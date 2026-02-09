@@ -1,0 +1,169 @@
+# Architecture
+
+## Design Goals
+
+- Keep the template simple enough to extend quickly.
+- Keep data boundaries explicit so it scales without rewrites.
+- Enforce security at multiple layers (route + data-access).
+
+## Layers
+
+```text
+components (UI)
+  -> hooks (React Query)
+  -> fn (server actions)
+  -> data-access (authz + queries)
+  -> db (Drizzle schema + connection)
+```
+
+Rules:
+
+- UI never talks directly to `db`.
+- Server actions validate with Zod.
+- Data-access functions enforce authorization checks.
+
+## Routing Model
+
+- `src/app/(auth)/*`: public auth pages.
+- `src/app/(app)/projects`: authenticated project list/CRUD.
+- `src/app/(app)/[projectId]/*`: project-scoped pages.
+- `src/app/admin/*`: admin-only pages.
+
+Project-scoped routes use `src/app/(app)/[projectId]/layout.tsx` to enforce project membership once at layout level.
+
+## Auth Architecture
+
+- `proxy.ts` runs request protection and includes API routes (Next.js 16 middleware replacement using Node.js runtime).
+- `/api/auth/*` is explicitly allowed through.
+- Better Auth config controls signup policy with `ALLOW_SELF_SIGNUP`.
+- Data-access checks remain the source of truth for authorization.
+
+### Proxy Middleware (Next.js 16)
+
+This template uses **Next.js 16's `proxy.ts`** instead of traditional `middleware.ts`:
+
+**Why proxy.ts?**
+- Runs in **Node.js runtime** (not Edge runtime)
+- Allows Better Auth to use Node.js `crypto` module
+- Same authentication logic as middleware
+- Better compatibility with server-side libraries
+
+**Location**: `/proxy.ts` (project root)
+
+**Route Protection Logic**:
+```typescript
+// Unauthenticated users → Redirect to /sign-in
+// Authenticated users on auth pages → Redirect to app
+// Session refresh and cookie management
+```
+
+**Matcher Configuration**:
+- Runs on all routes EXCEPT:
+  - Static assets (`_next`, images, fonts)
+  - API routes handled separately
+
+## State and Data Fetching
+
+- React Query provider is mounted once in `src/app/layout.tsx`.
+- Feature hooks (`use-items`, `use-projects`) call server actions and invalidate cache keys.
+
+### Caching Strategy
+
+**This template uses client-side caching via React Query, NOT Next.js 16 Cache Components.**
+
+**Configuration**: `cacheComponents: false` (default - not set in `next.config.ts`)
+
+**Why React Query over Cache Components:**
+- ✅ **Explicit control**: You decide what to cache and for how long
+- ✅ **User-specific**: React Query handles per-user cache keys naturally
+- ✅ **Invalidation**: Easy to invalidate on mutations with `queryClient.invalidateQueries()`
+- ✅ **Optimistic updates**: Built-in support for immediate UI feedback
+- ✅ **Security**: No risk of accidentally caching sensitive data server-side
+
+**What is cached:**
+- Client-side: React Query handles all data caching
+  - Stale time: 30s for current data, 5m for historical
+  - Query keys: `["resource", projectId, ...specifics]`
+  - Automatic invalidation on mutations
+
+**What is NOT cached:**
+- ❌ Server components (no `"use cache"` directive used)
+- ❌ API routes (all dynamic, no prerendering)
+- ❌ Auth checks (always fresh for security)
+
+**If you need server-side caching:**
+- Consider enabling `cacheComponents: true` in `next.config.ts`
+- See `docs/modern-patterns.md` for Next.js 16 Cache Components guide
+- Only cache expensive external API calls or admin-only operations
+- Never cache user-specific data or auth checks
+
+### API Routes Configuration
+
+All API routes in this template are **dynamic** by default (not prerendered at build time).
+
+**How API routes stay dynamic:**
+1. They call `getUser()` which accesses headers
+2. Next.js 16 automatically makes routes dynamic when they access request-specific data
+3. No need for `export const dynamic = 'force-dynamic'`
+
+**Standard API route pattern:**
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+import { getUser } from "@/lib/auth/server";
+
+export async function GET() {
+  // Auth check makes this route dynamic automatically
+  const user = await getUser();
+  if (!user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Rest of handler...
+}
+```
+
+**If you enable Cache Components (`cacheComponents: true`):**
+- Use `connection()` from `next/server` at the start of handlers
+- See `docs/modern-patterns.md` for detailed examples
+
+**Routes are automatically dynamic when they:**
+- ✅ Call `getUser()` or `requireAuth()` (accesses headers)
+- ✅ Access `request.headers`, `request.nextUrl.searchParams`
+- ✅ Use `headers()`, `cookies()`, `draftMode()` from `next/headers`
+- ✅ Call `await connection()` explicitly
+
+## Database Boundaries
+
+- `src/db/schema/*` defines tables and types.
+- `src/data-access/*` owns query composition and permission checks.
+- Connection pooling defaults are centralized in `src/db/index.ts` with optional env tuning.
+
+## What Is Intentionally Scaffolded
+
+- Admin user invitation UI (`/admin/users`) is a scaffold.
+- Project settings page is a scaffold.
+
+These are intentionally marked so template consumers can extend without hidden assumptions.
+
+## Caching Best Practices
+
+**General Rules:**
+1. **Default to React Query** for data fetching - it's simpler and more predictable
+2. **Keep server components uncached** - let Next.js optimize naturally
+3. **Only cache expensive operations** - external API health checks, admin-only data
+4. **Never cache auth checks** - security requires fresh validation
+5. **Test cache behavior** - ensure invalidation works correctly
+
+**When React Query is enough (most cases):**
+- ✅ User-facing CRUD operations
+- ✅ Frequently changing data
+- ✅ User-specific data that varies per user
+- ✅ Data that needs optimistic updates
+
+**When to consider Cache Components:**
+- ✅ Expensive external API calls (health checks, public data)
+- ✅ Infrequently changing data
+- ✅ Admin-only system operations
+- ✅ Reduce load on external services
+
+**Key Takeaway**: This template prioritizes **simplicity and security** over aggressive caching. React Query is sufficient for 95% of use cases. Only enable Cache Components if you have a specific need and understand the tradeoffs.
