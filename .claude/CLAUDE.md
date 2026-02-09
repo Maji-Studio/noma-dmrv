@@ -354,6 +354,17 @@ All env vars validated via Zod in `src/config/env.ts`:
 
 **CRITICAL:** Never document secret VALUES, only variable NAMES.
 
+## Isometric Requirements Docs
+
+For Biochar + Soil Storage requirements work, always consult:
+- `docs/isometric/README.md` (scope and usage)
+- `docs/isometric/versions.json` (single source of pinned protocol/module versions)
+- `docs/isometric/requirements-shortlist.md` (source-linked requirement summaries)
+- `docs/isometric/schema-mapping.md` (current schema coverage and gaps)
+- `docs/isometric/update-playbook.md` (refresh workflow)
+
+Treat all local summaries as non-authoritative interpretations and verify against linked Isometric Registry URLs when implementing logic or making claims.
+
 ## Important Documentation Files
 
 - **Modern Patterns** - `docs/modern-patterns.md` (current library patterns vs outdated LLM knowledge, includes Next.js 16 caching)
@@ -366,6 +377,7 @@ All env vars validated via Zod in `src/config/env.ts`:
 - **Forms** - `docs/forms.md` (React Hook Form integration guide)
 - **Security** - `docs/security.md` (security best practices and guidelines)
 - **Mail Setup** - `docs/mail-setup.md` (email configuration with Resend)
+- **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
 - **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
 
 ## This is a Template
