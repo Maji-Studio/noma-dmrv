@@ -189,6 +189,7 @@ See `docs/design-system.md` for the complete design system reference.
 - **[Architecture](docs/architecture.md)** - System design and implementation patterns
 - **[Design System](docs/design-system.md)** - UI tokens, typography, and component patterns
 - **[Database](docs/database.md)** - Drizzle ORM setup and migration guide
+- **[Isometric Requirements KB](docs/isometric/README.md)** - Biochar + Soil Storage requirement summaries, pinned versions, and schema coverage mapping
 - **[Authentication](docs/auth.md)** - Better Auth configuration and authentication flows
 - **[Forms](docs/forms.md)** - React Hook Form integration with Zod validation
 - **[Security](docs/security.md)** - Security best practices and guidelines

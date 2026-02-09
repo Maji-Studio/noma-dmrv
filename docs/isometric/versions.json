@@ -1,0 +1,91 @@
+{
+  "generated_at_utc": "2026-02-09T15:34:40Z",
+  "scope": {
+    "pathway": "biochar",
+    "storage_pathway": "biochar-storage-soil-environments",
+    "notes": "Pinned by repo policy for this documentation set."
+  },
+  "protocol": {
+    "slug": "biochar",
+    "name": "Biochar Production and Storage",
+    "minor_version": "1.2",
+    "patch_version": "1.2.0",
+    "status": "CERTIFIED",
+    "published_at": "2025-09-12",
+    "certified_at": "2025-11-14",
+    "authoritative_url": "https://registry.isometric.com/protocol/biochar/1.2",
+    "authoritative_tag_url": "https://registry.isometric.com/protocol/biochar/1.2?tag=1.2.0"
+  },
+  "modules": [
+    {
+      "slug": "biochar-storage-soil-environments",
+      "name": "Biochar Storage in Soil Environments",
+      "minor_version": "1.2",
+      "patch_version": "1.2.0",
+      "status": "CERTIFIED",
+      "published_at": "2025-08-19",
+      "certified_at": "2025-11-14",
+      "authoritative_url": "https://registry.isometric.com/module/biochar-storage-soil-environments/1.2",
+      "authoritative_tag_url": "https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0"
+    },
+    {
+      "slug": "biomass-feedstock-accounting",
+      "name": "Biomass Feedstock Accounting",
+      "minor_version": "1.3",
+      "patch_version": "1.3.0",
+      "status": "CERTIFIED",
+      "published_at": "2025-07-25",
+      "certified_at": "2025-10-16",
+      "authoritative_url": "https://registry.isometric.com/module/biomass-feedstock-accounting/1.3",
+      "authoritative_tag_url": "https://registry.isometric.com/module/biomass-feedstock-accounting/1.3?tag=1.3.0"
+    },
+    {
+      "slug": "energy-use-accounting",
+      "name": "Energy Use Accounting",
+      "minor_version": "1.2",
+      "patch_version": "1.2.0",
+      "status": "CERTIFIED",
+      "published_at": "2024-05-22",
+      "certified_at": "2024-11-22",
+      "authoritative_url": "https://registry.isometric.com/module/energy-use-accounting/1.2",
+      "authoritative_tag_url": "https://registry.isometric.com/module/energy-use-accounting/1.2?tag=1.2.0"
+    },
+    {
+      "slug": "transportation",
+      "name": "Transportation Emissions Accounting",
+      "minor_version": "1.1",
+      "patch_version": "1.1.0",
+      "status": "CERTIFIED",
+      "published_at": "2024-10-11",
+      "certified_at": "2024-11-14",
+      "authoritative_url": "https://registry.isometric.com/module/transportation/1.1",
+      "authoritative_tag_url": "https://registry.isometric.com/module/transportation/1.1?tag=1.1.0"
+    },
+    {
+      "slug": "ghg-accounting",
+      "name": "GHG Accounting",
+      "minor_version": "1.0",
+      "patch_version": "1.0.1",
+      "status": "CERTIFIED",
+      "published_at": "2025-03-14",
+      "certified_at": "2025-08-21",
+      "authoritative_url": "https://registry.isometric.com/module/ghg-accounting/1.0",
+      "authoritative_tag_url": "https://registry.isometric.com/module/ghg-accounting/1.0?tag=1.0.1"
+    },
+    {
+      "slug": "embodied-emissions",
+      "name": "Embodied Emissions Accounting",
+      "minor_version": "1.0",
+      "patch_version": "1.0.3",
+      "status": "CERTIFIED",
+      "published_at": "2024-04-17",
+      "certified_at": "2023-12-23",
+      "authoritative_url": "https://registry.isometric.com/module/embodied-emissions/1.0",
+      "authoritative_tag_url": "https://registry.isometric.com/module/embodied-emissions/1.0?tag=1.0.3"
+    }
+  ],
+  "notes": [
+    "Non-authoritative interpretation files in this folder must cite section references and authoritative URLs.",
+    "Bump versions only in this file first, then refresh shortlist + schema mapping."
+  ]
+}

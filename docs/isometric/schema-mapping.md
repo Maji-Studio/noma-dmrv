@@ -1,0 +1,36 @@
+# Requirement-to-Schema Mapping (Current Repo)
+
+> Non-authoritative interpretation.  
+> Coverage reflects current schema only (`src/db/schema/*`) and does not imply Isometric acceptance.
+
+| Requirement ID/Reference | Current table.column | Coverage | Gap notes | Priority |
+|---|---|---|---|---|
+| Feedstock SC evidence each RP (`biomass-feedstock-accounting` §2.1) | `feedstocks.feedstockTypeId`, `feedstocks.feedstockSourceRegion`, `documents.*` | partial | No structured SC criterion results (SC1.x/SC3.x/etc), pass/fail, assessor, validity dates. | P0 |
+| Ineligible biomass >25% mass rule (module intro) | none explicit | missing | No field/model for ineligible-feedstock mass fraction by Reporting Period. | P0 |
+| Counterfactual fate evidence + 10-year validity (§3.1) | `feedstocks.counterfactualCategory`, `feedstocks.counterfactualEmissions15Tons`, `feedstocks.counterfactualStorage50Tons`, `documents.*` | partial | Numeric fields exist, but no structured provenance window (last 5 years), validity expiry, or reassessment trigger. | P0 |
+| Market leakage price tests ML4/ML5/ML6 (§4.2) | `feedstocks.marketLeakageMethod`, `feedstocks.marketLeakageTons`, `suppliers.annualRevenueUsd` | partial | Missing supplier disposal-cost benchmark, benchmark-priced revenue, test outcome snapshots. | P1 |
+| Sampling plan in PDD (`R-S8K1-1`) | `documents.documentType` (`pdd`) | partial | PDD document can be attached, but no structured sampling-plan fields/version history. | P1 |
+| Method A/B cadence (`G-F74T-0`, `G-2W0F-0`) | `samples.productionRunId`, `samples.samplingTime` | partial | Raw samples exist; no explicit compliance flags for 30-sample threshold or 1-in-10 enforcement windows. | P1 |
+| Reactor design diagram (`R-6AQG-1`) | `reactors.designSpecs`, `reactors.specifications`, `documents.documentType` (`pdd`) | partial | No explicit design-diagram artifact linkage/versioned approval status. | P1 |
+| Leakage monitoring (`R-SZK5-1`, `G-MJPG-1`) | `productionRunReadings.pressureBar`, `productionRunReadings.timestamp`, `documents.*` | partial | Pressure timeseries exists, but no structured calibration interval tracking and leak-test standard references. | P0 |
+| Loss accounting in GHG statement (§8.4.2) | `incidentReports.*`, `productionRuns.totalEmissionsCo2eKg`, `creditBatches.*` | partial | No dedicated lost-mass field tied to specific delivery/application adjustments. | P0 |
+| Biochar chemistry thresholds (Soil §3.3 Table 2) | `samples.hCorgMolarRatio`, `samples.oCorgMolarRatio`, `samples.*metals*`, `samples.*pah*`, `samples.pcb*`, `samples.pcddFNgPerKg` | full | Measurements present; threshold evaluation logic can be derived externally. | P0 |
+| 200-year durability equation inputs (Soil §5.1.1.3.1 Eq.3) | `creditBatches.soilTemperatureC`, `creditBatches.hToCorgRatio`, `creditBatches.fDurableCalculated`, `soilTemperatureMeasurements.*` | full | Core inputs and output captured. | P0 |
+| 1000-year durability equation inputs (Soil §5.1.1.3.2 Eq.6) | `samples.randomReflectanceR0*`, `samples.residualOrganicCarbonPercent`, `samples.reactiveCarbonPercent`, `creditBatches.meanRandomReflectancePercent`, `creditBatches.meanNonReactiveCarbonPercent` | partial | Inputs exist; no explicit segregation controls when mixing 200-year and 1000-year pathways. | P1 |
+| Stockpiling <=12 months + safety controls (Soil §7.3) | none explicit | missing | No stockpile start/end dates, wet-condition flag, cover/waterway-risk controls. | P0 |
+| Point-of-mixing constraints (<50% vol, fuel-unsuitable) (Soil §9.4.2) | `formulations.biocharRatio`, `biocharProducts.composition` | partial | Ratio can be represented, but no explicit irreversibility/fuel-unsuitability attestations. | P0 |
+| Visual documentation with geotag/time (Soil §9.5.1) | `documents.documentType` (`photo`,`video`), `documents.capturedAt`, `documents.metadata` | partial | Geolocation may be in metadata, but not structured/validated for mandatory GPS/time fields. | P1 |
+| Chain-of-custody handoff records (Soil §9.9) | `feedstocks.code`, `productionRuns.code`, `deliveries.code`, `transportLegs.billOfLading`, `documents.documentType`, `suppliers.chainOfCustodyRef` | partial | IDs exist but no canonical handoff-event ledger with sender/receiver/time and mandatory evidence checks. | P0 |
+| Third-party purchaser affidavit (`G-SZZR-0`) | `creditBatches.affidavitReference`, `creditBatches.intendedUseConfirmation`, `creditBatches.companyVerificationRef`, `creditBatches.mixingTimelineDays` | partial | Key references exist; no normalized affidavit entity or validation of 3-year activity evidence. | P1 |
+| Facility intensity threshold >200 GWh (Energy §5.1) | `productionRuns.electricityKwh` | partial | Run-level kWh exists; no annual facility rollup field/state for compliance classification. | P0 |
+| Low-carbon power procurement EC1-EC5 (Energy §5.3) | `productionRuns.emissionFactorsUsed`, `documents.*` | missing | No structured PPA/EAC retirement, generator COD, grid-region deliverability, hourly matching artifacts. | P0 |
+| Meter quality and hourly reporting (Energy §5.6) | `productionRuns.electricityKwh`, `productionRunReadings.timestamp` | partial | No dedicated electricity meter stream + meter accuracy metadata model. | P1 |
+| Fuel emissions accounting Eq.6 (Energy §6) | `productionRuns.dieselOperationLiters`, `productionRuns.dieselGensetLiters`, `productionRuns.preprocessingFuelLiters`, `emissionFactors.*` | full | Inputs required for Eq.6 are represented. | P0 |
+| Transportation method hierarchy and leg-level calculations (Transport §3) | `transportLegs.calculationMethodType`, `transportLegs.fuelConsumedLiters`, `transportLegs.distanceKm`, `transportLegs.loadWeightTonnes`, `transportLegs.emissionsCo2eKg` | full | Core leg-level model supports both methods. | P0 |
+| Round-trip assumption + onward-leg evidence (Transport §5) | `transportLegs.distanceKm`, `documents.transportLegId` | partial | No explicit round-trip flag or onward-destination evidence requirement field. | P1 |
+| BCU retirement/additionality/double-count protection (Transport §4.1 EC1-EC4) | `transportLegs.bcuUsed`, `transportLegs.bcuProvider`, `transportLegs.bcuCertificationRef` | partial | Missing retirement timestamp, registry transaction ID, anti-double-counting attestation fields. | P0 |
+| Net removal equation and RP totals (Biochar Eq.1) | `creditBatches.totalCo2eStoredTons`, `creditBatches.totalCo2eEmissionsTons`, `creditBatches.totalCo2eCounterfactualTons`, `creditBatches.netCo2eRemovalTons` | full | Equation components are present. | P0 |
+| Materiality (<1%) and reassessment cadence (GHG §5) | none explicit | missing | No SSR materiality assessment object, threshold outcome, or reassessment schedule tracking. | P0 |
+| Emissions amortization review cadence (GHG §7) | none explicit | missing | No amortization schedule/review-year checkpoint tracking (Y1/Y3/Y5/renewals). | P1 |
+| Embodied emissions inventory + verified factors (Embodied module) | `documents.*`, `productionRuns.emissionFactorsUsed`, `emissionFactors.*` | partial | No dedicated embodied inventory table (materials/equipment/EPD refs/expiry/verification). | P0 |
+| Monitoring parameter table requirement (`R-ENZR-0`) | `documents.documentType` (`pdd`) | missing | No structured monitored-parameter register tied to protocol/module requirements. | P1 |
