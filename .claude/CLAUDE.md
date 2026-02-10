@@ -361,9 +361,10 @@ For Biochar + Soil Storage requirements work, always consult:
 - `docs/isometric/versions.json` (single source of pinned protocol/module versions)
 - `docs/isometric/requirements-shortlist.md` (source-linked requirement summaries)
 - `docs/isometric/schema-mapping.md` (current schema coverage and gaps)
+- `docs/isometric/condition-registry.md` (conditional field enforcement triggers)
 - `docs/isometric/update-playbook.md` (refresh workflow)
 
-Treat all local summaries as non-authoritative interpretations and verify against linked Isometric Registry URLs when implementing logic or making claims.
+All local summaries are non-authoritative interpretations. Verify against linked Isometric Registry URLs when implementing logic or making claims.
 
 ## Important Documentation Files
 

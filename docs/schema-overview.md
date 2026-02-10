@@ -50,6 +50,5 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
 ## Related References
 
-- High-level ERD: `docs/er-diagram.md`
 - Isometric requirement mapping: `docs/isometric/schema-mapping.md`
-- Required/conditional matrix: `docs/isometric/schema-review.csv`
+- Conditional field triggers: `docs/isometric/condition-registry.md`

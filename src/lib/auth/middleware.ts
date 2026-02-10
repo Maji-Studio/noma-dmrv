@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth/better-auth";
  * Route configuration
  */
 const PUBLIC_ROUTES = [
+  "/schema",
   "/login",
   "/forgot-password",
   "/reset-password",
