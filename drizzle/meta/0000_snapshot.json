@@ -1,5 +1,5 @@
 {
-  "id": "baee032f-6bfa-4dfb-9317-44e874c42221",
+  "id": "a6e20ca0-e796-4ef8-9965-68c52d88f25a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -72,15 +72,15 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gps_lat": {
-          "name": "gps_lat",
+        "average_application_rate_magnitude": {
+          "name": "average_application_rate_magnitude",
           "type": "real",
           "primaryKey": false,
           "notNull": false
         },
-        "gps_lng": {
-          "name": "gps_lng",
-          "type": "real",
+        "average_application_rate_unit": {
+          "name": "average_application_rate_unit",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -212,7 +212,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "applications_gps_latitude_range": {
+          "name": "applications_gps_latitude_range",
+          "value": "\"applications\".\"gps_latitude\" is null or (\"applications\".\"gps_latitude\" >= -90 and \"applications\".\"gps_latitude\" <= 90)"
+        },
+        "applications_gps_longitude_range": {
+          "name": "applications_gps_longitude_range",
+          "value": "\"applications\".\"gps_longitude\" is null or (\"applications\".\"gps_longitude\" >= -180 and \"applications\".\"gps_longitude\" <= 180)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.soil_temperature_measurements": {
@@ -274,18 +283,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "measurement_lat": {
-          "name": "measurement_lat",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "measurement_lng": {
-          "name": "measurement_lng",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "gps_latitude": {
           "name": "gps_latitude",
           "type": "real",
@@ -338,7 +335,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "soil_temperature_measurements_gps_latitude_range": {
+          "name": "soil_temperature_measurements_gps_latitude_range",
+          "value": "\"soil_temperature_measurements\".\"gps_latitude\" is null or (\"soil_temperature_measurements\".\"gps_latitude\" >= -90 and \"soil_temperature_measurements\".\"gps_latitude\" <= 90)"
+        },
+        "soil_temperature_measurements_gps_longitude_range": {
+          "name": "soil_temperature_measurements_gps_longitude_range",
+          "value": "\"soil_temperature_measurements\".\"gps_longitude\" is null or (\"soil_temperature_measurements\".\"gps_longitude\" >= -180 and \"soil_temperature_measurements\".\"gps_longitude\" <= 180)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.account": {
@@ -643,6 +649,357 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.custody_handoffs": {
+      "name": "custody_handoffs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "material_type": {
+          "name": "material_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "material_id": {
+          "name": "material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_party_type": {
+          "name": "from_party_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_party_id": {
+          "name": "from_party_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_party_type": {
+          "name": "to_party_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_party_id": {
+          "name": "to_party_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "handoff_at": {
+          "name": "handoff_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity_kg": {
+          "name": "quantity_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_number": {
+          "name": "reference_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "custody_handoffs_document_id_documents_id_fk": {
+          "name": "custody_handoffs_document_id_documents_id_fk",
+          "tableFrom": "custody_handoffs",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.feedstock_sc_assessments": {
+      "name": "feedstock_sc_assessments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "feedstock_id": {
+          "name": "feedstock_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criterion_code": {
+          "name": "criterion_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assessment_date": {
+          "name": "assessment_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assessor": {
+          "name": "assessor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valid_from": {
+          "name": "valid_from",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valid_to": {
+          "name": "valid_to",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence_document_id": {
+          "name": "evidence_document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "feedstock_sc_assessments_feedstock_id_feedstocks_id_fk": {
+          "name": "feedstock_sc_assessments_feedstock_id_feedstocks_id_fk",
+          "tableFrom": "feedstock_sc_assessments",
+          "tableTo": "feedstocks",
+          "columnsFrom": [
+            "feedstock_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "feedstock_sc_assessments_evidence_document_id_documents_id_fk": {
+          "name": "feedstock_sc_assessments_evidence_document_id_documents_id_fk",
+          "tableFrom": "feedstock_sc_assessments",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "evidence_document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "feedstock_sc_assessments_feedstock_criterion_date_unique": {
+          "name": "feedstock_sc_assessments_feedstock_criterion_date_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "feedstock_id",
+            "criterion_code",
+            "assessment_date"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "feedstock_sc_assessments_validity_window": {
+          "name": "feedstock_sc_assessments_validity_window",
+          "value": "\"feedstock_sc_assessments\".\"valid_from\" is null or \"feedstock_sc_assessments\".\"valid_to\" is null or \"feedstock_sc_assessments\".\"valid_from\" <= \"feedstock_sc_assessments\".\"valid_to\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ghg_materiality_assessments": {
+      "name": "ghg_materiality_assessments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "credit_batch_id": {
+          "name": "credit_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assessment_date": {
+          "name": "assessment_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estimated_ssr_emissions_tco2e": {
+          "name": "estimated_ssr_emissions_tco2e",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estimated_net_removals_tco2e": {
+          "name": "estimated_net_removals_tco2e",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "materiality_percent": {
+          "name": "materiality_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_material": {
+          "name": "is_material",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reassessment_required_by": {
+          "name": "reassessment_required_by",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "methodology_reference": {
+          "name": "methodology_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ghg_materiality_assessments_credit_batch_id_credit_batches_id_fk": {
+          "name": "ghg_materiality_assessments_credit_batch_id_credit_batches_id_fk",
+          "tableFrom": "ghg_materiality_assessments",
+          "tableTo": "credit_batches",
+          "columnsFrom": [
+            "credit_batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ghg_materiality_assessments_percent_range": {
+          "name": "ghg_materiality_assessments_percent_range",
+          "value": "\"ghg_materiality_assessments\".\"materiality_percent\" is null or (\"ghg_materiality_assessments\".\"materiality_percent\" >= 0 and \"ghg_materiality_assessments\".\"materiality_percent\" <= 100)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.credit_batch_applications": {
@@ -1019,7 +1376,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "credit_batches_200_year_requires_soil_temp_and_h_to_corg": {
+          "name": "credit_batches_200_year_requires_soil_temp_and_h_to_corg",
+          "value": "\"credit_batches\".\"durability_option\" <> '200_year'::durability_option or (\n        \"credit_batches\".\"soil_temperature_c\" is not null and\n        \"credit_batches\".\"h_to_c_org_ratio\" is not null\n      )"
+        },
+        "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon": {
+          "name": "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon",
+          "value": "\"credit_batches\".\"durability_option\" <> '1000_year'::durability_option or (\n        \"credit_batches\".\"mean_random_reflectance_percent\" is not null and\n        \"credit_batches\".\"mean_non_reactive_carbon_percent\" is not null\n      )"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.lab_analyses": {
@@ -1213,7 +1579,8 @@
           "name": "metadata",
           "type": "jsonb",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "created_by": {
           "name": "created_by",
@@ -1461,6 +1828,10 @@
         "documents_exactly_one_owner_check": {
           "name": "documents_exactly_one_owner_check",
           "value": "(\n      (case when \"documents\".\"feedstock_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"feedstock_delivery_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"production_run_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"sample_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"incident_report_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"biochar_product_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"delivery_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"transport_leg_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"application_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"credit_batch_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"lab_analysis_id\" is not null then 1 else 0 end)\n      ) = 1"
+        },
+        "documents_photo_video_require_captured_at": {
+          "name": "documents_photo_video_require_captured_at",
+          "value": "\"documents\".\"document_type\" <> all (array['photo', 'video']::documentation_type[]) or \"documents\".\"captured_at\" is not null"
         }
       },
       "isRLSEnabled": false
@@ -1582,31 +1953,17 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gps_lat": {
-          "name": "gps_lat",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gps_lng": {
-          "name": "gps_lng",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "gps_latitude": {
           "name": "gps_latitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": false
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": false
         },
         "country": {
           "name": "country",
@@ -1669,7 +2026,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "facilities_gps_latitude_range": {
+          "name": "facilities_gps_latitude_range",
+          "value": "\"facilities\".\"gps_latitude\" is null or (\"facilities\".\"gps_latitude\" >= -90 and \"facilities\".\"gps_latitude\" <= 90)"
+        },
+        "facilities_gps_longitude_range": {
+          "name": "facilities_gps_longitude_range",
+          "value": "\"facilities\".\"gps_longitude\" is null or (\"facilities\".\"gps_longitude\" >= -180 and \"facilities\".\"gps_longitude\" <= 180)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.reactors": {
@@ -1812,6 +2178,36 @@
           "primaryKey": false,
           "notNull": false
         },
+        "latitude": {
+          "name": "latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isometric_storage_method": {
+          "name": "isometric_storage_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isometric_description": {
+          "name": "isometric_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isometric_supplier_reference_id": {
+          "name": "isometric_supplier_reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "facility_id": {
           "name": "facility_id",
           "type": "uuid",
@@ -1860,7 +2256,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "storage_locations_latitude_range": {
+          "name": "storage_locations_latitude_range",
+          "value": "\"storage_locations\".\"latitude\" is null or (\"storage_locations\".\"latitude\" >= -90 and \"storage_locations\".\"latitude\" <= 90)"
+        },
+        "storage_locations_longitude_range": {
+          "name": "storage_locations_longitude_range",
+          "value": "\"storage_locations\".\"longitude\" is null or (\"storage_locations\".\"longitude\" >= -180 and \"storage_locations\".\"longitude\" <= 180)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.feedstock_deliveries": {
@@ -2096,7 +2501,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "feedstock_deliveries_gps_latitude_range": {
+          "name": "feedstock_deliveries_gps_latitude_range",
+          "value": "\"feedstock_deliveries\".\"gps_latitude\" is null or (\"feedstock_deliveries\".\"gps_latitude\" >= -90 and \"feedstock_deliveries\".\"gps_latitude\" <= 90)"
+        },
+        "feedstock_deliveries_gps_longitude_range": {
+          "name": "feedstock_deliveries_gps_longitude_range",
+          "value": "\"feedstock_deliveries\".\"gps_longitude\" is null or (\"feedstock_deliveries\".\"gps_longitude\" >= -180 and \"feedstock_deliveries\".\"gps_longitude\" <= 180)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.feedstock_types": {
@@ -2498,7 +2912,103 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "feedstocks_mass_dry_non_negative": {
+          "name": "feedstocks_mass_dry_non_negative",
+          "value": "\"feedstocks\".\"mass_dry_kg\" >= 0"
+        },
+        "feedstocks_mass_dry_lte_wet": {
+          "name": "feedstocks_mass_dry_lte_wet",
+          "value": "\"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.customer_locations": {
+      "name": "customer_locations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gps_latitude": {
+          "name": "gps_latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gps_longitude": {
+          "name": "gps_longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "customer_locations_customer_id_customers_id_fk": {
+          "name": "customer_locations_customer_id_customers_id_fk",
+          "tableFrom": "customer_locations",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "customer_locations_gps_latitude_range": {
+          "name": "customer_locations_gps_latitude_range",
+          "value": "\"customer_locations\".\"gps_latitude\" >= -90 and \"customer_locations\".\"gps_latitude\" <= 90"
+        },
+        "customer_locations_gps_longitude_range": {
+          "name": "customer_locations_gps_longitude_range",
+          "value": "\"customer_locations\".\"gps_longitude\" >= -180 and \"customer_locations\".\"gps_longitude\" <= 180"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.customers": {
@@ -2530,31 +3040,17 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gps_lat": {
-          "name": "gps_lat",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "gps_lng": {
-          "name": "gps_lng",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
         "gps_latitude": {
           "name": "gps_latitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": true
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": true
         },
         "distance_km": {
           "name": "distance_km",
@@ -2614,7 +3110,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "customers_gps_latitude_range": {
+          "name": "customers_gps_latitude_range",
+          "value": "\"customers\".\"gps_latitude\" >= -90 and \"customers\".\"gps_latitude\" <= 90"
+        },
+        "customers_gps_longitude_range": {
+          "name": "customers_gps_longitude_range",
+          "value": "\"customers\".\"gps_longitude\" >= -180 and \"customers\".\"gps_longitude\" <= 180"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.drivers": {
@@ -2784,31 +3289,17 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gps_lat": {
-          "name": "gps_lat",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gps_lng": {
-          "name": "gps_lng",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "gps_latitude": {
           "name": "gps_latitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": false
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true,
-          "default": 0
+          "notNull": false
         },
         "address": {
           "name": "address",
@@ -2874,7 +3365,16 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "suppliers_gps_latitude_range": {
+          "name": "suppliers_gps_latitude_range",
+          "value": "\"suppliers\".\"gps_latitude\" is null or (\"suppliers\".\"gps_latitude\" >= -90 and \"suppliers\".\"gps_latitude\" <= 90)"
+        },
+        "suppliers_gps_longitude_range": {
+          "name": "suppliers_gps_longitude_range",
+          "value": "\"suppliers\".\"gps_longitude\" is null or (\"suppliers\".\"gps_longitude\" >= -180 and \"suppliers\".\"gps_longitude\" <= 180)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.incident_reports": {
@@ -3120,6 +3620,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "continuous_gas_measurement": {
+          "name": "continuous_gas_measurement",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "ch4_composition": {
           "name": "ch4_composition",
           "type": "real",
@@ -3207,7 +3714,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "production_run_readings_ppm_required_when_continuous": {
+          "name": "production_run_readings_ppm_required_when_continuous",
+          "value": "\"production_run_readings\".\"continuous_gas_measurement\" = false or (\n        \"production_run_readings\".\"ch4_ppm\" is not null and\n        \"production_run_readings\".\"n2o_ppm\" is not null and\n        \"production_run_readings\".\"co_ppm\" is not null and\n        \"production_run_readings\".\"co2_ppm\" is not null\n      )"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.production_runs": {
@@ -3927,6 +4439,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "nutrient_claim_enabled": {
+          "name": "nutrient_claim_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "phosphorus_g_per_kg": {
           "name": "phosphorus_g_per_kg",
           "type": "real",
@@ -4137,7 +4656,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "samples_nutrients_required_when_claim_enabled": {
+          "name": "samples_nutrients_required_when_claim_enabled",
+          "value": "\"samples\".\"nutrient_claim_enabled\" = false or (\n        \"samples\".\"phosphorus_g_per_kg\" is not null and\n        \"samples\".\"potassium_g_per_kg\" is not null and\n        \"samples\".\"magnesium_g_per_kg\" is not null and\n        \"samples\".\"calcium_g_per_kg\" is not null and\n        \"samples\".\"iron_g_per_kg\" is not null\n      )"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.biochar_products": {
@@ -4519,6 +5043,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "customer_location_id": {
+          "name": "customer_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "biochar_product_id": {
           "name": "biochar_product_id",
           "type": "uuid",
@@ -4555,6 +5085,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "delivered_wet_mass_kg": {
+          "name": "delivered_wet_mass_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mass_dry_kg": {
+          "name": "mass_dry_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
         "driver_id": {
           "name": "driver_id",
           "type": "uuid",
@@ -4579,41 +5121,11 @@
           "primaryKey": false,
           "notNull": false
         },
-        "fuel_type": {
-          "name": "fuel_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fuel_consumed_liters": {
-          "name": "fuel_consumed_liters",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "distance_km": {
-          "name": "distance_km",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "emissions_tco2e": {
-          "name": "emissions_tco2e",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
         "transport_emissions_co2e_kg": {
           "name": "transport_emissions_co2e_kg",
           "type": "real",
           "primaryKey": false,
           "notNull": false
-        },
-        "emission_factor_used": {
-          "name": "emission_factor_used",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         },
         "created_at": {
           "name": "created_at",
@@ -4651,6 +5163,19 @@
           "tableTo": "orders",
           "columnsFrom": [
             "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deliveries_customer_location_id_customer_locations_id_fk": {
+          "name": "deliveries_customer_location_id_customer_locations_id_fk",
+          "tableFrom": "deliveries",
+          "tableTo": "customer_locations",
+          "columnsFrom": [
+            "customer_location_id"
           ],
           "columnsTo": [
             "id"
@@ -4722,7 +5247,20 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "deliveries_mass_dry_non_negative": {
+          "name": "deliveries_mass_dry_non_negative",
+          "value": "\"deliveries\".\"mass_dry_kg\" is null or \"deliveries\".\"mass_dry_kg\" >= 0"
+        },
+        "deliveries_delivered_wet_mass_non_negative": {
+          "name": "deliveries_delivered_wet_mass_non_negative",
+          "value": "\"deliveries\".\"delivered_wet_mass_kg\" is null or \"deliveries\".\"delivered_wet_mass_kg\" >= 0"
+        },
+        "deliveries_mass_dry_lte_wet_mass": {
+          "name": "deliveries_mass_dry_lte_wet_mass",
+          "value": "\"deliveries\".\"mass_dry_kg\" is null or \"deliveries\".\"delivered_wet_mass_kg\" is null or \"deliveries\".\"mass_dry_kg\" <= \"deliveries\".\"delivered_wet_mass_kg\""
+        }
+      },
       "isRLSEnabled": false
     },
     "public.orders": {
@@ -4764,6 +5302,12 @@
         },
         "customer_id": {
           "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_location_id": {
+          "name": "customer_location_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -4897,6 +5441,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "orders_customer_location_id_customer_locations_id_fk": {
+          "name": "orders_customer_location_id_customer_locations_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "customer_locations",
+          "columnsFrom": [
+            "customer_location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "orders_formulation_id_formulations_id_fk": {
           "name": "orders_formulation_id_formulations_id_fk",
           "tableFrom": "orders",
@@ -4962,26 +5519,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "origin_lat": {
-          "name": "origin_lat",
+        "origin_gps_latitude": {
+          "name": "origin_gps_latitude",
           "type": "real",
           "primaryKey": false,
           "notNull": false
         },
-        "origin_lng": {
-          "name": "origin_lng",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "origin_latitude": {
-          "name": "origin_latitude",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "origin_longitude": {
-          "name": "origin_longitude",
+        "origin_gps_longitude": {
+          "name": "origin_gps_longitude",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -4992,26 +5537,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "destination_lat": {
-          "name": "destination_lat",
+        "destination_gps_latitude": {
+          "name": "destination_gps_latitude",
           "type": "real",
           "primaryKey": false,
           "notNull": false
         },
-        "destination_lng": {
-          "name": "destination_lng",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "destination_latitude": {
-          "name": "destination_latitude",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "destination_longitude": {
-          "name": "destination_longitude",
+        "destination_gps_longitude": {
+          "name": "destination_gps_longitude",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -5033,7 +5566,7 @@
           "type": "transport_method",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "vehicle_type": {
           "name": "vehicle_type",
@@ -5094,7 +5627,7 @@
           "type": "emissions_calculation_method",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "emission_factor_used": {
           "name": "emission_factor_used",
@@ -5170,7 +5703,32 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "transport_legs_origin_gps_latitude_range": {
+          "name": "transport_legs_origin_gps_latitude_range",
+          "value": "\"transport_legs\".\"origin_gps_latitude\" is null or (\"transport_legs\".\"origin_gps_latitude\" >= -90 and \"transport_legs\".\"origin_gps_latitude\" <= 90)"
+        },
+        "transport_legs_origin_gps_longitude_range": {
+          "name": "transport_legs_origin_gps_longitude_range",
+          "value": "\"transport_legs\".\"origin_gps_longitude\" is null or (\"transport_legs\".\"origin_gps_longitude\" >= -180 and \"transport_legs\".\"origin_gps_longitude\" <= 180)"
+        },
+        "transport_legs_destination_gps_latitude_range": {
+          "name": "transport_legs_destination_gps_latitude_range",
+          "value": "\"transport_legs\".\"destination_gps_latitude\" is null or (\"transport_legs\".\"destination_gps_latitude\" >= -90 and \"transport_legs\".\"destination_gps_latitude\" <= 90)"
+        },
+        "transport_legs_destination_gps_longitude_range": {
+          "name": "transport_legs_destination_gps_longitude_range",
+          "value": "\"transport_legs\".\"destination_gps_longitude\" is null or (\"transport_legs\".\"destination_gps_longitude\" >= -180 and \"transport_legs\".\"destination_gps_longitude\" <= 180)"
+        },
+        "transport_legs_energy_usage_requirements": {
+          "name": "transport_legs_energy_usage_requirements",
+          "value": "\"transport_legs\".\"calculation_method\" <> 'energy_usage'::emissions_calculation_method or (\n        \"transport_legs\".\"fuel_type\" is not null and\n        (\"transport_legs\".\"fuel_consumed_liters\" is not null or \"transport_legs\".\"electricity_kwh\" is not null) and\n        \"transport_legs\".\"emission_factor_used\" is not null\n      )"
+        },
+        "transport_legs_distance_based_requirements": {
+          "name": "transport_legs_distance_based_requirements",
+          "value": "\"transport_legs\".\"calculation_method\" <> 'distance_based'::emissions_calculation_method or (\n        \"transport_legs\".\"load_mass_kg\" is not null and\n        \"transport_legs\".\"vehicle_type\" is not null and\n        \"transport_legs\".\"emission_factor_used\" is not null\n      )"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.vehicles": {
@@ -5299,6 +5857,33 @@
           "primaryKey": false,
           "notNull": true
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "isometric_submission_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submitted'"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "payload_snapshot": {
           "name": "payload_snapshot",
           "type": "jsonb",
@@ -5338,11 +5923,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "isometric_biochar_applications_application_unique": {
-          "name": "isometric_biochar_applications_application_unique",
+        "isometric_biochar_applications_application_version_unique": {
+          "name": "isometric_biochar_applications_application_version_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "application_id"
+            "application_id",
+            "version"
           ]
         },
         "isometric_biochar_applications_external_unique": {
@@ -5461,6 +6047,33 @@
           "primaryKey": false,
           "notNull": true
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "isometric_submission_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submitted'"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "payload_snapshot": {
           "name": "payload_snapshot",
           "type": "jsonb",
@@ -5500,11 +6113,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "isometric_ghg_statements_credit_batch_unique": {
-          "name": "isometric_ghg_statements_credit_batch_unique",
+        "isometric_ghg_statements_credit_batch_version_unique": {
+          "name": "isometric_ghg_statements_credit_batch_version_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "credit_batch_id"
+            "credit_batch_id",
+            "version"
           ]
         },
         "isometric_ghg_statements_external_unique": {
@@ -5512,6 +6126,127 @@
           "nullsNotDistinct": false,
           "columns": [
             "external_ghg_statement_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.isometric_monitoring_submissions": {
+      "name": "isometric_monitoring_submissions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_monitoring_submission_id": {
+          "name": "external_monitoring_submission_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "monitoring_period_start": {
+          "name": "monitoring_period_start",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "monitoring_period_end": {
+          "name": "monitoring_period_end",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "isometric_submission_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submitted'"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload_snapshot": {
+          "name": "payload_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "isometric_monitoring_submissions_source_id_isometric_sources_id_fk": {
+          "name": "isometric_monitoring_submissions_source_id_isometric_sources_id_fk",
+          "tableFrom": "isometric_monitoring_submissions",
+          "tableTo": "isometric_sources",
+          "columnsFrom": [
+            "source_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "isometric_monitoring_submissions_source_version_unique": {
+          "name": "isometric_monitoring_submissions_source_version_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "source_id",
+            "version"
+          ]
+        },
+        "isometric_monitoring_submissions_external_unique": {
+          "name": "isometric_monitoring_submissions_external_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "external_monitoring_submission_id"
           ]
         }
       },
@@ -5541,6 +6276,33 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "isometric_submission_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submitted'"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "payload_snapshot": {
           "name": "payload_snapshot",
@@ -5581,11 +6343,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "isometric_production_batches_run_unique": {
-          "name": "isometric_production_batches_run_unique",
+        "isometric_production_batches_run_version_unique": {
+          "name": "isometric_production_batches_run_version_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "production_run_id"
+            "production_run_id",
+            "version"
           ]
         },
         "isometric_production_batches_external_unique": {
@@ -5727,6 +6490,33 @@
           "primaryKey": false,
           "notNull": true
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "isometric_submission_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submitted'"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "payload_snapshot": {
           "name": "payload_snapshot",
           "type": "jsonb",
@@ -5766,11 +6556,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "isometric_removals_credit_batch_unique": {
-          "name": "isometric_removals_credit_batch_unique",
+        "isometric_removals_credit_batch_version_unique": {
+          "name": "isometric_removals_credit_batch_version_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "credit_batch_id"
+            "credit_batch_id",
+            "version"
           ]
         },
         "isometric_removals_external_unique": {
@@ -5778,6 +6569,82 @@
           "nullsNotDistinct": false,
           "columns": [
             "external_removal_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.isometric_sources": {
+      "name": "isometric_sources",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "certifier_provider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'isometric'"
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_reference_id": {
+          "name": "source_reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "isometric_sources_provider_type_ref_unique": {
+          "name": "isometric_sources_provider_type_ref_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider",
+            "source_type",
+            "source_reference_id"
           ]
         }
       },
@@ -5807,6 +6674,33 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "isometric_submission_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'submitted'"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "payload_snapshot": {
           "name": "payload_snapshot",
@@ -5847,11 +6741,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "isometric_storage_locations_application_unique": {
-          "name": "isometric_storage_locations_application_unique",
+        "isometric_storage_locations_application_version_unique": {
+          "name": "isometric_storage_locations_application_version_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "application_id"
+            "application_id",
+            "version"
           ]
         },
         "isometric_storage_locations_external_unique": {
@@ -6276,6 +7171,17 @@
         "low",
         "medium",
         "high"
+      ]
+    },
+    "public.isometric_submission_status": {
+      "name": "isometric_submission_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "submitted",
+        "accepted",
+        "rejected",
+        "superseded"
       ]
     },
     "public.order_status": {

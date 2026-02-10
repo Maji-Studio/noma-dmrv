@@ -1,4 +1,6 @@
 import {
+  boolean,
+  check,
   pgTable,
   text,
   timestamp,
@@ -8,7 +10,7 @@ import {
   integer,
   jsonb,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
@@ -96,35 +98,52 @@ export const productionRuns = pgTable('production_runs', {
 // Temperature: 5-min intervals, Pressure/Emissions: 1-min intervals
 // ============================================
 
-export const productionRunReadings = pgTable('production_run_readings', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
-    .notNull()
-    .references(() => productionRuns.id),
+export const productionRunReadings = pgTable(
+  'production_run_readings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    productionRunId: uuid('production_run_id')
+      .notNull()
+      .references(() => productionRuns.id),
 
-  timestamp: timestamp('timestamp').notNull(),
+    timestamp: timestamp('timestamp').notNull(),
 
-  // Temperature monitoring (5-min intervals required)
-  temperatureC: real('temperature_c'),
-  temperatureCelsius: real('temperature_celsius'),
+    // Temperature monitoring (5-min intervals required)
+    temperatureC: real('temperature_c'),
+    temperatureCelsius: real('temperature_celsius'),
 
-  // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
-  pressureBar: real('pressure_bar'),
+    // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
+    pressureBar: real('pressure_bar'),
+    continuousGasMeasurement: boolean('continuous_gas_measurement')
+      .notNull()
+      .default(false),
 
-  // Emissions monitoring (1-min intervals, Option 1: continuous measurement)
-  ch4Composition: real('ch4_composition'), // Methane
-  n2oComposition: real('n2o_composition'), // Nitrous oxide
-  coComposition: real('co_composition'), // Carbon monoxide
-  co2Composition: real('co2_composition'), // Carbon dioxide
-  gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
-  ch4Ppm: real('ch4_ppm'),
-  n2oPpm: real('n2o_ppm'),
-  coPpm: real('co_ppm'),
-  co2Ppm: real('co2_ppm'),
-  flowRate: real('flow_rate'),
+    // Emissions monitoring (1-min intervals, Option 1: continuous measurement)
+    ch4Composition: real('ch4_composition'), // Methane
+    n2oComposition: real('n2o_composition'), // Nitrous oxide
+    coComposition: real('co_composition'), // Carbon monoxide
+    co2Composition: real('co2_composition'), // Carbon dioxide
+    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
+    ch4Ppm: real('ch4_ppm'),
+    n2oPpm: real('n2o_ppm'),
+    coPpm: real('co_ppm'),
+    co2Ppm: real('co2_ppm'),
+    flowRate: real('flow_rate'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'production_run_readings_ppm_required_when_continuous',
+      sql`${table.continuousGasMeasurement} = false or (
+        ${table.ch4Ppm} is not null and
+        ${table.n2oPpm} is not null and
+        ${table.coPpm} is not null and
+        ${table.co2Ppm} is not null
+      )`
+    ),
+  ]
+);
 
 // ============================================
 // Samples - Biochar quality samples
@@ -134,14 +153,16 @@ export const productionRunReadings = pgTable('production_run_readings', {
 // Minimum 3 samples per production batch required
 // ============================================
 
-export const samples = pgTable('samples', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
-    .notNull()
-    .references(() => productionRuns.id),
-  samplingTime: timestamp('sampling_time').notNull(),
-  operatorId: uuid('operator_id').references(() => operators.id),
-  reactorId: uuid('reactor_id').references(() => reactors.id),
+export const samples = pgTable(
+  'samples',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    productionRunId: uuid('production_run_id')
+      .notNull()
+      .references(() => productionRuns.id),
+    samplingTime: timestamp('sampling_time').notNull(),
+    operatorId: uuid('operator_id').references(() => operators.id),
+    reactorId: uuid('reactor_id').references(() => reactors.id),
 
   // --- Sampling Details ---
   sampleCode: text('sample_code').notNull(),
@@ -222,42 +243,64 @@ export const samples = pgTable('samples', {
   pcbMgPerKg: real('pcb_mg_per_kg'), // ≤0.2 mg/kg DM (12 WHO PCB)
   pcbTotalMgKg: real('pcb_total_mg_kg'),
 
-  // --- Nutrients Declaration (Isometric: Table 2 - REQUIRED) ---
-  phosphorusGPerKg: real('phosphorus_g_per_kg'),
-  phosphorusPercent: real('phosphorus_percent'),
-  potassiumGPerKg: real('potassium_g_per_kg'),
-  potassiumPercent: real('potassium_percent'),
-  magnesiumGPerKg: real('magnesium_g_per_kg'),
-  magnesiumPercent: real('magnesium_percent'),
-  calciumGPerKg: real('calcium_g_per_kg'),
-  calciumPercent: real('calcium_percent'),
-  ironGPerKg: real('iron_g_per_kg'),
-  ironPercent: real('iron_percent'),
+    // --- Nutrients Declaration (required only for nutrient/fertilizer claim pathway) ---
+    nutrientClaimEnabled: boolean('nutrient_claim_enabled')
+      .notNull()
+      .default(false),
+    phosphorusGPerKg: real('phosphorus_g_per_kg'),
+    phosphorusPercent: real('phosphorus_percent'),
+    potassiumGPerKg: real('potassium_g_per_kg'),
+    potassiumPercent: real('potassium_percent'),
+    magnesiumGPerKg: real('magnesium_g_per_kg'),
+    magnesiumPercent: real('magnesium_percent'),
+    calciumGPerKg: real('calcium_g_per_kg'),
+    calciumPercent: real('calcium_percent'),
+    ironGPerKg: real('iron_g_per_kg'),
+    ironPercent: real('iron_percent'),
 
-  // --- 1000-Year Durability Fields (Isometric: Table 3 - Optional) ---
-  // Required only for 1000-year durability crediting option
-  randomReflectanceR0: real('random_reflectance_r0'), // >2% for inertinite (ISO 7404-5, 500+ measurements)
-  randomReflectanceR0Percent: real('random_reflectance_r0_percent'),
-  r0MeasurementCount: integer('r0_measurement_count'), // Must total >= 500 per batch
-  residualOrganicCarbonPercent: real('residual_organic_carbon_percent'), // Non-reactive carbon from TGA
-  residualCarbonPercent: real('residual_carbon_percent'),
-  reactiveCarbonPercent: real('reactive_carbon_percent'), // Reactive carbon from TGA
-  tgaAnalysisDate: date('tga_analysis_date'), // Thermogravimetric analysis date
-  r0AnalysisDate: date('r0_analysis_date'), // Random reflectance analysis date
-  r0HistogramFileUrl: text('r0_histogram_file_url'), // Evidence: R₀ histogram
-  tgaThermogramFileUrl: text('tga_thermogram_file_url'), // Evidence: TGA thermogram
+    // --- 1000-Year Durability Fields (Isometric: Table 3 - Optional) ---
+    // Required only for 1000-year durability crediting option
+    randomReflectanceR0: real('random_reflectance_r0'), // >2% for inertinite (ISO 7404-5, 500+ measurements)
+    randomReflectanceR0Percent: real('random_reflectance_r0_percent'),
+    r0MeasurementCount: integer('r0_measurement_count'), // Must total >= 500 per batch
+    residualOrganicCarbonPercent: real('residual_organic_carbon_percent'), // Non-reactive carbon from TGA
+    residualCarbonPercent: real('residual_carbon_percent'),
+    reactiveCarbonPercent: real('reactive_carbon_percent'), // Reactive carbon from TGA
+    tgaAnalysisDate: date('tga_analysis_date'), // Thermogravimetric analysis date
+    r0AnalysisDate: date('r0_analysis_date'), // Random reflectance analysis date
+    r0HistogramFileUrl: text('r0_histogram_file_url'), // Evidence: R₀ histogram
+    tgaThermogramFileUrl: text('tga_thermogram_file_url'), // Evidence: TGA thermogram
 
-  // --- Lab Information (Isometric: ISO 17025 compliance) ---
-  labName: text('lab_name'),
-  labAccreditationNumber: text('lab_accreditation_number'), // ISO 17025 accreditation
-  labAccreditation: text('lab_accreditation'),
-  analysisMethod: text('analysis_method'), // e.g., "ASTM D5291", "ISO 29541"
+    // --- Lab Information (Isometric: ISO 17025 compliance) ---
+    labName: text('lab_name'),
+    labAccreditationNumber: text('lab_accreditation_number'), // ISO 17025 accreditation
+    labAccreditation: text('lab_accreditation'),
+    analysisMethod: text('analysis_method'), // e.g., "ASTM D5291", "ISO 29541"
+    labAnalysisAt: timestamp('lab_analysis_at'),
+    iso17025Accreditation: boolean('iso_17025_accreditation'),
+    labResults: jsonb('lab_results'),
+    labAnalystName: text('lab_analyst_name'),
+    labReportFileUrl: text('lab_report_file_url'),
+    labReportFile: text('lab_report_file'),
 
-  notes: text('notes'),
+    notes: text('notes'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'samples_nutrients_required_when_claim_enabled',
+      sql`${table.nutrientClaimEnabled} = false or (
+        ${table.phosphorusGPerKg} is not null and
+        ${table.potassiumGPerKg} is not null and
+        ${table.magnesiumGPerKg} is not null and
+        ${table.calciumGPerKg} is not null and
+        ${table.ironGPerKg} is not null
+      )`
+    ),
+  ]
+);
 
 // ============================================
 // Incident Reports - Production issues

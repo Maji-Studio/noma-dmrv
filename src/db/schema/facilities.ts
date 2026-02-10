@@ -1,32 +1,42 @@
-import { pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
+import { check, pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
 import { storageLocationType, durabilityOption } from './common';
 
 // ============================================
 // Facilities - Production sites
 // ============================================
 
-export const facilities = pgTable('facilities', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
-  name: text('name').notNull(),
-  location: text('location'),
-  gpsLat: real('gps_lat'),
-  gpsLng: real('gps_lng'),
-  // CSV schema parity aliases
-  gpsLatitude: real('gps_latitude').notNull().default(0),
-  gpsLongitude: real('gps_longitude').notNull().default(0),
-  country: text('country').notNull().default('UNKNOWN'),
-  address: text('address'),
-  contactEmail: text('contact_email'),
-  contactPhone: text('contact_phone'),
-  defaultDurabilityOption: durabilityOption('default_durability_option')
-    .notNull()
-    .default('200_year'),
+export const facilities = pgTable(
+  'facilities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    name: text('name').notNull(),
+    location: text('location'),
+    gpsLatitude: real('gps_latitude'),
+    gpsLongitude: real('gps_longitude'),
+    country: text('country').notNull().default('UNKNOWN'),
+    address: text('address'),
+    contactEmail: text('contact_email'),
+    contactPhone: text('contact_phone'),
+    defaultDurabilityOption: durabilityOption('default_durability_option')
+      .notNull()
+      .default('200_year'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'facilities_gps_latitude_range',
+      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
+    ),
+    check(
+      'facilities_gps_longitude_range',
+      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
+    ),
+  ]
+);
 
 // ============================================
 // Reactors - Pyrolysis equipment
@@ -53,18 +63,36 @@ export const reactors = pgTable('reactors', {
 // Storage Locations - Bins/piles for materials
 // ============================================
 
-export const storageLocations = pgTable('storage_locations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
-  name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
-  type: storageLocationType('type').notNull(),
-  capacityKg: real('capacity_kg'),
-  facilityId: uuid('facility_id')
-    .notNull()
-    .references(() => facilities.id),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const storageLocations = pgTable(
+  'storage_locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
+    type: storageLocationType('type').notNull(),
+    capacityKg: real('capacity_kg'),
+    latitude: real('latitude'),
+    longitude: real('longitude'),
+    isometricStorageMethod: text('isometric_storage_method'),
+    isometricDescription: text('isometric_description'),
+    isometricSupplierReferenceId: text('isometric_supplier_reference_id'),
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'storage_locations_latitude_range',
+      sql`${table.latitude} is null or (${table.latitude} >= -90 and ${table.latitude} <= 90)`
+    ),
+    check(
+      'storage_locations_longitude_range',
+      sql`${table.longitude} is null or (${table.longitude} >= -180 and ${table.longitude} <= 180)`
+    ),
+  ]
+);
 
 // ============================================
 // Relations

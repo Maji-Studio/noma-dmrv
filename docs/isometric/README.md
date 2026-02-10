@@ -19,6 +19,8 @@ Maintain a local, low-token requirements knowledge base for:
 - `versions.json`: protocol/module version pins, status, dates, authoritative URLs
 - `requirements-shortlist.md`: concise requirement shortlist by domain
 - `schema-mapping.md`: requirement-to-schema coverage map and prioritized gaps
+- `condition-registry.md`: canonical trigger map for `conditional_required` fields
+- `schema-review.csv`: schema requiredness matrix (`required`, `conditional_required`, `optional`)
 - `update-playbook.md`: repeatable update workflow
 - `changes.md`: local changelog format for future bumps
 
