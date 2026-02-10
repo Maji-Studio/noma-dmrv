@@ -275,14 +275,6 @@
   --radius-full: 9999px;
 }
 
-/* Optional: Dark mode support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--color-gray-900);
-    --foreground: var(--color-white-100);
-  }
-}
-
 /* ===== BASE STYLES ===== */
 
 * {
