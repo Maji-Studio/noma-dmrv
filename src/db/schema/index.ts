@@ -15,7 +15,8 @@ export * from "./application";
 export * from "./credits";
 export * from "./emissions";
 export * from "./documentation";
-export * from "./isometric";
+export * from "./certification";
+export * from "./compliance";
 
 // Legacy template entities retained temporarily for app compatibility.
 export * from "./projects";

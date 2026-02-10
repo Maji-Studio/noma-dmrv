@@ -9,6 +9,7 @@ CREATE TYPE "public"."durability_option" AS ENUM('200_year', '1000_year');--> st
 CREATE TYPE "public"."emissions_calculation_method" AS ENUM('energy_usage', 'distance_based');--> statement-breakpoint
 CREATE TYPE "public"."feedstock_status" AS ENUM('missing_data', 'complete');--> statement-breakpoint
 CREATE TYPE "public"."incident_severity" AS ENUM('low', 'medium', 'high');--> statement-breakpoint
+CREATE TYPE "public"."isometric_submission_status" AS ENUM('draft', 'submitted', 'accepted', 'rejected', 'superseded');--> statement-breakpoint
 CREATE TYPE "public"."order_status" AS ENUM('draft', 'ordered', 'processed');--> statement-breakpoint
 CREATE TYPE "public"."packaging_type" AS ENUM('loose', 'bagged');--> statement-breakpoint
 CREATE TYPE "public"."production_run_status" AS ENUM('draft', 'running', 'complete', 'void');--> statement-breakpoint
@@ -28,8 +29,8 @@ CREATE TABLE "applications" (
 	"biochar_applied_dry_tons" real NOT NULL,
 	"biochar_dry_matter_tons" real,
 	"total_applied_tons" real,
-	"gps_lat" real,
-	"gps_lng" real,
+	"average_application_rate_magnitude" real,
+	"average_application_rate_unit" text,
 	"gps_latitude" real,
 	"gps_longitude" real,
 	"field_size_ha" real,
@@ -44,7 +45,9 @@ CREATE TABLE "applications" (
 	"truck_mass_on_departure_kg" real,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "applications_code_unique" UNIQUE("code")
+	CONSTRAINT "applications_code_unique" UNIQUE("code"),
+	CONSTRAINT "applications_gps_latitude_range" CHECK ("applications"."gps_latitude" is null or ("applications"."gps_latitude" >= -90 and "applications"."gps_latitude" <= 90)),
+	CONSTRAINT "applications_gps_longitude_range" CHECK ("applications"."gps_longitude" is null or ("applications"."gps_longitude" >= -180 and "applications"."gps_longitude" <= 180))
 );
 --> statement-breakpoint
 CREATE TABLE "soil_temperature_measurements" (
@@ -57,13 +60,13 @@ CREATE TABLE "soil_temperature_measurements" (
 	"measurement_approach" text,
 	"measurement_depth_cm" real,
 	"depth_cm" real,
-	"measurement_lat" real,
-	"measurement_lng" real,
 	"gps_latitude" real,
 	"gps_longitude" real,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "soil_temperature_measurements_gps_latitude_range" CHECK ("soil_temperature_measurements"."gps_latitude" is null or ("soil_temperature_measurements"."gps_latitude" >= -90 and "soil_temperature_measurements"."gps_latitude" <= 90)),
+	CONSTRAINT "soil_temperature_measurements_gps_longitude_range" CHECK ("soil_temperature_measurements"."gps_longitude" is null or ("soil_temperature_measurements"."gps_longitude" >= -180 and "soil_temperature_measurements"."gps_longitude" <= 180))
 );
 --> statement-breakpoint
 CREATE TABLE "account" (
@@ -111,6 +114,56 @@ CREATE TABLE "verification" (
 	"expires_at" timestamp NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "custody_handoffs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"material_type" text NOT NULL,
+	"material_id" uuid NOT NULL,
+	"from_party_type" text NOT NULL,
+	"from_party_id" uuid,
+	"to_party_type" text NOT NULL,
+	"to_party_id" uuid,
+	"handoff_at" timestamp NOT NULL,
+	"quantity_kg" real,
+	"reference_number" text,
+	"document_id" uuid,
+	"notes" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "feedstock_sc_assessments" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"feedstock_id" uuid NOT NULL,
+	"criterion_code" text NOT NULL,
+	"assessment_date" date NOT NULL,
+	"outcome" text NOT NULL,
+	"assessor" text,
+	"valid_from" date,
+	"valid_to" date,
+	"evidence_document_id" uuid,
+	"notes" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "feedstock_sc_assessments_feedstock_criterion_date_unique" UNIQUE("feedstock_id","criterion_code","assessment_date"),
+	CONSTRAINT "feedstock_sc_assessments_validity_window" CHECK ("feedstock_sc_assessments"."valid_from" is null or "feedstock_sc_assessments"."valid_to" is null or "feedstock_sc_assessments"."valid_from" <= "feedstock_sc_assessments"."valid_to")
+);
+--> statement-breakpoint
+CREATE TABLE "ghg_materiality_assessments" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"credit_batch_id" uuid NOT NULL,
+	"assessment_date" date NOT NULL,
+	"estimated_ssr_emissions_tco2e" real NOT NULL,
+	"estimated_net_removals_tco2e" real NOT NULL,
+	"materiality_percent" real,
+	"is_material" boolean,
+	"reassessment_required_by" date,
+	"methodology_reference" text,
+	"notes" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "ghg_materiality_assessments_percent_range" CHECK ("ghg_materiality_assessments"."materiality_percent" is null or ("ghg_materiality_assessments"."materiality_percent" >= 0 and "ghg_materiality_assessments"."materiality_percent" <= 100))
 );
 --> statement-breakpoint
 CREATE TABLE "credit_batch_applications" (
@@ -163,7 +216,15 @@ CREATE TABLE "credit_batches" (
 	"mixing_timeline_days" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "credit_batches_code_unique" UNIQUE("code")
+	CONSTRAINT "credit_batches_code_unique" UNIQUE("code"),
+	CONSTRAINT "credit_batches_200_year_requires_soil_temp_and_h_to_corg" CHECK ("credit_batches"."durability_option" <> '200_year'::durability_option or (
+        "credit_batches"."soil_temperature_c" is not null and
+        "credit_batches"."h_to_c_org_ratio" is not null
+      )),
+	CONSTRAINT "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon" CHECK ("credit_batches"."durability_option" <> '1000_year'::durability_option or (
+        "credit_batches"."mean_random_reflectance_percent" is not null and
+        "credit_batches"."mean_non_reactive_carbon_percent" is not null
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "lab_analyses" (
@@ -193,7 +254,7 @@ CREATE TABLE "documents" (
 	"issued_at" timestamp,
 	"captured_at" timestamp,
 	"description" text,
-	"metadata" jsonb,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_by" text,
 	"notes" text,
 	"feedstock_id" uuid,
@@ -221,7 +282,8 @@ CREATE TABLE "documents" (
       (case when "documents"."application_id" is not null then 1 else 0 end) +
       (case when "documents"."credit_batch_id" is not null then 1 else 0 end) +
       (case when "documents"."lab_analysis_id" is not null then 1 else 0 end)
-      ) = 1)
+      ) = 1),
+	CONSTRAINT "documents_photo_video_require_captured_at" CHECK ("documents"."document_type" <> all (array['photo', 'video']::documentation_type[]) or "documents"."captured_at" is not null)
 );
 --> statement-breakpoint
 CREATE TABLE "emission_factors" (
@@ -244,10 +306,8 @@ CREATE TABLE "facilities" (
 	"code" text NOT NULL,
 	"name" text NOT NULL,
 	"location" text,
-	"gps_lat" real,
-	"gps_lng" real,
-	"gps_latitude" real DEFAULT 0 NOT NULL,
-	"gps_longitude" real DEFAULT 0 NOT NULL,
+	"gps_latitude" real,
+	"gps_longitude" real,
 	"country" text DEFAULT 'UNKNOWN' NOT NULL,
 	"address" text,
 	"contact_email" text,
@@ -255,7 +315,9 @@ CREATE TABLE "facilities" (
 	"default_durability_option" "durability_option" DEFAULT '200_year' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "facilities_code_unique" UNIQUE("code")
+	CONSTRAINT "facilities_code_unique" UNIQUE("code"),
+	CONSTRAINT "facilities_gps_latitude_range" CHECK ("facilities"."gps_latitude" is null or ("facilities"."gps_latitude" >= -90 and "facilities"."gps_latitude" <= 90)),
+	CONSTRAINT "facilities_gps_longitude_range" CHECK ("facilities"."gps_longitude" is null or ("facilities"."gps_longitude" >= -180 and "facilities"."gps_longitude" <= 180))
 );
 --> statement-breakpoint
 CREATE TABLE "reactors" (
@@ -279,10 +341,17 @@ CREATE TABLE "storage_locations" (
 	"name" text NOT NULL,
 	"type" "storage_location_type" NOT NULL,
 	"capacity_kg" real,
+	"latitude" real,
+	"longitude" real,
+	"isometric_storage_method" text,
+	"isometric_description" text,
+	"isometric_supplier_reference_id" text,
 	"facility_id" uuid NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "storage_locations_code_unique" UNIQUE("code")
+	CONSTRAINT "storage_locations_code_unique" UNIQUE("code"),
+	CONSTRAINT "storage_locations_latitude_range" CHECK ("storage_locations"."latitude" is null or ("storage_locations"."latitude" >= -90 and "storage_locations"."latitude" <= 90)),
+	CONSTRAINT "storage_locations_longitude_range" CHECK ("storage_locations"."longitude" is null or ("storage_locations"."longitude" >= -180 and "storage_locations"."longitude" <= 180))
 );
 --> statement-breakpoint
 CREATE TABLE "feedstock_deliveries" (
@@ -310,7 +379,9 @@ CREATE TABLE "feedstock_deliveries" (
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "feedstock_deliveries_code_unique" UNIQUE("code")
+	CONSTRAINT "feedstock_deliveries_code_unique" UNIQUE("code"),
+	CONSTRAINT "feedstock_deliveries_gps_latitude_range" CHECK ("feedstock_deliveries"."gps_latitude" is null or ("feedstock_deliveries"."gps_latitude" >= -90 and "feedstock_deliveries"."gps_latitude" <= 90)),
+	CONSTRAINT "feedstock_deliveries_gps_longitude_range" CHECK ("feedstock_deliveries"."gps_longitude" is null or ("feedstock_deliveries"."gps_longitude" >= -180 and "feedstock_deliveries"."gps_longitude" <= 180))
 );
 --> statement-breakpoint
 CREATE TABLE "feedstock_types" (
@@ -363,7 +434,22 @@ CREATE TABLE "feedstocks" (
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "feedstocks_code_unique" UNIQUE("code")
+	CONSTRAINT "feedstocks_code_unique" UNIQUE("code"),
+	CONSTRAINT "feedstocks_mass_dry_non_negative" CHECK ("feedstocks"."mass_dry_kg" >= 0),
+	CONSTRAINT "feedstocks_mass_dry_lte_wet" CHECK ("feedstocks"."mass_dry_kg" <= "feedstocks"."mass_wet_kg")
+);
+--> statement-breakpoint
+CREATE TABLE "customer_locations" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"customer_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"gps_latitude" real NOT NULL,
+	"gps_longitude" real NOT NULL,
+	"address" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "customer_locations_gps_latitude_range" CHECK ("customer_locations"."gps_latitude" >= -90 and "customer_locations"."gps_latitude" <= 90),
+	CONSTRAINT "customer_locations_gps_longitude_range" CHECK ("customer_locations"."gps_longitude" >= -180 and "customer_locations"."gps_longitude" <= 180)
 );
 --> statement-breakpoint
 CREATE TABLE "customers" (
@@ -371,10 +457,8 @@ CREATE TABLE "customers" (
 	"code" text NOT NULL,
 	"name" text NOT NULL,
 	"location" text,
-	"gps_lat" real NOT NULL,
-	"gps_lng" real NOT NULL,
-	"gps_latitude" real DEFAULT 0 NOT NULL,
-	"gps_longitude" real DEFAULT 0 NOT NULL,
+	"gps_latitude" real NOT NULL,
+	"gps_longitude" real NOT NULL,
 	"distance_km" real,
 	"crop_type" text,
 	"address" text,
@@ -382,7 +466,9 @@ CREATE TABLE "customers" (
 	"contact_phone" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "customers_code_unique" UNIQUE("code")
+	CONSTRAINT "customers_code_unique" UNIQUE("code"),
+	CONSTRAINT "customers_gps_latitude_range" CHECK ("customers"."gps_latitude" >= -90 and "customers"."gps_latitude" <= 90),
+	CONSTRAINT "customers_gps_longitude_range" CHECK ("customers"."gps_longitude" >= -180 and "customers"."gps_longitude" <= 180)
 );
 --> statement-breakpoint
 CREATE TABLE "drivers" (
@@ -413,10 +499,8 @@ CREATE TABLE "suppliers" (
 	"code" text NOT NULL,
 	"name" text NOT NULL,
 	"location" text,
-	"gps_lat" real,
-	"gps_lng" real,
-	"gps_latitude" real DEFAULT 0 NOT NULL,
-	"gps_longitude" real DEFAULT 0 NOT NULL,
+	"gps_latitude" real,
+	"gps_longitude" real,
 	"address" text,
 	"contact_name" text,
 	"contact_email" text,
@@ -425,7 +509,9 @@ CREATE TABLE "suppliers" (
 	"chain_of_custody_ref" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "suppliers_code_unique" UNIQUE("code")
+	CONSTRAINT "suppliers_code_unique" UNIQUE("code"),
+	CONSTRAINT "suppliers_gps_latitude_range" CHECK ("suppliers"."gps_latitude" is null or ("suppliers"."gps_latitude" >= -90 and "suppliers"."gps_latitude" <= 90)),
+	CONSTRAINT "suppliers_gps_longitude_range" CHECK ("suppliers"."gps_longitude" is null or ("suppliers"."gps_longitude" >= -180 and "suppliers"."gps_longitude" <= 180))
 );
 --> statement-breakpoint
 CREATE TABLE "incident_reports" (
@@ -458,6 +544,7 @@ CREATE TABLE "production_run_readings" (
 	"temperature_c" real,
 	"temperature_celsius" real,
 	"pressure_bar" real,
+	"continuous_gas_measurement" boolean DEFAULT false NOT NULL,
 	"ch4_composition" real,
 	"n2o_composition" real,
 	"co_composition" real,
@@ -468,7 +555,13 @@ CREATE TABLE "production_run_readings" (
 	"co_ppm" real,
 	"co2_ppm" real,
 	"flow_rate" real,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "production_run_readings_ppm_required_when_continuous" CHECK ("production_run_readings"."continuous_gas_measurement" = false or (
+        "production_run_readings"."ch4_ppm" is not null and
+        "production_run_readings"."n2o_ppm" is not null and
+        "production_run_readings"."co_ppm" is not null and
+        "production_run_readings"."co2_ppm" is not null
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "production_runs" (
@@ -579,6 +672,7 @@ CREATE TABLE "samples" (
 	"furans_ng_kg" real,
 	"pcb_mg_per_kg" real,
 	"pcb_total_mg_kg" real,
+	"nutrient_claim_enabled" boolean DEFAULT false NOT NULL,
 	"phosphorus_g_per_kg" real,
 	"phosphorus_percent" real,
 	"potassium_g_per_kg" real,
@@ -605,7 +699,14 @@ CREATE TABLE "samples" (
 	"analysis_method" text,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "samples_nutrients_required_when_claim_enabled" CHECK ("samples"."nutrient_claim_enabled" = false or (
+        "samples"."phosphorus_g_per_kg" is not null and
+        "samples"."potassium_g_per_kg" is not null and
+        "samples"."magnesium_g_per_kg" is not null and
+        "samples"."calcium_g_per_kg" is not null and
+        "samples"."iron_g_per_kg" is not null
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "biochar_products" (
@@ -655,25 +756,26 @@ CREATE TABLE "deliveries" (
 	"delivery_date" timestamp NOT NULL,
 	"status" "delivery_status" DEFAULT 'processing' NOT NULL,
 	"order_id" uuid NOT NULL,
+	"customer_location_id" uuid,
 	"biochar_product_id" uuid,
 	"storage_location_id" uuid,
 	"quantity_tons" real,
 	"quantity_m3" real,
 	"biochar_tons" real,
 	"fixed_carbon_percent" real,
+	"delivered_wet_mass_kg" real,
+	"mass_dry_kg" real,
 	"driver_id" uuid,
 	"vehicle_id" uuid,
 	"vehicle_description" text,
 	"vehicle_type" text,
-	"fuel_type" text NOT NULL,
-	"fuel_consumed_liters" real NOT NULL,
-	"distance_km" real NOT NULL,
-	"emissions_tco2e" real NOT NULL,
 	"transport_emissions_co2e_kg" real,
-	"emission_factor_used" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "deliveries_code_unique" UNIQUE("code")
+	CONSTRAINT "deliveries_code_unique" UNIQUE("code"),
+	CONSTRAINT "deliveries_mass_dry_non_negative" CHECK ("deliveries"."mass_dry_kg" is null or "deliveries"."mass_dry_kg" >= 0),
+	CONSTRAINT "deliveries_delivered_wet_mass_non_negative" CHECK ("deliveries"."delivered_wet_mass_kg" is null or "deliveries"."delivered_wet_mass_kg" >= 0),
+	CONSTRAINT "deliveries_mass_dry_lte_wet_mass" CHECK ("deliveries"."mass_dry_kg" is null or "deliveries"."delivered_wet_mass_kg" is null or "deliveries"."mass_dry_kg" <= "deliveries"."delivered_wet_mass_kg")
 );
 --> statement-breakpoint
 CREATE TABLE "orders" (
@@ -683,6 +785,7 @@ CREATE TABLE "orders" (
 	"order_date" timestamp NOT NULL,
 	"status" "order_status" DEFAULT 'ordered' NOT NULL,
 	"customer_id" uuid NOT NULL,
+	"customer_location_id" uuid NOT NULL,
 	"invoice_number" text,
 	"formulation_id" uuid,
 	"biochar_product_id" uuid NOT NULL,
@@ -706,18 +809,14 @@ CREATE TABLE "transport_legs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"entity_type" "transport_entity_type" NOT NULL,
 	"entity_id" uuid NOT NULL,
-	"origin_lat" real,
-	"origin_lng" real,
-	"origin_latitude" real,
-	"origin_longitude" real,
+	"origin_gps_latitude" real,
+	"origin_gps_longitude" real,
 	"origin_name" text,
-	"destination_lat" real,
-	"destination_lng" real,
-	"destination_latitude" real,
-	"destination_longitude" real,
+	"destination_gps_latitude" real,
+	"destination_gps_longitude" real,
 	"destination_name" text,
 	"distance_km" real NOT NULL,
-	"transport_method" "transport_method",
+	"transport_method" "transport_method" NOT NULL,
 	"vehicle_type" text,
 	"vehicle_model_year" text,
 	"model_year" integer,
@@ -727,7 +826,7 @@ CREATE TABLE "transport_legs" (
 	"load_weight_tonnes" real,
 	"load_mass_kg" real,
 	"load_capacity_utilization_percent" real,
-	"calculation_method" "emissions_calculation_method",
+	"calculation_method" "emissions_calculation_method" NOT NULL,
 	"emission_factor_used" real,
 	"emission_factor_source" text,
 	"emissions_co2e_kg" real,
@@ -738,7 +837,21 @@ CREATE TABLE "transport_legs" (
 	"bill_of_lading" text,
 	"weigh_scale_ticket_ref" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "transport_legs_origin_gps_latitude_range" CHECK ("transport_legs"."origin_gps_latitude" is null or ("transport_legs"."origin_gps_latitude" >= -90 and "transport_legs"."origin_gps_latitude" <= 90)),
+	CONSTRAINT "transport_legs_origin_gps_longitude_range" CHECK ("transport_legs"."origin_gps_longitude" is null or ("transport_legs"."origin_gps_longitude" >= -180 and "transport_legs"."origin_gps_longitude" <= 180)),
+	CONSTRAINT "transport_legs_destination_gps_latitude_range" CHECK ("transport_legs"."destination_gps_latitude" is null or ("transport_legs"."destination_gps_latitude" >= -90 and "transport_legs"."destination_gps_latitude" <= 90)),
+	CONSTRAINT "transport_legs_destination_gps_longitude_range" CHECK ("transport_legs"."destination_gps_longitude" is null or ("transport_legs"."destination_gps_longitude" >= -180 and "transport_legs"."destination_gps_longitude" <= 180)),
+	CONSTRAINT "transport_legs_energy_usage_requirements" CHECK ("transport_legs"."calculation_method" <> 'energy_usage'::emissions_calculation_method or (
+        "transport_legs"."fuel_type" is not null and
+        ("transport_legs"."fuel_consumed_liters" is not null or "transport_legs"."electricity_kwh" is not null) and
+        "transport_legs"."emission_factor_used" is not null
+      )),
+	CONSTRAINT "transport_legs_distance_based_requirements" CHECK ("transport_legs"."calculation_method" <> 'distance_based'::emissions_calculation_method or (
+        "transport_legs"."load_mass_kg" is not null and
+        "transport_legs"."vehicle_type" is not null and
+        "transport_legs"."emission_factor_used" is not null
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "vehicles" (
@@ -762,10 +875,14 @@ CREATE TABLE "isometric_biochar_applications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"application_id" uuid NOT NULL,
 	"external_biochar_application_id" text NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" "isometric_submission_status" DEFAULT 'submitted' NOT NULL,
+	"submitted_at" timestamp,
+	"superseded_at" timestamp,
 	"payload_snapshot" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "isometric_biochar_applications_application_unique" UNIQUE("application_id"),
+	CONSTRAINT "isometric_biochar_applications_application_version_unique" UNIQUE("application_id","version"),
 	CONSTRAINT "isometric_biochar_applications_external_unique" UNIQUE("external_biochar_application_id")
 );
 --> statement-breakpoint
@@ -784,21 +901,46 @@ CREATE TABLE "isometric_ghg_statements" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"credit_batch_id" uuid NOT NULL,
 	"external_ghg_statement_id" text NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" "isometric_submission_status" DEFAULT 'submitted' NOT NULL,
+	"submitted_at" timestamp,
+	"superseded_at" timestamp,
 	"payload_snapshot" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "isometric_ghg_statements_credit_batch_unique" UNIQUE("credit_batch_id"),
+	CONSTRAINT "isometric_ghg_statements_credit_batch_version_unique" UNIQUE("credit_batch_id","version"),
 	CONSTRAINT "isometric_ghg_statements_external_unique" UNIQUE("external_ghg_statement_id")
+);
+--> statement-breakpoint
+CREATE TABLE "isometric_monitoring_submissions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"source_id" uuid NOT NULL,
+	"external_monitoring_submission_id" text NOT NULL,
+	"monitoring_period_start" timestamp,
+	"monitoring_period_end" timestamp,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" "isometric_submission_status" DEFAULT 'submitted' NOT NULL,
+	"submitted_at" timestamp,
+	"superseded_at" timestamp,
+	"payload_snapshot" jsonb,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "isometric_monitoring_submissions_source_version_unique" UNIQUE("source_id","version"),
+	CONSTRAINT "isometric_monitoring_submissions_external_unique" UNIQUE("external_monitoring_submission_id")
 );
 --> statement-breakpoint
 CREATE TABLE "isometric_production_batches" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"production_run_id" uuid NOT NULL,
 	"external_production_batch_id" text NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" "isometric_submission_status" DEFAULT 'submitted' NOT NULL,
+	"submitted_at" timestamp,
+	"superseded_at" timestamp,
 	"payload_snapshot" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "isometric_production_batches_run_unique" UNIQUE("production_run_id"),
+	CONSTRAINT "isometric_production_batches_run_version_unique" UNIQUE("production_run_id","version"),
 	CONSTRAINT "isometric_production_batches_external_unique" UNIQUE("external_production_batch_id")
 );
 --> statement-breakpoint
@@ -820,21 +962,41 @@ CREATE TABLE "isometric_removals" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"credit_batch_id" uuid NOT NULL,
 	"external_removal_id" text NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" "isometric_submission_status" DEFAULT 'submitted' NOT NULL,
+	"submitted_at" timestamp,
+	"superseded_at" timestamp,
 	"payload_snapshot" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "isometric_removals_credit_batch_unique" UNIQUE("credit_batch_id"),
+	CONSTRAINT "isometric_removals_credit_batch_version_unique" UNIQUE("credit_batch_id","version"),
 	CONSTRAINT "isometric_removals_external_unique" UNIQUE("external_removal_id")
+);
+--> statement-breakpoint
+CREATE TABLE "isometric_sources" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"provider" "certifier_provider" DEFAULT 'isometric' NOT NULL,
+	"source_type" text NOT NULL,
+	"source_reference_id" text NOT NULL,
+	"description" text,
+	"metadata" jsonb,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "isometric_sources_provider_type_ref_unique" UNIQUE("provider","source_type","source_reference_id")
 );
 --> statement-breakpoint
 CREATE TABLE "isometric_storage_locations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"application_id" uuid NOT NULL,
 	"external_storage_location_id" text NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" "isometric_submission_status" DEFAULT 'submitted' NOT NULL,
+	"submitted_at" timestamp,
+	"superseded_at" timestamp,
 	"payload_snapshot" jsonb,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "isometric_storage_locations_application_unique" UNIQUE("application_id"),
+	CONSTRAINT "isometric_storage_locations_application_version_unique" UNIQUE("application_id","version"),
 	CONSTRAINT "isometric_storage_locations_external_unique" UNIQUE("external_storage_location_id")
 );
 --> statement-breakpoint
@@ -885,6 +1047,10 @@ ALTER TABLE "applications" ADD CONSTRAINT "applications_delivery_id_deliveries_i
 ALTER TABLE "soil_temperature_measurements" ADD CONSTRAINT "soil_temperature_measurements_application_id_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."applications"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "custody_handoffs" ADD CONSTRAINT "custody_handoffs_document_id_documents_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."documents"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedstock_sc_assessments" ADD CONSTRAINT "feedstock_sc_assessments_feedstock_id_feedstocks_id_fk" FOREIGN KEY ("feedstock_id") REFERENCES "public"."feedstocks"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedstock_sc_assessments" ADD CONSTRAINT "feedstock_sc_assessments_evidence_document_id_documents_id_fk" FOREIGN KEY ("evidence_document_id") REFERENCES "public"."documents"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ghg_materiality_assessments" ADD CONSTRAINT "ghg_materiality_assessments_credit_batch_id_credit_batches_id_fk" FOREIGN KEY ("credit_batch_id") REFERENCES "public"."credit_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credit_batch_applications" ADD CONSTRAINT "credit_batch_applications_credit_batch_id_credit_batches_id_fk" FOREIGN KEY ("credit_batch_id") REFERENCES "public"."credit_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credit_batch_applications" ADD CONSTRAINT "credit_batch_applications_application_id_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."applications"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credit_batches" ADD CONSTRAINT "credit_batches_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -915,6 +1081,7 @@ ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_supplier_id_suppliers_id_fk"
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_feedstock_type_id_feedstock_types_id_fk" FOREIGN KEY ("feedstock_type_id") REFERENCES "public"."feedstock_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "customer_locations" ADD CONSTRAINT "customer_locations_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "incident_reports" ADD CONSTRAINT "incident_reports_production_run_id_production_runs_id_fk" FOREIGN KEY ("production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "incident_reports" ADD CONSTRAINT "incident_reports_operator_id_operators_id_fk" FOREIGN KEY ("operator_id") REFERENCES "public"."operators"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "incident_reports" ADD CONSTRAINT "incident_reports_reactor_id_reactors_id_fk" FOREIGN KEY ("reactor_id") REFERENCES "public"."reactors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -938,17 +1105,20 @@ ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_linked_productio
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_customer_location_id_customer_locations_id_fk" FOREIGN KEY ("customer_location_id") REFERENCES "public"."customer_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_biochar_product_id_biochar_products_id_fk" FOREIGN KEY ("biochar_product_id") REFERENCES "public"."biochar_products"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_vehicle_id_vehicles_id_fk" FOREIGN KEY ("vehicle_id") REFERENCES "public"."vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_customer_location_id_customer_locations_id_fk" FOREIGN KEY ("customer_location_id") REFERENCES "public"."customer_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_formulation_id_formulations_id_fk" FOREIGN KEY ("formulation_id") REFERENCES "public"."formulations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_biochar_product_id_biochar_products_id_fk" FOREIGN KEY ("biochar_product_id") REFERENCES "public"."biochar_products"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "isometric_biochar_applications" ADD CONSTRAINT "isometric_biochar_applications_application_id_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."applications"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "isometric_document_uploads" ADD CONSTRAINT "isometric_document_uploads_document_id_documents_id_fk" FOREIGN KEY ("document_id") REFERENCES "public"."documents"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "isometric_ghg_statements" ADD CONSTRAINT "isometric_ghg_statements_credit_batch_id_credit_batches_id_fk" FOREIGN KEY ("credit_batch_id") REFERENCES "public"."credit_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "isometric_monitoring_submissions" ADD CONSTRAINT "isometric_monitoring_submissions_source_id_isometric_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."isometric_sources"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "isometric_production_batches" ADD CONSTRAINT "isometric_production_batches_production_run_id_production_runs_id_fk" FOREIGN KEY ("production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "isometric_projects" ADD CONSTRAINT "isometric_projects_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "isometric_removals" ADD CONSTRAINT "isometric_removals_credit_batch_id_credit_batches_id_fk" FOREIGN KEY ("credit_batch_id") REFERENCES "public"."credit_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

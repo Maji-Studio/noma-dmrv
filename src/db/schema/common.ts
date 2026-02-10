@@ -123,10 +123,26 @@ export const emissionsCalculationMethod = pgEnum('emissions_calculation_method',
   'distance_based', // Uses distance + weight + emission factors
 ]);
 
-export const certifierProvider = pgEnum('certifier_provider', ['isometric']);
+export const certifierProvider = pgEnum('certifier_provider', [
+  'isometric',
+  'puro_earth',
+  'verra',
+]);
 
 export const syncStatus = pgEnum('sync_status', [
   'pending',
   'succeeded',
   'failed',
 ]);
+
+// Certifier submission lifecycle state.
+export const certificationSubmissionStatus = pgEnum(
+  'isometric_submission_status',
+  [
+    'draft',
+    'submitted',
+    'accepted',
+    'rejected',
+    'superseded',
+  ]
+);

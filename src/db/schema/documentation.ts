@@ -14,7 +14,7 @@ import { productionRuns, samples, incidentReports } from './production';
 import { biocharProducts } from './products';
 import { deliveries, transportLegs } from './logistics';
 import { applications } from './application';
-import { creditBatches, labAnalyses } from './credits';
+import { creditBatches } from './credits';
 
 // File-based evidence with explicit foreign keys instead of polymorphic references.
 export const documents = pgTable(
@@ -32,7 +32,7 @@ export const documents = pgTable(
     issuedAt: timestamp('issued_at'),
     capturedAt: timestamp('captured_at'),
     description: text('description'),
-    metadata: jsonb('metadata'),
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
     createdBy: text('created_by'),
     notes: text('notes'),
 
@@ -52,7 +52,6 @@ export const documents = pgTable(
     transportLegId: uuid('transport_leg_id').references(() => transportLegs.id),
     applicationId: uuid('application_id').references(() => applications.id),
     creditBatchId: uuid('credit_batch_id').references(() => creditBatches.id),
-    labAnalysisId: uuid('lab_analysis_id').references(() => labAnalyses.id),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -70,9 +69,12 @@ export const documents = pgTable(
       (case when ${table.deliveryId} is not null then 1 else 0 end) +
       (case when ${table.transportLegId} is not null then 1 else 0 end) +
       (case when ${table.applicationId} is not null then 1 else 0 end) +
-      (case when ${table.creditBatchId} is not null then 1 else 0 end) +
-      (case when ${table.labAnalysisId} is not null then 1 else 0 end)
+      (case when ${table.creditBatchId} is not null then 1 else 0 end)
       ) = 1`
+    ),
+    check(
+      'documents_photo_video_require_captured_at',
+      sql`${table.documentType} <> all (array['photo', 'video']::documentation_type[]) or ${table.capturedAt} is not null`
     ),
   ]
 );

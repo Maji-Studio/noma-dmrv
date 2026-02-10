@@ -1,16 +1,24 @@
-import { pgTable, text, timestamp, uuid, real, integer } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
-  orderStatus,
+  check,
+  integer,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import {
   deliveryStatus,
+  emissionsCalculationMethod,
+  orderStatus,
   packagingType,
   transportEntityType,
   transportMethod,
-  emissionsCalculationMethod,
 } from './common';
 import { facilities, storageLocations } from './facilities';
-import { customers, drivers } from './parties';
-import { formulations, biocharProducts } from './products';
+import { customerLocations, customers, drivers } from './parties';
+import { biocharProducts, formulations } from './products';
 
 // ============================================
 // Vehicles - Transport vehicles with fuel configuration
@@ -48,6 +56,9 @@ export const orders = pgTable('orders', {
   customerId: uuid('customer_id')
     .notNull()
     .references(() => customers.id),
+  customerLocationId: uuid('customer_location_id')
+    .notNull()
+    .references(() => customerLocations.id),
   invoiceNumber: text('invoice_number'), // e.g., "24-0009"
 
   // --- Order Details ---
@@ -75,113 +86,166 @@ export const orders = pgTable('orders', {
 
 // ============================================
 // Deliveries - Delivery of biochar products
-// Isometric Protocol: Transport emissions tracking
+// Isometric Protocol: Transport emissions now sourced from transport_legs
 // ============================================
 
-export const deliveries = pgTable('deliveries', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // e.g., "DL-2025-043"
-  facilityId: uuid('facility_id')
-    .notNull()
-    .references(() => facilities.id),
-  deliveryDate: timestamp('delivery_date').notNull(),
-  status: deliveryStatus('status').default('processing').notNull(),
+export const deliveries = pgTable(
+  'deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(), // e.g., "DL-2025-043"
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    deliveryDate: timestamp('delivery_date').notNull(),
+    status: deliveryStatus('status').default('processing').notNull(),
 
-  // --- Linked Order ---
-  orderId: uuid('order_id')
-    .notNull()
-    .references(() => orders.id),
+    // --- Linked Order ---
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id),
 
-  // --- Product Batch ---
-  biocharProductId: uuid('biochar_product_id').references(
-    () => biocharProducts.id
-  ),
-  storageLocationId: uuid('storage_location_id').references(
-    () => storageLocations.id
-  ),
-  quantityTons: real('quantity_tons'),
-  quantityM3: real('quantity_m3'),
-  biocharTons: real('biochar_tons'),
-  fixedCarbonPercent: real('fixed_carbon_percent'),
+    // Optional override when delivery destination differs from order destination.
+    customerLocationId: uuid('customer_location_id').references(
+      () => customerLocations.id
+    ),
 
-  // --- Delivery Details (Isometric: Transportation Emissions) ---
-  driverId: uuid('driver_id').references(() => drivers.id),
-  vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-  vehicleDescription: text('vehicle_description'),
-  vehicleType: text('vehicle_type'), // e.g., "Truck"
-  fuelType: text('fuel_type').notNull(), // e.g., "Diesel"
-  fuelConsumedLiters: real('fuel_consumed_liters').notNull(),
-  distanceKm: real('distance_km').notNull(),
-  // Isometric: Transport emissions (calculated)
-  emissionsTco2e: real('emissions_tco2e').notNull(),
-  transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
-  emissionFactorUsed: text('emission_factor_used').notNull(),
+    // --- Product Batch ---
+    biocharProductId: uuid('biochar_product_id').references(
+      () => biocharProducts.id
+    ),
+    storageLocationId: uuid('storage_location_id').references(
+      () => storageLocations.id
+    ),
+    quantityTons: real('quantity_tons'),
+    quantityM3: real('quantity_m3'),
+    biocharTons: real('biochar_tons'),
+    fixedCarbonPercent: real('fixed_carbon_percent'),
+    deliveredWetMassKg: real('delivered_wet_mass_kg'),
+    massDryKg: real('mass_dry_kg'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    // --- Operational transport metadata (not transport emissions source of truth) ---
+    driverId: uuid('driver_id').references(() => drivers.id),
+    vehicleId: uuid('vehicle_id').references(() => vehicles.id),
+    vehicleDescription: text('vehicle_description'),
+    vehicleType: text('vehicle_type'),
+
+    // Derived cache field; canonical accounting is in transport_legs.
+    transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
+
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'deliveries_mass_dry_non_negative',
+      sql`${table.massDryKg} is null or ${table.massDryKg} >= 0`
+    ),
+    check(
+      'deliveries_delivered_wet_mass_non_negative',
+      sql`${table.deliveredWetMassKg} is null or ${table.deliveredWetMassKg} >= 0`
+    ),
+    check(
+      'deliveries_mass_dry_lte_wet_mass',
+      sql`${table.massDryKg} is null or ${table.deliveredWetMassKg} is null or ${table.massDryKg} <= ${table.deliveredWetMassKg}`
+    ),
+  ]
+);
 
 // ============================================
-// Transport Legs - Transportation emissions tracking
+// Transport Legs - Canonical transportation emissions tracking
 // Isometric: Transportation Emissions Accounting Module v1.1
-// Tracks each leg of transport for feedstock, biochar, or samples
 // ============================================
 
-export const transportLegs = pgTable('transport_legs', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const transportLegs = pgTable(
+  'transport_legs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
 
-  // Polymorphic reference to the entity being transported
-  entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample | delivery
-  entityId: uuid('entity_id').notNull(),
+    // Polymorphic reference to the entity being transported.
+    entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample | delivery
+    entityId: uuid('entity_id').notNull(),
 
-  // --- Route Details ---
-  originLat: real('origin_lat'),
-  originLng: real('origin_lng'),
-  originLatitude: real('origin_latitude'),
-  originLongitude: real('origin_longitude'),
-  originName: text('origin_name'),
-  destinationLat: real('destination_lat'),
-  destinationLng: real('destination_lng'),
-  destinationLatitude: real('destination_latitude'),
-  destinationLongitude: real('destination_longitude'),
-  destinationName: text('destination_name'),
-  distanceKm: real('distance_km').notNull(),
+    // --- Route Details ---
+    originGpsLatitude: real('origin_gps_latitude'),
+    originGpsLongitude: real('origin_gps_longitude'),
+    originName: text('origin_name'),
+    destinationGpsLatitude: real('destination_gps_latitude'),
+    destinationGpsLongitude: real('destination_gps_longitude'),
+    destinationName: text('destination_name'),
+    distanceKm: real('distance_km').notNull(),
 
-  // --- Transport Details ---
-  transportMethodType: transportMethod('transport_method'), // road | rail | ship | pipeline | aircraft
-  vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck"
-  vehicleModelYear: text('vehicle_model_year'),
-  modelYear: integer('model_year'),
+    // --- Transport Details ---
+    transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft
+    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck"
+    vehicleModelYear: text('vehicle_model_year'),
+    modelYear: integer('model_year'),
 
-  // --- Fuel/Energy Details (Isometric: Energy Usage Method - preferred) ---
-  fuelType: text('fuel_type'), // diesel, biodiesel, gasoline, electricity, etc.
-  fuelConsumedLiters: real('fuel_consumed_liters'),
-  electricityKwh: real('electricity_kwh'),
+    // --- Fuel/Energy Details (Isometric: Energy Usage Method - preferred) ---
+    fuelType: text('fuel_type'), // diesel, biodiesel, gasoline, electricity, etc.
+    fuelConsumedLiters: real('fuel_consumed_liters'),
+    electricityKwh: real('electricity_kwh'),
 
-  // --- Load Details (Isometric: Distance-Based Method) ---
-  loadWeightTonnes: real('load_weight_tonnes'),
-  loadMassKg: real('load_mass_kg'),
-  loadCapacityUtilizationPercent: real('load_capacity_utilization_percent'),
+    // --- Load Details (Isometric: Distance-Based Method) ---
+    loadWeightTonnes: real('load_weight_tonnes'),
+    loadMassKg: real('load_mass_kg'),
+    loadCapacityUtilizationPercent: real('load_capacity_utilization_percent'),
 
-  // --- Emissions Calculation (Isometric: Section 3) ---
-  calculationMethodType: emissionsCalculationMethod('calculation_method'), // energy_usage | distance_based
-  emissionFactorUsed: real('emission_factor_used'),
-  emissionFactorSource: text('emission_factor_source'), // Citation for emission factor
-  emissionsCo2eKg: real('emissions_co2e_kg'),
-  transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
+    // --- Emissions Calculation (Isometric: Section 3) ---
+    calculationMethodType:
+      emissionsCalculationMethod('calculation_method').notNull(), // energy_usage | distance_based
+    emissionFactorUsed: real('emission_factor_used'),
+    emissionFactorSource: text('emission_factor_source'), // Citation for emission factor
+    emissionsCo2eKg: real('emissions_co2e_kg'),
+    transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
 
-  // --- Book and Claim Units (Isometric: Section 4) ---
-  bcuUsed: real('bcu_used'), // Volume of BCU fuel substitution
-  bcuProvider: text('bcu_provider'),
-  bcuCertificationRef: text('bcu_certification_ref'),
+    // --- Book and Claim Units (Isometric: Section 4) ---
+    bcuUsed: real('bcu_used'), // Volume of BCU fuel substitution
+    bcuProvider: text('bcu_provider'),
+    bcuCertificationRef: text('bcu_certification_ref'),
 
-  // --- Documentation ---
-  billOfLading: text('bill_of_lading'),
-  weighScaleTicketRef: text('weigh_scale_ticket_ref'),
+    // --- Documentation ---
+    billOfLading: text('bill_of_lading'),
+    weighScaleTicketRef: text('weigh_scale_ticket_ref'),
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'transport_legs_origin_gps_latitude_range',
+      sql`${table.originGpsLatitude} is null or (${table.originGpsLatitude} >= -90 and ${table.originGpsLatitude} <= 90)`
+    ),
+    check(
+      'transport_legs_origin_gps_longitude_range',
+      sql`${table.originGpsLongitude} is null or (${table.originGpsLongitude} >= -180 and ${table.originGpsLongitude} <= 180)`
+    ),
+    check(
+      'transport_legs_destination_gps_latitude_range',
+      sql`${table.destinationGpsLatitude} is null or (${table.destinationGpsLatitude} >= -90 and ${table.destinationGpsLatitude} <= 90)`
+    ),
+    check(
+      'transport_legs_destination_gps_longitude_range',
+      sql`${table.destinationGpsLongitude} is null or (${table.destinationGpsLongitude} >= -180 and ${table.destinationGpsLongitude} <= 180)`
+    ),
+    check(
+      'transport_legs_energy_usage_requirements',
+      sql`${table.calculationMethodType} <> 'energy_usage'::emissions_calculation_method or (
+        ${table.fuelType} is not null and
+        (${table.fuelConsumedLiters} is not null or ${table.electricityKwh} is not null) and
+        ${table.emissionFactorUsed} is not null
+      )`
+    ),
+    check(
+      'transport_legs_distance_based_requirements',
+      sql`${table.calculationMethodType} <> 'distance_based'::emissions_calculation_method or (
+        ${table.loadMassKg} is not null and
+        ${table.vehicleType} is not null and
+        ${table.emissionFactorUsed} is not null
+      )`
+    ),
+  ]
+);
 
 // ============================================
 // Relations
@@ -195,6 +259,10 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   customer: one(customers, {
     fields: [orders.customerId],
     references: [customers.id],
+  }),
+  customerLocation: one(customerLocations, {
+    fields: [orders.customerLocationId],
+    references: [customerLocations.id],
   }),
   formulation: one(formulations, {
     fields: [orders.formulationId],
@@ -215,6 +283,11 @@ export const deliveriesRelations = relations(deliveries, ({ one }) => ({
   order: one(orders, {
     fields: [deliveries.orderId],
     references: [orders.id],
+  }),
+  customerLocation: one(customerLocations, {
+    fields: [deliveries.customerLocationId],
+    references: [customerLocations.id],
+    relationName: 'deliveryLocationOverride',
   }),
   biocharProduct: one(biocharProducts, {
     fields: [deliveries.biocharProductId],
