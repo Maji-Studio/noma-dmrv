@@ -48,7 +48,6 @@ export const applications = pgTable(
 
     // Field details
     fieldSizeHa: real('field_size_ha'),
-    fieldSizeHectares: real('field_size_hectares'),
     cropType: text('crop_type'),
     applicationMethodType: applicationMethod('application_method'), // manual/mechanical
     fieldIdentifier: text('field_identifier'), // Field name/parcel ID
@@ -58,7 +57,6 @@ export const applications = pgTable(
     // Durability inputs (soil temp, H:Corg) are at Credit Batch level
     // These are the per-application calculated outputs
     co2eStoredTonnes: real('co2e_stored_tonnes'), // This application's contribution
-    co2eStoredTons: real('co2e_stored_tons'),
 
     // --- Truck Weighing (Isometric: BiocharApplication requirement) ---
     truckMassOnArrivalKg: real('truck_mass_on_arrival_kg'),
@@ -95,13 +93,10 @@ export const soilTemperatureMeasurements = pgTable(
 
     measurementDate: date('measurement_date').notNull(),
     temperatureC: real('temperature_c').notNull(),
-    temperatureCelsius: real('temperature_celsius'),
 
     // Measurement method (ISO 4974 or equivalent)
     measurementMethod: text('measurement_method'),
-    measurementApproach: text('measurement_approach'),
     measurementDepthCm: real('measurement_depth_cm'),
-    depthCm: real('depth_cm'),
 
     // Location within field
     gpsLatitude: real('gps_latitude'),

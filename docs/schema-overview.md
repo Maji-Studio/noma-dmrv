@@ -19,7 +19,7 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `feedstock_deliveries` | Feedstock | Logs incoming biomass shipments and transport attributes. | Intake receiving, transport emissions inputs, supplier delivery records. | `src/db/schema/feedstock.ts:13` |
 | `feedstock_types` | Feedstock | Controlled catalog of feedstock classes/categories. | Standardized material classification and filtering. | `src/db/schema/feedstock.ts:71` |
 | `feedstocks` | Feedstock | Canonical feedstock batch records with mass and quality fields. | Carbon accounting inputs, sustainability/counterfactual evidence, batch traceability. | `src/db/schema/feedstock.ts:87` |
-| `production_runs` | Production | Core pyrolysis batch execution records and calculated outputs. | Process tracking, run-level emissions/energy accounting, operational history. | `src/db/schema/production.ts:24` |
+| `production_runs` | Production | Core pyrolysis batch records with energy inputs and output mass. Feedstock inputs via `production_run_feedstocks` join; temperatures via `production_run_readings`; emissions calculated at query time. | Process tracking, run-level energy accounting, operational history. | `src/db/schema/production.ts:24` |
 | `production_run_readings` | Production | Time-series telemetry for temperature/pressure/gas composition. | Monitoring-plan evidence, compliance checks, diagnostics. | `src/db/schema/production.ts:101` |
 | `samples` | Production | Lab and field sample measurements for biochar quality/compliance. | Eligibility checks, durability inputs, contaminant screening. | `src/db/schema/production.ts:156` |
 | `incident_reports` | Production | Captures production exceptions, severity, and corrective actions. | Adaptive management log, audit evidence, RCA workflows. | `src/db/schema/production.ts:310` |
@@ -32,7 +32,7 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `transport_legs` | Logistics | Canonical per-leg transport emissions accounting ledger. | Distance/energy method calculations, BCU tracking, transport auditability. | `src/db/schema/logistics.ts:160` |
 | `applications` | Application | Field application events for delivered biochar to soil. | Soil application reporting, per-application CO2e storage outputs. | `src/db/schema/application.ts:21` |
 | `soil_temperature_measurements` | Application | Soil temperature observations tied to applications. | 200-year durability baseline and evidence support. | `src/db/schema/application.ts:88` |
-| `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. | Net removal calculation, durability pathway selection, registry submission prep. | `src/db/schema/credits.ts:22` |
+| `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep. | `src/db/schema/credits.ts:22` |
 | `credit_batch_applications` | Credits | M:N join between credit batches and applications. | Tracing which applications contribute to each issuance batch. | `src/db/schema/credits.ts:130` |
 | `emission_factors` | Emissions | Versioned lookup table for fuel/electricity emission factors. | Standardized CO2e calculations by region/fuel and validity window. | `src/db/schema/emissions.ts:19` |
 | `documents` | Documentation | Central file evidence store with explicit ownership FKs. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:20` |

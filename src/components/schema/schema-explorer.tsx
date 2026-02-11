@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import {
-  Database,
-  MagnifyingGlass,
-  ArrowRight,
-  ArrowUpRight,
-  ArrowDownLeft,
-} from "@phosphor-icons/react/dist/ssr";
+import { Database, MagnifyingGlass, ArrowRight, ArrowUpRight, ArrowDownLeft } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import type { SchemaArea, SchemaTableInfo } from "@/lib/schema/catalog";
 
@@ -98,10 +92,6 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
           </div>
           <h1 className="title-heading-2">Database Schema</h1>
-          <p className="body-medium text-[var(--color-text-secondary)] max-w-3xl">
-            Browse tables, columns, and foreign-key links generated from{" "}
-            <code className="text-[var(--color-text-primary)]">src/db/schema/*</code>.
-          </p>
         </header>
 
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-s">
@@ -196,9 +186,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
 }
 
 function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }) {
-  const linkedTables = Array.from(
-    new Set(table.outboundRelationships.map((r) => r.toTable))
-  );
+  const linkedTables = Array.from(new Set(table.outboundRelationships.map((r) => r.toTable)));
 
   return (
     <Link
@@ -213,16 +201,10 @@ function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }
         <div className="flex items-center gap-[6px]">
           <Pill label={`${table.columns.length} cols`} />
           {table.outboundRelationships.length > 0 && (
-            <Pill
-              label={`${table.outboundRelationships.length}`}
-              icon={<ArrowUpRight size={12} />}
-            />
+            <Pill label={`${table.outboundRelationships.length}`} icon={<ArrowUpRight size={12} />} />
           )}
           {table.inboundRelationships.length > 0 && (
-            <Pill
-              label={`${table.inboundRelationships.length}`}
-              icon={<ArrowDownLeft size={12} />}
-            />
+            <Pill label={`${table.inboundRelationships.length}`} icon={<ArrowDownLeft size={12} />} />
           )}
         </div>
       </div>
@@ -238,15 +220,7 @@ function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: string;
-}) {
+function MetricCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
       className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s"

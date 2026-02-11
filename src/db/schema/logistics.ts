@@ -18,7 +18,7 @@ import {
 } from './common';
 import { facilities, storageLocations } from './facilities';
 import { customerLocations, customers, drivers } from './parties';
-import { biocharProducts, formulations } from './products';
+import { biocharProducts } from './products';
 
 // ============================================
 // Vehicles - Transport vehicles with fuel configuration
@@ -29,11 +29,9 @@ export const vehicles = pgTable('vehicles', {
   code: text('code').notNull().unique(),
   name: text('name').notNull().unique(), // e.g., "Truck 1", "Truck 2", "Truck 3"
   identifier: text('identifier').notNull(),
-  type: text('type').notNull(),
   vehicleType: text('vehicle_type').notNull(), // e.g., "truck", "tractor"
   fuelType: text('fuel_type').notNull(), // e.g., "Diesel"
   fuelConsumptionLPerKm: real('fuel_consumption_l_per_km').notNull(), // e.g., 0.3 L/km
-  fuelConsumptionRate: real('fuel_consumption_rate'),
   modelYear: integer('model_year').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -59,26 +57,14 @@ export const orders = pgTable('orders', {
   customerLocationId: uuid('customer_location_id')
     .notNull()
     .references(() => customerLocations.id),
-  invoiceNumber: text('invoice_number'), // e.g., "24-0009"
-
   // --- Order Details ---
-  formulationId: uuid('formulation_id').references(() => formulations.id),
   biocharProductId: uuid('biochar_product_id')
     .notNull()
     .references(() => biocharProducts.id),
-  quantityTons: real('quantity_tons').notNull(),
   quantityKg: real('quantity_kg').notNull(),
-  quantityM3: real('quantity_m3'),
-  biocharTons: real('biochar_tons'),
   packaging: packagingType('packaging').notNull(),
-  packagingType: text('packaging_type').notNull().default('bagged'),
-  valueTzs: real('value_tzs'), // Value in Tanzanian Shillings
-
-  // --- Application Details ---
-  applicationStatus: text('application_status'), // e.g., "In preparation"
-  bulkDensityKgL: real('bulk_density_kg_l'),
-  cSinkType: text('c_sink_type'), // e.g., "Geo localised C Sink"
-  compostPerM3Percent: real('compost_per_m3_percent'),
+  value: real('value'),
+  currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -117,21 +103,13 @@ export const deliveries = pgTable(
     storageLocationId: uuid('storage_location_id').references(
       () => storageLocations.id
     ),
-    quantityTons: real('quantity_tons'),
-    quantityM3: real('quantity_m3'),
-    biocharTons: real('biochar_tons'),
     fixedCarbonPercent: real('fixed_carbon_percent'),
     deliveredWetMassKg: real('delivered_wet_mass_kg'),
     massDryKg: real('mass_dry_kg'),
 
-    // --- Operational transport metadata (not transport emissions source of truth) ---
+    // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-    vehicleDescription: text('vehicle_description'),
-    vehicleType: text('vehicle_type'),
-
-    // Derived cache field; canonical accounting is in transport_legs.
-    transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -178,7 +156,6 @@ export const transportLegs = pgTable(
     // --- Transport Details ---
     transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft
     vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck"
-    vehicleModelYear: text('vehicle_model_year'),
     modelYear: integer('model_year'),
 
     // --- Fuel/Energy Details (Isometric: Energy Usage Method - preferred) ---
@@ -187,7 +164,6 @@ export const transportLegs = pgTable(
     electricityKwh: real('electricity_kwh'),
 
     // --- Load Details (Isometric: Distance-Based Method) ---
-    loadWeightTonnes: real('load_weight_tonnes'),
     loadMassKg: real('load_mass_kg'),
     loadCapacityUtilizationPercent: real('load_capacity_utilization_percent'),
 
@@ -196,7 +172,6 @@ export const transportLegs = pgTable(
       emissionsCalculationMethod('calculation_method').notNull(), // energy_usage | distance_based
     emissionFactorUsed: real('emission_factor_used'),
     emissionFactorSource: text('emission_factor_source'), // Citation for emission factor
-    emissionsCo2eKg: real('emissions_co2e_kg'),
     transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
 
     // --- Book and Claim Units (Isometric: Section 4) ---
@@ -263,10 +238,6 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   customerLocation: one(customerLocations, {
     fields: [orders.customerLocationId],
     references: [customerLocations.id],
-  }),
-  formulation: one(formulations, {
-    fields: [orders.formulationId],
-    references: [formulations.id],
   }),
   biocharProduct: one(biocharProducts, {
     fields: [orders.biocharProductId],

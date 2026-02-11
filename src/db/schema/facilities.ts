@@ -53,8 +53,7 @@ export const reactors = pgTable('reactors', {
   reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
   type: text('type').notNull(),
   capacityKg: real('capacity_kg'),
-  designSpecs: text('design_specs'), // JSON or description of design
-  specifications: jsonb('specifications'),
+  specifications: jsonb('specifications'), // { description, manufacturer, ... }
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -73,9 +72,9 @@ export const storageLocations = pgTable(
     capacityKg: real('capacity_kg'),
     latitude: real('latitude'),
     longitude: real('longitude'),
-    isometricStorageMethod: text('isometric_storage_method'),
-    isometricDescription: text('isometric_description'),
-    isometricSupplierReferenceId: text('isometric_supplier_reference_id'),
+    storageMethod: text('storage_method'),
+    storageDescription: text('storage_description'),
+    supplierReferenceId: text('supplier_reference_id'),
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),

@@ -115,7 +115,7 @@ The following items are explicitly carried forward from the legacy delta invento
 
 1. **Storage location alignment**
    - Add canonical `latitude`/`longitude` for storage locations.
-   - Add optional Isometric mapping helpers (`isometric_storage_method`, `isometric_description`, `isometric_supplier_reference_id`).
+   - Add optional storage mapping helpers (`storage_method`, `storage_description`, `supplier_reference_id`).
 
 2. **Application payload completeness**
    - Add `average_application_rate_magnitude` and `average_application_rate_unit`.

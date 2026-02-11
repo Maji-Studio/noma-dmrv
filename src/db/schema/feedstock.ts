@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, pgTable, text, timestamp, uuid, real, date } from 'drizzle-orm/pg-core';
+import { check, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
 import { feedstockStatus } from './common';
 import { facilities, storageLocations } from './facilities';
 import { suppliers, drivers } from './parties';
@@ -27,17 +27,8 @@ export const feedstockDeliveries = pgTable(
       .references(() => suppliers.id),
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-    vehicleDescription: text('vehicle_description'),
-    vehicleType: text('vehicle_type'),
-    fuelType: text('fuel_type'),
     gpsLatitude: real('gps_latitude'),
     gpsLongitude: real('gps_longitude'),
-    distanceKm: real('distance_km'), // Can be auto-calculated or manually entered
-    fuelConsumedLiters: real('fuel_consumed_liters'),
-    // Isometric: Transport emissions (calculated)
-    transportEmissionsTco2e: real('transport_emissions_tco2e'),
-    transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
-    emissionFactorUsed: text('emission_factor_used'),
 
     // --- Feedstock Details ---
     feedstockTypeId: uuid('feedstock_type_id').references(
@@ -92,36 +83,20 @@ export const feedstocks = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
-    date: date('date').notNull(),
     status: feedstockStatus('status').default('missing_data').notNull(),
 
     // --- Delivery Reference ---
-    feedstockDeliveryId: uuid('feedstock_delivery_id').references(
-      () => feedstockDeliveries.id
-    ),
-
-    // --- Delivery & Transport ---
-    collectionDate: timestamp('collection_date'),
-    deliveryDate: timestamp('delivery_date').notNull(),
-    supplierId: uuid('supplier_id')
+    // Transport details (driver, vehicle, fuel, distance, emissions) live on feedstockDeliveries
+    feedstockDeliveryId: uuid('feedstock_delivery_id')
       .notNull()
-      .references(() => suppliers.id),
-    driverId: uuid('driver_id').references(() => drivers.id),
-    vehicleType: text('vehicle_type'),
-    fuelType: text('fuel_type'), // e.g., "Diesel"
-    fuelConsumedLiters: real('fuel_consumed_liters'),
-    distanceKm: real('distance_km'),
-    // Isometric: Transport emissions (calculated)
-    transportEmissionsTco2e: real('transport_emissions_tco2e'),
+      .references(() => feedstockDeliveries.id),
 
     // --- Feedstock Details ---
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    weightKg: real('weight_kg'),
     massWetKg: real('mass_wet_kg').notNull(),
     massDryKg: real('mass_dry_kg').notNull(),
-    moisturePercent: real('moisture_percent'),
     moistureContentPercent: real('moisture_content_percent'),
     totalCarbonPercent: real('total_carbon_percent'),
     inorganicCarbonPercent: real('inorganic_carbon_percent'),
@@ -131,6 +106,8 @@ export const feedstocks = pgTable(
     storageLocationId: uuid('storage_location_id').references(
       () => storageLocations.id
     ),
+
+    // --- Counterfactual & Leakage (Isometric §3–4) ---
     counterfactualCategory: text('counterfactual_category'),
     counterfactualEmissions15Tons: real('counterfactual_emissions_15_tons'),
     counterfactualStorage50Tons: real('counterfactual_storage_50_tons'),
@@ -153,6 +130,10 @@ export const feedstocks = pgTable(
     check(
       'feedstocks_mass_dry_lte_wet',
       sql`${table.massDryKg} <= ${table.massWetKg}`
+    ),
+    check(
+      'feedstocks_moisture_content_percent_range',
+      sql`${table.moistureContentPercent} is null or (${table.moistureContentPercent} >= 0 and ${table.moistureContentPercent} <= 100)`
     ),
   ]
 );
@@ -201,14 +182,6 @@ export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
   feedstockDelivery: one(feedstockDeliveries, {
     fields: [feedstocks.feedstockDeliveryId],
     references: [feedstockDeliveries.id],
-  }),
-  supplier: one(suppliers, {
-    fields: [feedstocks.supplierId],
-    references: [suppliers.id],
-  }),
-  driver: one(drivers, {
-    fields: [feedstocks.driverId],
-    references: [drivers.id],
   }),
   feedstockType: one(feedstockTypes, {
     fields: [feedstocks.feedstockTypeId],
