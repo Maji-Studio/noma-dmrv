@@ -48,7 +48,8 @@ export const creditBatches = pgTable(
     batchesCount: integer('batches_count'),
     weightTons: real('weight_tons'),
     creditsTco2e: real('credits_tco2e'), // Net CO2e removal
-    valueTzs: real('value_tzs'),
+    value: real('value'),
+    currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
     // Isometric: Buffer pool contribution (risk-based 2-20%)
     bufferPoolPercent: real('buffer_pool_percent'),
@@ -64,7 +65,6 @@ export const creditBatches = pgTable(
     // Formula: F_durable,200 = min(0.95, 1 - [c + (a + b·ln(T_soil))·H/C_org])
     // Where: a=-0.383, b=0.350, c=-0.048
     soilTemperatureC: real('soil_temperature_c'), // Annual average for project area
-    soilTemperatureCelsius: real('soil_temperature_celsius'),
     soilTemperatureSource: text('soil_temperature_source'), // 'baseline' | 'global_database'
     hToCorgRatio: real('h_to_c_org_ratio'), // H:Corg ratio (calculated from samples)
 
@@ -75,20 +75,17 @@ export const creditBatches = pgTable(
     stdRandomReflectance: real('std_random_reflectance'), // Standard deviation of R₀
     meanNonReactiveCarbonPercent: real('mean_non_reactive_carbon_percent'), // Mean from TGA
     stdNonReactiveCarbonPercent: real('std_non_reactive_carbon_percent'), // Std dev from TGA
-    stdNonReactiveCarbon: real('std_non_reactive_carbon'),
 
     // --- Calculated Durability Fraction ---
     // Applies to all applications in this batch (max 0.95)
     fDurableCalculated: real('f_durable_calculated'),
-    fDurableFraction: real('f_durable_fraction'),
 
     // --- Net CO2e Removal Calculation (Isometric GHG Accounting Module v1.0) ---
     // Net CO₂e Removal = CO₂e Stored - CO₂e Emissions - CO₂e Counterfactual
     totalCo2eStoredTons: real('total_co2e_stored_tons'), // Carbon durably stored
     totalCo2eEmissionsTons: real('total_co2e_emissions_tons'), // Project emissions
     totalCo2eCounterfactualTons: real('total_co2e_counterfactual_tons'), // Baseline emissions
-    netCo2eRemovalTons: real('net_co2e_removal_tons'), // Final net removal
-    totalCreditsTons: real('total_credits_tons'),
+    // netCo2eRemovalTons: derivable from stored - emissions - counterfactual
 
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission

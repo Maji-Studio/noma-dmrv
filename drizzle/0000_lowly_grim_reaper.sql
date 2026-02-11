@@ -343,9 +343,9 @@ CREATE TABLE "storage_locations" (
 	"capacity_kg" real,
 	"latitude" real,
 	"longitude" real,
-	"isometric_storage_method" text,
-	"isometric_description" text,
-	"isometric_supplier_reference_id" text,
+	"storage_method" text,
+	"storage_description" text,
+	"supplier_reference_id" text,
 	"facility_id" uuid NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
@@ -1126,4 +1126,38 @@ ALTER TABLE "isometric_storage_locations" ADD CONSTRAINT "isometric_storage_loca
 ALTER TABLE "project_members" ADD CONSTRAINT "project_members_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_members" ADD CONSTRAINT "project_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "items" ADD CONSTRAINT "items_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."prevent_credit_batch_durability_changes_after_lock"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD.status IN ('verified', 'issued')
+    AND (
+      NEW.durability_option IS DISTINCT FROM OLD.durability_option OR
+      NEW.soil_temperature_c IS DISTINCT FROM OLD.soil_temperature_c OR
+      NEW.soil_temperature_celsius IS DISTINCT FROM OLD.soil_temperature_celsius OR
+      NEW.soil_temperature_source IS DISTINCT FROM OLD.soil_temperature_source OR
+      NEW.h_to_c_org_ratio IS DISTINCT FROM OLD.h_to_c_org_ratio OR
+      NEW.mean_random_reflectance_percent IS DISTINCT FROM OLD.mean_random_reflectance_percent OR
+      NEW.std_random_reflectance IS DISTINCT FROM OLD.std_random_reflectance OR
+      NEW.mean_non_reactive_carbon_percent IS DISTINCT FROM OLD.mean_non_reactive_carbon_percent OR
+      NEW.std_non_reactive_carbon_percent IS DISTINCT FROM OLD.std_non_reactive_carbon_percent OR
+      NEW.std_non_reactive_carbon IS DISTINCT FROM OLD.std_non_reactive_carbon OR
+      NEW.f_durable_calculated IS DISTINCT FROM OLD.f_durable_calculated OR
+      NEW.f_durable_fraction IS DISTINCT FROM OLD.f_durable_fraction
+    )
+  THEN
+    RAISE EXCEPTION 'Durability fields are immutable once credit batch status is verified or issued.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS "credit_batches_lock_durability_after_verification" ON "credit_batches";
+--> statement-breakpoint
+CREATE TRIGGER "credit_batches_lock_durability_after_verification"
+BEFORE UPDATE ON "credit_batches"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."prevent_credit_batch_durability_changes_after_lock"();

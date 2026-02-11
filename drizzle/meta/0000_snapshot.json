@@ -2190,20 +2190,20 @@
           "primaryKey": false,
           "notNull": false
         },
-        "isometric_storage_method": {
-          "name": "isometric_storage_method",
+        "storage_method": {
+          "name": "storage_method",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "isometric_description": {
-          "name": "isometric_description",
+        "storage_description": {
+          "name": "storage_description",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "isometric_supplier_reference_id": {
-          "name": "isometric_supplier_reference_id",
+        "supplier_reference_id": {
+          "name": "supplier_reference_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false

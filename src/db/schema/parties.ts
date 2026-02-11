@@ -39,34 +39,17 @@ export const suppliers = pgTable(
 // Customers - Biochar product buyers/farmers
 // ============================================
 
-export const customers = pgTable(
-  'customers',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(),
-    name: text('name').notNull(),
-    location: text('location'),
-    gpsLatitude: real('gps_latitude').notNull(),
-    gpsLongitude: real('gps_longitude').notNull(),
-    distanceKm: real('distance_km'), // Distance from facility
-    cropType: text('crop_type'), // e.g., "Coffee"
-    address: text('address'),
-    contactEmail: text('contact_email'),
-    contactPhone: text('contact_phone'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    check(
-      'customers_gps_latitude_range',
-      sql`${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90`
-    ),
-    check(
-      'customers_gps_longitude_range',
-      sql`${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180`
-    ),
-  ]
-);
+export const customers = pgTable('customers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  cropType: text('crop_type'), // e.g., "Coffee"
+  address: text('address'),
+  contactEmail: text('contact_email'),
+  contactPhone: text('contact_phone'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 // ============================================
 // Customer Locations - Multi-location destinations per customer
@@ -106,7 +89,6 @@ export const drivers = pgTable('drivers', {
   id: uuid('id').primaryKey().defaultRandom(),
   code: text('code').notNull().unique(),
   name: text('name').notNull(),
-  contact: text('contact'), // Phone number
   licenseNumber: text('license_number'),
   contactPhone: text('contact_phone'),
   createdAt: timestamp('created_at').defaultNow().notNull(),

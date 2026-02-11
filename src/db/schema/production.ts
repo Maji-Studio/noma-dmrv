@@ -38,55 +38,25 @@ export const productionRuns = pgTable('production_runs', {
     .references(() => reactors.id),
   operatorId: uuid('operator_id').references(() => operators.id),
 
-  // --- Feedstock Input ---
-  feedstockMix: text('feedstock_mix'), // e.g., "Mixed Wood Chips"
-  feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
-    () => storageLocations.id
-  ),
-  feedstockAmountKg: real('feedstock_amount_kg'),
-  feedingRateKgHr: real('feeding_rate_kg_hr'),
-  moistureBeforeDryingPercent: real('moisture_before_drying_percent'),
-  moistureAfterDryingPercent: real('moisture_after_drying_percent'),
-
-  // --- Biochar Output ---
-  biocharAmountKg: real('biochar_amount_kg'),
-  biocharDryWeightKg: real('biochar_dry_weight_kg'),
-  biocharWetWeightKg: real('biochar_wet_weight_kg'),
-  biocharDryMoisturePercent: real('biochar_dry_moisture_percent'),
-  uncarbonizedBiocharKg: real('uncarbonized_biochar_kg'),
-  yieldPercent: real('yield_percent'), // Calculated: (biochar/feedstock)*100
-  biocharStorageLocationId: uuid('biochar_storage_location_id').references(
-    () => storageLocations.id
-  ),
-
   // --- Processing Parameters (Isometric Protocol Section 9) ---
-  // Pyrolysis monitoring requirements
-  pyrolysisTemperatureC: real('pyrolysis_temperature_c'), // Continuous monitoring
-  temperatureCelsius: real('temperature_celsius'),
-  residenceTimeMinutes: integer('residence_time_minutes'), // Process parameter
+  feedingRateKgHr: real('feeding_rate_kg_hr'),
+  residenceTimeMinutes: integer('residence_time_minutes'),
 
-  // Energy accounting (Isometric: Energy Use Accounting Module)
+  // --- Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6) ---
   dieselOperationLiters: real('diesel_operation_liters'),
   dieselGensetLiters: real('diesel_genset_liters'),
   preprocessingFuelLiters: real('preprocessing_fuel_liters'),
   electricityKwh: real('electricity_kwh'),
 
-  // --- Processing Data ---
-  plcDataFileUrl: text('plc_data_file_url'), // URL to uploaded PLC CSV data file
-
-  // --- Emissions (Isometric Protocol Section 8.6) ---
-  emissionsFromFossilsKg: real('emissions_from_fossils_kg'), // Calculated
-  emissionsFromGridKg: real('emissions_from_grid_kg'), // Calculated
-  totalEmissionsKg: real('total_emissions_kg'), // Calculated
-  energyEmissionsCo2eKg: real('energy_emissions_co2e_kg'),
-  totalEmissionsCo2eKg: real('total_emissions_co2e_kg'),
-  emissionFactorsUsed: jsonb('emission_factors_used'),
-
-  // --- Quenching ---
-  quenchingDryWeightKg: real('quenching_dry_weight_kg'),
-  quenchingWetWeightKg: real('quenching_wet_weight_kg'),
+  // --- Biochar Output ---
   biocharOutputKg: real('biochar_output_kg'),
-  yieldPercentage: real('yield_percentage'),
+  biocharStorageLocationId: uuid('biochar_storage_location_id').references(
+    () => storageLocations.id
+  ),
+
+  // --- Metadata ---
+  emissionFactorsUsed: jsonb('emission_factors_used'), // Snapshot of factors used
+  plcDataFileUrl: text('plc_data_file_url'), // URL to uploaded PLC CSV data file
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -110,7 +80,6 @@ export const productionRunReadings = pgTable(
 
     // Temperature monitoring (5-min intervals required)
     temperatureC: real('temperature_c'),
-    temperatureCelsius: real('temperature_celsius'),
 
     // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
     pressureBar: real('pressure_bar'),
@@ -118,17 +87,13 @@ export const productionRunReadings = pgTable(
       .notNull()
       .default(false),
 
-    // Emissions monitoring (1-min intervals, Option 1: continuous measurement)
-    ch4Composition: real('ch4_composition'), // Methane
-    n2oComposition: real('n2o_composition'), // Nitrous oxide
-    coComposition: real('co_composition'), // Carbon monoxide
-    co2Composition: real('co2_composition'), // Carbon dioxide
-    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
+    // Emissions monitoring (1-min intervals)
+    // PPM values required when continuous_gas_measurement = true
     ch4Ppm: real('ch4_ppm'),
     n2oPpm: real('n2o_ppm'),
     coPpm: real('co_ppm'),
     co2Ppm: real('co2_ppm'),
-    flowRate: real('flow_rate'),
+    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
@@ -153,154 +118,81 @@ export const productionRunReadings = pgTable(
 // Minimum 3 samples per production batch required
 // ============================================
 
-export const samples = pgTable(
-  'samples',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    productionRunId: uuid('production_run_id')
-      .notNull()
-      .references(() => productionRuns.id),
-    samplingTime: timestamp('sampling_time').notNull(),
-    operatorId: uuid('operator_id').references(() => operators.id),
-    reactorId: uuid('reactor_id').references(() => reactors.id),
-
-  // --- Sampling Details ---
+export const samples = pgTable('samples', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productionRunId: uuid('production_run_id')
+    .notNull()
+    .references(() => productionRuns.id),
   sampleCode: text('sample_code').notNull(),
-  weightG: real('weight_g'),
+  samplingTime: timestamp('sampling_time').notNull(),
   weightGrams: real('weight_grams'),
   volumeMl: real('volume_ml'),
-  temperatureC: real('temperature_c'),
+
+  // --- Lab ---
+  labName: text('lab_name'),
+  labAccreditation: text('lab_accreditation'),
   analysisDate: date('analysis_date'),
 
-  // --- Carbon Measurements (Isometric: Table 2) ---
-  // Total Carbon Content (Required - ISO 29541 or ASTM D5373)
+  // --- Carbon ---
   totalCarbonPercent: real('total_carbon_percent').notNull(),
-  // Inorganic Carbon (Required - ISO 16948 or ASTM D4373)
   inorganicCarbonPercent: real('inorganic_carbon_percent'),
-  // Organic Carbon (Calculated: Total C - Inorganic C)
   organicCarbonPercent: real('organic_carbon_percent').notNull(),
 
-  // Legacy field - keeping for backward compatibility
-  carbonContentPercent: real('carbon_content_percent'),
-
-  // --- Elemental Analysis (Isometric: Table 2) ---
-  hydrogenContentPercent: real('hydrogen_content_percent'), // Required - ISO 29541/ASTM D5373
+  // --- Elemental ---
   totalHydrogenPercent: real('total_hydrogen_percent'),
-  oxygenContentPercent: real('oxygen_content_percent'), // Required - ISO 16948/DIN 51733
-  totalOxygenPercent: real('total_oxygen_percent'),
-  nitrogenPercent: real('nitrogen_percent'), // Required - ISO 29541/ASTM D5373
   totalNitrogenPercent: real('total_nitrogen_percent'),
-  sulfurPercent: real('sulfur_percent'), // Required - ISO 15178/DIN 51724
+  totalOxygenPercent: real('total_oxygen_percent'),
   totalSulfurPercent: real('total_sulfur_percent'),
 
-  // --- Stability Ratios (Isometric: Table 2) ---
-  // H:Corg molar ratio (Required, threshold < 0.5 for eligibility)
-  hCorgMolarRatio: real('h_corg_molar_ratio'),
-  hToCOrgRatio: real('h_to_c_org_ratio'),
-  // O:Corg molar ratio (Required, threshold < 0.2 for eligibility)
-  oCorgMolarRatio: real('o_corg_molar_ratio'),
-  oToCOrgRatio: real('o_to_c_org_ratio'),
-
-  // --- Proximate Analysis ---
-  moisturePercent: real('moisture_percent'), // Required - ISO 18134/ASTM D1762
-  moistureContentPercent: real('moisture_content_percent'),
-  ashPercent: real('ash_percent'), // Required - ISO 18122/ISO 1171
+  // --- Proximate ---
   ashContentPercent: real('ash_content_percent'),
-  volatileMatterPercent: real('volatile_matter_percent'), // Recommended - ASTM D1762
-  fixedCarbonPercent: real('fixed_carbon_percent'), // Recommended
+  moistureContentPercent: real('moisture_content_percent'),
 
   // --- Physical Properties (Isometric: Table 2) ---
-  ph: real('ph'), // Required - ISO 10390
-  saltContentGPerKg: real('salt_content_g_per_kg'), // Required - ISO 10390
-  bulkDensityKgPerM3: real('bulk_density_kg_per_m3'), // Required (<3mm) - ISO 17828
-  waterHoldingCapacityPercent: real('water_holding_capacity_percent'), // Recommended - ISO 14238
+  ph: real('ph'),
+  bulkDensityKgPerM3: real('bulk_density_kg_per_m3'),
+  saltContentGPerKg: real('salt_content_g_per_kg'),
 
-  // --- Heavy Metals (Isometric: Table 2 - all REQUIRED with thresholds) ---
-  leadMgPerKg: real('lead_mg_per_kg'), // ≤300 mg/kg DM
-  leadMgKg: real('lead_mg_kg'),
-  cadmiumMgPerKg: real('cadmium_mg_per_kg'), // ≤5 mg/kg DM
-  cadmiumMgKg: real('cadmium_mg_kg'),
-  copperMgPerKg: real('copper_mg_per_kg'), // ≤200 mg/kg DM
-  copperMgKg: real('copper_mg_kg'),
-  nickelMgPerKg: real('nickel_mg_per_kg'), // ≤100 mg/kg DM
-  nickelMgKg: real('nickel_mg_kg'),
-  mercuryMgPerKg: real('mercury_mg_per_kg'), // ≤2 mg/kg DM
-  mercuryMgKg: real('mercury_mg_kg'),
-  zincMgPerKg: real('zinc_mg_per_kg'), // ≤1000 mg/kg DM
-  zincMgKg: real('zinc_mg_kg'),
-  chromiumMgPerKg: real('chromium_mg_per_kg'), // ≤200 mg/kg DM
-  chromiumMgKg: real('chromium_mg_kg'),
-  arsenicMgPerKg: real('arsenic_mg_per_kg'), // ≤20 mg/kg DM
+  // --- Stability Ratios ---
+  hToCOrgRatio: real('h_to_c_org_ratio'),
+  oToCOrgRatio: real('o_to_c_org_ratio'),
+
+  // --- Heavy Metals (mg/kg) ---
   arsenicMgKg: real('arsenic_mg_kg'),
+  cadmiumMgKg: real('cadmium_mg_kg'),
+  chromiumMgKg: real('chromium_mg_kg'),
+  copperMgKg: real('copper_mg_kg'),
+  leadMgKg: real('lead_mg_kg'),
+  mercuryMgKg: real('mercury_mg_kg'),
+  nickelMgKg: real('nickel_mg_kg'),
+  zincMgKg: real('zinc_mg_kg'),
 
-  // --- Contaminants (Isometric: Table 2 - all REQUIRED) ---
-  pahsEfsa8MgPerKg: real('pahs_efsa8_mg_per_kg'), // ≤1 g/t DM (EFSA 8)
+  // --- Contaminants ---
   pahTotalMgKg: real('pah_total_mg_kg'),
-  pahsEpa16MgPerKg: real('pahs_epa16_mg_per_kg'), // Declaration (EPA 16)
-  pcddFNgPerKg: real('pcdd_f_ng_per_kg'), // ≤20 ng/kg DM (17 PCDD/F)
+  pcbTotalMgKg: real('pcb_total_mg_kg'),
   dioxinsNgKg: real('dioxins_ng_kg'),
   furansNgKg: real('furans_ng_kg'),
-  pcbMgPerKg: real('pcb_mg_per_kg'), // ≤0.2 mg/kg DM (12 WHO PCB)
-  pcbTotalMgKg: real('pcb_total_mg_kg'),
 
-    // --- Nutrients Declaration (required only for nutrient/fertilizer claim pathway) ---
-    nutrientClaimEnabled: boolean('nutrient_claim_enabled')
-      .notNull()
-      .default(false),
-    phosphorusGPerKg: real('phosphorus_g_per_kg'),
-    phosphorusPercent: real('phosphorus_percent'),
-    potassiumGPerKg: real('potassium_g_per_kg'),
-    potassiumPercent: real('potassium_percent'),
-    magnesiumGPerKg: real('magnesium_g_per_kg'),
-    magnesiumPercent: real('magnesium_percent'),
-    calciumGPerKg: real('calcium_g_per_kg'),
-    calciumPercent: real('calcium_percent'),
-    ironGPerKg: real('iron_g_per_kg'),
-    ironPercent: real('iron_percent'),
+  // --- Nutrients (%) ---
+  phosphorusPercent: real('phosphorus_percent'),
+  potassiumPercent: real('potassium_percent'),
+  magnesiumPercent: real('magnesium_percent'),
+  calciumPercent: real('calcium_percent'),
+  ironPercent: real('iron_percent'),
 
-    // --- 1000-Year Durability Fields (Isometric: Table 3 - Optional) ---
-    // Required only for 1000-year durability crediting option
-    randomReflectanceR0: real('random_reflectance_r0'), // >2% for inertinite (ISO 7404-5, 500+ measurements)
-    randomReflectanceR0Percent: real('random_reflectance_r0_percent'),
-    r0MeasurementCount: integer('r0_measurement_count'), // Must total >= 500 per batch
-    residualOrganicCarbonPercent: real('residual_organic_carbon_percent'), // Non-reactive carbon from TGA
-    residualCarbonPercent: real('residual_carbon_percent'),
-    reactiveCarbonPercent: real('reactive_carbon_percent'), // Reactive carbon from TGA
-    tgaAnalysisDate: date('tga_analysis_date'), // Thermogravimetric analysis date
-    r0AnalysisDate: date('r0_analysis_date'), // Random reflectance analysis date
-    r0HistogramFileUrl: text('r0_histogram_file_url'), // Evidence: R₀ histogram
-    tgaThermogramFileUrl: text('tga_thermogram_file_url'), // Evidence: TGA thermogram
+  // --- 1000-Year Durability ---
+  randomReflectanceR0Percent: real('random_reflectance_r0_percent'),
+  r0MeasurementCount: integer('r0_measurement_count'),
+  reactiveCarbonPercent: real('reactive_carbon_percent'),
+  residualCarbonPercent: real('residual_carbon_percent'),
+  tgaAnalysisDate: date('tga_analysis_date'),
+  r0AnalysisDate: date('r0_analysis_date'),
+  r0HistogramFileUrl: text('r0_histogram_file_url'),
+  tgaThermogramFileUrl: text('tga_thermogram_file_url'),
 
-    // --- Lab Information (Isometric: ISO 17025 compliance) ---
-    labName: text('lab_name'),
-    labAccreditationNumber: text('lab_accreditation_number'), // ISO 17025 accreditation
-    labAccreditation: text('lab_accreditation'),
-    analysisMethod: text('analysis_method'), // e.g., "ASTM D5291", "ISO 29541"
-    labAnalysisAt: timestamp('lab_analysis_at'),
-    iso17025Accreditation: boolean('iso_17025_accreditation'),
-    labResults: jsonb('lab_results'),
-    labAnalystName: text('lab_analyst_name'),
-    labReportFileUrl: text('lab_report_file_url'),
-    labReportFile: text('lab_report_file'),
-
-    notes: text('notes'),
-
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    check(
-      'samples_nutrients_required_when_claim_enabled',
-      sql`${table.nutrientClaimEnabled} = false or (
-        ${table.phosphorusGPerKg} is not null and
-        ${table.potassiumGPerKg} is not null and
-        ${table.magnesiumGPerKg} is not null and
-        ${table.calciumGPerKg} is not null and
-        ${table.ironGPerKg} is not null
-      )`
-    ),
-  ]
-);
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 // ============================================
 // Incident Reports - Production issues
@@ -356,15 +248,9 @@ export const productionRunsRelations = relations(
       fields: [productionRuns.operatorId],
       references: [operators.id],
     }),
-    feedstockStorageLocation: one(storageLocations, {
-      fields: [productionRuns.feedstockStorageLocationId],
-      references: [storageLocations.id],
-      relationName: 'feedstockStorage',
-    }),
     biocharStorageLocation: one(storageLocations, {
       fields: [productionRuns.biocharStorageLocationId],
       references: [storageLocations.id],
-      relationName: 'biocharStorage',
     }),
     samples: many(samples),
     incidentReports: many(incidentReports),
@@ -387,14 +273,6 @@ export const samplesRelations = relations(samples, ({ one }) => ({
   productionRun: one(productionRuns, {
     fields: [samples.productionRunId],
     references: [productionRuns.id],
-  }),
-  operator: one(operators, {
-    fields: [samples.operatorId],
-    references: [operators.id],
-  }),
-  reactor: one(reactors, {
-    fields: [samples.reactorId],
-    references: [reactors.id],
   }),
 }));
 

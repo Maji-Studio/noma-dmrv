@@ -2,6 +2,15 @@
 
 > Tracks documentation updates only. Not an authoritative policy source.
 
+## 2026-02-11
+
+- **Scope:** Durability immutability guardrail
+- **Updated by:** Codex
+- Schema/workflow changes:
+  - Added DB trigger guardrail to freeze `credit_batches` durability fields once batch status is `verified` or `issued`.
+  - Documented the guardrail in the condition registry as `durability.lock_after_verification`.
+- Migration: guardrail SQL squashed into `drizzle/0000_lowly_grim_reaper.sql`.
+
 ## 2026-02-10
 
 - **Scope:** Phase 2 schema + validation alignment (greenfield reset)
