@@ -143,6 +143,34 @@ export const db = drizzle(pool, { schema });
 
 ---
 
+## Isometric Sampling Method (Reactor-Level)
+
+The system stores sampling method at the **credit batch** level and enforces Method B eligibility using historical data scoped to a **reactor**.
+
+### Where it is stored
+
+- `credit_batches.sampling_method`: `method_a | method_b`
+- `facilities.default_sampling_method`: `method_a | method_b` (convenience default)
+
+### Reactor-level eligibility rules for `method_b`
+
+- `reactor_id` must be set on the credit batch.
+- At least **30 prior samples** must exist before the reporting period for that reactor.
+- During the reporting period, sampled runs must satisfy **>= 1 sampled run per 10 runs** for that reactor.
+
+### Enforcement layers
+
+1. UI: disable/hide Method B when ineligible.
+2. Server/API: validate eligibility before write.
+3. Database trigger: final guardrail against bypass writes.
+
+### Why reactor-level today
+
+`production_run_id` represents a single run and cannot be used to evaluate cumulative thresholds across runs.  
+Reactor-level is used as the current proxy for "production process" until a dedicated `production_process_id` model is introduced.
+
+---
+
 ## Migration History
 
 This template starts with a clean schema for multi-project applications.

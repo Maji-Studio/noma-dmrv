@@ -10,7 +10,7 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { creditBatchStatus, durabilityOption } from './common';
+import { creditBatchStatus, durabilityOption, samplingMethod } from './common';
 import { facilities, reactors } from './facilities';
 import { applications } from './application';
 
@@ -56,9 +56,12 @@ export const creditBatches = pgTable(
 
     // --- Durability Calculation (Isometric: Soil Storage Module Section 5.1) ---
     // Project-level choice: 200-year (H:Corg + soil temp) or 1000-year (R0 reflectance)
-    durabilityOptionType: durabilityOption('durability_option')
+    durabilityOption: durabilityOption('durability_option')
       .notNull()
       .default('200_year'),
+    samplingMethod: samplingMethod('sampling_method')
+      .notNull()
+      .default('method_a'),
 
     // --- 200-Year Durability Fields ---
     // Soil temperature - required for F_durable calculation (200-year option)
@@ -104,14 +107,14 @@ export const creditBatches = pgTable(
   (table) => [
     check(
       'credit_batches_200_year_requires_soil_temp_and_h_to_corg',
-      sql`${table.durabilityOptionType} <> '200_year'::durability_option or (
+      sql`${table.durabilityOption} <> '200_year'::durability_option or (
         ${table.soilTemperatureC} is not null and
         ${table.hToCorgRatio} is not null
       )`
     ),
     check(
       'credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon',
-      sql`${table.durabilityOptionType} <> '1000_year'::durability_option or (
+      sql`${table.durabilityOption} <> '1000_year'::durability_option or (
         ${table.meanRandomReflectancePercent} is not null and
         ${table.meanNonReactiveCarbonPercent} is not null
       )`

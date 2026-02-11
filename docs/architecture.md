@@ -138,6 +138,26 @@ export async function GET() {
 - `src/data-access/*` owns query composition and permission checks.
 - Connection pooling defaults are centralized in `src/db/index.ts` with optional env tuning.
 
+## Sampling Method Enforcement (Isometric)
+
+Sampling method is selected at `credit_batches` and enforced with reactor-scoped eligibility checks.
+
+- Process key used today: `reactor_id` (not `production_run_id`)
+- Method A/B selection stored on credit batch: `credit_batches.sampling_method`
+- Facility convenience default: `facilities.default_sampling_method`
+
+Method B requires:
+
+1. `reactor_id` on the credit batch.
+2. At least 30 prior samples for that reactor before the reporting period.
+3. Reporting-period cadence of at least 1 sampled run per 10 runs for that reactor.
+
+Enforcement is intentionally layered:
+
+1. UI gating (disable/hide Method B when ineligible).
+2. Server validation in action/data-access layer.
+3. DB trigger guardrail for any direct/bypass writes.
+
 ## What Is Intentionally Scaffolded
 
 - Admin user invitation UI (`/admin/users`) is a scaffold.

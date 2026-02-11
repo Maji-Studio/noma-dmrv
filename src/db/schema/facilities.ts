@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { storageLocationType, durabilityOption } from './common';
+import { storageLocationType, durabilityOption, samplingMethod } from './common';
 
 // ============================================
 // Facilities - Production sites
@@ -22,6 +22,9 @@ export const facilities = pgTable(
     defaultDurabilityOption: durabilityOption('default_durability_option')
       .notNull()
       .default('200_year'),
+    defaultSamplingMethod: samplingMethod('default_sampling_method')
+      .notNull()
+      .default('method_a'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

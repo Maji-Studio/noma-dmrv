@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 const optionalNumber = z.number().finite().optional().nullable();
 const optionalString = z.string().trim().min(1).optional().nullable();
+const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+  message: 'date must be in YYYY-MM-DD format',
+});
 
 export const transportLegConditionSchema = z
   .object({
@@ -78,6 +81,7 @@ export const transportLegConditionSchema = z
 export const creditBatchConditionSchema = z
   .object({
     durability_option: z.enum(['200_year', '1000_year']),
+    sampling_method: z.enum(['method_a', 'method_b']).default('method_a'),
     soil_temperature_c: optionalNumber,
     h_to_c_org_ratio: optionalNumber,
     mean_random_reflectance_percent: optionalNumber,
@@ -120,6 +124,64 @@ export const creditBatchConditionSchema = z
             'mean_non_reactive_carbon_percent is required when durability_option=1000_year',
         });
       }
+    }
+  });
+
+export const creditBatchSamplingMethodSchema = z
+  .object({
+    sampling_method: z.enum(['method_a', 'method_b']),
+    reactor_id: z.string().uuid().optional().nullable(),
+    reporting_period_start: isoDateString,
+    reporting_period_end: isoDateString,
+    prior_method_a_sample_count: optionalNumber,
+    reporting_period_run_count: optionalNumber,
+    reporting_period_sampled_run_count: optionalNumber,
+  })
+  .superRefine((value, ctx) => {
+    if (value.reporting_period_start > value.reporting_period_end) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reporting_period_end'],
+        message: 'reporting_period_end must be on or after reporting_period_start',
+      });
+    }
+
+    if (value.sampling_method !== 'method_b') {
+      return;
+    }
+
+    if (!value.reactor_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reactor_id'],
+        message: 'reactor_id is required when sampling_method=method_b',
+      });
+    }
+
+    if (
+      value.prior_method_a_sample_count != null &&
+      value.prior_method_a_sample_count < 30
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sampling_method'],
+        message:
+          'sampling_method=method_b requires at least 30 prior samples under Method A',
+      });
+    }
+
+    if (
+      value.reporting_period_run_count != null &&
+      value.reporting_period_sampled_run_count != null &&
+      value.reporting_period_sampled_run_count * 10 <
+        value.reporting_period_run_count
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sampling_method'],
+        message:
+          'sampling_method=method_b requires at least 1 sampled production run per 10 runs in the reporting period',
+      });
     }
   });
 
