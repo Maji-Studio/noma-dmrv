@@ -6,21 +6,19 @@ import {
   jsonb,
   integer,
   check,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { documentationType } from './common';
-import { feedstocks, feedstockDeliveries } from './feedstock';
-import { productionRuns, samples, incidentReports } from './production';
-import { biocharProducts } from './products';
-import { deliveries, transportLegs } from './logistics';
-import { applications } from './application';
-import { creditBatches } from './credits';
+import { users } from './auth';
 
-// File-based evidence with explicit foreign keys instead of polymorphic references.
+// Optional file-based evidence linked via polymorphic entity references.
 export const documents = pgTable(
   'documents',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    entityType: text('entity_type').notNull(),
+    entityId: uuid('entity_id').notNull(),
     documentType: documentationType('document_type').notNull(),
 
     fileUrl: text('file_url').notNull(),
@@ -33,48 +31,20 @@ export const documents = pgTable(
     capturedAt: timestamp('captured_at'),
     description: text('description'),
     metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
-    createdBy: text('created_by'),
+    createdBy: text('created_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     notes: text('notes'),
-
-    feedstockId: uuid('feedstock_id').references(() => feedstocks.id),
-    feedstockDeliveryId: uuid('feedstock_delivery_id').references(
-      () => feedstockDeliveries.id
-    ),
-    productionRunId: uuid('production_run_id').references(() => productionRuns.id),
-    sampleId: uuid('sample_id').references(() => samples.id),
-    incidentReportId: uuid('incident_report_id').references(
-      () => incidentReports.id
-    ),
-    biocharProductId: uuid('biochar_product_id').references(
-      () => biocharProducts.id
-    ),
-    deliveryId: uuid('delivery_id').references(() => deliveries.id),
-    transportLegId: uuid('transport_leg_id').references(() => transportLegs.id),
-    applicationId: uuid('application_id').references(() => applications.id),
-    creditBatchId: uuid('credit_batch_id').references(() => creditBatches.id),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
     check(
-      'documents_exactly_one_owner_check',
-      sql`(
-      (case when ${table.feedstockId} is not null then 1 else 0 end) +
-      (case when ${table.feedstockDeliveryId} is not null then 1 else 0 end) +
-      (case when ${table.productionRunId} is not null then 1 else 0 end) +
-      (case when ${table.sampleId} is not null then 1 else 0 end) +
-      (case when ${table.incidentReportId} is not null then 1 else 0 end) +
-      (case when ${table.biocharProductId} is not null then 1 else 0 end) +
-      (case when ${table.deliveryId} is not null then 1 else 0 end) +
-      (case when ${table.transportLegId} is not null then 1 else 0 end) +
-      (case when ${table.applicationId} is not null then 1 else 0 end) +
-      (case when ${table.creditBatchId} is not null then 1 else 0 end)
-      ) = 1`
-    ),
-    check(
       'documents_photo_video_require_captured_at',
       sql`${table.documentType} <> all (array['photo', 'video']::documentation_type[]) or ${table.capturedAt} is not null`
     ),
+    index('documents_entity_type_entity_id_idx').on(table.entityType, table.entityId),
+    index('documents_document_type_idx').on(table.documentType),
   ]
 );

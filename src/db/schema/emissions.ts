@@ -35,7 +35,6 @@ export const emissionFactors = pgTable(
     // --- Metadata ---
     source: text('source').notNull(), // e.g., 'IPCC 2021', 'Tanzania National Database', 'IEA 2023'
     sourceUrl: text('source_url'),
-    methodologyVersion: text('methodology_version'),
     notes: text('notes'), // Additional context or methodology notes
 
     // --- Validity Period ---

@@ -257,7 +257,7 @@ const TABLE_META: Record<string, TableMeta> = {
   documents: {
     area: "Documentation",
     modulePath: "src/db/schema/documentation.ts",
-    summary: "Central evidence document store with strict ownership.",
+    summary: "Central optional evidence document store with polymorphic ownership.",
     useCases: ["Compliance evidence management", "Cross-entity file attachments"],
   },
   certifier_projects: {

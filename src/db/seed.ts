@@ -823,7 +823,7 @@ async function seed() {
       });
 
       // ------------------------------------------------------------
-      // Documentation (exactly one owner per row)
+      // Documentation (optional evidence linked by entity_type/entity_id)
       // ------------------------------------------------------------
       await tx.insert(schema.documents).values([
         {
@@ -838,7 +838,8 @@ async function seed() {
           description: 'Feedstock characterization sheet',
           metadata: { category: 'feedstock_profile' },
           createdBy: operatorUserId,
-          feedstockId: ids.feedstock,
+          entityType: 'feedstock',
+          entityId: ids.feedstock,
         },
         {
           id: ids.feedstockDeliveryDoc,
@@ -852,7 +853,8 @@ async function seed() {
           description: 'Inbound weighbridge ticket',
           metadata: { ticket_ref: 'WST-FD-2026-001' },
           createdBy: operatorUserId,
-          feedstockDeliveryId: ids.feedstockDelivery,
+          entityType: 'feedstock_delivery',
+          entityId: ids.feedstockDelivery,
         },
         {
           id: ids.productionRunDoc,
@@ -866,7 +868,8 @@ async function seed() {
           description: 'Monthly reactor sensor calibration certificate',
           metadata: { reactor_code: 'R-001' },
           createdBy: adminUserId,
-          productionRunId: ids.productionRun,
+          entityType: 'production_run',
+          entityId: ids.productionRun,
         },
         {
           id: ids.sampleDoc,
@@ -880,7 +883,8 @@ async function seed() {
           description: 'Laboratory report for sample S-2026-001',
           metadata: { sample_code: 'S-2026-001' },
           createdBy: operatorUserId,
-          sampleId: ids.sample,
+          entityType: 'sample',
+          entityId: ids.sample,
         },
         {
           id: ids.incidentDoc,
@@ -894,7 +898,8 @@ async function seed() {
           description: 'Photo captured during temperature overshoot event',
           metadata: { camera: 'mobile' },
           createdBy: operatorUserId,
-          incidentReportId: ids.incident,
+          entityType: 'incident_report',
+          entityId: ids.incident,
         },
         {
           id: ids.biocharProductDoc,
@@ -908,7 +913,8 @@ async function seed() {
           description: 'Product batch invoice package',
           metadata: { invoice: 'INV-2026-001' },
           createdBy: adminUserId,
-          biocharProductId: ids.biocharProduct,
+          entityType: 'biochar_product',
+          entityId: ids.biocharProduct,
         },
         {
           id: ids.deliveryDoc,
@@ -922,7 +928,8 @@ async function seed() {
           description: 'Signed delivery receipt',
           metadata: { recipient: 'Moshi Coffee Growers Union' },
           createdBy: operatorUserId,
-          deliveryId: ids.delivery,
+          entityType: 'delivery',
+          entityId: ids.delivery,
         },
         {
           id: ids.transportDoc,
@@ -936,7 +943,8 @@ async function seed() {
           description: 'Bill of lading for application delivery leg',
           metadata: { bol_number: 'BOL-DL-2026-001' },
           createdBy: operatorUserId,
-          transportLegId: ids.transportDelivery,
+          entityType: 'transport_leg',
+          entityId: ids.transportDelivery,
         },
         {
           id: ids.applicationDoc,
@@ -950,7 +958,8 @@ async function seed() {
           description: 'Geo-tagged photo of field application',
           metadata: { field: 'NORTH-12' },
           createdBy: operatorUserId,
-          applicationId: ids.application,
+          entityType: 'application',
+          entityId: ids.application,
         },
         {
           id: ids.creditBatchDoc,
@@ -964,7 +973,8 @@ async function seed() {
           description: 'Project design document excerpt for credit batch.',
           metadata: { credit_batch: 'CB-2026-001' },
           createdBy: adminUserId,
-          creditBatchId: ids.creditBatch,
+          entityType: 'credit_batch',
+          entityId: ids.creditBatch,
         },
       ]);
 
