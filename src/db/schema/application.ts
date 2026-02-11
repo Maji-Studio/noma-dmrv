@@ -8,7 +8,7 @@ import {
   date,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { applicationStatus, applicationMethod } from './common';
+import { applicationStatus, applicationMethod, soilTemperatureSource } from './common';
 import { deliveries } from './logistics';
 
 // ============================================
@@ -50,8 +50,15 @@ export const applications = pgTable(
     fieldIdentifier: text('field_identifier'), // Field name/parcel ID
     gisBoundaryReference: text('gis_boundary_reference'), // Link to GIS layer data
 
+    // --- Soil Temperature (Isometric: Soil Storage Module §5.1.1.3.1) ---
+    // Used in 200-year durability equation: F_durable,200 = min(0.95, 1 - [c + (a + b·ln(T_soil))·H/C_org])
+    // Source determines how soil_temperature_c is obtained:
+    //   'baseline' → computed from soil_temperature_measurements (≥10/site-month)
+    //   'global_database' → from approved external dataset
+    soilTemperatureSource: soilTemperatureSource('soil_temperature_source'),
+    soilTemperatureC: real('soil_temperature_c'), // Annual average for this application site
+
     // --- CO2e Calculation Results ---
-    // Durability inputs (soil temp, H:Corg) are at Credit Batch level
     // These are the per-application calculated outputs
     co2eStoredTonnes: real('co2e_stored_tonnes'), // This application's contribution
 

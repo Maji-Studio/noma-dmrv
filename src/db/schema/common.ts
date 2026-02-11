@@ -100,6 +100,12 @@ export const durabilityOption = pgEnum('durability_option', [
   '1000_year', // Based on random reflectance R0 (Sanei et al., 2024)
 ]);
 
+// Soil temperature data source (Soil Storage Module §5.1.1.3.1)
+export const soilTemperatureSource = pgEnum('soil_temperature_source', [
+  'baseline', // Measured directly on site (≥10 measurements/site-month)
+  'global_database', // From approved global temperature dataset
+]);
+
 // Biochar sampling pathways (Biochar Protocol §8.3.1)
 export const samplingMethod = pgEnum('sampling_method', [
   'method_a', // Sample every production batch

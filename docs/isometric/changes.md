@@ -7,13 +7,11 @@
 - **Scope:** Sampling method enforcement baseline
 - **Updated by:** Codex
 - Schema/workflow changes:
-  - Added `sampling_method` enum (`method_a`, `method_b`) and `credit_batches.sampling_method`.
-  - Added optional convenience default `facilities.default_sampling_method`.
-  - Added server-side Method B eligibility evaluation (reactor-scoped proxy) for:
-    - minimum 30 prior samples before Method B
-    - 1-in-10 sampled-run cadence during reporting period
-  - Added DB trigger guardrail to block ineligible `sampling_method=method_b`.
-  - Added immutable lock for `sampling_method` after `credit_batches` reaches `verified`/`issued`.
+  - Added `sampling_method` enum (`method_a`, `method_b`) and moved ownership to `reactors.sampling_method` (default `method_a`).
+  - Removed sampling-method storage from `facilities` and `credit_batches`.
+  - Added server-side Method B eligibility evaluation for reactor-level selection (minimum 30 prior samples).
+  - Added DB trigger guardrail to block ineligible `reactors.sampling_method=method_b`.
+  - Added DB trigger guardrail on `credit_batches` to enforce Method B cadence (>=1 sampled run per 10 runs) for reactors configured with Method B.
   - Updated Isometric condition registry and schema mapping entries for sampling-method rules.
 - Migration: guardrails and columns updated in `drizzle/0000_lowly_grim_reaper.sql`.
 

@@ -8,8 +8,8 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `session` | Auth | Tracks active login sessions and expiry tokens. | Session validation, logout-all, auth auditing. | `src/db/schema/auth.ts:35` |
 | `account` | Auth | Stores provider credentials and token material per user. | Password auth, OAuth account linking. | `src/db/schema/auth.ts:60` |
 | `verification` | Auth | Stores one-time verification/reset values and expirations. | Email verification, password reset flows. | `src/db/schema/auth.ts:88` |
-| `facilities` | Facilities | Master record for production sites and defaults. | Facility onboarding, regional reporting, durability defaults, default sampling method. | `src/db/schema/facilities.ts:9` |
-| `reactors` | Facilities | Defines pyrolysis units installed at facilities. | Run-to-reactor traceability, capacity planning, reactor compliance checks. | `src/db/schema/facilities.ts:45` |
+| `facilities` | Facilities | Master record for production sites and defaults. | Facility onboarding, regional reporting, durability defaults. | `src/db/schema/facilities.ts:9` |
+| `reactors` | Facilities | Defines pyrolysis units installed at facilities. | Run-to-reactor traceability, capacity planning, reactor compliance checks, sampling-method selection. | `src/db/schema/facilities.ts:45` |
 | `storage_locations` | Facilities | Defines physical material storage points at facilities. | Feedstock/biochar inventory location tracking. | `src/db/schema/facilities.ts:66` |
 | `suppliers` | Parties | Master list of feedstock suppliers and contacts. | Supply chain tracking, chain-of-custody references. | `src/db/schema/parties.ts:8` |
 | `customers` | Parties | Buyer/customer entities for biochar distribution. | Sales destination tracking, customer-level delivery reporting. | `src/db/schema/parties.ts:42` |
@@ -32,7 +32,7 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `transport_legs` | Logistics | Canonical per-leg transport emissions accounting ledger. | Distance/energy method calculations, BCU tracking, transport auditability. | `src/db/schema/logistics.ts:160` |
 | `applications` | Application | Field application events for delivered biochar to soil. | Soil application reporting, per-application CO2e storage outputs. | `src/db/schema/application.ts:21` |
 | `soil_temperature_measurements` | Application | Soil temperature observations tied to applications. | 200-year durability baseline and evidence support. | `src/db/schema/application.ts:88` |
-| `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. | Net removal calculation, durability + sampling pathway selection (locked after `verified`/`issued`), registry submission prep. | `src/db/schema/credits.ts:22` |
+| `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep, Method B cadence guardrails (reactor-driven). | `src/db/schema/credits.ts:22` |
 | `credit_batch_applications` | Credits | M:N join between credit batches and applications. | Tracing which applications contribute to each issuance batch. | `src/db/schema/credits.ts:130` |
 | `emission_factors` | Emissions | Versioned lookup table for fuel/electricity emission factors. | Standardized CO2e calculations by region/fuel and validity window. | `src/db/schema/emissions.ts:19` |
 | `documents` | Documentation | Central file evidence store with explicit ownership FKs. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:20` |

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  creditBatchSamplingMethodSchema,
+  reactorSamplingMethodSchema,
   continuousGasMeasurementSchema,
   creditBatchConditionSchema,
+  applicationSoilTemperatureSchema,
   sampleConditionSchema,
   transportLegConditionSchema,
 } from "@/schemas/isometric";
@@ -35,23 +36,41 @@ describe("Isometric conditional required validation", () => {
     expect(result.success).toBe(true);
   });
 
-  it("requires 200-year durability inputs when selected", () => {
+  it("requires h_to_c_org_ratio for 200-year durability on credit batch", () => {
     const result = creditBatchConditionSchema.safeParse({
       durability_option: "200_year",
-      sampling_method: "method_a",
-      soil_temperature_c: null,
       h_to_c_org_ratio: null,
     });
 
     expect(result.success).toBe(false);
     if (result.success) return;
 
-    expect(result.error.issues.map((issue) => issue.message)).toEqual(
-      expect.arrayContaining([
-        "soil_temperature_c is required when durability_option=200_year",
-        "h_to_c_org_ratio is required when durability_option=200_year",
-      ])
+    expect(result.error.issues.map((issue) => issue.message)).toContain(
+      "h_to_c_org_ratio is required when durability_option=200_year"
     );
+  });
+
+  it("requires soil_temperature_c on application", () => {
+    const result = applicationSoilTemperatureSchema.safeParse({
+      soil_temperature_source: "baseline",
+      soil_temperature_c: null,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+
+    expect(result.error.issues.map((issue) => issue.message)).toContain(
+      "soil_temperature_c is required for 200-year durability calculation"
+    );
+  });
+
+  it("accepts valid application soil temperature from global database", () => {
+    const result = applicationSoilTemperatureSchema.safeParse({
+      soil_temperature_source: "global_database",
+      soil_temperature_c: 22.4,
+    });
+
+    expect(result.success).toBe(true);
   });
 
   it("requires nutrient declarations when nutrient claim is enabled", () => {
@@ -83,30 +102,43 @@ describe("Isometric conditional required validation", () => {
     );
   });
 
-  it("requires reactor_id when Method B sampling is selected", () => {
-    const result = creditBatchSamplingMethodSchema.safeParse({
+  it("requires reactor_id when selecting sampling method on reactor", () => {
+    const result = reactorSamplingMethodSchema.safeParse({
       sampling_method: "method_b",
-      reporting_period_start: "2026-01-01",
-      reporting_period_end: "2026-01-31",
     });
 
     expect(result.success).toBe(false);
     if (result.success) return;
 
-    expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "reactor_id is required when sampling_method=method_b"
+    expect(result.error.issues.map((issue) => issue.path.join("."))).toContain(
+      "reactor_id"
     );
   });
 
-  it("rejects Method B when prior Method A samples are below threshold", () => {
-    const result = creditBatchSamplingMethodSchema.safeParse({
+  it("accepts Method A for a reactor", () => {
+    const result = reactorSamplingMethodSchema.safeParse({
+      reactor_id: "00000000-0000-0000-0000-000000000101",
+      sampling_method: "method_a",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts Method B when prior Method A samples meet threshold", () => {
+    const result = reactorSamplingMethodSchema.safeParse({
       sampling_method: "method_b",
       reactor_id: "00000000-0000-0000-0000-000000000101",
-      reporting_period_start: "2026-01-01",
-      reporting_period_end: "2026-01-31",
+      prior_method_a_sample_count: 30,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects Method B when prior Method A samples are below threshold", () => {
+    const result = reactorSamplingMethodSchema.safeParse({
+      sampling_method: "method_b",
+      reactor_id: "00000000-0000-0000-0000-000000000101",
       prior_method_a_sample_count: 29,
-      reporting_period_run_count: 10,
-      reporting_period_sampled_run_count: 1,
     });
 
     expect(result.success).toBe(false);
@@ -117,22 +149,4 @@ describe("Isometric conditional required validation", () => {
     );
   });
 
-  it("rejects Method B when reporting-period cadence is below 1-in-10", () => {
-    const result = creditBatchSamplingMethodSchema.safeParse({
-      sampling_method: "method_b",
-      reactor_id: "00000000-0000-0000-0000-000000000101",
-      reporting_period_start: "2026-01-01",
-      reporting_period_end: "2026-01-31",
-      prior_method_a_sample_count: 30,
-      reporting_period_run_count: 11,
-      reporting_period_sampled_run_count: 1,
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) return;
-
-    expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "sampling_method=method_b requires at least 1 sampled production run per 10 runs in the reporting period"
-    );
-  });
 });

@@ -140,23 +140,21 @@ export async function GET() {
 
 ## Sampling Method Enforcement (Isometric)
 
-Sampling method is selected at `credit_batches` and enforced with reactor-scoped eligibility checks.
+Sampling method is selected at `reactors` and enforced with reactor-scoped eligibility checks.
 
 - Process key used today: `reactor_id` (not `production_run_id`)
-- Method A/B selection stored on credit batch: `credit_batches.sampling_method`
-- Facility convenience default: `facilities.default_sampling_method`
+- Method A/B selection stored on reactor: `reactors.sampling_method` (default `method_a`)
 
 Method B requires:
 
-1. `reactor_id` on the credit batch.
-2. At least 30 prior samples for that reactor before the reporting period.
-3. Reporting-period cadence of at least 1 sampled run per 10 runs for that reactor.
+1. At least 30 prior samples for that reactor before switching reactor method to `method_b`.
+2. Credit-batch reporting periods linked to Method B reactors must satisfy sampled-run cadence >= 1 per 10 runs.
 
 Enforcement is intentionally layered:
 
-1. UI gating (disable/hide Method B when ineligible).
+1. UI gating (disable/hide Method B when reactor is ineligible).
 2. Server validation in action/data-access layer.
-3. DB trigger guardrail for any direct/bypass writes.
+3. DB trigger guardrails for any direct/bypass writes.
 
 ## What Is Intentionally Scaffolded
 
