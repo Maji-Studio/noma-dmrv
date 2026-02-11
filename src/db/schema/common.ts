@@ -100,6 +100,12 @@ export const durabilityOption = pgEnum('durability_option', [
   '1000_year', // Based on random reflectance R0 (Sanei et al., 2024)
 ]);
 
+// Biochar sampling pathways (Biochar Protocol §8.3.1)
+export const samplingMethod = pgEnum('sampling_method', [
+  'method_a', // Sample every production batch
+  'method_b', // Sample at least 1 in 10 production batches
+]);
+
 export const transportEntityType = pgEnum('transport_entity_type', [
   'feedstock',
   'biochar',

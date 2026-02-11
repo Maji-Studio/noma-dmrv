@@ -287,6 +287,7 @@ async function seed() {
         contactEmail: 'ops@noma.local',
         contactPhone: '+255700000001',
         defaultDurabilityOption: '200_year',
+        defaultSamplingMethod: 'method_a',
       });
 
       await tx.insert(schema.reactors).values({
@@ -741,16 +742,11 @@ async function seed() {
       await tx.insert(schema.applications).values({
         id: ids.application,
         code: 'AP-2026-001',
-        facilityId: ids.facility,
         applicationDate: timestamps.applicationTime,
         status: 'applied',
         deliveryId: ids.delivery,
         biocharAppliedTons: 0.66,
         biocharAppliedDryTons: 0.62,
-        biocharDryMatterTons: 0.62,
-        totalAppliedTons: 2.2,
-        averageApplicationRateMagnitude: 5.5,
-        averageApplicationRateUnit: 't/ha',
         gpsLatitude: -3.279,
         gpsLongitude: 37.425,
         fieldSizeHa: 0.4,
@@ -809,7 +805,8 @@ async function seed() {
         creditsTco2e: 0.95,
         value: 1180000,
         bufferPoolPercent: 12,
-        durabilityOptionType: '200_year',
+        durabilityOption: '200_year',
+        samplingMethod: 'method_a',
         soilTemperatureC: 24.9,
         soilTemperatureSource: 'baseline',
         hToCorgRatio: 0.26,

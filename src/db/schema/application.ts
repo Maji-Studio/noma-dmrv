@@ -9,7 +9,6 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { applicationStatus, applicationMethod } from './common';
-import { facilities } from './facilities';
 import { deliveries } from './logistics';
 
 // ============================================
@@ -23,13 +22,11 @@ export const applications = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     code: text('code').notNull().unique(), // e.g., "AP-2025-043"
-    facilityId: uuid('facility_id')
-      .notNull()
-      .references(() => facilities.id),
     applicationDate: timestamp('application_date').defaultNow().notNull(),
     status: applicationStatus('status').default('delivered').notNull(),
 
     // --- Linked Records ---
+    // Facility is derivable via delivery.facility_id (chain of custody)
     deliveryId: uuid('delivery_id')
       .notNull()
       .references(() => deliveries.id),
@@ -37,10 +34,10 @@ export const applications = pgTable(
     // --- Application Details (Isometric: Soil Storage Module) ---
     biocharAppliedTons: real('biochar_applied_tons').notNull(),
     biocharAppliedDryTons: real('biochar_applied_dry_tons').notNull(),
-    biocharDryMatterTons: real('biochar_dry_matter_tons'),
-    totalAppliedTons: real('total_applied_tons'), // Calculated
-    averageApplicationRateMagnitude: real('average_application_rate_magnitude'),
-    averageApplicationRateUnit: text('average_application_rate_unit'),
+    // Derived fields (compute at query time):
+    //   - biochar_dry_matter_tons = biochar_applied_dry_tons × (1 - ash_content/100) via lab samples
+    //   - total_applied_tons = biochar_applied_tons + amendments via formulation ratios
+    //   - average_application_rate = biochar_applied_tons / field_size_ha
 
     // GPS coordinates (Isometric requirement for soil storage)
     gpsLatitude: real('gps_latitude'),
@@ -126,10 +123,6 @@ export const soilTemperatureMeasurements = pgTable(
 export const applicationsRelations = relations(
   applications,
   ({ one, many }) => ({
-    facility: one(facilities, {
-      fields: [applications.facilityId],
-      references: [facilities.id],
-    }),
     delivery: one(deliveries, {
       fields: [applications.deliveryId],
       references: [deliveries.id],
