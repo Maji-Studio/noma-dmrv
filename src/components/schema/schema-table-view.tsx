@@ -24,6 +24,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import type { SchemaArea, SchemaColumnInfo, SchemaRelationship, SchemaTableInfo } from "@/lib/schema/catalog";
 import columnExamples from "@/lib/schema/column-examples.json";
+import columnDescriptions from "@/lib/schema/column-descriptions.json";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -72,6 +73,7 @@ const AREA_ACCENT: Record<SchemaArea, string> = {
 interface ColumnRow extends SchemaColumnInfo {
   isForeignKey: boolean;
   example: string;
+  description: string;
 }
 
 const columnHelper = createColumnHelper<ColumnRow>();
@@ -127,6 +129,19 @@ const columnDefs = [
         <code className="text-[var(--color-text-secondary)] break-all" title={val}>
           {val.length > 40 ? val.slice(0, 37) + "..." : val}
         </code>
+      );
+    },
+  }),
+  columnHelper.accessor("description", {
+    header: "Description",
+    enableSorting: false,
+    cell: (info) => {
+      const val = info.getValue();
+      if (!val) return <span className="text-[var(--color-text-tertiary)]">—</span>;
+      return (
+        <span className="body-small text-[var(--color-text-secondary)]" title={val}>
+          {val.length > 60 ? val.slice(0, 57) + "..." : val}
+        </span>
       );
     },
   }),
@@ -439,10 +454,12 @@ function ColumnsTable({
   const data: ColumnRow[] = useMemo(() => {
     const fkColumnNames = new Set(outboundRelationships.map((r) => r.fromColumn));
     const examples = (columnExamples as Record<string, Record<string, unknown>>)[tableName] ?? {};
+    const descriptions = (columnDescriptions as Record<string, Record<string, string>>)[tableName] ?? {};
     return rawData.map((col) => ({
       ...col,
       isForeignKey: fkColumnNames.has(col.name),
       example: col.name in examples ? String(examples[col.name] ?? "") : "",
+      description: descriptions[col.name] ?? "",
     }));
   }, [rawData, outboundRelationships, tableName]);
 

@@ -26,4 +26,4 @@ Requiredness levels:
 
 ## Ownership Terminology
 
-`documents` uses explicit FK ownership (`feedstock_id`, `delivery_id`, `transport_leg_id`, etc.) with exactly one owner per row. Legacy polymorphic ownership (`entity_type`/`entity_id`) is not used.
+`documents` uses polymorphic ownership (`entity_type` + `entity_id`) so evidence can attach to any tracked entity without adding new FK columns.

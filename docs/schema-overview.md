@@ -35,7 +35,7 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep, Method B cadence guardrails (reactor-driven). | `src/db/schema/credits.ts:22` |
 | `credit_batch_applications` | Credits | M:N join between credit batches and applications. | Tracing which applications contribute to each issuance batch. | `src/db/schema/credits.ts:130` |
 | `emission_factors` | Emissions | Versioned lookup table for fuel/electricity emission factors. | Standardized CO2e calculations by region/fuel and validity window. | `src/db/schema/emissions.ts:19` |
-| `documents` | Documentation | Central file evidence store with explicit ownership FKs. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:20` |
+| `documents` | Documentation | Central optional evidence store linked by `entity_type` + `entity_id`. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:14` |
 | `certifier_projects` | Certification | Maps local facilities to external certifier project identifiers. | Provider project registration and linkage. | `src/db/schema/certification.ts:19` |
 | `certifier_sources` | Certification | Normalizes external source references by provider/type. | Stable mapping of provider-specific IDs used in submissions. | `src/db/schema/certification.ts:46` |
 | `certification_submissions` | Certification | Immutable versioned submission history with payload snapshots. | Submission lifecycle tracking, auditability, resubmission/versioning. | `src/db/schema/certification.ts:68` |

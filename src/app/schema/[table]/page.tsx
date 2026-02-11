@@ -9,6 +9,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { getSchemaTableByName, type SchemaArea } from "@/lib/schema/catalog";
+import columnExamples from "@/lib/schema/column-examples.json";
+import columnDescriptions from "@/lib/schema/column-descriptions.json";
 
 const AREA_ACCENT: Record<SchemaArea, string> = {
   Auth: "var(--clr-purple)",
@@ -46,6 +48,9 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
   const linkedFromTables = Array.from(
     new Set(tableInfo.inboundRelationships.map((r) => r.fromTable))
   );
+
+  const examples = (columnExamples as Record<string, Record<string, unknown>>)[tableName] ?? {};
+  const descriptions = (columnDescriptions as Record<string, Record<string, string>>)[tableName] ?? {};
 
   return (
     <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
@@ -207,7 +212,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
             </h2>
           </div>
           <div className="overflow-auto mt-[8px]">
-            <table className="w-full border-collapse min-w-[760px]">
+            <table className="w-full border-collapse min-w-[1100px]">
               <thead>
                 <tr className="bg-[var(--color-background-medium)] border-b border-[var(--color-border-primary)]">
                   <th className="text-left body-caption-fit-bold py-[10px] px-[12px]">
@@ -227,6 +232,12 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                   </th>
                   <th className="text-center body-caption-fit-bold py-[10px] px-[12px] w-[70px]">
                     Default
+                  </th>
+                  <th className="text-left body-caption-fit-bold py-[10px] px-[12px]">
+                    Example
+                  </th>
+                  <th className="text-left body-caption-fit-bold py-[10px] px-[12px]">
+                    Description
                   </th>
                 </tr>
               </thead>
@@ -276,6 +287,21 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                     </td>
                     <td className="py-[8px] px-[12px] text-center body-caption text-[var(--color-text-tertiary)]">
                       {col.hasDefault ? "yes" : "—"}
+                    </td>
+                    <td className="py-[8px] px-[12px] body-small">
+                      {col.name in examples ? (
+                        <code className="text-[var(--color-text-secondary)] break-all" title={String(examples[col.name] ?? "")}>
+                          {(() => {
+                            const val = String(examples[col.name] ?? "");
+                            return val.length > 40 ? val.slice(0, 37) + "..." : val;
+                          })()}
+                        </code>
+                      ) : (
+                        <span className="text-[var(--color-text-tertiary)]">—</span>
+                      )}
+                    </td>
+                    <td className="py-[8px] px-[12px] body-small text-[var(--color-text-secondary)]">
+                      {descriptions[col.name] ?? <span className="text-[var(--color-text-tertiary)]">—</span>}
                     </td>
                   </tr>
                 ))}
