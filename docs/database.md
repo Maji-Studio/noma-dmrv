@@ -145,29 +145,27 @@ export const db = drizzle(pool, { schema });
 
 ## Isometric Sampling Method (Reactor-Level)
 
-The system stores sampling method at the **credit batch** level and enforces Method B eligibility using historical data scoped to a **reactor**.
+The system stores sampling method at the **reactor** level and enforces Method B guardrails using historical data scoped to that reactor.
 
 ### Where it is stored
 
-- `credit_batches.sampling_method`: `method_a | method_b`
-- `facilities.default_sampling_method`: `method_a | method_b` (convenience default)
+- `reactors.sampling_method`: `method_a | method_b` (default: `method_a`)
 
 ### Reactor-level eligibility rules for `method_b`
 
-- `reactor_id` must be set on the credit batch.
-- At least **30 prior samples** must exist before the reporting period for that reactor.
-- During the reporting period, sampled runs must satisfy **>= 1 sampled run per 10 runs** for that reactor.
+- A reactor can only be set to `method_b` after at least **30 prior samples** exist for that reactor.
+- For credit batches linked to reactors using `method_b`, sampled runs in the reporting period must satisfy **>= 1 sampled run per 10 runs**.
 
 ### Enforcement layers
 
-1. UI: disable/hide Method B when ineligible.
+1. UI: disable/hide Method B when ineligible for the selected reactor.
 2. Server/API: validate eligibility before write.
-3. Database trigger: final guardrail against bypass writes.
+3. Database triggers: final guardrail against bypass writes.
 
 ### Why reactor-level today
 
-`production_run_id` represents a single run and cannot be used to evaluate cumulative thresholds across runs.  
-Reactor-level is used as the current proxy for "production process" until a dedicated `production_process_id` model is introduced.
+`production_run_id` represents a single run and cannot evaluate cumulative thresholds across runs.  
+Reactor-level is currently used as the process proxy until a dedicated `production_process_id` model is introduced.
 
 ---
 

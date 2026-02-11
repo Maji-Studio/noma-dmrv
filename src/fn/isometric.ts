@@ -7,7 +7,7 @@ import {
   type MethodBEligibilitySummary,
 } from "@/data-access/isometric";
 import {
-  creditBatchSamplingMethodSchema,
+  reactorSamplingMethodSchema,
   creditBatchConditionSchema,
   continuousGasMeasurementSchema,
   deliveryDryMassSchema,
@@ -46,66 +46,51 @@ export async function validateCreditBatchFn(
   }
 }
 
-export type CreditBatchSamplingEligibilityResult = {
+export type ReactorSamplingEligibilityResult = {
+  reactor_id: string;
   sampling_method: "method_a" | "method_b";
-  reactor_id: string | null;
-  reporting_period_start: string;
-  reporting_period_end: string;
-  method_b_eligibility: MethodBEligibilitySummary | null;
+  method_b_eligibility: MethodBEligibilitySummary;
 };
 
-export async function validateCreditBatchSamplingMethodFn(
-  data: z.infer<typeof creditBatchSamplingMethodSchema>
-): Promise<ActionResult<CreditBatchSamplingEligibilityResult>> {
+export async function validateReactorSamplingMethodFn(
+  data: z.infer<typeof reactorSamplingMethodSchema>
+): Promise<ActionResult<ReactorSamplingEligibilityResult>> {
   try {
-    const validated = creditBatchSamplingMethodSchema.parse(data);
-
-    if (validated.sampling_method === "method_a") {
-      return {
-        success: true,
-        data: {
-          sampling_method: validated.sampling_method,
-          reactor_id: validated.reactor_id ?? null,
-          reporting_period_start: validated.reporting_period_start,
-          reporting_period_end: validated.reporting_period_end,
-          method_b_eligibility: null,
-        },
-      };
-    }
-
-    if (!validated.reactor_id) {
-      return {
-        success: false,
-        error: "reactor_id is required when sampling_method=method_b",
-      };
-    }
+    const validated = reactorSamplingMethodSchema.parse(data);
 
     const eligibility = await getMethodBEligibilityByReactor({
       reactorId: validated.reactor_id,
-      reportingPeriodStart: validated.reporting_period_start,
-      reportingPeriodEnd: validated.reporting_period_end,
     });
 
-    const parsedWithEligibility = creditBatchSamplingMethodSchema.parse({
+    const parsedWithEligibility = reactorSamplingMethodSchema.parse({
       ...validated,
       prior_method_a_sample_count: eligibility.priorMethodASampleCount,
-      reporting_period_run_count: eligibility.reportingPeriodRunCount,
-      reporting_period_sampled_run_count: eligibility.reportingPeriodSampledRunCount,
     });
 
     return {
       success: true,
       data: {
+        reactor_id: parsedWithEligibility.reactor_id,
         sampling_method: parsedWithEligibility.sampling_method,
-        reactor_id: parsedWithEligibility.reactor_id ?? null,
-        reporting_period_start: parsedWithEligibility.reporting_period_start,
-        reporting_period_end: parsedWithEligibility.reporting_period_end,
-        method_b_eligibility: eligibility,
+        method_b_eligibility: {
+          ...eligibility,
+          isEligible:
+            parsedWithEligibility.sampling_method === "method_a"
+              ? true
+              : eligibility.isEligible,
+        },
       },
     };
   } catch (error) {
     return { success: false, error: mapValidationError(error) };
   }
+}
+
+// Backward-compatible alias while callers migrate to reactor-level naming.
+export async function validateCreditBatchSamplingMethodFn(
+  data: z.infer<typeof reactorSamplingMethodSchema>
+): Promise<ActionResult<ReactorSamplingEligibilityResult>> {
+  return validateReactorSamplingMethodFn(data);
 }
 
 export async function validateSampleConditionsFn(

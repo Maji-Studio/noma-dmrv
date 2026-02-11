@@ -22,9 +22,6 @@ export const facilities = pgTable(
     defaultDurabilityOption: durabilityOption('default_durability_option')
       .notNull()
       .default('200_year'),
-    defaultSamplingMethod: samplingMethod('default_sampling_method')
-      .notNull()
-      .default('method_a'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -55,6 +52,7 @@ export const reactors = pgTable('reactors', {
   // Isometric Protocol: Reactor design requirements (Section 9.2)
   reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
   type: text('type').notNull(),
+  samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
   capacityKg: real('capacity_kg'),
   specifications: jsonb('specifications'), // { description, manufacturer, ... }
   createdAt: timestamp('created_at').defaultNow().notNull(),

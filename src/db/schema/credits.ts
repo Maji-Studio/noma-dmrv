@@ -10,8 +10,8 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { creditBatchStatus, durabilityOption, samplingMethod } from './common';
-import { facilities, reactors } from './facilities';
+import { creditBatchStatus, durabilityOption } from './common';
+import { facilities } from './facilities';
 import { applications } from './application';
 
 // ============================================
@@ -27,27 +27,17 @@ export const creditBatches = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
-    // Production runs are traced via FK chain: CreditBatch → Application → Delivery → BiocharProduct → ProductionRun
-    date: date('date').notNull(),
     status: creditBatchStatus('status').default('pending').notNull(),
 
     // --- Overview ---
-    reactorId: uuid('reactor_id').references(() => reactors.id),
-    startDate: timestamp('start_date'),
-    endDate: timestamp('end_date'),
-    reportingPeriodStart: date('reporting_period_start')
-      .notNull()
-      .default(sql`CURRENT_DATE`),
-    reportingPeriodEnd: date('reporting_period_end')
-      .notNull()
-      .default(sql`CURRENT_DATE`),
+    // Reactor traceable via FK chain: CreditBatch → Application → Delivery → BiocharProduct → ProductionRun → Reactor
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
     certifier: text('certifier'), // e.g., "Isometric"
     registry: text('registry'), // e.g., "Isometric"
 
     // --- Credit Details (Isometric Protocol Section 8) ---
-    batchesCount: integer('batches_count'),
     weightTons: real('weight_tons'),
-    creditsTco2e: real('credits_tco2e'), // Net CO2e removal
     value: real('value'),
     currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
@@ -59,16 +49,11 @@ export const creditBatches = pgTable(
     durabilityOption: durabilityOption('durability_option')
       .notNull()
       .default('200_year'),
-    samplingMethod: samplingMethod('sampling_method')
-      .notNull()
-      .default('method_a'),
 
     // --- 200-Year Durability Fields ---
-    // Soil temperature - required for F_durable calculation (200-year option)
+    // Soil temperature inputs (soil_temperature_c, soil_temperature_source) live on applications
     // Formula: F_durable,200 = min(0.95, 1 - [c + (a + b·ln(T_soil))·H/C_org])
     // Where: a=-0.383, b=0.350, c=-0.048
-    soilTemperatureC: real('soil_temperature_c'), // Annual average for project area
-    soilTemperatureSource: text('soil_temperature_source'), // 'baseline' | 'global_database'
     hToCorgRatio: real('h_to_c_org_ratio'), // H:Corg ratio (calculated from samples)
 
     // --- 1000-Year Durability Fields ---
@@ -106,9 +91,8 @@ export const creditBatches = pgTable(
   },
   (table) => [
     check(
-      'credit_batches_200_year_requires_soil_temp_and_h_to_corg',
+      'credit_batches_200_year_requires_h_to_corg',
       sql`${table.durabilityOption} <> '200_year'::durability_option or (
-        ${table.soilTemperatureC} is not null and
         ${table.hToCorgRatio} is not null
       )`
     ),
@@ -152,10 +136,6 @@ export const creditBatchesRelations = relations(
     facility: one(facilities, {
       fields: [creditBatches.facilityId],
       references: [facilities.id],
-    }),
-    reactor: one(reactors, {
-      fields: [creditBatches.reactorId],
-      references: [reactors.id],
     }),
     creditBatchApplications: many(creditBatchApplications),
   })

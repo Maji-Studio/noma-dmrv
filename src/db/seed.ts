@@ -287,7 +287,6 @@ async function seed() {
         contactEmail: 'ops@noma.local',
         contactPhone: '+255700000001',
         defaultDurabilityOption: '200_year',
-        defaultSamplingMethod: 'method_a',
       });
 
       await tx.insert(schema.reactors).values({
@@ -297,6 +296,7 @@ async function seed() {
         facilityId: ids.facility,
         reactorType: 'auger',
         type: 'continuous',
+        samplingMethod: 'method_a',
         capacityKg: 500,
         specifications: {
           description: 'Continuous auger pyrolysis reactor with condensate capture.',
@@ -757,6 +757,8 @@ async function seed() {
         co2eStoredTonnes: 1.1,
         truckMassOnArrivalKg: 8400,
         truckMassOnDepartureKg: 6200,
+        soilTemperatureSource: 'baseline',
+        soilTemperatureC: 24.9,
       });
 
       await tx.insert(schema.soilTemperatureMeasurements).values([
@@ -791,24 +793,15 @@ async function seed() {
         id: ids.creditBatch,
         code: 'CB-2026-001',
         facilityId: ids.facility,
-        date: '2026-01-19',
         status: 'pending',
-        reactorId: ids.reactor,
-        startDate: new Date('2026-01-13T00:00:00.000Z'),
-        endDate: new Date('2026-01-19T00:00:00.000Z'),
-        reportingPeriodStart: '2026-01-01',
-        reportingPeriodEnd: '2026-01-31',
+        startDate: '2026-01-13',
+        endDate: '2026-01-19',
         certifier: 'Isometric',
         registry: 'Isometric Registry',
-        batchesCount: 1,
         weightTons: 0.62,
-        creditsTco2e: 0.95,
         value: 1180000,
         bufferPoolPercent: 12,
         durabilityOption: '200_year',
-        samplingMethod: 'method_a',
-        soilTemperatureC: 24.9,
-        soilTemperatureSource: 'baseline',
         hToCorgRatio: 0.26,
         fDurableCalculated: 0.87,
         totalCo2eStoredTons: 1.1,

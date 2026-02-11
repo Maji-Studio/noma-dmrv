@@ -194,7 +194,6 @@ CREATE TABLE "credit_batches" (
 	"value_tzs" real,
 	"buffer_pool_percent" real,
 	"durability_option" "durability_option" DEFAULT '200_year' NOT NULL,
-	"sampling_method" "sampling_method" DEFAULT 'method_a' NOT NULL,
 	"soil_temperature_c" real,
 	"soil_temperature_celsius" real,
 	"soil_temperature_source" text,
@@ -315,7 +314,6 @@ CREATE TABLE "facilities" (
 	"contact_email" text,
 	"contact_phone" text,
 	"default_durability_option" "durability_option" DEFAULT '200_year' NOT NULL,
-	"default_sampling_method" "sampling_method" DEFAULT 'method_a' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "facilities_code_unique" UNIQUE("code"),
@@ -330,6 +328,7 @@ CREATE TABLE "reactors" (
 	"facility_id" uuid NOT NULL,
 	"reactor_type" text NOT NULL,
 	"type" text NOT NULL,
+	"sampling_method" "sampling_method" DEFAULT 'method_a' NOT NULL,
 	"capacity_kg" real,
 	"design_specs" text,
 	"specifications" jsonb,
@@ -1130,22 +1129,60 @@ ALTER TABLE "project_members" ADD CONSTRAINT "project_members_project_id_project
 ALTER TABLE "project_members" ADD CONSTRAINT "project_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE OR REPLACE FUNCTION "public"."enforce_credit_batch_sampling_method_rules"()
+CREATE OR REPLACE FUNCTION "public"."enforce_reactor_sampling_method_rules"()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
   prior_sample_count integer := 0;
-  period_run_count integer := 0;
-  period_sampled_run_count integer := 0;
-  required_sampled_run_count integer := 0;
 BEGIN
   IF NEW.sampling_method <> 'method_b'::sampling_method THEN
     RETURN NEW;
   END IF;
 
+  SELECT count(s.id)::int
+  INTO prior_sample_count
+  FROM production_runs pr
+  LEFT JOIN samples s ON s.production_run_id = pr.id
+  WHERE pr.reactor_id = NEW.id;
+
+  IF prior_sample_count < 30 THEN
+    RAISE EXCEPTION 'reactors.sampling_method=method_b requires at least 30 prior samples for this reactor (found %).', prior_sample_count;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS "reactors_enforce_sampling_method_rules" ON "reactors";
+--> statement-breakpoint
+CREATE TRIGGER "reactors_enforce_sampling_method_rules"
+BEFORE INSERT OR UPDATE OF "sampling_method" ON "reactors"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."enforce_reactor_sampling_method_rules"();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "public"."enforce_credit_batch_sampling_cadence_for_method_b_reactors"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  reactor_sampling_method sampling_method;
+  prior_sample_count integer := 0;
+  period_run_count integer := 0;
+  period_sampled_run_count integer := 0;
+  required_sampled_run_count integer := 0;
+BEGIN
   IF NEW.reactor_id IS NULL THEN
-    RAISE EXCEPTION 'sampling_method=method_b requires reactor_id so eligibility can be evaluated.';
+    RETURN NEW;
+  END IF;
+
+  SELECT r.sampling_method
+  INTO reactor_sampling_method
+  FROM reactors r
+  WHERE r.id = NEW.reactor_id;
+
+  IF reactor_sampling_method <> 'method_b'::sampling_method THEN
+    RETURN NEW;
   END IF;
 
   SELECT count(s.id)::int
@@ -1156,7 +1193,9 @@ BEGIN
     AND pr.date < NEW.reporting_period_start;
 
   IF prior_sample_count < 30 THEN
-    RAISE EXCEPTION 'sampling_method=method_b requires at least 30 prior samples under Method A for this reactor (found %).', prior_sample_count;
+    RAISE EXCEPTION 'credit batch requires at least 30 prior samples for reactor % before reporting period when reactor sampling_method=method_b (found %).',
+      NEW.reactor_id,
+      prior_sample_count;
   END IF;
 
   SELECT
@@ -1172,7 +1211,8 @@ BEGIN
   IF period_run_count > 0 THEN
     required_sampled_run_count := (period_run_count + 9) / 10;
     IF period_sampled_run_count < required_sampled_run_count THEN
-      RAISE EXCEPTION 'sampling_method=method_b requires at least 1 sampled production run per 10 runs in reporting period (sampled %, required %, total %).',
+      RAISE EXCEPTION 'reactor % uses method_b, so credit batch period must satisfy sampled-run cadence >= 1/10 (sampled %, required %, total %).',
+        NEW.reactor_id,
         period_sampled_run_count,
         required_sampled_run_count,
         period_run_count;
@@ -1183,12 +1223,12 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-DROP TRIGGER IF EXISTS "credit_batches_enforce_sampling_method_rules" ON "credit_batches";
+DROP TRIGGER IF EXISTS "credit_batches_enforce_sampling_cadence_for_method_b_reactors" ON "credit_batches";
 --> statement-breakpoint
-CREATE TRIGGER "credit_batches_enforce_sampling_method_rules"
-BEFORE INSERT OR UPDATE OF "sampling_method", "reactor_id", "reporting_period_start", "reporting_period_end" ON "credit_batches"
+CREATE TRIGGER "credit_batches_enforce_sampling_cadence_for_method_b_reactors"
+BEFORE INSERT OR UPDATE OF "reactor_id", "reporting_period_start", "reporting_period_end" ON "credit_batches"
 FOR EACH ROW
-EXECUTE FUNCTION "public"."enforce_credit_batch_sampling_method_rules"();
+EXECUTE FUNCTION "public"."enforce_credit_batch_sampling_cadence_for_method_b_reactors"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "public"."prevent_credit_batch_durability_changes_after_lock"()
 RETURNS trigger
@@ -1197,7 +1237,6 @@ AS $$
 BEGIN
   IF OLD.status IN ('verified', 'issued')
     AND (
-      NEW.sampling_method IS DISTINCT FROM OLD.sampling_method OR
       NEW.durability_option IS DISTINCT FROM OLD.durability_option OR
       NEW.soil_temperature_c IS DISTINCT FROM OLD.soil_temperature_c OR
       NEW.soil_temperature_celsius IS DISTINCT FROM OLD.soil_temperature_celsius OR
@@ -1212,7 +1251,7 @@ BEGIN
       NEW.f_durable_fraction IS DISTINCT FROM OLD.f_durable_fraction
     )
   THEN
-    RAISE EXCEPTION 'Durability and sampling fields are immutable once credit batch status is verified or issued.';
+    RAISE EXCEPTION 'Durability fields are immutable once credit batch status is verified or issued.';
   END IF;
 
   RETURN NEW;
