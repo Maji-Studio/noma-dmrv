@@ -79,6 +79,16 @@ export const creditBatches = pgTable(
     // Aggregated info for GHG Statement submission
     siteManagementNotes: text('site_management_notes'), // Irrigation, tillage, fertilizer summary
 
+    // --- Gas Composition (batch-level, moved from production_run_readings) ---
+    ch4CompositionPercent: real('ch4_composition_percent'),
+    ch4Ppm: real('ch4_ppm'),
+    coCompositionPercent: real('co_composition_percent'),
+    coPpm: real('co_ppm'),
+    co2CompositionPercent: real('co2_composition_percent'),
+    co2Ppm: real('co2_ppm'),
+    n2oCompositionPercent: real('n2o_composition_percent'),
+    n2oPpm: real('n2o_ppm'),
+
     // --- Third-Party Sale Verification (Isometric: SubRequirement G-SZZR-0) ---
     // Required when biochar is sold to third parties before application
     affidavitReference: text('affidavit_reference'), // Legally binding declaration ref

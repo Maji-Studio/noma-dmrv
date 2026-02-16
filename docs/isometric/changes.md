@@ -1,6 +1,28 @@
 # Isometric Docs Change Log
 
 > Tracks documentation updates only. Not an authoritative policy source.
+> Note: historical entries may reference pre-squash migration filenames that are no longer present in the current repo baseline.
+
+## 2026-02-11
+
+- **Scope:** Detailed implementation guidance and glossary
+- **Updated by:** Codex
+- Docs changes:
+  - Added `simple-implementation-guide.md` with topic-by-topic implementation notes for ineligible biomass, stockpiling, power procurement evidence, BCU, amortization, embodied inventory, and trigger guardrails.
+  - Added plain-language explanations for derived-vs-stored field decisions.
+  - Added abbreviation glossary (RP, EC1-EC5, BCU, EAC, PPA, COD, EPD, etc.).
+  - Updated `README.md` to include and route readers to the new guide.
+
+- **Scope:** Documentation reconciliation to current schema baseline
+- **Updated by:** Codex
+- Docs changes:
+  - Rewrote `schema-mapping.md` to match current table/column names and live implementation status in `src/db/schema/*`.
+  - Corrected `condition-registry.md` enforcement statuses to distinguish implemented checks from planned (not yet migrated) trigger guardrails.
+  - Added `p0-compliance-checklist.md` as an execution checklist table for highest-priority compliance gaps.
+  - Updated `README.md` index and freshness date for the isometric docs set.
+- Baseline references used:
+  - `drizzle/0000_blue_mastermind.sql`
+  - `src/db/schema/*`
 
 ## 2026-02-11
 

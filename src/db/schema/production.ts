@@ -1,6 +1,4 @@
 import {
-  boolean,
-  check,
   pgTable,
   text,
   timestamp,
@@ -10,11 +8,12 @@ import {
   integer,
   jsonb,
 } from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
+import { relations } from 'drizzle-orm';
 import { incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
 import { feedstocks } from './feedstock';
+import { creditBatches } from './credits';
 
 // ============================================
 // Production Runs - Pyrolysis batches
@@ -53,6 +52,9 @@ export const productionRuns = pgTable('production_runs', {
   biocharStorageLocationId: uuid('biochar_storage_location_id').references(
     () => storageLocations.id
   ),
+  feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
+    () => storageLocations.id
+  ),
 
   // --- Metadata ---
   emissionFactorsUsed: jsonb('emission_factors_used'), // Snapshot of factors used
@@ -68,47 +70,24 @@ export const productionRuns = pgTable('production_runs', {
 // Temperature: 5-min intervals, Pressure/Emissions: 1-min intervals
 // ============================================
 
-export const productionRunReadings = pgTable(
-  'production_run_readings',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    productionRunId: uuid('production_run_id')
-      .notNull()
-      .references(() => productionRuns.id),
+export const productionRunReadings = pgTable('production_run_readings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productionRunId: uuid('production_run_id')
+    .notNull()
+    .references(() => productionRuns.id),
 
-    timestamp: timestamp('timestamp').notNull(),
+  timestamp: timestamp('timestamp').notNull(),
 
-    // Temperature monitoring (5-min intervals required)
-    temperatureC: real('temperature_c'),
+  // Temperature monitoring (5-min intervals required)
+  temperatureC: real('temperature_c'),
 
-    // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
-    pressureBar: real('pressure_bar'),
-    continuousGasMeasurement: boolean('continuous_gas_measurement')
-      .notNull()
-      .default(false),
+  // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
+  pressureBar: real('pressure_bar'),
 
-    // Emissions monitoring (1-min intervals)
-    // PPM values required when continuous_gas_measurement = true
-    ch4Ppm: real('ch4_ppm'),
-    n2oPpm: real('n2o_ppm'),
-    coPpm: real('co_ppm'),
-    co2Ppm: real('co2_ppm'),
-    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
+  gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
 
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  (table) => [
-    check(
-      'production_run_readings_ppm_required_when_continuous',
-      sql`${table.continuousGasMeasurement} = false or (
-        ${table.ch4Ppm} is not null and
-        ${table.n2oPpm} is not null and
-        ${table.coPpm} is not null and
-        ${table.co2Ppm} is not null
-      )`
-    ),
-  ]
-);
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 // ============================================
 // Samples - Biochar quality samples
@@ -123,6 +102,9 @@ export const samples = pgTable('samples', {
   productionRunId: uuid('production_run_id')
     .notNull()
     .references(() => productionRuns.id),
+  creditBatchId: uuid('credit_batch_id').references(
+    () => creditBatches.id
+  ),
   sampleCode: text('sample_code').notNull(),
   samplingTime: timestamp('sampling_time').notNull(),
   weightGrams: real('weight_grams'),
@@ -230,6 +212,32 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
 });
 
 // ============================================
+// Production Samples - In-process sampling (~every 2h)
+// Lightweight table for quick field measurements during pyrolysis
+// ============================================
+
+export const productionSamples = pgTable('production_samples', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productionRunId: uuid('production_run_id')
+    .notNull()
+    .references(() => productionRuns.id),
+  sampleCode: text('sample_code'),
+  timestamp: timestamp('timestamp').notNull(),
+  weightGrams: real('weight_grams'),
+  volumeMl: real('volume_ml'),
+  temperatureC: real('temperature_c'),
+  moistureContentPercent: real('moisture_content_percent'),
+  fixedCarbonPercent: real('fixed_carbon_percent'),
+  volatileMatterPercent: real('volatile_matter_percent'),
+  ashContentPercent: real('ash_content_percent'),
+  photoUrl: text('photo_url'),
+  sampledById: uuid('sampled_by_id').references(() => operators.id),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// ============================================
 // Relations
 // ============================================
 
@@ -251,8 +259,15 @@ export const productionRunsRelations = relations(
     biocharStorageLocation: one(storageLocations, {
       fields: [productionRuns.biocharStorageLocationId],
       references: [storageLocations.id],
+      relationName: 'biocharStorageLocation',
+    }),
+    feedstockStorageLocation: one(storageLocations, {
+      fields: [productionRuns.feedstockStorageLocationId],
+      references: [storageLocations.id],
+      relationName: 'feedstockStorageLocation',
     }),
     samples: many(samples),
+    productionSamples: many(productionSamples),
     incidentReports: many(incidentReports),
     readings: many(productionRunReadings),
     productionRunFeedstocks: many(productionRunFeedstocks),
@@ -273,6 +288,10 @@ export const samplesRelations = relations(samples, ({ one }) => ({
   productionRun: one(productionRuns, {
     fields: [samples.productionRunId],
     references: [productionRuns.id],
+  }),
+  creditBatch: one(creditBatches, {
+    fields: [samples.creditBatchId],
+    references: [creditBatches.id],
   }),
 }));
 
@@ -301,6 +320,20 @@ export const productionRunFeedstocksRelations = relations(
     feedstock: one(feedstocks, {
       fields: [productionRunFeedstocks.feedstockId],
       references: [feedstocks.id],
+    }),
+  })
+);
+
+export const productionSamplesRelations = relations(
+  productionSamples,
+  ({ one }) => ({
+    productionRun: one(productionRuns, {
+      fields: [productionSamples.productionRunId],
+      references: [productionRuns.id],
+    }),
+    sampledBy: one(operators, {
+      fields: [productionSamples.sampledById],
+      references: [operators.id],
     }),
   })
 );

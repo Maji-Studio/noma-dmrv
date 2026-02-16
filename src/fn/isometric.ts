@@ -9,7 +9,6 @@ import {
 import {
   reactorSamplingMethodSchema,
   creditBatchConditionSchema,
-  continuousGasMeasurementSchema,
   deliveryDryMassSchema,
   sampleConditionSchema,
   transportLegConditionSchema,
@@ -98,19 +97,6 @@ export async function validateSampleConditionsFn(
 ): Promise<ActionResult<z.infer<typeof sampleConditionSchema>>> {
   try {
     return { success: true, data: sampleConditionSchema.parse(data) };
-  } catch (error) {
-    return { success: false, error: mapValidationError(error) };
-  }
-}
-
-export async function validateContinuousGasMeasurementFn(
-  data: z.infer<typeof continuousGasMeasurementSchema>
-): Promise<ActionResult<z.infer<typeof continuousGasMeasurementSchema>>> {
-  try {
-    return {
-      success: true,
-      data: continuousGasMeasurementSchema.parse(data),
-    };
   } catch (error) {
     return { success: false, error: mapValidationError(error) };
   }

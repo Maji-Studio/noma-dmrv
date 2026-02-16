@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   reactorSamplingMethodSchema,
-  continuousGasMeasurementSchema,
   creditBatchConditionSchema,
   applicationSoilTemperatureSchema,
   sampleConditionSchema,
@@ -82,24 +81,6 @@ describe("Isometric conditional required validation", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues.length).toBeGreaterThan(0);
-  });
-
-  it("requires ppm fields for continuous gas measurement pathway", () => {
-    const result = continuousGasMeasurementSchema.safeParse({
-      continuous_gas_measurement: true,
-      ch4_ppm: 12,
-      n2o_ppm: 2,
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) return;
-
-    expect(result.error.issues.map((issue) => issue.message)).toEqual(
-      expect.arrayContaining([
-        "co_ppm is required when continuous_gas_measurement=true",
-        "co2_ppm is required when continuous_gas_measurement=true",
-      ])
-    );
   });
 
   it("requires reactor_id when selecting sampling method on reactor", () => {

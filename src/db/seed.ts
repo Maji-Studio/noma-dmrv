@@ -47,6 +47,8 @@ const ids = {
   incident: makeId(164),
   productionFeedstockLink: makeId(165),
 
+  productionSample: makeId(166),
+
   formulation: makeId(180),
   biocharProduct: makeId(181),
 
@@ -487,9 +489,6 @@ async function seed() {
         massWetKg: 3200,
         massDryKg: 2624,
         moistureContentPercent: 18,
-        totalCarbonPercent: 49.5,
-        inorganicCarbonPercent: 0.4,
-        totalOrganicCarbonPercent: 49.1,
         co2eFeedstockTons: 4.8,
         feedstockSourceRegion: 'Kilimanjaro',
         storageLocationId: ids.storageFeedstock,
@@ -538,7 +537,6 @@ async function seed() {
           timestamp: new Date('2026-01-13T07:00:00.000Z'),
           temperatureC: 590,
           pressureBar: 0.2,
-          continuousGasMeasurement: false,
           gasFlowRate: 1.4,
         },
         {
@@ -547,11 +545,6 @@ async function seed() {
           timestamp: new Date('2026-01-13T08:00:00.000Z'),
           temperatureC: 612,
           pressureBar: 0.21,
-          continuousGasMeasurement: true,
-          ch4Ppm: 7100,
-          n2oPpm: 320,
-          coPpm: 25700,
-          co2Ppm: 164000,
           gasFlowRate: 1.45,
         },
       ]);
@@ -624,6 +617,21 @@ async function seed() {
         massUsedKg: 2500,
       });
 
+      await tx.insert(schema.productionSamples).values({
+        id: ids.productionSample,
+        productionRunId: ids.productionRun,
+        sampleCode: 'PS-2026-001',
+        timestamp: new Date('2026-01-13T08:30:00.000Z'),
+        weightGrams: 320,
+        temperatureC: 605,
+        moistureContentPercent: 4.2,
+        fixedCarbonPercent: 72.1,
+        volatileMatterPercent: 14.8,
+        ashContentPercent: 9.1,
+        sampledById: ids.operator,
+        notes: 'Mid-run in-process sample, visual check OK.',
+      });
+
       // ------------------------------------------------------------
       // Products, logistics, applications
       // ------------------------------------------------------------
@@ -678,7 +686,7 @@ async function seed() {
         customerLocationId: ids.customerLocation,
         biocharProductId: ids.biocharProduct,
         storageLocationId: ids.storageProduct,
-        fixedCarbonPercent: 70.6,
+        moistureContentPercent: 6.0,
         deliveredWetMassKg: 2200,
         massDryKg: 2068,
         driverId: ids.driver,
@@ -703,7 +711,6 @@ async function seed() {
           fuelType: 'diesel',
           fuelConsumedLiters: 10.5,
           loadMassKg: 3200,
-          loadCapacityUtilizationPercent: 62,
           calculationMethodType: 'energy_usage',
           emissionFactorUsed: 2.68,
           emissionFactorSource: 'IPCC 2021',
@@ -729,7 +736,6 @@ async function seed() {
           fuelConsumedLiters: 11.8,
           electricityKwh: 0,
           loadMassKg: 2200,
-          loadCapacityUtilizationPercent: 55,
           calculationMethodType: 'energy_usage',
           emissionFactorUsed: 2.68,
           emissionFactorSource: 'IPCC 2021',
@@ -808,6 +814,14 @@ async function seed() {
         totalCo2eEmissionsTons: 0.11,
         totalCo2eCounterfactualTons: 0.04,
         // netCo2eRemovalTons derivable: 1.1 - 0.11 - 0.04 = 0.95
+        ch4CompositionPercent: 0.71,
+        ch4Ppm: 7100,
+        coCompositionPercent: 2.57,
+        coPpm: 25700,
+        co2CompositionPercent: 16.4,
+        co2Ppm: 164000,
+        n2oCompositionPercent: 0.032,
+        n2oPpm: 320,
         siteManagementNotes:
           'Low-disturbance tilling, rainfed irrigation, no residue burning on plot.',
         affidavitReference: 'AFF-2026-001',

@@ -191,34 +191,6 @@ export const sampleConditionSchema = z
     }
   });
 
-export const continuousGasMeasurementSchema = z
-  .object({
-    continuous_gas_measurement: z.boolean().default(false),
-    ch4_ppm: optionalNumber,
-    n2o_ppm: optionalNumber,
-    co_ppm: optionalNumber,
-    co2_ppm: optionalNumber,
-  })
-  .superRefine((value, ctx) => {
-    if (!value.continuous_gas_measurement) return;
-
-    const ppmFields: Array<[keyof typeof value, string]> = [
-      ['ch4_ppm', 'ch4_ppm'],
-      ['n2o_ppm', 'n2o_ppm'],
-      ['co_ppm', 'co_ppm'],
-      ['co2_ppm', 'co2_ppm'],
-    ];
-
-    for (const [fieldKey, fieldName] of ppmFields) {
-      if (value[fieldKey] != null) continue;
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [fieldKey],
-        message: `${fieldName} is required when continuous_gas_measurement=true`,
-      });
-    }
-  });
-
 export const deliveryDryMassSchema = z
   .object({
     mass_dry_kg: optionalNumber,

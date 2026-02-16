@@ -103,7 +103,7 @@ export const deliveries = pgTable(
     storageLocationId: uuid('storage_location_id').references(
       () => storageLocations.id
     ),
-    fixedCarbonPercent: real('fixed_carbon_percent'),
+    moistureContentPercent: real('moisture_content_percent'),
     deliveredWetMassKg: real('delivered_wet_mass_kg'),
     massDryKg: real('mass_dry_kg'),
 
@@ -165,7 +165,6 @@ export const transportLegs = pgTable(
 
     // --- Load Details (Isometric: Distance-Based Method) ---
     loadMassKg: real('load_mass_kg'),
-    loadCapacityUtilizationPercent: real('load_capacity_utilization_percent'),
 
     // --- Emissions Calculation (Isometric: Section 3) ---
     calculationMethodType:
@@ -173,11 +172,6 @@ export const transportLegs = pgTable(
     emissionFactorUsed: real('emission_factor_used'),
     emissionFactorSource: text('emission_factor_source'), // Citation for emission factor
     transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
-
-    // --- Book and Claim Units (Isometric: Section 4) ---
-    bcuUsed: real('bcu_used'), // Volume of BCU fuel substitution
-    bcuProvider: text('bcu_provider'),
-    bcuCertificationRef: text('bcu_certification_ref'),
 
     // --- Documentation ---
     billOfLading: text('bill_of_lading'),
