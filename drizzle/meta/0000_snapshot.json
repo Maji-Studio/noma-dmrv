@@ -1,5 +1,5 @@
 {
-  "id": "7e80dfa4-92de-4c98-a572-9171c6aa6cb1",
+  "id": "4bd9d6f2-bad4-4fda-9ec7-f6e2672ac2ef",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1679,6 +1679,54 @@
           "primaryKey": false,
           "notNull": false
         },
+        "ch4_composition_percent": {
+          "name": "ch4_composition_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ch4_ppm": {
+          "name": "ch4_ppm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "co_composition_percent": {
+          "name": "co_composition_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "co_ppm": {
+          "name": "co_ppm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "co2_composition_percent": {
+          "name": "co2_composition_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "co2_ppm": {
+          "name": "co2_ppm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "n2o_composition_percent": {
+          "name": "n2o_composition_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "n2o_ppm": {
+          "name": "n2o_ppm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
         "affidavit_reference": {
           "name": "affidavit_reference",
           "type": "text",
@@ -1768,6 +1816,18 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "document_type": {
           "name": "document_type",
           "type": "documentation_type",
@@ -1842,66 +1902,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "feedstock_id": {
-          "name": "feedstock_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "feedstock_delivery_id": {
-          "name": "feedstock_delivery_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "production_run_id": {
-          "name": "production_run_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sample_id": {
-          "name": "sample_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "incident_report_id": {
-          "name": "incident_report_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "biochar_product_id": {
-          "name": "biochar_product_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "delivery_id": {
-          "name": "delivery_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "transport_leg_id": {
-          "name": "transport_leg_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "application_id": {
-          "name": "application_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "credit_batch_id": {
-          "name": "credit_batch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1917,136 +1917,56 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "documents_entity_type_entity_id_idx": {
+          "name": "documents_entity_type_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_document_type_idx": {
+          "name": "documents_document_type_idx",
+          "columns": [
+            {
+              "expression": "document_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "documents_feedstock_id_feedstocks_id_fk": {
-          "name": "documents_feedstock_id_feedstocks_id_fk",
+        "documents_created_by_users_id_fk": {
+          "name": "documents_created_by_users_id_fk",
           "tableFrom": "documents",
-          "tableTo": "feedstocks",
+          "tableTo": "users",
           "columnsFrom": [
-            "feedstock_id"
+            "created_by"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_feedstock_delivery_id_feedstock_deliveries_id_fk": {
-          "name": "documents_feedstock_delivery_id_feedstock_deliveries_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "feedstock_deliveries",
-          "columnsFrom": [
-            "feedstock_delivery_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_production_run_id_production_runs_id_fk": {
-          "name": "documents_production_run_id_production_runs_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "production_runs",
-          "columnsFrom": [
-            "production_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_sample_id_samples_id_fk": {
-          "name": "documents_sample_id_samples_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "samples",
-          "columnsFrom": [
-            "sample_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_incident_report_id_incident_reports_id_fk": {
-          "name": "documents_incident_report_id_incident_reports_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "incident_reports",
-          "columnsFrom": [
-            "incident_report_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_biochar_product_id_biochar_products_id_fk": {
-          "name": "documents_biochar_product_id_biochar_products_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "biochar_products",
-          "columnsFrom": [
-            "biochar_product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_delivery_id_deliveries_id_fk": {
-          "name": "documents_delivery_id_deliveries_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "deliveries",
-          "columnsFrom": [
-            "delivery_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_transport_leg_id_transport_legs_id_fk": {
-          "name": "documents_transport_leg_id_transport_legs_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "transport_legs",
-          "columnsFrom": [
-            "transport_leg_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_application_id_applications_id_fk": {
-          "name": "documents_application_id_applications_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "applications",
-          "columnsFrom": [
-            "application_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "documents_credit_batch_id_credit_batches_id_fk": {
-          "name": "documents_credit_batch_id_credit_batches_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "credit_batches",
-          "columnsFrom": [
-            "credit_batch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2054,10 +1974,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "documents_exactly_one_owner_check": {
-          "name": "documents_exactly_one_owner_check",
-          "value": "(\n      (case when \"documents\".\"feedstock_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"feedstock_delivery_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"production_run_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"sample_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"incident_report_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"biochar_product_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"delivery_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"transport_leg_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"application_id\" is not null then 1 else 0 end) +\n      (case when \"documents\".\"credit_batch_id\" is not null then 1 else 0 end)\n      ) = 1"
-        },
         "documents_photo_video_require_captured_at": {
           "name": "documents_photo_video_require_captured_at",
           "value": "\"documents\".\"document_type\" <> all (array['photo', 'video']::documentation_type[]) or \"documents\".\"captured_at\" is not null"
@@ -2754,6 +2670,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "registry_url": {
+          "name": "registry_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2839,7 +2761,7 @@
           "name": "mass_wet_kg",
           "type": "real",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "mass_dry_kg": {
           "name": "mass_dry_kg",
@@ -2849,24 +2771,6 @@
         },
         "moisture_content_percent": {
           "name": "moisture_content_percent",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_carbon_percent": {
-          "name": "total_carbon_percent",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "inorganic_carbon_percent": {
-          "name": "inorganic_carbon_percent",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_organic_carbon_percent": {
-          "name": "total_organic_carbon_percent",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -3027,7 +2931,7 @@
         },
         "feedstocks_mass_dry_lte_wet": {
           "name": "feedstocks_mass_dry_lte_wet",
-          "value": "\"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
+          "value": "\"feedstocks\".\"mass_wet_kg\" is null or \"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
         },
         "feedstocks_moisture_content_percent_range": {
           "name": "feedstocks_moisture_content_percent_range",
@@ -3687,37 +3591,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "continuous_gas_measurement": {
-          "name": "continuous_gas_measurement",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "ch4_ppm": {
-          "name": "ch4_ppm",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "n2o_ppm": {
-          "name": "n2o_ppm",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "co_ppm": {
-          "name": "co_ppm",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "co2_ppm": {
-          "name": "co2_ppm",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "gas_flow_rate": {
           "name": "gas_flow_rate",
           "type": "real",
@@ -3751,12 +3624,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "production_run_readings_ppm_required_when_continuous": {
-          "name": "production_run_readings_ppm_required_when_continuous",
-          "value": "\"production_run_readings\".\"continuous_gas_measurement\" = false or (\n        \"production_run_readings\".\"ch4_ppm\" is not null and\n        \"production_run_readings\".\"n2o_ppm\" is not null and\n        \"production_run_readings\".\"co_ppm\" is not null and\n        \"production_run_readings\".\"co2_ppm\" is not null\n      )"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.production_runs": {
@@ -3870,6 +3738,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "feedstock_storage_location_id": {
+          "name": "feedstock_storage_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "emission_factors_used": {
           "name": "emission_factors_used",
           "type": "jsonb",
@@ -3950,6 +3824,19 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "production_runs_feedstock_storage_location_id_storage_locations_id_fk": {
+          "name": "production_runs_feedstock_storage_location_id_storage_locations_id_fk",
+          "tableFrom": "production_runs",
+          "tableTo": "storage_locations",
+          "columnsFrom": [
+            "feedstock_storage_location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3962,6 +3849,145 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.production_samples": {
+      "name": "production_samples",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "production_run_id": {
+          "name": "production_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sample_code": {
+          "name": "sample_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "weight_grams": {
+          "name": "weight_grams",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "volume_ml": {
+          "name": "volume_ml",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "temperature_c": {
+          "name": "temperature_c",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moisture_content_percent": {
+          "name": "moisture_content_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fixed_carbon_percent": {
+          "name": "fixed_carbon_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "volatile_matter_percent": {
+          "name": "volatile_matter_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ash_content_percent": {
+          "name": "ash_content_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_url": {
+          "name": "photo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sampled_by_id": {
+          "name": "sampled_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "production_samples_production_run_id_production_runs_id_fk": {
+          "name": "production_samples_production_run_id_production_runs_id_fk",
+          "tableFrom": "production_samples",
+          "tableTo": "production_runs",
+          "columnsFrom": [
+            "production_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_samples_sampled_by_id_operators_id_fk": {
+          "name": "production_samples_sampled_by_id_operators_id_fk",
+          "tableFrom": "production_samples",
+          "tableTo": "operators",
+          "columnsFrom": [
+            "sampled_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -3982,6 +4008,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "credit_batch_id": {
+          "name": "credit_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "sample_code": {
           "name": "sample_code",
@@ -4282,6 +4314,19 @@
           "tableTo": "production_runs",
           "columnsFrom": [
             "production_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "samples_credit_batch_id_credit_batches_id_fk": {
+          "name": "samples_credit_batch_id_credit_batches_id_fk",
+          "tableFrom": "samples",
+          "tableTo": "credit_batches",
+          "columnsFrom": [
+            "credit_batch_id"
           ],
           "columnsTo": [
             "id"
@@ -4597,8 +4642,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "fixed_carbon_percent": {
-          "name": "fixed_carbon_percent",
+        "moisture_content_percent": {
+          "name": "moisture_content_percent",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -5037,12 +5082,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "load_capacity_utilization_percent": {
-          "name": "load_capacity_utilization_percent",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "calculation_method": {
           "name": "calculation_method",
           "type": "emissions_calculation_method",
@@ -5065,24 +5104,6 @@
         "transport_emissions_co2e_kg": {
           "name": "transport_emissions_co2e_kg",
           "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "bcu_used": {
-          "name": "bcu_used",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "bcu_provider": {
-          "name": "bcu_provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "bcu_certification_ref": {
-          "name": "bcu_certification_ref",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

@@ -65,6 +65,7 @@ export const feedstockTypes = pgTable('feedstock_types', {
   name: text('name').notNull().unique(), // e.g., "Mixed Wood Chips", "Hardwood"
   category: text('category').notNull(), // forestry | agricultural | industrial | municipal | invasive
   description: text('description'),
+  registryUrl: text('registry_url'), // Link to Isometric registry page
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -95,12 +96,9 @@ export const feedstocks = pgTable(
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    massWetKg: real('mass_wet_kg').notNull(),
+    massWetKg: real('mass_wet_kg'), // Nullable: moisture changes over time in bins
     massDryKg: real('mass_dry_kg').notNull(),
     moistureContentPercent: real('moisture_content_percent'),
-    totalCarbonPercent: real('total_carbon_percent'),
-    inorganicCarbonPercent: real('inorganic_carbon_percent'),
-    totalOrganicCarbonPercent: real('total_organic_carbon_percent'),
     co2eFeedstockTons: real('co2e_feedstock_tons'),
     feedstockSourceRegion: text('feedstock_source_region'),
     storageLocationId: uuid('storage_location_id').references(
@@ -129,7 +127,7 @@ export const feedstocks = pgTable(
     ),
     check(
       'feedstocks_mass_dry_lte_wet',
-      sql`${table.massDryKg} <= ${table.massWetKg}`
+      sql`${table.massWetKg} is null or ${table.massDryKg} <= ${table.massWetKg}`
     ),
     check(
       'feedstocks_moisture_content_percent_range',

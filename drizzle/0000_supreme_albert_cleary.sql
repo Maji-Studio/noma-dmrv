@@ -266,6 +266,14 @@ CREATE TABLE "credit_batches" (
 	"total_co2e_emissions_tons" real,
 	"total_co2e_counterfactual_tons" real,
 	"site_management_notes" text,
+	"ch4_composition_percent" real,
+	"ch4_ppm" real,
+	"co_composition_percent" real,
+	"co_ppm" real,
+	"co2_composition_percent" real,
+	"co2_ppm" real,
+	"n2o_composition_percent" real,
+	"n2o_ppm" real,
 	"affidavit_reference" text,
 	"intended_use_confirmation" text,
 	"company_verification_ref" text,
@@ -302,10 +310,6 @@ CREATE TABLE "documents" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "documents_photo_video_require_captured_at" CHECK ("documents"."document_type" <> all (array['photo', 'video']::documentation_type[]) or "documents"."captured_at" is not null)
 );
---> statement-breakpoint
-CREATE INDEX "documents_entity_type_entity_id_idx" ON "documents" USING btree ("entity_type","entity_id");
---> statement-breakpoint
-CREATE INDEX "documents_document_type_idx" ON "documents" USING btree ("document_type");
 --> statement-breakpoint
 CREATE TABLE "emission_factors" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -406,6 +410,7 @@ CREATE TABLE "feedstock_types" (
 	"name" text NOT NULL,
 	"category" text NOT NULL,
 	"description" text,
+	"registry_url" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "feedstock_types_code_unique" UNIQUE("code"),
@@ -419,12 +424,9 @@ CREATE TABLE "feedstocks" (
 	"status" "feedstock_status" DEFAULT 'missing_data' NOT NULL,
 	"feedstock_delivery_id" uuid NOT NULL,
 	"feedstock_type_id" uuid NOT NULL,
-	"mass_wet_kg" real NOT NULL,
+	"mass_wet_kg" real,
 	"mass_dry_kg" real NOT NULL,
 	"moisture_content_percent" real,
-	"total_carbon_percent" real,
-	"inorganic_carbon_percent" real,
-	"total_organic_carbon_percent" real,
 	"co2e_feedstock_tons" real,
 	"feedstock_source_region" text,
 	"storage_location_id" uuid,
@@ -440,7 +442,7 @@ CREATE TABLE "feedstocks" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "feedstocks_code_unique" UNIQUE("code"),
 	CONSTRAINT "feedstocks_mass_dry_non_negative" CHECK ("feedstocks"."mass_dry_kg" >= 0),
-	CONSTRAINT "feedstocks_mass_dry_lte_wet" CHECK ("feedstocks"."mass_dry_kg" <= "feedstocks"."mass_wet_kg"),
+	CONSTRAINT "feedstocks_mass_dry_lte_wet" CHECK ("feedstocks"."mass_wet_kg" is null or "feedstocks"."mass_dry_kg" <= "feedstocks"."mass_wet_kg"),
 	CONSTRAINT "feedstocks_moisture_content_percent_range" CHECK ("feedstocks"."moisture_content_percent" is null or ("feedstocks"."moisture_content_percent" >= 0 and "feedstocks"."moisture_content_percent" <= 100))
 );
 --> statement-breakpoint
@@ -541,19 +543,8 @@ CREATE TABLE "production_run_readings" (
 	"timestamp" timestamp NOT NULL,
 	"temperature_c" real,
 	"pressure_bar" real,
-	"continuous_gas_measurement" boolean DEFAULT false NOT NULL,
-	"ch4_ppm" real,
-	"n2o_ppm" real,
-	"co_ppm" real,
-	"co2_ppm" real,
 	"gas_flow_rate" real,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "production_run_readings_ppm_required_when_continuous" CHECK ("production_run_readings"."continuous_gas_measurement" = false or (
-        "production_run_readings"."ch4_ppm" is not null and
-        "production_run_readings"."n2o_ppm" is not null and
-        "production_run_readings"."co_ppm" is not null and
-        "production_run_readings"."co2_ppm" is not null
-      ))
+	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "production_runs" (
@@ -574,6 +565,7 @@ CREATE TABLE "production_runs" (
 	"electricity_kwh" real,
 	"biochar_output_kg" real,
 	"biochar_storage_location_id" uuid,
+	"feedstock_storage_location_id" uuid,
 	"emission_factors_used" jsonb,
 	"plc_data_file_url" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -581,9 +573,29 @@ CREATE TABLE "production_runs" (
 	CONSTRAINT "production_runs_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
+CREATE TABLE "production_samples" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"production_run_id" uuid NOT NULL,
+	"sample_code" text,
+	"timestamp" timestamp NOT NULL,
+	"weight_grams" real,
+	"volume_ml" real,
+	"temperature_c" real,
+	"moisture_content_percent" real,
+	"fixed_carbon_percent" real,
+	"volatile_matter_percent" real,
+	"ash_content_percent" real,
+	"photo_url" text,
+	"sampled_by_id" uuid,
+	"notes" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "samples" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"production_run_id" uuid NOT NULL,
+	"credit_batch_id" uuid,
 	"sample_code" text NOT NULL,
 	"sampling_time" timestamp NOT NULL,
 	"weight_grams" real,
@@ -675,7 +687,7 @@ CREATE TABLE "deliveries" (
 	"customer_location_id" uuid,
 	"biochar_product_id" uuid,
 	"storage_location_id" uuid,
-	"fixed_carbon_percent" real,
+	"moisture_content_percent" real,
 	"delivered_wet_mass_kg" real,
 	"mass_dry_kg" real,
 	"driver_id" uuid,
@@ -724,14 +736,10 @@ CREATE TABLE "transport_legs" (
 	"fuel_consumed_liters" real,
 	"electricity_kwh" real,
 	"load_mass_kg" real,
-	"load_capacity_utilization_percent" real,
 	"calculation_method" "emissions_calculation_method" NOT NULL,
 	"emission_factor_used" real,
 	"emission_factor_source" text,
 	"transport_emissions_co2e_kg" real,
-	"bcu_used" real,
-	"bcu_provider" text,
-	"bcu_certification_ref" text,
 	"bill_of_lading" text,
 	"weigh_scale_ticket_ref" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -832,7 +840,11 @@ ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_facility_id_facili
 ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_reactor_id_reactors_id_fk" FOREIGN KEY ("reactor_id") REFERENCES "public"."reactors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_operator_id_operators_id_fk" FOREIGN KEY ("operator_id") REFERENCES "public"."operators"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_biochar_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("biochar_storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_feedstock_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("feedstock_storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_samples" ADD CONSTRAINT "production_samples_production_run_id_production_runs_id_fk" FOREIGN KEY ("production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_samples" ADD CONSTRAINT "production_samples_sampled_by_id_operators_id_fk" FOREIGN KEY ("sampled_by_id") REFERENCES "public"."operators"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "samples" ADD CONSTRAINT "samples_production_run_id_production_runs_id_fk" FOREIGN KEY ("production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "samples" ADD CONSTRAINT "samples_credit_batch_id_credit_batches_id_fk" FOREIGN KEY ("credit_batch_id") REFERENCES "public"."credit_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_formulation_id_formulations_id_fk" FOREIGN KEY ("formulation_id") REFERENCES "public"."formulations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_linked_production_run_id_production_runs_id_fk" FOREIGN KEY ("linked_production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -851,4 +863,6 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_biochar_product_id_biochar_products_
 ALTER TABLE "project_members" ADD CONSTRAINT "project_members_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_members" ADD CONSTRAINT "project_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "items" ADD CONSTRAINT "items_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "documents_entity_type_entity_id_idx" ON "documents" USING btree ("entity_type","entity_id");--> statement-breakpoint
+CREATE INDEX "documents_document_type_idx" ON "documents" USING btree ("document_type");
