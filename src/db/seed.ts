@@ -394,7 +394,6 @@ async function seed() {
 
       await tx.insert(schema.operators).values({
         id: ids.operator,
-        code: 'OP-001',
         name: 'Neema Kweka',
         credentials: 'Pyrolysis operations certification',
         contactPhone: '+255700000040',
@@ -421,8 +420,7 @@ async function seed() {
           unit: 'liter',
           source: 'IPCC 2021',
           sourceUrl: 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/',
-          methodologyVersion: '2006GL',
-          notes: 'Default stationary/mobile combustion factor.',
+          notes: 'Default stationary/mobile combustion factor (2006GL).',
           validFrom: '2025-01-01',
           validTo: '2027-12-31',
         },
@@ -435,8 +433,7 @@ async function seed() {
           unit: 'kWh',
           source: 'IEA 2024',
           sourceUrl: 'https://www.iea.org/data-and-statistics',
-          methodologyVersion: 'IEA-2024',
-          notes: 'Grid-average factor used for process electricity.',
+          notes: 'Grid-average factor used for process electricity (IEA-2024).',
           validFrom: '2025-01-01',
           validTo: '2027-12-31',
         },

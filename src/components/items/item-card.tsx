@@ -12,17 +12,17 @@ interface ItemCardProps {
 
 export function ItemCard({ item, onEdit, onArchive }: ItemCardProps) {
   return (
-    <div className="border border-[var(--color-border-primary)] rounded-lg p-m hover:border-[var(--clr-dark-purple)] transition-colors">
-      <div className="flex items-start justify-between gap-m">
+    <div className="border border-[var(--color-border-primary)] rounded-8 p-24 hover:border-[var(--clr-dark-purple)] transition-colors">
+      <div className="flex items-start justify-between gap-24">
         <div className="flex-1 min-w-0">
-          <h3 className="title-heading-4 mb-xs">{item.title}</h3>
+          <h3 className="title-heading-4 mb-16">{item.title}</h3>
           {item.description && (
-            <p className="body-small text-[var(--color-text-secondary)] mb-s">
+            <p className="body-small text-[var(--color-text-secondary)] mb-16">
               {item.description}
             </p>
           )}
-          <div className="flex items-center gap-s text-xs text-[var(--color-text-tertiary)]">
-            <span className="px-s py-xs bg-[var(--color-bg-secondary)] rounded">
+          <div className="flex items-center gap-16 text-xs text-[var(--color-text-tertiary)]">
+            <span className="px-16 py-16 bg-[var(--color-bg-secondary)]rounded-4">
               {item.status}
             </span>
             <span>
@@ -32,17 +32,17 @@ export function ItemCard({ item, onEdit, onArchive }: ItemCardProps) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-xs">
+        <div className="flex items-center gap-16">
           <button
             onClick={() => onEdit(item)}
-            className="p-xs rounded hover:bg-[var(--color-bg-secondary)] transition-colors"
+            className="p-16 rounded-4 hover:bg-[var(--color-bg-secondary)] transition-colors"
             aria-label="Edit item"
           >
             <Pencil size={20} />
           </button>
           <button
             onClick={() => onArchive(item.id)}
-            className="p-xs rounded hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-error)] transition-colors"
+            className="p-16 rounded-4 hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-error)] transition-colors"
             aria-label="Archive item"
           >
             <Trash size={20} />

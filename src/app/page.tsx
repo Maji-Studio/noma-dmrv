@@ -9,8 +9,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
-      <main className="container-max flex flex-col items-center justify-center min-h-screen gap-xl py-xl text-center">
-        <div className="flex flex-col items-center gap-m max-w-4xl">
+      <main className="container-max flex flex-col items-center justify-center min-h-screen gap-48 py-48 text-center">
+        <div className="flex flex-col items-center gap-24 max-w-4xl">
            <span className="title-chapter-title text-[var(--clr-purple)]">Maji Noema</span>
            <h1 className="title-heading-1">
              Build with purpose.
@@ -20,7 +20,7 @@ export default function Home() {
            </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-s">
+        <div className="flex flex-col sm:flex-row gap-16">
           <Button
             variant="primary"
             size="default"

@@ -22,12 +22,15 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div>
-      <label htmlFor={id} className="label-input block mb-8">
+      <label
+        htmlFor={id}
+        className="body-small font-medium text-[var(--color-text-secondary)] block mb-4"
+      >
         {label}
       </label>
       {children}
       {helperText && !error && (
-        <p className="body-small text-[var(--color-text-tertiary)] mt-xs">
+        <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
           {helperText}
         </p>
       )}
