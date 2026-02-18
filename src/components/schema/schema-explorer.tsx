@@ -85,8 +85,8 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
 
   return (
     <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
-      <main className="container-max py-l md:py-xl flex flex-col gap-m">
-        <header className="flex flex-col gap-s">
+      <main className="container-max py-32 md:py-48 flex flex-col gap-24">
+        <header className="flex flex-col gap-16">
           <div className="flex items-center gap-[10px]">
             <Database size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
@@ -94,14 +94,14 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
           <h1 className="title-heading-2">Database Schema</h1>
         </header>
 
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-s">
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-16">
           <MetricCard label="Tables" value={tables.length} accent="var(--clr-purple)" />
           <MetricCard label="FK Links" value={relationshipCount} accent="var(--clr-orange)" />
           <MetricCard label="Areas" value={areaCount} accent="var(--clr-pink)" />
         </section>
 
-        <section className="flex flex-col gap-s">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-s">
+        <section className="flex flex-col gap-16">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-16">
             <label className="flex flex-col gap-[6px]">
               <span className="body-caption text-[var(--color-text-tertiary)]">Search</span>
               <div className="relative">
@@ -122,7 +122,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
               <select
                 value={area}
                 onChange={(e) => setArea(e.target.value as SchemaArea | "All")}
-                className="h-[44px] px-s border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-medium"
+                className="h-[44px] px-16 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-medium"
               >
                 <option value="All">All areas</option>
                 {AREA_ORDER.map((a) => (
@@ -133,7 +133,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
               </select>
             </label>
           </div>
-          <div className="flex items-center justify-between flex-wrap gap-s">
+          <div className="flex items-center justify-between flex-wrap gap-16">
             <label className="inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer">
               <input
                 type="checkbox"
@@ -151,7 +151,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
         </section>
 
         {groupedTables.length === 0 ? (
-          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-m flex flex-col items-center gap-[12px] py-[64px]">
+          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24 flex flex-col items-center gap-[12px] py-[64px]">
             <Database size={32} className="text-[var(--color-text-tertiary)]" />
             <p className="body-medium text-[var(--color-text-secondary)]">
               No matching tables. Try a broader query or clear filters.
@@ -191,7 +191,7 @@ function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }
   return (
     <Link
       href={`/schema/${encodeURIComponent(table.name)}`}
-      className="group border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s hover:border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] transition-colors flex flex-col gap-[8px]"
+      className="group border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 hover:border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] transition-colors flex flex-col gap-[8px]"
       style={{ borderLeftWidth: "3px", borderLeftColor: accent }}
     >
       <div className="flex flex-wrap items-center justify-between gap-[8px]">
@@ -223,7 +223,7 @@ function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }
 function MetricCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s"
+      className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
       style={{ borderLeftWidth: "3px", borderLeftColor: accent }}
     >
       <p className="body-caption text-[var(--color-text-tertiary)]">{label}</p>

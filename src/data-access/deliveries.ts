@@ -1,0 +1,636 @@
+/**
+ * Deliveries Data Access Layer
+ * CRUD operations for deliveries with auth guards, pagination, and filtering
+ */
+
+import { and, asc, desc, eq, gte, ilike, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { db } from "@/db";
+import {
+  deliveries,
+  orders,
+  facilities,
+  customers,
+  biocharProducts,
+  drivers,
+  vehicles,
+  type Delivery,
+} from "@/db/schema";
+import type { DeliveryFilterData } from "@/schemas/deliveries";
+
+// ============================================
+// Types
+// ============================================
+
+export interface DeliveryWithRelations extends Delivery {
+  orderCode: string | null;
+  facilityName: string | null;
+  customerName: string | null;
+  biocharProductCode: string | null;
+  driverName: string | null;
+  vehicleName: string | null;
+}
+
+export interface PaginatedDeliveries {
+  items: DeliveryWithRelations[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface DeliveryDetail extends Delivery {
+  order: {
+    id: string;
+    code: string;
+    orderDate: Date;
+    quantityKg: number;
+    status: string;
+  } | null;
+  facility: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  biocharProduct: {
+    id: string;
+    code: string;
+  } | null;
+  driver: {
+    id: string;
+    name: string;
+  } | null;
+  vehicle: {
+    id: string;
+    name: string;
+    identifier: string;
+  } | null;
+}
+
+export interface DeliveryStats {
+  totalDeliveries: number;
+  totalDeliveredWetMassKg: number;
+  totalMassDryKg: number;
+  scheduledCount: number;
+  processingCount: number;
+  deliveredCount: number;
+}
+
+// ============================================
+// Auth Guards
+// ============================================
+
+/**
+ * Require user to be authenticated
+ * Throws error if userId is not provided
+ */
+function requireAuth(userId: string): void {
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+}
+
+// ============================================
+// Read Operations
+// ============================================
+
+/**
+ * Get all deliveries with pagination and filtering
+ */
+export async function getDeliveries(
+  userId: string,
+  filters?: Partial<DeliveryFilterData>
+): Promise<PaginatedDeliveries> {
+  requireAuth(userId);
+
+  const {
+    search,
+    orderId,
+    facilityId,
+    status,
+    fromDate,
+    toDate,
+    page = 1,
+    pageSize = 20,
+    sortBy = "deliveryDate",
+    sortOrder = "desc",
+  } = filters ?? {};
+
+  // Build where conditions
+  const conditions: SQL[] = [];
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push(ilike(deliveries.code, searchPattern));
+  }
+
+  if (orderId) {
+    conditions.push(eq(deliveries.orderId, orderId));
+  }
+
+  if (facilityId) {
+    conditions.push(eq(deliveries.facilityId, facilityId));
+  }
+
+  if (status) {
+    conditions.push(eq(deliveries.status, status));
+  }
+
+  if (fromDate) {
+    conditions.push(gte(deliveries.deliveryDate, fromDate));
+  }
+
+  if (toDate) {
+    conditions.push(lte(deliveries.deliveryDate, toDate));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Build sort clause
+  const sortColumn = {
+    code: deliveries.code,
+    deliveryDate: deliveries.deliveryDate,
+    deliveredWetMassKg: deliveries.deliveredWetMassKg,
+    massDryKg: deliveries.massDryKg,
+    status: deliveries.status,
+    createdAt: deliveries.createdAt,
+    updatedAt: deliveries.updatedAt,
+  }[sortBy] ?? deliveries.deliveryDate;
+
+  const orderFn = sortOrder === "desc" ? desc : asc;
+
+  // Count total for pagination
+  const [{ totalCount }] = await db
+    .select({ totalCount: count() })
+    .from(deliveries)
+    .where(whereClause);
+
+  const total = Number(totalCount);
+  const totalPages = Math.ceil(total / pageSize);
+  const offset = (page - 1) * pageSize;
+
+  // Get deliveries with related entity names
+  const deliveryList = await db
+    .select({
+      id: deliveries.id,
+      code: deliveries.code,
+      facilityId: deliveries.facilityId,
+      orderId: deliveries.orderId,
+      customerLocationId: deliveries.customerLocationId,
+      biocharProductId: deliveries.biocharProductId,
+      storageLocationId: deliveries.storageLocationId,
+      deliveryDate: deliveries.deliveryDate,
+      status: deliveries.status,
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
+      moistureContentPercent: deliveries.moistureContentPercent,
+      driverId: deliveries.driverId,
+      vehicleId: deliveries.vehicleId,
+      createdAt: deliveries.createdAt,
+      updatedAt: deliveries.updatedAt,
+      orderCode: orders.code,
+      facilityName: facilities.name,
+      customerName: customers.name,
+      biocharProductCode: biocharProducts.code,
+      driverName: drivers.name,
+      vehicleName: vehicles.name,
+    })
+    .from(deliveries)
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(facilities, eq(deliveries.facilityId, facilities.id))
+    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
+    .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
+    .leftJoin(vehicles, eq(deliveries.vehicleId, vehicles.id))
+    .where(whereClause)
+    .orderBy(orderFn(sortColumn))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    items: deliveryList,
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
+}
+
+/**
+ * Get a single delivery by ID
+ */
+export async function getDeliveryById(
+  userId: string,
+  deliveryId: string
+): Promise<Delivery> {
+  requireAuth(userId);
+
+  const [delivery] = await db
+    .select()
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  return delivery;
+}
+
+/**
+ * Get a single delivery with all its relationships
+ */
+export async function getDeliveryWithRelations(
+  userId: string,
+  deliveryId: string
+): Promise<DeliveryDetail> {
+  requireAuth(userId);
+
+  // Get delivery with related data
+  const [deliveryRow] = await db
+    .select({
+      id: deliveries.id,
+      code: deliveries.code,
+      facilityId: deliveries.facilityId,
+      orderId: deliveries.orderId,
+      customerLocationId: deliveries.customerLocationId,
+      biocharProductId: deliveries.biocharProductId,
+      storageLocationId: deliveries.storageLocationId,
+      deliveryDate: deliveries.deliveryDate,
+      status: deliveries.status,
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+      massDryKg: deliveries.massDryKg,
+      moistureContentPercent: deliveries.moistureContentPercent,
+      driverId: deliveries.driverId,
+      vehicleId: deliveries.vehicleId,
+      createdAt: deliveries.createdAt,
+      updatedAt: deliveries.updatedAt,
+      orderCode: orders.code,
+      orderDate: orders.orderDate,
+      orderQuantityKg: orders.quantityKg,
+      orderStatus: orders.status,
+      facilityCode: facilities.code,
+      facilityName: facilities.name,
+      biocharProductCode: biocharProducts.code,
+      driverName: drivers.name,
+      vehicleName: vehicles.name,
+      vehicleIdentifier: vehicles.identifier,
+    })
+    .from(deliveries)
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(facilities, eq(deliveries.facilityId, facilities.id))
+    .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
+    .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
+    .leftJoin(vehicles, eq(deliveries.vehicleId, vehicles.id))
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!deliveryRow) {
+    throw new Error("Delivery not found");
+  }
+
+  return {
+    id: deliveryRow.id,
+    code: deliveryRow.code,
+    facilityId: deliveryRow.facilityId,
+    orderId: deliveryRow.orderId,
+    customerLocationId: deliveryRow.customerLocationId,
+    biocharProductId: deliveryRow.biocharProductId,
+    storageLocationId: deliveryRow.storageLocationId,
+    deliveryDate: deliveryRow.deliveryDate,
+    status: deliveryRow.status,
+    deliveredWetMassKg: deliveryRow.deliveredWetMassKg,
+    massDryKg: deliveryRow.massDryKg,
+    moistureContentPercent: deliveryRow.moistureContentPercent,
+    driverId: deliveryRow.driverId,
+    vehicleId: deliveryRow.vehicleId,
+    createdAt: deliveryRow.createdAt,
+    updatedAt: deliveryRow.updatedAt,
+    order: deliveryRow.orderId
+      ? {
+          id: deliveryRow.orderId,
+          code: deliveryRow.orderCode ?? "",
+          orderDate: deliveryRow.orderDate!,
+          quantityKg: deliveryRow.orderQuantityKg!,
+          status: deliveryRow.orderStatus ?? "",
+        }
+      : null,
+    facility: deliveryRow.facilityId
+      ? {
+          id: deliveryRow.facilityId,
+          code: deliveryRow.facilityCode ?? "",
+          name: deliveryRow.facilityName ?? "",
+        }
+      : null,
+    biocharProduct: deliveryRow.biocharProductId
+      ? {
+          id: deliveryRow.biocharProductId,
+          code: deliveryRow.biocharProductCode ?? "",
+        }
+      : null,
+    driver: deliveryRow.driverId
+      ? {
+          id: deliveryRow.driverId,
+          name: deliveryRow.driverName ?? "",
+        }
+      : null,
+    vehicle: deliveryRow.vehicleId
+      ? {
+          id: deliveryRow.vehicleId,
+          name: deliveryRow.vehicleName ?? "",
+          identifier: deliveryRow.vehicleIdentifier ?? "",
+        }
+      : null,
+  };
+}
+
+/**
+ * Get delivery statistics
+ */
+export async function getDeliveryStats(
+  userId: string,
+  filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }
+): Promise<DeliveryStats> {
+  requireAuth(userId);
+
+  const conditions: SQL[] = [];
+
+  if (filters?.facilityId) {
+    conditions.push(eq(deliveries.facilityId, filters.facilityId));
+  }
+
+  if (filters?.fromDate) {
+    conditions.push(gte(deliveries.deliveryDate, filters.fromDate));
+  }
+
+  if (filters?.toDate) {
+    conditions.push(lte(deliveries.deliveryDate, filters.toDate));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Get aggregate stats
+  const [stats] = await db
+    .select({
+      totalDeliveries: count(),
+      totalDeliveredWetMassKg: sum(deliveries.deliveredWetMassKg),
+      totalMassDryKg: sum(deliveries.massDryKg),
+    })
+    .from(deliveries)
+    .where(whereClause);
+
+  // Get counts by status
+  const statusCounts = await db
+    .select({
+      status: deliveries.status,
+      count: count(),
+    })
+    .from(deliveries)
+    .where(whereClause)
+    .groupBy(deliveries.status);
+
+  const statusCountMap = new Map(
+    statusCounts.map((s) => [s.status, Number(s.count)])
+  );
+
+  return {
+    totalDeliveries: Number(stats.totalDeliveries),
+    totalDeliveredWetMassKg: Number(stats.totalDeliveredWetMassKg) || 0,
+    totalMassDryKg: Number(stats.totalMassDryKg) || 0,
+    scheduledCount: statusCountMap.get("scheduled") ?? 0,
+    processingCount: statusCountMap.get("processing") ?? 0,
+    deliveredCount: statusCountMap.get("delivered") ?? 0,
+  };
+}
+
+/**
+ * Get deliveries for dropdown selection
+ */
+export async function getDeliveriesForSelect(
+  userId: string,
+  orderId?: string
+): Promise<Array<{ id: string; code: string; deliveryDate: Date; status: string; orderCode: string | null }>> {
+  requireAuth(userId);
+
+  const conditions: SQL[] = [];
+  if (orderId) {
+    conditions.push(eq(deliveries.orderId, orderId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  return db
+    .select({
+      id: deliveries.id,
+      code: deliveries.code,
+      deliveryDate: deliveries.deliveryDate,
+      status: deliveries.status,
+      orderCode: orders.code,
+    })
+    .from(deliveries)
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .where(whereClause)
+    .orderBy(desc(deliveries.deliveryDate));
+}
+
+// ============================================
+// Create Operations
+// ============================================
+
+/**
+ * Create a new delivery
+ */
+export async function createDelivery(
+  userId: string,
+  data: {
+    code: string;
+    orderId: string;
+    facilityId: string;
+    deliveryDate: Date;
+    biocharProductId?: string | null;
+    driverId?: string | null;
+    vehicleId?: string | null;
+    status?: "scheduled" | "processing" | "delivered";
+    deliveredWetMassKg?: number | null;
+    massDryKg?: number | null;
+    moistureContentPercent?: number | null;
+  }
+): Promise<Delivery> {
+  requireAuth(userId);
+
+  // Validate massDryKg <= deliveredWetMassKg
+  if (
+    data.massDryKg != null &&
+    data.deliveredWetMassKg != null &&
+    data.massDryKg > data.deliveredWetMassKg
+  ) {
+    throw new Error("Dry mass must be less than or equal to wet mass");
+  }
+
+  // Check for duplicate code
+  const [existing] = await db
+    .select({ id: deliveries.id })
+    .from(deliveries)
+    .where(eq(deliveries.code, data.code));
+
+  if (existing) {
+    throw new Error("A delivery with this code already exists");
+  }
+
+  // Verify order exists
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.id, data.orderId));
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  const [delivery] = await db
+    .insert(deliveries)
+    .values({
+      code: data.code,
+      orderId: data.orderId,
+      facilityId: data.facilityId,
+      deliveryDate: data.deliveryDate,
+      biocharProductId: data.biocharProductId ?? null,
+      driverId: data.driverId ?? null,
+      vehicleId: data.vehicleId ?? null,
+      status: data.status ?? "processing",
+      deliveredWetMassKg: data.deliveredWetMassKg ?? null,
+      massDryKg: data.massDryKg ?? null,
+      moistureContentPercent: data.moistureContentPercent ?? null,
+    })
+    .returning();
+
+  return delivery;
+}
+
+// ============================================
+// Update Operations
+// ============================================
+
+/**
+ * Update an existing delivery
+ */
+export async function updateDelivery(
+  userId: string,
+  deliveryId: string,
+  data: {
+    code?: string;
+    orderId?: string;
+    facilityId?: string;
+    deliveryDate?: Date;
+    biocharProductId?: string | null;
+    driverId?: string | null;
+    vehicleId?: string | null;
+    status?: "scheduled" | "processing" | "delivered";
+    deliveredWetMassKg?: number | null;
+    massDryKg?: number | null;
+    moistureContentPercent?: number | null;
+  }
+): Promise<Delivery> {
+  requireAuth(userId);
+
+  // Verify delivery exists
+  const [existing] = await db
+    .select()
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!existing) {
+    throw new Error("Delivery not found");
+  }
+
+  // Validate massDryKg <= deliveredWetMassKg with merged data
+  const finalWetMass = data.deliveredWetMassKg !== undefined
+    ? data.deliveredWetMassKg
+    : existing.deliveredWetMassKg;
+  const finalDryMass = data.massDryKg !== undefined
+    ? data.massDryKg
+    : existing.massDryKg;
+
+  if (
+    finalDryMass != null &&
+    finalWetMass != null &&
+    finalDryMass > finalWetMass
+  ) {
+    throw new Error("Dry mass must be less than or equal to wet mass");
+  }
+
+  // If code is being changed, check for duplicates
+  if (data.code && data.code !== existing.code) {
+    const [duplicate] = await db
+      .select({ id: deliveries.id })
+      .from(deliveries)
+      .where(eq(deliveries.code, data.code));
+
+    if (duplicate) {
+      throw new Error("A delivery with this code already exists");
+    }
+  }
+
+  const [updated] = await db
+    .update(deliveries)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(eq(deliveries.id, deliveryId))
+    .returning();
+
+  return updated;
+}
+
+// ============================================
+// Delete Operations
+// ============================================
+
+/**
+ * Delete a delivery
+ */
+export async function deleteDelivery(
+  userId: string,
+  deliveryId: string
+): Promise<void> {
+  requireAuth(userId);
+
+  // Verify delivery exists
+  const [existing] = await db
+    .select({ id: deliveries.id })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!existing) {
+    throw new Error("Delivery not found");
+  }
+
+  await db.delete(deliveries).where(eq(deliveries.id, deliveryId));
+}
+
+// ============================================
+// Utility Operations
+// ============================================
+
+/**
+ * Check if a delivery code is available
+ */
+export async function isDeliveryCodeAvailable(
+  userId: string,
+  code: string,
+  excludeDeliveryId?: string
+): Promise<boolean> {
+  requireAuth(userId);
+
+  const conditions: SQL[] = [eq(deliveries.code, code)];
+
+  if (excludeDeliveryId) {
+    conditions.push(sql`${deliveries.id} != ${excludeDeliveryId}`);
+  }
+
+  const [existing] = await db
+    .select({ id: deliveries.id })
+    .from(deliveries)
+    .where(and(...conditions));
+
+  return !existing;
+}

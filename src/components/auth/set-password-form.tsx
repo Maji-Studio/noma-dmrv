@@ -66,10 +66,10 @@ function SetPasswordFormContent() {
     return (
       <div className="space-y-24">
         <div
-          className="p-m bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
+          className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-medium font-semibold mb-xs">Invalid Invitation Link</h3>
+          <h3 className="body-medium font-semibold mb-16">Invalid Invitation Link</h3>
           <p className="body-small">
             This invitation link is invalid or has expired. Please contact your
             administrator for a new invitation.
@@ -93,11 +93,11 @@ function SetPasswordFormContent() {
       {success ? (
         <div className="space-y-24">
           <div
-            className="p-m bg-green-50 border border-green-500 rounded-none text-green-700"
+            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
             role="status"
             aria-live="polite"
           >
-            <h3 className="body-medium font-semibold mb-xs">
+            <h3 className="body-medium font-semibold mb-16">
               Password set successfully
             </h3>
             <p className="body-small">
@@ -108,11 +108,11 @@ function SetPasswordFormContent() {
         </div>
       ) : (
         <>
-          <div className="mb-m">
+          <div className="mb-24">
             <h2 className="body-large font-semibold text-[var(--color-text-primary)]">
               Set Your Password
             </h2>
-            <p className="body-small text-[var(--color-text-secondary)] mt-xs">
+            <p className="body-small text-[var(--color-text-secondary)] mt-16">
               Create a secure password for your account
             </p>
           </div>

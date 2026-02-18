@@ -1,8 +1,9 @@
 /**
  * Main app layout
- * Provides navigation and authenticated layout wrapper
+ * Provides sidebar navigation and authenticated layout wrapper
  */
 import { requireAuth } from "@/lib/auth/server";
+import { AppSidebar } from "@/components/navigation";
 
 export default async function AppLayout({
   children,
@@ -13,9 +14,9 @@ export default async function AppLayout({
   await requireAuth();
 
   return (
-    <div className="min-h-screen">
-      {/* TODO: Add navigation component */}
-      <main>{children}</main>
+    <div className="min-h-screen flex">
+      <AppSidebar />
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   );
 }

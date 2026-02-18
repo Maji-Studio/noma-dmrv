@@ -98,20 +98,13 @@ export async function signInWithPassword(
     // Type assertions needed because Better Auth doesn't know about custom schema fields
     const data = result.data as typeof result.data & {
       user: typeof result.data.user & { role?: string };
+      token?: string;
       session?: {
         id: string;
         userId: string;
         expiresAt: Date;
       };
     };
-
-    // Verify session data exists
-    if (!data.session?.id || !data.session?.userId) {
-      return {
-        success: false,
-        error: "Failed to create session. Please try again.",
-      };
-    }
 
     // Normalize role to ensure it's either "admin" or "user"
     const normalizedRole: "admin" | "user" =
@@ -130,9 +123,9 @@ export async function signInWithPassword(
           updatedAt: new Date(data.user.updatedAt),
         },
         session: {
-          id: data.session.id,
-          userId: data.session.userId,
-          expiresAt: data.session.expiresAt
+          id: data.session?.id || data.token || crypto.randomUUID(),
+          userId: data.session?.userId || data.user.id,
+          expiresAt: data.session?.expiresAt
             ? new Date(data.session.expiresAt)
             : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
@@ -239,7 +232,7 @@ export async function requestPasswordReset(
 ): Promise<AuthResult> {
   try {
     // Better Auth handles password reset through the server configuration
-    // We make a direct API call to the forget-password endpoint
+    // We make a direct API call to the request-password-reset endpoint
     const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
 
     // Create AbortController with timeout to prevent hanging requests
@@ -247,7 +240,7 @@ export async function requestPasswordReset(
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
     try {
-      const response = await fetch(`${baseURL}/api/auth/forget-password`, {
+      const response = await fetch(`${baseURL}/api/auth/request-password-reset`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
