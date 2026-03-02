@@ -55,32 +55,31 @@ async function getDeliveriesStats(
 
   const baseWhere = facilityId ? eq(deliveries.facilityId, facilityId) : undefined;
 
-  // Current period count
-  const [currentResult] = await db
-    .select({ count: count() })
-    .from(deliveries)
-    .where(
-      baseWhere
-        ? and(baseWhere, gte(deliveries.createdAt, currentStart))
-        : gte(deliveries.createdAt, currentStart)
-    );
-
-  // Previous period count
-  const [previousResult] = await db
-    .select({ count: count() })
-    .from(deliveries)
-    .where(
-      baseWhere
-        ? and(
-            baseWhere,
-            gte(deliveries.createdAt, previousStart),
-            lt(deliveries.createdAt, previousEnd)
-          )
-        : and(
-            gte(deliveries.createdAt, previousStart),
-            lt(deliveries.createdAt, previousEnd)
-          )
-    );
+  const [[currentResult], [previousResult]] = await Promise.all([
+    db
+      .select({ count: count() })
+      .from(deliveries)
+      .where(
+        baseWhere
+          ? and(baseWhere, gte(deliveries.createdAt, currentStart))
+          : gte(deliveries.createdAt, currentStart)
+      ),
+    db
+      .select({ count: count() })
+      .from(deliveries)
+      .where(
+        baseWhere
+          ? and(
+              baseWhere,
+              gte(deliveries.createdAt, previousStart),
+              lt(deliveries.createdAt, previousEnd)
+            )
+          : and(
+              gte(deliveries.createdAt, previousStart),
+              lt(deliveries.createdAt, previousEnd)
+            )
+      ),
+  ]);
 
   return {
     current: currentResult?.count ?? 0,
@@ -99,34 +98,33 @@ async function getActiveProductionRunsStats(
 
   const baseWhere = facilityId ? eq(productionRuns.facilityId, facilityId) : undefined;
 
-  // Current active count (currently running)
-  const [currentResult] = await db
-    .select({ count: count() })
-    .from(productionRuns)
-    .where(
-      baseWhere
-        ? and(baseWhere, eq(productionRuns.status, "running"))
-        : eq(productionRuns.status, "running")
-    );
-
-  // Previous period - count runs that were running during that period
-  const [previousResult] = await db
-    .select({ count: count() })
-    .from(productionRuns)
-    .where(
-      baseWhere
-        ? and(
-            baseWhere,
-            eq(productionRuns.status, "running"),
-            gte(productionRuns.createdAt, previousStart),
-            lt(productionRuns.createdAt, previousEnd)
-          )
-        : and(
-            eq(productionRuns.status, "running"),
-            gte(productionRuns.createdAt, previousStart),
-            lt(productionRuns.createdAt, previousEnd)
-          )
-    );
+  const [[currentResult], [previousResult]] = await Promise.all([
+    db
+      .select({ count: count() })
+      .from(productionRuns)
+      .where(
+        baseWhere
+          ? and(baseWhere, eq(productionRuns.status, "running"))
+          : eq(productionRuns.status, "running")
+      ),
+    db
+      .select({ count: count() })
+      .from(productionRuns)
+      .where(
+        baseWhere
+          ? and(
+              baseWhere,
+              eq(productionRuns.status, "running"),
+              gte(productionRuns.createdAt, previousStart),
+              lt(productionRuns.createdAt, previousEnd)
+            )
+          : and(
+              eq(productionRuns.status, "running"),
+              gte(productionRuns.createdAt, previousStart),
+              lt(productionRuns.createdAt, previousEnd)
+            )
+      ),
+  ]);
 
   return {
     current: currentResult?.count ?? 0,
@@ -148,38 +146,35 @@ async function getPendingApplicationsStats(
     ? eq(deliveries.facilityId, facilityId)
     : undefined;
 
-  // Current pending count (delivered but not yet applied)
-  const currentQuery = db
-    .select({ count: count() })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id));
-
-  const [currentResult] = await (facilityWhere
-    ? currentQuery.where(and(eq(applications.status, "delivered"), facilityWhere))
-    : currentQuery.where(eq(applications.status, "delivered")));
-
-  // Previous period pending
-  const previousQuery = db
-    .select({ count: count() })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id));
-
-  const [previousResult] = await (facilityWhere
-    ? previousQuery.where(
-        and(
-          eq(applications.status, "delivered"),
-          facilityWhere,
-          gte(applications.createdAt, previousStart),
-          lt(applications.createdAt, previousEnd)
-        )
-      )
-    : previousQuery.where(
-        and(
-          eq(applications.status, "delivered"),
-          gte(applications.createdAt, previousStart),
-          lt(applications.createdAt, previousEnd)
-        )
-      ));
+  const [[currentResult], [previousResult]] = await Promise.all([
+    db
+      .select({ count: count() })
+      .from(applications)
+      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+      .where(
+        facilityWhere
+          ? and(eq(applications.status, "delivered"), facilityWhere)
+          : eq(applications.status, "delivered")
+      ),
+    db
+      .select({ count: count() })
+      .from(applications)
+      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+      .where(
+        facilityWhere
+          ? and(
+              eq(applications.status, "delivered"),
+              facilityWhere,
+              gte(applications.createdAt, previousStart),
+              lt(applications.createdAt, previousEnd)
+            )
+          : and(
+              eq(applications.status, "delivered"),
+              gte(applications.createdAt, previousStart),
+              lt(applications.createdAt, previousEnd)
+            )
+      ),
+  ]);
 
   return {
     current: currentResult?.count ?? 0,
@@ -194,38 +189,37 @@ async function getIssuedCreditsStats(
   facilityId?: string,
   periodDays: number = 30
 ): Promise<MetricStat> {
-  const { previousStart, previousEnd } = getDateRanges(periodDays);
+  const { currentStart, previousStart, previousEnd } = getDateRanges(periodDays);
 
   const baseWhere = facilityId ? eq(creditBatches.facilityId, facilityId) : undefined;
 
-  // Current issued count
-  const [currentResult] = await db
-    .select({ count: count() })
-    .from(creditBatches)
-    .where(
-      baseWhere
-        ? and(baseWhere, eq(creditBatches.status, "issued"))
-        : eq(creditBatches.status, "issued")
-    );
-
-  // Previous period issued count
-  const [previousResult] = await db
-    .select({ count: count() })
-    .from(creditBatches)
-    .where(
-      baseWhere
-        ? and(
-            baseWhere,
-            eq(creditBatches.status, "issued"),
-            gte(creditBatches.createdAt, previousStart),
-            lt(creditBatches.createdAt, previousEnd)
-          )
-        : and(
-            eq(creditBatches.status, "issued"),
-            gte(creditBatches.createdAt, previousStart),
-            lt(creditBatches.createdAt, previousEnd)
-          )
-    );
+  const [[currentResult], [previousResult]] = await Promise.all([
+    db
+      .select({ count: count() })
+      .from(creditBatches)
+      .where(
+        baseWhere
+          ? and(baseWhere, eq(creditBatches.status, "issued"), gte(creditBatches.createdAt, currentStart))
+          : and(eq(creditBatches.status, "issued"), gte(creditBatches.createdAt, currentStart))
+      ),
+    db
+      .select({ count: count() })
+      .from(creditBatches)
+      .where(
+        baseWhere
+          ? and(
+              baseWhere,
+              eq(creditBatches.status, "issued"),
+              gte(creditBatches.createdAt, previousStart),
+              lt(creditBatches.createdAt, previousEnd)
+            )
+          : and(
+              eq(creditBatches.status, "issued"),
+              gte(creditBatches.createdAt, previousStart),
+              lt(creditBatches.createdAt, previousEnd)
+            )
+      ),
+  ]);
 
   return {
     current: currentResult?.count ?? 0,

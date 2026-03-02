@@ -61,12 +61,20 @@ export const supplierFormSchema = z.object({
     .or(z.literal("")),
   gpsLatitude: z.union([
     z.number().min(-90).max(90),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
   gpsLongitude: z.union([
     z.number().min(-180).max(180),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
   address: z
@@ -96,7 +104,11 @@ export const supplierFormSchema = z.object({
   // Business Information
   annualRevenueUsd: z.union([
     z.number().min(0, "Annual revenue must be a positive number"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
 

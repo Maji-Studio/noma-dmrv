@@ -194,7 +194,7 @@ export function FormulationList() {
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createFormulation.isPending || updateFormulation.isPending;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   if (fetchError) {
     return (

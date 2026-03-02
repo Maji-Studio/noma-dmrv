@@ -137,6 +137,17 @@ export function FeedstockTypeQuickAddDialog({
     setError(null);
     setIsSubmitting(true);
 
+    if (!formData.name.trim()) {
+      setError("Name is required");
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.category) {
+      setError("Category is required");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const result = await createFeedstockTypeFn({
         code: formData.code.trim().toUpperCase(),

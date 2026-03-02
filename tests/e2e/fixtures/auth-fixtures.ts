@@ -327,6 +327,59 @@ export async function setAuthCookies(
   ]);
 }
 
+/**
+ * Create an authenticated browser context via HTTP API sign-in (fast, no UI interaction)
+ */
+async function createDirectAuthContext(
+  browser: { newContext: () => Promise<BrowserContext> },
+  user: TestUser,
+  baseURL: string
+): Promise<BrowserContext> {
+  // Sign in via HTTP API to get valid signed cookies
+  const response = await fetch(`${baseURL}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Origin": baseURL },
+    body: JSON.stringify({ email: user.email, password: user.password }),
+    redirect: "manual",
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`API sign-in failed for ${user.email}: ${response.status} ${body}`);
+  }
+
+  // Extract Set-Cookie headers
+  const setCookieHeaders = response.headers.getSetCookie();
+  const url = new URL(baseURL);
+  const cookies = setCookieHeaders
+    .map((header) => {
+      const [nameValue, ...attrs] = header.split(";");
+      const [name, ...valueParts] = nameValue!.split("=");
+      const value = valueParts.join("=");
+      const attrMap: Record<string, string> = {};
+      for (const attr of attrs) {
+        const [key, val] = attr.trim().split("=");
+        attrMap[key!.toLowerCase()] = val || "";
+      }
+      return {
+        name: name!.trim(),
+        value,
+        domain: url.hostname,
+        path: attrMap["path"] || "/",
+        httpOnly: "httponly" in attrMap,
+        secure: "secure" in attrMap,
+        sameSite: (attrMap["samesite"] as "Lax" | "Strict" | "None") || "Lax",
+      };
+    })
+    .filter((c) => c.name && c.value);
+
+  const context = await browser.newContext();
+  if (cookies.length > 0) {
+    await context.addCookies(cookies);
+  }
+  return context;
+}
+
 // Extended test fixture with auth helpers
 export const test = base.extend<AuthFixtures>({
   testUsers: async ({}, use) => {
@@ -386,8 +439,7 @@ export const test = base.extend<AuthFixtures>({
 
   adminContext: async ({ browser, testUsers }, use) => {
     const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    // Use UI-based authentication for reliable session creation
-    const context = await createAuthenticatedContext(browser, testUsers.admin, baseURL);
+    const context = await createDirectAuthContext(browser, testUsers.admin, baseURL);
 
     await use(context);
     await context.close();
@@ -395,7 +447,7 @@ export const test = base.extend<AuthFixtures>({
 
   operatorContext: async ({ browser, testUsers }, use) => {
     const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createAuthenticatedContext(browser, testUsers.operator, baseURL);
+    const context = await createDirectAuthContext(browser, testUsers.operator, baseURL);
 
     await use(context);
     await context.close();
@@ -403,7 +455,7 @@ export const test = base.extend<AuthFixtures>({
 
   labTechnicianContext: async ({ browser, testUsers }, use) => {
     const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createAuthenticatedContext(browser, testUsers.lab_technician, baseURL);
+    const context = await createDirectAuthContext(browser, testUsers.lab_technician, baseURL);
 
     await use(context);
     await context.close();
@@ -411,7 +463,7 @@ export const test = base.extend<AuthFixtures>({
 
   viewerContext: async ({ browser, testUsers }, use) => {
     const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createAuthenticatedContext(browser, testUsers.viewer, baseURL);
+    const context = await createDirectAuthContext(browser, testUsers.viewer, baseURL);
 
     await use(context);
     await context.close();

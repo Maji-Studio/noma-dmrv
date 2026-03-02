@@ -185,3 +185,16 @@ These are intentionally marked so template consumers can extend without hidden a
 - ✅ Reduce load on external services
 
 **Key Takeaway**: This template prioritizes **simplicity and security** over aggressive caching. React Query is sufficient for 95% of use cases. Only enable Cache Components if you have a specific need and understand the tradeoffs.
+
+## Shared Utilities
+
+Cross-cutting code is extracted to shared modules to avoid duplication:
+
+| Module | Purpose |
+|--------|---------|
+| `src/data-access/utils.ts` | `requireAuth()` — auth guard used by all data-access files |
+| `src/hooks/types.ts` | `MutationCallbacks`, `OptimisticUpdateOptions` — shared React Query mutation types |
+| `src/schemas/helpers.ts` | `emptyToNull`, `latitudeSchema`, `longitudeSchema`, `gpsCoordinatesSchema` — reusable Zod schemas |
+| `src/types/actions.ts` | `ActionResult<T>` — standard server action return type |
+
+When adding new entities, import from these shared modules instead of re-declaring locally.

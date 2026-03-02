@@ -228,7 +228,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
   // Memoize columns
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const deliveries = deliveriesData?.items ?? [];
 

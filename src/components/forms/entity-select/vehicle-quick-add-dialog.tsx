@@ -138,6 +138,28 @@ export function VehicleQuickAddDialog({
     setError(null);
     setIsSubmitting(true);
 
+    // Validate required fields
+    if (!formData.name.trim()) {
+      setError("Name is required");
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.identifier.trim()) {
+      setError("Identifier is required");
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.vehicleType) {
+      setError("Vehicle type is required");
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.fuelType) {
+      setError("Fuel type is required");
+      setIsSubmitting(false);
+      return;
+    }
+
     // Parse numeric fields
     const fuelConsumption = parseFloat(formData.fuelConsumptionLPerKm);
     const modelYear = parseInt(formData.modelYear, 10);

@@ -461,6 +461,69 @@ After fixing, re-seed the database: `pnpm db:reset`
 - After Zod major version upgrades, test seed IDs against the UUID schema
 - Prefer the relaxed regex if you can't guarantee all IDs are RFC 4122 compliant
 
+## E2E Testing Issues
+
+### Rate Limiting Blocks Test Auth (429 Too Many Requests)
+
+**Symptoms**
+- E2E tests fail with "Failed to sign in. Please try again."
+- Login page shows error after form submission
+- Server logs show `POST /api/auth/sign-in/email 429`
+
+**Root Cause**
+Better Auth rate limits `/sign-in/email` to 10 attempts per 15 minutes. With 4 parallel Playwright workers each needing authentication, this limit is quickly exceeded.
+
+**Fix**
+Add `DISABLE_RATE_LIMIT=true` to `.env.local` for local development:
+```bash
+# .env.local
+DISABLE_RATE_LIMIT=true
+```
+Restart the dev server after adding this. The rate limit check is at `src/lib/auth/better-auth.ts:154`.
+
+### Auth Fixtures Use HTTP API Sign-In (Not UI)
+
+**Background**
+The auth fixtures (`tests/e2e/fixtures/auth-fixtures.ts`) authenticate via HTTP API (`POST /api/auth/sign-in/email`) instead of filling the login form through the browser UI. This is faster and more reliable because:
+
+- **scrypt is CPU-intensive**: Each password verification takes 8-10 seconds. With 4 parallel workers doing UI login simultaneously, the dev server gets overwhelmed and requests timeout.
+- **HTTP API auth** captures signed cookies from the response and injects them into the Playwright browser context, skipping UI interaction entirely.
+- **Origin header required**: Better Auth requires an `Origin` header matching `trustedOrigins`. The HTTP sign-in includes `Origin: ${baseURL}`.
+
+**Key function**: `createDirectAuthContext()` in `auth-fixtures.ts`
+
+### Tests Timeout on First Page Load (Dev Mode Compilation)
+
+**Symptoms**
+- Tests fail with "Target page, context or browser has been closed"
+- Tests pass on subsequent runs
+- Server logs show `Compiling...` during test execution
+
+**Root Cause**
+Next.js dev mode compiles pages on first request. With 4 workers hitting different routes simultaneously, compilation can take 10-30 seconds per page.
+
+**Fix**
+- Global timeout is set to 60s in `playwright.config.ts` to accommodate this
+- Run tests twice: first run warms up the dev server cache, second run is faster
+- For CI, consider using `pnpm build && pnpm start` instead of dev mode
+
+### Seed Data Collisions (Duplicate Key Errors)
+
+**Symptoms**
+- `duplicate key value violates unique constraint "facilities_code_unique"`
+- Tests fail on `seedChainData` in fixture setup
+
+**Root Cause**
+Leftover E2E data from previous test runs. The `testRunId` is unique per worker process, but cleanup may not complete if tests are interrupted. The `code` column has a unique constraint.
+
+**Fix**
+```bash
+# Reset the database to clear all stale test data
+pnpm db:reset
+```
+
+Or run tests again — the auto-cleanup in `cleanupTestData` fixture handles most cases.
+
 ## Performance Issues
 
 ### Slow Page Loads

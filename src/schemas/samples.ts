@@ -62,7 +62,14 @@ export const sampleFormSchema = z
     productionRunId: z.string().min(1, "Please select a production run").uuid("Invalid production run"),
     samplingTime: z.union([
       z.date(),
-      z.string().transform((val) => new Date(val)),
+      z.string().transform((val, ctx) => {
+        const date = new Date(val);
+        if (isNaN(date.getTime())) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+          return z.NEVER;
+        }
+        return date;
+      }),
     ]),
 
     // Lab info (optional)
@@ -206,7 +213,14 @@ export const updateSampleSchema = z.object({
   productionRunId: z.string().uuid().optional(),
   samplingTime: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]).optional(),
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),

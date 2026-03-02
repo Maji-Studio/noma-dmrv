@@ -232,7 +232,7 @@ export function ProductionRunList() {
   const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setStatusFilter(""); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || facilityFilter || statusFilter;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   if (fetchError) {
     return (

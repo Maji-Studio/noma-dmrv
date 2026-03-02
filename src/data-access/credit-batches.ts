@@ -11,15 +11,7 @@ import type {
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 
-// ============================================
-// Auth Guard
-// ============================================
-
-function requireAuth(userId: string): void {
-  if (!userId) {
-    throw new Error("Unauthorized");
-  }
-}
+import { requireAuth } from "./utils";
 
 // ============================================
 // Credit Batch Data Access Layer
@@ -293,7 +285,10 @@ export async function updateCreditBatch(
 
   // Fetch full details
   const result = await getCreditBatchById(userId, id);
-  return result!;
+  if (!result) {
+    throw new Error("Failed to fetch updated credit batch");
+  }
+  return result;
 }
 
 /**

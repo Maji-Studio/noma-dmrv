@@ -1,31 +1,49 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, count } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, type Application } from "@/db/schema/application";
 import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
 
-// ============================================
-// Auth Guard
-// ============================================
-
-function requireAuth(userId: string): void {
-  if (!userId) {
-    throw new Error("Unauthorized");
-  }
-}
+import { requireAuth } from "./utils";
 
 // ============================================
 // Application Data Access Layer
 // ============================================
 
+const DEFAULT_PAGE_SIZE = 100;
+
 /**
- * Get all applications
+ * Get applications with pagination
  */
-export async function getApplications(userId: string): Promise<Application[]> {
+export async function getApplications(
+  userId: string,
+  options?: { page?: number; pageSize?: number }
+): Promise<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }> {
   requireAuth(userId);
-  return db
+
+  const page = options?.page ?? 1;
+  const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const offset = (page - 1) * pageSize;
+
+  const [{ totalCount }] = await db
+    .select({ totalCount: count() })
+    .from(applications);
+
+  const total = Number(totalCount);
+
+  const items = await db
     .select()
     .from(applications)
-    .orderBy(desc(applications.applicationDate));
+    .orderBy(desc(applications.applicationDate))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
 }
 
 /**

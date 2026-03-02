@@ -234,7 +234,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // Memoize columns
   const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
 
-  const items = applications ?? [];
+  const items = applications?.items ?? [];
   const totalApplications = items.length;
   const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
   const totalCo2e = items.reduce((sum, a) => sum + (a.co2eStoredTonnes ?? 0), 0);

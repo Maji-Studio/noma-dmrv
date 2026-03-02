@@ -201,7 +201,7 @@ export function SampleList() {
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createSample.isPending || updateSample.isPending;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   if (fetchError) {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load samples"} /></div>;

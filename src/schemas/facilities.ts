@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { latitudeSchema, longitudeSchema } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -115,33 +116,7 @@ export const facilityAddressSchema = z
 // GPS Coordinate Validation
 // ============================================
 
-/**
- * GPS latitude validation (-90 to 90)
- */
-export const latitudeSchema = z
-  .number()
-  .min(-90, "Latitude must be between -90 and 90")
-  .max(90, "Latitude must be between -90 and 90")
-  .optional()
-  .nullable();
-
-/**
- * GPS longitude validation (-180 to 180)
- */
-export const longitudeSchema = z
-  .number()
-  .min(-180, "Longitude must be between -180 and 180")
-  .max(180, "Longitude must be between -180 and 180")
-  .optional()
-  .nullable();
-
-/**
- * Combined GPS coordinates schema
- */
-export const gpsCoordinatesSchema = z.object({
-  latitude: latitudeSchema,
-  longitude: longitudeSchema,
-});
+// GPS schemas imported from ./helpers
 
 // ============================================
 // Contact Information Validation
@@ -327,7 +302,7 @@ export const facilitySelectSchema = z.object({
 // ============================================
 
 export type AddressData = z.infer<typeof addressSchema>;
-export type GpsCoordinates = z.infer<typeof gpsCoordinatesSchema>;
+export type { GpsCoordinates } from "./helpers";
 export type FacilityFormData = z.infer<typeof facilityFormSchema>;
 export type CreateFacilityData = z.infer<typeof createFacilitySchema>;
 export type UpdateFacilityData = z.infer<typeof updateFacilitySchema>;

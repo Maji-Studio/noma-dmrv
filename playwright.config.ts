@@ -13,8 +13,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
 
-  // Global timeout settings
-  timeout: 30000,
+  // Global timeout - 60s to accommodate Next.js dev-mode page compilation
+  timeout: 60000,
   expect: {
     timeout: 10000,
   },
