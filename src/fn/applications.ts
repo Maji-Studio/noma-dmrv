@@ -20,17 +20,19 @@ import {
 } from "@/schemas/applications";
 
 /**
- * Get all applications
+ * Get applications with pagination
  */
-export async function getApplicationsFn(): Promise<ActionResult<Application[]>> {
+export async function getApplicationsFn(
+  options?: { page?: number; pageSize?: number }
+): Promise<ActionResult<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
     const user = await getUser();
     if (!user || !user.id) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const applications = await getApplicationsData(user.id);
-    return { success: true, data: applications };
+    const result = await getApplicationsData(user.id, options);
+    return { success: true, data: result };
   } catch (error) {
     console.error("Failed to get applications:", error);
     return {

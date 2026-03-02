@@ -21,13 +21,13 @@ export const applicationKeys = {
 };
 
 /**
- * Query hook for fetching all applications
+ * Query hook for fetching applications with pagination
  */
-export function useApplications() {
+export function useApplications(options?: { page?: number; pageSize?: number }) {
   return useQuery({
-    queryKey: applicationKeys.lists(),
+    queryKey: applicationKeys.list(options),
     queryFn: async () => {
-      const result = await getApplicationsFn();
+      const result = await getApplicationsFn(options);
       if (!result.success) {
         throw new Error(result.error);
       }

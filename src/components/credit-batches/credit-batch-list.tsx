@@ -250,7 +250,7 @@ export function CreditBatchList({
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
   // Memoize columns
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const items = (creditBatches ?? []) as CreditBatchWithRelations[];
   const totalBatches = items.length;

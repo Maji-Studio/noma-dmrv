@@ -4,7 +4,8 @@
  * Includes M:M relationship handling for feedstocks
  */
 
-import { and, asc, desc, eq, gte, ilike, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   productionRuns,
@@ -99,15 +100,7 @@ export interface ProductionRunReadingRecord {
 // Auth Guards
 // ============================================
 
-/**
- * Require user to be authenticated
- * Throws error if userId is not provided
- */
-function requireAuth(userId: string): void {
-  if (!userId) {
-    throw new Error("Unauthorized");
-  }
-}
+import { requireAuth } from "./utils";
 
 // ============================================
 // Production Run Read Operations
@@ -188,7 +181,11 @@ export async function getProductionRuns(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // Get production runs with relations
+  // Alias storage locations for biochar and feedstock joins
+  const biocharStorage = alias(storageLocations, "biocharStorage");
+  const feedstockStorage = alias(storageLocations, "feedstockStorage");
+
+  // Get production runs with all relations in a single query (no N+1 for storage locations)
   const runList = await db
     .select({
       id: productionRuns.id,
@@ -218,44 +215,56 @@ export async function getProductionRuns(
       reactorCode: reactors.code,
       reactorIdentifier: reactors.identifier,
       operatorName: operators.name,
+      biocharStorageLocationCode: biocharStorage.code,
+      feedstockStorageLocationCode: feedstockStorage.code,
     })
     .from(productionRuns)
     .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
     .leftJoin(reactors, eq(productionRuns.reactorId, reactors.id))
     .leftJoin(operators, eq(productionRuns.operatorId, operators.id))
+    .leftJoin(biocharStorage, eq(productionRuns.biocharStorageLocationId, biocharStorage.id))
+    .leftJoin(feedstockStorage, eq(productionRuns.feedstockStorageLocationId, feedstockStorage.id))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
     .offset(offset);
 
-  // Get feedstocks for each production run
-  const items: ProductionRunWithRelations[] = await Promise.all(
-    runList.map(async (run) => {
-      const runFeedstocks = await getProductionRunFeedstocks(run.id);
-      const biocharStorageLocation = run.biocharStorageLocationId
-        ? await db
-            .select({ code: storageLocations.code })
-            .from(storageLocations)
-            .where(eq(storageLocations.id, run.biocharStorageLocationId))
-            .then(([loc]) => loc?.code ?? null)
-        : null;
-      const feedstockStorageLocation = run.feedstockStorageLocationId
-        ? await db
-            .select({ code: storageLocations.code })
-            .from(storageLocations)
-            .where(eq(storageLocations.id, run.feedstockStorageLocationId))
-            .then(([loc]) => loc?.code ?? null)
-        : null;
+  // Batch-fetch feedstocks for all runs in a single query (instead of N queries)
+  const runIds = runList.map((r) => r.id);
+  const allFeedstocks = runIds.length > 0
+    ? await db
+        .select({
+          id: productionRunFeedstocks.id,
+          productionRunId: productionRunFeedstocks.productionRunId,
+          feedstockId: productionRunFeedstocks.feedstockId,
+          massUsedKg: productionRunFeedstocks.massUsedKg,
+          feedstockCode: feedstocks.code,
+          feedstockTypeName: feedstockTypes.name,
+        })
+        .from(productionRunFeedstocks)
+        .leftJoin(feedstocks, eq(productionRunFeedstocks.feedstockId, feedstocks.id))
+        .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+        .where(inArray(productionRunFeedstocks.productionRunId, runIds))
+    : [];
 
-      return {
-        ...run,
-        biocharStorageLocationCode: biocharStorageLocation,
-        feedstockStorageLocationCode: feedstockStorageLocation,
-        feedstocks: runFeedstocks,
-        totalFeedstockMassKg: runFeedstocks.reduce((sum, f) => sum + f.massUsedKg, 0),
-      };
-    })
-  );
+  // Group feedstocks by production run ID
+  const feedstocksByRunId = new Map<string, ProductionRunFeedstockWithDetails[]>();
+  for (const f of allFeedstocks) {
+    const existing = feedstocksByRunId.get(f.productionRunId) ?? [];
+    existing.push(f);
+    feedstocksByRunId.set(f.productionRunId, existing);
+  }
+
+  const items: ProductionRunWithRelations[] = runList.map((run) => {
+    const runFeedstocks = feedstocksByRunId.get(run.id) ?? [];
+    return {
+      ...run,
+      biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
+      feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
+      feedstocks: runFeedstocks,
+      totalFeedstockMassKg: runFeedstocks.reduce((s, f) => s + f.massUsedKg, 0),
+    };
+  });
 
   return {
     items,
@@ -397,39 +406,27 @@ export async function getProductionRunStats(
     .leftJoin(productionRuns, eq(productionRunFeedstocks.productionRunId, productionRuns.id))
     .where(whereClause);
 
-  // Get status counts
-  const runningConditions = whereClause
-    ? and(whereClause, eq(productionRuns.status, "running"))
-    : eq(productionRuns.status, "running");
-  const completedConditions = whereClause
-    ? and(whereClause, eq(productionRuns.status, "complete"))
-    : eq(productionRuns.status, "complete");
-  const draftConditions = whereClause
-    ? and(whereClause, eq(productionRuns.status, "draft"))
-    : eq(productionRuns.status, "draft");
-
-  const [runningCounts] = await db
-    .select({ count: count() })
+  // Get status counts in a single GROUP BY query
+  const statusCounts = await db
+    .select({
+      status: productionRuns.status,
+      count: count(),
+    })
     .from(productionRuns)
-    .where(runningConditions);
+    .where(whereClause)
+    .groupBy(productionRuns.status);
 
-  const [completedCounts] = await db
-    .select({ count: count() })
-    .from(productionRuns)
-    .where(completedConditions);
-
-  const [draftCounts] = await db
-    .select({ count: count() })
-    .from(productionRuns)
-    .where(draftConditions);
+  const statusMap = Object.fromEntries(
+    statusCounts.map((row) => [row.status, Number(row.count)])
+  );
 
   return {
     totalRuns: Number(stats.totalRuns),
     totalBiocharKg: Number(stats.totalBiocharKg) || 0,
     totalFeedstockKg: Number(feedstockStats.totalFeedstockKg) || 0,
-    runningCount: Number(runningCounts.count),
-    completedCount: Number(completedCounts.count),
-    draftCount: Number(draftCounts.count),
+    runningCount: statusMap["running"] ?? 0,
+    completedCount: statusMap["complete"] ?? 0,
+    draftCount: statusMap["draft"] ?? 0,
   };
 }
 

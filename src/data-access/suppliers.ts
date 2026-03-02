@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
-import { suppliers, type Supplier } from "@/db/schema";
+import { suppliers, feedstockDeliveries, type Supplier } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
 
 // ============================================
@@ -26,15 +26,7 @@ export interface PaginatedSuppliers {
 // Auth Guards
 // ============================================
 
-/**
- * Require user to be authenticated
- * Throws error if userId is not provided
- */
-function requireAuth(userId: string): void {
-  if (!userId) {
-    throw new Error("Unauthorized");
-  }
-}
+import { requireAuth } from "./utils";
 
 // ============================================
 // Supplier Read Operations
@@ -307,17 +299,16 @@ export async function deleteSupplier(
     throw new Error("Supplier not found");
   }
 
-  // Note: In a real implementation, we would check for associated feedstock deliveries
-  // const [deliveryCount] = await db
-  //   .select({ count: count() })
-  //   .from(feedstockDeliveries)
-  //   .where(eq(feedstockDeliveries.supplierId, supplierId));
-  //
-  // if (Number(deliveryCount.count) > 0) {
-  //   throw new Error(
-  //     "Cannot delete supplier with associated feedstock deliveries. Remove deliveries first."
-  //   );
-  // }
+  const [deliveryCount] = await db
+    .select({ count: count() })
+    .from(feedstockDeliveries)
+    .where(eq(feedstockDeliveries.supplierId, supplierId));
+
+  if (Number(deliveryCount.count) > 0) {
+    throw new Error(
+      "Cannot delete supplier with associated feedstock deliveries. Remove deliveries first."
+    );
+  }
 
   await db.delete(suppliers).where(eq(suppliers.id, supplierId));
 }

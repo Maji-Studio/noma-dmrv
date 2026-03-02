@@ -27,15 +27,7 @@ export interface PaginatedFormulations {
 // Auth Guards
 // ============================================
 
-/**
- * Require user to be authenticated
- * Throws error if userId is not provided
- */
-function requireAuth(userId: string): void {
-  if (!userId) {
-    throw new Error("Unauthorized");
-  }
-}
+import { requireAuth } from "./utils";
 
 // ============================================
 // Formulation Read Operations

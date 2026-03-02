@@ -144,11 +144,7 @@ export function QuickAddDialog({
     e.preventDefault();
     setError(null);
 
-    // Basic validation
-    if (!formData.code.trim()) {
-      setError("Code is required");
-      return;
-    }
+    // Basic validation (code is optional - auto-generated if empty)
     if (!formData.name.trim()) {
       setError("Name is required");
       return;

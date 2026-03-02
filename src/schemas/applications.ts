@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
+import { emptyToNull, latitudeSchema, longitudeSchema } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -27,25 +27,7 @@ export type ApplicationMethod = (typeof applicationMethods)[number];
 // GPS Coordinate Validation
 // ============================================
 
-/**
- * GPS latitude validation (-90 to 90)
- */
-export const latitudeSchema = z
-  .number()
-  .min(-90, "Latitude must be between -90 and 90")
-  .max(90, "Latitude must be between -90 and 90")
-  .optional()
-  .nullable();
-
-/**
- * GPS longitude validation (-180 to 180)
- */
-export const longitudeSchema = z
-  .number()
-  .min(-180, "Longitude must be between -180 and 180")
-  .max(180, "Longitude must be between -180 and 180")
-  .optional()
-  .nullable();
+// GPS schemas imported from ./helpers
 
 // ============================================
 // Application Form Schema (Client-side validation)

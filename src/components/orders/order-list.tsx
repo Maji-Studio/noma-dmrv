@@ -196,7 +196,7 @@ export function OrderList() {
   const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setStatusFilter(""); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || facilityFilter || statusFilter;
 
-  const columns = useMemo(() => createColumns((order) => openEdit(order), handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   if (fetchError) {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load orders"} /></div>;

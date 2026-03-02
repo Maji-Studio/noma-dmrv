@@ -185,7 +185,7 @@ export function SupplierList() {
   const openEdit = (supplier: SupplierWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   if (fetchError) {
     return (

@@ -156,7 +156,7 @@ export function FacilityList() {
   const clearFilters = () => { setSearchQuery(""); setCountryFilter(""); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || countryFilter;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   if (fetchError) {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load facilities"} /></div>;

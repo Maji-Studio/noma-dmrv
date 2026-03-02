@@ -52,7 +52,14 @@ export const feedstockDeliveryFormSchema = z.object({
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   deliveryDate: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]),
   supplierId: z.string().min(1, "Please select a supplier").uuid("Please select a valid supplier"),
 
@@ -132,7 +139,14 @@ export const updateFeedstockDeliverySchema = z.object({
   facilityId: z.string().uuid().optional(),
   deliveryDate: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]).optional(),
   supplierId: z.string().uuid().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),

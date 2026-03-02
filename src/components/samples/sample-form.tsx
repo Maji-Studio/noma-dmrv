@@ -16,7 +16,6 @@
 
 import { numericValue, integerValue } from "@/lib/form-utils";
 
-import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect } from "@/components/forms";
@@ -73,7 +72,6 @@ export function SampleForm({
     handleSubmit,
     control,
     watch,
-    setValue,
     formState: { errors },
   } = useForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,20 +133,19 @@ export function SampleForm({
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
 
-  // Auto-calculate H:C org ratio when hydrogen and organic carbon change
-  useEffect(() => {
-    const hToCRatio = calculateHToCOrgRatio(
-      watchedHydrogenPercent as number | null,
-      watchedOrganicCarbonPercent as number | null
-    );
-    if (hToCRatio !== null) {
-      setValue("hToCOrgRatio", parseFloat(hToCRatio.toFixed(4)));
-    }
-  }, [watchedHydrogenPercent, watchedOrganicCarbonPercent, setValue]);
+  // Derive H:C org ratio from watched values (no useEffect needed)
+  const calculatedHToCRatio = calculateHToCOrgRatio(
+    watchedHydrogenPercent as number | null,
+    watchedOrganicCarbonPercent as number | null
+  );
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
   const handleFormSubmit = handleSubmit((data) => {
+    // Inject calculated H:C ratio at submit time
+    if (calculatedHToCRatio !== null) {
+      data.hToCOrgRatio = parseFloat(calculatedHToCRatio.toFixed(4));
+    }
     onSubmit(data as unknown as SampleFormData);
   });
 
@@ -637,11 +634,10 @@ export function SampleForm({
                   type="number"
                   step="0.0001"
                   placeholder="Auto-calculated"
-                  disabled={isSubmitting}
+                  disabled
+                  readOnly
+                  value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
                   error={!!errors.hToCOrgRatio}
-                  {...register("hToCOrgRatio", {
-                    setValueAs: numericValue,
-                  })}
                 />
               </FormField>
 
