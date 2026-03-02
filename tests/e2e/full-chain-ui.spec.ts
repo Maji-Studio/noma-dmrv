@@ -10,42 +10,12 @@
  * from the auth fixtures.
  */
 import { test, expect } from "./fixtures";
-import type { Page } from "@playwright/test";
-
-// ============================================
-// Helpers
-// ============================================
-
-async function waitForSideSheet(page: Page) {
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
-}
-
-async function waitForSideSheetClose(page: Page) {
-  await page.waitForSelector('[role="dialog"]', {
-    state: "hidden",
-    timeout: 15000,
-  });
-}
-
-/** Click an EntitySelect trigger scoped to a field label within the dialog, then click an option by ID */
-async function selectEntityById(page: Page, fieldLabel: string, optionId: string) {
-  const dialog = page.locator('[role="dialog"]');
-  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
-  const fieldContainer = label.locator("..");
-  await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
-  await page.waitForSelector('[data-testid="entity-select-listbox"]', { timeout: 10000 });
-  await page.click(`[data-testid="entity-option-${optionId}"]`);
-}
-
-/** Click an EntitySelect trigger scoped to a field label within the dialog, then click the first option */
-async function selectFirstEntity(page: Page, fieldLabel: string) {
-  const dialog = page.locator('[role="dialog"]');
-  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
-  const fieldContainer = label.locator("..");
-  await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
-  await page.waitForSelector('[data-testid="entity-select-listbox"]', { timeout: 10000 });
-  await page.locator('[role="option"]').first().click();
-}
+import {
+  waitForSideSheet,
+  waitForSideSheetClose,
+  selectEntity as selectEntityById,
+  selectFirstEntity,
+} from "./fixtures/page-helpers";
 
 // ============================================
 // Full Chain Smoke Test
@@ -76,7 +46,11 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("Create Facility")');
       await waitForSideSheetClose(page);
 
-      await expect(page.getByText(`Chain Facility ${runId}`)).toBeVisible();
+      // Search for the new facility (list may be paginated)
+      const facilitySearch = page.getByPlaceholder(/search/i);
+      await facilitySearch.fill(`Chain Facility ${runId}`);
+      await page.waitForTimeout(500);
+      await expect(page.getByText(`Chain Facility ${runId}`)).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 2. REACTOR ────────────────────────────────────────
@@ -107,7 +81,11 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("Create Reactor")');
       await waitForSideSheetClose(page);
 
-      await expect(page.getByText(`Chain Reactor ${runId}`)).toBeVisible();
+      // Search for the new reactor (list may be paginated)
+      const reactorSearch = page.getByPlaceholder(/search/i);
+      await reactorSearch.fill(`Chain Reactor ${runId}`);
+      await page.waitForTimeout(500);
+      await expect(page.getByText(`Chain Reactor ${runId}`)).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 3. PRODUCTION RUN ─────────────────────────────────
@@ -259,6 +237,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       }
 
       await page.fill('input[name="biocharAppliedTons"]', "5");
+      await page.fill('input[name="biocharAppliedDryTons"]', "4.5");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 
@@ -295,6 +274,8 @@ test.describe("Full Chain UI Smoke Test", () => {
       }
 
       await page.selectOption('select[name="durabilityOption"]', "200_year");
+      // H:Corg ratio is required for 200-year durability
+      await page.fill('input[name="hToCorgRatio"]', "0.4");
 
       await page.click('button:has-text("Create Credit Batch")');
       await waitForSideSheetClose(page);

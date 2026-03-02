@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { numericValue } from "@/lib/form-utils";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
@@ -193,10 +195,7 @@ export function DeliveryForm({
               disabled={isSubmitting}
               error={!!errors.deliveredWetMassKg}
               {...register("deliveredWetMassKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -219,10 +218,7 @@ export function DeliveryForm({
               disabled={isSubmitting}
               error={!!errors.massDryKg}
               {...register("massDryKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -241,10 +237,7 @@ export function DeliveryForm({
               disabled={isSubmitting}
               error={!!errors.moistureContentPercent}
               {...register("moistureContentPercent", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>

@@ -38,45 +38,24 @@ export const biocharProductFormSchema = z.object({
   // Optional date field
   productionDate: z.union([
     z.date(),
-    z.string().transform((val) => (val === "" ? undefined : new Date(val))),
+    z.string().transform((val) => {
+      if (val === "") return undefined;
+      const date = new Date(val);
+      if (isNaN(date.getTime())) return undefined;
+      return date;
+    }),
   ]).optional(),
 
   // Status field
   status: z.enum(biocharProductStatusValues).default("testing"),
 
-  // Optional relation fields
-  linkedProductionRunId: z
-    .string()
-    .uuid()
-    .optional()
-    .nullable()
-    .or(emptyToNull),
-  storageLocationId: z
-    .string()
-    .uuid()
-    .optional()
-    .nullable()
-    .or(emptyToNull),
+  // Optional relation fields (empty string → null, otherwise must be valid UUID)
+  linkedProductionRunId: emptyToNull.or(z.string().uuid("Invalid production run")).nullable().optional(),
+  storageLocationId: emptyToNull.or(z.string().uuid("Invalid storage location")).nullable().optional(),
 
-  // Measurement fields
-  massKg: z.union([
-    z.number().min(0, "Mass must be a positive number"),
-    z.string().transform((val) => {
-      if (val === "") return null;
-      const num = parseFloat(val);
-      return isNaN(num) ? null : num;
-    }).pipe(z.number().min(0, "Mass must be a positive number").nullable()),
-    z.null(),
-  ]).optional().nullable(),
-  densityKgM3: z.union([
-    z.number().min(0, "Density must be a positive number"),
-    z.string().transform((val) => {
-      if (val === "") return null;
-      const num = parseFloat(val);
-      return isNaN(num) ? null : num;
-    }).pipe(z.number().min(0, "Density must be a positive number").nullable()),
-    z.null(),
-  ]).optional().nullable(),
+  // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
+  massKg: z.number().min(0, "Mass must be a positive number").nullable().optional(),
+  densityKgM3: z.number().min(0, "Density must be a positive number").nullable().optional(),
 });
 
 // ============================================
@@ -104,11 +83,16 @@ export const updateBiocharProductSchema = z.object({
   formulationId: z.string().uuid().optional(),
   productionDate: z.union([
     z.date(),
-    z.string().transform((val) => (val === "" ? undefined : new Date(val))),
+    z.string().transform((val) => {
+      if (val === "") return undefined;
+      const date = new Date(val);
+      if (isNaN(date.getTime())) return undefined;
+      return date;
+    }),
   ]).optional(),
   status: z.enum(biocharProductStatusValues).optional(),
-  linkedProductionRunId: z.string().uuid().optional().nullable().or(emptyToNull),
-  storageLocationId: z.string().uuid().optional().nullable().or(emptyToNull),
+  linkedProductionRunId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   massKg: z.number().min(0).optional().nullable(),
   densityKgM3: z.number().min(0).optional().nullable(),
 });

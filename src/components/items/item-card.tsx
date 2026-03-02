@@ -22,7 +22,7 @@ export function ItemCard({ item, onEdit, onArchive }: ItemCardProps) {
             </p>
           )}
           <div className="flex items-center gap-16 text-xs text-[var(--color-text-tertiary)]">
-            <span className="px-16 py-16 bg-[var(--color-bg-secondary)]rounded-4">
+            <span className="px-16 py-16 bg-[var(--color-bg-secondary)] rounded-4">
               {item.status}
             </span>
             <span>

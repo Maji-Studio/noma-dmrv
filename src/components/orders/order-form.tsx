@@ -4,6 +4,8 @@
  */
 "use client";
 
+import { numericValue } from "@/lib/form-utils";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
@@ -326,10 +328,7 @@ export function OrderForm({
               disabled={isSubmitting}
               error={!!errors.quantityKg}
               {...register("quantityKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -347,10 +346,7 @@ export function OrderForm({
               disabled={isSubmitting}
               error={!!errors.value}
               {...register("value", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>

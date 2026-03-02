@@ -81,7 +81,7 @@ export const productionRunFormSchema = z.object({
   ]),
 
   // Operator (optional)
-  operatorId: z.string().uuid().optional().nullable().or(emptyToNull),
+  operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Multi-select feedstocks (M:M relationship)
   feedstocks: z
@@ -128,8 +128,8 @@ export const productionRunFormSchema = z.object({
     z.string().transform((val) => (val === "" ? null : parseFloat(val))),
     z.null(),
   ]).optional().nullable(),
-  biocharStorageLocationId: z.string().uuid().optional().nullable().or(emptyToNull),
-  feedstockStorageLocationId: z.string().uuid().optional().nullable().or(emptyToNull),
+  biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Metadata
   plcDataFileUrl: z
@@ -176,7 +176,7 @@ export const updateProductionRunSchema = z.object({
     z.date(),
     z.string().transform((val) => new Date(val)),
   ]).optional(),
-  operatorId: z.string().uuid().optional().nullable().or(emptyToNull),
+  operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstocks: z.array(productionRunFeedstockSchema).min(1).optional(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
   residenceTimeMinutes: z.number().int().positive().optional().nullable(),
@@ -185,8 +185,8 @@ export const updateProductionRunSchema = z.object({
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
   biocharOutputKg: z.number().positive().optional().nullable(),
-  biocharStorageLocationId: z.string().uuid().optional().nullable().or(emptyToNull),
-  feedstockStorageLocationId: z.string().uuid().optional().nullable().or(emptyToNull),
+  biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   plcDataFileUrl: z.string().max(2000).optional().nullable(),
 });
 

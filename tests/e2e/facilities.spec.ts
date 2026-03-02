@@ -56,8 +56,13 @@ test.describe("Facility + Reactor UI CRUD", () => {
       timeout: 10000,
     });
 
-    // Verify the new facility appears in the list
-    await expect(page.getByText(facilityName)).toBeVisible();
+    // Search for the new facility (list may be paginated with many entries)
+    const searchBox = page.getByPlaceholder(/search/i);
+    await searchBox.fill(facilityName);
+    await page.waitForTimeout(500); // debounce
+
+    // Verify the new facility appears in the filtered list
+    await expect(page.getByText(facilityName)).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;
   });
@@ -111,8 +116,19 @@ test.describe("Facility + Reactor UI CRUD", () => {
       timeout: 10000,
     });
 
-    // Verify the new reactor appears in the list
-    await expect(page.getByText(reactorIdentifier)).toBeVisible();
+    // Wait for the list to reload after mutation
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1000);
+
+    // Search for the new reactor (list may be paginated with many entries)
+    const searchBox = page.getByPlaceholder(/search/i);
+    await searchBox.click();
+    await searchBox.fill(reactorIdentifier);
+    // Wait for debounce + server round-trip
+    await page.waitForTimeout(1500);
+
+    // Verify the new reactor appears in the filtered list
+    await expect(page.getByText(reactorIdentifier)).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;
   });

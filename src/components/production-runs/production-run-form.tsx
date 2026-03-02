@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { numericValue, integerValue } from "@/lib/form-utils";
+
 import { useEffect } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -372,8 +374,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
               {...register("feedingRateKgHr", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -392,8 +393,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.residenceTimeMinutes}
               {...register("residenceTimeMinutes", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseInt(v, 10),
+                setValueAs: integerValue,
               })}
             />
           </FormField>
@@ -420,8 +420,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
               {...register("dieselOperationLiters", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -439,8 +438,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
               {...register("dieselGensetLiters", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -458,8 +456,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
               {...register("preprocessingFuelLiters", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -477,8 +474,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.electricityKwh}
               {...register("electricityKwh", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -505,8 +501,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.biocharOutputKg}
               {...register("biocharOutputKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined ? undefined : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>

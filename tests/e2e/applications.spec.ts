@@ -7,19 +7,7 @@
  * Chain: Delivery → Application → Credit Batch
  */
 import { test, expect } from "./fixtures";
-
-// Helper: wait for side sheet to open
-async function waitForSideSheet(page: import("@playwright/test").Page) {
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
-}
-
-// Helper: wait for side sheet to close (success indicator)
-async function waitForSideSheetClose(page: import("@playwright/test").Page) {
-  await page.waitForSelector('[role="dialog"]', {
-    state: "hidden",
-    timeout: 15000,
-  });
-}
+import { waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
 
 test.describe("Application + Credit Batch UI CRUD", () => {
   test("create application via UI form", async ({
@@ -96,8 +84,9 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       await deliverySelect.selectOption(firstDeliveryValue);
     }
 
-    // Fill optional fields
+    // Fill required and optional fields
     await page.fill('input[name="biocharAppliedTons"]', "5");
+    await page.fill('input[name="biocharAppliedDryTons"]', "4.5");
     await page.fill('input[name="fieldSizeHa"]', "2");
     await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
     await page.fill('input[name="cropType"]', "maize");
@@ -148,6 +137,9 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Durability section (defaults to 200_year)
     await page.selectOption('select[name="durabilityOption"]', "200_year");
+    // H:Corg ratio is required for 200-year durability (conditionally rendered)
+    await page.waitForSelector('input[name="hToCorgRatio"]', { timeout: 5000 });
+    await page.fill('input[name="hToCorgRatio"]', "0.4");
 
     // Submit
     await page.click('button:has-text("Create Credit Batch")');

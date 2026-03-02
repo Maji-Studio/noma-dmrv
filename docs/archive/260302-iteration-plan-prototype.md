@@ -19,6 +19,59 @@ Walk the full traceability chain: **Facility → Reactor → Production Run → 
 
 Baseline: 107 e2e passed (2 skipped), 28 unit passed.
 
+## Verification Run (2026-03-02)
+
+Running all tests exposed **form/test drift** — forms had gained required fields and the tests hadn't caught up. Summary of fixes applied:
+
+### Bugs found and fixed in app code
+
+| Bug | File | Fix |
+|-----|------|-----|
+| Delivery code auto-gen unreachable — `createDeliverySchema.parse()` requires `min(1)` but runs BEFORE `generateNextCode()` fallback, so empty code always fails validation | `src/fn/deliveries.ts` | Move auto-gen before `parse()` |
+| Sample code auto-gen unreachable — same pattern as delivery | `src/fn/samples.ts` | Move auto-gen before `parse()` |
+| Sample form schema rejects empty code — `sampleFormSchema.sampleCode` has `min(1)` but UI says "Auto-generated if empty" | `src/schemas/samples.ts` | Changed to `.optional().or(z.literal(""))` to match other form schemas |
+
+### Test fixes applied
+
+| Test file | Issue | Fix |
+|-----------|-------|-----|
+| `applications.spec.ts` | Order form missing `customerLocationId` and `biocharProductId` (required fields added to form since tests written) | Added `selectOption` calls for both fields, with wait for cascading customer location load |
+| `applications.spec.ts` | Application form missing `biocharAppliedDryTons` (required field) | Added `page.fill` for the field |
+| `applications.spec.ts` | Credit batch form `hToCorgRatio` required when durability=200_year | Added `page.fill` with `waitForSelector` (conditionally rendered) |
+| `production-runs.spec.ts` | EntitySelect locator matched table headers instead of form fields — `<label>` element doesn't contain the EntitySelect trigger (they're siblings) | Changed to `label.locator("..")` (parent div) pattern, scoped to `[role="dialog"]` |
+| `production-runs.spec.ts` | Reactor list has many leftover entries from prior runs, new reactor not on page 1 | Simplified: use seeded reactor instead of creating a new one |
+| `full-chain-ui.spec.ts` | Same EntitySelect locator bug + missing `biocharProductId` + missing `biocharAppliedDryTons` + wrong `hToCorgRatio` field name | Applied same fixes as above |
+| `seed-chain-data.ts` | Cleanup FK error — deleting `biochar_products` fails when UI-created orders reference them | Added facility-scoped cascade cleanup: orders → deliveries → applications → credit batches → production runs → samples before deleting seeded entities |
+
+### Current test results
+
+```
+69 passed, 1 failed, 2 skipped
+```
+
+**Remaining failure: `create sample via UI form`** — The sample form fills correctly (production run selected, carbon values entered) and the submit button is clicked, but the side sheet doesn't close. No visible validation errors. Root cause still under investigation — likely a hidden form validation error or server-side rejection not surfaced in the UI. The sample form has many accordion sections and complex validation; may need deeper debugging of the form submission flow.
+
+### Round 2: Biochar product form validation bugs
+
+User tried to create a biochar product through the UI and hit multiple validation errors.
+
+| Bug | File | Fix |
+|-----|------|-----|
+| Density field shows "expected number, received NaN" when left empty — `valueAsNumber: true` converts `""` to `NaN`, which fails all Zod union branches (`z.number()` rejects NaN, `z.string()` doesn't match, `z.null()` doesn't match) | `biochar-product-form.tsx` | Replaced `valueAsNumber: true` with `setValueAs: v => v === "" ? null : Number(v)` for both `massKg` and `densityKgM3` |
+| Same NaN risk on mass field (worked in user's test only because they entered a value) | `biochar-product-form.tsx` | Same `setValueAs` fix |
+| Zod schema for measurements was over-complex — 3-branch union to handle strings, numbers, and null no longer needed after `setValueAs` handles conversion | `schemas/biochar-products.ts` | Simplified to `z.number().min(0).nullable().optional()` |
+| Optional UUID fields show "Invalid UUID" when empty — `z.string().uuid().optional().nullable().or(emptyToNull)` tries UUID first on `""`, which fails with misleading error before `emptyToNull` gets a chance | `schemas/biochar-products.ts` | Reordered to `emptyToNull.or(z.string().uuid()).nullable().optional()` — tries empty-to-null first |
+| Facility/formulation showing "Please select a valid facility" despite being selected — **Root cause: Zod v4 strict UUID validation.** Seed `makeId` produces `00000000-0000-0000-0000-...` which lacks version/variant bits required by Zod v4's RFC 4122 regex | `src/db/seed.ts` | Fix `makeId` to `00000000-0000-4000-a000-...` and re-seed |
+
+### Items to clean up (found in review)
+
+| Issue | File | Status |
+|-------|------|--------|
+| ~~**DEBUG logging left in** — `console.log("[createFeedstockDelivery]...")`~~ | `src/fn/feedstock-deliveries.ts` | **Done** — removed |
+| **Feedstock delivery form still uses `valueAsNumber: true`** — same NaN bug pattern, mitigated by `nanToNull` wrapper in `handleFormSubmit` but inconsistent with the `setValueAs` fix | `feedstock-delivery-form.tsx` | Works, unify later |
+| **Seed file imports `@noble/hashes`** — runtime dep for dev tooling | `src/db/seed.ts` | Low priority |
+| **`waitForTimeout` in E2E tests** — fragile on slow CI | `tests/e2e/*.spec.ts` | Low priority |
+
 ## Core Chain (8 entities, in dependency order)
 
 These are the entities users need to create through the UI to walk the full chain:

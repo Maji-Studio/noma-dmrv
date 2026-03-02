@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { numericValue } from "@/lib/form-utils";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
@@ -174,10 +176,7 @@ export function StorageLocationForm({
             disabled={isSubmitting}
             error={!!errors.capacityKg}
             {...register("capacityKg", {
-              setValueAs: (v) =>
-                v === "" || v === null || v === undefined
-                  ? undefined
-                  : parseFloat(v),
+              setValueAs: numericValue,
             })}
           />
         </FormField>
@@ -204,10 +203,7 @@ export function StorageLocationForm({
               disabled={isSubmitting}
               error={!!errors.latitude}
               {...register("latitude", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -226,10 +222,7 @@ export function StorageLocationForm({
               disabled={isSubmitting}
               error={!!errors.longitude}
               {...register("longitude", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>

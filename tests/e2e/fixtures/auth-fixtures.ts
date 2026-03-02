@@ -16,37 +16,12 @@ import { Pool } from "pg";
 import { eq, inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
-import { scryptAsync } from "@noble/hashes/scrypt.js";
-import { bytesToHex } from "@noble/hashes/utils.js";
 import {
   seedChainData,
   cleanupChainData,
   type SeededChainData,
 } from "./seed-chain-data";
-
-// Better Auth uses scrypt for password hashing with specific config
-const scryptConfig = {
-  N: 16384,
-  r: 16,
-  p: 1,
-  dkLen: 64
-};
-
-/**
- * Hash password using Better Auth's scrypt implementation
- * Format: {salt}:{key}
- */
-async function hashPasswordForBetterAuth(password: string): Promise<string> {
-  const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-  const key = await scryptAsync(password.normalize("NFKC"), salt, {
-    N: scryptConfig.N,
-    p: scryptConfig.p,
-    r: scryptConfig.r,
-    dkLen: scryptConfig.dkLen,
-    maxmem: 128 * scryptConfig.N * scryptConfig.r * 2
-  });
-  return `${salt}:${bytesToHex(key)}`;
-}
+import { hashPassword } from "./hash-password";
 
 // Types for user roles
 export type UserRole = "admin" | "operator" | "lab_technician" | "viewer";
@@ -142,7 +117,7 @@ export async function seedTestUsers(
     const seededUsers: Record<UserRole, TestUser> = {} as Record<UserRole, TestUser>;
 
     // Hash passwords using Better Auth's scrypt format
-    const passwordHash = await hashPasswordForBetterAuth("TestPassword123!");
+    const passwordHash = await hashPassword("TestPassword123!");
 
     await db.transaction(async (tx) => {
       // Create users

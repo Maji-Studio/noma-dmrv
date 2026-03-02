@@ -57,29 +57,45 @@ export const feedstockDeliveryFormSchema = z.object({
   supplierId: z.string().min(1, "Please select a supplier").uuid("Please select a valid supplier"),
 
   // Optional transport fields
-  driverId: z.string().uuid().optional().nullable().or(emptyToNull),
-  vehicleId: z.string().uuid().optional().nullable().or(emptyToNull),
+  driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   gpsLatitude: z.union([
     z.number().min(-90).max(90),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
   gpsLongitude: z.union([
     z.number().min(-180).max(180),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
 
   // Feedstock details
-  feedstockTypeId: z.string().uuid().optional().nullable().or(emptyToNull),
+  feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   weightKg: z.union([
     z.number().min(0, "Weight must be positive"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
   moisturePercent: z.union([
     z.number().min(0, "Moisture must be between 0 and 100").max(100, "Moisture must be between 0 and 100"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.string().transform((val) => {
+      if (val === "") return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }),
     z.null(),
   ]).optional().nullable(),
 
@@ -119,11 +135,11 @@ export const updateFeedstockDeliverySchema = z.object({
     z.string().transform((val) => new Date(val)),
   ]).optional(),
   supplierId: z.string().uuid().optional(),
-  driverId: z.string().uuid().optional().nullable().or(emptyToNull),
-  vehicleId: z.string().uuid().optional().nullable().or(emptyToNull),
+  driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
-  feedstockTypeId: z.string().uuid().optional().nullable().or(emptyToNull),
+  feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   weightKg: z.number().min(0).optional().nullable(),
   moisturePercent: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),

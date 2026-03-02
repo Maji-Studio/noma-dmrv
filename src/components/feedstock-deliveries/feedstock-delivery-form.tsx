@@ -5,34 +5,20 @@
  */
 "use client";
 
-import { useForm, type Control } from "react-hook-form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { numericValue } from "@/lib/form-utils";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
-import type { FeedstockDeliveryFormData } from "@/schemas/feedstock-deliveries";
+import {
+  feedstockDeliveryFormSchema,
+  type FeedstockDeliveryFormData,
+} from "@/schemas/feedstock-deliveries";
 import type { FeedstockDeliveryWithRelations } from "@/data-access/feedstock-deliveries";
 import { DriverQuickAddDialog } from "@/components/forms/entity-select/driver-quick-add-dialog";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
-
-// ============================================
-// Internal Form Values Type (uses string for date inputs)
-// ============================================
-
-interface FormValues {
-  code: string;
-  facilityId: string;
-  deliveryDate: string;
-  supplierId: string;
-  driverId: string;
-  vehicleId: string;
-  gpsLatitude: number | null;
-  gpsLongitude: number | null;
-  feedstockTypeId: string;
-  weightKg: number | null;
-  moisturePercent: number | null;
-  notes: string;
-}
 
 // ============================================
 // Component
@@ -74,7 +60,8 @@ export function FeedstockDeliveryForm({
     control,
     setValue,
     formState: { errors },
-  } = useForm<FormValues>({
+  } = useForm<FeedstockDeliveryFormData>({
+    resolver: zodResolver(feedstockDeliveryFormSchema),
     defaultValues: {
       code: delivery?.code ?? suggestedCode ?? "",
       facilityId: delivery?.facilityId ?? "",
@@ -96,26 +83,8 @@ export function FeedstockDeliveryForm({
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    // Transform form data to match the expected schema
-    const formData: FeedstockDeliveryFormData = {
-      code: data.code,
-      facilityId: data.facilityId,
-      deliveryDate: new Date(data.deliveryDate),
-      supplierId: data.supplierId,
-      driverId: data.driverId || null,
-      vehicleId: data.vehicleId || null,
-      gpsLatitude: data.gpsLatitude,
-      gpsLongitude: data.gpsLongitude,
-      feedstockTypeId: data.feedstockTypeId || null,
-      weightKg: data.weightKg,
-      moisturePercent: data.moisturePercent,
-      notes: data.notes || "",
-    };
-    onSubmit(formData);
+    onSubmit(data);
   });
-
-  // Cast control for FormEntitySelect compatibility
-  const formControl = control as unknown as Control<Record<string, unknown>>;
 
   return (
     <>
@@ -159,7 +128,7 @@ export function FeedstockDeliveryForm({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
-              control={formControl}
+              control={control}
               name="facilityId"
               label="Facility"
               entityType="facility"
@@ -168,7 +137,7 @@ export function FeedstockDeliveryForm({
             />
 
             <FormEntitySelect
-              control={formControl}
+              control={control}
               name="supplierId"
               label="Supplier"
               entityType="supplier"
@@ -186,7 +155,7 @@ export function FeedstockDeliveryForm({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
-              control={formControl}
+              control={control}
               name="driverId"
               label="Driver (optional)"
               entityType="driver"
@@ -198,7 +167,7 @@ export function FeedstockDeliveryForm({
             />
 
             <FormEntitySelect
-              control={formControl}
+              control={control}
               name="vehicleId"
               label="Vehicle (optional)"
               entityType="vehicle"
@@ -224,7 +193,7 @@ export function FeedstockDeliveryForm({
                 placeholder="e.g., -1.2921"
                 disabled={isSubmitting}
                 error={!!errors.gpsLatitude}
-                {...register("gpsLatitude", { valueAsNumber: true })}
+                {...register("gpsLatitude", { setValueAs: numericValue })}
               />
             </FormField>
 
@@ -241,7 +210,7 @@ export function FeedstockDeliveryForm({
                 placeholder="e.g., 36.8219"
                 disabled={isSubmitting}
                 error={!!errors.gpsLongitude}
-                {...register("gpsLongitude", { valueAsNumber: true })}
+                {...register("gpsLongitude", { setValueAs: numericValue })}
               />
             </FormField>
           </div>
@@ -254,7 +223,7 @@ export function FeedstockDeliveryForm({
           </h3>
 
           <FormEntitySelect
-            control={formControl}
+            control={control}
             name="feedstockTypeId"
             label="Feedstock Type (optional)"
             entityType="feedstockType"
@@ -280,7 +249,7 @@ export function FeedstockDeliveryForm({
                 placeholder="e.g., 1500"
                 disabled={isSubmitting}
                 error={!!errors.weightKg}
-                {...register("weightKg", { valueAsNumber: true })}
+                {...register("weightKg", { setValueAs: numericValue })}
               />
             </FormField>
 
@@ -299,7 +268,7 @@ export function FeedstockDeliveryForm({
                 placeholder="e.g., 35"
                 disabled={isSubmitting}
                 error={!!errors.moisturePercent}
-                {...register("moisturePercent", { valueAsNumber: true })}
+                {...register("moisturePercent", { setValueAs: numericValue })}
               />
             </FormField>
           </div>

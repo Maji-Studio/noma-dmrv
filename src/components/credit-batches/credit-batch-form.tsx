@@ -11,6 +11,8 @@
  */
 "use client";
 
+import { numericValue } from "@/lib/form-utils";
+
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect } from "@/components/forms";
@@ -360,10 +362,7 @@ export function CreditBatchForm({
                 disabled={isSubmitting}
                 error={!!errors.hToCorgRatio}
                 {...register("hToCorgRatio", {
-                  setValueAs: (v) =>
-                    v === "" || v === null || v === undefined
-                      ? undefined
-                      : parseFloat(v),
+                  setValueAs: numericValue,
                 })}
               />
             </FormField>
@@ -395,10 +394,7 @@ export function CreditBatchForm({
                   disabled={isSubmitting}
                   error={!!errors.meanRandomReflectancePercent}
                   {...register("meanRandomReflectancePercent", {
-                    setValueAs: (v) =>
-                      v === "" || v === null || v === undefined
-                        ? undefined
-                        : parseFloat(v),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -417,10 +413,7 @@ export function CreditBatchForm({
                   disabled={isSubmitting}
                   error={!!errors.stdRandomReflectance}
                   {...register("stdRandomReflectance", {
-                    setValueAs: (v) =>
-                      v === "" || v === null || v === undefined
-                        ? undefined
-                        : parseFloat(v),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -441,10 +434,7 @@ export function CreditBatchForm({
                   disabled={isSubmitting}
                   error={!!errors.meanNonReactiveCarbonPercent}
                   {...register("meanNonReactiveCarbonPercent", {
-                    setValueAs: (v) =>
-                      v === "" || v === null || v === undefined
-                        ? undefined
-                        : parseFloat(v),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -463,10 +453,7 @@ export function CreditBatchForm({
                   disabled={isSubmitting}
                   error={!!errors.stdNonReactiveCarbonPercent}
                   {...register("stdNonReactiveCarbonPercent", {
-                    setValueAs: (v) =>
-                      v === "" || v === null || v === undefined
-                        ? undefined
-                        : parseFloat(v),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -488,10 +475,7 @@ export function CreditBatchForm({
             disabled={isSubmitting}
             error={!!errors.fDurableCalculated}
             {...register("fDurableCalculated", {
-              setValueAs: (v) =>
-                v === "" || v === null || v === undefined
-                  ? undefined
-                  : parseFloat(v),
+              setValueAs: numericValue,
             })}
           />
         </FormField>
@@ -521,10 +505,7 @@ export function CreditBatchForm({
               disabled={isSubmitting}
               error={!!errors.totalCo2eStoredTons}
               {...register("totalCo2eStoredTons", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -543,10 +524,7 @@ export function CreditBatchForm({
               disabled={isSubmitting}
               error={!!errors.totalCo2eEmissionsTons}
               {...register("totalCo2eEmissionsTons", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -565,10 +543,7 @@ export function CreditBatchForm({
               disabled={isSubmitting}
               error={!!errors.totalCo2eCounterfactualTons}
               {...register("totalCo2eCounterfactualTons", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -588,10 +563,7 @@ export function CreditBatchForm({
             disabled={isSubmitting}
             error={!!errors.bufferPoolPercent}
             {...register("bufferPoolPercent", {
-              setValueAs: (v) =>
-                v === "" || v === null || v === undefined
-                  ? undefined
-                  : parseFloat(v),
+              setValueAs: numericValue,
             })}
           />
         </FormField>
@@ -636,10 +608,7 @@ export function CreditBatchForm({
               disabled={isSubmitting}
               error={!!errors.weightTons}
               {...register("weightTons", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -660,10 +629,7 @@ export function CreditBatchForm({
               disabled={isSubmitting}
               error={!!errors.value}
               {...register("value", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
