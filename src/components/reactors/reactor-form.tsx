@@ -6,6 +6,8 @@
  */
 "use client";
 
+import { numericValue } from "@/lib/form-utils";
+
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
@@ -226,10 +228,7 @@ export function ReactorForm({
               disabled={isSubmitting}
               error={!!errors.capacityKg}
               {...register("capacityKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: numericValue,
               })}
             />
           </FormField>

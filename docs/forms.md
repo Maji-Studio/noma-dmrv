@@ -335,6 +335,30 @@ When migrating an existing form to React Hook Form:
 - [ ] Test success and error paths
 - [ ] Verify accessibility (keyboard navigation, screen reader)
 
+## Numeric Input Coercion
+
+HTML inputs always return strings. Use the shared utilities from `@/lib/form-utils` with `setValueAs` to coerce values before they reach Zod validation.
+
+**Never use `valueAsNumber: true`** — it converts empty strings to `NaN`, which fails all Zod branches.
+
+```typescript
+import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-utils";
+
+// Optional number field (empty → undefined, otherwise parseFloat)
+{...register("fieldSizeHa", { setValueAs: numericValue })}
+
+// Nullable number field (empty → null, otherwise Number)
+{...register("massKg", { setValueAs: nullableNumericValue })}
+
+// Optional integer field (empty → undefined, otherwise parseInt)
+{...register("residenceTimeMinutes", { setValueAs: integerValue })}
+```
+
+**Which to use:**
+- `numericValue` — most common, for optional numeric fields with `z.number().optional()`
+- `nullableNumericValue` — for nullable fields with `z.number().nullable().optional()`
+- `integerValue` — for integer-only fields
+
 ## Examples
 
 See these files for complete examples:

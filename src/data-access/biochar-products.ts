@@ -198,13 +198,13 @@ export async function getBiocharProducts(
     updatedAt: row.updatedAt,
     facility: {
       id: row.facilityId,
-      code: row.facilityCode!,
-      name: row.facilityName!,
+      code: row.facilityCode ?? "",
+      name: row.facilityName ?? "",
     },
     formulation: {
       id: row.formulationId,
-      code: row.formulationCode!,
-      name: row.formulationName!,
+      code: row.formulationCode ?? "",
+      name: row.formulationName ?? "",
     },
     linkedProductionRun: row.linkedProductionRunId && row.productionRunCode
       ? {
@@ -216,7 +216,7 @@ export async function getBiocharProducts(
       ? {
           id: row.storageLocationId,
           code: row.storageLocationCode,
-          name: row.storageLocationName!,
+          name: row.storageLocationName ?? "",
         }
       : null,
   }));
@@ -289,13 +289,13 @@ export async function getBiocharProductById(
     updatedAt: row.updatedAt,
     facility: {
       id: row.facilityId,
-      code: row.facilityCode!,
-      name: row.facilityName!,
+      code: row.facilityCode ?? "",
+      name: row.facilityName ?? "",
     },
     formulation: {
       id: row.formulationId,
-      code: row.formulationCode!,
-      name: row.formulationName!,
+      code: row.formulationCode ?? "",
+      name: row.formulationName ?? "",
     },
     linkedProductionRun: row.linkedProductionRunId && row.productionRunCode
       ? {
@@ -307,7 +307,7 @@ export async function getBiocharProductById(
       ? {
           id: row.storageLocationId,
           code: row.storageLocationCode,
-          name: row.storageLocationName!,
+          name: row.storageLocationName ?? "",
         }
       : null,
   };

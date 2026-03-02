@@ -52,12 +52,13 @@ export const sampleFormSchema = z
     // === Section 1: Sample Info ===
     sampleCode: z
       .string()
-      .min(1, "Sample code is required")
       .max(50, "Code must be less than 50 characters")
       .regex(
         /^[A-Z0-9-]+$/,
         "Code must contain only uppercase letters, numbers, and hyphens"
-      ),
+      )
+      .optional()
+      .or(z.literal("")),
     productionRunId: z.string().min(1, "Please select a production run").uuid("Invalid production run"),
     samplingTime: z.union([
       z.date(),

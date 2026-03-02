@@ -360,6 +360,107 @@ pnpm install
   ```
 - For React Hook Form: use `zodResolver(schema)`
 
+### Number Fields: "expected number, received NaN"
+
+**Symptoms**
+- Empty optional number inputs show "Invalid input: expected number, received NaN"
+- Density, mass, GPS, or other numeric fields fail validation when left blank
+
+**Root Cause**
+Using `valueAsNumber: true` in `register()` converts empty strings to `NaN` (via the DOM's `input.valueAsNumber`). `NaN` is type `number` in JS but Zod's `z.number()` rejects it, and it won't match `z.string()` or `z.null()` branches either.
+
+**Fix**
+Use `setValueAs` instead of `valueAsNumber` to convert empty strings to `null`:
+```typescript
+// BAD - empty input becomes NaN, fails all Zod union branches
+{...register("massKg", { valueAsNumber: true })}
+
+// GOOD - empty input becomes null, non-empty becomes number
+{...register("massKg", { setValueAs: (v: string) => v === "" ? null : Number(v) })}
+```
+
+And simplify the Zod schema (no need for string transform branch):
+```typescript
+// BAD - complex union to handle strings, numbers, and null
+massKg: z.union([
+  z.number().min(0),
+  z.string().transform(val => val === "" ? null : parseFloat(val))
+    .pipe(z.number().min(0).nullable()),
+  z.null(),
+]).optional().nullable()
+
+// GOOD - setValueAs handles conversion, schema just validates
+massKg: z.number().min(0, "Must be positive").nullable().optional()
+```
+
+### Optional UUID Fields: "Invalid UUID" on Empty Selection
+
+**Symptoms**
+- Optional entity select fields (e.g., linked production run, storage location) show "Invalid UUID" when left empty
+- Form defaults these fields to `""` which fails `z.string().uuid()`
+
+**Root Cause**
+Schema ordering: `z.string().uuid().optional().nullable().or(emptyToNull)` tries UUID validation first on `""`, which fails. While `.or(emptyToNull)` should catch it, the error reporting can be misleading.
+
+**Fix**
+Put `emptyToNull` first in the union so empty strings are handled before UUID validation:
+```typescript
+import { emptyToNull } from "./helpers";
+
+// BAD - tries UUID first, fails on "", error leaks
+linkedId: z.string().uuid().optional().nullable().or(emptyToNull)
+
+// GOOD - catches "" first, then validates UUID
+linkedId: emptyToNull.or(z.string().uuid("Invalid selection")).nullable().optional()
+```
+
+### Zod v4 `.uuid()` Rejects Seed Data IDs
+
+**Symptoms**
+- EntitySelect fields (facility, reactor, feedstock) show "Please select a valid facility/reactor/feedstock" on form submit
+- Values appear correctly selected in the UI but fail validation
+- Multiple UUID fields fail simultaneously
+- Error type is `invalid_format`, not `too_small`
+
+**Root Cause**
+Zod v4's `.uuid()` enforces strict RFC 4122 validation, checking version (position 13 must be `1`-`8`) and variant (position 17 must be `8`-`b`) bits. Zod v3 only checked the hex format pattern. Demo seed data uses sequential pseudo-UUIDs like `00000000-0000-0000-0000-000000000160` which lack valid version/variant bits and fail this stricter check.
+
+**Fix — use a relaxed UUID-format regex in schemas**
+
+Replace `.uuid()` with a custom regex that accepts any 8-4-4-4-12 hex string:
+```typescript
+// src/schemas/helpers.ts
+export const uuidFormat = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  "Please select a valid option"
+);
+```
+
+Then use `uuidFormat` instead of `z.string().uuid()` in form schemas:
+```typescript
+// BAD — rejects valid DB rows with non-RFC-4122 IDs
+facilityId: z.string().uuid("Please select a valid facility")
+
+// GOOD — accepts any UUID-shaped string from the database
+facilityId: uuidFormat
+```
+
+**Alternative fix — make seed IDs RFC 4122 compliant**
+
+Add version `4` and variant `a` bits to the seed helper:
+```typescript
+// BAD — no version/variant bits, fails Zod v4
+const makeId = (n: number) => `00000000-0000-0000-0000-${n.toString().padStart(12, '0')}`;
+
+// GOOD — version=4, variant=a, passes Zod v4
+const makeId = (n: number) => `00000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
+```
+After fixing, re-seed the database: `pnpm db:reset`
+
+**Prevention**
+- After Zod major version upgrades, test seed IDs against the UUID schema
+- Prefer the relaxed regex if you can't guarantee all IDs are RFC 4122 compliant
+
 ## Performance Issues
 
 ### Slow Page Loads

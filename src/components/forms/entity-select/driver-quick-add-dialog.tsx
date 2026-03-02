@@ -118,6 +118,16 @@ export function DriverQuickAddDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.code.trim()) {
+      setError("Code is required");
+      return;
+    }
+    if (!formData.name.trim()) {
+      setError("Name is required");
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
 

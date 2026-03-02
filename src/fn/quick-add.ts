@@ -21,10 +21,7 @@ import {
 } from "@/schemas/quick-add";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import { getUser } from "@/lib/auth/server";
-
-export type ActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
+import type { ActionResult } from "@/types/actions";
 
 // ============================================
 // Driver Quick Add

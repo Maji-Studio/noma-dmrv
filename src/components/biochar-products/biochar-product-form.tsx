@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { nullableNumericValue } from "@/lib/form-utils";
+
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect, EntitySelect } from "@/components/forms";
@@ -206,7 +208,7 @@ export function BiocharProductForm({
               placeholder="e.g., 500"
               disabled={isSubmitting}
               error={!!errors.massKg}
-              {...register("massKg", { valueAsNumber: true })}
+              {...register("massKg", { setValueAs: nullableNumericValue })}
             />
           </FormField>
 
@@ -224,7 +226,7 @@ export function BiocharProductForm({
               placeholder="e.g., 350"
               disabled={isSubmitting}
               error={!!errors.densityKgM3}
-              {...register("densityKgM3", { valueAsNumber: true })}
+              {...register("densityKgM3", { setValueAs: nullableNumericValue })}
             />
           </FormField>
         </div>

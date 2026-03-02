@@ -308,8 +308,8 @@ export async function getDeliveryWithRelations(
       ? {
           id: deliveryRow.orderId,
           code: deliveryRow.orderCode ?? "",
-          orderDate: deliveryRow.orderDate!,
-          quantityKg: deliveryRow.orderQuantityKg!,
+          orderDate: deliveryRow.orderDate ?? new Date(0),
+          quantityKg: deliveryRow.orderQuantityKg ?? 0,
           status: deliveryRow.orderStatus ?? "",
         }
       : null,

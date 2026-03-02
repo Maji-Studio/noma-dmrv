@@ -6,10 +6,7 @@
 
 import { getEntities, getEntityById } from "@/data-access/entities";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
-
-export type ActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
+import type { ActionResult } from "@/types/actions";
 
 interface SearchEntitiesParams {
   entityType: EntityType;

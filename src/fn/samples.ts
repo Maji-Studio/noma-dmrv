@@ -183,9 +183,9 @@ export async function createSampleFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const validated = createSampleSchema.parse(data);
-
-    const sampleCode = validated.sampleCode || await generateNextCode("SAM", samples, samples.sampleCode);
+    // Auto-generate code before validation if empty
+    const sampleCode = data.sampleCode || await generateNextCode("SAM", samples, samples.sampleCode);
+    const validated = createSampleSchema.parse({ ...data, sampleCode });
 
     const sample = await createSample(user.id, {
       sampleCode,

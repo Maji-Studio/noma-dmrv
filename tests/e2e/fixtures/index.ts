@@ -36,6 +36,14 @@ export {
   cleanupChainData,
 } from "./seed-chain-data";
 
+// Shared page interaction helpers
+export {
+  waitForSideSheet,
+  waitForSideSheetClose,
+  selectEntity,
+  selectFirstEntity,
+} from "./page-helpers";
+
 // Test data seeding helpers
 export {
   type TestProject,

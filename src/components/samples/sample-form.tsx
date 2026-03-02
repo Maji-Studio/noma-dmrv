@@ -14,6 +14,8 @@
  */
 "use client";
 
+import { numericValue, integerValue } from "@/lib/form-utils";
+
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -281,7 +283,7 @@ export function SampleForm({
                     disabled={isSubmitting}
                     error={!!errors.weightGrams}
                     {...register("weightGrams", {
-                      setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                      setValueAs: numericValue,
                     })}
                   />
                 </FormField>
@@ -299,7 +301,7 @@ export function SampleForm({
                     disabled={isSubmitting}
                     error={!!errors.volumeMl}
                     {...register("volumeMl", {
-                      setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                      setValueAs: numericValue,
                     })}
                   />
                 </FormField>
@@ -328,7 +330,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.totalCarbonPercent}
                   {...register("totalCarbonPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -347,7 +349,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.organicCarbonPercent}
                   {...register("organicCarbonPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -365,7 +367,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.inorganicCarbonPercent}
                   {...register("inorganicCarbonPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -393,7 +395,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.totalHydrogenPercent}
                   {...register("totalHydrogenPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -411,7 +413,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.totalNitrogenPercent}
                   {...register("totalNitrogenPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -429,7 +431,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.totalOxygenPercent}
                   {...register("totalOxygenPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -447,7 +449,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.totalSulfurPercent}
                   {...register("totalSulfurPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -475,7 +477,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.ashContentPercent}
                   {...register("ashContentPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -493,7 +495,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.volatileMatterPercent}
                   {...register("volatileMatterPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -511,7 +513,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.moistureContentPercent}
                   {...register("moistureContentPercent", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -539,7 +541,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.bulkDensityKgPerM3}
                   {...register("bulkDensityKgPerM3", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -559,7 +561,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.ph}
                   {...register("ph", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -577,7 +579,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.surfaceAreaM2PerG}
                   {...register("surfaceAreaM2PerG", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -595,7 +597,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.saltContentGPerKg}
                   {...register("saltContentGPerKg", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -638,7 +640,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.hToCOrgRatio}
                   {...register("hToCOrgRatio", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -656,7 +658,7 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.oToCOrgRatio}
                   {...register("oToCOrgRatio", {
-                    setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                    setValueAs: numericValue,
                   })}
                 />
               </FormField>
@@ -691,7 +693,7 @@ export function SampleForm({
                         disabled={isSubmitting}
                         error={!!errors.randomReflectanceR0Percent}
                         {...register("randomReflectanceR0Percent", {
-                          setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                          setValueAs: numericValue,
                         })}
                       />
                     </FormField>
@@ -710,7 +712,7 @@ export function SampleForm({
                         disabled={isSubmitting}
                         error={!!errors.r0MeasurementCount}
                         {...register("r0MeasurementCount", {
-                          setValueAs: (v) => (v === "" ? undefined : parseInt(v, 10)),
+                          setValueAs: integerValue,
                         })}
                       />
                     </FormField>
@@ -752,7 +754,7 @@ export function SampleForm({
                         disabled={isSubmitting}
                         error={!!errors.reactiveCarbonPercent}
                         {...register("reactiveCarbonPercent", {
-                          setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                          setValueAs: numericValue,
                         })}
                       />
                     </FormField>
@@ -770,7 +772,7 @@ export function SampleForm({
                         disabled={isSubmitting}
                         error={!!errors.residualCarbonPercent}
                         {...register("residualCarbonPercent", {
-                          setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                          setValueAs: numericValue,
                         })}
                       />
                     </FormField>
@@ -835,7 +837,7 @@ export function SampleForm({
                       disabled={isSubmitting}
                       error={!!errors.phosphorusPercent}
                       {...register("phosphorusPercent", {
-                        setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                        setValueAs: numericValue,
                       })}
                     />
                   </FormField>
@@ -853,7 +855,7 @@ export function SampleForm({
                       disabled={isSubmitting}
                       error={!!errors.potassiumPercent}
                       {...register("potassiumPercent", {
-                        setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                        setValueAs: numericValue,
                       })}
                     />
                   </FormField>
@@ -871,7 +873,7 @@ export function SampleForm({
                       disabled={isSubmitting}
                       error={!!errors.magnesiumPercent}
                       {...register("magnesiumPercent", {
-                        setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                        setValueAs: numericValue,
                       })}
                     />
                   </FormField>
@@ -889,7 +891,7 @@ export function SampleForm({
                       disabled={isSubmitting}
                       error={!!errors.calciumPercent}
                       {...register("calciumPercent", {
-                        setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                        setValueAs: numericValue,
                       })}
                     />
                   </FormField>
@@ -907,7 +909,7 @@ export function SampleForm({
                       disabled={isSubmitting}
                       error={!!errors.ironPercent}
                       {...register("ironPercent", {
-                        setValueAs: (v) => (v === "" ? undefined : parseFloat(v)),
+                        setValueAs: numericValue,
                       })}
                     />
                   </FormField>

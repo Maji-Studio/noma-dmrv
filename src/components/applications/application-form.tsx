@@ -10,6 +10,8 @@
  */
 "use client";
 
+import { numericValue } from "@/lib/form-utils";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect } from "@/components/forms";
@@ -158,7 +160,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.biocharAppliedTons}
               {...register("biocharAppliedTons", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -176,7 +178,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.biocharAppliedDryTons}
               {...register("biocharAppliedDryTons", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -199,7 +201,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
               {...register("fieldSizeHa", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -264,7 +266,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.gpsLatitude}
               {...register("gpsLatitude", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -283,7 +285,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
               {...register("gpsLongitude", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -345,7 +347,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}
               {...register("soilTemperatureC", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -375,7 +377,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.truckMassOnArrivalKg}
               {...register("truckMassOnArrivalKg", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
@@ -393,7 +395,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.truckMassOnDepartureKg}
               {...register("truckMassOnDepartureKg", {
-                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
+                setValueAs: numericValue,
               })}
             />
           </FormField>
