@@ -315,7 +315,7 @@ export function ProductionRunList() {
               className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
             >
               <option value="">All Facilities</option>
-              {facilitiesData?.items?.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
+              {facilitiesData?.items?.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
             <select
               value={statusFilter}

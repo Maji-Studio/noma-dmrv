@@ -261,7 +261,7 @@ export function SampleList() {
           <div className="flex items-center gap-8">
             <select value={productionRunFilter} onChange={(e) => { setProductionRunFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
               <option value="">All Production Runs</option>
-              {productionRunsData?.items?.map((run) => <option key={run.id} value={run.id}>{run.code} - {new Date(run.date).toLocaleDateString()}</option>)}
+              {productionRunsData?.items?.map((run) => <option key={run.id} value={run.id}>{[run.facilityName, new Date(run.date).toLocaleDateString()].filter(Boolean).join(" - ")}</option>)}
             </select>
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
           </div>

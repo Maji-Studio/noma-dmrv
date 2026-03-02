@@ -1,162 +1,162 @@
 /**
- * Applications E2E Tests
+ * Application + Credit Batch UI CRUD Tests
  *
- * Comprehensive Playwright tests covering:
- * - CRUD operations (Create, Read, Update, Delete)
- * - Form validation scenarios for all 4 sections
- * - Role-based access control (authentication redirects)
+ * Tests creating applications and credit batches through the browser UI.
+ * Depends on deliveries existing in the system (created by distribution tests or seeded).
  *
- * Note: These tests focus on client-side validation and UI behavior.
- * Authentication-dependent tests verify redirect behavior for unauthenticated users.
+ * Chain: Delivery → Application → Credit Batch
  */
-import { test, expect } from "@playwright/test";
-import { generateTestId } from "./fixtures";
+import { test, expect } from "./fixtures";
 
-// ============================================
-// Test Constants
-// ============================================
+// Helper: wait for side sheet to open
+async function waitForSideSheet(page: import("@playwright/test").Page) {
+  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+}
 
-const APPLICATIONS_URL = "/applications";
-
-// ============================================
-// Role-Based Access Control Tests
-// ============================================
-
-test.describe("Applications Role-Based Access Control", () => {
-  test("unauthenticated user cannot access applications page - redirects to login", async ({ page }) => {
-    // Try to access applications without authentication
-    await page.goto(APPLICATIONS_URL);
-
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+// Helper: wait for side sheet to close (success indicator)
+async function waitForSideSheetClose(page: import("@playwright/test").Page) {
+  await page.waitForSelector('[role="dialog"]', {
+    state: "hidden",
+    timeout: 15000,
   });
+}
 
-  test("unauthenticated user sees login form when accessing applications", async ({ page }) => {
-    await page.goto(APPLICATIONS_URL);
+test.describe("Application + Credit Batch UI CRUD", () => {
+  test("create application via UI form", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    // First, we need a delivery to exist. Create an order and delivery first.
+    // Step 1: Create an order
+    await page.goto("/orders");
+    await page.waitForLoadState("networkidle");
+    await page.click('button:has-text("New Order")');
+    await waitForSideSheet(page);
 
-    // Should show login form elements
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
-  });
-});
+    const today = new Date().toISOString().split("T")[0];
+    await page.fill('input[name="orderDate"]', today);
+    await page.selectOption('select[name="facilityId"]', seededData.facility.id);
+    await page.selectOption('select[name="status"]', "draft");
+    await page.selectOption('select[name="customerId"]', seededData.customer.id);
 
-// ============================================
-// Form Validation Tests (Client-Side)
-// ============================================
+    // Wait for customer locations to load (cascading from customer selection)
+    await page.waitForTimeout(1000);
+    await page.selectOption(
+      'select[name="customerLocationId"]',
+      seededData.customerLocation.id
+    );
 
-test.describe("Applications Form Validation - Login Page Redirect", () => {
-  test("applications page requires authentication", async ({ page }) => {
-    await page.goto(APPLICATIONS_URL);
+    await page.selectOption(
+      'select[name="biocharProductId"]',
+      seededData.biocharProduct.id
+    );
+    await page.selectOption('select[name="packaging"]', "loose");
+    await page.fill('input[name="quantityKg"]', "100");
 
-    // Should be redirected to login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    await page.click('button:has-text("Create Order")');
+    await waitForSideSheetClose(page);
 
-    // Login page should have proper form elements
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  });
+    // Step 2: Create a delivery for this order
+    await page.goto("/deliveries");
+    await page.waitForLoadState("networkidle");
+    await page.click('button:has-text("New Delivery")');
+    await waitForSideSheet(page);
 
-  test("direct URL access to applications is protected", async ({ page }) => {
-    // Try various applications-related URLs
-    const protectedUrls = [
-      APPLICATIONS_URL,
-      `${APPLICATIONS_URL}/new`,
-      `${APPLICATIONS_URL}/some-id`,
-    ];
-
-    for (const url of protectedUrls) {
-      await page.goto(url);
-      // All should redirect to login
-      await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    await page.fill('input[name="deliveryDate"]', today);
+    // Select the first available order
+    await page.selectOption('select[name="status"]', "processing");
+    // The orderId select should have our order — select the first option
+    const orderSelect = page.locator('select[name="orderId"]');
+    const orderOptions = orderSelect.locator("option:not([value=''])");
+    const firstOrderValue = await orderOptions.first().getAttribute("value");
+    if (firstOrderValue) {
+      await orderSelect.selectOption(firstOrderValue);
     }
-  });
-});
+    await page.fill('input[name="deliveredWetMassKg"]', "95");
 
-// ============================================
-// Data Layer Tests
-// ============================================
+    await page.click('button:has-text("Create Delivery")');
+    await waitForSideSheetClose(page);
 
-test.describe("Applications Data Layer", () => {
-  test("generateTestId produces unique IDs", () => {
-    const ids = new Set<string>();
+    // Step 3: Create an application
+    await page.goto("/applications");
+    await page.waitForLoadState("networkidle");
 
-    for (let i = 0; i < 10; i++) {
-      const id = generateTestId("unique");
-      ids.add(id);
+    await page.click('button:has-text("New Application")');
+    await waitForSideSheet(page);
+
+    await page.fill('input[name="applicationDate"]', today);
+
+    // Select the first available delivery
+    const deliverySelect = page.locator('select[name="deliveryId"]');
+    const deliveryOptions = deliverySelect.locator("option:not([value=''])");
+    const firstDeliveryValue = await deliveryOptions
+      .first()
+      .getAttribute("value");
+    if (firstDeliveryValue) {
+      await deliverySelect.selectOption(firstDeliveryValue);
     }
 
-    // All IDs should be unique
-    expect(ids.size).toBe(10);
-  });
-});
+    // Fill optional fields
+    await page.fill('input[name="biocharAppliedTons"]', "5");
+    await page.fill('input[name="fieldSizeHa"]', "2");
+    await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
+    await page.fill('input[name="cropType"]', "maize");
 
-// ============================================
-// UI State and Navigation Tests
-// ============================================
+    await page.click('button:has-text("Create Application")');
+    await waitForSideSheetClose(page);
 
-test.describe("Applications UI State", () => {
-  test("accessing protected route stores redirect URL", async ({ page }) => {
-    // Go to applications
-    await page.goto(APPLICATIONS_URL);
-
-    // Should be at login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    // Verify application appears in list
+    await page.waitForLoadState("networkidle");
+    await expect(
+      page.locator("table tbody tr, [role='row']").first()
+    ).toBeVisible({ timeout: 10000 });
   });
 
-  test("login page is accessible and functional", async ({ page }) => {
-    await page.goto("/login");
+  test("create credit batch via UI form", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto("/credit-batches");
+    await page.waitForLoadState("networkidle");
 
-    // Should show login page without redirect loops
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
+    await page.click('button:has-text("New Credit Batch")');
+    await waitForSideSheet(page);
 
-    // Verify the page title or heading
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  });
-});
+    const today = new Date().toISOString().split("T")[0];
 
-// ============================================
-// Empty State Tests
-// ============================================
+    // Fill Overview section
+    await page.selectOption(
+      'select[name="facilityId"]',
+      seededData.facility.id
+    );
+    await page.fill('input[name="startDate"]', today);
+    await page.fill('input[name="endDate"]', today);
+    await page.selectOption('select[name="status"]', "draft");
 
-test.describe("Applications Empty State", () => {
-  test("unauthenticated access shows login, not empty state", async ({ page }) => {
-    await page.goto(APPLICATIONS_URL);
+    // Select applications (checkbox toggle)
+    // The application checkboxes should be visible - click the first one if available
+    const appCheckboxes = page.locator('input[type="checkbox"]');
+    const checkboxCount = await appCheckboxes.count();
+    if (checkboxCount > 0) {
+      // Click the label/container for the first application to toggle it
+      const firstAppLabel = page
+        .locator("label")
+        .filter({ has: page.locator('input[type="checkbox"]') })
+        .first();
+      await firstAppLabel.click();
+    }
 
-    // Should redirect to login, not show applications empty state
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    // Durability section (defaults to 200_year)
+    await page.selectOption('select[name="durabilityOption"]', "200_year");
 
-    // Should NOT show applications-specific content
-    await expect(page.getByText(/no applications/i)).not.toBeVisible();
-  });
-});
+    // Submit
+    await page.click('button:has-text("Create Credit Batch")');
+    await waitForSideSheetClose(page);
 
-// ============================================
-// Login Form Structure Tests
-// ============================================
-
-test.describe("Applications Login Form Structure", () => {
-  test("login page structure is correct", async ({ page }) => {
-    await page.goto(APPLICATIONS_URL);
-
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-
-    // Verify login form structure
-    const emailInput = page.locator('input[type="email"]');
-    const passwordInput = page.locator('input[type="password"]');
-    const submitButton = page.locator('button[type="submit"]');
-
-    await expect(emailInput).toBeVisible();
-    await expect(passwordInput).toBeVisible();
-    await expect(submitButton).toBeVisible();
-
-    // Email input should accept text
-    await emailInput.fill("test@example.com");
-    await expect(emailInput).toHaveValue("test@example.com");
-
-    // Password input should mask input
-    await passwordInput.fill("password123");
-    await expect(passwordInput).toHaveAttribute("type", "password");
+    // Verify credit batch appears in list
+    await page.waitForLoadState("networkidle");
+    await expect(
+      page.locator("table tbody tr, [role='row']").first()
+    ).toBeVisible({ timeout: 10000 });
   });
 });

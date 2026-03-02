@@ -107,12 +107,12 @@ export function OrderForm({
 
   const facilityOptions = facilities.map((f) => ({
     value: f.id,
-    label: `${f.code} - ${f.name}`,
+    label: f.name,
   }));
 
   const customerOptions = customers.map((c) => ({
     value: c.id,
-    label: `${c.code} - ${c.name}`,
+    label: c.name,
   }));
 
   const locationOptions = customerLocations.map((l: { id: string; name: string }) => ({
@@ -122,7 +122,7 @@ export function OrderForm({
 
   const productOptions = products.map((p) => ({
     value: p.id,
-    label: p.code,
+    label: [p.formulation?.name, p.facility?.name].filter(Boolean).join(" - ") || "Biochar product",
   }));
 
   const {

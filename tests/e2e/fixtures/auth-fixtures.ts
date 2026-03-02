@@ -18,6 +18,11 @@ import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import {
+  seedChainData,
+  cleanupChainData,
+  type SeededChainData,
+} from "./seed-chain-data";
 
 // Better Auth uses scrypt for password hashing with specific config
 const scryptConfig = {
@@ -69,9 +74,12 @@ export interface AuthFixtures {
   viewerContext: BrowserContext;
   testUsers: Record<UserRole, TestUser>;
   testProjectId: string;
+  seededData: SeededChainData;
   seedTestData: () => Promise<void>;
   cleanupTestData: () => Promise<void>;
 }
+
+export type { SeededChainData };
 
 // Generate unique test IDs to avoid collisions
 const testRunId = crypto.randomUUID().slice(0, 8);
@@ -367,19 +375,27 @@ export const test = base.extend<AuthFixtures>({
     }
   },
 
-  seedTestData: async ({ testUsers, testProjectId }, use) => {
-    // Provide a function to seed additional test data
+  seededData: async ({}, use) => {
+    // Seed all prerequisite lookup entities for UI tests
+    const data = await seedChainData(testRunId);
+    await use(data);
+    // Cleanup happens in cleanupTestData fixture
+  },
+
+  seedTestData: async ({ testUsers, testProjectId, seededData }, use) => {
     const seedFn = async () => {
-      // This can be extended to seed additional entities
-      console.log(`Test data ready: ${Object.keys(testUsers).length} users, project: ${testProjectId}`);
+      console.log(
+        `Test data ready: ${Object.keys(testUsers).length} users, project: ${testProjectId}, facility: ${seededData.facility.code}`
+      );
     };
     await use(seedFn);
   },
 
-  cleanupTestData: async ({ testUsers, testProjectId }, use) => {
+  cleanupTestData: async ({ testUsers, testProjectId, seededData }, use) => {
     // Provide cleanup function
     const cleanupFn = async () => {
       await cleanupTestData(testUsers, testProjectId);
+      await cleanupChainData(seededData);
     };
 
     // Use the fixture

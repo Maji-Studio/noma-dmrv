@@ -151,7 +151,7 @@ function createColumns(
 // ============================================
 
 interface ApplicationListProps {
-  deliveries?: { id: string; code: string }[];
+  deliveries?: { id: string; deliveryDate: Date | string }[];
 }
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
@@ -173,7 +173,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
 
-  const deliveryOptions = deliveries.map((d) => ({ id: d.id, code: d.code }));
+  const deliveryOptions = deliveries.map((d) => ({
+    id: d.id,
+    deliveryDate: d.deliveryDate,
+  }));
 
   // Handlers
   const handleCreate = async (data: ApplicationFormData) => {

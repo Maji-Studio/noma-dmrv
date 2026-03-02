@@ -13,7 +13,7 @@ export default async function ApplicationsPage() {
   const deliveryOptions = await db
     .select({
       id: deliveries.id,
-      code: deliveries.code,
+      deliveryDate: deliveries.deliveryDate,
     })
     .from(deliveries)
     .orderBy(desc(deliveries.deliveryDate));

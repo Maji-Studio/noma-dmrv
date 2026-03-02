@@ -214,9 +214,9 @@ export async function createDeliveryFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const validated = createDeliverySchema.parse(data);
-
-    const code = validated.code || await generateNextCode("DL", deliveriesTable, deliveriesTable.code);
+    // Auto-generate code before validation if empty
+    const code = data.code || await generateNextCode("DL", deliveriesTable, deliveriesTable.code);
+    const validated = createDeliverySchema.parse({ ...data, code });
 
     const delivery = await createDelivery(user.id, {
       code,

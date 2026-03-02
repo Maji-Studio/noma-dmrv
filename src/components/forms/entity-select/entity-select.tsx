@@ -144,6 +144,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   productionRun: "production run",
   formulation: "formulation",
 };
+const SEARCH_VISIBILITY_THRESHOLD = 5;
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -209,6 +210,7 @@ export function EntitySelect({
     const maxIndex = options.length + (allowCreate && onCreateNew ? 1 : 0) - 1;
     return Math.min(Math.max(0, highlightedIndex), Math.max(0, maxIndex));
   }, [highlightedIndex, options.length, allowCreate, onCreateNew]);
+  const showSearch = searchQuery.length > 0 || options.length > SEARCH_VISIBILITY_THRESHOLD;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -226,12 +228,12 @@ export function EntitySelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Focus input when dropdown opens
+  // Focus input when dropdown opens and search is visible
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (isOpen && showSearch && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isOpen]);
+  }, [isOpen, showSearch]);
 
   // Scroll highlighted option into view
   useEffect(() => {
@@ -370,22 +372,24 @@ export function EntitySelect({
           role="presentation"
         >
           {/* Search input */}
-          <div className="p-8 border-b border-[var(--color-border-primary)]">
-            <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-tertiary)]" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
-                aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
-                data-testid="entity-select-search"
-                className="w-full h-[40px] pl-10 pr-4 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
-              />
+          {showSearch && (
+            <div className="p-8 border-b border-[var(--color-border-primary)]">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-tertiary)]" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
+                  aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
+                  data-testid="entity-select-search"
+                  className="w-full h-[40px] pl-10 pr-4 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Options list */}
           <ul
@@ -418,7 +422,7 @@ export function EntitySelect({
                   onClick={() => handleSelect(option)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={cn(
-                    "flex items-baseline gap-6 px-12 py-8 cursor-pointer transition-colors",
+                    "px-12 py-8 cursor-pointer transition-colors",
                     index === clampedHighlightedIndex &&
                       "bg-[var(--color-background-medium)]",
                     option.id === value &&
@@ -427,9 +431,6 @@ export function EntitySelect({
                 >
                   <span className="text-[var(--text-s)] text-[var(--color-text-primary)]">
                     {option.name}
-                  </span>
-                  <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] shrink-0">
-                    {option.code}
                   </span>
                 </li>
               ))

@@ -22,6 +22,7 @@ export {
   type ProjectRole,
   type TestUser,
   type AuthFixtures,
+  type SeededChainData,
   seedTestUsers,
   cleanupTestData,
   authenticatePage,
@@ -29,6 +30,11 @@ export {
   createDirectSession,
   setAuthCookies,
 } from "./auth-fixtures";
+
+export {
+  seedChainData,
+  cleanupChainData,
+} from "./seed-chain-data";
 
 // Test data seeding helpers
 export {
