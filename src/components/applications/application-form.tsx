@@ -30,17 +30,17 @@ import type { Application } from "@/db/schema/application";
 // Constants for select options
 // ============================================
 
-const applicationMethodOptions: readonly { value: string; label: string }[] =
-  applicationMethods.map((method) => ({
-    value: method,
-    label: formatApplicationMethod(method as ApplicationMethod),
-  }));
+const applicationMethodOptions: readonly { value: string; label: string }[] = applicationMethods.map((method) => ({
+  value: method,
+  label: formatApplicationMethod(method as ApplicationMethod),
+}));
 
-const soilTemperatureSourceOptions: readonly { value: string; label: string }[] =
-  soilTemperatureSources.map((source) => ({
+const soilTemperatureSourceOptions: readonly { value: string; label: string }[] = soilTemperatureSources.map(
+  (source) => ({
     value: source,
     label: formatSoilTemperatureSource(source as SoilTemperatureSource),
-  }));
+  }),
+);
 
 // ============================================
 // Component
@@ -50,7 +50,7 @@ interface ApplicationFormProps {
   /** Existing application data for editing (undefined for create mode) */
   application?: Application;
   /** Available deliveries for selection */
-  deliveries?: Array<{ id: string; code: string }>;
+  deliveries?: Array<{ id: string; deliveryDate: Date | string }>;
   /** Form submission handler */
   onSubmit: (data: ApplicationFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -103,7 +103,7 @@ export function ApplicationForm({
 
   const deliveryOptions = deliveries.map((d) => ({
     value: d.id,
-    label: d.code,
+    label: new Date(d.deliveryDate).toLocaleDateString(),
   }));
 
   return (
@@ -115,11 +115,7 @@ export function ApplicationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Application Code"
-            error={errors.code?.message}
-          >
+          <FormField id="code" label="Application Code" error={errors.code?.message}>
             <FormInput
               id="code"
               type="text"
@@ -130,11 +126,7 @@ export function ApplicationForm({
             />
           </FormField>
 
-          <FormField
-            id="applicationDate"
-            label="Application Date"
-            error={errors.applicationDate?.message}
-          >
+          <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message}>
             <FormInput
               id="applicationDate"
               type="date"
@@ -145,11 +137,7 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <FormField
-          id="deliveryId"
-          label="Delivery"
-          error={errors.deliveryId?.message}
-        >
+        <FormField id="deliveryId" label="Delivery" error={errors.deliveryId?.message}>
           <FormSelect
             id="deliveryId"
             placeholder="Select delivery..."
@@ -161,11 +149,7 @@ export function ApplicationForm({
         </FormField>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="biocharAppliedTons"
-            label="Biochar Applied (Tons)"
-            error={errors.biocharAppliedTons?.message}
-          >
+          <FormField id="biocharAppliedTons" label="Biochar Applied (Tons)" error={errors.biocharAppliedTons?.message}>
             <FormInput
               id="biocharAppliedTons"
               type="number"
@@ -174,10 +158,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.biocharAppliedTons}
               {...register("biocharAppliedTons", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -195,10 +176,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.biocharAppliedDryTons}
               {...register("biocharAppliedDryTons", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -212,11 +190,7 @@ export function ApplicationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="fieldSizeHa"
-            label="Field Size (Ha)"
-            error={errors.fieldSizeHa?.message}
-          >
+          <FormField id="fieldSizeHa" label="Field Size (Ha)" error={errors.fieldSizeHa?.message}>
             <FormInput
               id="fieldSizeHa"
               type="number"
@@ -225,10 +199,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.fieldSizeHa}
               {...register("fieldSizeHa", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -251,11 +222,7 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="cropType"
-            label="Crop Type"
-            error={errors.cropType?.message}
-          >
+          <FormField id="cropType" label="Crop Type" error={errors.cropType?.message}>
             <FormInput
               id="cropType"
               type="text"
@@ -297,10 +264,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.gpsLatitude}
               {...register("gpsLatitude", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -319,10 +283,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
               {...register("gpsLongitude", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -384,10 +345,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}
               {...register("soilTemperatureC", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -417,10 +375,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.truckMassOnArrivalKg}
               {...register("truckMassOnArrivalKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -438,10 +393,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.truckMassOnDepartureKg}
               {...register("truckMassOnDepartureKg", {
-                setValueAs: (v) =>
-                  v === "" || v === null || v === undefined
-                    ? undefined
-                    : parseFloat(v),
+                setValueAs: (v) => (v === "" || v === null || v === undefined ? undefined : parseFloat(v)),
               })}
             />
           </FormField>
@@ -451,17 +403,12 @@ export function ApplicationForm({
       {/* Form Actions */}
       <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
         {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         )}
         <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
+          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
         </Button>
       </div>
     </form>

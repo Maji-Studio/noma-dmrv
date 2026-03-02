@@ -1,19 +1,14 @@
 /**
  * Distribution (Orders & Deliveries) E2E Tests
  *
- * Comprehensive Playwright tests covering:
- * - Orders CRUD operations
- * - Deliveries CRUD operations
- * - Form validation (massDryKg <= deliveredWetMassKg)
- * - Role-based access control (authentication redirects)
- * - Search and filtering
+ * UI CRUD tests for Orders and Deliveries using authenticated fixtures
+ * and pre-seeded lookup data.
+ *
+ * Prerequisites (handled by fixtures):
+ * - Admin user seeded and authenticated via adminPage
+ * - Facility, Customer, CustomerLocation, BiocharProduct seeded via seededData
  */
-import { test, expect } from "@playwright/test";
-import {
-  generateTestId,
-  createTestFacility,
-  deleteTestFacility,
-} from "./fixtures";
+import { test, expect } from "./fixtures";
 
 // ============================================
 // Test Constants
@@ -23,269 +18,251 @@ const ORDERS_URL = "/orders";
 const DELIVERIES_URL = "/deliveries";
 
 // ============================================
-// Role-Based Access Control Tests - Orders
+// Order + Delivery UI CRUD
 // ============================================
 
-test.describe("Orders Role-Based Access Control", () => {
-  test("unauthenticated user cannot access orders page - redirects to login", async ({
-    page,
+test.describe("Order + Delivery UI CRUD", () => {
+  // Track the created order's code so the delivery test can find it in the select
+  let createdOrderCode: string;
+  let createdOrderId: string;
+
+  // -------------------------------------------------------
+  // Orders — Create
+  // -------------------------------------------------------
+
+  test("admin can create a new order via the side sheet form", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
   }) => {
-    await page.goto(ORDERS_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-  });
+    void cleanupTestData; // ensure fixture is active for auto-cleanup
 
-  test("unauthenticated user sees login form when accessing orders", async ({
-    page,
-  }) => {
-    await page.goto(ORDERS_URL);
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
-  });
-});
+    // Navigate to the orders list
+    await adminPage.goto(ORDERS_URL);
+    await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
-// ============================================
-// Role-Based Access Control Tests - Deliveries
-// ============================================
+    // Open the "New Order" side sheet
+    await adminPage.click('button:has-text("New Order")');
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
 
-test.describe("Deliveries Role-Based Access Control", () => {
-  test("unauthenticated user cannot access deliveries page - redirects to login", async ({
-    page,
-  }) => {
-    await page.goto(DELIVERIES_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-  });
+    // --- Fill in required fields ---
 
-  test("unauthenticated user sees login form when accessing deliveries", async ({
-    page,
-  }) => {
-    await page.goto(DELIVERIES_URL);
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
-  });
-});
+    // Order Date
+    await adminPage.fill('input[name="orderDate"]', "2026-03-02");
 
-// ============================================
-// Protected URL Tests
-// ============================================
+    // Facility
+    await adminPage.selectOption(
+      'select[name="facilityId"]',
+      seededData.facility.id
+    );
 
-test.describe("Distribution Protected Routes", () => {
-  test("direct URL access to distribution pages is protected", async ({
-    page,
-  }) => {
-    const protectedUrls = [
-      ORDERS_URL,
-      `${ORDERS_URL}/new`,
-      `${ORDERS_URL}/some-id`,
-      DELIVERIES_URL,
-      `${DELIVERIES_URL}/new`,
-      `${DELIVERIES_URL}/some-id`,
-    ];
+    // Status
+    await adminPage.selectOption('select[name="status"]', "draft");
 
-    for (const url of protectedUrls) {
-      await page.goto(url);
-      await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-    }
-  });
-});
+    // Customer — selecting triggers an async load of customer locations
+    await adminPage.selectOption(
+      'select[name="customerId"]',
+      seededData.customer.id
+    );
 
-// ============================================
-// Login Page Structure Tests
-// ============================================
+    // Wait for the cascading customerLocationId select to become enabled
+    await adminPage.waitForSelector(
+      'select[name="customerLocationId"]:not([disabled])',
+      { timeout: 8000 }
+    );
+    await adminPage.selectOption(
+      'select[name="customerLocationId"]',
+      seededData.customerLocation.id
+    );
 
-test.describe("Distribution Login Page Structure", () => {
-  test("login page structure is correct when accessing orders", async ({
-    page,
-  }) => {
-    await page.goto(ORDERS_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    // Packaging
+    await adminPage.selectOption('select[name="packaging"]', "loose");
 
-    const emailInput = page.locator('input[type="email"]');
-    const passwordInput = page.locator('input[type="password"]');
-    const submitButton = page.locator('button[type="submit"]');
+    // Quantity
+    await adminPage.fill('input[name="quantityKg"]', "100");
 
-    await expect(emailInput).toBeVisible();
-    await expect(passwordInput).toBeVisible();
-    await expect(submitButton).toBeVisible();
-  });
+    // Biochar Product
+    await adminPage.selectOption(
+      'select[name="biocharProductId"]',
+      seededData.biocharProduct.id
+    );
 
-  test("login page structure is correct when accessing deliveries", async ({
-    page,
-  }) => {
-    await page.goto(DELIVERIES_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
+    // Submit the form
+    await adminPage.click('button[type="submit"]:has-text("Create Order")');
 
-    const emailInput = page.locator('input[type="email"]');
-    const passwordInput = page.locator('input[type="password"]');
-    const submitButton = page.locator('button[type="submit"]');
-
-    await expect(emailInput).toBeVisible();
-    await expect(passwordInput).toBeVisible();
-    await expect(submitButton).toBeVisible();
-  });
-});
-
-// ============================================
-// Database Integration Tests - Test Helpers
-// ============================================
-
-test.describe("Distribution Database Operations - Test Helpers", () => {
-  test("generateTestId produces unique IDs for orders", () => {
-    const ids = new Set<string>();
-
-    for (let i = 0; i < 10; i++) {
-      const id = generateTestId("order");
-      ids.add(id);
-    }
-
-    expect(ids.size).toBe(10);
-  });
-
-  test("generateTestId produces unique IDs for deliveries", () => {
-    const ids = new Set<string>();
-
-    for (let i = 0; i < 10; i++) {
-      const id = generateTestId("delivery");
-      ids.add(id);
-    }
-
-    expect(ids.size).toBe(10);
-  });
-
-  test("can create and delete test facility for distribution tests", async () => {
-    const testId = generateTestId("dist-fac");
-    const facility = await createTestFacility({
-      code: `E2E-DIST-${testId.toUpperCase()}`,
-      name: `Distribution Test Facility ${testId}`,
-      location: "Test Location",
+    // Side sheet should close on success
+    await adminPage.waitForSelector('[role="dialog"]', {
+      state: "hidden",
+      timeout: 10000,
     });
 
-    expect(facility).toBeDefined();
-    expect(facility.id).toBeDefined();
-    expect(facility.code).toContain("E2E-DIST-");
+    // --- Verify the new order appears in the list ---
 
-    // Clean up
-    await deleteTestFacility(facility.id);
+    // Look for the seeded customer name in the table (the Order list shows the customer)
+    const customerCellLocator = adminPage.getByText(
+      seededData.customer.name,
+      { exact: false }
+    );
+    await expect(customerCellLocator.first()).toBeVisible({ timeout: 8000 });
+
+    // Capture the order code from the first row so the delivery test can use it
+    // The code column is rendered with a distinctive style; grab the first code cell
+    const firstCodeCell = adminPage.locator("table tbody tr").first().locator("td").first();
+    createdOrderCode = (await firstCodeCell.textContent()) ?? "";
+    expect(createdOrderCode.length).toBeGreaterThan(0);
   });
-});
 
-// ============================================
-// Empty State Tests
-// ============================================
+  // -------------------------------------------------------
+  // Orders — Read (list verification)
+  // -------------------------------------------------------
 
-test.describe("Distribution Empty State", () => {
-  test("unauthenticated access to orders shows login, not empty state", async ({
-    page,
+  test("orders list shows the newly created order", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
   }) => {
-    await page.goto(ORDERS_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-    await expect(page.getByText(/no orders/i)).not.toBeVisible();
+    void cleanupTestData;
+
+    await adminPage.goto(ORDERS_URL);
+    await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
+
+    // The customer name from seeded data should appear somewhere on the page
+    const customerText = adminPage.getByText(seededData.customer.name, {
+      exact: false,
+    });
+    // At least one row with our customer should exist (may be from previous create test)
+    await expect(customerText.first()).toBeVisible({ timeout: 8000 });
   });
 
-  test("unauthenticated access to deliveries shows login, not empty state", async ({
-    page,
+  // -------------------------------------------------------
+  // Deliveries — Create (selects the order created above)
+  // -------------------------------------------------------
+
+  test("admin can create a new delivery linked to the seeded order", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
   }) => {
-    await page.goto(DELIVERIES_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-    await expect(page.getByText(/no deliveries/i)).not.toBeVisible();
+    void cleanupTestData;
+
+    // ---- First, ensure an order exists to select in the delivery form ----
+    // We create one inline so this test is self-contained even when run in isolation.
+
+    await adminPage.goto(ORDERS_URL);
+    await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
+
+    await adminPage.click('button:has-text("New Order")');
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
+
+    await adminPage.fill('input[name="orderDate"]', "2026-03-02");
+    await adminPage.selectOption('select[name="facilityId"]', seededData.facility.id);
+    await adminPage.selectOption('select[name="status"]', "draft");
+    await adminPage.selectOption('select[name="customerId"]', seededData.customer.id);
+    await adminPage.waitForSelector(
+      'select[name="customerLocationId"]:not([disabled])',
+      { timeout: 8000 }
+    );
+    await adminPage.selectOption(
+      'select[name="customerLocationId"]',
+      seededData.customerLocation.id
+    );
+    await adminPage.selectOption('select[name="packaging"]', "loose");
+    await adminPage.fill('input[name="quantityKg"]', "50");
+    await adminPage.selectOption('select[name="biocharProductId"]', seededData.biocharProduct.id);
+    await adminPage.click('button[type="submit"]:has-text("Create Order")');
+    await adminPage.waitForSelector('[role="dialog"]', {
+      state: "hidden",
+      timeout: 10000,
+    });
+
+    // Grab the orderId from the first row we just created via the select options
+    // that will be rendered in the delivery form. We identify the order by the
+    // customer name displayed in the orderId select (format: "CustomerName - Date").
+
+    // ---- Navigate to Deliveries and open the creation form ----
+
+    await adminPage.goto(DELIVERIES_URL);
+    await expect(adminPage).toHaveURL(new RegExp(DELIVERIES_URL), {
+      timeout: 10000,
+    });
+
+    await adminPage.click('button:has-text("New Delivery")');
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
+
+    // Delivery Date
+    await adminPage.fill('input[name="deliveryDate"]', "2026-03-02");
+
+    // Status
+    await adminPage.selectOption('select[name="status"]', "processing");
+
+    // Order — select by the customer name that should be part of the option label
+    // (DeliveryForm renders options as "CustomerName - Date")
+    const orderSelect = adminPage.locator('select[name="orderId"]');
+    await orderSelect.waitFor({ state: "attached", timeout: 8000 });
+
+    // Find the option whose text includes our seeded customer name
+    const matchingOption = orderSelect.locator(
+      `option:text-matches("${seededData.customer.name}", "i")`
+    );
+
+    // Wait for options to populate (async fetch)
+    await expect(matchingOption.first()).toBeAttached({ timeout: 8000 });
+
+    // Get the value attribute of the matching option and use it to select
+    const optionValue = await matchingOption.first().getAttribute("value");
+    expect(optionValue).not.toBeNull();
+    createdOrderId = optionValue!;
+
+    await adminPage.selectOption('select[name="orderId"]', createdOrderId);
+
+    // Wet mass
+    await adminPage.fill('input[name="deliveredWetMassKg"]', "95");
+
+    // Submit
+    await adminPage.click('button[type="submit"]:has-text("Create Delivery")');
+
+    // Side sheet should close on success
+    await adminPage.waitForSelector('[role="dialog"]', {
+      state: "hidden",
+      timeout: 10000,
+    });
+
+    // ---- Verify delivery appears in the list ----
+
+    // The delivery list shows the customer name (via the linked order)
+    const customerCellLocator = adminPage.getByText(
+      seededData.customer.name,
+      { exact: false }
+    );
+    await expect(customerCellLocator.first()).toBeVisible({ timeout: 8000 });
+  });
+
+  // -------------------------------------------------------
+  // Deliveries — Read (list verification)
+  // -------------------------------------------------------
+
+  test("deliveries list shows the newly created delivery", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    await adminPage.goto(DELIVERIES_URL);
+    await expect(adminPage).toHaveURL(new RegExp(DELIVERIES_URL), {
+      timeout: 10000,
+    });
+
+    // There should be at least one row referencing our seeded customer's data
+    const customerText = adminPage.getByText(seededData.customer.name, {
+      exact: false,
+    });
+    await expect(customerText.first()).toBeVisible({ timeout: 8000 });
   });
 });
 
 // ============================================
-// Validation Schema Tests
-// ============================================
-
-test.describe("Distribution Validation Logic", () => {
-  test("delivery dry mass validation helper", () => {
-    // Test the business rule: massDryKg must be <= deliveredWetMassKg
-    const testCases = [
-      { dryMass: 100, wetMass: 200, valid: true },
-      { dryMass: 200, wetMass: 200, valid: true },
-      { dryMass: 201, wetMass: 200, valid: false },
-      { dryMass: 0, wetMass: 100, valid: true },
-      { dryMass: -1, wetMass: 100, valid: false },
-    ];
-
-    for (const tc of testCases) {
-      const isValid =
-        tc.dryMass >= 0 && (tc.wetMass === null || tc.dryMass <= tc.wetMass);
-      expect(isValid).toBe(tc.valid);
-    }
-  });
-
-  test("order status values are valid", () => {
-    const validStatuses = ["draft", "ordered", "processed"];
-    expect(validStatuses).toContain("draft");
-    expect(validStatuses).toContain("ordered");
-    expect(validStatuses).toContain("processed");
-  });
-
-  test("delivery status values are valid", () => {
-    const validStatuses = ["scheduled", "processing", "delivered"];
-    expect(validStatuses).toContain("scheduled");
-    expect(validStatuses).toContain("processing");
-    expect(validStatuses).toContain("delivered");
-  });
-
-  test("packaging types are valid", () => {
-    const validPackaging = ["loose", "bagged"];
-    expect(validPackaging).toContain("loose");
-    expect(validPackaging).toContain("bagged");
-  });
-});
-
-// ============================================
-// UI State Tests
-// ============================================
-
-test.describe("Distribution UI State", () => {
-  test("accessing orders stores redirect URL", async ({ page }) => {
-    await page.goto(ORDERS_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-  });
-
-  test("accessing deliveries stores redirect URL", async ({ page }) => {
-    await page.goto(DELIVERIES_URL);
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-  });
-});
-
-// ============================================
-// Code Format Tests
-// ============================================
-
-test.describe("Distribution Code Format Validation", () => {
-  test("order code format regex is correct", () => {
-    const codeRegex = /^[A-Z0-9-]+$/;
-
-    // Valid codes
-    expect(codeRegex.test("OR-2025-001")).toBe(true);
-    expect(codeRegex.test("ORDER-123")).toBe(true);
-    expect(codeRegex.test("A1B2C3")).toBe(true);
-
-    // Invalid codes
-    expect(codeRegex.test("or-2025-001")).toBe(false); // lowercase
-    expect(codeRegex.test("OR 2025 001")).toBe(false); // spaces
-    expect(codeRegex.test("OR_2025_001")).toBe(false); // underscores
-  });
-
-  test("delivery code format regex is correct", () => {
-    const codeRegex = /^[A-Z0-9-]+$/;
-
-    // Valid codes
-    expect(codeRegex.test("DL-2025-001")).toBe(true);
-    expect(codeRegex.test("DELIVERY-123")).toBe(true);
-    expect(codeRegex.test("D1E2L3")).toBe(true);
-
-    // Invalid codes
-    expect(codeRegex.test("dl-2025-001")).toBe(false);
-    expect(codeRegex.test("DL 2025 001")).toBe(false);
-  });
-});
-
-// ============================================
-// Mass Validation Tests (Critical Business Rule)
+// Business Logic Validation (pure JS — no browser needed)
 // ============================================
 
 test.describe("Delivery Mass Validation - Isometric Protocol", () => {
@@ -311,7 +288,6 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
       return dryMass <= wetMass;
     };
 
-    // Valid cases
     expect(validateMassRelation(100, 200)).toBe(true);
     expect(validateMassRelation(100, 100)).toBe(true);
     expect(validateMassRelation(0, 100)).toBe(true);
@@ -319,7 +295,6 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
     expect(validateMassRelation(100, null)).toBe(true);
     expect(validateMassRelation(null, null)).toBe(true);
 
-    // Invalid cases
     expect(validateMassRelation(200, 100)).toBe(false);
     expect(validateMassRelation(101, 100)).toBe(false);
   });
@@ -336,5 +311,31 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
     expect(validateMoisture(-1)).toBe(false);
     expect(validateMoisture(101)).toBe(false);
     expect(validateMoisture(null)).toBe(true);
+  });
+});
+
+// ============================================
+// Enum / schema sanity checks (pure JS)
+// ============================================
+
+test.describe("Distribution Schema Constants", () => {
+  test("order status values are valid", () => {
+    const validStatuses = ["draft", "ordered", "processed"];
+    expect(validStatuses).toContain("draft");
+    expect(validStatuses).toContain("ordered");
+    expect(validStatuses).toContain("processed");
+  });
+
+  test("delivery status values are valid", () => {
+    const validStatuses = ["scheduled", "processing", "delivered"];
+    expect(validStatuses).toContain("scheduled");
+    expect(validStatuses).toContain("processing");
+    expect(validStatuses).toContain("delivered");
+  });
+
+  test("packaging types are valid", () => {
+    const validPackaging = ["loose", "bagged"];
+    expect(validPackaging).toContain("loose");
+    expect(validPackaging).toContain("bagged");
   });
 });

@@ -21,7 +21,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:check": "tsx src/db/seed.ts",
     "db:seed:demo": "tsx src/db/seed-data.ts",
-    "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:seed",
+    "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:push && pnpm db:seed",
     "env:local": "op inject -i .env.tpl -o .env",
     "env:vercel": "pnpm env:prod && pnpm env:preview && pnpm env:dev",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",

@@ -74,7 +74,12 @@ export function DeliveryForm({
 
   const orderOptions = orders.map((o) => ({
     value: o.id,
-    label: `${o.code}${o.customerName ? ` - ${o.customerName}` : ""}`,
+    label: [
+      o.customerName,
+      o.orderDate ? new Date(o.orderDate).toLocaleDateString() : undefined,
+    ]
+      .filter(Boolean)
+      .join(" - ") || "Order",
   }));
 
   const {

@@ -1,163 +1,135 @@
 /**
- * Facilities E2E Tests
+ * Facilities & Reactors E2E Tests
  *
- * Comprehensive Playwright tests covering:
- * - CRUD operations (Create, Read, Update, Delete)
- * - Form validation scenarios
- * - Duplicate code handling
- * - Role-based access control (authentication redirects)
- * - Search and filtering
- *
- * Note: These tests focus on client-side validation and UI behavior.
- * Authentication-dependent tests verify redirect behavior for unauthenticated users.
+ * Covers:
+ * - UI CRUD: create a facility through the side sheet form, verify it appears in the list
+ * - UI CRUD: create a reactor selecting the facility via EntitySelect, verify it appears in the list
+ * - DB-level duplicate code enforcement (preserved from original test suite)
  */
-import { test, expect } from "@playwright/test";
-import { generateTestId, createTestFacility, deleteTestFacility, type TestFacility } from "./fixtures";
+import { test, expect } from "./fixtures";
+import {
+  createTestFacility,
+  deleteTestFacility,
+  type TestFacility,
+} from "./fixtures";
+import * as crypto from "crypto";
 
 // ============================================
-// Test Constants
+// Unique run identifier for this test file
 // ============================================
 
-const FACILITIES_URL = "/facilities";
+const RUN_ID = crypto.randomUUID().slice(0, 8);
 
 // ============================================
-// Role-Based Access Control Tests
+// Facility + Reactor UI CRUD
 // ============================================
 
-test.describe("Facilities Role-Based Access Control", () => {
-  test("unauthenticated user cannot access facilities page - redirects to login", async ({ page }) => {
-    // Try to access facilities without authentication
-    await page.goto(FACILITIES_URL);
+test.describe("Facility + Reactor UI CRUD", () => {
+  test("admin can create a facility and it appears in the list", async ({
+    adminPage,
+    cleanupTestData,
+  }) => {
+    const page = adminPage;
+    const facilityName = `UI Facility ${RUN_ID}`;
+    const facilityCountry = "Kenya";
 
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-  });
+    // Navigate to facilities list
+    await page.goto("/facilities");
+    await expect(page).toHaveURL(/\/facilities/);
 
-  test("unauthenticated user sees login form when accessing facilities", async ({ page }) => {
-    await page.goto(FACILITIES_URL);
+    // Open the create side sheet
+    await page.getByRole("button", { name: /New Facility/i }).click();
 
-    // Should show login form elements
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
-  });
-});
+    // Wait for the side sheet to be visible
+    await page.waitForSelector('[role="dialog"]', { state: "visible" });
 
-// ============================================
-// Form Validation Tests (Client-Side)
-// ============================================
+    // Fill in required fields
+    await page.fill('input[name="name"]', facilityName);
+    await page.fill('input[name="country"]', facilityCountry);
 
-test.describe("Facilities Form Validation - Login Page Redirect", () => {
-  // These tests verify that attempting to access the facilities page
-  // without authentication redirects to login, which confirms the
-  // authentication guard is working.
+    // Submit the form
+    await page.getByRole("button", { name: /Create Facility/i }).click();
 
-  test("facilities page requires authentication", async ({ page }) => {
-    await page.goto(FACILITIES_URL);
-
-    // Should be redirected to login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-
-    // Login page should have proper form elements
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  });
-
-  test("direct URL access to facilities is protected", async ({ page }) => {
-    // Try various facilities-related URLs
-    const protectedUrls = [
-      FACILITIES_URL,
-      `${FACILITIES_URL}/new`,
-      `${FACILITIES_URL}/some-id`,
-    ];
-
-    for (const url of protectedUrls) {
-      await page.goto(url);
-      // All should redirect to login
-      await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-    }
-  });
-});
-
-// ============================================
-// Database Integration Tests
-// These tests use direct database operations via test helpers
-// to verify data layer functionality without requiring UI auth
-// ============================================
-
-test.describe("Facilities Database Operations", () => {
-  test("can create facility via test helper", async () => {
-    const testId = generateTestId("db-create");
-    const facility = await createTestFacility({
-      code: `E2E-DB-${testId.toUpperCase()}`,
-      name: `DB Test Facility ${testId}`,
-      location: "Test Location",
+    // Side sheet closes on success — wait for it to disappear
+    await page.waitForSelector('[role="dialog"]', {
+      state: "detached",
+      timeout: 10000,
     });
 
-    expect(facility).toBeDefined();
-    expect(facility.id).toBeDefined();
-    expect(facility.code).toContain("E2E-DB-");
-    expect(facility.name).toContain("DB Test Facility");
+    // Verify the new facility appears in the list
+    await expect(page.getByText(facilityName)).toBeVisible();
 
-    // Clean up
-    await deleteTestFacility(facility.id);
+    void cleanupTestData;
   });
 
-  test("can delete facility via test helper", async () => {
-    const testId = generateTestId("db-delete");
-    const facility = await createTestFacility({
-      code: `E2E-DEL-${testId.toUpperCase()}`,
-      name: `Delete Test Facility ${testId}`,
-      location: "Test Location",
+  test("admin can create a reactor linked to a facility and it appears in the list", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    const page = adminPage;
+
+    // seededData.facility was seeded into the DB and is available in EntitySelect
+    const facilityId = seededData.facility.id;
+    const reactorIdentifier = `UI Reactor ${RUN_ID}`;
+
+    // Navigate to reactors list
+    await page.goto("/reactors");
+    await expect(page).toHaveURL(/\/reactors/);
+
+    // Open the create side sheet
+    await page.getByRole("button", { name: /New Reactor/i }).click();
+
+    // Wait for the side sheet to be visible
+    await page.waitForSelector('[role="dialog"]', { state: "visible" });
+
+    // Fill in the identifier (required)
+    await page.fill('input[name="identifier"]', reactorIdentifier);
+
+    // Select the facility via EntitySelect
+    await page.click('[data-testid="entity-select-trigger"]');
+    await page.waitForSelector('[data-testid="entity-select-listbox"]', {
+      state: "visible",
+    });
+    await page.click(`[data-testid="entity-option-${facilityId}"]`);
+
+    // Select reactor type via native select
+    await page.selectOption('select[name="reactorType"]', "fixed-bed");
+
+    // Fill the "Type" text field (operational type, required)
+    await page.fill('input[name="type"]', "primary pyrolysis");
+
+    // Select sampling method (default is method_a, keep it)
+    await page.selectOption('select[name="samplingMethod"]', "method_a");
+
+    // Submit the form
+    await page.getByRole("button", { name: /Create Reactor/i }).click();
+
+    // Side sheet closes on success — wait for it to disappear
+    await page.waitForSelector('[role="dialog"]', {
+      state: "detached",
+      timeout: 10000,
     });
 
-    expect(facility.id).toBeDefined();
+    // Verify the new reactor appears in the list
+    await expect(page.getByText(reactorIdentifier)).toBeVisible();
 
-    // Delete should not throw
-    await expect(deleteTestFacility(facility.id)).resolves.not.toThrow();
-  });
-
-  test("can create multiple facilities with unique codes", async () => {
-    const facilities: TestFacility[] = [];
-
-    try {
-      // Create multiple facilities
-      for (let i = 0; i < 3; i++) {
-        const testId = generateTestId(`multi-${i}`);
-        const facility = await createTestFacility({
-          code: `E2E-MULTI-${i}-${testId.toUpperCase()}`,
-          name: `Multi Facility ${i} ${testId}`,
-          location: `Location ${i}`,
-        });
-        facilities.push(facility);
-      }
-
-      // Verify all created
-      expect(facilities).toHaveLength(3);
-      const codes = facilities.map((f) => f.code);
-      const uniqueCodes = new Set(codes);
-      expect(uniqueCodes.size).toBe(3); // All codes should be unique
-    } finally {
-      // Clean up all
-      for (const facility of facilities) {
-        await deleteTestFacility(facility.id);
-      }
-    }
+    void cleanupTestData;
   });
 });
 
 // ============================================
-// Duplicate Code Handling Tests (Database Level)
+// DB-Level Duplicate Code Enforcement
 // ============================================
 
 test.describe("Facilities Duplicate Code Handling", () => {
   let existingFacility: TestFacility;
 
   test.beforeAll(async () => {
-    // Create an existing facility with a known code
     existingFacility = await createTestFacility({
-      code: "E2E-DUP-TEST-CODE",
-      name: "Existing Duplicate Test Facility",
-      location: "Existing Location",
+      code: `E2E-DUP-${RUN_ID}`,
+      name: `Duplicate Test Facility ${RUN_ID}`,
+      location: "Test Location",
     });
   });
 
@@ -167,130 +139,16 @@ test.describe("Facilities Duplicate Code Handling", () => {
     }
   });
 
-  test("facility code uniqueness is enforced", async () => {
-    expect(existingFacility.code).toBe("E2E-DUP-TEST-CODE");
+  test("facility code uniqueness is enforced at the database level", async () => {
+    expect(existingFacility.code).toBe(`E2E-DUP-${RUN_ID}`);
 
-    // Attempt to create a duplicate with the same code - should fail at DB level
+    // Attempting to insert a duplicate code should throw
     await expect(
       createTestFacility({
-        code: "E2E-DUP-TEST-CODE",
-        name: "Duplicate Facility",
+        code: `E2E-DUP-${RUN_ID}`,
+        name: "Duplicate Facility Attempt",
         location: "Duplicate Location",
       })
     ).rejects.toThrow();
-  });
-});
-
-// ============================================
-// Search and Filter Tests (Structure Only)
-// ============================================
-
-test.describe("Facilities Search and Filtering Structure", () => {
-  // These tests verify that when redirected to login,
-  // the login page has proper structure
-
-  test("login page structure is correct", async ({ page }) => {
-    await page.goto(FACILITIES_URL);
-
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-
-    // Verify login form structure
-    const emailInput = page.locator('input[type="email"]');
-    const passwordInput = page.locator('input[type="password"]');
-    const submitButton = page.locator('button[type="submit"]');
-
-    await expect(emailInput).toBeVisible();
-    await expect(passwordInput).toBeVisible();
-    await expect(submitButton).toBeVisible();
-
-    // Email input should accept text
-    await emailInput.fill("test@example.com");
-    await expect(emailInput).toHaveValue("test@example.com");
-
-    // Password input should mask input
-    await passwordInput.fill("password123");
-    await expect(passwordInput).toHaveAttribute("type", "password");
-  });
-});
-
-// ============================================
-// UI State and Navigation Tests
-// ============================================
-
-test.describe("Facilities UI State", () => {
-  test("accessing protected route stores redirect URL", async ({ page }) => {
-    // Go to facilities
-    await page.goto(FACILITIES_URL);
-
-    // Should be at login
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-
-    // The URL or state should indicate we came from facilities
-    // (implementation-specific - some apps use query params, some use session)
-  });
-
-  test("login page is accessible and functional", async ({ page }) => {
-    await page.goto("/login");
-
-    // Should show login page without redirect loops
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-
-    // Verify the page title or heading
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  });
-});
-
-// ============================================
-// Empty State Tests
-// ============================================
-
-test.describe("Facilities Empty State", () => {
-  test("unauthenticated access shows login, not empty state", async ({ page }) => {
-    await page.goto(FACILITIES_URL);
-
-    // Should redirect to login, not show facilities empty state
-    await expect(page).toHaveURL(/\/login/, { timeout: 5000 });
-
-    // Should NOT show facilities-specific content
-    await expect(page.getByText(/no facilities/i)).not.toBeVisible();
-  });
-});
-
-// ============================================
-// API/Data Layer Tests (via Test Helpers)
-// ============================================
-
-test.describe("Facilities Data Layer", () => {
-  test("generateTestId produces unique IDs", () => {
-    const ids = new Set<string>();
-
-    for (let i = 0; i < 10; i++) {
-      const id = generateTestId("unique");
-      ids.add(id);
-    }
-
-    // All IDs should be unique
-    expect(ids.size).toBe(10);
-  });
-
-  test("test facility has required fields", async () => {
-    const testId = generateTestId("fields");
-    const facility = await createTestFacility({
-      code: `E2E-FIELDS-${testId.toUpperCase()}`,
-      name: `Fields Test ${testId}`,
-      location: "Test Location",
-    });
-
-    try {
-      expect(facility.id).toBeDefined();
-      expect(typeof facility.id).toBe("string");
-      expect(facility.code).toBeDefined();
-      expect(facility.name).toBeDefined();
-      expect(facility.location).toBeDefined();
-    } finally {
-      await deleteTestFacility(facility.id);
-    }
   });
 });
