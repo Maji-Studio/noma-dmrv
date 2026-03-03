@@ -67,20 +67,30 @@ export const feedstockDeliveryFormSchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   gpsLatitude: z.union([
-    z.number().min(-90).max(90),
-    z.string().transform((val) => {
+    z.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90"),
+    z.string().transform((val, ctx) => {
       if (val === "") return null;
       const n = parseFloat(val);
-      return isNaN(n) ? null : n;
+      if (isNaN(n)) return null;
+      if (n < -90 || n > 90) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Latitude must be between -90 and 90" });
+        return z.NEVER;
+      }
+      return n;
     }),
     z.null(),
   ]).optional().nullable(),
   gpsLongitude: z.union([
-    z.number().min(-180).max(180),
-    z.string().transform((val) => {
+    z.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180"),
+    z.string().transform((val, ctx) => {
       if (val === "") return null;
       const n = parseFloat(val);
-      return isNaN(n) ? null : n;
+      if (isNaN(n)) return null;
+      if (n < -180 || n > 180) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Longitude must be between -180 and 180" });
+        return z.NEVER;
+      }
+      return n;
     }),
     z.null(),
   ]).optional().nullable(),
@@ -89,19 +99,29 @@ export const feedstockDeliveryFormSchema = z.object({
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   weightKg: z.union([
     z.number().min(0, "Weight must be positive"),
-    z.string().transform((val) => {
+    z.string().transform((val, ctx) => {
       if (val === "") return null;
       const n = parseFloat(val);
-      return isNaN(n) ? null : n;
+      if (isNaN(n)) return null;
+      if (n < 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Weight must be positive" });
+        return z.NEVER;
+      }
+      return n;
     }),
     z.null(),
   ]).optional().nullable(),
   moisturePercent: z.union([
     z.number().min(0, "Moisture must be between 0 and 100").max(100, "Moisture must be between 0 and 100"),
-    z.string().transform((val) => {
+    z.string().transform((val, ctx) => {
       if (val === "") return null;
       const n = parseFloat(val);
-      return isNaN(n) ? null : n;
+      if (isNaN(n)) return null;
+      if (n < 0 || n > 100) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Moisture must be between 0 and 100" });
+        return z.NEVER;
+      }
+      return n;
     }),
     z.null(),
   ]).optional().nullable(),

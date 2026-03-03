@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Customer, type CustomerLocation, customers } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createCustomer,
   deleteCustomer,
@@ -229,16 +229,21 @@ export async function createCustomerFn(
 
     const validated = createCustomerSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("CUS", customers, customers.code);
-
-    const customer = await createCustomer(user.id, {
-      code,
-      name: validated.name,
-      cropType: validated.cropType || null,
-      address: validated.address || null,
-      contactEmail: validated.contactEmail || null,
-      contactPhone: validated.contactPhone || null,
-    });
+    const customer = await withAutoCode(
+      "CUS",
+      customers,
+      customers.code,
+      validated.code,
+      (code) =>
+        createCustomer(user.id, {
+          code,
+          name: validated.name,
+          cropType: validated.cropType || null,
+          address: validated.address || null,
+          contactEmail: validated.contactEmail || null,
+          contactPhone: validated.contactPhone || null,
+        })
+    );
 
     return { success: true, data: customer };
   } catch (error) {

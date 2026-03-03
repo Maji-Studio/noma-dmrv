@@ -212,7 +212,7 @@ export function FeedstockTypeQuickAddDialog({
           <div className="grid grid-cols-2 gap-24">
             <div className="flex flex-col gap-16">
               <label htmlFor="feedstock-code" className="label-medium">
-                Code <span className="text-[var(--color-signal-red)]">*</span>
+                Code
               </label>
               <input
                 id="feedstock-code"

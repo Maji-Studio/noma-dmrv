@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { getUser } from "@/lib/auth/server";
 import { creditBatches } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
@@ -86,18 +86,14 @@ export async function createCreditBatchFn(
 
     const validated = createCreditBatchSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("CB", creditBatches, creditBatches.code);
+    const creditBatch = await withAutoCode(
+      "CB",
+      creditBatches,
+      creditBatches.code,
+      validated.code,
+      (code) => createCreditBatchData(user.id, { ...validated, code })
+    );
 
-    // Check for duplicate code
-    const codeExists = await creditBatchCodeExists(user.id, code);
-    if (codeExists) {
-      return {
-        success: false,
-        error: `Credit batch code "${code}" already exists`,
-      };
-    }
-
-    const creditBatch = await createCreditBatchData(user.id, { ...validated, code });
     return { success: true, data: creditBatch };
   } catch (error) {
     console.error("Failed to create credit batch:", error);

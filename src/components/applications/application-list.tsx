@@ -232,7 +232,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
   // Memoize columns
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), []);
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const items = applications?.items ?? [];
   const totalApplications = items.length;

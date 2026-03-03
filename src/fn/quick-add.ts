@@ -13,7 +13,7 @@ import {
   type CreateFeedstockTypeData,
 } from "@/data-access/quick-add";
 import { drivers, vehicles, feedstockTypes } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   driverQuickAddSchema,
   vehicleQuickAddSchema,
@@ -48,9 +48,10 @@ export async function createDriverFn(
       };
     }
 
-    const code = parsed.data.code || await generateNextCode("DRV", drivers, drivers.code);
-
-    const driver = await createDriver({ ...parsed.data, code });
+    const driver = await withAutoCode(
+      "DRV", drivers, drivers.code, parsed.data.code,
+      (code) => createDriver({ ...parsed.data, code })
+    );
     return { success: true, data: driver };
   } catch (error) {
     console.error("Error creating driver:", error);
@@ -86,9 +87,10 @@ export async function createVehicleFn(
       };
     }
 
-    const code = parsed.data.code || await generateNextCode("VEH", vehicles, vehicles.code);
-
-    const vehicle = await createVehicle({ ...parsed.data, code });
+    const vehicle = await withAutoCode(
+      "VEH", vehicles, vehicles.code, parsed.data.code,
+      (code) => createVehicle({ ...parsed.data, code })
+    );
     return { success: true, data: vehicle };
   } catch (error) {
     console.error("Error creating vehicle:", error);
@@ -124,9 +126,10 @@ export async function createFeedstockTypeFn(
       };
     }
 
-    const code = parsed.data.code || await generateNextCode("FT", feedstockTypes, feedstockTypes.code);
-
-    const feedstockType = await createFeedstockType({ ...parsed.data, code });
+    const feedstockType = await withAutoCode(
+      "FT", feedstockTypes, feedstockTypes.code, parsed.data.code,
+      (code) => createFeedstockType({ ...parsed.data, code })
+    );
     return { success: true, data: feedstockType };
   } catch (error) {
     console.error("Error creating feedstock type:", error);

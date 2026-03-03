@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Reactor, reactors } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createReactor,
   deleteReactor,
@@ -207,18 +207,23 @@ export async function createReactorFn(
 
     const validated = createReactorSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("R", reactors, reactors.code);
-
-    const reactor = await createReactor(user.id, {
-      code,
-      identifier: validated.identifier,
-      facilityId: validated.facilityId,
-      reactorType: validated.reactorType,
-      type: validated.type,
-      samplingMethod: validated.samplingMethod,
-      capacityKg: validated.capacityKg ?? null,
-      specifications: validated.specifications ?? null,
-    });
+    const reactor = await withAutoCode(
+      "R",
+      reactors,
+      reactors.code,
+      validated.code,
+      (code) =>
+        createReactor(user.id, {
+          code,
+          identifier: validated.identifier,
+          facilityId: validated.facilityId,
+          reactorType: validated.reactorType,
+          type: validated.type,
+          samplingMethod: validated.samplingMethod,
+          capacityKg: validated.capacityKg ?? null,
+          specifications: validated.specifications ?? null,
+        })
+    );
 
     return { success: true, data: reactor };
   } catch (error) {

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { type Application, applications } from "@/db/schema/application";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import { getUser } from "@/lib/auth/server";
 import {
   getApplications as getApplicationsData,
@@ -83,18 +83,14 @@ export async function createApplicationFn(
 
     const validated = createApplicationSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("AP", applications, applications.code);
+    const application = await withAutoCode(
+      "AP",
+      applications,
+      applications.code,
+      validated.code,
+      (code) => createApplicationData(user.id, { ...validated, code })
+    );
 
-    // Check for duplicate code
-    const codeExists = await applicationCodeExists(user.id, code);
-    if (codeExists) {
-      return {
-        success: false,
-        error: `Application code "${code}" already exists`,
-      };
-    }
-
-    const application = await createApplicationData(user.id, { ...validated, code });
     return { success: true, data: application };
   } catch (error) {
     console.error("Failed to create application:", error);

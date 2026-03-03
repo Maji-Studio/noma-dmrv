@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { feedstockDeliveries } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createFeedstockDelivery,
   deleteFeedstockDelivery,
@@ -207,24 +207,29 @@ export async function createFeedstockDeliveryFn(
 
     const validated = createFeedstockDeliverySchema.parse(data);
 
-    const code = validated.code || await generateNextCode("FD", feedstockDeliveries, feedstockDeliveries.code);
-
-    const delivery = await createFeedstockDelivery(user.id, {
-      code,
-      facilityId: validated.facilityId,
-      deliveryDate: validated.deliveryDate instanceof Date
-        ? validated.deliveryDate
-        : new Date(validated.deliveryDate),
-      supplierId: validated.supplierId,
-      driverId: validated.driverId || null,
-      vehicleId: validated.vehicleId || null,
-      gpsLatitude: validated.gpsLatitude ?? null,
-      gpsLongitude: validated.gpsLongitude ?? null,
-      feedstockTypeId: validated.feedstockTypeId || null,
-      weightKg: validated.weightKg ?? null,
-      moisturePercent: validated.moisturePercent ?? null,
-      notes: validated.notes || null,
-    });
+    const delivery = await withAutoCode(
+      "FD",
+      feedstockDeliveries,
+      feedstockDeliveries.code,
+      validated.code,
+      (code) =>
+        createFeedstockDelivery(user.id, {
+          code,
+          facilityId: validated.facilityId,
+          deliveryDate: validated.deliveryDate instanceof Date
+            ? validated.deliveryDate
+            : new Date(validated.deliveryDate),
+          supplierId: validated.supplierId,
+          driverId: validated.driverId || null,
+          vehicleId: validated.vehicleId || null,
+          gpsLatitude: validated.gpsLatitude ?? null,
+          gpsLongitude: validated.gpsLongitude ?? null,
+          feedstockTypeId: validated.feedstockTypeId || null,
+          weightKg: validated.weightKg ?? null,
+          moisturePercent: validated.moisturePercent ?? null,
+          notes: validated.notes || null,
+        })
+    );
 
     return { success: true, data: delivery };
   } catch (error) {

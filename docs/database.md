@@ -735,6 +735,67 @@ const paginatedItems = await db
 
 ---
 
+## Auto-Generated Entity Codes
+
+Every biochar entity has a unique human-readable `code` column. Codes follow the format `{PREFIX}-{YYYY}-{NNN}` (e.g., `FAC-2026-001`). When users leave the code field empty, the system auto-generates the next sequential code.
+
+**Source:** `src/data-access/code-generator.ts`
+
+### Prefix Registry
+
+| Prefix | Entity             | Example        |
+|--------|--------------------|----------------|
+| `FAC`  | Facility           | FAC-2026-001   |
+| `R`    | Reactor            | R-2026-003     |
+| `SL`   | Storage Location   | SL-2026-001    |
+| `SUP`  | Supplier           | SUP-2026-002   |
+| `FT`   | Feedstock Type     | FT-2026-001    |
+| `FD`   | Feedstock Delivery | FD-2026-005    |
+| `PR`   | Production Run     | PR-2026-012    |
+| `SAM`  | Sample             | SAM-2026-007   |
+| `BCF`  | Formulation        | BCF-2026-001   |
+| `BP`   | Biochar Product    | BP-2026-004    |
+| `CUS`  | Customer           | CUS-2026-001   |
+| `OR`   | Order              | OR-2026-003    |
+| `DL`   | Delivery           | DL-2026-002    |
+| `DRV`  | Driver             | DRV-2026-001   |
+| `VEH`  | Vehicle            | VEH-2026-001   |
+| `AP`   | Application        | AP-2026-006    |
+| `CB`   | Credit Batch       | CB-2026-001    |
+
+### How It Works
+
+1. `generateNextCode(prefix, table, codeColumn)` queries for the highest existing code matching the prefix + current year, then returns the next sequential number (zero-padded to 3 digits).
+2. `withAutoCode(prefix, table, codeColumn, userCode, insertFn)` wraps the insert. If the user provided a code, it uses that directly. Otherwise it auto-generates and retries up to 3 times on duplicate key collisions (handles concurrent inserts).
+
+### Usage in Server Actions
+
+All entity server actions in `src/fn/` use `withAutoCode`:
+
+```typescript
+import { withAutoCode } from "@/data-access/code-generator";
+
+const facility = await withAutoCode(
+  "FAC",
+  facilitiesTable,
+  facilitiesTable.code,
+  validated.code,       // user-provided code (empty = auto-generate)
+  (code) => createFacilityData(user.id, { ...validated, code })
+);
+```
+
+### Adding a New Entity
+
+When creating a new entity with auto-generated codes:
+
+1. Choose a unique prefix (2-3 uppercase letters)
+2. Add a `code` column with a unique constraint to the DB schema
+3. Use `withAutoCode` in the server action's create function
+4. Make the code field optional in the form schema (`.optional().or(z.literal(""))`)
+5. Add the prefix to this table
+
+---
+
 ## Environment Variables
 
 **Required database variable:**

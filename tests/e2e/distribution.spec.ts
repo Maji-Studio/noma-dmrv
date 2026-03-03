@@ -22,8 +22,6 @@ const DELIVERIES_URL = "/deliveries";
 // ============================================
 
 test.describe("Order + Delivery UI CRUD", () => {
-  // Track the created order's code so the delivery test can find it in the select
-  let createdOrderCode: string;
   let createdOrderId: string;
 
   // -------------------------------------------------------
@@ -105,11 +103,10 @@ test.describe("Order + Delivery UI CRUD", () => {
     );
     await expect(customerCellLocator.first()).toBeVisible({ timeout: 8000 });
 
-    // Capture the order code from the first row so the delivery test can use it
-    // The code column is rendered with a distinctive style; grab the first code cell
+    // Verify the order appears in the list
     const firstCodeCell = adminPage.locator("table tbody tr").first().locator("td").first();
-    createdOrderCode = (await firstCodeCell.textContent()) ?? "";
-    expect(createdOrderCode.length).toBeGreaterThan(0);
+    const orderCode = (await firstCodeCell.textContent()) ?? "";
+    expect(orderCode.length).toBeGreaterThan(0);
   });
 
   // -------------------------------------------------------

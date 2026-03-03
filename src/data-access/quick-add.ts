@@ -35,22 +35,29 @@ export async function createDriver(data: CreateDriverData): Promise<EntityOption
     throw new Error("A driver with this code already exists");
   }
 
-  const [driver] = await db
-    .insert(drivers)
-    .values({
-      code: data.code,
-      name: data.name,
-      licenseNumber: data.licenseNumber ?? null,
-      contactPhone: data.contactPhone ?? null,
-    })
-    .returning();
+  try {
+    const [driver] = await db
+      .insert(drivers)
+      .values({
+        code: data.code,
+        name: data.name,
+        licenseNumber: data.licenseNumber ?? null,
+        contactPhone: data.contactPhone ?? null,
+      })
+      .returning();
 
-  return {
-    id: driver.id,
-    code: driver.code,
-    name: driver.name,
-    subtitle: driver.licenseNumber ?? undefined,
-  };
+    return {
+      id: driver.id,
+      code: driver.code,
+      name: driver.name,
+      subtitle: driver.licenseNumber ?? undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new Error("A driver with this code already exists");
+    }
+    throw error;
+  }
 }
 
 // ============================================
@@ -92,25 +99,32 @@ export async function createVehicle(data: CreateVehicleData): Promise<EntityOpti
     throw new Error("A vehicle with this name already exists");
   }
 
-  const [vehicle] = await db
-    .insert(vehicles)
-    .values({
-      code: data.code,
-      name: data.name,
-      identifier: data.identifier,
-      vehicleType: data.vehicleType,
-      fuelType: data.fuelType,
-      fuelConsumptionLPerKm: data.fuelConsumptionLPerKm,
-      modelYear: data.modelYear,
-    })
-    .returning();
+  try {
+    const [vehicle] = await db
+      .insert(vehicles)
+      .values({
+        code: data.code,
+        name: data.name,
+        identifier: data.identifier,
+        vehicleType: data.vehicleType,
+        fuelType: data.fuelType,
+        fuelConsumptionLPerKm: data.fuelConsumptionLPerKm,
+        modelYear: data.modelYear,
+      })
+      .returning();
 
-  return {
-    id: vehicle.id,
-    code: vehicle.code,
-    name: vehicle.name,
-    subtitle: vehicle.vehicleType,
-  };
+    return {
+      id: vehicle.id,
+      code: vehicle.code,
+      name: vehicle.name,
+      subtitle: vehicle.vehicleType,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new Error("A vehicle with this code or name already exists");
+    }
+    throw error;
+  }
 }
 
 // ============================================
@@ -152,21 +166,28 @@ export async function createFeedstockType(
     throw new Error("A feedstock type with this name already exists");
   }
 
-  const [feedstockType] = await db
-    .insert(feedstockTypes)
-    .values({
-      code: data.code,
-      name: data.name,
-      category: data.category,
-      description: data.description ?? null,
-      registryUrl: data.registryUrl ?? null,
-    })
-    .returning();
+  try {
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        code: data.code,
+        name: data.name,
+        category: data.category,
+        description: data.description ?? null,
+        registryUrl: data.registryUrl ?? null,
+      })
+      .returning();
 
-  return {
-    id: feedstockType.id,
-    code: feedstockType.code,
-    name: feedstockType.name,
-    subtitle: feedstockType.category,
-  };
+    return {
+      id: feedstockType.id,
+      code: feedstockType.code,
+      name: feedstockType.name,
+      subtitle: feedstockType.category,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new Error("A feedstock type with this code or name already exists");
+    }
+    throw error;
+  }
 }

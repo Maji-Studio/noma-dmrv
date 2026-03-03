@@ -7,6 +7,8 @@ import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 
+const MAX_RETRIES = 3;
+
 /**
  * Generate the next sequential code for an entity.
  *
@@ -49,4 +51,52 @@ export async function generateNextCode(
 
   const paddedNumber = String(nextNumber).padStart(3, "0");
   return `${prefix}-${year}-${paddedNumber}`;
+}
+
+/**
+ * Execute an insert operation with auto-generated code, retrying on
+ * duplicate code collisions. This handles the race condition where
+ * concurrent requests generate the same sequential code.
+ *
+ * @param prefix - Entity prefix (e.g., "OR", "FAC")
+ * @param table - Drizzle table reference
+ * @param codeColumn - The code column on the table
+ * @param userCode - User-provided code (empty/undefined = auto-generate)
+ * @param insertFn - Callback that performs the insert with the given code
+ * @returns The result from insertFn
+ */
+export async function withAutoCode<T>(
+  prefix: string,
+  table: PgTable,
+  codeColumn: PgColumn,
+  userCode: string | undefined | null,
+  insertFn: (code: string) => Promise<T>
+): Promise<T> {
+  // If user provided a code, just use it directly (no retry)
+  if (userCode) {
+    return insertFn(userCode);
+  }
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const code = await generateNextCode(prefix, table, codeColumn);
+    try {
+      return await insertFn(code);
+    } catch (error) {
+      const isDuplicateCode =
+        error instanceof Error &&
+        (error.message.includes("unique") ||
+          error.message.includes("duplicate key") ||
+          error.message.includes("already exists"));
+
+      if (isDuplicateCode && attempt < MAX_RETRIES - 1) {
+        // Brief pause before retry to let the other transaction commit
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  // Should never reach here, but TypeScript needs it
+  throw new Error(`Failed to generate unique code after ${MAX_RETRIES} attempts`);
 }

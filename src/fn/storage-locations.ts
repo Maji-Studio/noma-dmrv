@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type StorageLocation, storageLocations } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createStorageLocation,
   deleteStorageLocation,
@@ -203,20 +203,25 @@ export async function createStorageLocationFn(
 
     const validated = createStorageLocationSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("SL", storageLocations, storageLocations.code);
-
-    const storageLocation = await createStorageLocation(user.id, {
-      code,
-      name: validated.name,
-      type: validated.type,
-      facilityId: validated.facilityId,
-      capacityKg: validated.capacityKg ?? null,
-      latitude: validated.latitude ?? null,
-      longitude: validated.longitude ?? null,
-      storageMethod: validated.storageMethod || null,
-      storageDescription: validated.storageDescription || null,
-      supplierReferenceId: validated.supplierReferenceId || null,
-    });
+    const storageLocation = await withAutoCode(
+      "SL",
+      storageLocations,
+      storageLocations.code,
+      validated.code,
+      (code) =>
+        createStorageLocation(user.id, {
+          code,
+          name: validated.name,
+          type: validated.type,
+          facilityId: validated.facilityId,
+          capacityKg: validated.capacityKg ?? null,
+          latitude: validated.latitude ?? null,
+          longitude: validated.longitude ?? null,
+          storageMethod: validated.storageMethod || null,
+          storageDescription: validated.storageDescription || null,
+          supplierReferenceId: validated.supplierReferenceId || null,
+        })
+    );
 
     return { success: true, data: storageLocation };
   } catch (error) {
