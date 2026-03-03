@@ -190,7 +190,7 @@ export async function createProductionRunFn(
       "PR",
       productionRuns,
       productionRuns.code,
-      validated.code,
+      undefined,
       (code) =>
         createProductionRun(user.id, {
           code,

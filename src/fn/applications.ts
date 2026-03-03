@@ -87,7 +87,7 @@ export async function createApplicationFn(
       "AP",
       applications,
       applications.code,
-      validated.code,
+      undefined,
       (code) => createApplicationData(user.id, { ...validated, code })
     );
 

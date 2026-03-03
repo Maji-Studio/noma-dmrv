@@ -163,7 +163,7 @@ export async function createBiocharProductFn(
       "BP",
       biocharProducts,
       biocharProducts.code,
-      validated.code,
+      undefined,
       (code) =>
         createBiocharProduct(user.id, {
           code,

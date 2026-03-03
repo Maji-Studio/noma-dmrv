@@ -90,7 +90,7 @@ export async function createCreditBatchFn(
       "CB",
       creditBatches,
       creditBatches.code,
-      validated.code,
+      undefined,
       (code) => createCreditBatchData(user.id, { ...validated, code })
     );
 

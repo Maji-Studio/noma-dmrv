@@ -187,7 +187,7 @@ export async function createFeedstockDeliveryFn(
       "FD",
       feedstockDeliveries,
       feedstockDeliveries.code,
-      validated.code,
+      undefined,
       (code) =>
         createFeedstockDelivery(user.id, {
           code,

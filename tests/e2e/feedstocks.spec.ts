@@ -21,13 +21,23 @@ test.describe("Feedstock UI CRUD", () => {
     await waitForSideSheet(page);
 
     // Select seeded feedstock delivery (required)
-    await selectEntity(page, "Feedstock Delivery", seededData.feedstockDelivery.id);
+    await selectEntity(
+      page,
+      "Feedstock Delivery",
+      seededData.feedstockDelivery.id,
+      seededData.feedstockDelivery.code
+    );
 
     // Wait for facilityId auto-population from delivery
     await page.waitForTimeout(1000);
 
     // Select seeded feedstock type (required)
-    await selectEntity(page, "Feedstock Type", seededData.feedstockType.id);
+    await selectEntity(
+      page,
+      "Feedstock Type",
+      seededData.feedstockType.id,
+      seededData.feedstockType.name
+    );
 
     // Fill required numeric field
     await page.fill('input[name="massDryKg"]', "75");
@@ -37,7 +47,12 @@ test.describe("Feedstock UI CRUD", () => {
     await page.fill('input[name="moistureContentPercent"]', "25");
 
     // Select storage location (optional)
-    await selectEntity(page, "Storage Location", seededData.feedstockStorageLocation.id);
+    await selectEntity(
+      page,
+      "Storage Location",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name
+    );
 
     // Submit the form
     await page.locator('[role="dialog"]').locator('button:has-text("Create Feedstock")').click();

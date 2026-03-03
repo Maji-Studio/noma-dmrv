@@ -26,13 +26,23 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await page.selectOption('select[name="status"]', "draft");
 
     // Select seeded facility (this enables reactor and feedstock selects)
-    await selectEntity(page, "Facility", seededData.facility.id);
+    await selectEntity(
+      page,
+      "Facility",
+      seededData.facility.id,
+      seededData.facility.name
+    );
 
     // Wait for cascading selects to load
     await page.waitForTimeout(1000);
 
     // Select the seeded reactor
-    await selectEntity(page, "Reactor", seededData.reactor.id);
+    await selectEntity(
+      page,
+      "Reactor",
+      seededData.reactor.id,
+      seededData.reactor.identifier
+    );
 
     // Fill date
     const today = new Date().toISOString().split("T")[0];
@@ -40,7 +50,12 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     // Select feedstock source bin
     await page.waitForTimeout(500);
-    await selectEntity(page, "Feedstock Source Bin", seededData.feedstockStorageLocation.id);
+    await selectEntity(
+      page,
+      "Feedstock Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name
+    );
 
     // Fill feedstock mass used
     await page.fill('input[name="feedstockMassUsedKg"]', "50");

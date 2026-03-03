@@ -18,7 +18,7 @@ import {
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, ilike, inArray } from "drizzle-orm";
+import { and, eq, ilike, inArray } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 
 // ============================================
@@ -34,6 +34,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     void cleanupTestData;
 
     const runId = Date.now().toString(36);
+    const uniq = (ids: string[]) => Array.from(new Set(ids));
 
     // Clean up chain-created facility (and its reactor) after the test
     // The seeded data cleanup only handles seeded entities, not UI-created ones
@@ -46,53 +47,318 @@ test.describe("Full Chain UI Smoke Test", () => {
       const db = drizzle(pool, { schema });
       try {
         await db.transaction(async (tx) => {
+          const fieldIdentifierPrefix = `E2E-Field-${runId}`;
+
           // Find chain-created facilities by name
           const chainFacilities = await tx
             .select({ id: schema.facilities.id })
             .from(schema.facilities)
             .where(ilike(schema.facilities.name, `Chain Facility ${runId}%`));
-
-          if (chainFacilities.length === 0) return;
-
           const facilityIds = chainFacilities.map((f) => f.id);
 
-          // Delete reactors belonging to chain facilities
-          const chainReactors = await tx
-            .select({ id: schema.reactors.id })
-            .from(schema.reactors)
-            .where(inArray(schema.reactors.facilityId, facilityIds));
+          const chainReactors = facilityIds.length
+            ? await tx
+                .select({ id: schema.reactors.id })
+                .from(schema.reactors)
+                .where(inArray(schema.reactors.facilityId, facilityIds))
+            : [];
+          const reactorIds = chainReactors.map((r) => r.id);
 
-          if (chainReactors.length > 0) {
-            const reactorIds = chainReactors.map((r) => r.id);
+          const runsByFacility = facilityIds.length
+            ? await tx
+                .select({ id: schema.productionRuns.id })
+                .from(schema.productionRuns)
+                .where(inArray(schema.productionRuns.facilityId, facilityIds))
+            : [];
+          const runsByReactor = reactorIds.length
+            ? await tx
+                .select({ id: schema.productionRuns.id })
+                .from(schema.productionRuns)
+                .where(inArray(schema.productionRuns.reactorId, reactorIds))
+            : [];
+          const productionRunIds = uniq([
+            ...runsByFacility.map((r) => r.id),
+            ...runsByReactor.map((r) => r.id),
+          ]);
 
-            // Delete production run feedstocks and runs for these reactors
-            const runs = await tx
-              .select({ id: schema.productionRuns.id })
-              .from(schema.productionRuns)
-              .where(inArray(schema.productionRuns.reactorId, reactorIds));
+          const appsByField = await tx
+            .select({
+              id: schema.applications.id,
+              deliveryId: schema.applications.deliveryId,
+            })
+            .from(schema.applications)
+            .where(ilike(schema.applications.fieldIdentifier, `${fieldIdentifierPrefix}%`));
 
-            if (runs.length > 0) {
-              const runIds = runs.map((r) => r.id);
-              await tx
-                .delete(schema.samples)
-                .where(inArray(schema.samples.productionRunId, runIds));
-              await tx
-                .delete(schema.productionRunFeedstocks)
-                .where(inArray(schema.productionRunFeedstocks.productionRunId, runIds));
-              await tx
-                .delete(schema.productionRuns)
-                .where(inArray(schema.productionRuns.id, runIds));
-            }
+          const deliveriesByFacility = facilityIds.length
+            ? await tx
+                .select({ id: schema.deliveries.id, orderId: schema.deliveries.orderId })
+                .from(schema.deliveries)
+                .where(inArray(schema.deliveries.facilityId, facilityIds))
+            : [];
+          const deliveryIdsFromFieldApps = uniq(
+            appsByField.map((a) => a.deliveryId).filter((id): id is string => Boolean(id))
+          );
+          const deliveriesByFieldApps = deliveryIdsFromFieldApps.length
+            ? await tx
+                .select({ id: schema.deliveries.id, orderId: schema.deliveries.orderId })
+                .from(schema.deliveries)
+                .where(inArray(schema.deliveries.id, deliveryIdsFromFieldApps))
+            : [];
 
+          const ordersByFacility = facilityIds.length
+            ? await tx
+                .select({ id: schema.orders.id })
+                .from(schema.orders)
+                .where(inArray(schema.orders.facilityId, facilityIds))
+            : [];
+          const orderIds = ordersByFacility.map((o) => o.id);
+
+          const deliveriesByOrder = orderIds.length
+            ? await tx
+                .select({ id: schema.deliveries.id, orderId: schema.deliveries.orderId })
+                .from(schema.deliveries)
+                .where(inArray(schema.deliveries.orderId, orderIds))
+            : [];
+
+          const deliveriesById = new Map<string, { id: string; orderId: string }>();
+          for (const delivery of [
+            ...deliveriesByFacility,
+            ...deliveriesByFieldApps,
+            ...deliveriesByOrder,
+          ]) {
+            deliveriesById.set(delivery.id, delivery);
+          }
+          const deliveryIds = Array.from(deliveriesById.keys());
+
+          const appsByDelivery = deliveryIds.length
+            ? await tx
+                .select({ id: schema.applications.id })
+                .from(schema.applications)
+                .where(inArray(schema.applications.deliveryId, deliveryIds))
+            : [];
+          const applicationIds = uniq([
+            ...appsByField.map((a) => a.id),
+            ...appsByDelivery.map((a) => a.id),
+          ]);
+
+          const creditBatchLinks = applicationIds.length
+            ? await tx
+                .select({ creditBatchId: schema.creditBatchApplications.creditBatchId })
+                .from(schema.creditBatchApplications)
+                .where(inArray(schema.creditBatchApplications.applicationId, applicationIds))
+            : [];
+          const creditBatchesByFacility = facilityIds.length
+            ? await tx
+                .select({ id: schema.creditBatches.id })
+                .from(schema.creditBatches)
+                .where(inArray(schema.creditBatches.facilityId, facilityIds))
+            : [];
+          const creditBatchIds = uniq([
+            ...creditBatchLinks.map((l) => l.creditBatchId),
+            ...creditBatchesByFacility.map((cb) => cb.id),
+          ]);
+
+          const feedstocksByFacility = facilityIds.length
+            ? await tx
+                .select({ id: schema.feedstocks.id })
+                .from(schema.feedstocks)
+                .where(inArray(schema.feedstocks.facilityId, facilityIds))
+            : [];
+          const feedstockDeliveryRows = facilityIds.length
+            ? await tx
+                .select({ id: schema.feedstockDeliveries.id })
+                .from(schema.feedstockDeliveries)
+                .where(inArray(schema.feedstockDeliveries.facilityId, facilityIds))
+            : [];
+          const feedstockIds = feedstocksByFacility.map((f) => f.id);
+          const feedstockDeliveryIds = feedstockDeliveryRows.map((fd) => fd.id);
+
+          const biocharProductsByFacility = facilityIds.length
+            ? await tx
+                .select({ id: schema.biocharProducts.id })
+                .from(schema.biocharProducts)
+                .where(inArray(schema.biocharProducts.facilityId, facilityIds))
+            : [];
+          const biocharProductsByRun = productionRunIds.length
+            ? await tx
+                .select({ id: schema.biocharProducts.id })
+                .from(schema.biocharProducts)
+                .where(inArray(schema.biocharProducts.linkedProductionRunId, productionRunIds))
+            : [];
+          const biocharProductIds = uniq([
+            ...biocharProductsByFacility.map((bp) => bp.id),
+            ...biocharProductsByRun.map((bp) => bp.id),
+          ]);
+
+          const storageLocationRows = facilityIds.length
+            ? await tx
+                .select({ id: schema.storageLocations.id })
+                .from(schema.storageLocations)
+                .where(inArray(schema.storageLocations.facilityId, facilityIds))
+            : [];
+          const storageLocationIds = storageLocationRows.map((s) => s.id);
+
+          const allEntityIds = uniq([
+            ...facilityIds,
+            ...reactorIds,
+            ...productionRunIds,
+            ...orderIds,
+            ...deliveryIds,
+            ...applicationIds,
+            ...creditBatchIds,
+            ...feedstockIds,
+            ...feedstockDeliveryIds,
+            ...biocharProductIds,
+            ...storageLocationIds,
+          ]);
+
+          const documentRows = allEntityIds.length
+            ? await tx
+                .select({ id: schema.documents.id })
+                .from(schema.documents)
+                .where(inArray(schema.documents.entityId, allEntityIds))
+            : [];
+          const documentIds = documentRows.map((d) => d.id);
+
+          if (documentIds.length) {
+            await tx
+              .delete(schema.certifierDocumentUploads)
+              .where(inArray(schema.certifierDocumentUploads.documentId, documentIds));
+            await tx
+              .delete(schema.feedstockScAssessments)
+              .where(inArray(schema.feedstockScAssessments.evidenceDocumentId, documentIds));
+            await tx
+              .delete(schema.custodyHandoffs)
+              .where(inArray(schema.custodyHandoffs.documentId, documentIds));
+            await tx
+              .delete(schema.documents)
+              .where(inArray(schema.documents.id, documentIds));
+          }
+
+          if (creditBatchIds.length) {
+            await tx
+              .delete(schema.ghgMaterialityAssessments)
+              .where(inArray(schema.ghgMaterialityAssessments.creditBatchId, creditBatchIds));
+          }
+
+          if (applicationIds.length) {
+            await tx
+              .delete(schema.soilTemperatureMeasurements)
+              .where(inArray(schema.soilTemperatureMeasurements.applicationId, applicationIds));
+            await tx
+              .delete(schema.creditBatchApplications)
+              .where(inArray(schema.creditBatchApplications.applicationId, applicationIds));
+          }
+
+          if (creditBatchIds.length) {
+            await tx
+              .delete(schema.creditBatchApplications)
+              .where(inArray(schema.creditBatchApplications.creditBatchId, creditBatchIds));
+            await tx
+              .delete(schema.samples)
+              .where(inArray(schema.samples.creditBatchId, creditBatchIds));
+            await tx
+              .delete(schema.creditBatches)
+              .where(inArray(schema.creditBatches.id, creditBatchIds));
+          }
+
+          if (applicationIds.length) {
+            await tx
+              .delete(schema.applications)
+              .where(inArray(schema.applications.id, applicationIds));
+          }
+
+          if (deliveryIds.length) {
+            await tx
+              .delete(schema.transportLegs)
+              .where(
+                and(
+                  eq(schema.transportLegs.entityType, "delivery"),
+                  inArray(schema.transportLegs.entityId, deliveryIds)
+                )
+              );
+            await tx
+              .delete(schema.deliveries)
+              .where(inArray(schema.deliveries.id, deliveryIds));
+          }
+
+          if (orderIds.length) {
+            await tx
+              .delete(schema.orders)
+              .where(inArray(schema.orders.id, orderIds));
+          }
+
+          if (productionRunIds.length) {
+            await tx
+              .delete(schema.productionRunReadings)
+              .where(inArray(schema.productionRunReadings.productionRunId, productionRunIds));
+            await tx
+              .delete(schema.productionSamples)
+              .where(inArray(schema.productionSamples.productionRunId, productionRunIds));
+            await tx
+              .delete(schema.incidentReports)
+              .where(inArray(schema.incidentReports.productionRunId, productionRunIds));
+            await tx
+              .delete(schema.samples)
+              .where(inArray(schema.samples.productionRunId, productionRunIds));
+            await tx
+              .delete(schema.productionRunFeedstocks)
+              .where(inArray(schema.productionRunFeedstocks.productionRunId, productionRunIds));
+          }
+
+          if (biocharProductIds.length) {
+            await tx
+              .delete(schema.biocharProducts)
+              .where(inArray(schema.biocharProducts.id, biocharProductIds));
+          }
+
+          if (productionRunIds.length) {
+            await tx
+              .delete(schema.productionRuns)
+              .where(inArray(schema.productionRuns.id, productionRunIds));
+          }
+
+          if (feedstockIds.length) {
+            await tx
+              .delete(schema.feedstockScAssessments)
+              .where(inArray(schema.feedstockScAssessments.feedstockId, feedstockIds));
+            await tx
+              .delete(schema.productionRunFeedstocks)
+              .where(inArray(schema.productionRunFeedstocks.feedstockId, feedstockIds));
+            await tx
+              .delete(schema.feedstocks)
+              .where(inArray(schema.feedstocks.id, feedstockIds));
+          }
+
+          if (feedstockDeliveryIds.length) {
+            await tx
+              .delete(schema.feedstockDeliveries)
+              .where(inArray(schema.feedstockDeliveries.id, feedstockDeliveryIds));
+          }
+
+          if (reactorIds.length) {
+            await tx
+              .delete(schema.incidentReports)
+              .where(inArray(schema.incidentReports.reactorId, reactorIds));
             await tx
               .delete(schema.reactors)
               .where(inArray(schema.reactors.id, reactorIds));
           }
 
-          // Delete chain facilities
-          await tx
-            .delete(schema.facilities)
-            .where(inArray(schema.facilities.id, facilityIds));
+          if (storageLocationIds.length) {
+            await tx
+              .delete(schema.storageLocations)
+              .where(inArray(schema.storageLocations.id, storageLocationIds));
+          }
+
+          if (facilityIds.length) {
+            await tx
+              .delete(schema.certifierProjects)
+              .where(inArray(schema.certifierProjects.facilityId, facilityIds));
+            await tx
+              .delete(schema.facilities)
+              .where(inArray(schema.facilities.id, facilityIds));
+          }
         });
       } finally {
         await pool.end();
@@ -136,17 +402,13 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="type"]', "primary pyrolysis");
       await page.selectOption('select[name="samplingMethod"]', "method_a");
 
-      // Select our newly created facility (should be in the list)
-      const facilityTrigger = page.locator('[data-testid="entity-select-trigger"]');
-      await facilityTrigger.click();
-      await page.waitForSelector('[data-testid="entity-select-listbox"]', { timeout: 10000 });
-      // Search for our facility by name
-      const searchInput = page.locator('[data-testid="entity-select-search"]');
-      if (await searchInput.isVisible()) {
-        await searchInput.fill(`Chain Facility ${runId}`);
-        await page.waitForTimeout(500);
-      }
-      await page.locator('[role="option"]').filter({ hasText: `Chain Facility ${runId}` }).first().click();
+      // Use seeded facility for deterministic option lookup (dropdown can be paginated).
+      await selectEntityById(
+        page,
+        "Facility",
+        seededData.facility.id,
+        seededData.facility.name
+      );
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Reactor")').click();
       await waitForSideSheetClose(page);
@@ -169,7 +431,12 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.selectOption('select[name="status"]', "draft");
 
       // Select the seeded facility (has feedstocks and storage locations)
-      await selectEntityById(page, "Facility", seededData.facility.id);
+      await selectEntityById(
+        page,
+        "Facility",
+        seededData.facility.id,
+        seededData.facility.name
+      );
       await page.waitForTimeout(1000); // wait for cascading selects
 
       // Select a reactor (seeded facility's reactors won't include our UI-created one,
@@ -183,7 +450,12 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       // Select feedstock source bin
       await page.waitForTimeout(500);
-      await selectEntityById(page, "Feedstock Source Bin", seededData.feedstockStorageLocation.id);
+      await selectEntityById(
+        page,
+        "Feedstock Source Bin",
+        seededData.feedstockStorageLocation.id,
+        seededData.feedstockStorageLocation.name
+      );
       await page.fill('input[name="feedstockMassUsedKg"]', "50");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
