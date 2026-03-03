@@ -49,11 +49,11 @@ export function ForgotPasswordForm() {
       {success ? (
         <div className="space-y-24">
           <div
-            className="p-m bg-green-50 border border-green-500 rounded-none text-green-700"
+            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
             role="status"
             aria-live="polite"
           >
-            <h3 className="body-medium font-semibold mb-xs">Check your email</h3>
+            <h3 className="body-medium font-semibold mb-16">Check your email</h3>
             <p className="body-small">
               If an account exists with that email address, we&apos;ve sent a
               password reset link. Please check your inbox and follow the

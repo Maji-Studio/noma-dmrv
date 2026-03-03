@@ -31,8 +31,8 @@ export function Sidebar({ projectId }: SidebarProps) {
   ];
 
   return (
-    <aside className="w-64 border-r border-[var(--color-border-primary)] min-h-screen p-l bg-[var(--color-background-light)]">
-      <nav className="flex flex-col gap-xs">
+    <aside className="w-64 border-r border-[var(--color-border-primary)] min-h-screen p-32 bg-[var(--color-background-light)]">
+      <nav className="flex flex-col gap-16">
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = pathname === link.href;
@@ -42,7 +42,7 @@ export function Sidebar({ projectId }: SidebarProps) {
               key={link.href}
               href={link.href}
               className={cn(
-                "flex items-center gap-s px-m py-s rounded-[var(--radius-8)] transition-colors duration-300",
+                "flex items-center gap-16 px-24 py-16 rounded-[var(--radius-8)] transition-colors duration-300",
                 isActive
                   ? "bg-[var(--clr-dark-purple)] text-[var(--color-text-white-primary)]"
                   : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-medium)]"

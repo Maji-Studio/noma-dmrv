@@ -81,7 +81,7 @@ This file provides guidance to Claude Code when working with this Next.js templa
 
 ## Project Overview
 
-This is a **Next.js App Template** - a production-ready starter with authentication, database, and best practices. It uses Next.js 16 with App Router, Better Auth for authentication, PostgreSQL with Drizzle ORM, and includes example CRUD features to demonstrate architecture patterns.
+**noma-dmrv** is a biochar carbon credit MRV (Monitoring, Reporting, Verification) system built on a Next.js 16 App Router template. It uses Better Auth for authentication, PostgreSQL with Drizzle ORM (45+ tables), and implements 16 entity CRUD workflows covering the full traceability chain: Facility → Reactor → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
 
 ## Essential Commands
 
@@ -94,6 +94,7 @@ This is a **Next.js App Template** - a production-ready starter with authenticat
 ### Database Operations
 - `pnpm db:generate` - Generate new migrations from schema changes (SAFE)
 - `pnpm db:push` - Push schema changes directly (review first)
+- `pnpm db:reset` - Drop all tables, push schema, and ensure admin user (DESTRUCTIVE)
 - `pnpm db:studio` - Open Drizzle Studio for database exploration (SAFE)
 
 ## Architecture
@@ -126,17 +127,24 @@ db/ (Database connection & schema)
 │   ├── app/               # Next.js App Router
 │   │   ├── (auth)/        # Auth routes
 │   │   ├── (app)/         # Protected app routes
-│   │   │   └── [projectId]/ # Project-scoped routes
+│   │   │   ├── [projectId]/ # Project-scoped routes (items example)
+│   │   │   ├── facilities/  # Flat entity routes (biochar entities)
+│   │   │   ├── production-runs/
+│   │   │   └── ...          # 16 entity routes total
 │   │   ├── admin/         # Admin panel
 │   │   └── api/           # API routes
-│   ├── components/        # React components
+│   ├── components/        # React components (per-entity folders)
 │   ├── config/            # Configuration
 │   ├── data-access/       # Database queries + auth guards
-│   ├── db/                # Database & schema
+│   ├── db/                # Database & schema (45+ tables)
 │   ├── fn/                # Server actions
 │   ├── hooks/             # React Query hooks
 │   ├── lib/               # Utilities
+│   ├── schemas/           # Zod form + action schemas
 │   └── types/             # TypeScript types
+├── tests/e2e/             # Playwright E2E tests
+│   ├── fixtures/          # Auth fixtures, seed data, helpers
+│   └── *.spec.ts          # Per-entity and chain tests
 ```
 
 ## Code Quality Rules
@@ -222,8 +230,10 @@ const {
 - Use `ServerError` for server-side errors (use `setError('root.serverError', {...})`)
 - Use `FormError` for field-level errors (handled by FormField)
 - Client-side validation happens before server calls
-- For numeric inputs: `{...register("age", { setValueAs: v => v === "" ? undefined : Number(v) })}`
-- See `docs/forms.md` for complete guide
+- For numeric inputs use helpers from `@/lib/form-utils`: `{...register("massKg", { setValueAs: nullableNumericValue })}`
+- Never use `valueAsNumber: true` — it converts `""` to `NaN` which breaks Zod validation
+- For optional UUID fields (EntitySelect), use `emptyToNull` from `@/schemas/helpers` first in the union: `emptyToNull.or(z.string().uuid())`
+- See `docs/forms.md` for complete guide, `docs/troubleshooting.md` for gotchas
 
 ### Accessibility
 - Touch targets: Minimum 44x44px
@@ -231,19 +241,26 @@ const {
 - Keyboard navigation: All interactive elements accessible
 - ARIA labels: Present where visual context insufficient
 
-## Example Feature (Items CRUD)
+## Reference Features
 
-The template includes a complete CRUD example in `/[projectId]/items`:
+### Biochar Entities (primary pattern)
 
-**Files to reference:**
-- `src/db/schema/items.ts` - Database schema
-- `src/data-access/items.ts` - Data layer with auth guards
-- `src/fn/items.ts` - Server actions
-- `src/hooks/use-items.ts` - React Query hooks
-- `src/components/items/` - UI components
-- `src/app/(app)/[projectId]/items/page.tsx` - Route
+Each of the 16 biochar entities follows the same layered structure. Use **facilities** as a representative example:
 
-**Use this as a reference when creating new features.**
+- `src/schemas/facilities.ts` - Zod form + action schemas
+- `src/data-access/facilities.ts` - CRUD queries + auth guards
+- `src/fn/facilities.ts` - Server actions
+- `src/hooks/use-facilities.ts` - React Query hooks
+- `src/components/facilities/` - List + Form + barrel export
+- `src/app/(app)/facilities/page.tsx` - Flat route (no `[projectId]`)
+- `tests/e2e/facilities.spec.ts` - Playwright CRUD test
+
+### Items CRUD (template example)
+
+The original template example in `/[projectId]/items` demonstrates project-scoped routes:
+
+- `src/db/schema/items.ts`, `src/data-access/items.ts`, `src/fn/items.ts`
+- `src/hooks/use-items.ts`, `src/components/items/`, `src/app/(app)/[projectId]/items/page.tsx`
 
 ## Key Patterns
 
@@ -316,8 +333,13 @@ Follow this checklist when creating new features:
    - Barrel export from `index.ts`
 
 7. **Routes** (`src/app/(app)/your-feature/page.tsx`)
-   - Create page component
+   - Biochar entities use flat routes: `/facilities`, `/production-runs`
+   - Project-scoped features use: `/[projectId]/your-feature`
    - Use async params for Next.js 16
+
+8. **E2E Tests** (`tests/e2e/your-feature.spec.ts`)
+   - Use `adminPage` and `seededData` fixtures
+   - Test create via side sheet form + verify in list
 
 See `TEMPLATE_USAGE.md` for detailed examples.
 
@@ -381,11 +403,13 @@ All local summaries are non-authoritative interpretations. Verify against linked
 - **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
 - **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
 
-## This is a Template
+## E2E Testing
 
-Remember: This is a starting point for new projects. The example features (items, dashboard) are meant to be:
-- **Referenced** - Use as examples for your own features
-- **Customized** - Adapt to your project needs
-- **Removed** - Delete if not needed
+Playwright tests cover all 16 entities plus a full-chain smoke test:
 
-Focus on teaching patterns, not preserving specific features.
+- **Fixtures**: `tests/e2e/fixtures/auth-fixtures.ts` provides `adminPage`, `seededData`, `cleanupTestData`
+- **Seed data**: `tests/e2e/fixtures/seed-chain-data.ts` seeds 13 prerequisite entities
+- **Chain test**: `tests/e2e/full-chain-ui.spec.ts` creates all 8 core entities in one session
+- **Per-entity tests**: `tests/e2e/facilities.spec.ts`, `production-runs.spec.ts`, `distribution.spec.ts`, `applications.spec.ts`
+
+Run: `pnpm test:e2e` (requires dev server running)

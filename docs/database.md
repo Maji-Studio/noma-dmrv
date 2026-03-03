@@ -735,6 +735,68 @@ const paginatedItems = await db
 
 ---
 
+## Auto-Generated Entity Codes
+
+Every biochar entity has a unique human-readable `code` column. Codes follow the format `{PREFIX}-{YYYY}-{NNN}` (e.g., `FAC-2026-001`). Codes are always auto-generated server-side — there is no code field in any form or schema. The code field is not exposed to users.
+
+**Source:** `src/data-access/code-generator.ts`
+
+### Prefix Registry
+
+| Prefix | Entity             | Example        |
+|--------|--------------------|----------------|
+| `FAC`  | Facility           | FAC-2026-001   |
+| `R`    | Reactor            | R-2026-003     |
+| `SL`   | Storage Location   | SL-2026-001    |
+| `SUP`  | Supplier           | SUP-2026-002   |
+| `FT`   | Feedstock Type     | FT-2026-001    |
+| `FD`   | Feedstock Delivery | FD-2026-005    |
+| `FS`   | Feedstock          | FS-2026-001    |
+| `PR`   | Production Run     | PR-2026-012    |
+| `SAM`  | Sample             | SAM-2026-007   |
+| `BCF`  | Formulation        | BCF-2026-001   |
+| `BP`   | Biochar Product    | BP-2026-004    |
+| `CUS`  | Customer           | CUS-2026-001   |
+| `OR`   | Order              | OR-2026-003    |
+| `DL`   | Delivery           | DL-2026-002    |
+| `DRV`  | Driver             | DRV-2026-001   |
+| `VEH`  | Vehicle            | VEH-2026-001   |
+| `AP`   | Application        | AP-2026-006    |
+| `CB`   | Credit Batch       | CB-2026-001    |
+
+### How It Works
+
+1. `generateNextCode(prefix, table, codeColumn)` queries for the highest existing code matching the prefix + current year, then returns the next sequential number (zero-padded to 3 digits).
+2. `withAutoCode(prefix, table, codeColumn, userCode, insertFn)` wraps the insert. It auto-generates a code and retries up to 3 times on duplicate key collisions (handles concurrent inserts). Duplicate detection uses `isCodeUniqueViolation()` which matches the specific Postgres constraint name for the code column.
+
+### Usage in Server Actions
+
+All entity server actions in `src/fn/` use `withAutoCode`:
+
+```typescript
+import { withAutoCode } from "@/data-access/code-generator";
+
+const facility = await withAutoCode(
+  "FAC",
+  facilitiesTable,
+  facilitiesTable.code,
+  undefined,            // codes are always auto-generated
+  (code) => createFacilityData(user.id, { ...validated, code })
+);
+```
+
+### Adding a New Entity
+
+When creating a new entity with auto-generated codes:
+
+1. Choose a unique prefix (2-3 uppercase letters)
+2. Add a `code` column with a unique constraint to the DB schema
+3. Use `withAutoCode` in the server action's create function (pass `undefined` for `userCode`)
+4. Do NOT add a code field to the form schema — codes are auto-generated
+5. Add the prefix to this table
+
+---
+
 ## Environment Variables
 
 **Required database variable:**

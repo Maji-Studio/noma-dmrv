@@ -14,8 +14,9 @@ const buttonVariants = cva(
         noOutline: "border-transparent bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-surface-medium)]",
       },
       size: {
-        default: "h-[48px] px-[var(--spacing-16)] xl:h-[60px] xl:px-[var(--spacing-24)] gap-[var(--spacing-12)]",
-        small: "h-[32px] px-[var(--spacing-12)] gap-[var(--spacing-8)] text-[var(--text-xs)]",
+        default: "h-[40px] px-16 gap-10",
+        small: "h-[32px] px-12 gap-8 text-[var(--text-xs)]",
+        large: "h-[48px] px-20 xl:h-[60px] xl:px-24 gap-12",
       },
       width: {
         default: "w-auto",

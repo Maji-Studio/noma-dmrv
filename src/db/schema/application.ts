@@ -147,3 +147,12 @@ export const soilTemperatureMeasurementsRelations = relations(
     }),
   })
 );
+
+// ============================================
+// Type Exports
+// ============================================
+
+export type Application = typeof applications.$inferSelect;
+export type NewApplication = typeof applications.$inferInsert;
+export type SoilTemperatureMeasurement = typeof soilTemperatureMeasurements.$inferSelect;
+export type NewSoilTemperatureMeasurement = typeof soilTemperatureMeasurements.$inferInsert;
