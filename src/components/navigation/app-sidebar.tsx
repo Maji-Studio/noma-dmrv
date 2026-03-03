@@ -54,14 +54,13 @@ const SECTION_ACCENTS = {
 
 const navSections: NavSection[] = [
   {
-    items: [{ href: "/facilities", label: "Dashboard", icon: House }],
+    items: [{ href: "/dashboard", label: "Dashboard", icon: House }],
     accent: SECTION_ACCENTS.default,
   },
   {
     title: "Production",
     accent: SECTION_ACCENTS.production,
     items: [
-      { href: "/suppliers", label: "Suppliers", icon: Handshake },
       { href: "/feedstock-deliveries", label: "Feedstock Deliveries", icon: Leaf },
       { href: "/feedstocks", label: "Feedstocks", icon: Grains },
       { href: "/production-runs", label: "Production Runs", icon: Factory },
@@ -82,6 +81,7 @@ const navSections: NavSection[] = [
     title: "Distribution",
     accent: SECTION_ACCENTS.distribution,
     items: [
+      { href: "/suppliers", label: "Suppliers", icon: Handshake },
       { href: "/customers", label: "Customers", icon: Users },
       { href: "/orders", label: "Orders", icon: ShoppingCart },
       { href: "/deliveries", label: "Deliveries", icon: Truck },
@@ -182,7 +182,7 @@ export function AppSidebar() {
     >
       {/* Brand header */}
       <div className="flex items-center h-56 px-16 border-b border-[var(--color-white-10)]">
-        <Link href="/facilities" className="flex items-center gap-10">
+        <Link href="/dashboard" className="flex items-center gap-10">
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-[12px] leading-none">
               D

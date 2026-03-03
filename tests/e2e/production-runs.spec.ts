@@ -46,7 +46,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await page.fill('input[name="feedstockMassUsedKg"]', "50");
 
     // Submit
-    await page.click('button:has-text("Create Production Run")');
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
 
     // Verify production run appears in list

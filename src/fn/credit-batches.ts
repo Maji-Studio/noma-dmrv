@@ -98,10 +98,8 @@ export async function createCreditBatchFn(
   } catch (error) {
     console.error("Failed to create credit batch:", error);
     if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: error.issues.map((e) => e.message).join(", "),
-      };
+      const msg = error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+      return { success: false, error: msg };
     }
     return {
       success: false,

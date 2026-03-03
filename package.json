@@ -1,7 +1,7 @@
 {
   "name": "noma-dmrv",
   "version": "1.0.0",
-  "description": "Production-ready Next.js template with auth, database, and best practices",
+  "description": "Maji dMRV - Biochar carbon credit MRV system",
   "private": true,
   "scripts": {
     "dev": "pnpm dev:docker",
