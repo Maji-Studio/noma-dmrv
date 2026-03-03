@@ -144,6 +144,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   feedstock: "feedstock",
   productionRun: "production run",
   formulation: "formulation",
+  feedstockDelivery: "feedstock delivery",
 };
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 

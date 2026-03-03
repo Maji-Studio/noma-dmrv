@@ -16,6 +16,7 @@ import {
   vehicles,
   feedstockTypes,
   feedstocks,
+  feedstockDeliveries,
   productionRuns,
   formulations,
 } from "@/db/schema";
@@ -63,6 +64,8 @@ export async function getEntities(
       return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
       return getFormulationsEntity({ search, limit });
+    case "feedstockDelivery":
+      return getFeedstockDeliveriesEntity({ search, limit });
     default:
       return [];
   }
@@ -97,6 +100,8 @@ export async function getEntityById(
       return getProductionRunEntityById(id);
     case "formulation":
       return getFormulationEntityById(id);
+    case "feedstockDelivery":
+      return getFeedstockDeliveryEntityById(id);
     default:
       return null;
   }
@@ -876,5 +881,76 @@ async function getFormulationEntityById(id: string): Promise<EntityOption | null
     code: result.code,
     name: result.name,
     subtitle: result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar` : undefined,
+  };
+}
+
+// ============================================
+// Feedstock Deliveries
+// ============================================
+
+async function getFeedstockDeliveriesEntity(params: {
+  search?: string;
+  limit: number;
+}): Promise<EntityOption[]> {
+  const { search, limit } = params;
+
+  const conditions: SQL[] = [];
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push(
+      or(
+        ilike(feedstockDeliveries.code, searchPattern),
+        ilike(suppliers.name, searchPattern)
+      )!
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const results = await db
+    .select({
+      id: feedstockDeliveries.id,
+      code: feedstockDeliveries.code,
+      deliveryDate: feedstockDeliveries.deliveryDate,
+      facilityId: feedstockDeliveries.facilityId,
+      supplierName: suppliers.name,
+    })
+    .from(feedstockDeliveries)
+    .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
+    .where(whereClause)
+    .limit(limit);
+
+  return results.map((r) => ({
+    id: r.id,
+    code: r.code,
+    name: `${r.code} (${new Date(r.deliveryDate).toLocaleDateString()})`,
+    subtitle: r.supplierName ?? undefined,
+  }));
+}
+
+async function getFeedstockDeliveryEntityById(
+  id: string
+): Promise<EntityOption | null> {
+  const [result] = await db
+    .select({
+      id: feedstockDeliveries.id,
+      code: feedstockDeliveries.code,
+      deliveryDate: feedstockDeliveries.deliveryDate,
+      facilityId: feedstockDeliveries.facilityId,
+      supplierName: suppliers.name,
+    })
+    .from(feedstockDeliveries)
+    .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
+    .where(eq(feedstockDeliveries.id, id))
+    .limit(1);
+
+  if (!result) return null;
+
+  return {
+    id: result.id,
+    code: result.code,
+    name: `${result.code} (${new Date(result.deliveryDate).toLocaleDateString()})`,
+    subtitle: result.supplierName ?? undefined,
   };
 }

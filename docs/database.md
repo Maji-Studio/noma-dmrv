@@ -751,6 +751,7 @@ Every biochar entity has a unique human-readable `code` column. Codes follow the
 | `SUP`  | Supplier           | SUP-2026-002   |
 | `FT`   | Feedstock Type     | FT-2026-001    |
 | `FD`   | Feedstock Delivery | FD-2026-005    |
+| `FS`   | Feedstock          | FS-2026-001    |
 | `PR`   | Production Run     | PR-2026-012    |
 | `SAM`  | Sample             | SAM-2026-007   |
 | `BCF`  | Formulation        | BCF-2026-001   |

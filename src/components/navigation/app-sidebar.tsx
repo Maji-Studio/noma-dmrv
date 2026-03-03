@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import {
   House,
   Leaf,
+  Grains,
   Factory,
   Warehouse,
   Handshake,
@@ -60,6 +61,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/suppliers", label: "Suppliers", icon: Handshake },
       { href: "/feedstock-deliveries", label: "Feedstock Deliveries", icon: Leaf },
+      { href: "/feedstocks", label: "Feedstocks", icon: Grains },
       { href: "/production-runs", label: "Production Runs", icon: Factory },
       { href: "/formulations", label: "Formulations", icon: ListChecks },
       { href: "/biochar-products", label: "Biochar Products", icon: Cube },

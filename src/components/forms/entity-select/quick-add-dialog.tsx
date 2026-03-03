@@ -22,6 +22,7 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   feedstock: "Feedstock",
   productionRun: "Production Run",
   formulation: "Formulation",
+  feedstockDelivery: "Feedstock Delivery",
 };
 
 // Icon components
