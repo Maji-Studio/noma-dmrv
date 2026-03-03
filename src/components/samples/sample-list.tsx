@@ -1,0 +1,346 @@
+/**
+ * SampleList component
+ * Main sample listing with CRUD operations, stat cards, filters, and DataTable
+ */
+"use client";
+
+import { useState, useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate } from "@phosphor-icons/react";
+import {
+  useCreateSample,
+  useDeleteSample,
+  useSamples,
+  useUpdateSample,
+  useSampleStats,
+} from "@/hooks/use-samples";
+import { useProductionRuns } from "@/hooks/use-production-runs";
+import { DataTable } from "@/components/ui/data-table";
+import { ServerError } from "@/components/forms";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { Button } from "@/components/ui";
+import { SampleForm } from "./sample-form";
+import {
+  formatDurabilityOption,
+  type SampleFormData,
+  type SampleFilterData,
+} from "@/schemas/samples";
+import type { SampleWithRelations } from "@/data-access/samples";
+
+// ============================================
+// Durability Badge
+// ============================================
+
+function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" }) {
+  const label = formatDurabilityOption(durability);
+  const is1000Year = durability === "1000_year";
+  return (
+    <span className={`inline-flex items-center gap-4 px-8 py-2 text-[var(--text-xs)] font-medium ${is1000Year ? "text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/10" : "text-[var(--color-text-secondary)] bg-[var(--color-surface-light)]"}`}>
+      {is1000Year && <Certificate size={14} weight="fill" />}
+      {label}
+    </span>
+  );
+}
+
+// ============================================
+// Column Definitions
+// ============================================
+
+function createColumns(
+  onEdit: (sample: SampleWithRelations) => void,
+  onDelete: (sampleId: string) => void
+): ColumnDef<SampleWithRelations>[] {
+  return [
+    {
+      accessorKey: "sampleCode",
+      header: "Code",
+      cell: ({ row }) => <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.sampleCode}</span>,
+    },
+    {
+      accessorKey: "samplingTime",
+      header: "Sampling Time",
+      cell: ({ row }) => new Date(row.original.samplingTime).toLocaleString(),
+    },
+    {
+      id: "productionRun",
+      header: "Production Run",
+      accessorFn: (row) => row.productionRunCode ?? "",
+      cell: ({ row }) => <span className="text-[var(--clr-dark-purple)]">{row.original.productionRunCode ?? "\u2014"}</span>,
+    },
+    {
+      accessorKey: "totalCarbonPercent",
+      header: "Total C (%)",
+      cell: ({ row }) => row.original.totalCarbonPercent?.toFixed(1) ?? "\u2014",
+    },
+    {
+      accessorKey: "organicCarbonPercent",
+      header: "Organic C (%)",
+      cell: ({ row }) => row.original.organicCarbonPercent?.toFixed(1) ?? "\u2014",
+    },
+    {
+      accessorKey: "hToCOrgRatio",
+      header: "H:C Ratio",
+      cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "\u2014",
+    },
+    {
+      accessorKey: "durabilityOption",
+      header: "Durability",
+      cell: ({ row }) => <DurabilityBadge durability={row.original.durabilityOption} />,
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-8">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(row.original); }} className="h-32 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors">Edit</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }} className="h-32 px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small transition-colors">Delete</button>
+        </div>
+      ),
+      enableSorting: false,
+    },
+  ];
+}
+
+// ============================================
+// Side Sheet State
+// ============================================
+
+type SideSheetState =
+  | { mode: "create"; entity: null }
+  | { mode: "view"; entity: SampleWithRelations }
+  | { mode: "edit"; entity: SampleWithRelations };
+
+// ============================================
+// Component
+// ============================================
+
+export function SampleList() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [productionRunFilter, setProductionRunFilter] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const filters: Partial<SampleFilterData> = useMemo(() => ({
+    search: searchQuery || undefined,
+    productionRunId: productionRunFilter || undefined,
+    page: currentPage,
+    pageSize,
+    sortBy: "samplingTime",
+    sortOrder: "desc",
+  }), [searchQuery, productionRunFilter, currentPage, pageSize]);
+
+  const { data: samplesData, isLoading, error: fetchError } = useSamples(filters);
+  const { data: statsData, isLoading: statsLoading } = useSampleStats(productionRunFilter || undefined);
+  const { data: productionRunsData } = useProductionRuns({ pageSize: 100 });
+
+  const createSample = useCreateSample();
+  const updateSample = useUpdateSample();
+  const deleteSample = useDeleteSample();
+
+  const samples = samplesData?.items ?? [];
+  const totalPages = samplesData?.totalPages ?? 0;
+
+  const handleCreate = async (data: SampleFormData) => {
+    setFormError(null);
+    try {
+      await createSample.mutateAsync(data);
+      setSideSheet(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Failed to create sample");
+    }
+  };
+
+  const handleUpdate = async (data: SampleFormData) => {
+    if (sideSheet?.mode !== "edit") return;
+    setFormError(null);
+    try {
+      await updateSample.mutateAsync({ sampleId: sideSheet.entity.id, ...data });
+      setSideSheet(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Failed to update sample");
+    }
+  };
+
+  const handleDelete = (sampleId: string) => setDeletingSampleId(sampleId);
+  const handleDeleteConfirm = async () => {
+    if (!deletingSampleId) return;
+    setDeleteError(null);
+    try {
+      await deleteSample.mutateAsync(deletingSampleId);
+      setDeletingSampleId(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete sample");
+    }
+  };
+
+  const openCreate = () => { setFormError(null); setSideSheet({ mode: "create", entity: null }); };
+  const openView = (sample: SampleWithRelations) => { setFormError(null); setSideSheet({ mode: "view", entity: sample }); };
+  const openEdit = (sample: SampleWithRelations) => { setFormError(null); setSideSheet({ mode: "edit", entity: sample }); };
+  const closeSideSheet = () => { setSideSheet(null); setFormError(null); };
+
+  const handleModeChange = (mode: SideSheetMode) => {
+    if (!sideSheet) return;
+    setFormError(null);
+    if (mode === "edit" && sideSheet.entity) {
+      setSideSheet({ mode: "edit", entity: sideSheet.entity });
+    } else if (mode === "view" && sideSheet.entity) {
+      setSideSheet({ mode: "view", entity: sideSheet.entity });
+    }
+  };
+
+  const clearFilters = () => { setSearchQuery(""); setProductionRunFilter(""); setCurrentPage(1); };
+  const hasActiveFilters = searchQuery || productionRunFilter;
+
+  const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
+  const isSubmitting = createSample.isPending || updateSample.isPending;
+
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+
+  if (fetchError) {
+    return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load samples"} /></div>;
+  }
+
+  const viewingEntity = sideSheet?.mode === "view" ? sideSheet.entity : null;
+  const viewSubtitle = viewingEntity
+    ? [viewingEntity.productionRunCode, viewingEntity.facilityName].filter(Boolean).join(" \u2014 ") || undefined
+    : undefined;
+
+  return (
+    <div className="container-max py-32 flex flex-col gap-32">
+      <div className="flex items-center justify-between gap-24">
+        <h1 className="title-heading-2">Lab Samples</h1>
+        <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Sample</Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
+        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<Flask size={24} weight="bold" />} description="All lab samples" isLoading={statsLoading} />
+        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "-"} icon={<Leaf size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<Fire size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
+        <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<Certificate size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={samples}
+        enableSorting
+        enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        onPaginationChange={(p) => {
+          if (p.pageSize !== pageSize) { setPageSize(p.pageSize); setCurrentPage(1); }
+          else { setCurrentPage(p.pageIndex + 1); }
+        }}
+        isLoading={isLoading}
+        hoverable
+        onRowClick={(row) => openView(row)}
+        emptyMessage={
+          <div className="flex flex-col items-center justify-center gap-24 py-48">
+            <Flask size={48} className="text-[var(--color-text-tertiary)]" />
+            <div className="text-center">
+              <h3 className="title-heading-3 mb-1">{hasActiveFilters ? "No samples found" : "No samples yet"}</h3>
+              <p className="body-small text-[var(--color-text-secondary)]">{hasActiveFilters ? "Try adjusting your search or filters." : "Create your first lab sample to start tracking biochar quality."}</p>
+            </div>
+            {!hasActiveFilters && <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />Create Sample</Button>}
+          </div>
+        }
+      >
+        <DataTable.Toolbar>
+          <div className="relative max-w-[320px] flex-1">
+            <MagnifyingGlass size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
+            <input type="text" placeholder="Search samples..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]" aria-label="Search table" />
+          </div>
+          <div className="flex items-center gap-8">
+            <select value={productionRunFilter} onChange={(e) => { setProductionRunFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
+              <option value="">All Production Runs</option>
+              {productionRunsData?.items?.map((run) => <option key={run.id} value={run.id}>{[run.facilityName, new Date(run.date).toLocaleDateString()].filter(Boolean).join(" - ")}</option>)}
+            </select>
+            {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
+          </div>
+        </DataTable.Toolbar>
+        <DataTable.Pagination />
+      </DataTable>
+
+      {deleteError && <ServerError message={deleteError} />}
+      <DeleteConfirmDialog
+        isOpen={!!deletingSampleId}
+        title="Delete Sample"
+        message="Are you sure you want to delete this sample? This action cannot be undone. Note: Samples linked to credit batches cannot be deleted."
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => { setDeletingSampleId(null); setDeleteError(null); }}
+        isPending={deleteSample.isPending}
+      />
+
+      <EntitySideSheet
+        open={!!sideSheet}
+        onOpenChange={(open) => { if (!open) closeSideSheet(); }}
+        mode={sideSheet?.mode ?? "create"}
+        onModeChange={handleModeChange}
+        title={sideSheet?.mode === "create" ? "Create Sample" : (sideSheet?.entity?.sampleCode ?? "")}
+        subtitle={sideSheet?.mode === "create" ? "Fill in the form to create a new lab sample." : viewSubtitle}
+        editLabel="Edit Sample"
+        sections={sideSheet?.mode === "view" && sideSheet.entity ? [
+          {
+            title: "General",
+            fields: [
+              { label: "Sample Code", value: sideSheet.entity.sampleCode },
+              { label: "Sampling Time", value: new Date(sideSheet.entity.samplingTime).toLocaleString() },
+              { label: "Production Run", value: sideSheet.entity.productionRunCode },
+              { label: "Facility", value: sideSheet.entity.facilityName },
+            ],
+          },
+          {
+            title: "Carbon Analysis",
+            fields: [
+              { label: "Total Carbon", value: sideSheet.entity.totalCarbonPercent != null ? `${sideSheet.entity.totalCarbonPercent.toFixed(1)}%` : null },
+              { label: "Organic Carbon", value: sideSheet.entity.organicCarbonPercent != null ? `${sideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
+              { label: "Inorganic Carbon", value: sideSheet.entity.inorganicCarbonPercent != null ? `${sideSheet.entity.inorganicCarbonPercent.toFixed(1)}%` : null },
+              { label: "H:Corg Ratio", value: sideSheet.entity.hToCOrgRatio != null ? sideSheet.entity.hToCOrgRatio.toFixed(3) : null },
+            ],
+          },
+          {
+            title: "Durability",
+            fields: [
+              { label: "Durability Option", value: formatDurabilityOption(sideSheet.entity.durabilityOption) },
+              { label: "Random Reflectance R0", value: sideSheet.entity.randomReflectanceR0Percent != null ? `${sideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
+            ],
+          },
+          {
+            title: "Physical Properties",
+            fields: [
+              { label: "Bulk Density", value: sideSheet.entity.bulkDensityKgPerM3 != null ? `${sideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
+              { label: "pH", value: sideSheet.entity.ph != null ? String(sideSheet.entity.ph) : null },
+              { label: "Surface Area", value: sideSheet.entity.surfaceAreaM2PerG != null ? `${sideSheet.entity.surfaceAreaM2PerG} m\u00B2/g` : null },
+            ],
+          },
+          {
+            title: "Lab Information",
+            fields: [
+              { label: "Lab Name", value: sideSheet.entity.labName },
+              { label: "Lab Accreditation", value: sideSheet.entity.labAccreditation },
+              { label: "Analysis Date", value: sideSheet.entity.analysisDate },
+            ],
+          },
+        ] : undefined}
+      >
+        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
+        <SampleForm
+          key={editingEntity?.id ?? "create"}
+          sample={editingEntity ?? undefined}
+          onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={isSubmitting}
+          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
+        />
+      </EntitySideSheet>
+    </div>
+  );
+}

@@ -66,6 +66,13 @@
   --color-signal-orange: #f59723ff;
   --color-signal-orange-strong: #f59723ff;
   --color-signal-orange-light: #f5972326;
+  --color-signal-green: #16a34aff;
+  --color-signal-green-light: #16a34a26;
+
+  /* ===== STATUS COLORS ===== */
+  --color-status-success: #16a34a;
+  --color-status-success-bg: rgba(22, 163, 74, 0.1);
+  --color-status-success-border: rgba(22, 163, 74, 0.4);
 
   /* ===== BLACK & WHITE OPACITY VARIANTS ===== */
   --color-black-100: #000000ff;
@@ -1180,4 +1187,43 @@ p,
     padding-left: 96px;
     padding-right: 96px;
   }
+}
+
+/* ===== ANIMATIONS ===== */
+
+/* Toast slide-in animation */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Loading skeleton shimmer animation */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-background-medium) 25%,
+    var(--color-background-light) 50%,
+    var(--color-background-medium) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }

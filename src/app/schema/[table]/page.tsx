@@ -54,7 +54,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
 
   return (
     <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
-      <main className="container-max py-l md:py-xl flex flex-col gap-m">
+      <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         <nav className="flex flex-wrap items-center gap-[8px]">
           <Link href="/schema" className={buttonVariants({ size: "small" })}>
             <ArrowLeft size={16} weight="bold" />
@@ -69,7 +69,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
         </nav>
 
         <header
-          className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-m flex flex-col gap-s"
+          className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24 flex flex-col gap-16"
           style={{ borderLeftWidth: "4px", borderLeftColor: accent }}
         >
           <div className="flex flex-wrap items-center gap-[8px]">
@@ -115,8 +115,8 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
           )}
         </header>
 
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-s">
-          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s flex flex-col gap-[8px]">
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 flex flex-col gap-[8px]">
             <div className="flex items-center justify-between">
               <h2 className="title-heading-4 flex items-center gap-[6px]">
                 <ArrowUpRight
@@ -160,7 +160,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
             )}
           </div>
 
-          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s flex flex-col gap-[8px]">
+          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 flex flex-col gap-[8px]">
             <div className="flex items-center justify-between">
               <h2 className="title-heading-4 flex items-center gap-[6px]">
                 <ArrowDownLeft
@@ -206,7 +206,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
         </section>
 
         <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
-          <div className="px-s pt-s">
+          <div className="px-16 pt-16">
             <h2 className="title-heading-4">
               Columns ({tableInfo.columns.length})
             </h2>

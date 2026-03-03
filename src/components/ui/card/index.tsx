@@ -14,9 +14,9 @@ const cardRootVariants = cva(
     variants: {
       padding: {
         none: "",
-        small: "p-[var(--spacing-16)]",
-        medium: "p-[var(--spacing-24)]",
-        large: "p-[var(--spacing-40)]",
+        small: "p-16",
+        medium: "p-24",
+        large: "p-40",
       },
       radius: {
         default: "rounded-[var(--radius-8)]",
@@ -122,14 +122,14 @@ const cardContentVariants = cva("flex flex-col", {
   variants: {
     padding: {
       none: "p-0",
-      small: "p-[var(--spacing-16)]",
-      medium: "p-[var(--spacing-24)]",
-      large: "p-[var(--spacing-40)]",
+      small: "p-16",
+      medium: "p-24",
+      large: "p-40",
     },
     gap: {
-      small: "gap-[var(--spacing-12)]",
-      medium: "gap-[var(--spacing-16)]",
-      large: "gap-[var(--spacing-24)]",
+      small: "gap-12",
+      medium: "gap-16",
+      large: "gap-24",
     },
   },
   defaultVariants: {
@@ -165,7 +165,7 @@ const Header = React.forwardRef<HTMLDivElement, CardHeaderProps>(
     return (
       <div
         ref={ref}
-        className={cn("flex flex-col gap-[var(--spacing-8)]", className)}
+        className={cn("flex flex-col gap-8", className)}
         {...props}
       />
     )
@@ -237,7 +237,7 @@ Description.displayName = "Card.Description"
  * -----------------------------------------------------------------------------------------------*/
 
 const cardOverlayVariants = cva(
-  "absolute inset-0 flex flex-col justify-end p-[var(--spacing-24)] bg-[var(--clr-dark-purple-40)] transition-opacity duration-300",
+  "absolute inset-0 flex flex-col justify-end p-24 bg-[var(--clr-dark-purple-40)] transition-opacity duration-300",
   {
     variants: {
       showOnHover: {
@@ -278,7 +278,7 @@ const Footer = React.forwardRef<HTMLDivElement, CardFooterProps>(
     return (
       <div
         ref={ref}
-        className={cn("mt-auto pt-[var(--spacing-16)] flex items-center gap-[var(--spacing-16)]", className)}
+        className={cn("mt-auto pt-16 flex items-center gap-16", className)}
         {...props}
       />
     )

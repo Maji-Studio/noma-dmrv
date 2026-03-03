@@ -44,7 +44,7 @@ export default function VerifyEmailPage() {
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
-        <div className="w-16 h-16 mx-auto mb-m bg-[var(--clr-dark-purple-10)] rounded-full flex items-center justify-center">
+        <div className="w-16 h-16 mx-auto mb-24 bg-[var(--clr-dark-purple-10)] rounded-full flex items-center justify-center">
           <svg
             className="w-8 h-8 text-[var(--clr-dark-purple)]"
             fill="none"
@@ -86,7 +86,7 @@ export default function VerifyEmailPage() {
 
         {resendSuccess && (
           <div
-            className="p-s bg-green-50 border border-green-500 rounded-none text-green-700 body-small"
+            className="p-16 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)] body-small"
             role="status"
             aria-live="polite"
           >
@@ -96,7 +96,7 @@ export default function VerifyEmailPage() {
 
         {error && (
           <div
-            className="p-s bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)] body-small"
+            className="p-16 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)] body-small"
             role="alert"
             aria-live="polite"
           >
@@ -104,8 +104,8 @@ export default function VerifyEmailPage() {
           </div>
         )}
 
-        <div className="pt-s border-t border-[var(--color-border-tertiary)]">
-          <p className="body-small text-[var(--color-text-secondary)] mb-xs">
+        <div className="pt-16 border-t border-[var(--color-border-tertiary)]">
+          <p className="body-small text-[var(--color-text-secondary)] mb-16">
             Didn&apos;t receive the email?
           </p>
           <button
@@ -118,7 +118,7 @@ export default function VerifyEmailPage() {
           </button>
         </div>
 
-        <div className="text-center pt-s">
+        <div className="text-center pt-16">
           <Link
             href="/login"
             className="body-small text-[var(--color-text-tertiary)] hover:text-[var(--clr-dark-purple)]"

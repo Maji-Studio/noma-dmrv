@@ -271,3 +271,16 @@ export const deliveriesRelations = relations(deliveries, ({ one }) => ({
     references: [vehicles.id],
   }),
 }));
+
+// ============================================
+// Type Exports
+// ============================================
+
+export type Vehicle = typeof vehicles.$inferSelect;
+export type NewVehicle = typeof vehicles.$inferInsert;
+export type Order = typeof orders.$inferSelect;
+export type NewOrder = typeof orders.$inferInsert;
+export type Delivery = typeof deliveries.$inferSelect;
+export type NewDelivery = typeof deliveries.$inferInsert;
+export type TransportLeg = typeof transportLegs.$inferSelect;
+export type NewTransportLeg = typeof transportLegs.$inferInsert;

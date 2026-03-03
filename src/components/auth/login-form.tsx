@@ -40,7 +40,7 @@ export function LoginForm() {
     const result = await signIn(data.email, data.password);
 
     if (result.success) {
-      router.push("/projects");
+      router.push("/facilities");
     } else {
       setServerError(result.error || "Failed to sign in");
 
@@ -100,8 +100,8 @@ export function LoginForm() {
       <ServerError message={serverError} />
 
       {showResendVerification && !resendSuccess && (
-        <div className="p-s bg-[var(--color-background-interaction-light)] border border-[var(--color-border-secondary)] rounded-none">
-          <p className="body-small text-[var(--color-text-secondary)] mb-xs">
+        <div className="p-16 bg-[var(--color-background-interaction-light)] border border-[var(--color-border-secondary)] rounded-none">
+          <p className="body-small text-[var(--color-text-secondary)] mb-16">
             Your email address needs to be verified.
           </p>
           <button
@@ -117,7 +117,7 @@ export function LoginForm() {
 
       {resendSuccess && (
         <div
-          className="p-s bg-green-50 border border-green-500 rounded-none text-green-700 body-small"
+          className="p-16 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)] body-small"
           role="status"
           aria-live="polite"
         >

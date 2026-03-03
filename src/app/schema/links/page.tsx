@@ -8,8 +8,8 @@ export default function SchemaLinksPage() {
 
   return (
     <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
-      <main className="container-max py-l md:py-xl flex flex-col gap-m">
-        <header className="flex flex-col gap-s">
+      <main className="container-max py-32 md:py-48 flex flex-col gap-24">
+        <header className="flex flex-col gap-16">
           <nav>
             <Link href="/schema" className={buttonVariants({ size: "small" })}>
               <ArrowLeft size={16} weight="bold" />

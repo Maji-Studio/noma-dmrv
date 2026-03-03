@@ -18,7 +18,7 @@ export default async function ProjectLayout({
   return (
     <div className="flex min-h-screen">
       <Sidebar projectId={projectId} />
-      <main className="flex-1 p-xl">{children}</main>
+      <main className="flex-1 p-48">{children}</main>
     </div>
   );
 }

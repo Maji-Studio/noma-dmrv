@@ -32,7 +32,7 @@ export function ItemForm({
   });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-m">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
       <FormField id="title" label="Title" error={errors.title?.message}>
         <FormInput
           id="title"
@@ -58,18 +58,18 @@ export function ItemForm({
         />
       </FormField>
 
-      <div className="flex items-center gap-s justify-end">
+      <div className="flex items-center gap-16 justify-end">
         <button
           type="button"
           onClick={onCancel}
-          className="px-l py-s border border-[var(--color-border-primary)] rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors"
+          className="h-[48px] px-16 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-bg-secondary)] transition-colors"
           disabled={isSubmitting}
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="px-l py-s bg-[var(--clr-dark-purple)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="h-[48px] px-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity disabled:opacity-50"
           disabled={isSubmitting}
         >
           {isSubmitting ? "Saving..." : item ? "Update" : "Create"}
