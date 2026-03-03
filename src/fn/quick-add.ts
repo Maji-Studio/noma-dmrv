@@ -8,9 +8,6 @@ import {
   createDriver,
   createVehicle,
   createFeedstockType,
-  type CreateDriverData,
-  type CreateVehicleData,
-  type CreateFeedstockTypeData,
 } from "@/data-access/quick-add";
 import { drivers, vehicles, feedstockTypes } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
@@ -18,6 +15,9 @@ import {
   driverQuickAddSchema,
   vehicleQuickAddSchema,
   feedstockTypeQuickAddSchema,
+  type DriverQuickAddData,
+  type VehicleQuickAddData,
+  type FeedstockTypeQuickAddData,
 } from "@/schemas/quick-add";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import { getUser } from "@/lib/auth/server";
@@ -31,7 +31,7 @@ import type { ActionResult } from "@/types/actions";
  * Create a new driver from quick-add dialog
  */
 export async function createDriverFn(
-  data: CreateDriverData
+  data: DriverQuickAddData
 ): Promise<ActionResult<EntityOption>> {
   try {
     const user = await getUser();
@@ -49,7 +49,7 @@ export async function createDriverFn(
     }
 
     const driver = await withAutoCode(
-      "DRV", drivers, drivers.code, parsed.data.code,
+      "DRV", drivers, drivers.code, undefined,
       (code) => createDriver({ ...parsed.data, code })
     );
     return { success: true, data: driver };
@@ -70,7 +70,7 @@ export async function createDriverFn(
  * Create a new vehicle from quick-add dialog
  */
 export async function createVehicleFn(
-  data: CreateVehicleData
+  data: VehicleQuickAddData
 ): Promise<ActionResult<EntityOption>> {
   try {
     const user = await getUser();
@@ -88,7 +88,7 @@ export async function createVehicleFn(
     }
 
     const vehicle = await withAutoCode(
-      "VEH", vehicles, vehicles.code, parsed.data.code,
+      "VEH", vehicles, vehicles.code, undefined,
       (code) => createVehicle({ ...parsed.data, code })
     );
     return { success: true, data: vehicle };
@@ -109,7 +109,7 @@ export async function createVehicleFn(
  * Create a new feedstock type from quick-add dialog
  */
 export async function createFeedstockTypeFn(
-  data: CreateFeedstockTypeData
+  data: FeedstockTypeQuickAddData
 ): Promise<ActionResult<EntityOption>> {
   try {
     const user = await getUser();
@@ -127,7 +127,7 @@ export async function createFeedstockTypeFn(
     }
 
     const feedstockType = await withAutoCode(
-      "FT", feedstockTypes, feedstockTypes.code, parsed.data.code,
+      "FT", feedstockTypes, feedstockTypes.code, undefined,
       (code) => createFeedstockType({ ...parsed.data, code })
     );
     return { success: true, data: feedstockType };

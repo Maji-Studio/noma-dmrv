@@ -489,7 +489,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.totalCo2eStoredTons ?? ""}
-              readOnly
+
             />
           </FormField>
 
@@ -505,7 +505,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.totalCo2eEmissionsTons ?? ""}
-              readOnly
+
             />
           </FormField>
 
@@ -521,7 +521,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.totalCo2eCounterfactualTons ?? ""}
-              readOnly
+
             />
           </FormField>
         </div>
@@ -560,7 +560,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.registry ?? ""}
-              readOnly
+
             />
           </FormField>
 
@@ -575,7 +575,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.weightTons ?? ""}
-              readOnly
+
             />
           </FormField>
         </div>
@@ -588,7 +588,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.value ?? ""}
-              readOnly
+
             />
           </FormField>
 
@@ -599,7 +599,7 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.currency ?? ""}
-              readOnly
+
             />
           </FormField>
         </div>

@@ -185,7 +185,7 @@ export async function createSupplierFn(
       "SUP",
       suppliers,
       suppliers.code,
-      validated.code,
+      undefined,
       (code) =>
         createSupplier(user.id, {
           code,

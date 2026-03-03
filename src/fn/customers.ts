@@ -233,7 +233,7 @@ export async function createCustomerFn(
       "CUS",
       customers,
       customers.code,
-      validated.code,
+      undefined,
       (code) =>
         createCustomer(user.id, {
           code,

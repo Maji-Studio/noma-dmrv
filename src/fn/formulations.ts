@@ -161,7 +161,7 @@ export async function createFormulationFn(
       "BCF",
       formulations,
       formulations.code,
-      validated.code,
+      undefined,
       (code) =>
         createFormulation(user.id, {
           code,

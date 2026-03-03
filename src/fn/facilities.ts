@@ -271,7 +271,7 @@ export async function createFacilityFn(
       "FAC",
       facilitiesTable,
       facilitiesTable.code,
-      validated.code,
+      undefined,
       (code) =>
         createFacility(user.id, {
           code,
