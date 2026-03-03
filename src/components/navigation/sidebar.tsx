@@ -35,7 +35,7 @@ export function Sidebar({ projectId }: SidebarProps) {
       <nav className="flex flex-col gap-16">
         {links.map((link) => {
           const Icon = link.icon;
-          const isActive = pathname === link.href;
+          const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
 
           return (
             <Link

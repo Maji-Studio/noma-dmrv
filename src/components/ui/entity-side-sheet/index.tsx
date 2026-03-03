@@ -156,21 +156,25 @@ function EntitySideSheet({
           className={isViewMode ? "flex flex-col gap-32" : undefined}
         >
           {isViewMode && sections
-            ? sections.map((section) => (
-                <DetailSection key={section.title} title={section.title}>
-                  {chunkFields(section.fields).map((row, rowIdx) => (
-                    <DetailRow key={rowIdx}>
-                      {row.map((field) => (
-                        <DetailField
-                          key={field.label}
-                          label={field.label}
-                          value={field.value}
-                        />
+            ? (
+                <>
+                  {sections.map((section) => (
+                    <DetailSection key={section.title} title={section.title}>
+                      {chunkFields(section.fields).map((row, rowIdx) => (
+                        <DetailRow key={rowIdx}>
+                          {row.map((field) => (
+                            <DetailField
+                              key={field.label}
+                              label={field.label}
+                              value={field.value}
+                            />
+                          ))}
+                        </DetailRow>
                       ))}
-                    </DetailRow>
+                    </DetailSection>
                   ))}
-                </DetailSection>
-              ))
+                </>
+              )
             : children}
         </SlideOverPanel.Body>
 

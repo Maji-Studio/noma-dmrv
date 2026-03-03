@@ -4,11 +4,10 @@
  * Integrates with React Hook Form via register spread
  */
 
-import { forwardRef } from "react";
+import { forwardRef, type SelectHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-interface FormSelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {
+interface FormSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: boolean;
   options: readonly { value: string; label: string }[];
   placeholder?: string;

@@ -200,7 +200,7 @@ export function StorageLocationList() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard title="Storage Locations" value={totalStorageLocations} icon={<Cube size={24} weight="bold" />} description="Total storage locations" isLoading={isLoading} />
-        <StatCard title="Total Capacity" value={`${(totalCapacity / 1000).toFixed(1)} t`} icon={<Factory size={24} weight="bold" />} description="Combined capacity across all locations" isLoading={isLoading} />
+        <StatCard title="Total Capacity" value={`${(totalCapacity / 1000).toFixed(1)} t`} icon={<Factory size={24} weight="bold" />} description="Combined capacity on this page" isLoading={isLoading} />
       </div>
 
       <DataTable
