@@ -38,12 +38,12 @@ test.describe("Production Run + Sample UI CRUD", () => {
     const today = new Date().toISOString().split("T")[0];
     await page.fill('input[name="date"]', today);
 
-    // Select a feedstock (seeded feedstock should be available after facility selection)
+    // Select feedstock source bin
     await page.waitForTimeout(500);
-    await selectEntity(page, "Feedstock", seededData.feedstock.id);
+    await selectEntity(page, "Feedstock Source Bin", seededData.feedstockStorageLocation.id);
 
-    // Fill feedstock mass
-    await page.fill('input[name="feedstocks.0.massUsedKg"]', "50");
+    // Fill feedstock mass used
+    await page.fill('input[name="feedstockMassUsedKg"]', "50");
 
     // Submit
     await page.click('button:has-text("Create Production Run")');

@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { type ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -29,11 +30,12 @@ import {
   SignOut,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth/client";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ElementType;
+  icon: ElementType;
 }
 
 interface NavSection {
@@ -80,6 +82,7 @@ const navSections: NavSection[] = [
     title: "Distribution",
     accent: SECTION_ACCENTS.distribution,
     items: [
+      { href: "/customers", label: "Customers", icon: Users },
       { href: "/orders", label: "Orders", icon: ShoppingCart },
       { href: "/deliveries", label: "Deliveries", icon: Truck },
       { href: "/applications", label: "Applications", icon: MapPin },
@@ -164,6 +167,7 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { signOut } = useAuth();
 
   return (
     <aside
@@ -261,6 +265,7 @@ export function AppSidebar() {
           </div>
           <button
             type="button"
+            onClick={() => signOut()}
             className="flex items-center justify-center size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150"
             aria-label="Sign out"
           >

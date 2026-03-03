@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { nullableNumericValue } from "@/lib/form-utils";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea } from "@/components/forms";
@@ -45,7 +47,7 @@ export function FormulationForm({
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({
+  } = useForm<FormulationFormData>({
     resolver: zodResolver(formulationFormSchema),
     defaultValues: {
       name: formulation?.name ?? "",
@@ -58,7 +60,7 @@ export function FormulationForm({
   const defaultSubmitLabel = isEditMode ? "Update Formulation" : "Create Formulation";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as FormulationFormData);
+    return onSubmit(data as FormulationFormData);
   });
 
   return (
@@ -109,7 +111,7 @@ export function FormulationForm({
               placeholder="e.g., 0.7"
               disabled={isSubmitting}
               error={!!errors.biocharRatio}
-              {...register("biocharRatio", { valueAsNumber: true })}
+              {...register("biocharRatio", { setValueAs: nullableNumericValue })}
             />
           </FormField>
 
@@ -128,7 +130,7 @@ export function FormulationForm({
               placeholder="e.g., 0.3"
               disabled={isSubmitting}
               error={!!errors.compostRatio}
-              {...register("compostRatio", { valueAsNumber: true })}
+              {...register("compostRatio", { setValueAs: nullableNumericValue })}
             />
           </FormField>
         </div>

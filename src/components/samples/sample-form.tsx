@@ -15,7 +15,9 @@
 "use client";
 
 import { numericValue, integerValue } from "@/lib/form-utils";
+import { formatLocalDateTime } from "@/lib/date-utils";
 
+import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect } from "@/components/forms";
@@ -72,6 +74,7 @@ export function SampleForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,13 +82,11 @@ export function SampleForm({
     defaultValues: {
       productionRunId: preselectedProductionRunId || sample?.productionRunId || "",
       samplingTime: sample?.samplingTime
-        ? new Date(sample.samplingTime).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16),
+        ? formatLocalDateTime(new Date(sample.samplingTime))
+        : formatLocalDateTime(new Date()),
       labName: sample?.labName ?? "",
       labAccreditation: sample?.labAccreditation ?? "",
-      analysisDate: sample?.analysisDate
-        ? new Date(sample.analysisDate).toISOString().split("T")[0]
-        : "",
+      analysisDate: sample?.analysisDate ?? "",
       weightGrams: sample?.weightGrams ?? undefined,
       volumeMl: sample?.volumeMl ?? undefined,
       totalCarbonPercent: sample?.totalCarbonPercent ?? undefined,
@@ -107,15 +108,11 @@ export function SampleForm({
       durabilityOption: sample?.durabilityOption ?? "200_year",
       randomReflectanceR0Percent: sample?.randomReflectanceR0Percent ?? undefined,
       r0MeasurementCount: sample?.r0MeasurementCount ?? undefined,
-      r0AnalysisDate: sample?.r0AnalysisDate
-        ? new Date(sample.r0AnalysisDate).toISOString().split("T")[0]
-        : "",
+      r0AnalysisDate: sample?.r0AnalysisDate ?? "",
       r0HistogramFileUrl: sample?.r0HistogramFileUrl ?? "",
       reactiveCarbonPercent: sample?.reactiveCarbonPercent ?? undefined,
       residualCarbonPercent: sample?.residualCarbonPercent ?? undefined,
-      tgaAnalysisDate: sample?.tgaAnalysisDate
-        ? new Date(sample.tgaAnalysisDate).toISOString().split("T")[0]
-        : "",
+      tgaAnalysisDate: sample?.tgaAnalysisDate ?? "",
       tgaThermogramFileUrl: sample?.tgaThermogramFileUrl ?? "",
       nutrientClaimEnabled: sample?.nutrientClaimEnabled ?? false,
       phosphorusPercent: sample?.phosphorusPercent ?? undefined,
@@ -131,6 +128,33 @@ export function SampleForm({
   const watchedHydrogenPercent = watch("totalHydrogenPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
+
+  // Clear 1000-year fields when switching to 200-year
+  useEffect(() => {
+    if (watchedDurabilityOption === "200_year") {
+      setValue("randomReflectanceR0Percent", undefined);
+      setValue("r0MeasurementCount", undefined);
+      setValue("r0AnalysisDate", "");
+      setValue("r0HistogramFileUrl", "");
+      setValue("reactiveCarbonPercent", undefined);
+      setValue("residualCarbonPercent", undefined);
+      setValue("tgaAnalysisDate", "");
+      setValue("tgaThermogramFileUrl", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedDurabilityOption]);
+
+  // Clear nutrient fields when nutrient claims disabled
+  useEffect(() => {
+    if (!watchedNutrientClaimEnabled) {
+      setValue("phosphorusPercent", undefined);
+      setValue("potassiumPercent", undefined);
+      setValue("magnesiumPercent", undefined);
+      setValue("calciumPercent", undefined);
+      setValue("ironPercent", undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedNutrientClaimEnabled]);
 
   // Derive H:C org ratio from watched values (no useEffect needed)
   const calculatedHToCRatio = calculateHToCOrgRatio(

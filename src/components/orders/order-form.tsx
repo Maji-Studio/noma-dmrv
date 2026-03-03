@@ -164,6 +164,13 @@ export function OrderForm({
     }
   }, [watchedCustomerId, selectedCustomerId, order?.customerId, setValue]);
 
+  // Auto-select location when customer has exactly one
+  useEffect(() => {
+    if (customerLocations.length === 1 && !watch("customerLocationId")) {
+      setValue("customerLocationId", customerLocations[0].id);
+    }
+  }, [customerLocations, setValue, watch]);
+
   const defaultSubmitLabel = isEditMode ? "Update Order" : "Create Order";
 
   const handleFormSubmit = handleSubmit((data) => {

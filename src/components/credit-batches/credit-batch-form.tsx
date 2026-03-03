@@ -13,6 +13,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect } from "@/components/forms";
@@ -142,6 +143,19 @@ export function CreditBatchForm({
     name: "durabilityOption",
     defaultValue: "200_year",
   });
+
+  // Clear opposite durability fields when option changes
+  useEffect(() => {
+    if (durabilityOption === "200_year") {
+      setValue("meanRandomReflectancePercent", undefined);
+      setValue("stdRandomReflectance", undefined);
+      setValue("meanNonReactiveCarbonPercent", undefined);
+      setValue("stdNonReactiveCarbonPercent", undefined);
+    } else if (durabilityOption === "1000_year") {
+      setValue("hToCorgRatio", undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durabilityOption]);
 
   // Watch selected applications
   const selectedApplicationIds = useWatch({
@@ -274,11 +288,11 @@ export function CreditBatchForm({
             credit batches.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-16 max-h-48 overflow-y-auto p-16 border border-[var(--color-border-primary)] rounded-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-16 max-h-[240px] overflow-y-auto p-16 border border-[var(--color-border-primary)] rounded-4">
             {applications.map((app) => (
               <label
                 key={app.id}
-                className={`flex items-center gap-16 p-16 rounded-4 cursor-pointer transition-colors ${
+                className={`flex items-center gap-16 p-16 rounded-4 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-[var(--color-interaction)] ${
                   selectedApplicationIds?.includes(app.id)
                     ? "bg-[var(--clr-dark-purple)] text-white"
                     : "bg-[var(--color-surface-light)] hover:bg-[var(--color-surface-medium)]"

@@ -288,14 +288,14 @@ export function ReactorList() {
           title="Method B Eligible"
           value={methodBEligibleCount}
           icon={<CheckCircle size={24} weight="bold" />}
-          description="Reactors with 30+ Method A samples"
+          description="Eligible reactors on this page"
           isLoading={isLoading}
         />
         <StatCard
           title="Total Capacity"
           value={`${totalCapacity.toLocaleString()} kg`}
           icon={<Flask size={24} weight="bold" />}
-          description="Combined production capacity"
+          description="Combined capacity on this page"
           isLoading={isLoading}
         />
       </div>

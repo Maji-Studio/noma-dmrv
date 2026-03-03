@@ -181,10 +181,10 @@ test.describe("Full Chain UI Smoke Test", () => {
       // Fill date
       await page.fill('input[name="date"]', today);
 
-      // Select feedstock
+      // Select feedstock source bin
       await page.waitForTimeout(500);
-      await selectEntityById(page, "Feedstock", seededData.feedstock.id);
-      await page.fill('input[name="feedstocks.0.massUsedKg"]', "50");
+      await selectEntityById(page, "Feedstock Source Bin", seededData.feedstockStorageLocation.id);
+      await page.fill('input[name="feedstockMassUsedKg"]', "50");
 
       await page.click('button:has-text("Create Production Run")');
       await waitForSideSheetClose(page);
