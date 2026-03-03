@@ -113,7 +113,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
 
-      await page.click('button:has-text("Create Facility")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Facility")').click();
       await waitForSideSheetClose(page);
 
       // Search for the new facility (list may be paginated)
@@ -148,7 +148,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       }
       await page.locator('[role="option"]').filter({ hasText: `Chain Facility ${runId}` }).first().click();
 
-      await page.click('button:has-text("Create Reactor")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Reactor")').click();
       await waitForSideSheetClose(page);
 
       // Search for the new reactor (list may be paginated)
@@ -186,7 +186,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await selectEntityById(page, "Feedstock Source Bin", seededData.feedstockStorageLocation.id);
       await page.fill('input[name="feedstockMassUsedKg"]', "50");
 
-      await page.click('button:has-text("Create Production Run")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
       await waitForSideSheetClose(page);
 
       // Verify a row exists in the list
@@ -210,7 +210,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="totalCarbonPercent"]', "75");
       await page.fill('input[name="organicCarbonPercent"]', "70");
 
-      await page.click('button:has-text("Create Sample")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Sample")').click();
       await waitForSideSheetClose(page);
 
       await expect(
@@ -248,7 +248,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.selectOption('select[name="packaging"]', "loose");
       await page.fill('input[name="quantityKg"]', "100");
 
-      await page.click('button:has-text("Create Order")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
       await waitForSideSheetClose(page);
 
       await expect(
@@ -279,7 +279,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
 
-      await page.click('button:has-text("Create Delivery")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
       await waitForSideSheetClose(page);
 
       await expect(
@@ -311,7 +311,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 
-      await page.click('button:has-text("Create Application")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
       await waitForSideSheetClose(page);
 
       await expect(
@@ -347,7 +347,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       // H:Corg ratio is required for 200-year durability
       await page.fill('input[name="hToCorgRatio"]', "0.4");
 
-      await page.click('button:has-text("Create Credit Batch")');
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);
 
       await expect(

@@ -40,7 +40,7 @@ test.describe("Feedstock UI CRUD", () => {
     await selectEntity(page, "Storage Location", seededData.feedstockStorageLocation.id);
 
     // Submit the form
-    await page.click('button:has-text("Create Feedstock")');
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Feedstock")').click();
     await waitForSideSheetClose(page);
 
     // Verify feedstock appears in list
