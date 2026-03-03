@@ -107,7 +107,6 @@ export function FacilityForm({
   } = useForm({
     resolver: zodResolver(facilityFormSchema),
     defaultValues: {
-      code: facility?.code ?? "",
       name: facility?.name ?? "",
       country: facility?.country ?? "",
       location: facility?.location ?? "",
@@ -139,21 +138,6 @@ export function FacilityForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Facility Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField id="name" label="Facility Name" error={errors.name?.message}>
             <FormInput
               id="name"

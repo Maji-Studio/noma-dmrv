@@ -66,7 +66,6 @@ interface DriverQuickAddDialogProps {
 }
 
 interface DriverForm {
-  code: string;
   name: string;
   licenseNumber: string;
   contactPhone: string;
@@ -79,7 +78,6 @@ export function DriverQuickAddDialog({
 }: DriverQuickAddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [formData, setFormData] = useState<DriverForm>({
-    code: "",
     name: "",
     licenseNumber: "",
     contactPhone: "",
@@ -93,7 +91,7 @@ export function DriverQuickAddDialog({
     if (!dialog) return;
 
     if (isOpen) {
-      setFormData({ code: "", name: "", licenseNumber: "", contactPhone: "" });
+      setFormData({ name: "", licenseNumber: "", contactPhone: "" });
       setError(null);
       setIsSubmitting(false);
       dialog.showModal();
@@ -119,10 +117,6 @@ export function DriverQuickAddDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.code.trim()) {
-      setError("Code is required");
-      return;
-    }
     if (!formData.name.trim()) {
       setError("Name is required");
       return;
@@ -133,7 +127,6 @@ export function DriverQuickAddDialog({
 
     try {
       const result = await createDriverFn({
-        code: formData.code.trim().toUpperCase(),
         name: formData.name.trim(),
         licenseNumber: formData.licenseNumber.trim() || null,
         contactPhone: formData.contactPhone.trim() || null,
@@ -158,7 +151,7 @@ export function DriverQuickAddDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="p-0 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-md w-full"
+      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-md w-full m-auto"
       aria-labelledby="driver-quick-add-dialog-title"
       data-testid="driver-quick-add-dialog"
     >
@@ -187,24 +180,6 @@ export function DriverQuickAddDialog({
           )}
 
           <div className="flex flex-col gap-16">
-            <label htmlFor="driver-code" className="label-medium">
-              Code <span className="text-[var(--color-signal-red)]">*</span>
-            </label>
-            <input
-              id="driver-code"
-              type="text"
-              value={formData.code}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))
-              }
-              placeholder="e.g., DRV-001"
-              className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              autoFocus
-              data-testid="driver-code-input"
-            />
-          </div>
-
-          <div className="flex flex-col gap-16">
             <label htmlFor="driver-name" className="label-medium">
               Name <span className="text-[var(--color-signal-red)]">*</span>
             </label>
@@ -217,6 +192,7 @@ export function DriverQuickAddDialog({
               }
               placeholder="Enter driver name"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+              autoFocus
               data-testid="driver-name-input"
             />
           </div>

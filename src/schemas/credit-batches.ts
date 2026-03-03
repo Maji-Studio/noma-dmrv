@@ -46,15 +46,6 @@ export type CurrencyCode = (typeof currencyCodes)[number];
 export const creditBatchFormSchema = z
   .object({
     // === Section 1: Overview ===
-    code: z
-      .string()
-      .max(50, "Batch code must be less than 50 characters")
-      .regex(
-        /^[A-Z0-9-]+$/,
-        "Batch code must contain only uppercase letters, numbers, and hyphens"
-      )
-      .optional()
-      .or(z.literal("")),
     facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),

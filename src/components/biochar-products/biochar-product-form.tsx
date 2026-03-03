@@ -59,7 +59,6 @@ export function BiocharProductForm({
   } = useForm({
     resolver: zodResolver(biocharProductFormSchema),
     defaultValues: {
-      code: product?.code ?? "",
       facilityId: product?.facility?.id ?? "",
       formulationId: product?.formulation?.id ?? "",
       productionDate: product?.productionDate
@@ -89,21 +88,6 @@ export function BiocharProductForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Product Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="productionDate"
             label="Production Date"

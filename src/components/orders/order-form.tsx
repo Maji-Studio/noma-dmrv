@@ -136,7 +136,6 @@ export function OrderForm({
   } = useForm({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
-      code: order?.code ?? "",
       facilityId: order?.facilityId ?? "",
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
@@ -180,17 +179,6 @@ export function OrderForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="code" label="Order Code" error={errors.code?.message}>
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="orderDate"
             label="Order Date"

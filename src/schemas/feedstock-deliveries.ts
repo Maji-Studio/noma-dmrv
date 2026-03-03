@@ -40,15 +40,6 @@ const optionalLongitudeSchema = z
  */
 export const feedstockDeliveryFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Delivery code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Delivery code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   deliveryDate: z.union([
     z.date(),

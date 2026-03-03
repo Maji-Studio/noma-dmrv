@@ -533,34 +533,6 @@ export async function getFeedstockDeliveryOptions(
     .orderBy(desc(feedstockDeliveries.deliveryDate));
 }
 
-/**
- * Generate next delivery code
- * Returns the next available code in format FD-YYYY-XXX
- */
-export async function generateNextDeliveryCode(userId: string): Promise<string> {
-  requireAuth(userId);
-
-  const year = new Date().getFullYear();
-  const prefix = `FD-${year}-`;
-
-  const [lastDelivery] = await db
-    .select({ code: feedstockDeliveries.code })
-    .from(feedstockDeliveries)
-    .where(ilike(feedstockDeliveries.code, `${prefix}%`))
-    .orderBy(desc(feedstockDeliveries.code))
-    .limit(1);
-
-  let nextNumber = 1;
-  if (lastDelivery) {
-    const match = lastDelivery.code.match(/FD-\d{4}-(\d+)/);
-    if (match) {
-      nextNumber = parseInt(match[1], 10) + 1;
-    }
-  }
-
-  return `${prefix}${nextNumber.toString().padStart(3, "0")}`;
-}
-
 // ============================================
 // Helper Functions
 // ============================================

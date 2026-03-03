@@ -21,7 +21,6 @@ import {
   getProductionRunStatsFn,
   getProductionRunReadingsFn,
   checkProductionRunCodeFn,
-  generateNextProductionRunCodeFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
@@ -49,7 +48,6 @@ export const productionRunKeys = {
     [...productionRunKeys.all, productionRunId, "readings"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...productionRunKeys.all, "codeCheck", code, excludeId] as const,
-  nextCode: () => [...productionRunKeys.all, "nextCode"] as const,
 };
 
 // ============================================
@@ -152,24 +150,6 @@ export function useProductionRunCodeCheck(
   });
 }
 
-/**
- * Hook to generate the next production run code
- */
-export function useNextProductionRunCode(enabled = true) {
-  return useQuery({
-    queryKey: productionRunKeys.nextCode(),
-    queryFn: async () => {
-      const result = await generateNextProductionRunCodeFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.code;
-    },
-    enabled,
-    staleTime: 0, // Always fetch fresh
-  });
-}
-
 // ============================================
 // Mutation Hooks
 // ============================================
@@ -199,8 +179,6 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: productionRunKeys.stats() });
-      // Invalidate next code
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.nextCode() });
       // Invalidate facility detail (run count may have changed)
       queryClient.invalidateQueries({
         queryKey: facilityKeys.detail(data.facilityId),

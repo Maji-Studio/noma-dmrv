@@ -7,7 +7,6 @@
 
 import { numericValue, integerValue } from "@/lib/form-utils";
 
-import { useEffect } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash } from "@phosphor-icons/react";
@@ -23,7 +22,6 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
-import { useNextProductionRunCode } from "@/hooks/use-production-runs";
 
 // ============================================
 // Constants for select options
@@ -64,20 +62,15 @@ export function ProductionRunForm({
 }: ProductionRunFormProps) {
   const isEditMode = !!productionRun;
 
-  // Get next available code for new production runs
-  const { data: nextCode } = useNextProductionRunCode(!isEditMode);
-
   const {
     register,
     handleSubmit,
     control,
     watch,
-    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     defaultValues: {
-      code: productionRun?.code ?? "",
       facilityId: preselectedFacilityId || productionRun?.facilityId || "",
       date: productionRun?.date
         ? new Date(productionRun.date).toISOString().split("T")[0]
@@ -108,13 +101,6 @@ export function ProductionRunForm({
     },
   });
 
-  // Auto-fill code for new production runs
-  useEffect(() => {
-    if (!isEditMode && nextCode) {
-      setValue("code", nextCode);
-    }
-  }, [isEditMode, nextCode, setValue]);
-
   const { fields, append, remove } = useFieldArray({
     control,
     name: "feedstocks",
@@ -140,17 +126,6 @@ export function ProductionRunForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="code" label="Production Run Code" error={errors.code?.message}>
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField id="status" label="Status" error={errors.status?.message}>
             <FormSelect
               id="status"

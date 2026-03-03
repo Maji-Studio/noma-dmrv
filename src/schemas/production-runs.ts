@@ -51,15 +51,6 @@ export type ProductionRunFeedstockData = z.infer<typeof productionRunFeedstockSc
  */
 export const productionRunFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   date: z.union([
     z.date(),

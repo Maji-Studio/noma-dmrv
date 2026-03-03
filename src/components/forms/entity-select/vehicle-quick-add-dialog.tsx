@@ -66,7 +66,6 @@ interface VehicleQuickAddDialogProps {
 }
 
 interface VehicleForm {
-  code: string;
   name: string;
   identifier: string;
   vehicleType: string;
@@ -85,7 +84,6 @@ export function VehicleQuickAddDialog({
 }: VehicleQuickAddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [formData, setFormData] = useState<VehicleForm>({
-    code: "",
     name: "",
     identifier: "",
     vehicleType: "",
@@ -103,7 +101,6 @@ export function VehicleQuickAddDialog({
 
     if (isOpen) {
       setFormData({
-        code: "",
         name: "",
         identifier: "",
         vehicleType: "",
@@ -178,7 +175,6 @@ export function VehicleQuickAddDialog({
 
     try {
       const result = await createVehicleFn({
-        code: formData.code.trim().toUpperCase(),
         name: formData.name.trim(),
         identifier: formData.identifier.trim(),
         vehicleType: formData.vehicleType,
@@ -206,7 +202,7 @@ export function VehicleQuickAddDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="p-0 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full"
+      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full m-auto"
       aria-labelledby="vehicle-quick-add-dialog-title"
       data-testid="vehicle-quick-add-dialog"
     >
@@ -234,44 +230,22 @@ export function VehicleQuickAddDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-24">
-            <div className="flex flex-col gap-16">
-              <label htmlFor="vehicle-code" className="label-medium">
-                Code
-              </label>
-              <input
-                id="vehicle-code"
-                type="text"
-                value={formData.code}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    code: e.target.value.toUpperCase(),
-                  }))
-                }
-                placeholder="e.g., VEH-001"
-                className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                autoFocus
-                data-testid="vehicle-code-input"
-              />
-            </div>
-
-            <div className="flex flex-col gap-16">
-              <label htmlFor="vehicle-name" className="label-medium">
-                Name <span className="text-[var(--color-signal-red)]">*</span>
-              </label>
-              <input
-                id="vehicle-name"
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="e.g., Truck 1"
-                className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                data-testid="vehicle-name-input"
-              />
-            </div>
+          <div className="flex flex-col gap-16">
+            <label htmlFor="vehicle-name" className="label-medium">
+              Name <span className="text-[var(--color-signal-red)]">*</span>
+            </label>
+            <input
+              id="vehicle-name"
+              type="text"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
+              placeholder="e.g., Truck 1"
+              className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+              autoFocus
+              data-testid="vehicle-name-input"
+            />
           </div>
 
           <div className="flex flex-col gap-16">

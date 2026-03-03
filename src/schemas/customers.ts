@@ -35,15 +35,6 @@ const requiredLongitudeSchema = z
  */
 export const customerFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Customer code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Customer code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Customer name is required")

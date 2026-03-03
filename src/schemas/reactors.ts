@@ -36,15 +36,6 @@ export type SamplingMethod = (typeof samplingMethods)[number];
  */
 export const reactorFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Reactor code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Reactor code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   identifier: z
     .string()
     .min(1, "Identifier is required")

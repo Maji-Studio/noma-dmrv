@@ -92,7 +92,6 @@ export function DeliveryForm({
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
     defaultValues: {
-      code: delivery?.code ?? "",
       orderId: delivery?.orderId ?? "",
       deliveryDate: delivery?.deliveryDate
         ? new Date(delivery.deliveryDate).toISOString().split("T")[0]
@@ -124,17 +123,6 @@ export function DeliveryForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="code" label="Delivery Code" error={errors.code?.message}>
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="deliveryDate"
             label="Delivery Date"

@@ -34,15 +34,6 @@ export type PackagingType = (typeof packagingTypes)[number];
  */
 export const orderFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Order code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Order code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
   customerId: z.string().min(1, "Please select a customer").uuid("Invalid customer"),
   customerLocationId: z.string().min(1, "Please select a customer location").uuid("Invalid customer location"),

@@ -798,34 +798,6 @@ export async function isProductionRunCodeAvailable(
 }
 
 /**
- * Generate next production run code
- * Returns the next available code in format PR-YYYY-XXX
- */
-export async function generateNextProductionRunCode(userId: string): Promise<string> {
-  requireAuth(userId);
-
-  const year = new Date().getFullYear();
-  const prefix = `PR-${year}-`;
-
-  const [lastRun] = await db
-    .select({ code: productionRuns.code })
-    .from(productionRuns)
-    .where(ilike(productionRuns.code, `${prefix}%`))
-    .orderBy(desc(productionRuns.code))
-    .limit(1);
-
-  let nextNumber = 1;
-  if (lastRun) {
-    const match = lastRun.code.match(/PR-\d{4}-(\d+)/);
-    if (match) {
-      nextNumber = parseInt(match[1], 10) + 1;
-    }
-  }
-
-  return `${prefix}${nextNumber.toString().padStart(3, "0")}`;
-}
-
-/**
  * Get production run options for dropdowns
  * Returns minimal data needed for select inputs
  */

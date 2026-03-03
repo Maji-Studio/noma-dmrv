@@ -16,7 +16,6 @@ import {
   getFeedstockDeliveryStats as getFeedstockDeliveryStatsData,
   isFeedstockDeliveryCodeAvailable as isFeedstockDeliveryCodeAvailableData,
   getFeedstockDeliveryOptions as getFeedstockDeliveryOptionsData,
-  generateNextDeliveryCode as generateNextDeliveryCodeData,
   updateFeedstockDelivery,
   type PaginatedFeedstockDeliveries,
   type FeedstockDeliveryWithRelations,
@@ -162,29 +161,6 @@ export async function checkFeedstockDeliveryCodeFn(
         error instanceof Error
           ? error.message
           : "Failed to check feedstock delivery code",
-    };
-  }
-}
-
-/**
- * Generate next delivery code
- */
-export async function generateNextDeliveryCodeFn(): Promise<ActionResult<string>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const code = await generateNextDeliveryCodeData(user.id);
-    return { success: true, data: code };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to generate delivery code",
     };
   }
 }

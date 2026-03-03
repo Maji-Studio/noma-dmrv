@@ -23,15 +23,6 @@ export type BiocharProductStatus = typeof biocharProductStatusValues[number];
  */
 export const biocharProductFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Product code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Product code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   formulationId: z.string().min(1, "Please select a formulation").uuid("Please select a valid formulation"),
 

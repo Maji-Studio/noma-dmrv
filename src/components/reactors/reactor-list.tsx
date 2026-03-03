@@ -6,6 +6,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Lightning, Flask, Plus, CheckCircle, Warning } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
@@ -174,8 +175,13 @@ export function ReactorList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Data fetching
-  const { data: reactorsData, isLoading, error: fetchError } = useReactors();
+  // Server-side search: debounce the search input before querying
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 250);
+  const filters = debouncedSearch ? { search: debouncedSearch, pageSize: 100 } : { pageSize: 100 };
+
+  // Data fetching — pass search filter so the server does the filtering
+  const { data: reactorsData, isLoading, error: fetchError } = useReactors(filters);
   const createReactor = useCreateReactor();
   const updateReactor = useUpdateReactor();
   const deleteReactor = useDeleteReactor();
@@ -300,8 +306,9 @@ export function ReactorList() {
         data={reactors}
         onRowClick={openView}
         enableSorting
-        enableFiltering
         enablePagination
+        globalFilter={searchInput}
+        onGlobalFilterChange={setSearchInput}
         isLoading={isLoading}
         hoverable
         emptyMessage={
