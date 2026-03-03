@@ -229,7 +229,17 @@ export const updateFacilitySchema = z.object({
   defaultDurabilityOption: z.enum(durabilityOptions).optional(),
   timezone: z.enum(timezones).optional().nullable(),
   facilityType: z.enum(facilityTypes).optional().nullable(),
-});
+}).refine(
+  (data) => {
+    const hasLat = data.gpsLatitude != null;
+    const hasLng = data.gpsLongitude != null;
+    return hasLat === hasLng;
+  },
+  {
+    message: "Both latitude and longitude must be provided together",
+    path: ["gpsLatitude"],
+  }
+);
 
 /**
  * Schema for deleting a facility

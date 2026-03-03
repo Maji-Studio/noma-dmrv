@@ -404,8 +404,10 @@ export const test = base.extend<AuthFixtures>({
   },
 
   seededData: async ({}, use) => {
-    // Seed all prerequisite lookup entities for UI tests
-    const data = await seedChainData(testRunId);
+    // Generate a unique seed ID per test to avoid collisions between
+    // parallel tests in the same worker that share the module-level testRunId
+    const seedId = crypto.randomUUID().slice(0, 8);
+    const data = await seedChainData(seedId);
     await use(data);
     // Cleanup happens in cleanupTestData fixture
   },

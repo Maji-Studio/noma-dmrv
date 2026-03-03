@@ -29,7 +29,7 @@ import {
   facilityFilterSchema,
 } from "@/schemas/facilities";
 import type { ActionResult } from "@/types/actions";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
 
 // ============================================
@@ -267,20 +267,25 @@ export async function createFacilityFn(
 
     const validated = createFacilitySchema.parse(data);
 
-    const code = validated.code || await generateNextCode("FAC", facilitiesTable, facilitiesTable.code);
-
-    const facility = await createFacility(user.id, {
-      code,
-      name: validated.name,
-      country: validated.country,
-      location: validated.location || null,
-      address: validated.address || null,
-      gpsLatitude: validated.gpsLatitude ?? null,
-      gpsLongitude: validated.gpsLongitude ?? null,
-      contactEmail: validated.contactEmail || null,
-      contactPhone: validated.contactPhone || null,
-      defaultDurabilityOption: validated.defaultDurabilityOption,
-    });
+    const facility = await withAutoCode(
+      "FAC",
+      facilitiesTable,
+      facilitiesTable.code,
+      validated.code,
+      (code) =>
+        createFacility(user.id, {
+          code,
+          name: validated.name,
+          country: validated.country,
+          location: validated.location || null,
+          address: validated.address || null,
+          gpsLatitude: validated.gpsLatitude ?? null,
+          gpsLongitude: validated.gpsLongitude ?? null,
+          contactEmail: validated.contactEmail || null,
+          contactPhone: validated.contactPhone || null,
+          defaultDurabilityOption: validated.defaultDurabilityOption,
+        })
+    );
 
     return { success: true, data: facility };
   } catch (error) {

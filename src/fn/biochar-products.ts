@@ -26,7 +26,7 @@ import {
   biocharProductFilterSchema,
 } from "@/schemas/biochar-products";
 import type { ActionResult } from "@/types/actions";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import { biocharProducts } from "@/db/schema";
 
 // ============================================
@@ -159,19 +159,24 @@ export async function createBiocharProductFn(
 
     const validated = createBiocharProductSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("BP", biocharProducts, biocharProducts.code);
-
-    const product = await createBiocharProduct(user.id, {
-      code,
-      facilityId: validated.facilityId,
-      formulationId: validated.formulationId,
-      productionDate: validated.productionDate,
-      status: validated.status,
-      linkedProductionRunId: validated.linkedProductionRunId || null,
-      storageLocationId: validated.storageLocationId || null,
-      massKg: validated.massKg ?? null,
-      densityKgM3: validated.densityKgM3 ?? null,
-    });
+    const product = await withAutoCode(
+      "BP",
+      biocharProducts,
+      biocharProducts.code,
+      validated.code,
+      (code) =>
+        createBiocharProduct(user.id, {
+          code,
+          facilityId: validated.facilityId,
+          formulationId: validated.formulationId,
+          productionDate: validated.productionDate,
+          status: validated.status,
+          linkedProductionRunId: validated.linkedProductionRunId || null,
+          storageLocationId: validated.storageLocationId || null,
+          massKg: validated.massKg ?? null,
+          densityKgM3: validated.densityKgM3 ?? null,
+        })
+    );
 
     return { success: true, data: product };
   } catch (error) {

@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Supplier, suppliers } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createSupplier,
   deleteSupplier,
@@ -181,21 +181,26 @@ export async function createSupplierFn(
 
     const validated = createSupplierSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("SUP", suppliers, suppliers.code);
-
-    const supplier = await createSupplier(user.id, {
-      code,
-      name: validated.name,
-      location: validated.location || null,
-      gpsLatitude: validated.gpsLatitude ?? null,
-      gpsLongitude: validated.gpsLongitude ?? null,
-      address: validated.address || null,
-      contactName: validated.contactName || null,
-      contactEmail: validated.contactEmail || null,
-      contactPhone: validated.contactPhone || null,
-      annualRevenueUsd: validated.annualRevenueUsd ?? null,
-      chainOfCustodyRef: validated.chainOfCustodyRef || null,
-    });
+    const supplier = await withAutoCode(
+      "SUP",
+      suppliers,
+      suppliers.code,
+      validated.code,
+      (code) =>
+        createSupplier(user.id, {
+          code,
+          name: validated.name,
+          location: validated.location || null,
+          gpsLatitude: validated.gpsLatitude ?? null,
+          gpsLongitude: validated.gpsLongitude ?? null,
+          address: validated.address || null,
+          contactName: validated.contactName || null,
+          contactEmail: validated.contactEmail || null,
+          contactPhone: validated.contactPhone || null,
+          annualRevenueUsd: validated.annualRevenueUsd ?? null,
+          chainOfCustodyRef: validated.chainOfCustodyRef || null,
+        })
+    );
 
     return { success: true, data: supplier };
   } catch (error) {

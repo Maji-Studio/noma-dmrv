@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { samples } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createSample,
   deleteSample,
@@ -183,32 +183,35 @@ export async function createSampleFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    // Auto-generate code before validation if empty
-    const sampleCode = data.sampleCode || await generateNextCode("SAM", samples, samples.sampleCode);
-    const validated = createSampleSchema.parse({ ...data, sampleCode });
-
-    const sample = await createSample(user.id, {
-      sampleCode,
-      productionRunId: validated.productionRunId,
-      samplingTime:
-        validated.samplingTime instanceof Date
-          ? validated.samplingTime
-          : new Date(validated.samplingTime),
-      labName: validated.labName || null,
-      labAccreditation: validated.labAccreditation || null,
-      analysisDate: validated.analysisDate
-        ? validated.analysisDate instanceof Date
-          ? validated.analysisDate
-          : new Date(validated.analysisDate)
-        : null,
-      weightGrams: validated.weightGrams ?? null,
-      volumeMl: validated.volumeMl ?? null,
-      totalCarbonPercent: validated.totalCarbonPercent as number,
-      organicCarbonPercent: validated.organicCarbonPercent as number,
-      inorganicCarbonPercent: validated.inorganicCarbonPercent ?? null,
-      totalHydrogenPercent: validated.totalHydrogenPercent ?? null,
-      totalNitrogenPercent: validated.totalNitrogenPercent ?? null,
-      totalOxygenPercent: validated.totalOxygenPercent ?? null,
+    const sample = await withAutoCode(
+      "SAM",
+      samples,
+      samples.sampleCode,
+      data.sampleCode,
+      async (sampleCode) => {
+        const validated = createSampleSchema.parse({ ...data, sampleCode });
+        return createSample(user.id, {
+          sampleCode,
+          productionRunId: validated.productionRunId,
+          samplingTime:
+            validated.samplingTime instanceof Date
+              ? validated.samplingTime
+              : new Date(validated.samplingTime),
+          labName: validated.labName || null,
+          labAccreditation: validated.labAccreditation || null,
+          analysisDate: validated.analysisDate
+            ? validated.analysisDate instanceof Date
+              ? validated.analysisDate
+              : new Date(validated.analysisDate)
+            : null,
+          weightGrams: validated.weightGrams ?? null,
+          volumeMl: validated.volumeMl ?? null,
+          totalCarbonPercent: validated.totalCarbonPercent as number,
+          organicCarbonPercent: validated.organicCarbonPercent as number,
+          inorganicCarbonPercent: validated.inorganicCarbonPercent ?? null,
+          totalHydrogenPercent: validated.totalHydrogenPercent ?? null,
+          totalNitrogenPercent: validated.totalNitrogenPercent ?? null,
+          totalOxygenPercent: validated.totalOxygenPercent ?? null,
       totalSulfurPercent: validated.totalSulfurPercent ?? null,
       ashContentPercent: validated.ashContentPercent ?? null,
       moistureContentPercent: validated.moistureContentPercent ?? null,
@@ -238,7 +241,9 @@ export async function createSampleFn(
       magnesiumPercent: validated.magnesiumPercent ?? null,
       calciumPercent: validated.calciumPercent ?? null,
       ironPercent: validated.ironPercent ?? null,
-    });
+        });
+      }
+    );
 
     return { success: true, data: sample };
   } catch (error) {

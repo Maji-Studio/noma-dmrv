@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Delivery, deliveries as deliveriesTable } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createDelivery,
   deleteDelivery,
@@ -214,23 +214,28 @@ export async function createDeliveryFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    // Auto-generate code before validation if empty
-    const code = data.code || await generateNextCode("DL", deliveriesTable, deliveriesTable.code);
-    const validated = createDeliverySchema.parse({ ...data, code });
-
-    const delivery = await createDelivery(user.id, {
-      code,
-      orderId: validated.orderId,
-      facilityId: validated.facilityId,
-      deliveryDate: validated.deliveryDate,
-      biocharProductId: validated.biocharProductId ?? null,
-      driverId: validated.driverId ?? null,
-      vehicleId: validated.vehicleId ?? null,
-      status: validated.status,
-      deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-      massDryKg: validated.massDryKg ?? null,
-      moistureContentPercent: validated.moistureContentPercent ?? null,
-    });
+    const delivery = await withAutoCode(
+      "DL",
+      deliveriesTable,
+      deliveriesTable.code,
+      data.code,
+      async (code) => {
+        const validated = createDeliverySchema.parse({ ...data, code });
+        return createDelivery(user.id, {
+          code,
+          orderId: validated.orderId,
+          facilityId: validated.facilityId,
+          deliveryDate: validated.deliveryDate,
+          biocharProductId: validated.biocharProductId ?? null,
+          driverId: validated.driverId ?? null,
+          vehicleId: validated.vehicleId ?? null,
+          status: validated.status,
+          deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
+          massDryKg: validated.massDryKg ?? null,
+          moistureContentPercent: validated.moistureContentPercent ?? null,
+        });
+      }
+    );
 
     return { success: true, data: delivery };
   } catch (error) {

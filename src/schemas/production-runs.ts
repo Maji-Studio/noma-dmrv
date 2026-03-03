@@ -63,7 +63,14 @@ export const productionRunFormSchema = z.object({
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   date: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]),
   reactorId: z.string().min(1, "Please select a reactor").uuid("Please select a valid reactor"),
 
@@ -73,11 +80,25 @@ export const productionRunFormSchema = z.object({
   // Timing
   startTime: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]),
   endTime: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]),
 
   // Operator (optional)

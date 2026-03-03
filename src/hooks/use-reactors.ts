@@ -397,17 +397,16 @@ export function useDeleteReactor(
         });
       });
 
+      // Capture facilityId before optimistic removal clears the cache
+      const facilityId = previousReactor?.facilityId;
+
       await callbacks?.onMutate?.(reactorId);
 
       // Return context with snapshots for rollback
-      return { previousReactor, previousLists };
+      return { previousReactor, previousLists, facilityId };
     },
-    onSuccess: async (_, reactorId) => {
-      // Get the reactor's facility ID before removing from cache
-      const reactor = queryClient.getQueryData<ReactorWithRelations>(
-        reactorKeys.detail(reactorId)
-      );
-      const facilityId = reactor?.facilityId;
+    onSuccess: async (_, reactorId, context) => {
+      const facilityId = (context as { facilityId?: string })?.facilityId;
 
       // Remove specific reactor from cache
       queryClient.removeQueries({ queryKey: reactorKeys.detail(reactorId) });

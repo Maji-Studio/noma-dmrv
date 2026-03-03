@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Order, orders } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createOrder,
   deleteOrder,
@@ -185,21 +185,26 @@ export async function createOrderFn(
 
     const validated = createOrderSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("OR", orders, orders.code);
-
-    const order = await createOrder(user.id, {
-      code,
-      facilityId: validated.facilityId,
-      customerId: validated.customerId,
-      customerLocationId: validated.customerLocationId,
-      biocharProductId: validated.biocharProductId,
-      orderDate: validated.orderDate,
-      quantityKg: validated.quantityKg,
-      packaging: validated.packaging,
-      status: validated.status,
-      value: validated.value ?? null,
-      currency: validated.currency,
-    });
+    const order = await withAutoCode(
+      "OR",
+      orders,
+      orders.code,
+      validated.code,
+      (code) =>
+        createOrder(user.id, {
+          code,
+          facilityId: validated.facilityId,
+          customerId: validated.customerId,
+          customerLocationId: validated.customerLocationId,
+          biocharProductId: validated.biocharProductId,
+          orderDate: validated.orderDate,
+          quantityKg: validated.quantityKg,
+          packaging: validated.packaging,
+          status: validated.status,
+          value: validated.value ?? null,
+          currency: validated.currency,
+        })
+    );
 
     return { success: true, data: order };
   } catch (error) {

@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { productionRuns } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createProductionRun,
   deleteProductionRun,
@@ -212,29 +212,34 @@ export async function createProductionRunFn(
 
     const validated = createProductionRunSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("PR", productionRuns, productionRuns.code);
-
-    const run = await createProductionRun(user.id, {
-      code,
-      facilityId: validated.facilityId,
-      date: validated.date instanceof Date ? validated.date : new Date(validated.date),
-      reactorId: validated.reactorId,
-      status: validated.status,
-      startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
-      endTime: validated.endTime instanceof Date ? validated.endTime : new Date(validated.endTime),
-      operatorId: validated.operatorId || null,
-      feedstocks: validated.feedstocks,
-      feedingRateKgHr: validated.feedingRateKgHr ?? null,
-      residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
-      dieselOperationLiters: validated.dieselOperationLiters ?? null,
-      dieselGensetLiters: validated.dieselGensetLiters ?? null,
-      preprocessingFuelLiters: validated.preprocessingFuelLiters ?? null,
-      electricityKwh: validated.electricityKwh ?? null,
-      biocharOutputKg: validated.biocharOutputKg ?? null,
-      biocharStorageLocationId: validated.biocharStorageLocationId || null,
-      feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
-      plcDataFileUrl: validated.plcDataFileUrl || null,
-    });
+    const run = await withAutoCode(
+      "PR",
+      productionRuns,
+      productionRuns.code,
+      validated.code,
+      (code) =>
+        createProductionRun(user.id, {
+          code,
+          facilityId: validated.facilityId,
+          date: validated.date instanceof Date ? validated.date : new Date(validated.date),
+          reactorId: validated.reactorId,
+          status: validated.status,
+          startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
+          endTime: validated.endTime instanceof Date ? validated.endTime : new Date(validated.endTime),
+          operatorId: validated.operatorId || null,
+          feedstocks: validated.feedstocks,
+          feedingRateKgHr: validated.feedingRateKgHr ?? null,
+          residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
+          dieselOperationLiters: validated.dieselOperationLiters ?? null,
+          dieselGensetLiters: validated.dieselGensetLiters ?? null,
+          preprocessingFuelLiters: validated.preprocessingFuelLiters ?? null,
+          electricityKwh: validated.electricityKwh ?? null,
+          biocharOutputKg: validated.biocharOutputKg ?? null,
+          biocharStorageLocationId: validated.biocharStorageLocationId || null,
+          feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
+          plcDataFileUrl: validated.plcDataFileUrl || null,
+        })
+    );
 
     return { success: true, data: run };
   } catch (error) {

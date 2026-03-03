@@ -195,7 +195,7 @@ export function QuickAddDialog({
 
           <div className="flex flex-col gap-16">
             <label htmlFor="quick-add-code" className="label-medium">
-              Code <span className="text-[var(--color-signal-red)]">*</span>
+              Code
             </label>
             <input
               id="quick-add-code"

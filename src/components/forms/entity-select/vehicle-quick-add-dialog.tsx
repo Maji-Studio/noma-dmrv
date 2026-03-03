@@ -237,7 +237,7 @@ export function VehicleQuickAddDialog({
           <div className="grid grid-cols-2 gap-24">
             <div className="flex flex-col gap-16">
               <label htmlFor="vehicle-code" className="label-medium">
-                Code <span className="text-[var(--color-signal-red)]">*</span>
+                Code
               </label>
               <input
                 id="vehicle-code"

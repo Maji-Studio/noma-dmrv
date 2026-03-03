@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { type Formulation, formulations } from "@/db/schema";
-import { generateNextCode } from "@/data-access/code-generator";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
   createFormulation,
   deleteFormulation,
@@ -157,15 +157,20 @@ export async function createFormulationFn(
 
     const validated = createFormulationSchema.parse(data);
 
-    const code = validated.code || await generateNextCode("BCF", formulations, formulations.code);
-
-    const formulation = await createFormulation(user.id, {
-      code,
-      name: validated.name,
-      biocharRatio: validated.biocharRatio ?? null,
-      compostRatio: validated.compostRatio ?? null,
-      description: validated.description || null,
-    });
+    const formulation = await withAutoCode(
+      "BCF",
+      formulations,
+      formulations.code,
+      validated.code,
+      (code) =>
+        createFormulation(user.id, {
+          code,
+          name: validated.name,
+          biocharRatio: validated.biocharRatio ?? null,
+          compostRatio: validated.compostRatio ?? null,
+          description: validated.description || null,
+        })
+    );
 
     return { success: true, data: formulation };
   } catch (error) {

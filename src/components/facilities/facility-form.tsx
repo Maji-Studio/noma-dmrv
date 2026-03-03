@@ -118,8 +118,8 @@ export function FacilityForm({
       contactPhone: facility?.contactPhone ?? "",
       defaultDurabilityOption:
         (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
-      timezone: undefined as Timezone | undefined,
-      facilityType: undefined as FacilityType | undefined,
+      timezone: ((facility as Record<string, unknown>)?.timezone as Timezone) ?? undefined,
+      facilityType: ((facility as Record<string, unknown>)?.facilityType as FacilityType) ?? undefined,
     },
   });
 
