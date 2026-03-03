@@ -737,7 +737,7 @@ const paginatedItems = await db
 
 ## Auto-Generated Entity Codes
 
-Every biochar entity has a unique human-readable `code` column. Codes follow the format `{PREFIX}-{YYYY}-{NNN}` (e.g., `FAC-2026-001`). When users leave the code field empty, the system auto-generates the next sequential code.
+Every biochar entity has a unique human-readable `code` column. Codes follow the format `{PREFIX}-{YYYY}-{NNN}` (e.g., `FAC-2026-001`). Codes are always auto-generated server-side — there is no code field in any form or schema. The code field is not exposed to users.
 
 **Source:** `src/data-access/code-generator.ts`
 
@@ -766,7 +766,7 @@ Every biochar entity has a unique human-readable `code` column. Codes follow the
 ### How It Works
 
 1. `generateNextCode(prefix, table, codeColumn)` queries for the highest existing code matching the prefix + current year, then returns the next sequential number (zero-padded to 3 digits).
-2. `withAutoCode(prefix, table, codeColumn, userCode, insertFn)` wraps the insert. If the user provided a code, it uses that directly. Otherwise it auto-generates and retries up to 3 times on duplicate key collisions (handles concurrent inserts).
+2. `withAutoCode(prefix, table, codeColumn, userCode, insertFn)` wraps the insert. It auto-generates a code and retries up to 3 times on duplicate key collisions (handles concurrent inserts). Duplicate detection uses `isCodeUniqueViolation()` which matches the specific Postgres constraint name for the code column.
 
 ### Usage in Server Actions
 
@@ -779,7 +779,7 @@ const facility = await withAutoCode(
   "FAC",
   facilitiesTable,
   facilitiesTable.code,
-  validated.code,       // user-provided code (empty = auto-generate)
+  undefined,            // codes are always auto-generated
   (code) => createFacilityData(user.id, { ...validated, code })
 );
 ```
@@ -790,8 +790,8 @@ When creating a new entity with auto-generated codes:
 
 1. Choose a unique prefix (2-3 uppercase letters)
 2. Add a `code` column with a unique constraint to the DB schema
-3. Use `withAutoCode` in the server action's create function
-4. Make the code field optional in the form schema (`.optional().or(z.literal(""))`)
+3. Use `withAutoCode` in the server action's create function (pass `undefined` for `userCode`)
+4. Do NOT add a code field to the form schema — codes are auto-generated
 5. Add the prefix to this table
 
 ---

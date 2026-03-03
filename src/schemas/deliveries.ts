@@ -34,15 +34,6 @@ const optionalNumber = z.number().finite().optional().nullable();
  */
 const deliveryFormBaseSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Delivery code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Delivery code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   orderId: z.string().min(1, "Please select an order").uuid("Invalid order"),
   deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
 

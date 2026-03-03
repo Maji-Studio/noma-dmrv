@@ -38,15 +38,6 @@ export type StorageLocationType = (typeof storageLocationTypes)[number];
  */
 export const storageLocationFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Storage location name is required")

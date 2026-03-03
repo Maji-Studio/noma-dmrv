@@ -18,7 +18,6 @@ import {
   addProductionRunReading as addProductionRunReadingData,
   updateProductionRun,
   isProductionRunCodeAvailable as isProductionRunCodeAvailableData,
-  generateNextProductionRunCode as generateNextProductionRunCodeData,
   type PaginatedProductionRuns,
   type ProductionRunWithRelations,
   type ProductionRunStats,
@@ -165,31 +164,6 @@ export async function checkProductionRunCodeFn(
         error instanceof Error
           ? error.message
           : "Failed to check production run code",
-    };
-  }
-}
-
-/**
- * Generate next production run code
- */
-export async function generateNextProductionRunCodeFn(): Promise<
-  ActionResult<{ code: string }>
-> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const code = await generateNextProductionRunCodeData(user.id);
-    return { success: true, data: { code } };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to generate production run code",
     };
   }
 }

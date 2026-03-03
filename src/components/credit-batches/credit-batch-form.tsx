@@ -106,7 +106,6 @@ export function CreditBatchForm({
   } = useForm({
     resolver: zodResolver(creditBatchFormSchema),
     defaultValues: {
-      code: creditBatch?.code ?? "",
       facilityId: creditBatch?.facilityId ?? "",
       startDate: formatDateForInput(creditBatch?.startDate),
       endDate: formatDateForInput(creditBatch?.endDate),
@@ -181,21 +180,6 @@ export function CreditBatchForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Batch Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="facilityId"
             label="Facility"

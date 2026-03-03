@@ -43,15 +43,6 @@ export type ApplicationMethod = (typeof applicationMethods)[number];
  */
 export const applicationFormSchema = z.object({
   // === Section 1: Application Details ===
-  code: z
-    .string()
-    .max(50, "Application code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Application code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   applicationDate: z.coerce.date({ error: "Application date is required" }),
   deliveryId: z.string().min(1, "Please select a delivery").uuid("Invalid delivery"),
   biocharAppliedTons: z

@@ -80,7 +80,6 @@ export function ApplicationForm({
   } = useForm({
     resolver: zodResolver(applicationFormSchema),
     defaultValues: {
-      code: application?.code ?? "",
       applicationDate: application?.applicationDate
         ? new Date(application.applicationDate).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0],
@@ -117,17 +116,6 @@ export function ApplicationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="code" label="Application Code" error={errors.code?.message}>
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message}>
             <FormInput
               id="applicationDate"

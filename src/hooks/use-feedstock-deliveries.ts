@@ -20,7 +20,6 @@ import {
   getFeedstockDeliveryStatsFn,
   getFeedstockDeliveryOptionsFn,
   checkFeedstockDeliveryCodeFn,
-  generateNextDeliveryCodeFn,
   createFeedstockDeliveryFn,
   updateFeedstockDeliveryFn,
   deleteFeedstockDeliveryFn,
@@ -43,7 +42,6 @@ export const feedstockDeliveryKeys = {
   options: () => [...feedstockDeliveryKeys.all, "options"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...feedstockDeliveryKeys.all, "codeCheck", code, excludeId] as const,
-  nextCode: () => [...feedstockDeliveryKeys.all, "nextCode"] as const,
 };
 
 // ============================================
@@ -141,23 +139,6 @@ export function useFeedstockDeliveryCodeCheck(
   });
 }
 
-/**
- * Hook to generate next delivery code
- */
-export function useGenerateNextDeliveryCode() {
-  return useQuery({
-    queryKey: feedstockDeliveryKeys.nextCode(),
-    queryFn: async () => {
-      const result = await generateNextDeliveryCodeFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 0, // Always fetch fresh code
-  });
-}
-
 // ============================================
 // Feedstock Delivery Mutation Hooks
 // ============================================
@@ -189,8 +170,6 @@ export function useCreateFeedstockDelivery(
       queryClient.invalidateQueries({ queryKey: feedstockDeliveryKeys.stats() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: feedstockDeliveryKeys.options() });
-      // Invalidate next code
-      queryClient.invalidateQueries({ queryKey: feedstockDeliveryKeys.nextCode() });
 
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(feedstockDeliveryKeys.detail(data.id), data);

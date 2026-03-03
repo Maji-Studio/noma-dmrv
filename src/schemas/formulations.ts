@@ -29,15 +29,6 @@ const optionalRatioSchema = z
  */
 export const formulationFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Formulation code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Formulation code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Formulation name is required")

@@ -48,7 +48,6 @@ export function SupplierForm({
   } = useForm({
     resolver: zodResolver(supplierFormSchema),
     defaultValues: {
-      code: supplier?.code ?? "",
       name: supplier?.name ?? "",
       location: supplier?.location ?? "",
       gpsLatitude: supplier?.gpsLatitude ?? null,
@@ -77,21 +76,6 @@ export function SupplierForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Supplier Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="name"
             label="Supplier Name"

@@ -20,7 +20,6 @@ import {
   useDeleteFeedstockDelivery,
   useFeedstockDeliveries,
   useUpdateFeedstockDelivery,
-  useGenerateNextDeliveryCode,
 } from "@/hooks/use-feedstock-deliveries";
 import type { FeedstockDeliveryFormData } from "@/schemas/feedstock-deliveries";
 import type { FeedstockDeliveryWithRelations } from "@/data-access/feedstock-deliveries";
@@ -177,7 +176,6 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
 
   // Data fetching
   const { data: deliveriesData, isLoading } = useFeedstockDeliveries();
-  const { data: nextCode } = useGenerateNextDeliveryCode();
   const createDelivery = useCreateFeedstockDelivery();
   const updateDelivery = useUpdateFeedstockDelivery();
   const deleteDelivery = useDeleteFeedstockDelivery();
@@ -354,7 +352,6 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
             onCancel={closeSideSheet}
             isSubmitting={createDelivery.isPending || updateDelivery.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Delivery"}
-            suggestedCode={sideSheet.mode === "create" ? nextCode : undefined}
           />
         </EntitySideSheet>
       )}

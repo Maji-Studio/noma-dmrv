@@ -35,8 +35,6 @@ interface FeedstockDeliveryFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
-  /** Pre-generated code for new deliveries */
-  suggestedCode?: string;
 }
 
 export function FeedstockDeliveryForm({
@@ -45,7 +43,6 @@ export function FeedstockDeliveryForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
-  suggestedCode,
 }: FeedstockDeliveryFormProps) {
   const isEditMode = !!delivery;
 
@@ -60,10 +57,9 @@ export function FeedstockDeliveryForm({
     control,
     setValue,
     formState: { errors },
-  } = useForm<FeedstockDeliveryFormData>({
+  } = useForm({
     resolver: zodResolver(feedstockDeliveryFormSchema),
     defaultValues: {
-      code: delivery?.code ?? suggestedCode ?? "",
       facilityId: delivery?.facilityId ?? "",
       deliveryDate: delivery?.deliveryDate
         ? new Date(delivery.deliveryDate).toISOString().split("T")[0]
@@ -83,7 +79,7 @@ export function FeedstockDeliveryForm({
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data);
+    onSubmit(data as FeedstockDeliveryFormData);
   });
 
   return (
@@ -96,21 +92,6 @@ export function FeedstockDeliveryForm({
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="code"
-              label="Delivery Code"
-              error={errors.code?.message}
-            >
-              <FormInput
-                id="code"
-                type="text"
-                placeholder="Auto-generated if empty"
-                disabled={isSubmitting}
-                error={!!errors.code}
-                {...register("code")}
-              />
-            </FormField>
-
             <FormField
               id="deliveryDate"
               label="Delivery Date"

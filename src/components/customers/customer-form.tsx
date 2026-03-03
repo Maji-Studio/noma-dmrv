@@ -48,7 +48,6 @@ export function CustomerForm({
   } = useForm({
     resolver: zodResolver(customerFormSchema),
     defaultValues: {
-      code: customer?.code ?? "",
       name: customer?.name ?? "",
       cropType: customer?.cropType ?? "",
       address: customer?.address ?? "",
@@ -72,21 +71,6 @@ export function CustomerForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Customer Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="name"
             label="Customer Name"

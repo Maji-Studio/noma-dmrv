@@ -78,7 +78,6 @@ export function ReactorForm({
   } = useForm({
     resolver: zodResolver(reactorFormSchema),
     defaultValues: {
-      code: reactor?.code ?? "",
       identifier: reactor?.identifier ?? "",
       facilityId: preselectedFacilityId || reactor?.facilityId || "",
       reactorType: reactor?.reactorType ?? "",
@@ -105,21 +104,6 @@ export function ReactorForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Reactor Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="identifier"
             label="Identifier"

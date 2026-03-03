@@ -15,15 +15,6 @@ import { z } from "zod";
  * Only requires code and name for rapid creation
  */
 export const driverQuickAddSchema = z.object({
-  code: z
-    .string()
-    .max(50, "Driver code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Driver code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Driver name is required")
@@ -32,11 +23,13 @@ export const driverQuickAddSchema = z.object({
     .string()
     .max(50, "License number must be less than 50 characters")
     .optional()
+    .nullable()
     .or(z.literal("")),
   contactPhone: z
     .string()
     .max(30, "Phone number must be less than 30 characters")
     .optional()
+    .nullable()
     .or(z.literal("")),
 });
 
@@ -48,15 +41,6 @@ export const driverQuickAddSchema = z.object({
  * Schema for quick-adding a vehicle from entity select dropdown
  */
 export const vehicleQuickAddSchema = z.object({
-  code: z
-    .string()
-    .max(50, "Vehicle code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Vehicle code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Vehicle name is required")
@@ -105,15 +89,6 @@ export type FeedstockCategory = (typeof feedstockCategories)[number];
  * Schema for quick-adding a feedstock type from entity select dropdown
  */
 export const feedstockTypeQuickAddSchema = z.object({
-  code: z
-    .string()
-    .max(50, "Code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Feedstock type name is required")
@@ -125,6 +100,7 @@ export const feedstockTypeQuickAddSchema = z.object({
     .string()
     .max(1000, "Description must be less than 1000 characters")
     .optional()
+    .nullable()
     .or(z.literal("")),
   registryUrl: z
     .string()

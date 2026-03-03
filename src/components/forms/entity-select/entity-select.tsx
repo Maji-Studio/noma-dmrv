@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
 import type { EntitySelectProps, EntityOption } from "./types";
+import { useDebounce } from "@/hooks/use-debounce";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -145,18 +146,6 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   formulation: "formulation",
 };
 const SEARCH_VISIBILITY_THRESHOLD = 5;
-
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 export function EntitySelect({
   entityType,

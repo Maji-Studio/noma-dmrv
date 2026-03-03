@@ -66,7 +66,6 @@ interface FeedstockTypeQuickAddDialogProps {
 }
 
 interface FeedstockTypeForm {
-  code: string;
   name: string;
   category: string;
   description: string;
@@ -88,7 +87,6 @@ export function FeedstockTypeQuickAddDialog({
 }: FeedstockTypeQuickAddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [formData, setFormData] = useState<FeedstockTypeForm>({
-    code: "",
     name: "",
     category: "",
     description: "",
@@ -104,7 +102,6 @@ export function FeedstockTypeQuickAddDialog({
 
     if (isOpen) {
       setFormData({
-        code: "",
         name: "",
         category: "",
         description: "",
@@ -150,7 +147,6 @@ export function FeedstockTypeQuickAddDialog({
 
     try {
       const result = await createFeedstockTypeFn({
-        code: formData.code.trim().toUpperCase(),
         name: formData.name.trim(),
         category: formData.category,
         description: formData.description.trim() || null,
@@ -178,7 +174,7 @@ export function FeedstockTypeQuickAddDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="p-0 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full"
+      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full m-auto"
       aria-labelledby="feedstock-type-quick-add-dialog-title"
       data-testid="feedstock-type-quick-add-dialog"
     >
@@ -209,50 +205,27 @@ export function FeedstockTypeQuickAddDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-24">
-            <div className="flex flex-col gap-16">
-              <label htmlFor="feedstock-code" className="label-medium">
-                Code
-              </label>
-              <input
-                id="feedstock-code"
-                type="text"
-                value={formData.code}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    code: e.target.value.toUpperCase(),
-                  }))
-                }
-                placeholder="e.g., FST-001"
-                className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                autoFocus
-                data-testid="feedstock-code-input"
-              />
-            </div>
-
-            <div className="flex flex-col gap-16">
-              <label htmlFor="feedstock-category" className="label-medium">
-                Category{" "}
-                <span className="text-[var(--color-signal-red)]">*</span>
-              </label>
-              <select
-                id="feedstock-category"
-                value={formData.category}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, category: e.target.value }))
-                }
-                className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                data-testid="feedstock-category-select"
-              >
-                <option value="">Select category...</option>
-                {FEEDSTOCK_CATEGORIES.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-16">
+            <label htmlFor="feedstock-category" className="label-medium">
+              Category{" "}
+              <span className="text-[var(--color-signal-red)]">*</span>
+            </label>
+            <select
+              id="feedstock-category"
+              value={formData.category}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, category: e.target.value }))
+              }
+              className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+              data-testid="feedstock-category-select"
+            >
+              <option value="">Select category...</option>
+              {FEEDSTOCK_CATEGORIES.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-col gap-16">
@@ -268,6 +241,7 @@ export function FeedstockTypeQuickAddDialog({
               }
               placeholder="e.g., Mixed Wood Chips"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+              autoFocus
               data-testid="feedstock-name-input"
             />
           </div>

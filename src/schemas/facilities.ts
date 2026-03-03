@@ -156,15 +156,6 @@ export const contactPhoneSchema = z
  */
 export const facilityFormSchema = z.object({
   // Required fields
-  code: z
-    .string()
-    .max(50, "Facility code must be less than 50 characters")
-    .regex(
-      /^[A-Z0-9-]+$/,
-      "Facility code must contain only uppercase letters, numbers, and hyphens"
-    )
-    .optional()
-    .or(z.literal("")),
   name: z
     .string()
     .min(1, "Facility name is required")
@@ -364,12 +355,6 @@ export const facilityFormSchemaWithGpsValidation = facilityFormSchema.refine(
  * Minimal required fields for rapid data entry
  */
 export const quickAddFacilitySchema = z.object({
-  code: z
-    .string()
-    .max(50)
-    .regex(/^[A-Z0-9-]+$/, "Invalid facility code format")
-    .optional()
-    .or(z.literal("")),
   name: z.string().min(1, "Facility name is required").max(255),
   country: z.string().min(1, "Country is required").max(100),
   location: z.string().max(255).optional().or(z.literal("")),

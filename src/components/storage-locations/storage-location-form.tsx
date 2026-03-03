@@ -67,7 +67,6 @@ export function StorageLocationForm({
   } = useForm<StorageLocationFormData>({
     resolver: zodResolver(storageLocationFormSchema),
     defaultValues: {
-      code: storageLocation?.code ?? "",
       name: storageLocation?.name ?? "",
       type: storageLocation?.type ?? undefined,
       facilityId: storageLocation?.facilityId ?? defaultFacilityId ?? "",
@@ -98,21 +97,6 @@ export function StorageLocationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="code"
-            label="Location Code"
-            error={errors.code?.message}
-          >
-            <FormInput
-              id="code"
-              type="text"
-              placeholder="Auto-generated if empty"
-              disabled={isSubmitting}
-              error={!!errors.code}
-              {...register("code")}
-            />
-          </FormField>
-
           <FormField
             id="name"
             label="Location Name"

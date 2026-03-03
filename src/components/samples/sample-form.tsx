@@ -77,7 +77,6 @@ export function SampleForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(sampleFormSchema) as any,
     defaultValues: {
-      sampleCode: sample?.sampleCode ?? "",
       productionRunId: preselectedProductionRunId || sample?.productionRunId || "",
       samplingTime: sample?.samplingTime
         ? new Date(sample.samplingTime).toISOString().slice(0, 16)
@@ -163,21 +162,6 @@ export function SampleForm({
           <Accordion.Panel>
             <div className="space-y-24">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
-                <FormField
-                  id="sampleCode"
-                  label="Sample Code"
-                  error={errors.sampleCode?.message}
-                >
-                  <FormInput
-                    id="sampleCode"
-                    type="text"
-                    placeholder="Auto-generated if empty"
-                    disabled={isSubmitting}
-                    error={!!errors.sampleCode}
-                    {...register("sampleCode")}
-                  />
-                </FormField>
-
                 <FormField
                   id="productionRunId"
                   label="Production Run"

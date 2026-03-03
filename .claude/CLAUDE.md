@@ -94,7 +94,7 @@ This file provides guidance to Claude Code when working with this Next.js templa
 ### Database Operations
 - `pnpm db:generate` - Generate new migrations from schema changes (SAFE)
 - `pnpm db:push` - Push schema changes directly (review first)
-- `pnpm db:reset` - Drop all tables, push schema, and re-seed (DESTRUCTIVE)
+- `pnpm db:reset` - Drop all tables, push schema, and ensure admin user (DESTRUCTIVE)
 - `pnpm db:studio` - Open Drizzle Studio for database exploration (SAFE)
 
 ## Architecture

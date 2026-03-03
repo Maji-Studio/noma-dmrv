@@ -16,6 +16,10 @@ import {
   selectEntity as selectEntityById,
   selectFirstEntity,
 } from "./fixtures/page-helpers";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { eq, ilike, inArray } from "drizzle-orm";
+import * as schema from "../../src/db/schema";
 
 // ============================================
 // Full Chain Smoke Test
@@ -30,8 +34,74 @@ test.describe("Full Chain UI Smoke Test", () => {
     void cleanupTestData;
 
     const runId = Date.now().toString(36);
+
+    // Clean up chain-created facility (and its reactor) after the test
+    // The seeded data cleanup only handles seeded entities, not UI-created ones
+    test.setTimeout(90000);
+    const cleanupChainCreatedEntities = async () => {
+      const databaseUrl =
+        process.env.DATABASE_URL ||
+        "postgresql://postgres:postgres@localhost:5432/app_template_test";
+      const pool = new Pool({ connectionString: databaseUrl });
+      const db = drizzle(pool, { schema });
+      try {
+        await db.transaction(async (tx) => {
+          // Find chain-created facilities by name
+          const chainFacilities = await tx
+            .select({ id: schema.facilities.id })
+            .from(schema.facilities)
+            .where(ilike(schema.facilities.name, `Chain Facility ${runId}%`));
+
+          if (chainFacilities.length === 0) return;
+
+          const facilityIds = chainFacilities.map((f) => f.id);
+
+          // Delete reactors belonging to chain facilities
+          const chainReactors = await tx
+            .select({ id: schema.reactors.id })
+            .from(schema.reactors)
+            .where(inArray(schema.reactors.facilityId, facilityIds));
+
+          if (chainReactors.length > 0) {
+            const reactorIds = chainReactors.map((r) => r.id);
+
+            // Delete production run feedstocks and runs for these reactors
+            const runs = await tx
+              .select({ id: schema.productionRuns.id })
+              .from(schema.productionRuns)
+              .where(inArray(schema.productionRuns.reactorId, reactorIds));
+
+            if (runs.length > 0) {
+              const runIds = runs.map((r) => r.id);
+              await tx
+                .delete(schema.samples)
+                .where(inArray(schema.samples.productionRunId, runIds));
+              await tx
+                .delete(schema.productionRunFeedstocks)
+                .where(inArray(schema.productionRunFeedstocks.productionRunId, runIds));
+              await tx
+                .delete(schema.productionRuns)
+                .where(inArray(schema.productionRuns.id, runIds));
+            }
+
+            await tx
+              .delete(schema.reactors)
+              .where(inArray(schema.reactors.id, reactorIds));
+          }
+
+          // Delete chain facilities
+          await tx
+            .delete(schema.facilities)
+            .where(inArray(schema.facilities.id, facilityIds));
+        });
+      } finally {
+        await pool.end();
+      }
+    };
+
     const today = new Date().toISOString().split("T")[0];
 
+    try {
     // ─── 1. FACILITY ───────────────────────────────────────
     await test.step("Create Facility", async () => {
       await page.goto("/facilities");
@@ -284,5 +354,9 @@ test.describe("Full Chain UI Smoke Test", () => {
         page.locator("table tbody tr, [role='row']").first()
       ).toBeVisible({ timeout: 10000 });
     });
+    } finally {
+      // Clean up chain-created entities regardless of test outcome
+      await cleanupChainCreatedEntities();
+    }
   });
 });
