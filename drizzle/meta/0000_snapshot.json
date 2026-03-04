@@ -1,5 +1,5 @@
 {
-  "id": "4bd9d6f2-bad4-4fda-9ec7-f6e2672ac2ef",
+  "id": "4074884a-128b-43c1-8064-a21ccc666fd4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3182,12 +3182,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "name": {
           "name": "name",
           "type": "text",
@@ -3224,15 +3218,7 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "operators_code_unique": {
-          "name": "operators_code_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -3741,6 +3727,12 @@
         "feedstock_storage_location_id": {
           "name": "feedstock_storage_location_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedstock_mass_used_kg": {
+          "name": "feedstock_mass_used_kg",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
@@ -5645,9 +5637,8 @@
       "schema": "public",
       "values": [
         "feedstock_bin",
-        "feedstock_pile",
-        "biochar_pile",
-        "product_pile"
+        "biochar_bin",
+        "product_bin"
       ]
     },
     "public.sync_status": {

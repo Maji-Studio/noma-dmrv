@@ -265,7 +265,7 @@ export function ProductionRunForm({
                   error={!!errors.feedstockStorageLocationId}
                   filterBy={
                     watchedFacilityId
-                      ? { facilityId: watchedFacilityId, type: "feedstock_bin,feedstock_pile" }
+                      ? { facilityId: watchedFacilityId, type: "feedstock_bin" }
                       : undefined
                   }
                 />
@@ -464,7 +464,7 @@ export function ProductionRunForm({
                   error={!!errors.biocharStorageLocationId}
                   filterBy={
                     watchedFacilityId
-                      ? { facilityId: watchedFacilityId, type: "biochar_pile" }
+                      ? { facilityId: watchedFacilityId, type: "biochar_bin" }
                       : undefined
                   }
                 />

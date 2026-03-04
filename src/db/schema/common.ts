@@ -50,9 +50,8 @@ export const creditBatchStatus = pgEnum('credit_batch_status', [
 
 export const storageLocationType = pgEnum('storage_location_type', [
   'feedstock_bin',
-  'feedstock_pile',
-  'biochar_pile',
-  'product_pile',
+  'biochar_bin',
+  'product_bin',
 ]);
 
 export const packagingType = pgEnum('packaging_type', ['loose', 'bagged']);

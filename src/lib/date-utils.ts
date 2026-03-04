@@ -23,8 +23,21 @@ export function formatLocalDateTime(date: Date): string {
   return `${y}-${mo}-${d}T${h}:${mi}`;
 }
 
+/** Convert a date value (string or Date) to "YYYY-MM-DD" for input[type="date"]. Passes through YYYY-MM-DD strings as-is. */
+export function toDateInputValue(value: string | Date | null | undefined): string {
+  if (!value) return formatLocalDate(new Date());
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (isNaN(date.getTime())) return formatLocalDate(new Date());
+  return formatLocalDate(date);
+}
+
 /** Parse a "YYYY-MM-DD" string as a local date (avoids UTC midnight shift). */
 export function parseLocalDateString(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+    throw new Error(`Invalid date: ${dateStr}`);
+  }
+  return date;
 }

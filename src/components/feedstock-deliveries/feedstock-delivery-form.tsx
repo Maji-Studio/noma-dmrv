@@ -8,6 +8,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -62,8 +63,8 @@ export function FeedstockDeliveryForm({
     defaultValues: {
       facilityId: delivery?.facilityId ?? "",
       deliveryDate: delivery?.deliveryDate
-        ? new Date(delivery.deliveryDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+        ? formatLocalDate(new Date(delivery.deliveryDate))
+        : formatLocalDate(new Date()),
       supplierId: delivery?.supplierId ?? "",
       driverId: delivery?.driverId ?? "",
       vehicleId: delivery?.vehicleId ?? "",
