@@ -329,7 +329,7 @@ function DataTableRoot<TData, TValue>({
                           }
                         } : undefined}
                         tabIndex={isSortable ? 0 : undefined}
-                        role={isSortable ? "button" : undefined}
+                        aria-roledescription={isSortable ? "sortable column" : undefined}
                         aria-sort={
                           sortDir === "asc"
                             ? "ascending"

@@ -271,10 +271,13 @@ export function BiocharProductForm({
                   entityType="storageLocation"
                   value={field.value || ""}
                   onChange={field.onChange}
-                  placeholder="Select a storage location (optional)"
+                  placeholder="Select a product bin (optional)"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
-                  filterBy={selectedFacilityId ? { facilityId: selectedFacilityId } : undefined}
+                  filterBy={{
+                    ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
+                    type: "product_bin",
+                  }}
                 />
               )}
             />

@@ -29,7 +29,7 @@ const nodeTypes: NodeTypes = {
 
 export function ChainOfCustodyPage() {
   const router = useRouter();
-  const { data: facilitiesData, isLoading: facilitiesLoading } = useFacilities();
+  const { data: facilitiesData, isLoading: facilitiesLoading, isError: facilitiesError } = useFacilities();
   const facilityList = facilitiesData?.items ?? [];
 
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export function ChainOfCustodyPage() {
   // Auto-select first facility when data loads
   const activeFacilityId = selectedFacilityId ?? facilityList[0]?.id ?? null;
 
-  const { data: chainData, isLoading: chainLoading } = useChainOfCustody(activeFacilityId);
+  const { data: chainData, isLoading: chainLoading, isError: chainError } = useChainOfCustody(activeFacilityId);
   const { nodes, edges } = useChainGraph(chainData);
 
   const handleFacilityChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -62,6 +62,7 @@ export function ChainOfCustodyPage() {
           </div>
 
           <select
+            aria-label="Facility"
             value={activeFacilityId ?? ""}
             onChange={handleFacilityChange}
             disabled={facilitiesLoading || facilityList.length === 0}
@@ -80,7 +81,13 @@ export function ChainOfCustodyPage() {
 
         {/* Canvas */}
         <div className="flex-1 relative">
-          {isLoading ? (
+          {facilitiesError || chainError ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <p className="body-medium text-[var(--color-signal-red)]">
+                {facilitiesError ? "Failed to load facilities." : "Failed to load chain of custody data."}
+              </p>
+            </div>
+          ) : isLoading ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="flex flex-col items-center gap-12">
                 <TreeStructure size={32} className="text-[var(--color-text-tertiary)] animate-pulse" />

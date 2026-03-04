@@ -192,8 +192,9 @@ export function FeedstockForm({
               name="storageLocationId"
               label="Storage Location (optional)"
               entityType="storageLocation"
-              placeholder="Select bin/pile..."
+              placeholder="Select feedstock bin..."
               disabled={isSubmitting}
+              filterBy={{ type: "feedstock_bin" }}
             />
 
             <FormField
