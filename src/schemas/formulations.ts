@@ -34,37 +34,9 @@ export const formulationFormSchema = z.object({
     .min(1, "Formulation name is required")
     .max(255, "Formulation name must be less than 255 characters"),
 
-  // Ratio fields
-  biocharRatio: z.union([
-    z.number().transform((val) => (isNaN(val) ? null : val)).pipe(
-      z.number().min(0, "Ratio must be between 0 and 1").max(1, "Ratio must be between 0 and 1").nullable()
-    ),
-    z.string().transform((val, ctx) => {
-      if (val === "") return null;
-      const num = parseFloat(val);
-      if (isNaN(num) || num < 0 || num > 1) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ratio must be between 0 and 1" });
-        return z.NEVER;
-      }
-      return num;
-    }),
-    z.null(),
-  ]).optional().nullable(),
-  compostRatio: z.union([
-    z.number().transform((val) => (isNaN(val) ? null : val)).pipe(
-      z.number().min(0, "Ratio must be between 0 and 1").max(1, "Ratio must be between 0 and 1").nullable()
-    ),
-    z.string().transform((val, ctx) => {
-      if (val === "") return null;
-      const num = parseFloat(val);
-      if (isNaN(num) || num < 0 || num > 1) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ratio must be between 0 and 1" });
-        return z.NEVER;
-      }
-      return num;
-    }),
-    z.null(),
-  ]).optional().nullable(),
+  // Ratio fields (use setValueAs: nullableNumericValue in register)
+  biocharRatio: optionalRatioSchema,
+  compostRatio: optionalRatioSchema,
 
   // Optional fields
   description: z

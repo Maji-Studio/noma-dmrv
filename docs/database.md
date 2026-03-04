@@ -123,7 +123,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_dev
 | **Database** | PostgreSQL |
 | **ORM** | Drizzle ORM v0.45.1 |
 | **Connection** | `pg` Pool (connection pooling) |
-| **Current Tables** | 5 core tables (Better Auth + Projects + Items example) |
+| **Current Tables** | 45+ tables (auth, facilities, production, logistics, credits) |
 | **Security** | Application-level auth guards + per-project membership |
 | **Migrations** | Incremental migrations from start |
 
@@ -767,7 +767,7 @@ Every biochar entity has a unique human-readable `code` column. Codes follow the
 ### How It Works
 
 1. `generateNextCode(prefix, table, codeColumn)` queries for the highest existing code matching the prefix + current year, then returns the next sequential number (zero-padded to 3 digits).
-2. `withAutoCode(prefix, table, codeColumn, userCode, insertFn)` wraps the insert. It auto-generates a code and retries up to 3 times on duplicate key collisions (handles concurrent inserts). Duplicate detection uses `isCodeUniqueViolation()` which matches the specific Postgres constraint name for the code column.
+2. `withAutoCode(prefix, table, codeColumn, undefined, insertFn)` wraps the insert. The `userCode` parameter is always `undefined` — all codes are auto-generated. It retries up to 3 times on duplicate key collisions (handles concurrent inserts). Duplicate detection uses `isCodeUniqueViolation()` which matches the specific Postgres constraint name for the code column.
 
 ### Usage in Server Actions
 

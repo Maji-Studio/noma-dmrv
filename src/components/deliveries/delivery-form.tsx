@@ -6,6 +6,7 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -93,9 +94,7 @@ export function DeliveryForm({
     resolver: zodResolver(deliveryFormSchema),
     defaultValues: {
       orderId: delivery?.orderId ?? "",
-      deliveryDate: delivery?.deliveryDate
-        ? new Date(delivery.deliveryDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
       status: (delivery?.status as DeliveryStatus) ?? "processing",
       deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
       massDryKg: delivery?.massDryKg ?? undefined,
@@ -111,7 +110,7 @@ export function DeliveryForm({
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as DeliveryFormData);
+    return onSubmit(data as DeliveryFormData);
   });
 
   return (

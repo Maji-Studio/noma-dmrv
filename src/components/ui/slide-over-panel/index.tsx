@@ -75,12 +75,23 @@ const Trigger = React.forwardRef<HTMLButtonElement, SlideOverPanelTriggerProps>(
         className={className}
         render={(props) => {
           if (React.isValidElement(children)) {
+            const childProps = children.props as Record<string, unknown>;
+            const existingOnClick = childProps.onClick as
+              | ((e: React.MouseEvent) => void)
+              | undefined;
+            const triggerOnClick = props.onClick as
+              | ((e: React.MouseEvent) => void)
+              | undefined;
             return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
               ...props,
               className: cn(
-                (children.props as { className?: string }).className,
+                (childProps as { className?: string }).className,
                 className
               ),
+              onClick: (e: React.MouseEvent) => {
+                existingOnClick?.(e);
+                triggerOnClick?.(e);
+              },
             });
           }
           return <button {...props}>{children}</button>;
@@ -329,12 +340,23 @@ const Close = React.forwardRef<HTMLButtonElement, SlideOverPanelCloseProps>(
         className={className}
         render={(props) => {
           if (React.isValidElement(children)) {
+            const childProps = children.props as Record<string, unknown>;
+            const existingOnClick = childProps.onClick as
+              | ((e: React.MouseEvent) => void)
+              | undefined;
+            const closeOnClick = props.onClick as
+              | ((e: React.MouseEvent) => void)
+              | undefined;
             return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
               ...props,
               className: cn(
-                (children.props as { className?: string }).className,
+                (childProps as { className?: string }).className,
                 className
               ),
+              onClick: (e: React.MouseEvent) => {
+                existingOnClick?.(e);
+                closeOnClick?.(e);
+              },
             });
           }
           return <button {...props}>{children}</button>;

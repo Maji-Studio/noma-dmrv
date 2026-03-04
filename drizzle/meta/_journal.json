@@ -15,6 +15,13 @@
       "when": 1771358661098,
       "tag": "0001_sad_sugar_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772551769800,
+      "tag": "0002_harsh_sally_floyd",
+      "breakpoints": true
     }
   ]
 }

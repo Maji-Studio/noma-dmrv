@@ -4,10 +4,10 @@
  * Integrates with React Hook Form via register spread
  */
 
-import { forwardRef } from "react";
+import { forwardRef, type ComponentPropsWithoutRef } from "react";
 import { Input } from "@/components/ui";
 
-interface FormInputProps extends React.ComponentPropsWithoutRef<typeof Input> {
+interface FormInputProps extends ComponentPropsWithoutRef<typeof Input> {
   error?: boolean;
 }
 

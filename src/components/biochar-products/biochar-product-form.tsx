@@ -5,7 +5,9 @@
  */
 "use client";
 
+import { useEffect } from "react";
 import { nullableNumericValue } from "@/lib/form-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -55,15 +57,14 @@ export function BiocharProductForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(biocharProductFormSchema),
     defaultValues: {
       facilityId: product?.facility?.id ?? "",
       formulationId: product?.formulation?.id ?? "",
-      productionDate: product?.productionDate
-        ? new Date(product.productionDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      productionDate: product?.productionDate ?? formatLocalDate(new Date()),
       status: product?.status ?? "testing",
       linkedProductionRunId: product?.linkedProductionRun?.id ?? "",
       storageLocationId: product?.storageLocation?.id ?? "",
@@ -73,10 +74,21 @@ export function BiocharProductForm({
   });
 
   const selectedFacilityId = watch("facilityId");
+
+  // Clear dependent fields when facility changes
+  const initialFacilityId = product?.facility?.id ?? "";
+  useEffect(() => {
+    if (selectedFacilityId && selectedFacilityId !== initialFacilityId) {
+      setValue("linkedProductionRunId", "");
+      setValue("storageLocationId", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFacilityId]);
+
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as BiocharProductFormData);
+    return onSubmit(data as BiocharProductFormData);
   });
 
   return (

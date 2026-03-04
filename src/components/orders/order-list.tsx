@@ -224,8 +224,8 @@ export function OrderList() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard title="Total Orders" value={totalOrders} icon={<Package size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
-        <StatCard title="Total Deliveries" value={totalDeliveries} icon={<Truck size={24} weight="bold" />} description="Associated deliveries" isLoading={isLoading} />
-        <StatCard title="Total Quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<Package size={24} weight="bold" />} description="Ordered quantity" isLoading={isLoading} />
+        <StatCard title="Total Deliveries" value={totalDeliveries} icon={<Truck size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
+        <StatCard title="Total Quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<Package size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
       </div>
 
       <DataTable

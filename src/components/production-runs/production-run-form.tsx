@@ -1,15 +1,16 @@
 /**
  * ProductionRunForm component
  * Reusable production run form with React Hook Form integration
- * Features multi-select feedstock input with mass tracking
+ * Uses bin-based feedstock selection with proportional allocation
  */
 "use client";
 
-import { numericValue, integerValue } from "@/lib/form-utils";
+import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-utils";
+import { formatLocalDate, formatLocalDateTime } from "@/lib/date-utils";
 
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash } from "@phosphor-icons/react";
 import { FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -67,27 +68,24 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     defaultValues: {
       facilityId: preselectedFacilityId || productionRun?.facilityId || "",
-      date: productionRun?.date
-        ? new Date(productionRun.date).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      date: productionRun?.date ?? formatLocalDate(new Date()),
       reactorId: productionRun?.reactorId ?? "",
       status: (productionRun?.status as ProductionRunStatus) ?? "draft",
       startTime: productionRun?.startTime
-        ? new Date(productionRun.startTime).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16),
+        ? formatLocalDateTime(new Date(productionRun.startTime))
+        : formatLocalDateTime(new Date()),
       endTime: productionRun?.endTime
-        ? new Date(productionRun.endTime).toISOString().slice(0, 16)
-        : new Date().toISOString().slice(0, 16),
+        ? formatLocalDateTime(new Date(productionRun.endTime))
+        : formatLocalDateTime(new Date()),
       operatorId: productionRun?.operatorId ?? "",
-      feedstocks: productionRun?.feedstocks?.map((f) => ({
-        feedstockId: f.feedstockId,
-        massUsedKg: f.massUsedKg,
-      })) ?? [{ feedstockId: "", massUsedKg: 0 }],
+      feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
+      feedstockMassUsedKg: productionRun?.feedstockMassUsedKg ?? undefined,
       feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
       residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
       dieselOperationLiters: productionRun?.dieselOperationLiters ?? undefined,
@@ -96,25 +94,31 @@ export function ProductionRunForm({
       electricityKwh: productionRun?.electricityKwh ?? undefined,
       biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
       biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
-      feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
       plcDataFileUrl: productionRun?.plcDataFileUrl ?? "",
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "feedstocks",
-  });
-
-  // Watch facility to filter reactors and feedstocks
+  // Watch facility to filter reactors and storage locations
   const watchedFacilityId = watch("facilityId");
+
+  // Clear dependent fields when facility changes (skip if facility matches initial value)
+  const initialFacilityId = preselectedFacilityId || productionRun?.facilityId || "";
+  useEffect(() => {
+    if (watchedFacilityId && watchedFacilityId !== initialFacilityId) {
+      setValue("reactorId", "");
+      setValue("feedstockStorageLocationId", "");
+      setValue("biocharStorageLocationId", "");
+    }
+    // Only run when facility changes, not on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedFacilityId]);
 
   const defaultSubmitLabel = isEditMode
     ? "Update Production Run"
     : "Create Production Run";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as ProductionRunFormData);
+    return onSubmit(data as ProductionRunFormData);
   });
 
   return (
@@ -230,101 +234,62 @@ export function ProductionRunForm({
         </FormField>
       </div>
 
-      {/* Feedstocks Section (M:M relationship) */}
+      {/* Feedstock Input Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <div className="flex items-center justify-between">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Feedstocks
-          </h3>
-          <Button
-            type="button"
-            variant="noOutline"
-            size="small"
-            onClick={() => append({ feedstockId: "", massUsedKg: 0 })}
-            disabled={isSubmitting || !watchedFacilityId}
-          >
-            <Plus size={16} weight="bold" />
-            Add Feedstock
-          </Button>
-        </div>
-
-        {errors.feedstocks?.message && (
-          <p className="text-[var(--color-signal-red)] text-[var(--text-s)]">
-            {errors.feedstocks.message}
-          </p>
-        )}
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Feedstock Input
+        </h3>
 
         {!watchedFacilityId && (
           <p className="text-[var(--color-text-tertiary)] text-[var(--text-s)]">
-            Please select a facility first to choose feedstocks.
+            Please select a facility first to choose a feedstock source bin.
           </p>
         )}
 
-        <div className="space-y-16">
-          {fields.map((field, index) => (
-            <div
-              key={field.id}
-              className="flex items-start gap-16 p-24 bg-[var(--color-surface-light)] rounded-[var(--radius-8)] border border-[var(--color-border-tertiary)]"
-            >
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-                <FormField
-                  id={`feedstocks.${index}.feedstockId`}
-                  label="Feedstock"
-                  error={errors.feedstocks?.[index]?.feedstockId?.message}
-                >
-                  <Controller
-                    name={`feedstocks.${index}.feedstockId`}
-                    control={control}
-                    render={({ field: fieldProps }) => (
-                      <EntitySelect
-                        entityType="feedstock"
-                        value={fieldProps.value}
-                        onChange={fieldProps.onChange}
-                        placeholder="Select feedstock..."
-                        disabled={isSubmitting || !watchedFacilityId}
-                        error={!!errors.feedstocks?.[index]?.feedstockId}
-                        filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
-                      />
-                    )}
-                  />
-                </FormField>
-
-                <FormField
-                  id={`feedstocks.${index}.massUsedKg`}
-                  label="Mass Used (kg)"
-                  error={errors.feedstocks?.[index]?.massUsedKg?.message}
-                >
-                  <FormInput
-                    id={`feedstocks.${index}.massUsedKg`}
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g., 500"
-                    disabled={isSubmitting}
-                    error={!!errors.feedstocks?.[index]?.massUsedKg}
-                    {...register(`feedstocks.${index}.massUsedKg`, {
-                      setValueAs: (v) =>
-                        v === "" || v === null || v === undefined
-                          ? 0
-                          : parseFloat(v),
-                    })}
-                  />
-                </FormField>
-              </div>
-
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="noOutline"
-                  size="small"
-                  onClick={() => remove(index)}
-                  disabled={isSubmitting}
-                  className="mt-[26px] text-[var(--color-signal-red)]"
-                >
-                  <Trash size={18} weight="bold" />
-                </Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="feedstockStorageLocationId"
+            label="Feedstock Source Bin"
+            error={errors.feedstockStorageLocationId?.message}
+          >
+            <Controller
+              name="feedstockStorageLocationId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  entityType="storageLocation"
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  placeholder="Select feedstock bin..."
+                  disabled={isSubmitting || !watchedFacilityId}
+                  error={!!errors.feedstockStorageLocationId}
+                  filterBy={
+                    watchedFacilityId
+                      ? { facilityId: watchedFacilityId, type: "feedstock_bin,feedstock_pile" }
+                      : undefined
+                  }
+                />
               )}
-            </div>
-          ))}
+            />
+          </FormField>
+
+          <FormField
+            id="feedstockMassUsedKg"
+            label="Mass Used (kg)"
+            error={errors.feedstockMassUsedKg?.message}
+          >
+            <FormInput
+              id="feedstockMassUsedKg"
+              type="number"
+              step="0.1"
+              placeholder="e.g., 500"
+              disabled={isSubmitting}
+              error={!!errors.feedstockMassUsedKg}
+              {...register("feedstockMassUsedKg", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
         </div>
       </div>
 
@@ -500,32 +465,6 @@ export function ProductionRunForm({
                   filterBy={
                     watchedFacilityId
                       ? { facilityId: watchedFacilityId, type: "biochar_pile" }
-                      : undefined
-                  }
-                />
-              )}
-            />
-          </FormField>
-
-          <FormField
-            id="feedstockStorageLocationId"
-            label="Feedstock Source Location"
-            error={errors.feedstockStorageLocationId?.message}
-          >
-            <Controller
-              name="feedstockStorageLocationId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  entityType="storageLocation"
-                  value={field.value || undefined}
-                  onChange={field.onChange}
-                  placeholder="Select storage location..."
-                  disabled={isSubmitting || !watchedFacilityId}
-                  error={!!errors.feedstockStorageLocationId}
-                  filterBy={
-                    watchedFacilityId
-                      ? { facilityId: watchedFacilityId }
                       : undefined
                   }
                 />

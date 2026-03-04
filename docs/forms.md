@@ -390,6 +390,27 @@ gpsLatitude: z.union([
 
 Same applies to date transforms — always validate `isNaN(date.getTime())` after `new Date(val)`.
 
+### Date/DateTime Form Defaults
+
+Use `@/lib/date-utils` for date and datetime default values. **Never** use `toISOString()` — it converts to UTC, which shifts the date in timezones behind UTC (e.g., midnight March 3 in UTC+0 becomes Feb 28 in UTC-5).
+
+```typescript
+import { formatLocalDate, formatLocalDateTime } from "@/lib/date-utils";
+
+// BAD — UTC conversion shifts the date in negative-offset timezones
+date: new Date().toISOString().split("T")[0],
+startTime: new Date().toISOString().slice(0, 16),
+
+// GOOD — formats in user's local timezone
+date: formatLocalDate(new Date()),           // "2026-03-03"
+startTime: formatLocalDateTime(new Date()),  // "2026-03-03T14:30"
+```
+
+Available helpers:
+- `formatLocalDate(date)` → `"YYYY-MM-DD"` (for `<input type="date">`)
+- `formatLocalDateTime(date)` → `"YYYY-MM-DDTHH:MM"` (for `<input type="datetime-local">`)
+- `parseLocalDateString(str)` → `Date` (avoids UTC midnight shift when parsing `"YYYY-MM-DD"`)
+
 ## Examples
 
 See these files for complete examples:

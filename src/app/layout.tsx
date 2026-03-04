@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Maji Noema",
-  description: "Your personal AI companion for reflection, growth, and transformation",
+  title: "Maji dMRV",
+  description: "Biochar carbon credit MRV system",
 };
 
 export default function RootLayout({

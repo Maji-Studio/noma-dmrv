@@ -84,8 +84,7 @@ export function StorageLocationForm({
     : "Create Storage Location";
 
   const handleFormSubmit = handleSubmit((data) => {
-    // Cast to StorageLocationFormData since zodResolver validates the data
-    onSubmit(data as StorageLocationFormData);
+    return onSubmit(data as StorageLocationFormData);
   });
 
   return (
