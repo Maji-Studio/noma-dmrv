@@ -345,16 +345,16 @@ export function ApplicationForm({
       {/* === Section 4: Truck Weighing === */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Truck Weighing
+          Truck Weighing at Field Site
         </h3>
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Isometric: BiocharApplication verification requirement
+          Weigh the delivery truck before and after unloading to independently verify the mass of biochar applied. The difference (arrival − departure) should match the applied amount above.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="truckMassOnArrivalKg"
-            label="Truck Mass on Arrival (kg)"
+            label="Truck Mass Before Unloading (kg)"
             error={errors.truckMassOnArrivalKg?.message}
           >
             <FormInput
@@ -372,7 +372,7 @@ export function ApplicationForm({
 
           <FormField
             id="truckMassOnDepartureKg"
-            label="Truck Mass on Departure (kg)"
+            label="Truck Mass After Unloading (kg)"
             error={errors.truckMassOnDepartureKg?.message}
           >
             <FormInput

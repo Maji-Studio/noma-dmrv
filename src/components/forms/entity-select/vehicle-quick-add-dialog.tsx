@@ -94,22 +94,26 @@ export function VehicleQuickAddDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      identifier: "",
+      vehicleType: "",
+      fuelType: "",
+      fuelConsumptionLPerKm: "",
+      modelYear: new Date().getFullYear().toString(),
+    });
+    setError(null);
+    setIsSubmitting(false);
+  };
+
   // Handle dialog open/close with native dialog API
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
 
     if (isOpen) {
-      setFormData({
-        name: "",
-        identifier: "",
-        vehicleType: "",
-        fuelType: "",
-        fuelConsumptionLPerKm: "",
-        modelYear: new Date().getFullYear().toString(),
-      });
-      setError(null);
-      setIsSubmitting(false);
+      resetForm();
       dialog.showModal();
     } else {
       dialog.close();

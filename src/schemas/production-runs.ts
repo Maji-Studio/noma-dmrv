@@ -1,7 +1,7 @@
 /**
  * Production Runs Validation Schemas
  * Zod schemas for production run forms, server actions, and filtering
- * Includes multi-select feedstocks with M:M relationship
+ * Bin-based feedstock selection with proportional M:M allocation
  */
 
 import { z } from "zod";
@@ -22,24 +22,6 @@ export const productionRunStatuses = [
 ] as const;
 
 export type ProductionRunStatus = (typeof productionRunStatuses)[number];
-
-// ============================================
-// Feedstock Selection Schema (M:M relationship)
-// ============================================
-
-/**
- * Schema for individual feedstock selection with mass
- * Used in the multi-select feedstock picker
- */
-export const productionRunFeedstockSchema = z.object({
-  feedstockId: z.string().uuid("Please select a valid feedstock"),
-  massUsedKg: z
-    .number()
-    .positive("Mass must be a positive number")
-    .max(1000000, "Mass must be less than 1,000,000 kg"),
-});
-
-export type ProductionRunFeedstockData = z.infer<typeof productionRunFeedstockSchema>;
 
 // ============================================
 // Production Run Form Schema (Client-side validation)
@@ -95,10 +77,12 @@ export const productionRunFormSchema = z.object({
   // Operator (optional)
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
-  // Multi-select feedstocks (M:M relationship)
-  feedstocks: z
-    .array(productionRunFeedstockSchema)
-    .min(1, "At least one feedstock is required"),
+  // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
+  feedstockMassUsedKg: z.union([
+    z.number().positive("Mass must be a positive number"),
+    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
+    z.null(),
+  ]).optional().nullable(),
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.union([
@@ -189,7 +173,7 @@ export const updateProductionRunSchema = z.object({
     z.string().transform((val) => new Date(val)),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstocks: z.array(productionRunFeedstockSchema).min(1).optional(),
+  feedstockMassUsedKg: z.number().positive().optional().nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
   residenceTimeMinutes: z.number().int().positive().optional().nullable(),
   dieselOperationLiters: z.number().min(0).optional().nullable(),

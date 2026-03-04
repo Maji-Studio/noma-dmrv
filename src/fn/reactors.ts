@@ -211,7 +211,7 @@ export async function createReactorFn(
       "R",
       reactors,
       reactors.code,
-      validated.code,
+      undefined,
       (code) =>
         createReactor(user.id, {
           code,

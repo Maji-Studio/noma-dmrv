@@ -12,6 +12,7 @@ import {
   deleteTestFacility,
   type TestFacility,
 } from "./fixtures";
+import { selectEntity } from "./fixtures/page-helpers";
 import * as crypto from "crypto";
 
 // ============================================
@@ -75,7 +76,6 @@ test.describe("Facility + Reactor UI CRUD", () => {
     const page = adminPage;
 
     // seededData.facility was seeded into the DB and is available in EntitySelect
-    const facilityId = seededData.facility.id;
     const reactorIdentifier = `UI Reactor ${RUN_ID}`;
 
     // Navigate to reactors list
@@ -92,11 +92,12 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await page.fill('input[name="identifier"]', reactorIdentifier);
 
     // Select the facility via EntitySelect
-    await page.click('[data-testid="entity-select-trigger"]');
-    await page.waitForSelector('[data-testid="entity-select-listbox"]', {
-      state: "visible",
-    });
-    await page.click(`[data-testid="entity-option-${facilityId}"]`);
+    await selectEntity(
+      page,
+      "Facility",
+      seededData.facility.id,
+      seededData.facility.name
+    );
 
     // Select reactor type via native select
     await page.selectOption('select[name="reactorType"]', "fixed-bed");

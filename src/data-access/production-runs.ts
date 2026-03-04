@@ -18,7 +18,7 @@ import {
   feedstocks,
   feedstockTypes,
 } from "@/db/schema";
-import type { ProductionRunFilterData, ProductionRunFeedstockData } from "@/schemas/production-runs";
+import type { ProductionRunFilterData } from "@/schemas/production-runs";
 
 // ============================================
 // Types
@@ -51,6 +51,7 @@ export interface ProductionRunWithRelations {
   biocharOutputKg: number | null;
   biocharStorageLocationId: string | null;
   feedstockStorageLocationId: string | null;
+  feedstockMassUsedKg: number | null;
   emissionFactorsUsed: unknown | null;
   plcDataFileUrl: string | null;
   createdAt: Date;
@@ -206,6 +207,7 @@ export async function getProductionRuns(
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
+      feedstockMassUsedKg: productionRuns.feedstockMassUsedKg,
       emissionFactorsUsed: productionRuns.emissionFactorsUsed,
       plcDataFileUrl: productionRuns.plcDataFileUrl,
       createdAt: productionRuns.createdAt,
@@ -327,6 +329,7 @@ export async function getProductionRunById(
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
+      feedstockMassUsedKg: productionRuns.feedstockMassUsedKg,
       emissionFactorsUsed: productionRuns.emissionFactorsUsed,
       plcDataFileUrl: productionRuns.plcDataFileUrl,
       createdAt: productionRuns.createdAt,
@@ -347,21 +350,24 @@ export async function getProductionRunById(
     throw new Error("Production run not found");
   }
 
-  const runFeedstocks = await getProductionRunFeedstocks(productionRunId);
-  const biocharStorageLocation = run.biocharStorageLocationId
-    ? await db
-        .select({ code: storageLocations.code })
-        .from(storageLocations)
-        .where(eq(storageLocations.id, run.biocharStorageLocationId))
-        .then(([loc]) => loc?.code ?? null)
-    : null;
-  const feedstockStorageLocation = run.feedstockStorageLocationId
-    ? await db
-        .select({ code: storageLocations.code })
-        .from(storageLocations)
-        .where(eq(storageLocations.id, run.feedstockStorageLocationId))
-        .then(([loc]) => loc?.code ?? null)
-    : null;
+  const [runFeedstocks, biocharStorageLocation, feedstockStorageLocation] =
+    await Promise.all([
+      getProductionRunFeedstocks(productionRunId),
+      run.biocharStorageLocationId
+        ? db
+            .select({ code: storageLocations.code })
+            .from(storageLocations)
+            .where(eq(storageLocations.id, run.biocharStorageLocationId))
+            .then(([loc]) => loc?.code ?? null)
+        : null,
+      run.feedstockStorageLocationId
+        ? db
+            .select({ code: storageLocations.code })
+            .from(storageLocations)
+            .where(eq(storageLocations.id, run.feedstockStorageLocationId))
+            .then(([loc]) => loc?.code ?? null)
+        : null,
+    ]);
 
   return {
     ...run,
@@ -457,11 +463,52 @@ export async function getProductionRunReadings(
 }
 
 // ============================================
+// Feedstock Allocation Helper
+// ============================================
+
+/**
+ * Proportionally allocate total mass across feedstock batches stored in a bin.
+ * Mass is split by each batch's massDryKg relative to the bin total.
+ * Returns array of { feedstockId, massUsedKg } for M:M insertion.
+ */
+async function allocateFeedstockMass(
+  storageLocationId: string,
+  totalMassKg: number
+): Promise<Array<{ feedstockId: string; massUsedKg: number }>> {
+  const batchesInBin = await db
+    .select({
+      id: feedstocks.id,
+      massDryKg: feedstocks.massDryKg,
+    })
+    .from(feedstocks)
+    .where(eq(feedstocks.storageLocationId, storageLocationId));
+
+  if (batchesInBin.length === 0) {
+    throw new Error("Selected feedstock bin has no feedstock batches");
+  }
+
+  const totalDryMass = batchesInBin.reduce((s, b) => s + (b.massDryKg ?? 0), 0);
+
+  if (totalDryMass === 0) {
+    const equalShare = totalMassKg / batchesInBin.length;
+    return batchesInBin.map((b) => ({
+      feedstockId: b.id,
+      massUsedKg: equalShare,
+    }));
+  }
+
+  return batchesInBin.map((b) => ({
+    feedstockId: b.id,
+    massUsedKg: ((b.massDryKg ?? 0) / totalDryMass) * totalMassKg,
+  }));
+}
+
+// ============================================
 // Production Run Create Operations
 // ============================================
 
 /**
- * Create a new production run with feedstocks
+ * Create a new production run with bin-based feedstock allocation
  */
 export async function createProductionRun(
   userId: string,
@@ -474,7 +521,7 @@ export async function createProductionRun(
     startTime: Date;
     endTime: Date;
     operatorId?: string | null;
-    feedstocks: ProductionRunFeedstockData[];
+    feedstockMassUsedKg?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
     dieselOperationLiters?: number | null;
@@ -523,41 +570,50 @@ export async function createProductionRun(
     throw new Error("Reactor does not belong to the selected facility");
   }
 
-  // Create production run
-  const [run] = await db
-    .insert(productionRuns)
-    .values({
-      code: data.code,
-      facilityId: data.facilityId,
-      date: data.date.toISOString().split('T')[0],
-      status: data.status ?? "draft",
-      startTime: data.startTime,
-      endTime: data.endTime,
-      reactorId: data.reactorId,
-      operatorId: data.operatorId ?? null,
-      feedingRateKgHr: data.feedingRateKgHr ?? null,
-      residenceTimeMinutes: data.residenceTimeMinutes ?? null,
-      dieselOperationLiters: data.dieselOperationLiters ?? null,
-      dieselGensetLiters: data.dieselGensetLiters ?? null,
-      preprocessingFuelLiters: data.preprocessingFuelLiters ?? null,
-      electricityKwh: data.electricityKwh ?? null,
-      biocharOutputKg: data.biocharOutputKg ?? null,
-      biocharStorageLocationId: data.biocharStorageLocationId ?? null,
-      feedstockStorageLocationId: data.feedstockStorageLocationId ?? null,
-      plcDataFileUrl: data.plcDataFileUrl ?? null,
-    })
-    .returning();
+  // Create production run + M:M allocation in a transaction
+  const run = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(productionRuns)
+      .values({
+        code: data.code,
+        facilityId: data.facilityId,
+        date: data.date.toISOString().split('T')[0],
+        status: data.status ?? "draft",
+        startTime: data.startTime,
+        endTime: data.endTime,
+        reactorId: data.reactorId,
+        operatorId: data.operatorId ?? null,
+        feedstockMassUsedKg: data.feedstockMassUsedKg ?? null,
+        feedingRateKgHr: data.feedingRateKgHr ?? null,
+        residenceTimeMinutes: data.residenceTimeMinutes ?? null,
+        dieselOperationLiters: data.dieselOperationLiters ?? null,
+        dieselGensetLiters: data.dieselGensetLiters ?? null,
+        preprocessingFuelLiters: data.preprocessingFuelLiters ?? null,
+        electricityKwh: data.electricityKwh ?? null,
+        biocharOutputKg: data.biocharOutputKg ?? null,
+        biocharStorageLocationId: data.biocharStorageLocationId ?? null,
+        feedstockStorageLocationId: data.feedstockStorageLocationId ?? null,
+        plcDataFileUrl: data.plcDataFileUrl ?? null,
+      })
+      .returning();
 
-  // Create feedstock relationships
-  if (data.feedstocks.length > 0) {
-    await db.insert(productionRunFeedstocks).values(
-      data.feedstocks.map((f) => ({
-        productionRunId: run.id,
-        feedstockId: f.feedstockId,
-        massUsedKg: f.massUsedKg,
-      }))
-    );
-  }
+    // Auto-populate M:M feedstock relationships from bin contents
+    if (data.feedstockStorageLocationId && data.feedstockMassUsedKg) {
+      const allocated = await allocateFeedstockMass(
+        data.feedstockStorageLocationId,
+        data.feedstockMassUsedKg
+      );
+      await tx.insert(productionRunFeedstocks).values(
+        allocated.map((a) => ({
+          productionRunId: created.id,
+          feedstockId: a.feedstockId,
+          massUsedKg: a.massUsedKg,
+        }))
+      );
+    }
+
+    return created;
+  });
 
   return getProductionRunById(userId, run.id);
 }
@@ -581,7 +637,7 @@ export async function updateProductionRun(
     startTime?: Date;
     endTime?: Date;
     operatorId?: string | null;
-    feedstocks?: ProductionRunFeedstockData[];
+    feedstockMassUsedKg?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
     dieselOperationLiters?: number | null;
@@ -635,7 +691,7 @@ export async function updateProductionRun(
     }
   }
 
-  // Update production run
+  // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
   };
@@ -648,6 +704,7 @@ export async function updateProductionRun(
   if (data.startTime !== undefined) updateData.startTime = data.startTime;
   if (data.endTime !== undefined) updateData.endTime = data.endTime;
   if (data.operatorId !== undefined) updateData.operatorId = data.operatorId;
+  if (data.feedstockMassUsedKg !== undefined) updateData.feedstockMassUsedKg = data.feedstockMassUsedKg;
   if (data.feedingRateKgHr !== undefined) updateData.feedingRateKgHr = data.feedingRateKgHr;
   if (data.residenceTimeMinutes !== undefined) updateData.residenceTimeMinutes = data.residenceTimeMinutes;
   if (data.dieselOperationLiters !== undefined) updateData.dieselOperationLiters = data.dieselOperationLiters;
@@ -659,29 +716,43 @@ export async function updateProductionRun(
   if (data.feedstockStorageLocationId !== undefined) updateData.feedstockStorageLocationId = data.feedstockStorageLocationId;
   if (data.plcDataFileUrl !== undefined) updateData.plcDataFileUrl = data.plcDataFileUrl;
 
-  await db
-    .update(productionRuns)
-    .set(updateData)
-    .where(eq(productionRuns.id, productionRunId));
+  const feedstockFieldsChanged =
+    data.feedstockStorageLocationId !== undefined ||
+    data.feedstockMassUsedKg !== undefined;
 
-  // Update feedstock relationships if provided
-  if (data.feedstocks !== undefined) {
-    // Delete existing feedstock relationships
-    await db
-      .delete(productionRunFeedstocks)
-      .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(productionRuns)
+      .set(updateData)
+      .where(eq(productionRuns.id, productionRunId));
 
-    // Create new feedstock relationships
-    if (data.feedstocks.length > 0) {
-      await db.insert(productionRunFeedstocks).values(
-        data.feedstocks.map((f) => ({
-          productionRunId,
-          feedstockId: f.feedstockId,
-          massUsedKg: f.massUsedKg,
-        }))
-      );
+    if (feedstockFieldsChanged) {
+      await tx
+        .delete(productionRunFeedstocks)
+        .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+
+      // Use undefined check (not ??) so explicit null correctly clears the field
+      const storageLocationId =
+        data.feedstockStorageLocationId !== undefined
+          ? data.feedstockStorageLocationId
+          : existing.feedstockStorageLocationId;
+      const massUsedKg =
+        data.feedstockMassUsedKg !== undefined
+          ? data.feedstockMassUsedKg
+          : existing.feedstockMassUsedKg;
+
+      if (storageLocationId && massUsedKg) {
+        const allocated = await allocateFeedstockMass(storageLocationId, massUsedKg);
+        await tx.insert(productionRunFeedstocks).values(
+          allocated.map((a) => ({
+            productionRunId,
+            feedstockId: a.feedstockId,
+            massUsedKg: a.massUsedKg,
+          }))
+        );
+      }
     }
-  }
+  });
 
   return getProductionRunById(userId, productionRunId);
 }

@@ -187,7 +187,7 @@ export async function createSampleFn(
       "SAM",
       samples,
       samples.sampleCode,
-      data.sampleCode,
+      undefined,
       async (sampleCode) => {
         const validated = createSampleSchema.parse({ ...data, sampleCode });
         return createSample(user.id, {

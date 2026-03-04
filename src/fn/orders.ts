@@ -189,7 +189,7 @@ export async function createOrderFn(
       "OR",
       orders,
       orders.code,
-      validated.code,
+      undefined,
       (code) =>
         createOrder(user.id, {
           code,
