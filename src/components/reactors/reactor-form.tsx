@@ -21,6 +21,7 @@ import {
   formatReactorType,
   formatSamplingMethod,
   type ReactorFormData,
+  type ReactorType,
   type SamplingMethod,
 } from "@/schemas/reactors";
 import type { Reactor } from "@/db/schema/facilities";
@@ -80,7 +81,7 @@ export function ReactorForm({
     defaultValues: {
       identifier: reactor?.identifier ?? "",
       facilityId: preselectedFacilityId || reactor?.facilityId || "",
-      reactorType: reactor?.reactorType ?? "",
+      reactorType: (reactor?.reactorType as ReactorType) ?? undefined,
       samplingMethod: (reactor?.samplingMethod as SamplingMethod) ?? "method_a",
       capacityKg: reactor?.capacityKg ?? undefined,
       specifications: undefined,

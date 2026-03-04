@@ -132,4 +132,4 @@ export const STATUS_COLORS: Record<string, string> = {
 export const STATUS_COLOR_FALLBACK = "var(--color-text-tertiary)";
 
 /** Statuses considered "in progress" — used to animate edges */
-export const IN_PROGRESS_STATUSES = new Set(["running", "processing", "ordered"]);
+export const IN_PROGRESS_STATUSES = new Set(["running", "upcoming"]);
