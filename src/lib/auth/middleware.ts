@@ -64,7 +64,7 @@ export async function updateSession(request: NextRequest) {
 
   // If authenticated and on an auth page, redirect to app
   if (isAuthenticated && isAuthRoute) {
-    return NextResponse.redirect(new URL("/facilities", request.url));
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // If not authenticated and not on a public route

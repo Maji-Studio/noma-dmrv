@@ -114,7 +114,7 @@ export function ChainOfCustodyPage() {
               elementsSelectable={false}
               minZoom={0.3}
               maxZoom={2}
-              defaultEdgeOptions={{ pathOptions: { offset: 20 } }}
+              defaultEdgeOptions={{ type: 'smoothstep' }}
             >
               <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-border-tertiary)" />
               <Controls

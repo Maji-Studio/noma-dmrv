@@ -70,6 +70,9 @@ function aggregateStatusRows(rows: StatusRow[]): { total: number; byStatus: Reco
 export async function getChainOfCustodyData(
   facilityId: string
 ): Promise<ChainOfCustodyData> {
+  // Auth note: This is a single-tenant, admin-invite-only app with no per-facility ACL.
+  // All authenticated users are authorized to view any facility's data.
+  // If multi-tenant facility access is added, this needs facility-level permission checks.
   await requireAuth();
 
   // Verify facility exists
@@ -180,12 +183,11 @@ export async function getChainOfCustodyData(
       .where(eq(biocharProducts.facilityId, facilityId))
       .groupBy(biocharProducts.status),
 
-    // Orders — has status
+    // Orders — no status
     db
-      .select({ status: orders.status, count: count() })
+      .select({ status: sql<string | null>`null`.as("status"), count: count() })
       .from(orders)
-      .where(eq(orders.facilityId, facilityId))
-      .groupBy(orders.status),
+      .where(eq(orders.facilityId, facilityId)),
 
     // Deliveries — has status
     db

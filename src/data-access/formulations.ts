@@ -5,7 +5,12 @@
 
 import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
-import { formulations, type Formulation } from "@/db/schema";
+import {
+  formulations,
+  formulationIngredients,
+  type Formulation,
+  type FormulationIngredient,
+} from "@/db/schema";
 import { biocharProducts } from "@/db/schema/products";
 import type { FormulationFilterData } from "@/schemas/formulations";
 
@@ -13,15 +18,24 @@ import type { FormulationFilterData } from "@/schemas/formulations";
 // Types
 // ============================================
 
-export type FormulationWithRelations = Formulation;
+export type FormulationWithIngredients = Formulation & {
+  ingredients: FormulationIngredient[];
+};
 
 export interface PaginatedFormulations {
-  items: FormulationWithRelations[];
+  items: FormulationWithIngredients[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
 }
+
+export type IngredientInput = {
+  ingredientType: FormulationIngredient["ingredientType"];
+  name: string;
+  ratio?: number | null;
+  description?: string | null;
+};
 
 // ============================================
 // Auth Guards
@@ -35,7 +49,7 @@ import { requireAuth } from "./utils";
 
 /**
  * Get all formulations with pagination and filtering
- * Supports search, sorting, and pagination
+ * Includes ingredient data for each formulation
  */
 export async function getFormulations(
   userId: string,
@@ -72,7 +86,6 @@ export async function getFormulations(
     code: formulations.code,
     name: formulations.name,
     biocharRatio: formulations.biocharRatio,
-    compostRatio: formulations.compostRatio,
     createdAt: formulations.createdAt,
     updatedAt: formulations.updatedAt,
   }[sortBy] ?? formulations.name;
@@ -89,31 +102,21 @@ export async function getFormulations(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // Get formulations
-  const formulationList = await db
-    .select({
-      id: formulations.id,
-      code: formulations.code,
-      name: formulations.name,
-      biocharRatio: formulations.biocharRatio,
-      compostRatio: formulations.compostRatio,
-      description: formulations.description,
-      createdAt: formulations.createdAt,
-      updatedAt: formulations.updatedAt,
-    })
-    .from(formulations)
-    .where(whereClause)
-    .orderBy(orderFn(sortColumn))
-    .limit(pageSize)
-    .offset(offset);
-
-  // Combine data (can be extended with computed fields)
-  const items: FormulationWithRelations[] = formulationList.map((f) => ({
-    ...f,
-  }));
+  // Get formulations with relational query for ingredients
+  const formulationList = await db.query.formulations.findMany({
+    where: whereClause,
+    orderBy: [orderFn(sortColumn)],
+    limit: pageSize,
+    offset,
+    with: {
+      ingredients: {
+        orderBy: [asc(formulationIngredients.sortOrder)],
+      },
+    },
+  });
 
   return {
-    items,
+    items: formulationList,
     total,
     page,
     pageSize,
@@ -122,19 +125,22 @@ export async function getFormulations(
 }
 
 /**
- * Get a single formulation by ID
- * Returns formulation data without relations
+ * Get a single formulation by ID with ingredients
  */
 export async function getFormulationById(
   userId: string,
   formulationId: string
-): Promise<Formulation> {
+): Promise<FormulationWithIngredients> {
   requireAuth(userId);
 
-  const [formulation] = await db
-    .select()
-    .from(formulations)
-    .where(eq(formulations.id, formulationId));
+  const formulation = await db.query.formulations.findFirst({
+    where: eq(formulations.id, formulationId),
+    with: {
+      ingredients: {
+        orderBy: [asc(formulationIngredients.sortOrder)],
+      },
+    },
+  });
 
   if (!formulation) {
     throw new Error("Formulation not found");
@@ -148,7 +154,7 @@ export async function getFormulationById(
 // ============================================
 
 /**
- * Create a new formulation
+ * Create a new formulation with optional ingredients (transactional)
  */
 export async function createFormulation(
   userId: string,
@@ -156,10 +162,10 @@ export async function createFormulation(
     code: string;
     name: string;
     biocharRatio?: number | null;
-    compostRatio?: number | null;
     description?: string | null;
+    ingredients?: IngredientInput[];
   }
-): Promise<Formulation> {
+): Promise<FormulationWithIngredients> {
   requireAuth(userId);
 
   // Check for duplicate code
@@ -172,18 +178,37 @@ export async function createFormulation(
     throw new Error("A formulation with this code already exists");
   }
 
-  const [formulation] = await db
-    .insert(formulations)
-    .values({
-      code: data.code,
-      name: data.name,
-      biocharRatio: data.biocharRatio ?? null,
-      compostRatio: data.compostRatio ?? null,
-      description: data.description ?? null,
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    const [formulation] = await tx
+      .insert(formulations)
+      .values({
+        code: data.code,
+        name: data.name,
+        biocharRatio: data.biocharRatio ?? null,
+        description: data.description ?? null,
+      })
+      .returning();
 
-  return formulation;
+    let ingredients: FormulationIngredient[] = [];
+
+    if (data.ingredients && data.ingredients.length > 0) {
+      ingredients = await tx
+        .insert(formulationIngredients)
+        .values(
+          data.ingredients.map((ing, index) => ({
+            formulationId: formulation.id,
+            ingredientType: ing.ingredientType,
+            name: ing.name,
+            ratio: ing.ratio ?? null,
+            description: ing.description ?? null,
+            sortOrder: index,
+          }))
+        )
+        .returning();
+    }
+
+    return { ...formulation, ingredients };
+  });
 }
 
 // ============================================
@@ -191,7 +216,7 @@ export async function createFormulation(
 // ============================================
 
 /**
- * Update an existing formulation
+ * Update an existing formulation with ingredients (transactional delete-and-reinsert)
  */
 export async function updateFormulation(
   userId: string,
@@ -200,10 +225,10 @@ export async function updateFormulation(
     code?: string;
     name?: string;
     biocharRatio?: number | null;
-    compostRatio?: number | null;
     description?: string | null;
+    ingredients?: IngredientInput[];
   }
-): Promise<Formulation> {
+): Promise<FormulationWithIngredients> {
   requireAuth(userId);
 
   // Verify formulation exists
@@ -228,16 +253,53 @@ export async function updateFormulation(
     }
   }
 
-  const [updated] = await db
-    .update(formulations)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(formulations.id, formulationId))
-    .returning();
+  // Separate ingredients from formulation fields
+  const { ingredients: ingredientData, ...formulationFields } = data;
 
-  return updated;
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(formulations)
+      .set({
+        ...formulationFields,
+        updatedAt: new Date(),
+      })
+      .where(eq(formulations.id, formulationId))
+      .returning();
+
+    let ingredients: FormulationIngredient[] = [];
+
+    // If ingredients are provided, delete-and-reinsert
+    if (ingredientData !== undefined) {
+      await tx
+        .delete(formulationIngredients)
+        .where(eq(formulationIngredients.formulationId, formulationId));
+
+      if (ingredientData.length > 0) {
+        ingredients = await tx
+          .insert(formulationIngredients)
+          .values(
+            ingredientData.map((ing, index) => ({
+              formulationId: formulationId,
+              ingredientType: ing.ingredientType,
+              name: ing.name,
+              ratio: ing.ratio ?? null,
+              description: ing.description ?? null,
+              sortOrder: index,
+            }))
+          )
+          .returning();
+      }
+    } else {
+      // If ingredients not provided, fetch existing ones
+      ingredients = await tx
+        .select()
+        .from(formulationIngredients)
+        .where(eq(formulationIngredients.formulationId, formulationId))
+        .orderBy(asc(formulationIngredients.sortOrder));
+    }
+
+    return { ...updated, ingredients };
+  });
 }
 
 // ============================================
@@ -245,7 +307,7 @@ export async function updateFormulation(
 // ============================================
 
 /**
- * Delete a formulation
+ * Delete a formulation (ingredients cascade via FK)
  * Will fail if formulation has associated biochar products
  */
 export async function deleteFormulation(
@@ -254,7 +316,6 @@ export async function deleteFormulation(
 ): Promise<void> {
   requireAuth(userId);
 
-  // Verify formulation exists
   const [existing] = await db
     .select({ id: formulations.id })
     .from(formulations)
@@ -275,6 +336,7 @@ export async function deleteFormulation(
     );
   }
 
+  // Ingredients cascade-delete via FK onDelete: 'cascade'
   await db.delete(formulations).where(eq(formulations.id, formulationId));
 }
 
@@ -308,7 +370,6 @@ export async function isFormulationCodeAvailable(
 
 /**
  * Get formulation options for dropdowns
- * Returns minimal data needed for select inputs
  */
 export async function getFormulationOptions(
   userId: string

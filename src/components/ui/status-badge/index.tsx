@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
  *
  * Color-coded status badge component with variants for:
  * - Production run status: draft, running, complete, void
- * - Delivery status: scheduled, processing, delivered
+ * - Delivery status: upcoming, delivered
  * - Application status: delivered, applied
  * - Credit batch status: draft, pending, verified, issued, rejected
  *
@@ -27,11 +27,10 @@ const statusBadgeVariants = cva(
 
         // In-progress / Active states - purple/brand
         running: "bg-[var(--clr-purple-10)] text-[var(--clr-purple)] border-[var(--clr-purple-40)]",
-        processing: "bg-[var(--clr-purple-10)] text-[var(--clr-purple)] border-[var(--clr-purple-40)]",
 
-        // Pending / Scheduled states - orange/warning
+        // Pending / Upcoming states - orange/warning
         pending: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
-        scheduled: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
+        upcoming: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
 
         // Success / Complete states - green
         complete: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
@@ -39,10 +38,6 @@ const statusBadgeVariants = cva(
         applied: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
         verified: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
         issued: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
-
-        // Ordered / Info states - blue
-        ordered: "bg-[var(--clr-purple-10)] text-[var(--clr-purple)] border-[var(--clr-purple-40)]",
-        processed: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
 
         // Testing / Ready states
         testing: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
@@ -76,12 +71,8 @@ export type StatusValue =
   | "running"
   | "complete"
   | "void"
-  // Order status
-  | "ordered"
-  | "processed"
   // Delivery status
-  | "scheduled"
-  | "processing"
+  | "upcoming"
   | "delivered"
   // Application status
   | "applied"
@@ -101,10 +92,7 @@ const statusLabels: Record<StatusValue, string> = {
   running: "Running",
   complete: "Complete",
   void: "Void",
-  ordered: "Ordered",
-  processed: "Processed",
-  scheduled: "Scheduled",
-  processing: "Processing",
+  upcoming: "Upcoming",
   delivered: "Delivered",
   applied: "Applied",
   testing: "Testing",
@@ -140,7 +128,7 @@ export interface StatusBadgeProps
  *
  * @example
  * // Delivery status
- * <StatusBadge status="scheduled" />
+ * <StatusBadge status="upcoming" />
  * <StatusBadge status="delivered" />
  *
  * @example

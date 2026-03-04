@@ -372,10 +372,19 @@
     "code": "Human-readable formulation code",
     "name": "Display name for this formulation",
     "biochar_ratio": "Biochar proportion in the blend (0.0 to 1.0)",
-    "compost_ratio": "Compost proportion in the blend (0.0 to 1.0)",
     "description": "Narrative description of the formulation recipe",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
+  },
+  "formulation_ingredients": {
+    "id": "Unique identifier for this ingredient row",
+    "formulation_id": "FK to parent formulation",
+    "ingredient_type": "Category of the ingredient (compost, mineral, lime, binder, amendment, other)",
+    "name": "Freeform ingredient name (e.g., cow manure compost, rock dust)",
+    "ratio": "Proportion of this ingredient in the blend (0.0 to 1.0)",
+    "description": "Optional notes about this ingredient",
+    "sort_order": "Display ordering index",
+    "createdAt": "Timestamp when the record was created"
   },
   "biochar_products": {
     "id": "Unique product batch identifier",

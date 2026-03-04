@@ -537,7 +537,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await waitForSideSheet(page);
 
       await page.fill('input[name="deliveryDate"]', today);
-      await page.selectOption('select[name="status"]', "processing");
+      await page.selectOption('select[name="status"]', "upcoming");
 
       // Select the first available order
       const orderSelect = page.locator('select[name="orderId"]');

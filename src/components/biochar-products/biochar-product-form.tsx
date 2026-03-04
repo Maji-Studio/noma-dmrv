@@ -11,11 +11,10 @@ import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormSelect, EntitySelect } from "@/components/forms";
+import { FormField, FormInput, EntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
   biocharProductFormSchema,
-  biocharProductStatusValues,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -36,12 +35,6 @@ interface BiocharProductFormProps {
   /** Custom label for the submit button */
   submitLabel?: string;
 }
-
-// Status display options
-const statusOptions = biocharProductStatusValues.map((status) => ({
-  value: status,
-  label: status.charAt(0).toUpperCase() + status.slice(1),
-}));
 
 export function BiocharProductForm({
   product,
@@ -65,7 +58,6 @@ export function BiocharProductForm({
       facilityId: product?.facility?.id ?? "",
       formulationId: product?.formulation?.id ?? "",
       productionDate: product?.productionDate ?? formatLocalDate(new Date()),
-      status: product?.status ?? "testing",
       linkedProductionRunId: product?.linkedProductionRun?.id ?? "",
       storageLocationId: product?.storageLocation?.id ?? "",
       massKg: product?.massKg ?? null,
@@ -100,11 +92,7 @@ export function BiocharProductForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="productionDate"
-            label="Production Date"
-            error={errors.productionDate?.message}
-          >
+          <FormField id="productionDate" label="Production Date" error={errors.productionDate?.message}>
             <FormInput
               id="productionDate"
               type="date"
@@ -116,12 +104,7 @@ export function BiocharProductForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="facilityId"
-            label="Facility"
-            error={errors.facilityId?.message}
-            required
-          >
+          <FormField id="facilityId" label="Facility" error={errors.facilityId?.message} required>
             <Controller
               name="facilityId"
               control={control}
@@ -139,12 +122,7 @@ export function BiocharProductForm({
             />
           </FormField>
 
-          <FormField
-            id="formulationId"
-            label="Formulation"
-            error={errors.formulationId?.message}
-            required
-          >
+          <FormField id="formulationId" label="Formulation" error={errors.formulationId?.message} required>
             <Controller
               name="formulationId"
               control={control}
@@ -159,74 +137,6 @@ export function BiocharProductForm({
                   autoSelectSingle
                 />
               )}
-            />
-          </FormField>
-        </div>
-      </div>
-
-      {/* Status Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Status
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="status"
-            label="Product Status"
-            error={errors.status?.message}
-          >
-            <FormSelect
-              id="status"
-              options={statusOptions}
-              disabled={isSubmitting}
-              error={!!errors.status}
-              {...register("status")}
-            />
-          </FormField>
-        </div>
-      </div>
-
-      {/* Measurements Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Measurements
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="massKg"
-            label="Mass (kg)"
-            error={errors.massKg?.message}
-            helperText="Total mass of the biochar product"
-          >
-            <FormInput
-              id="massKg"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="e.g., 500"
-              disabled={isSubmitting}
-              error={!!errors.massKg}
-              {...register("massKg", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-
-          <FormField
-            id="densityKgM3"
-            label="Density (kg/m³)"
-            error={errors.densityKgM3?.message}
-            helperText="Bulk density of the product"
-          >
-            <FormInput
-              id="densityKgM3"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="e.g., 350"
-              disabled={isSubmitting}
-              error={!!errors.densityKgM3}
-              {...register("densityKgM3", { setValueAs: nullableNumericValue })}
             />
           </FormField>
         </div>
@@ -290,20 +200,60 @@ export function BiocharProductForm({
         </div>
       </div>
 
+      {/* Measurements Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Measurements
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="massKg"
+            label="Mass (kg)"
+            error={errors.massKg?.message}
+            helperText="Total mass of the biochar product"
+          >
+            <FormInput
+              id="massKg"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g., 500"
+              disabled={isSubmitting}
+              error={!!errors.massKg}
+              {...register("massKg", { setValueAs: nullableNumericValue })}
+            />
+          </FormField>
+
+          <FormField
+            id="densityKgM3"
+            label="Density (kg/m³)"
+            error={errors.densityKgM3?.message}
+            helperText="Bulk density of the product"
+          >
+            <FormInput
+              id="densityKgM3"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g., 350"
+              disabled={isSubmitting}
+              error={!!errors.densityKgM3}
+              {...register("densityKgM3", { setValueAs: nullableNumericValue })}
+            />
+          </FormField>
+        </div>
+      </div>
+
       {/* Form Actions */}
       <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
         {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         )}
         <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
+          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
         </Button>
       </div>
     </form>

@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useDialog } from "@/hooks/use-dialog";
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -23,31 +23,7 @@ export function DeleteConfirmDialog({
   onCancel,
   isPending = false,
 }: DeleteConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (isOpen) {
-      dialog.showModal();
-    } else {
-      dialog.close();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    const handleCancel = (e: Event) => {
-      e.preventDefault();
-      onCancel();
-    };
-
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onCancel]);
+  const dialogRef = useDialog(isOpen, onCancel);
 
   if (!isOpen) return null;
 

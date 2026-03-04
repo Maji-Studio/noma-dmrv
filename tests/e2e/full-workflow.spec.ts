@@ -251,7 +251,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       code: codes.formulation,
       name: `E2E Test Formulation ${testRunId}`,
       biocharRatio: 1.0,
-      compostRatio: 0,
     });
 
     // 14. Create Biochar Product (links formulation, production run, storage)
@@ -295,7 +294,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       biocharProductId: ids.biocharProduct,
       quantityKg: 100,
       packaging: "bagged",
-      status: "ordered",
     });
 
     // 18. Create Delivery (links order, biochar product, storage)
