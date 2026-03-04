@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { ServerError } from "@/components/forms";
+import { useToast } from "@/components/ui/toast";
 import { FeedstockForm } from "./feedstock-form";
 import {
   useCreateFeedstock,
@@ -168,12 +169,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
+  const toast = useToast();
 
   const handleCreate = async (data: FeedstockFormData) => {
     setCreateError(null);
     try {
       await createFeedstock.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Feedstock created successfully");
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Failed to create feedstock"
@@ -190,6 +193,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         ...data,
       });
       setSideSheet(null);
+      toast.success("Feedstock updated successfully");
     } catch (error) {
       setUpdateError(
         error instanceof Error ? error.message : "Failed to update feedstock"
@@ -207,6 +211,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     try {
       await deleteFeedstock.mutateAsync(deletingFeedstockId);
       setDeletingFeedstockId(null);
+      toast.success("Feedstock deleted successfully");
     } catch (error) {
       setDeleteError(
         error instanceof Error ? error.message : "Failed to delete feedstock"

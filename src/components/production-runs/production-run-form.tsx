@@ -6,7 +6,7 @@
 "use client";
 
 import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-utils";
-import { formatLocalDate, formatLocalDateTime } from "@/lib/date-utils";
+import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date-utils";
 
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
@@ -78,11 +78,11 @@ export function ProductionRunForm({
       reactorId: productionRun?.reactorId ?? "",
       status: (productionRun?.status as ProductionRunStatus) ?? "draft",
       startTime: productionRun?.startTime
-        ? formatLocalDateTime(new Date(productionRun.startTime))
-        : formatLocalDateTime(new Date()),
+        ? formatLocalTime(new Date(productionRun.startTime))
+        : formatLocalTime(new Date()),
       endTime: productionRun?.endTime
-        ? formatLocalDateTime(new Date(productionRun.endTime))
-        : formatLocalDateTime(new Date()),
+        ? formatLocalTime(new Date(productionRun.endTime))
+        : "",
       operatorId: productionRun?.operatorId ?? "",
       feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
       feedstockMassUsedKg: productionRun?.feedstockMassUsedKg ?? undefined,
@@ -118,7 +118,15 @@ export function ProductionRunForm({
     : "Create Production Run";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as ProductionRunFormData);
+    // date comes as "YYYY-MM-DD" string from the input
+    const dateStr = typeof data.date === "string" ? data.date : formatLocalDate(data.date as Date);
+    const combined = {
+      ...data,
+      date: new Date(dateStr + "T00:00:00"), // local midnight
+      startTime: combineDateAndTime(dateStr, data.startTime as string),
+      endTime: combineDateAndTime(dateStr, data.endTime as string),
+    };
+    return onSubmit(combined as ProductionRunFormData);
   });
 
   return (
@@ -142,7 +150,7 @@ export function ProductionRunForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="facilityId" label="Facility" error={errors.facilityId?.message}>
+          <FormField id="facilityId" label="Facility" error={errors.facilityId?.message} required>
             <Controller
               name="facilityId"
               control={control}
@@ -154,12 +162,13 @@ export function ProductionRunForm({
                   placeholder="Select a facility..."
                   disabled={isSubmitting || !!preselectedFacilityId}
                   error={!!errors.facilityId}
+                  autoSelectSingle
                 />
               )}
             />
           </FormField>
 
-          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message}>
+          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
               control={control}
@@ -172,6 +181,7 @@ export function ProductionRunForm({
                   disabled={isSubmitting || !watchedFacilityId}
                   error={!!errors.reactorId}
                   filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
+                  autoSelectSingle
                 />
               )}
             />
@@ -179,59 +189,55 @@ export function ProductionRunForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-          <FormField id="date" label="Date" error={errors.date?.message}>
+          <FormField id="date" label="Date" error={errors.date?.message} required>
             <FormInput
               id="date"
               type="date"
               disabled={isSubmitting}
               error={!!errors.date}
-              {...register("date", {
-                setValueAs: (v) => (v ? new Date(v) : undefined),
-              })}
+              {...register("date")}
             />
           </FormField>
 
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message}>
+          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
-              type="datetime-local"
+              type="time"
               disabled={isSubmitting}
               error={!!errors.startTime}
-              {...register("startTime", {
-                setValueAs: (v) => (v ? new Date(v) : undefined),
-              })}
+              {...register("startTime")}
             />
           </FormField>
 
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End Time" error={errors.endTime?.message} required>
             <FormInput
               id="endTime"
-              type="datetime-local"
+              type="time"
               disabled={isSubmitting}
               error={!!errors.endTime}
-              {...register("endTime", {
-                setValueAs: (v) => (v ? new Date(v) : undefined),
-              })}
+              {...register("endTime")}
             />
           </FormField>
         </div>
 
-        <FormField id="operatorId" label="Operator (Optional)" error={errors.operatorId?.message}>
-          <Controller
-            name="operatorId"
-            control={control}
-            render={({ field }) => (
-              <EntitySelect
-                entityType="operator"
-                value={field.value || undefined}
-                onChange={field.onChange}
-                placeholder="Select an operator..."
-                disabled={isSubmitting}
-                error={!!errors.operatorId}
-              />
-            )}
-          />
-        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
+            <Controller
+              name="operatorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  entityType="operator"
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  placeholder="Select an operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.operatorId}
+                />
+              )}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Feedstock Input Section */}

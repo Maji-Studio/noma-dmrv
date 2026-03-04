@@ -21,6 +21,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { useToast } from "@/components/ui/toast";
 import { CustomerForm } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
@@ -126,6 +127,7 @@ export function CustomerList() {
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
+  const toast = useToast();
 
   const customers = customersData?.items ?? [];
 
@@ -164,6 +166,7 @@ export function CustomerList() {
     try {
       await createCustomer.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Customer created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create customer");
     }
@@ -175,6 +178,7 @@ export function CustomerList() {
     try {
       await updateCustomer.mutateAsync({ customerId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Customer updated successfully");
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update customer");
     }
@@ -188,6 +192,7 @@ export function CustomerList() {
     try {
       await deleteCustomer.mutateAsync(deletingCustomerId);
       setDeletingCustomerId(null);
+      toast.success("Customer deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete customer");
     }

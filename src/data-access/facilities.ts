@@ -35,7 +35,6 @@ export interface FacilityDetail extends Facility {
     id: string;
     code: string;
     identifier: string;
-    type: string;
     reactorType: string;
   }>;
   storageLocations: Array<{
@@ -242,7 +241,6 @@ export async function getFacilityWithRelations(
       id: reactors.id,
       code: reactors.code,
       identifier: reactors.identifier,
-      type: reactors.type,
       reactorType: reactors.reactorType,
     })
     .from(reactors)
@@ -279,7 +277,6 @@ export async function getFacilityReactors(
     id: string;
     code: string;
     identifier: string;
-    type: string;
     reactorType: string;
     capacityKg: number | null;
     samplingMethod: string;
@@ -304,7 +301,6 @@ export async function getFacilityReactors(
       id: reactors.id,
       code: reactors.code,
       identifier: reactors.identifier,
-      type: reactors.type,
       reactorType: reactors.reactorType,
       capacityKg: reactors.capacityKg,
       samplingMethod: reactors.samplingMethod,

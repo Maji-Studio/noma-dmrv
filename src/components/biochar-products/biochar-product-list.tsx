@@ -20,6 +20,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -143,6 +144,7 @@ export function BiocharProductList() {
   const createProduct = useCreateBiocharProduct();
   const updateProduct = useUpdateBiocharProduct();
   const deleteProduct = useDeleteBiocharProduct();
+  const toast = useToast();
 
   const products = productsData?.items ?? [];
 
@@ -156,6 +158,7 @@ export function BiocharProductList() {
     try {
       await createProduct.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Biochar product created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create biochar product");
     }
@@ -167,6 +170,7 @@ export function BiocharProductList() {
     try {
       await updateProduct.mutateAsync({ productId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Biochar product updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update biochar product");
     }
@@ -180,6 +184,7 @@ export function BiocharProductList() {
     try {
       await deleteProduct.mutateAsync(deletingProductId);
       setDeletingProductId(null);
+      toast.success("Biochar product deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete biochar product");
     }

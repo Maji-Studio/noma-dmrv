@@ -6,18 +6,6 @@ import { latitudeSchema, longitudeSchema } from "./helpers";
 // ============================================
 
 /**
- * Valid facility types for biochar production
- */
-export const facilityTypes = [
-  "production",
-  "storage",
-  "processing",
-  "distribution",
-] as const;
-
-export type FacilityType = (typeof facilityTypes)[number];
-
-/**
  * Durability options from the Isometric Protocol
  */
 export const durabilityOptions = ["200_year", "1000_year"] as const;
@@ -181,10 +169,6 @@ export const facilityFormSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.enum(timezones).optional()
   ),
-  facilityType: z.preprocess(
-    (v) => (v === "" ? undefined : v),
-    z.enum(facilityTypes).optional()
-  ),
 });
 
 // ============================================
@@ -219,7 +203,6 @@ export const updateFacilitySchema = z.object({
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   defaultDurabilityOption: z.enum(durabilityOptions).optional(),
   timezone: z.enum(timezones).optional().nullable(),
-  facilityType: z.enum(facilityTypes).optional().nullable(),
 }).refine(
   (data) => {
     const hasLat = data.gpsLatitude != null;
@@ -256,9 +239,6 @@ export const facilityFilterSchema = z.object({
 
   // Filter by country
   country: z.string().max(100).optional(),
-
-  // Filter by facility type
-  facilityType: z.enum(facilityTypes).optional(),
 
   // Filter by durability option
   durabilityOption: z.enum(durabilityOptions).optional(),

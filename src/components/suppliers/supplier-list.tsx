@@ -20,6 +20,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { SupplierForm } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
@@ -127,6 +128,7 @@ export function SupplierList() {
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
+  const toast = useToast();
 
   const suppliers = suppliersData?.items ?? [];
 
@@ -140,6 +142,7 @@ export function SupplierList() {
     try {
       await createSupplier.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Supplier created successfully");
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Failed to create supplier"
@@ -156,6 +159,7 @@ export function SupplierList() {
         ...data,
       });
       setSideSheet(null);
+      toast.success("Supplier updated successfully");
     } catch (error) {
       setUpdateError(
         error instanceof Error ? error.message : "Failed to update supplier"
@@ -173,6 +177,7 @@ export function SupplierList() {
     try {
       await deleteSupplier.mutateAsync(deletingSupplierId);
       setDeletingSupplierId(null);
+      toast.success("Supplier deleted successfully");
     } catch (error) {
       setDeleteError(
         error instanceof Error ? error.message : "Failed to delete supplier"

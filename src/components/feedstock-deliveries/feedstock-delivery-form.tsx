@@ -97,6 +97,7 @@ export function FeedstockDeliveryForm({
               id="deliveryDate"
               label="Delivery Date"
               error={errors.deliveryDate?.message}
+              required
             >
               <FormInput
                 id="deliveryDate"
@@ -116,6 +117,7 @@ export function FeedstockDeliveryForm({
               entityType="facility"
               placeholder="Select facility..."
               disabled={isSubmitting}
+              required
             />
 
             <FormEntitySelect
@@ -125,6 +127,7 @@ export function FeedstockDeliveryForm({
               entityType="supplier"
               placeholder="Select supplier..."
               disabled={isSubmitting}
+              required
             />
           </div>
         </div>
@@ -139,7 +142,7 @@ export function FeedstockDeliveryForm({
             <FormEntitySelect
               control={control}
               name="driverId"
-              label="Driver (optional)"
+              label="Driver"
               entityType="driver"
               placeholder="Select driver..."
               disabled={isSubmitting}
@@ -151,7 +154,7 @@ export function FeedstockDeliveryForm({
             <FormEntitySelect
               control={control}
               name="vehicleId"
-              label="Vehicle (optional)"
+              label="Vehicle"
               entityType="vehicle"
               placeholder="Select vehicle..."
               disabled={isSubmitting}
@@ -164,7 +167,7 @@ export function FeedstockDeliveryForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
               id="gpsLatitude"
-              label="GPS Latitude (optional)"
+              label="GPS Latitude"
               error={errors.gpsLatitude?.message}
               helperText="-90 to 90"
             >
@@ -181,7 +184,7 @@ export function FeedstockDeliveryForm({
 
             <FormField
               id="gpsLongitude"
-              label="GPS Longitude (optional)"
+              label="GPS Longitude"
               error={errors.gpsLongitude?.message}
               helperText="-180 to 180"
             >
@@ -204,22 +207,24 @@ export function FeedstockDeliveryForm({
             Feedstock Details
           </h3>
 
-          <FormEntitySelect
-            control={control}
-            name="feedstockTypeId"
-            label="Feedstock Type (optional)"
-            entityType="feedstockType"
-            placeholder="Select feedstock type..."
-            disabled={isSubmitting}
-            allowCreate
-            createLabel="Add new feedstock type"
-            onCreateNew={() => feedstockTypeDialog.open()}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormEntitySelect
+              control={control}
+              name="feedstockTypeId"
+              label="Feedstock Type"
+              entityType="feedstockType"
+              placeholder="Select feedstock type..."
+              disabled={isSubmitting}
+              allowCreate
+              createLabel="Add new feedstock type"
+              onCreateNew={() => feedstockTypeDialog.open()}
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
               id="weightKg"
-              label="Weight (kg, optional)"
+              label="Weight (kg)"
               error={errors.weightKg?.message}
               helperText="Total weight in kilograms"
             >
@@ -237,7 +242,7 @@ export function FeedstockDeliveryForm({
 
             <FormField
               id="moisturePercent"
-              label="Moisture Content (%, optional)"
+              label="Moisture Content (%)"
               error={errors.moisturePercent?.message}
               helperText="0-100%"
             >
@@ -262,21 +267,23 @@ export function FeedstockDeliveryForm({
             Documentation
           </h3>
 
-          <FormField
-            id="notes"
-            label="Notes (optional)"
-            error={errors.notes?.message}
-            helperText="Additional delivery notes or documentation references"
-          >
-            <FormTextarea
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormField
               id="notes"
-              placeholder="Enter any additional notes, weighbridge ticket references, bill of lading numbers, etc."
-              disabled={isSubmitting}
-              error={!!errors.notes}
-              rows={4}
-              {...register("notes")}
-            />
-          </FormField>
+              label="Notes"
+              error={errors.notes?.message}
+              helperText="Additional delivery notes or documentation references"
+            >
+              <FormTextarea
+                id="notes"
+                placeholder="Enter any additional notes, weighbridge ticket references, bill of lading numbers, etc."
+                disabled={isSubmitting}
+                error={!!errors.notes}
+                rows={4}
+                {...register("notes")}
+              />
+            </FormField>
+          </div>
         </div>
 
         {/* Form Actions */}

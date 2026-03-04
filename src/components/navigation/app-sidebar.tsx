@@ -31,7 +31,7 @@ import {
   SignOut,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/auth/client";
+import { useAuth, authClient } from "@/lib/auth/client";
 
 interface NavItem {
   href: string;
@@ -171,7 +171,8 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { data: session, signOut } = useAuth();
+  const { signOut } = useAuth();
+  const { data: session } = authClient.useSession();
 
   return (
     <aside
