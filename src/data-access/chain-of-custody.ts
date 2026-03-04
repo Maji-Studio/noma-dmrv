@@ -9,6 +9,7 @@ import {
   facilities,
   reactors,
   storageLocations,
+  suppliers,
   feedstockDeliveries,
   feedstocks,
   productionRuns,
@@ -84,6 +85,7 @@ export async function getChainOfCustodyData(
 
   // Run all count queries + item queries in parallel
   const [
+    supplierRows,
     reactorRows,
     slFeedstockBinRows,
     slBiocharBinRows,
@@ -98,6 +100,7 @@ export async function getChainOfCustodyData(
     applicationRows,
     creditBatchRows,
     // Item queries
+    supplierItems,
     reactorItems,
     slFeedstockBinItems,
     slBiocharBinItems,
@@ -113,6 +116,14 @@ export async function getChainOfCustodyData(
     creditBatchItems,
   ] = await Promise.all([
     // --- Status count queries ---
+
+    // Suppliers — distinct suppliers linked via feedstock deliveries (no status)
+    db
+      .selectDistinct({ id: suppliers.id })
+      .from(suppliers)
+      .innerJoin(feedstockDeliveries, eq(feedstockDeliveries.supplierId, suppliers.id))
+      .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .then((rows) => [{ status: null as string | null, count: rows.length }]),
 
     // Reactors — no status field
     db
@@ -199,6 +210,13 @@ export async function getChainOfCustodyData(
       .groupBy(creditBatches.status),
 
     // --- Item queries (code + optional name, limited) ---
+
+    db
+      .selectDistinct({ code: suppliers.code, name: suppliers.name })
+      .from(suppliers)
+      .innerJoin(feedstockDeliveries, eq(feedstockDeliveries.supplierId, suppliers.id))
+      .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .limit(ITEMS_LIMIT),
 
     db
       .select({ code: reactors.code })
@@ -294,6 +312,7 @@ export async function getChainOfCustodyData(
   ]);
 
   const entitySummaries: EntitySummary[] = [
+    { entityType: "suppliers", ...aggregateStatusRows(supplierRows), items: supplierItems },
     { entityType: "reactors", ...aggregateStatusRows(reactorRows), items: reactorItems },
     { entityType: "feedstockBin", ...aggregateStatusRows(slFeedstockBinRows), items: slFeedstockBinItems },
     { entityType: "biocharBin", ...aggregateStatusRows(slBiocharBinRows), items: slBiocharBinItems },

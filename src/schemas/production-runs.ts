@@ -36,7 +36,9 @@ export const productionRunFormSchema = z.object({
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   date: z.union([
     z.date(),
-    z.string().transform((val, ctx) => {
+    z.string().min(1, "Please enter a date").transform((val, ctx) => {
+      // Accept "YYYY-MM-DD" strings (from form input, converted to Date in submit handler)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
@@ -50,10 +52,12 @@ export const productionRunFormSchema = z.object({
   // Status
   status: z.enum(productionRunStatuses).default("draft"),
 
-  // Timing
+  // Timing — accepts Date objects (from submit handler) or time strings "HH:MM" (from form)
   startTime: z.union([
     z.date(),
-    z.string().transform((val, ctx) => {
+    z.string().min(1, "Please enter a start time").transform((val, ctx) => {
+      // Accept "HH:MM" time-only strings (passed through as-is for combine in submit handler)
+      if (/^\d{2}:\d{2}$/.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
@@ -64,7 +68,8 @@ export const productionRunFormSchema = z.object({
   ]),
   endTime: z.union([
     z.date(),
-    z.string().transform((val, ctx) => {
+    z.string().min(1, "Please enter an end time").transform((val, ctx) => {
+      if (/^\d{2}:\d{2}$/.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });

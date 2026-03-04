@@ -133,6 +133,7 @@ export function BiocharProductForm({
                   placeholder="Select a facility"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
+                  autoSelectSingle
                 />
               )}
             />
@@ -155,6 +156,7 @@ export function BiocharProductForm({
                   placeholder="Select a formulation"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
+                  autoSelectSingle
                 />
               )}
             />
