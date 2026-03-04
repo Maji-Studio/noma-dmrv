@@ -20,6 +20,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithRelations } from "@/data-access/formulations";
@@ -135,6 +136,7 @@ export function FormulationList() {
   const createFormulation = useCreateFormulation();
   const updateFormulation = useUpdateFormulation();
   const deleteFormulation = useDeleteFormulation();
+  const toast = useToast();
 
   const formulations = formulationsData?.items ?? [];
 
@@ -144,6 +146,7 @@ export function FormulationList() {
     try {
       await createFormulation.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Formulation created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create formulation");
     }
@@ -158,6 +161,7 @@ export function FormulationList() {
         ...data,
       });
       setSideSheet(null);
+      toast.success("Formulation updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update formulation");
     }
@@ -171,6 +175,7 @@ export function FormulationList() {
     try {
       await deleteFormulation.mutateAsync(deletingFormulationId);
       setDeletingFormulationId(null);
+      toast.success("Formulation deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete formulation");
     }

@@ -3,7 +3,7 @@
  * Database queries for searchable entity selection
  */
 
-import { ilike, or, eq, and, inArray, SQL } from "drizzle-orm";
+import { ilike, or, eq, and, inArray, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   facilities,
@@ -197,7 +197,7 @@ async function getReactors(params: {
       or(
         ilike(reactors.code, searchPattern),
         ilike(reactors.identifier, searchPattern),
-        ilike(reactors.type, searchPattern)
+        ilike(reactors.reactorType, searchPattern)
       )!
     );
   }
@@ -209,7 +209,7 @@ async function getReactors(params: {
       id: reactors.id,
       code: reactors.code,
       identifier: reactors.identifier,
-      type: reactors.type,
+      reactorType: reactors.reactorType,
     })
     .from(reactors)
     .where(whereClause)
@@ -219,7 +219,7 @@ async function getReactors(params: {
     id: r.id,
     code: r.code,
     name: r.identifier,
-    subtitle: r.type,
+    subtitle: r.reactorType,
   }));
 }
 
@@ -229,7 +229,7 @@ async function getReactorById(id: string): Promise<EntityOption | null> {
       id: reactors.id,
       code: reactors.code,
       identifier: reactors.identifier,
-      type: reactors.type,
+      reactorType: reactors.reactorType,
     })
     .from(reactors)
     .where(eq(reactors.id, id))
@@ -241,7 +241,7 @@ async function getReactorById(id: string): Promise<EntityOption | null> {
     id: result.id,
     code: result.code,
     name: result.identifier,
-    subtitle: result.type,
+    subtitle: result.reactorType,
   };
 }
 
@@ -486,6 +486,27 @@ async function getOperatorById(id: string): Promise<EntityOption | null> {
 // Storage Locations
 // ============================================
 
+function formatStorageLocationSubtitle(
+  type: string,
+  feedstockTypeName: string | null,
+  totalStoredKg: number,
+  totalConsumedKg: number,
+): string {
+  const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
+
+  if (!feedstockTypeName && remainingKg === 0) {
+    return "Empty";
+  }
+
+  const parts: string[] = [];
+  if (feedstockTypeName) {
+    parts.push(feedstockTypeName);
+  }
+  parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+
+  return parts.join(" · ");
+}
+
 async function getStorageLocations(params: {
   search?: string;
   facilityId?: string;
@@ -526,6 +547,23 @@ async function getStorageLocations(params: {
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      feedstockTypeName: sql<string | null>`(
+        SELECT string_agg(DISTINCT ft.name, ', ')
+        FROM feedstocks f
+        JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
+        WHERE f.storage_location_id = ${storageLocations.id}
+      )`,
+      totalStoredKg: sql<number>`COALESCE((
+        SELECT SUM(f.mass_dry_kg)
+        FROM feedstocks f
+        WHERE f.storage_location_id = ${storageLocations.id}
+      ), 0)`,
+      totalConsumedKg: sql<number>`COALESCE((
+        SELECT SUM(pr.feedstock_mass_used_kg)
+        FROM production_runs pr
+        WHERE pr.feedstock_storage_location_id = ${storageLocations.id}
+        AND pr.feedstock_mass_used_kg IS NOT NULL
+      ), 0)`,
     })
     .from(storageLocations)
     .where(whereClause)
@@ -535,7 +573,7 @@ async function getStorageLocations(params: {
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: r.type,
+    subtitle: formatStorageLocationSubtitle(r.type, r.feedstockTypeName, r.totalStoredKg, r.totalConsumedKg),
   }));
 }
 
@@ -548,6 +586,23 @@ async function getStorageLocationById(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      feedstockTypeName: sql<string | null>`(
+        SELECT string_agg(DISTINCT ft.name, ', ')
+        FROM feedstocks f
+        JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
+        WHERE f.storage_location_id = ${storageLocations.id}
+      )`,
+      totalStoredKg: sql<number>`COALESCE((
+        SELECT SUM(f.mass_dry_kg)
+        FROM feedstocks f
+        WHERE f.storage_location_id = ${storageLocations.id}
+      ), 0)`,
+      totalConsumedKg: sql<number>`COALESCE((
+        SELECT SUM(pr.feedstock_mass_used_kg)
+        FROM production_runs pr
+        WHERE pr.feedstock_storage_location_id = ${storageLocations.id}
+        AND pr.feedstock_mass_used_kg IS NOT NULL
+      ), 0)`,
     })
     .from(storageLocations)
     .where(eq(storageLocations.id, id))
@@ -559,7 +614,7 @@ async function getStorageLocationById(
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.type,
+    subtitle: formatStorageLocationSubtitle(result.type, result.feedstockTypeName, result.totalStoredKg, result.totalConsumedKg),
   };
 }
 

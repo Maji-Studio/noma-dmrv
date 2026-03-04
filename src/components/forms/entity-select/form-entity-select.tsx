@@ -36,6 +36,10 @@ interface FormEntitySelectProps<
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /** Whether the field is required */
+  required?: boolean;
+  /** Auto-select when there is exactly one option (defaults to true when required) */
+  autoSelectSingle?: boolean;
 }
 
 export function FormEntitySelect<
@@ -53,6 +57,8 @@ export function FormEntitySelect<
   createLabel,
   onCreateNew,
   filterBy,
+  required,
+  autoSelectSingle,
 }: FormEntitySelectProps<TFieldValues, TName>) {
   const id = useId();
 
@@ -66,6 +72,7 @@ export function FormEntitySelect<
           label={label}
           error={fieldState.error?.message}
           helperText={helperText}
+          required={required}
         >
           <EntitySelect
             entityType={entityType}
@@ -78,6 +85,7 @@ export function FormEntitySelect<
             createLabel={createLabel}
             onCreateNew={onCreateNew}
             filterBy={filterBy}
+            autoSelectSingle={autoSelectSingle ?? required}
           />
         </FormField>
       )}

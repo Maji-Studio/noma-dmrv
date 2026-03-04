@@ -51,7 +51,6 @@ export const reactors = pgTable('reactors', {
     .references(() => facilities.id),
   // Isometric Protocol: Reactor design requirements (Section 9.2)
   reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
-  type: text('type').notNull(),
   samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
   capacityKg: real('capacity_kg'),
   specifications: jsonb('specifications'), // { description, manufacturer, ... }

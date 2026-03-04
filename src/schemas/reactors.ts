@@ -41,13 +41,7 @@ export const reactorFormSchema = z.object({
     .min(1, "Identifier is required")
     .max(255, "Identifier must be less than 255 characters"),
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
-  reactorType: z
-    .string()
-    .min(1, "Reactor type is required"),
-  type: z
-    .string()
-    .min(1, "Type is required")
-    .max(255, "Type must be less than 255 characters"),
+  reactorType: z.enum(reactorTypes, { required_error: "Reactor type is required" }),
 
   // Optional fields
   samplingMethod: z.enum(samplingMethods).default("method_a"),
@@ -83,8 +77,7 @@ export const updateReactorSchema = z.object({
     .optional(),
   identifier: z.string().min(1).max(255).optional(),
   facilityId: z.string().uuid().optional(),
-  reactorType: z.string().min(1).optional(),
-  type: z.string().min(1).max(255).optional(),
+  reactorType: z.enum(reactorTypes).optional(),
   samplingMethod: z.enum(samplingMethods).optional(),
   capacityKg: z.number().positive().optional().nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -127,7 +120,7 @@ export const reactorFilterSchema = z.object({
 
   // Sorting
   sortBy: z
-    .enum(["code", "identifier", "type", "reactorType", "createdAt", "updatedAt"])
+    .enum(["code", "identifier", "reactorType", "createdAt", "updatedAt"])
     .default("code"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
@@ -140,7 +133,6 @@ export const reactorSelectSchema = z.object({
   code: z.string(),
   identifier: z.string(),
   facilityId: z.string().uuid(),
-  type: z.string(),
   reactorType: z.string(),
 });
 

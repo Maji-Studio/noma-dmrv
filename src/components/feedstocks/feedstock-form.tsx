@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { numericValue, nullableNumericValue } from "@/lib/form-utils";
+import { numericValue } from "@/lib/form-utils";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -55,9 +55,9 @@ export function FeedstockForm({
       feedstockDeliveryId: feedstock?.feedstockDeliveryId ?? "",
       feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       facilityId: feedstock?.facilityId ?? "",
+      massWetKg: feedstock?.massWetKg ?? ("" as unknown as number),
+      moistureContentPercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
       massDryKg: feedstock?.massDryKg ?? ("" as unknown as number),
-      massWetKg: feedstock?.massWetKg ?? null,
-      moistureContentPercent: feedstock?.moistureContentPercent ?? null,
       storageLocationId: feedstock?.storageLocationId ?? "",
       feedstockSourceRegion: feedstock?.feedstockSourceRegion ?? "",
       notes: feedstock?.notes ?? "",
@@ -65,6 +65,25 @@ export function FeedstockForm({
   });
 
   const deliveryId = watch("feedstockDeliveryId");
+  const watchWetMass = watch("massWetKg");
+  const watchMoisture = watch("moistureContentPercent");
+
+  // Auto-calculate dry mass from wet mass and moisture
+  const calculatedDryMass =
+    typeof watchWetMass === "number" &&
+    typeof watchMoisture === "number" &&
+    watchWetMass > 0 &&
+    watchMoisture >= 0 &&
+    watchMoisture <= 100
+      ? watchWetMass * (1 - watchMoisture / 100)
+      : null;
+
+  // Sync calculated dry mass into the form
+  useEffect(() => {
+    if (calculatedDryMass !== null) {
+      setValue("massDryKg", Math.round(calculatedDryMass * 100) / 100);
+    }
+  }, [calculatedDryMass, setValue]);
 
   // Auto-populate facilityId when delivery changes
   useEffect(() => {
@@ -94,26 +113,30 @@ export function FeedstockForm({
             Reference
           </h3>
 
-          <FormEntitySelect
-            control={control}
-            name="feedstockDeliveryId"
-            label="Feedstock Delivery"
-            entityType="feedstockDelivery"
-            placeholder="Select delivery..."
-            disabled={isSubmitting}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormEntitySelect
+              control={control}
+              name="feedstockDeliveryId"
+              label="Feedstock Delivery"
+              entityType="feedstockDelivery"
+              placeholder="Select delivery..."
+              disabled={isSubmitting}
+              required
+            />
 
-          <FormEntitySelect
-            control={control}
-            name="feedstockTypeId"
-            label="Feedstock Type"
-            entityType="feedstockType"
-            placeholder="Select feedstock type..."
-            disabled={isSubmitting}
-            allowCreate
-            createLabel="Add new feedstock type"
-            onCreateNew={() => feedstockTypeDialog.open()}
-          />
+            <FormEntitySelect
+              control={control}
+              name="feedstockTypeId"
+              label="Feedstock Type"
+              entityType="feedstockType"
+              required
+              placeholder="Select feedstock type..."
+              disabled={isSubmitting}
+              allowCreate
+              createLabel="Add new feedstock type"
+              onCreateNew={() => feedstockTypeDialog.open()}
+            />
+          </div>
         </div>
 
         {/* Mass & Moisture Section */}
@@ -122,30 +145,13 @@ export function FeedstockForm({
             Mass & Moisture
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-            <FormField
-              id="massDryKg"
-              label="Dry Mass (kg)"
-              error={errors.massDryKg?.message}
-              helperText="Required — oven-dry basis"
-            >
-              <FormInput
-                id="massDryKg"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="e.g., 1200"
-                disabled={isSubmitting}
-                error={!!errors.massDryKg}
-                {...register("massDryKg", { setValueAs: numericValue })}
-              />
-            </FormField>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
               id="massWetKg"
-              label="Wet Mass (kg, optional)"
+              label="Wet Mass (kg)"
               error={errors.massWetKg?.message}
               helperText="As-received weight"
+              required
             >
               <FormInput
                 id="massWetKg"
@@ -155,15 +161,16 @@ export function FeedstockForm({
                 placeholder="e.g., 1800"
                 disabled={isSubmitting}
                 error={!!errors.massWetKg}
-                {...register("massWetKg", { setValueAs: nullableNumericValue })}
+                {...register("massWetKg", { setValueAs: numericValue })}
               />
             </FormField>
 
             <FormField
               id="moistureContentPercent"
-              label="Moisture (%, optional)"
+              label="Moisture (%)"
               error={errors.moistureContentPercent?.message}
               helperText="0–100%"
+              required
             >
               <FormInput
                 id="moistureContentPercent"
@@ -174,10 +181,31 @@ export function FeedstockForm({
                 placeholder="e.g., 35"
                 disabled={isSubmitting}
                 error={!!errors.moistureContentPercent}
-                {...register("moistureContentPercent", { setValueAs: nullableNumericValue })}
+                {...register("moistureContentPercent", { setValueAs: numericValue })}
               />
             </FormField>
           </div>
+
+          {/* Auto-calculated dry mass */}
+          <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+            <span className="body-medium font-medium text-[var(--color-text-primary)]">
+              {calculatedDryMass !== null
+                ? `${calculatedDryMass.toFixed(2)} kg`
+                : "—"}
+            </span>
+            {calculatedDryMass !== null && (
+              <span className="body-small text-[var(--color-text-quaternary)]">
+                = {watchWetMass} × (1 − {watchMoisture}%)
+              </span>
+            )}
+          </div>
+          {errors.massDryKg?.message && (
+            <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
+          )}
+
+          {/* Hidden field to submit calculated value */}
+          <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
         </div>
 
         {/* Storage Section */}
@@ -190,7 +218,7 @@ export function FeedstockForm({
             <FormEntitySelect
               control={control}
               name="storageLocationId"
-              label="Storage Location (optional)"
+              label="Storage Location"
               entityType="storageLocation"
               placeholder="Select feedstock bin..."
               disabled={isSubmitting}
@@ -199,7 +227,7 @@ export function FeedstockForm({
 
             <FormField
               id="feedstockSourceRegion"
-              label="Source Region (optional)"
+              label="Source Region"
               error={errors.feedstockSourceRegion?.message}
             >
               <FormInput
@@ -219,21 +247,23 @@ export function FeedstockForm({
             Documentation
           </h3>
 
-          <FormField
-            id="notes"
-            label="Notes (optional)"
-            error={errors.notes?.message}
-            helperText="Additional notes or documentation references"
-          >
-            <FormTextarea
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormField
               id="notes"
-              placeholder="Enter any additional notes..."
-              disabled={isSubmitting}
-              error={!!errors.notes}
-              rows={4}
-              {...register("notes")}
-            />
-          </FormField>
+              label="Notes"
+              error={errors.notes?.message}
+              helperText="Additional notes or documentation references"
+            >
+              <FormTextarea
+                id="notes"
+                placeholder="Enter any additional notes..."
+                disabled={isSubmitting}
+                error={!!errors.notes}
+                rows={4}
+                {...register("notes")}
+              />
+            </FormField>
+          </div>
         </div>
 
         {/* Hidden facilityId field */}

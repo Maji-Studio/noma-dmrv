@@ -3,12 +3,13 @@
  * Queries entity counts grouped by status for a given facility,
  * plus recent item codes/names for display in the DAG nodes.
  */
-import { count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   facilities,
   reactors,
   storageLocations,
+  suppliers,
   feedstockDeliveries,
   feedstocks,
   productionRuns,
@@ -67,7 +68,6 @@ function aggregateStatusRows(rows: StatusRow[]): { total: number; byStatus: Reco
 // ============================================
 
 export async function getChainOfCustodyData(
-  userId: string,
   facilityId: string
 ): Promise<ChainOfCustodyData> {
   await requireAuth();
@@ -85,6 +85,7 @@ export async function getChainOfCustodyData(
 
   // Run all count queries + item queries in parallel
   const [
+    supplierRows,
     reactorRows,
     slFeedstockBinRows,
     slBiocharBinRows,
@@ -99,6 +100,7 @@ export async function getChainOfCustodyData(
     applicationRows,
     creditBatchRows,
     // Item queries
+    supplierItems,
     reactorItems,
     slFeedstockBinItems,
     slBiocharBinItems,
@@ -115,6 +117,14 @@ export async function getChainOfCustodyData(
   ] = await Promise.all([
     // --- Status count queries ---
 
+    // Suppliers — distinct suppliers linked via feedstock deliveries (no status)
+    db
+      .selectDistinct({ id: suppliers.id })
+      .from(suppliers)
+      .innerJoin(feedstockDeliveries, eq(feedstockDeliveries.supplierId, suppliers.id))
+      .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .then((rows) => [{ status: null as string | null, count: rows.length }]),
+
     // Reactors — no status field
     db
       .select({ status: sql<string | null>`null`.as("status"), count: count() })
@@ -125,15 +135,15 @@ export async function getChainOfCustodyData(
     db
       .select({ status: sql<string | null>`null`.as("status"), count: count() })
       .from(storageLocations)
-      .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'feedstock_bin'`),
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "feedstock_bin"))),
     db
       .select({ status: sql<string | null>`null`.as("status"), count: count() })
       .from(storageLocations)
-      .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'biochar_bin'`),
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "biochar_bin"))),
     db
       .select({ status: sql<string | null>`null`.as("status"), count: count() })
       .from(storageLocations)
-      .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'product_bin'`),
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "product_bin"))),
 
     // Feedstock Deliveries — has status
     db
@@ -202,6 +212,13 @@ export async function getChainOfCustodyData(
     // --- Item queries (code + optional name, limited) ---
 
     db
+      .selectDistinct({ code: suppliers.code, name: suppliers.name })
+      .from(suppliers)
+      .innerJoin(feedstockDeliveries, eq(feedstockDeliveries.supplierId, suppliers.id))
+      .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .limit(ITEMS_LIMIT),
+
+    db
       .select({ code: reactors.code })
       .from(reactors)
       .where(eq(reactors.facilityId, facilityId))
@@ -211,19 +228,19 @@ export async function getChainOfCustodyData(
     db
       .select({ code: storageLocations.code, name: storageLocations.name })
       .from(storageLocations)
-      .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'feedstock_bin'`)
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "feedstock_bin")))
       .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
     db
       .select({ code: storageLocations.code, name: storageLocations.name })
       .from(storageLocations)
-      .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'biochar_bin'`)
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "biochar_bin")))
       .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
     db
       .select({ code: storageLocations.code, name: storageLocations.name })
       .from(storageLocations)
-      .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'product_bin'`)
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "product_bin")))
       .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
 
@@ -295,6 +312,7 @@ export async function getChainOfCustodyData(
   ]);
 
   const entitySummaries: EntitySummary[] = [
+    { entityType: "suppliers", ...aggregateStatusRows(supplierRows), items: supplierItems },
     { entityType: "reactors", ...aggregateStatusRows(reactorRows), items: reactorItems },
     { entityType: "feedstockBin", ...aggregateStatusRows(slFeedstockBinRows), items: slFeedstockBinItems },
     { entityType: "biocharBin", ...aggregateStatusRows(slBiocharBinRows), items: slBiocharBinItems },

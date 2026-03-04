@@ -77,7 +77,6 @@ export async function seedChainData(
         identifier: `E2E Seed Reactor ${testRunId}`,
         facilityId: facilityId,
         reactorType: "fixed-bed",
-        type: "primary pyrolysis",
       });
 
       // 3. Supplier

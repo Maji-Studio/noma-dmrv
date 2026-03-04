@@ -26,7 +26,63 @@ export const feedstockFormSchema = z
       .min(1, "Facility is required")
       .uuid("Invalid facility"),
 
-    // Mass & Moisture
+    // Mass & Moisture — wet mass + moisture are primary inputs, dry mass is auto-calculated
+    massWetKg: z.union([
+      z.number().min(0, "Wet mass must be 0 or greater"),
+      z
+        .string()
+        .transform((val, ctx) => {
+          if (val === "") {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Wet mass is required",
+            });
+            return z.NEVER;
+          }
+          const n = parseFloat(val);
+          if (isNaN(n)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Must be a number",
+            });
+            return z.NEVER;
+          }
+          if (n < 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Wet mass must be 0 or greater",
+            });
+            return z.NEVER;
+          }
+          return n;
+        }),
+    ]),
+    moistureContentPercent: z.union([
+      z
+        .number()
+        .min(0, "Moisture must be between 0 and 100")
+        .max(100, "Moisture must be between 0 and 100"),
+      z
+        .string()
+        .transform((val, ctx) => {
+          if (val === "") {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Moisture content is required",
+            });
+            return z.NEVER;
+          }
+          const n = parseFloat(val);
+          if (isNaN(n)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Must be a number",
+            });
+            return z.NEVER;
+          }
+          return n;
+        }),
+    ]),
     massDryKg: z.union([
       z.number().min(0, "Dry mass must be 0 or greater"),
       z
@@ -47,45 +103,9 @@ export const feedstockFormSchema = z
             });
             return z.NEVER;
           }
-          if (n < 0) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Dry mass must be 0 or greater",
-            });
-            return z.NEVER;
-          }
           return n;
         }),
     ]),
-    massWetKg: z
-      .union([
-        z.number().min(0, "Wet mass must be 0 or greater"),
-        z.string().transform((val) => {
-          if (val === "") return null;
-          const n = parseFloat(val);
-          if (isNaN(n)) return null;
-          return n;
-        }),
-        z.null(),
-      ])
-      .optional()
-      .nullable(),
-    moistureContentPercent: z
-      .union([
-        z
-          .number()
-          .min(0, "Moisture must be between 0 and 100")
-          .max(100, "Moisture must be between 0 and 100"),
-        z.string().transform((val) => {
-          if (val === "") return null;
-          const n = parseFloat(val);
-          if (isNaN(n)) return null;
-          return n;
-        }),
-        z.null(),
-      ])
-      .optional()
-      .nullable(),
 
     // Storage
     storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -98,22 +118,7 @@ export const feedstockFormSchema = z
       .optional()
       .or(z.literal("")),
   })
-  .refine(
-    (data) => {
-      if (
-        data.massWetKg !== null &&
-        data.massWetKg !== undefined &&
-        typeof data.massDryKg === "number"
-      ) {
-        return data.massDryKg <= data.massWetKg;
-      }
-      return true;
-    },
-    {
-      message: "Dry mass cannot exceed wet mass",
-      path: ["massDryKg"],
-    }
-  );
+;
 
 // ============================================
 // Server Action Schemas
@@ -126,9 +131,9 @@ export const updateFeedstockSchema = z.object({
   feedstockDeliveryId: z.string().uuid().optional(),
   feedstockTypeId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
+  massWetKg: z.number().min(0).optional(),
+  moistureContentPercent: z.number().min(0).max(100).optional(),
   massDryKg: z.number().min(0).optional(),
-  massWetKg: z.number().min(0).optional().nullable(),
-  moistureContentPercent: z.number().min(0).max(100).optional().nullable(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockSourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),

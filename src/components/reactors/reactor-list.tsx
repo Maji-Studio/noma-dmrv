@@ -15,6 +15,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
+import { useToast } from "@/components/ui/toast";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -185,6 +186,7 @@ export function ReactorList() {
   const createReactor = useCreateReactor();
   const updateReactor = useUpdateReactor();
   const deleteReactor = useDeleteReactor();
+  const toast = useToast();
 
   // Side sheet helpers
   const openCreate = () => {
@@ -212,6 +214,7 @@ export function ReactorList() {
     try {
       await createReactor.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Reactor created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create reactor");
     }
@@ -223,6 +226,7 @@ export function ReactorList() {
     try {
       await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Reactor updated successfully");
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update reactor");
     }
@@ -238,6 +242,7 @@ export function ReactorList() {
     try {
       await deleteReactor.mutateAsync(deletingReactorId);
       setDeletingReactorId(null);
+      toast.success("Reactor deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete reactor");
     }

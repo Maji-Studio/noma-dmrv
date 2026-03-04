@@ -49,6 +49,8 @@ export interface EntitySelectProps {
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /** Auto-select when there is exactly one option available */
+  autoSelectSingle?: boolean;
 }
 
 export interface UseEntityOptionsParams {
