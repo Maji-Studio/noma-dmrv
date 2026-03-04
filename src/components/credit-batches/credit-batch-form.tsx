@@ -12,6 +12,7 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -78,17 +79,6 @@ export function CreditBatchForm({
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
 
-  // Helper to format date for input[type="date"]
-  const formatDateForInput = (date: string | Date | undefined | null): string => {
-    if (!date) {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    }
-    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-    const d = typeof date === "string" ? new Date(date) : date;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
   const {
     register,
     handleSubmit,
@@ -100,8 +90,8 @@ export function CreditBatchForm({
     resolver: zodResolver(creditBatchFormSchema),
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? "",
-      startDate: formatDateForInput(creditBatch?.startDate),
-      endDate: formatDateForInput(creditBatch?.endDate),
+      startDate: toDateInputValue(creditBatch?.startDate),
+      endDate: toDateInputValue(creditBatch?.endDate),
       certifier: creditBatch?.certifier ?? "",
       status: (creditBatch?.status as CreditBatchStatus) ?? "draft",
       applicationIds: creditBatch?.applicationIds ?? [],
@@ -468,7 +458,7 @@ export function CreditBatchForm({
       </div>
 
       {/* === Section 4: GHG Accounting (read-only, populated during verification) === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)] opacity-50">
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           GHG Accounting
         </h3>
@@ -538,13 +528,12 @@ export function CreditBatchForm({
             placeholder="—"
             disabled
             value={creditBatch?.bufferPoolPercent ?? ""}
-            readOnly
           />
         </FormField>
       </div>
 
       {/* === Section 5: Verification (read-only, populated after issuance) === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)] opacity-50">
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Verification
         </h3>

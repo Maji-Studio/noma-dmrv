@@ -6,17 +6,16 @@ config({ path: ".env.test" });
 
 // Validate that tests only target localhost to prevent accidentally running against staging/production
 const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-const ALLOWED_PREFIXES = [
-  "http://localhost",
-  "https://localhost",
-  "http://127.0.0.1",
-  "https://127.0.0.1",
-];
-if (!ALLOWED_PREFIXES.some((prefix) => baseURL.startsWith(prefix))) {
+try {
+  const url = new URL(baseURL);
+  if (!["http:", "https:"].includes(url.protocol) || !["localhost", "127.0.0.1"].includes(url.hostname)) {
+    throw new Error("invalid");
+  }
+} catch {
   throw new Error(
     `NEXT_PUBLIC_APP_URL must point to localhost for E2E tests. ` +
       `Got: "${baseURL}". ` +
-      `Allowed prefixes: ${ALLOWED_PREFIXES.join(", ")}`
+      `Allowed hostnames: localhost, 127.0.0.1`
   );
 }
 

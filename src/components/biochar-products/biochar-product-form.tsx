@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 
@@ -76,14 +76,13 @@ export function BiocharProductForm({
   const selectedFacilityId = watch("facilityId");
 
   // Clear dependent fields when facility changes
-  const initialFacilityId = product?.facility?.id ?? "";
+  const initialFacilityIdRef = useRef(product?.facility?.id ?? "");
   useEffect(() => {
-    if (selectedFacilityId && selectedFacilityId !== initialFacilityId) {
+    if (selectedFacilityId && selectedFacilityId !== initialFacilityIdRef.current) {
       setValue("linkedProductionRunId", "");
       setValue("storageLocationId", "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFacilityId]);
+  }, [selectedFacilityId, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
@@ -272,10 +271,13 @@ export function BiocharProductForm({
                   entityType="storageLocation"
                   value={field.value || ""}
                   onChange={field.onChange}
-                  placeholder="Select a storage location (optional)"
+                  placeholder="Select a product bin (optional)"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
-                  filterBy={selectedFacilityId ? { facilityId: selectedFacilityId } : undefined}
+                  filterBy={{
+                    ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
+                    type: "product_bin",
+                  }}
                 />
               )}
             />

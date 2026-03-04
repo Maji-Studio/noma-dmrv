@@ -48,6 +48,13 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `project_members` | Legacy/Core Template | Role mapping between users and projects. | Access control and collaborator management. | `src/db/schema/projects.ts:26` |
 | `items` | Legacy/Core Template | Example CRUD entity tied to projects. | Demo data patterns and template scaffolding. | `src/db/schema/items.ts:8` |
 
+## Notable Enums (common.ts)
+
+| Enum | Values | Used by |
+|---|---|---|
+| `samplingMethod` | `method_a`, `method_b` | `reactors.sampling_method` — Isometric protocol sampling method selection |
+| `soilTemperatureSource` | `baseline`, `global_database` | Applications — soil temperature data source for durability calcs |
+
 ## Related References
 
 - Isometric requirement mapping: `docs/isometric/schema-mapping.md`

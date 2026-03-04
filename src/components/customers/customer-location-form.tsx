@@ -47,7 +47,7 @@ export function CustomerLocationForm({
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({
+  } = useForm<CustomerLocationFormData>({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues: {
       name: location?.name ?? "",
@@ -60,7 +60,7 @@ export function CustomerLocationForm({
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as CustomerLocationFormData);
+    return onSubmit(data);
   });
 
   return (
