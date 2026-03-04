@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   House,
+  TreeStructure,
   Leaf,
   Grains,
   Factory,
@@ -54,7 +55,10 @@ const SECTION_ACCENTS = {
 
 const navSections: NavSection[] = [
   {
-    items: [{ href: "/dashboard", label: "Dashboard", icon: House }],
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: House },
+      { href: "/chain-of-custody", label: "Chain of Custody", icon: TreeStructure },
+    ],
     accent: SECTION_ACCENTS.default,
   },
   {
@@ -167,7 +171,7 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { signOut } = useAuth();
+  const { data: session, signOut } = useAuth();
 
   return (
     <aside
@@ -257,10 +261,10 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="body-caption font-medium text-white truncate">
-              User
+              {session?.user?.name ?? "User"}
             </span>
             <span className="text-[10px] text-[var(--color-white-25)] truncate">
-              user@example.com
+              {session?.user?.email ?? ""}
             </span>
           </div>
           <button

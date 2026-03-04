@@ -11,6 +11,7 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,8 +82,8 @@ export function ApplicationForm({
     resolver: zodResolver(applicationFormSchema),
     defaultValues: {
       applicationDate: application?.applicationDate
-        ? new Date(application.applicationDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+        ? formatLocalDate(new Date(application.applicationDate))
+        : formatLocalDate(new Date()),
       deliveryId: application?.deliveryId ?? "",
       biocharAppliedTons: application?.biocharAppliedTons ?? undefined,
       biocharAppliedDryTons: application?.biocharAppliedDryTons ?? undefined,

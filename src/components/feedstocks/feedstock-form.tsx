@@ -70,11 +70,13 @@ export function FeedstockForm({
   useEffect(() => {
     if (!deliveryId || isEditMode) return;
 
+    let active = true;
     getFeedstockDeliveryByIdFn(deliveryId).then((result) => {
-      if (result.success) {
+      if (active && result.success) {
         setValue("facilityId", result.data.facilityId);
       }
     });
+    return () => { active = false; };
   }, [deliveryId, setValue, isEditMode]);
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";

@@ -200,6 +200,14 @@ function DataTableRoot<TData, TValue>({
     pageSize: externalPageSize,
   });
 
+  // Sync pagination state when external props change
+  React.useEffect(() => {
+    setPagination((prev) => {
+      if (prev.pageIndex === externalPageIndex && prev.pageSize === externalPageSize) return prev;
+      return { pageIndex: externalPageIndex, pageSize: externalPageSize };
+    });
+  }, [externalPageIndex, externalPageSize]);
+
   // Controlled state handlers
   const handleSortingChange = React.useCallback(
     (updater: SortingState | ((old: SortingState) => SortingState)) => {
@@ -314,6 +322,14 @@ function DataTableRoot<TData, TValue>({
                         )}
                         style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                         onClick={isSortable ? header.column.getToggleSortingHandler() : undefined}
+                        onKeyDown={isSortable ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            header.column.getToggleSortingHandler()?.(e);
+                          }
+                        } : undefined}
+                        tabIndex={isSortable ? 0 : undefined}
+                        role={isSortable ? "button" : undefined}
                         aria-sort={
                           sortDir === "asc"
                             ? "ascending"

@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
+import { emptyToNull, toNumberOrNull, toIntOrNull } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -78,52 +78,20 @@ export const productionRunFormSchema = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
-  feedstockMassUsedKg: z.union([
-    z.number().positive("Mass must be a positive number"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
+  feedstockMassUsedKg: z.preprocess(toNumberOrNull, z.number().positive("Mass must be a positive number").nullable()).optional(),
 
   // Processing Parameters (Isometric Protocol Section 9)
-  feedingRateKgHr: z.union([
-    z.number().positive("Feeding rate must be positive"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
-  residenceTimeMinutes: z.union([
-    z.number().int().positive("Residence time must be a positive integer"),
-    z.string().transform((val) => (val === "" ? null : parseInt(val, 10))),
-    z.null(),
-  ]).optional().nullable(),
+  feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
+  residenceTimeMinutes: z.preprocess(toIntOrNull, z.number().int().positive("Residence time must be a positive integer").nullable()).optional(),
 
   // Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6)
-  dieselOperationLiters: z.union([
-    z.number().min(0, "Diesel operation must be non-negative"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
-  dieselGensetLiters: z.union([
-    z.number().min(0, "Diesel genset must be non-negative"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
-  preprocessingFuelLiters: z.union([
-    z.number().min(0, "Preprocessing fuel must be non-negative"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
-  electricityKwh: z.union([
-    z.number().min(0, "Electricity must be non-negative"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
+  dieselOperationLiters: z.preprocess(toNumberOrNull, z.number().min(0, "Diesel operation must be non-negative").nullable()).optional(),
+  dieselGensetLiters: z.preprocess(toNumberOrNull, z.number().min(0, "Diesel genset must be non-negative").nullable()).optional(),
+  preprocessingFuelLiters: z.preprocess(toNumberOrNull, z.number().min(0, "Preprocessing fuel must be non-negative").nullable()).optional(),
+  electricityKwh: z.preprocess(toNumberOrNull, z.number().min(0, "Electricity must be non-negative").nullable()).optional(),
 
   // Biochar Output
-  biocharOutputKg: z.union([
-    z.number().positive("Biochar output must be positive"),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
+  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().positive("Biochar output must be positive").nullable()).optional(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
@@ -255,21 +223,9 @@ export const productionRunReadingSchema = z.object({
     z.date(),
     z.string().transform((val) => new Date(val)),
   ]),
-  temperatureC: z.union([
-    z.number(),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
-  pressureBar: z.union([
-    z.number(),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
-  gasFlowRate: z.union([
-    z.number(),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ]).optional().nullable(),
+  temperatureC: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
+  pressureBar: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
+  gasFlowRate: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
 });
 
 // ============================================
