@@ -21,6 +21,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -143,6 +144,7 @@ export function SampleList() {
   const createSample = useCreateSample();
   const updateSample = useUpdateSample();
   const deleteSample = useDeleteSample();
+  const toast = useToast();
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
@@ -152,6 +154,7 @@ export function SampleList() {
     try {
       await createSample.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Sample created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create sample");
     }
@@ -163,6 +166,7 @@ export function SampleList() {
     try {
       await updateSample.mutateAsync({ sampleId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Sample updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update sample");
     }
@@ -175,6 +179,7 @@ export function SampleList() {
     try {
       await deleteSample.mutateAsync(deletingSampleId);
       setDeletingSampleId(null);
+      toast.success("Sample deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete sample");
     }

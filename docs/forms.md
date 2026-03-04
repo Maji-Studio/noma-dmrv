@@ -428,6 +428,22 @@ Available helpers:
 - `toDateInputValue(value)` → `"YYYY-MM-DD"` (accepts `string | Date | null`, passes through YYYY-MM-DD strings as-is)
 - `parseLocalDateString(str)` → `Date` (avoids UTC midnight shift when parsing `"YYYY-MM-DD"`)
 
+### Facility Timezone Display
+
+All timestamps are stored as UTC in the database. Use `date-fns-tz` helpers from `@/lib/date-utils` to display in a facility's local timezone:
+
+```typescript
+import { formatFacilityTime, formatFacilityDate, formatTimezoneLabel } from "@/lib/date-utils";
+
+// Display a UTC timestamp in the facility's local time
+formatFacilityTime(run.startedAt, facility.timezone);       // "2026-03-03 14:30"
+formatFacilityDate(run.startedAt, facility.timezone);       // "2026-03-03"
+formatFacilityTime(run.startedAt, facility.timezone, "HH:mm"); // "14:30"
+
+// Format timezone for dropdowns
+formatTimezoneLabel("Africa/Nairobi");  // "Africa/Nairobi (UTC+3)"
+```
+
 ## Examples
 
 See these files for complete examples:

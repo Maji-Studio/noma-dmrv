@@ -33,7 +33,7 @@ export function ItemForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
-      <FormField id="title" label="Title" error={errors.title?.message}>
+      <FormField id="title" label="Title" error={errors.title?.message} required>
         <FormInput
           id="title"
           type="text"
@@ -46,7 +46,7 @@ export function ItemForm({
 
       <FormField
         id="description"
-        label="Description (optional)"
+        label="Description"
         error={errors.description?.message}
       >
         <FormTextarea

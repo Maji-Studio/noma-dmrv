@@ -16,6 +16,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
+import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
 import {
   useCreateDelivery,
@@ -170,6 +171,7 @@ export function DeliveryList() {
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
   const deleteDelivery = useDeleteDelivery();
+  const toast = useToast();
 
   // Side sheet helpers
   const openCreate = () => {
@@ -204,6 +206,7 @@ export function DeliveryList() {
       const createData = { ...data, facilityId } as CreateDeliveryData;
       await createDelivery.mutateAsync(createData);
       closeSideSheet();
+      toast.success("Delivery created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create delivery");
     }
@@ -215,6 +218,7 @@ export function DeliveryList() {
     try {
       await updateDelivery.mutateAsync({ deliveryId: sideSheet.entity.id, ...data });
       closeSideSheet();
+      toast.success("Delivery updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update delivery");
     }
@@ -230,6 +234,7 @@ export function DeliveryList() {
     try {
       await deleteDelivery.mutateAsync(deletingDeliveryId);
       setDeletingDeliveryId(null);
+      toast.success("Delivery deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete delivery");
     }

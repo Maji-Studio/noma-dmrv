@@ -4,11 +4,14 @@ Interactive DAG (Directed Acyclic Graph) that shows the complete biochar traceab
 
 ## Overview
 
-The chain-of-custody page renders a React Flow graph with 12 entity nodes and 15 edges representing the full production-to-credit pipeline:
+The chain-of-custody page renders a React Flow graph with 13 entity nodes and 15 edges representing the full production-to-credit pipeline. Storage Locations are split into three bin types (Feedstock Bin, Biochar Bin, Product Bin), giving 13 nodes total:
+
+Reactors, Feedstock Bin, Biochar Bin, Product Bin, Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches.
 
 ```text
-Facility → Reactors, Storage Locations, Feedstock Deliveries,
-           Production Runs, Biochar Products, Credit Batches
+Facility → Reactors, Feedstock Bin, Biochar Bin, Product Bin,
+           Feedstock Deliveries, Production Runs, Biochar Products,
+           Credit Batches
 Feedstock Deliveries → Feedstocks
 Feedstocks → Production Runs
 Reactors → Production Runs
@@ -51,7 +54,7 @@ Transforms `ChainOfCustodyData` into React Flow nodes + edges using dagre for au
 
 ### `chain-constants.ts`
 Static configuration:
-- Node definitions (12 entities with icons, accent colors, routes)
+- Node definitions (13 entities with icons, accent colors, routes)
 - Edge definitions (15 connections)
 - Status color mapping
 - Layout constants (node size, dagre spacing)
@@ -62,7 +65,7 @@ Static configuration:
 
 | Group | Entities | Accent |
 |-------|----------|--------|
-| Infrastructure | Facilities, Reactors, Storage Locations | `--clr-purple` |
+| Infrastructure | Facilities, Reactors, Feedstock Bin, Biochar Bin, Product Bin | `--clr-purple` |
 | Production | Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products | `--clr-orange` |
 | Distribution | Orders, Deliveries, Applications | `--clr-rose` |
 | Credits | Credit Batches | `--clr-pink` |
@@ -84,7 +87,7 @@ Test file: `tests/e2e/chain-of-custody.spec.ts`
 
 Tests cover:
 - Page loads with header and populated facility dropdown
-- Selecting a facility renders all 12 entity nodes
+- Selecting a facility renders all 13 entity nodes
 - Edges are rendered between nodes (15 connections)
 - Seeded data shows correct non-zero counts on nodes
 - Clickable nodes navigate to entity list pages

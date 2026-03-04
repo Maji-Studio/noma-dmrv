@@ -17,6 +17,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { OrderForm } from "./order-form";
 import type { OrderFormData, OrderFilterData, OrderStatus } from "@/schemas/orders";
 import type { OrderWithRelations } from "@/data-access/orders";
@@ -130,6 +131,7 @@ export function OrderList() {
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const deleteOrder = useDeleteOrder();
+  const toast = useToast();
 
   const orders = ordersData?.items ?? [];
   const totalOrders = ordersData?.total ?? 0;
@@ -164,6 +166,7 @@ export function OrderList() {
     try {
       await createOrder.mutateAsync(data);
       closeSideSheet();
+      toast.success("Order created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create order");
     }
@@ -175,6 +178,7 @@ export function OrderList() {
     try {
       await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, ...data });
       closeSideSheet();
+      toast.success("Order updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update order");
     }
@@ -188,6 +192,7 @@ export function OrderList() {
     try {
       await deleteOrder.mutateAsync(deletingOrderId);
       setDeletingOrderId(null);
+      toast.success("Order deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete order");
     }

@@ -128,16 +128,18 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <FormField id="deliveryId" label="Delivery" error={errors.deliveryId?.message}>
-          <FormSelect
-            id="deliveryId"
-            placeholder="Select delivery..."
-            disabled={isSubmitting}
-            error={!!errors.deliveryId}
-            options={deliveryOptions}
-            {...register("deliveryId")}
-          />
-        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField id="deliveryId" label="Delivery" error={errors.deliveryId?.message}>
+            <FormSelect
+              id="deliveryId"
+              placeholder="Select delivery..."
+              disabled={isSubmitting}
+              error={!!errors.deliveryId}
+              options={deliveryOptions}
+              {...register("deliveryId")}
+            />
+          </FormField>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="biocharAppliedTons" label="Biochar Applied (Tons)" error={errors.biocharAppliedTons?.message}>
@@ -280,21 +282,23 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <FormField
-          id="gisBoundaryReference"
-          label="GIS Boundary Reference"
-          error={errors.gisBoundaryReference?.message}
-          helperText="Link to GIS layer data"
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="gisBoundaryReference"
-            type="text"
-            placeholder="e.g., https://gis.example.com/layer/123"
-            disabled={isSubmitting}
-            error={!!errors.gisBoundaryReference}
-            {...register("gisBoundaryReference")}
-          />
-        </FormField>
+            label="GIS Boundary Reference"
+            error={errors.gisBoundaryReference?.message}
+            helperText="Link to GIS layer data"
+          >
+            <FormInput
+              id="gisBoundaryReference"
+              type="text"
+              placeholder="e.g., https://gis.example.com/layer/123"
+              disabled={isSubmitting}
+              error={!!errors.gisBoundaryReference}
+              {...register("gisBoundaryReference")}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* === Section 3: Soil Temperature === */}

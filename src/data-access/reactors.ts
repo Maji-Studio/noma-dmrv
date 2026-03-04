@@ -72,7 +72,6 @@ export async function getReactors(
       or(
         ilike(reactors.code, searchPattern),
         ilike(reactors.identifier, searchPattern),
-        ilike(reactors.type, searchPattern),
         ilike(reactors.reactorType, searchPattern)
       )!
     );
@@ -96,7 +95,6 @@ export async function getReactors(
   const sortColumn = {
     code: reactors.code,
     identifier: reactors.identifier,
-    type: reactors.type,
     reactorType: reactors.reactorType,
     createdAt: reactors.createdAt,
     updatedAt: reactors.updatedAt,
@@ -122,7 +120,6 @@ export async function getReactors(
       identifier: reactors.identifier,
       facilityId: reactors.facilityId,
       reactorType: reactors.reactorType,
-      type: reactors.type,
       samplingMethod: reactors.samplingMethod,
       capacityKg: reactors.capacityKg,
       specifications: reactors.specifications,
@@ -152,7 +149,6 @@ export async function getReactors(
         identifier: reactor.identifier,
         facilityId: reactor.facilityId,
         reactorType: reactor.reactorType,
-        type: reactor.type,
         samplingMethod: reactor.samplingMethod,
         capacityKg: reactor.capacityKg,
         specifications: reactor.specifications,
@@ -191,7 +187,6 @@ export async function getReactorById(
       identifier: reactors.identifier,
       facilityId: reactors.facilityId,
       reactorType: reactors.reactorType,
-      type: reactors.type,
       samplingMethod: reactors.samplingMethod,
       capacityKg: reactors.capacityKg,
       specifications: reactors.specifications,
@@ -219,7 +214,6 @@ export async function getReactorById(
     identifier: reactor.identifier,
     facilityId: reactor.facilityId,
     reactorType: reactor.reactorType,
-    type: reactor.type,
     samplingMethod: reactor.samplingMethod,
     capacityKg: reactor.capacityKg,
     specifications: reactor.specifications,
@@ -272,7 +266,6 @@ export async function createReactor(
     identifier: string;
     facilityId: string;
     reactorType: string;
-    type: string;
     samplingMethod?: "method_a" | "method_b";
     capacityKg?: number | null;
     specifications?: Record<string, unknown> | null;
@@ -307,7 +300,6 @@ export async function createReactor(
       identifier: data.identifier,
       facilityId: data.facilityId,
       reactorType: data.reactorType,
-      type: data.type,
       samplingMethod: data.samplingMethod ?? "method_a",
       capacityKg: data.capacityKg ?? null,
       specifications: data.specifications ?? null,
@@ -332,7 +324,6 @@ export async function updateReactor(
     identifier?: string;
     facilityId?: string;
     reactorType?: string;
-    type?: string;
     samplingMethod?: "method_a" | "method_b";
     capacityKg?: number | null;
     specifications?: Record<string, unknown> | null;

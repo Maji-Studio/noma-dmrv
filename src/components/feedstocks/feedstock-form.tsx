@@ -94,26 +94,30 @@ export function FeedstockForm({
             Reference
           </h3>
 
-          <FormEntitySelect
-            control={control}
-            name="feedstockDeliveryId"
-            label="Feedstock Delivery"
-            entityType="feedstockDelivery"
-            placeholder="Select delivery..."
-            disabled={isSubmitting}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormEntitySelect
+              control={control}
+              name="feedstockDeliveryId"
+              label="Feedstock Delivery"
+              entityType="feedstockDelivery"
+              placeholder="Select delivery..."
+              disabled={isSubmitting}
+              required
+            />
 
-          <FormEntitySelect
-            control={control}
-            name="feedstockTypeId"
-            label="Feedstock Type"
-            entityType="feedstockType"
-            placeholder="Select feedstock type..."
-            disabled={isSubmitting}
-            allowCreate
-            createLabel="Add new feedstock type"
-            onCreateNew={() => feedstockTypeDialog.open()}
-          />
+            <FormEntitySelect
+              control={control}
+              name="feedstockTypeId"
+              label="Feedstock Type"
+              entityType="feedstockType"
+              required
+              placeholder="Select feedstock type..."
+              disabled={isSubmitting}
+              allowCreate
+              createLabel="Add new feedstock type"
+              onCreateNew={() => feedstockTypeDialog.open()}
+            />
+          </div>
         </div>
 
         {/* Mass & Moisture Section */}
@@ -127,7 +131,8 @@ export function FeedstockForm({
               id="massDryKg"
               label="Dry Mass (kg)"
               error={errors.massDryKg?.message}
-              helperText="Required — oven-dry basis"
+              helperText="Oven-dry basis"
+              required
             >
               <FormInput
                 id="massDryKg"
@@ -143,7 +148,7 @@ export function FeedstockForm({
 
             <FormField
               id="massWetKg"
-              label="Wet Mass (kg, optional)"
+              label="Wet Mass (kg)"
               error={errors.massWetKg?.message}
               helperText="As-received weight"
             >
@@ -161,7 +166,7 @@ export function FeedstockForm({
 
             <FormField
               id="moistureContentPercent"
-              label="Moisture (%, optional)"
+              label="Moisture (%)"
               error={errors.moistureContentPercent?.message}
               helperText="0–100%"
             >
@@ -190,7 +195,7 @@ export function FeedstockForm({
             <FormEntitySelect
               control={control}
               name="storageLocationId"
-              label="Storage Location (optional)"
+              label="Storage Location"
               entityType="storageLocation"
               placeholder="Select feedstock bin..."
               disabled={isSubmitting}
@@ -199,7 +204,7 @@ export function FeedstockForm({
 
             <FormField
               id="feedstockSourceRegion"
-              label="Source Region (optional)"
+              label="Source Region"
               error={errors.feedstockSourceRegion?.message}
             >
               <FormInput
@@ -219,21 +224,23 @@ export function FeedstockForm({
             Documentation
           </h3>
 
-          <FormField
-            id="notes"
-            label="Notes (optional)"
-            error={errors.notes?.message}
-            helperText="Additional notes or documentation references"
-          >
-            <FormTextarea
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormField
               id="notes"
-              placeholder="Enter any additional notes..."
-              disabled={isSubmitting}
-              error={!!errors.notes}
-              rows={4}
-              {...register("notes")}
-            />
-          </FormField>
+              label="Notes"
+              error={errors.notes?.message}
+              helperText="Additional notes or documentation references"
+            >
+              <FormTextarea
+                id="notes"
+                placeholder="Enter any additional notes..."
+                disabled={isSubmitting}
+                error={!!errors.notes}
+                rows={4}
+                {...register("notes")}
+              />
+            </FormField>
+          </div>
         </div>
 
         {/* Hidden facilityId field */}

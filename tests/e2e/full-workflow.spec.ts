@@ -132,7 +132,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       identifier: `Reactor-${testRunId}`,
       facilityId: ids.facility,
       reactorType: "fixed-bed",
-      type: "pyrolysis",
       samplingMethod: "method_a",
       capacityKg: 1000,
     });

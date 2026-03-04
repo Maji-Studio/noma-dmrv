@@ -219,7 +219,6 @@ export async function createStorageLocationFn(
           longitude: validated.longitude ?? null,
           storageMethod: validated.storageMethod || null,
           storageDescription: validated.storageDescription || null,
-          supplierReferenceId: validated.supplierReferenceId || null,
         })
     );
 

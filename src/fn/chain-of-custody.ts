@@ -21,7 +21,7 @@ export async function getChainOfCustodyFn(
     }
 
     const validated = facilityIdSchema.parse(facilityId);
-    const data = await getChainOfCustodyData(user.id, validated);
+    const data = await getChainOfCustodyData(validated);
 
     return { success: true, data };
   } catch (error) {

@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { ServerError } from "@/components/forms";
+import { useToast } from "@/components/ui/toast";
 import { FeedstockDeliveryForm } from "./feedstock-delivery-form";
 import {
   useCreateFeedstockDelivery,
@@ -179,6 +180,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
   const createDelivery = useCreateFeedstockDelivery();
   const updateDelivery = useUpdateFeedstockDelivery();
   const deleteDelivery = useDeleteFeedstockDelivery();
+  const toast = useToast();
 
   // Handlers
   const handleCreate = async (data: FeedstockDeliveryFormData) => {
@@ -186,6 +188,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
     try {
       await createDelivery.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Feedstock delivery created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create feedstock delivery");
     }
@@ -200,6 +203,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
         ...data,
       });
       setSideSheet(null);
+      toast.success("Feedstock delivery updated successfully");
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update feedstock delivery");
     }
@@ -215,6 +219,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
     try {
       await deleteDelivery.mutateAsync(deletingDeliveryId);
       setDeletingDeliveryId(null);
+      toast.success("Feedstock delivery deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete feedstock delivery");
     }

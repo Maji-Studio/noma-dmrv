@@ -81,7 +81,6 @@ export function ReactorForm({
       identifier: reactor?.identifier ?? "",
       facilityId: preselectedFacilityId || reactor?.facilityId || "",
       reactorType: reactor?.reactorType ?? "",
-      type: reactor?.type ?? "",
       samplingMethod: (reactor?.samplingMethod as SamplingMethod) ?? "method_a",
       capacityKg: reactor?.capacityKg ?? undefined,
       specifications: undefined,
@@ -108,6 +107,7 @@ export function ReactorForm({
             id="identifier"
             label="Identifier"
             error={errors.identifier?.message}
+            required
           >
             <FormInput
               id="identifier"
@@ -120,27 +120,29 @@ export function ReactorForm({
           </FormField>
         </div>
 
-        {/* Facility Selection */}
-        <FormField
-          id="facilityId"
-          label="Facility"
-          error={errors.facilityId?.message}
-        >
-          <Controller
-            name="facilityId"
-            control={control}
-            render={({ field }) => (
-              <EntitySelect
-                entityType="facility"
-                value={field.value}
-                onChange={field.onChange}
-                placeholder="Select a facility..."
-                disabled={isSubmitting || !!preselectedFacilityId}
-                error={!!errors.facilityId}
-              />
-            )}
-          />
-        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="facilityId"
+            label="Facility"
+            error={errors.facilityId?.message}
+            required
+          >
+            <Controller
+              name="facilityId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  entityType="facility"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Select a facility..."
+                  disabled={isSubmitting || !!preselectedFacilityId}
+                  error={!!errors.facilityId}
+                />
+              )}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Reactor Configuration Section */}
@@ -154,6 +156,7 @@ export function ReactorForm({
             id="reactorType"
             label="Reactor Type"
             error={errors.reactorType?.message}
+            required
           >
             <FormSelect
               id="reactorType"
@@ -165,21 +168,6 @@ export function ReactorForm({
             />
           </FormField>
 
-          <FormField
-            id="type"
-            label="Type"
-            error={errors.type?.message}
-            helperText="Operational type, e.g., primary pyrolysis"
-          >
-            <FormInput
-              id="type"
-              type="text"
-              placeholder="e.g., primary pyrolysis"
-              disabled={isSubmitting}
-              error={!!errors.type}
-              {...register("type")}
-            />
-          </FormField>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -202,7 +190,7 @@ export function ReactorForm({
             id="capacityKg"
             label="Capacity (kg)"
             error={errors.capacityKg?.message}
-            helperText="Optional - production capacity in kilograms"
+            helperText="Production capacity in kilograms"
           >
             <FormInput
               id="capacityKg"
