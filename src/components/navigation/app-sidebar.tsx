@@ -263,9 +263,11 @@ export function AppSidebar() {
             <span className="body-caption font-medium text-white truncate">
               {session?.user?.name ?? "User"}
             </span>
-            <span className="text-[10px] text-[var(--color-white-25)] truncate">
-              {session?.user?.email ?? ""}
-            </span>
+            {session?.user?.email && (
+              <span className="text-[10px] text-[var(--color-white-25)] truncate">
+                {session.user.email}
+              </span>
+            )}
           </div>
           <button
             type="button"

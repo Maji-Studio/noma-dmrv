@@ -28,9 +28,10 @@ export async function getChainOfCustodyFn(
     if (error instanceof z.ZodError) {
       return { success: false, error: "Invalid facility ID" };
     }
+    console.error("Chain of custody query failed:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load chain of custody data",
+      error: "Failed to load chain of custody data",
     };
   }
 }

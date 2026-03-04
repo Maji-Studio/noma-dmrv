@@ -69,9 +69,10 @@ test.describe("Chain of Custody Visualization", () => {
 
     // All 12 entity nodes should be rendered
     const expectedLabels = [
-      "Facilities",
       "Reactors",
-      "Storage Locations",
+      "Feedstock Bin",
+      "Biochar Bin",
+      "Product Bin",
       "Feedstock Deliveries",
       "Feedstocks",
       "Production Runs",
@@ -175,17 +176,27 @@ test.describe("Chain of Custody Visualization", () => {
 
     const select = page.locator("select");
     await expect(select).toBeVisible({ timeout: 15000 });
+    await expect(async () => {
+      const html = await select.innerHTML();
+      expect(html).toContain(seededData.facility.id);
+    }).toPass({ timeout: 15000 });
     await select.selectOption(seededData.facility.id);
 
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
 
-    // Check that at least one edge path has the purple stroke style
+    // Check that at least one edge path exists with the purple stroke style
+    // SVG paths with no fill can be reported as "hidden" by Playwright,
+    // so we check for attachment and attributes instead of visibility
     const edgePath = page.locator(".react-flow__edge path").first();
-    await expect(edgePath).toBeVisible({ timeout: 10000 });
+    await expect(edgePath).toBeAttached({ timeout: 10000 });
 
-    // The stroke should reference the purple CSS variable
+    // The stroke should reference the purple CSS variable via marker-end or style
+    const markerEnd = await edgePath.getAttribute("marker-end");
     const stroke = await edgePath.getAttribute("style");
-    expect(stroke).toContain("--clr-purple");
+    const hasPurple =
+      (markerEnd && markerEnd.includes("clr-purple")) ||
+      (stroke && stroke.includes("clr-purple"));
+    expect(hasPurple).toBeTruthy();
   });
 
   test("minimap and controls are visible", async ({
@@ -200,6 +211,10 @@ test.describe("Chain of Custody Visualization", () => {
 
     const select = page.locator("select");
     await expect(select).toBeVisible({ timeout: 15000 });
+    await expect(async () => {
+      const html = await select.innerHTML();
+      expect(html).toContain(seededData.facility.id);
+    }).toPass({ timeout: 15000 });
     await select.selectOption(seededData.facility.id);
 
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });

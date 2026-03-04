@@ -3,7 +3,7 @@
  * Queries entity counts grouped by status for a given facility,
  * plus recent item codes/names for display in the DAG nodes.
  */
-import { count, eq, sql } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   facilities,
@@ -205,40 +205,47 @@ export async function getChainOfCustodyData(
       .select({ code: reactors.code })
       .from(reactors)
       .where(eq(reactors.facilityId, facilityId))
+      .orderBy(desc(reactors.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: storageLocations.code, name: storageLocations.name })
       .from(storageLocations)
       .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'feedstock_bin'`)
+      .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
     db
       .select({ code: storageLocations.code, name: storageLocations.name })
       .from(storageLocations)
       .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'biochar_bin'`)
+      .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
     db
       .select({ code: storageLocations.code, name: storageLocations.name })
       .from(storageLocations)
       .where(sql`${storageLocations.facilityId} = ${facilityId} AND ${storageLocations.type} = 'product_bin'`)
+      .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: feedstockDeliveries.code })
       .from(feedstockDeliveries)
       .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .orderBy(desc(feedstockDeliveries.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: feedstocks.code })
       .from(feedstocks)
       .where(eq(feedstocks.facilityId, facilityId))
+      .orderBy(desc(feedstocks.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: productionRuns.code })
       .from(productionRuns)
       .where(eq(productionRuns.facilityId, facilityId))
+      .orderBy(desc(productionRuns.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
@@ -246,6 +253,7 @@ export async function getChainOfCustodyData(
       .from(samples)
       .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
       .where(eq(productionRuns.facilityId, facilityId))
+      .orderBy(desc(samples.createdAt))
       .limit(ITEMS_LIMIT)
       .then((rows) => rows.map((r) => ({ code: r.code }))),
 
@@ -253,18 +261,21 @@ export async function getChainOfCustodyData(
       .select({ code: biocharProducts.code })
       .from(biocharProducts)
       .where(eq(biocharProducts.facilityId, facilityId))
+      .orderBy(desc(biocharProducts.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: orders.code })
       .from(orders)
       .where(eq(orders.facilityId, facilityId))
+      .orderBy(desc(orders.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: deliveries.code })
       .from(deliveries)
       .where(eq(deliveries.facilityId, facilityId))
+      .orderBy(desc(deliveries.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
@@ -272,12 +283,14 @@ export async function getChainOfCustodyData(
       .from(applications)
       .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
       .where(eq(deliveries.facilityId, facilityId))
+      .orderBy(desc(applications.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
       .select({ code: creditBatches.code })
       .from(creditBatches)
       .where(eq(creditBatches.facilityId, facilityId))
+      .orderBy(desc(creditBatches.createdAt))
       .limit(ITEMS_LIMIT),
   ]);
 
