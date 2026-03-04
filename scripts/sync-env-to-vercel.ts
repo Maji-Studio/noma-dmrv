@@ -30,7 +30,6 @@ import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
-const VAULT = "Environment Variables";
 const ITEM_PREFIX = "noma-dmrv env";
 
 // CLI flags

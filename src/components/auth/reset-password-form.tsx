@@ -62,10 +62,10 @@ function ResetPasswordFormContent() {
     return (
       <div className="space-y-24">
         <div
-          className="p-m bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
+          className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-medium font-semibold mb-xs">Invalid Reset Link</h3>
+          <h3 className="body-medium font-semibold mb-16">Invalid Reset Link</h3>
           <p className="body-small">
             This password reset link is invalid or has expired. Please request a
             new password reset.
@@ -89,11 +89,11 @@ function ResetPasswordFormContent() {
       {success ? (
         <div className="space-y-24">
           <div
-            className="p-m bg-green-50 border border-green-500 rounded-none text-green-700"
+            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
             role="status"
             aria-live="polite"
           >
-            <h3 className="body-medium font-semibold mb-xs">
+            <h3 className="body-medium font-semibold mb-16">
               Password reset successful
             </h3>
             <p className="body-small">

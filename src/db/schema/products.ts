@@ -7,7 +7,7 @@ import {
   uuid,
   real,
 } from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
+import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { biocharProductStatus } from './common';
 import { facilities, storageLocations } from './facilities';
 import { productionRuns } from './production';
@@ -104,3 +104,10 @@ export const biocharProductsRelations = relations(
     }),
   })
 );
+
+// ============================================
+// Type Exports
+// ============================================
+
+export type Formulation = InferSelectModel<typeof formulations>;
+export type BiocharProduct = InferSelectModel<typeof biocharProducts>;

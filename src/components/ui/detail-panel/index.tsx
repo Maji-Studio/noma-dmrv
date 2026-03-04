@@ -1,0 +1,208 @@
+/**
+ * Detail Panel Components
+ *
+ * Reusable read-only detail display components for entity detail slide-overs.
+ * Includes both low-level building blocks (DetailSection, DetailRow, DetailField)
+ * and a high-level generic EntityDetailPanel that renders from a sections config.
+ *
+ * @example
+ * ```tsx
+ * <EntityDetailPanel
+ *   open={!!viewing}
+ *   onOpenChange={(open) => !open && setViewing(null)}
+ *   title={entity.code}
+ *   subtitle="Some description"
+ *   sections={[
+ *     {
+ *       title: "General",
+ *       fields: [
+ *         { label: "Name", value: entity.name },
+ *         { label: "Status", value: <StatusBadge status="complete" /> },
+ *       ],
+ *     },
+ *   ]}
+ *   onEdit={() => startEditing(entity)}
+ *   editLabel="Edit Entity"
+ * />
+ * ```
+ */
+"use client";
+
+import * as React from "react";
+import { cn } from "@/lib/utils";
+import { SlideOverPanel } from "@/components/ui/slide-over-panel";
+import { Button } from "@/components/ui/button";
+
+/* -------------------------------------------------------------------------------------------------
+ * DetailSection - Gray background container with title
+ * -----------------------------------------------------------------------------------------------*/
+
+interface DetailSectionProps {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}
+
+function DetailSection({ title, children, className }: DetailSectionProps) {
+  return (
+    <div className={cn("flex flex-col gap-16", className)}>
+      <h3 className="title-heading-4 text-[var(--color-text-primary)]">
+        {title}
+      </h3>
+      <div className="bg-[var(--color-background-light)] p-16 rounded-[var(--radius-8)] flex flex-col gap-16">
+        {children}
+      </div>
+    </div>
+  );
+}
+DetailSection.displayName = "DetailSection";
+
+/* -------------------------------------------------------------------------------------------------
+ * DetailRow - Two-column row for fields
+ * -----------------------------------------------------------------------------------------------*/
+
+interface DetailRowProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+function DetailRow({ children, className }: DetailRowProps) {
+  return (
+    <div className={cn("flex gap-16", className)}>
+      {children}
+    </div>
+  );
+}
+DetailRow.displayName = "DetailRow";
+
+/* -------------------------------------------------------------------------------------------------
+ * DetailField - Label + value pair
+ * -----------------------------------------------------------------------------------------------*/
+
+interface DetailFieldProps {
+  label: string;
+  value: React.ReactNode;
+  className?: string;
+}
+
+function DetailField({ label, value, className }: DetailFieldProps) {
+  const displayValue = value === null || value === undefined || value === "" ? "—" : value;
+
+  return (
+    <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>
+      <span className="body-small text-[var(--color-text-secondary)]">
+        {label}
+      </span>
+      <span className="body-medium font-medium text-[var(--color-text-primary)]">
+        {displayValue}
+      </span>
+    </div>
+  );
+}
+DetailField.displayName = "DetailField";
+
+/* -------------------------------------------------------------------------------------------------
+ * EntityDetailPanel - Generic slide-over detail panel rendered from config
+ * -----------------------------------------------------------------------------------------------*/
+
+export interface DetailPanelField {
+  label: string;
+  value: React.ReactNode;
+}
+
+export interface DetailPanelSection {
+  title: string;
+  fields: DetailPanelField[];
+}
+
+interface EntityDetailPanelProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  subtitle?: string;
+  sections: DetailPanelSection[];
+  onEdit?: () => void;
+  editLabel?: string;
+}
+
+function EntityDetailPanel({
+  open,
+  onOpenChange,
+  title,
+  subtitle,
+  sections,
+  onEdit,
+  editLabel = "Edit",
+}: EntityDetailPanelProps) {
+  return (
+    <SlideOverPanel.Root open={open} onOpenChange={onOpenChange}>
+      <SlideOverPanel.Content>
+        <SlideOverPanel.Header showClose>
+          <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+          {subtitle && (
+            <SlideOverPanel.Description>{subtitle}</SlideOverPanel.Description>
+          )}
+        </SlideOverPanel.Header>
+
+        <SlideOverPanel.Body className="flex flex-col gap-32">
+          {sections.map((section) => (
+            <DetailSection key={section.title} title={section.title}>
+              {/* Render fields in rows of 2 */}
+              {chunkFields(section.fields).map((row, rowIdx) => (
+                <DetailRow key={rowIdx}>
+                  {row.map((field) => (
+                    <DetailField
+                      key={field.label}
+                      label={field.label}
+                      value={field.value}
+                    />
+                  ))}
+                </DetailRow>
+              ))}
+            </DetailSection>
+          ))}
+        </SlideOverPanel.Body>
+
+        {onEdit && (
+          <SlideOverPanel.Footer className="justify-stretch">
+            <Button
+              variant="primary"
+              className="flex-1"
+              onClick={() => {
+                onOpenChange(false);
+                onEdit();
+              }}
+            >
+              {editLabel}
+            </Button>
+            <SlideOverPanel.Close>
+              <Button variant="default" className="flex-1">
+                Close
+              </Button>
+            </SlideOverPanel.Close>
+          </SlideOverPanel.Footer>
+        )}
+      </SlideOverPanel.Content>
+    </SlideOverPanel.Root>
+  );
+}
+EntityDetailPanel.displayName = "EntityDetailPanel";
+
+/* -------------------------------------------------------------------------------------------------
+ * Helpers
+ * -----------------------------------------------------------------------------------------------*/
+
+/** Chunk an array of fields into rows of 2 */
+function chunkFields(fields: DetailPanelField[]): DetailPanelField[][] {
+  const rows: DetailPanelField[][] = [];
+  for (let i = 0; i < fields.length; i += 2) {
+    rows.push(fields.slice(i, i + 2));
+  }
+  return rows;
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Export
+ * -----------------------------------------------------------------------------------------------*/
+
+export { DetailSection, DetailRow, DetailField, EntityDetailPanel };

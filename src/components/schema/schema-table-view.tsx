@@ -219,9 +219,9 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
 
   return (
     <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
-      <main className="container-max py-l md:py-xl flex flex-col gap-m">
+      <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         {/* Header */}
-        <header className="flex flex-col gap-s">
+        <header className="flex flex-col gap-16">
           <div className="flex items-center gap-[10px]">
             <Database size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
@@ -230,14 +230,14 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
         </header>
 
         {/* Stats row */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-s">
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-16">
           <MetricCard label="Tables" value={totalTables} accent="var(--clr-purple)" />
           <MetricCard label="FK Links" value={relationships.length} accent="var(--clr-orange)" />
           <MetricCard label="Areas" value={areaCount} accent="var(--clr-pink)" />
         </section>
 
         {/* Controls: search + legacy toggle + links button */}
-        <section className="flex flex-col gap-s">
+        <section className="flex flex-col gap-16">
           <div className="relative max-w-[480px]">
             <MagnifyingGlass
               size={18}
@@ -250,7 +250,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
               className="w-full h-[44px] pl-[36px] pr-s border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-medium placeholder:text-[var(--color-text-tertiary)]"
             />
           </div>
-          <div className="flex items-center justify-between flex-wrap gap-s">
+          <div className="flex items-center justify-between flex-wrap gap-16">
             <label className="inline-flex items-center gap-[8px] body-small text-[var(--color-text-secondary)] select-none cursor-pointer">
               <input
                 type="checkbox"
@@ -326,7 +326,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
             {selectedTable && <SelectedTablePanel table={selectedTable} accent={AREA_ACCENT[resolvedArea]} />}
           </>
         ) : (
-          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-m flex flex-col items-center gap-[12px] py-[64px]">
+          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24 flex flex-col items-center gap-[12px] py-[64px]">
             <Database size={32} className="text-[var(--color-text-tertiary)]" />
             <p className="body-medium text-[var(--color-text-secondary)]">No matching tables. Try a broader query.</p>
           </div>
@@ -345,10 +345,10 @@ function SelectedTablePanel({ table, accent }: { table: SchemaTableInfo; accent:
   const linkedFromTables = Array.from(new Set(table.inboundRelationships.map((r) => r.fromTable)));
 
   return (
-    <div className="flex flex-col gap-s">
+    <div className="flex flex-col gap-16">
       {/* Table header card */}
       <div
-        className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s flex flex-col gap-[8px]"
+        className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 flex flex-col gap-[8px]"
         style={{ borderLeftWidth: "4px", borderLeftColor: accent }}
       >
         <div className="flex flex-wrap items-center gap-[8px]">
@@ -390,7 +390,7 @@ function SelectedTablePanel({ table, accent }: { table: SchemaTableInfo; accent:
 
       {/* Relationships */}
       {(table.outboundRelationships.length > 0 || table.inboundRelationships.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-s">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <RelationshipPanel
             title="Outbound"
             icon={<ArrowUpRight size={18} weight="bold" className="text-[var(--clr-purple)]" />}
@@ -554,7 +554,7 @@ function RelationshipPanel({
   getHref: (r: SchemaRelationship) => string;
 }) {
   return (
-    <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s flex flex-col gap-[8px]">
+    <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 flex flex-col gap-[8px]">
       <div className="flex items-center justify-between">
         <h3 className="title-heading-4 flex items-center gap-[6px]">
           {icon}
@@ -590,7 +590,7 @@ function RelationshipPanel({
 function MetricCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-s"
+      className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
       style={{ borderLeftWidth: "3px", borderLeftColor: accent }}
     >
       <p className="body-caption text-[var(--color-text-tertiary)]">{label}</p>

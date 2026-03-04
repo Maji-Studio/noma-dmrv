@@ -8,6 +8,13 @@
       "when": 1771233134023,
       "tag": "0000_supreme_albert_cleary",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771358661098,
+      "tag": "0001_sad_sugar_man",
+      "breakpoints": true
     }
   ]
 }

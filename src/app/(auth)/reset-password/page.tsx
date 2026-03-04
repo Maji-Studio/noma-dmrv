@@ -18,7 +18,7 @@ export default function ResetPasswordPage() {
       <div className="bg-[var(--color-background-white)] rounded-[var(--radius-8)] border border-[var(--color-border-primary)] p-32 shadow-sm">
         <Suspense
           fallback={
-            <div className="text-center py-l text-[var(--color-text-secondary)]">
+            <div className="text-center py-32 text-[var(--color-text-secondary)]">
               Loading...
             </div>
           }

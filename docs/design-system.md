@@ -1653,39 +1653,42 @@ aria-current={isActive ? 'page' : undefined}
 4. **Border radius:** Use tokens (`var(--radius-8)`, `var(--radius-12)`, etc.)
 
 **Avoid:**
-- Hardcoded pixel values for spacing (e.g., `gap-6`, `p-10`, `px-4`)
+- Spacing values not in the scale (e.g., `gap-3`, `gap-5`, `gap-7` — these don't exist)
 - Direct color values or custom color names without tokens
 - Inline text sizing (e.g., `text-4xl`) - use typography classes instead
 - Magic numbers without semantic meaning
 
 ### Migration Pattern
 
-**Before:**
+**Before (default Tailwind 4px scale — NOT our system):**
 ```tsx
+// ❌ These assume default Tailwind where gap-6 = 24px — WRONG in our 1px scale
 className="gap-6 p-10 text-textprimary border-borderprimary"
 ```
 
-**After:**
+**After (1px scale — direct values work):**
 ```tsx
-className="gap-[var(--spacing-24)] p-[var(--spacing-40)] text-[var(--color-text-primary)] border-[var(--color-border-primary)]"
+// ✅ Direct Tailwind classes: gap-24 = 24px, p-40 = 40px
+className="gap-24 p-40 text-[var(--color-text-primary)] border-[var(--color-border-primary)]"
 ```
 
-Or better, use semantic utilities:
+Or use semantic utilities where available:
 ```tsx
-className="gap-m p-[var(--spacing-40)] text-[var(--color-text-primary)] border-[var(--color-border-primary)]"
+className="gap-m p-40 text-[var(--color-text-primary)] border-[var(--color-border-primary)]"
 ```
+
+**Note:** With our 1px spacing scale, `gap-24` and `gap-[var(--spacing-24)]` are identical. Prefer the shorter direct form.
 
 ### Common Token Mappings
 
-**Spacing conversions:**
-- `gap-3` → `gap-[var(--spacing-12)]` or use semantic `gap-xs` if appropriate
-- `gap-4` → `gap-[var(--spacing-16)]`
-- `gap-6` → `gap-[var(--spacing-24)]`
-- `gap-8` → `gap-[var(--spacing-32)]`
-- `gap-12` → `gap-[var(--spacing-48)]`
-- `p-6` → `p-[var(--spacing-24)]`
-- `p-10` → `p-[var(--spacing-40)]`
-- `px-4` → `px-[var(--spacing-16)]`
+**Spacing (1px scale — use values directly):**
+- `gap-4` = 4px, `gap-8` = 8px, `gap-12` = 12px
+- `gap-16` = 16px, `gap-24` = 24px, `gap-32` = 32px
+- `gap-48` = 48px, `gap-64` = 64px
+- `p-16` = 16px, `p-24` = 24px, `p-32` = 32px, `p-40` = 40px
+- `px-16` = 16px, `px-24` = 24px
+
+**Important:** Do NOT use default Tailwind mental model. In our system `p-4` = **4px** (not 16px). If you want 16px padding, use `p-16`.
 
 **Color conversions:**
 - `textprimary` → `text-[var(--color-text-primary)]`
@@ -1715,9 +1718,13 @@ className="gap-m p-[var(--spacing-40)] text-[var(--color-text-primary)] border-[
    className="mb-xl"
    ```
 
-3. **CSS variable with Tailwind bracket notation**
+3. **Direct Tailwind spacing classes (1px scale) or CSS variable bracket notation**
    ```tsx
-   className="px-[var(--spacing-24)]"
+   // Spacing: direct classes preferred (1px scale makes them equivalent)
+   className="px-24"        // = 24px (same as px-[var(--spacing-24)])
+   className="gap-16"       // = 16px
+   className="p-32"         // = 32px
+   // Colors/radius: use bracket notation
    className="text-[var(--color-text-primary)]"
    className="rounded-[var(--radius-8)]"
    ```

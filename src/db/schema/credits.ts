@@ -164,3 +164,12 @@ export const creditBatchApplicationsRelations = relations(
     }),
   })
 );
+
+// ============================================
+// Type Exports
+// ============================================
+
+export type CreditBatch = typeof creditBatches.$inferSelect;
+export type NewCreditBatch = typeof creditBatches.$inferInsert;
+export type CreditBatchApplication = typeof creditBatchApplications.$inferSelect;
+export type NewCreditBatchApplication = typeof creditBatchApplications.$inferInsert;

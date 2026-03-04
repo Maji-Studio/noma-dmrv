@@ -119,3 +119,14 @@ export const storageLocationsRelations = relations(
     }),
   })
 );
+
+// ============================================
+// Type Inference
+// ============================================
+
+export type Facility = typeof facilities.$inferSelect;
+export type NewFacility = typeof facilities.$inferInsert;
+export type Reactor = typeof reactors.$inferSelect;
+export type NewReactor = typeof reactors.$inferInsert;
+export type StorageLocation = typeof storageLocations.$inferSelect;
+export type NewStorageLocation = typeof storageLocations.$inferInsert;

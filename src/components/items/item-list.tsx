@@ -57,13 +57,13 @@ export function ItemList({ projectId }: ItemListProps) {
   const activeItems = items?.filter((item) => item.status === "active") ?? [];
 
   return (
-    <div className="space-y-l">
+    <div className="space-y-32">
       <div className="flex items-center justify-between">
         <h1 className="title-heading-1">Items</h1>
         {!isCreating && !editingItem && (
           <button
             onClick={() => setIsCreating(true)}
-            className="flex items-center gap-s px-l py-s bg-[var(--clr-dark-purple)] text-white rounded-lg hover:opacity-90 transition-opacity"
+            className="flex items-center gap-16 h-[48px] px-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity"
           >
             <Plus size={20} weight="bold" />
             New Item
@@ -72,8 +72,8 @@ export function ItemList({ projectId }: ItemListProps) {
       </div>
 
       {isCreating && (
-        <div className="border border-[var(--color-border-primary)] rounded-lg p-l">
-          <h2 className="title-heading-3 mb-m">Create New Item</h2>
+        <div className="border border-[var(--color-border-primary)] rounded-8 p-32">
+          <h2 className="title-heading-3 mb-24">Create New Item</h2>
           <ItemForm
             onSubmit={handleCreate}
             onCancel={() => setIsCreating(false)}
@@ -83,8 +83,8 @@ export function ItemList({ projectId }: ItemListProps) {
       )}
 
       {editingItem && (
-        <div className="border border-[var(--color-border-primary)] rounded-lg p-l">
-          <h2 className="title-heading-3 mb-m">Edit Item</h2>
+        <div className="border border-[var(--color-border-primary)] rounded-8 p-32">
+          <h2 className="title-heading-3 mb-24">Edit Item</h2>
           <ItemForm
             item={editingItem}
             onSubmit={handleUpdate}
@@ -94,9 +94,9 @@ export function ItemList({ projectId }: ItemListProps) {
         </div>
       )}
 
-      <div className="space-y-m">
+      <div className="space-y-24">
         {activeItems.length === 0 ? (
-          <div className="text-center py-xl border border-dashed border-[var(--color-border-primary)] rounded-lg">
+          <div className="text-center py-48 border border-dashed border-[var(--color-border-primary)] rounded-8">
             <p className="body-large text-[var(--color-text-secondary)]">
               No items yet. Create your first item to get started.
             </p>

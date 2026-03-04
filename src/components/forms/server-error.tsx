@@ -12,7 +12,7 @@ export function ServerError({ message }: ServerErrorProps) {
 
   return (
     <div
-      className="p-s bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)] body-small"
+      className="p-16 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)] body-small"
       role="alert"
       aria-live="polite"
     >

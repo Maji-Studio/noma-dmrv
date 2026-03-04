@@ -12,7 +12,7 @@ export function FormError({ message }: FormErrorProps) {
 
   return (
     <p
-      className="body-small text-[var(--color-signal-red)] mt-xs"
+      className="body-caption text-[var(--color-signal-red)] mt-6"
       role="alert"
       aria-live="polite"
     >
