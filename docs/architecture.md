@@ -156,6 +156,17 @@ Enforcement is intentionally layered:
 2. Server validation in action/data-access layer.
 3. DB trigger guardrails for any direct/bypass writes.
 
+## Chain of Custody Visualization
+
+Interactive React Flow DAG showing material flow through the system, scoped per facility.
+
+- **Route**: `/chain-of-custody`
+- **Components**: `src/components/chain-of-custody/` (constants, node, page, hook)
+- **Data**: `src/data-access/chain-of-custody.ts` batch-fetches counts per entity to avoid N+1
+- **Layout**: dagre auto-layout (LR direction), 13 nodes, 13 edges
+- **Nodes**: Color-coded by group (Infrastructure=purple, Production=orange, Distribution=rose, Credits=pink)
+- **Storage locations**: Split into 3 node types (Feedstock Bin, Biochar Bin, Product Bin) from single table using `storageLocationType` enum
+
 ## What Is Intentionally Scaffolded
 
 - Admin user invitation UI (`/admin/users`) is a scaffold.

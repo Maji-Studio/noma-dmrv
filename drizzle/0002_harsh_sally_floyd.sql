@@ -1,1 +1,0 @@
-ALTER TABLE "production_runs" ADD COLUMN "feedstock_mass_used_kg" real;

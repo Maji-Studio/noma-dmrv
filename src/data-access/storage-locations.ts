@@ -260,7 +260,7 @@ export async function createStorageLocation(
   data: {
     code: string;
     name: string;
-    type: "feedstock_bin" | "feedstock_pile" | "biochar_pile" | "product_pile";
+    type: "feedstock_bin" | "biochar_bin" | "product_bin";
     facilityId: string;
     capacityKg?: number | null;
     latitude?: number | null;
@@ -324,7 +324,7 @@ export async function updateStorageLocation(
   data: {
     code?: string;
     name?: string;
-    type?: "feedstock_bin" | "feedstock_pile" | "biochar_pile" | "product_pile";
+    type?: "feedstock_bin" | "biochar_bin" | "product_bin";
     facilityId?: string;
     capacityKg?: number | null;
     latitude?: number | null;

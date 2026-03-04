@@ -473,9 +473,10 @@ export async function getProductionRunReadings(
  */
 async function allocateFeedstockMass(
   storageLocationId: string,
-  totalMassKg: number
+  totalMassKg: number,
+  trx: Pick<typeof db, "select">
 ): Promise<Array<{ feedstockId: string; massUsedKg: number }>> {
-  const batchesInBin = await db
+  const batchesInBin = await trx
     .select({
       id: feedstocks.id,
       massDryKg: feedstocks.massDryKg,
@@ -601,7 +602,8 @@ export async function createProductionRun(
     if (data.feedstockStorageLocationId && data.feedstockMassUsedKg) {
       const allocated = await allocateFeedstockMass(
         data.feedstockStorageLocationId,
-        data.feedstockMassUsedKg
+        data.feedstockMassUsedKg,
+        tx
       );
       await tx.insert(productionRunFeedstocks).values(
         allocated.map((a) => ({
@@ -742,7 +744,7 @@ export async function updateProductionRun(
           : existing.feedstockMassUsedKg;
 
       if (storageLocationId && massUsedKg) {
-        const allocated = await allocateFeedstockMass(storageLocationId, massUsedKg);
+        const allocated = await allocateFeedstockMass(storageLocationId, massUsedKg, tx);
         await tx.insert(productionRunFeedstocks).values(
           allocated.map((a) => ({
             productionRunId,
