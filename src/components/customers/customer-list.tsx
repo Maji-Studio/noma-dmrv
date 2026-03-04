@@ -301,12 +301,20 @@ export function CustomerList() {
                       { label: "Code", value: sideSheet.entity.code },
                       { label: "Name", value: sideSheet.entity.name },
                       { label: "Crop Type", value: sideSheet.entity.cropType },
+                      { label: "Address", value: sideSheet.entity.address },
                     ],
                   },
                   {
-                    title: "Stats",
+                    title: "Contact Information",
                     fields: [
-                      { label: "Locations", value: String(sideSheet.entity.locationCount) },
+                      { label: "Email", value: sideSheet.entity.contactEmail },
+                      { label: "Phone", value: sideSheet.entity.contactPhone },
+                    ],
+                  },
+                  {
+                    title: "Locations",
+                    fields: [
+                      { label: "Count", value: String(sideSheet.entity.locationCount) },
                     ],
                   },
                 ]
@@ -321,6 +329,7 @@ export function CustomerList() {
           <CustomerForm
             key={sideSheet.entity?.id ?? "create"}
             customer={sideSheet.entity as Customer | undefined}
+            customerId={sideSheet.entity && sideSheet.mode === "edit" ? sideSheet.entity.id : undefined}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createCustomer.isPending || updateCustomer.isPending}

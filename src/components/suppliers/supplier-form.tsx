@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { nullableNumericValue } from "@/lib/form-utils";
+
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea } from "@/components/forms";
@@ -129,7 +131,7 @@ export function SupplierForm({
               placeholder="e.g., -1.2921"
               disabled={isSubmitting}
               error={!!errors.gpsLatitude}
-              {...register("gpsLatitude", { valueAsNumber: true })}
+              {...register("gpsLatitude", { setValueAs: nullableNumericValue })}
             />
           </FormField>
 
@@ -146,7 +148,7 @@ export function SupplierForm({
               placeholder="e.g., 36.8219"
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
-              {...register("gpsLongitude", { valueAsNumber: true })}
+              {...register("gpsLongitude", { setValueAs: nullableNumericValue })}
             />
           </FormField>
         </div>
@@ -242,7 +244,7 @@ export function SupplierForm({
               placeholder="e.g., 100000"
               disabled={isSubmitting}
               error={!!errors.annualRevenueUsd}
-              {...register("annualRevenueUsd", { valueAsNumber: true })}
+              {...register("annualRevenueUsd", { setValueAs: nullableNumericValue })}
             />
           </FormField>
 

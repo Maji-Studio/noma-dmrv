@@ -1,11 +1,12 @@
 {
   "name": "noma-dmrv",
   "version": "1.0.0",
-  "description": "Production-ready Next.js template with auth, database, and best practices",
+  "description": "Maji dMRV - Biochar carbon credit MRV system",
   "private": true,
   "scripts": {
     "dev": "pnpm dev:docker",
-    "dev:docker": "pnpm docker:up && pnpm db:wait && (pnpm db:reset) && next dev -p 3100",
+    "dev:docker": "pnpm docker:up && pnpm db:wait && next dev -p 3100",
+    "dev:docker:init": "pnpm docker:up && pnpm db:wait && pnpm db:reset && next dev -p 3100",
     "dev:manual": "next dev -p 3100",
     "build": "next build",
     "start": "next start",
@@ -30,15 +31,17 @@
     "env:dev": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=development",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --workers=1 --retries=2",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
+    "@dagrejs/dagre": "^2.0.4",
     "@hookform/resolvers": "^5.2.2",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-query": "^5.90.20",
     "@tanstack/react-table": "^8.21.3",
+    "@xyflow/react": "^12.10.1",
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

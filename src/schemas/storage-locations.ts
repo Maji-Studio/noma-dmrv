@@ -15,9 +15,8 @@ import { emptyToNull, latitudeSchema, longitudeSchema } from "./helpers";
  */
 export const storageLocationTypes = [
   "feedstock_bin",
-  "feedstock_pile",
-  "biochar_pile",
-  "product_pile",
+  "biochar_bin",
+  "product_bin",
 ] as const;
 
 export type StorageLocationType = (typeof storageLocationTypes)[number];
@@ -172,9 +171,8 @@ export type StorageLocationFilterData = z.infer<
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
     feedstock_bin: "Feedstock Bin",
-    feedstock_pile: "Feedstock Pile",
-    biochar_pile: "Biochar Pile",
-    product_pile: "Product Pile",
+    biochar_bin: "Biochar Bin",
+    product_bin: "Product Bin",
   };
   return labels[type];
 }

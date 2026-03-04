@@ -12,7 +12,9 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect } from "@/components/forms";
@@ -21,13 +23,11 @@ import {
   creditBatchFormSchema,
   creditBatchStatuses,
   durabilityOptions,
-  currencyCodes,
   formatCreditBatchStatus,
   formatDurabilityOption,
   type CreditBatchFormData,
   type CreditBatchStatus,
   type DurabilityOption,
-  type CurrencyCode,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
 
@@ -45,12 +45,6 @@ const durabilityOptionsList: readonly { value: string; label: string }[] =
   durabilityOptions.map((option) => ({
     value: option,
     label: formatDurabilityOption(option as DurabilityOption),
-  }));
-
-const currencyOptions: readonly { value: string; label: string }[] =
-  currencyCodes.map((code) => ({
-    value: code,
-    label: code,
   }));
 
 // ============================================
@@ -85,17 +79,6 @@ export function CreditBatchForm({
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
 
-  // Helper to format date for input[type="date"]
-  const formatDateForInput = (date: string | Date | undefined | null): string => {
-    if (!date) {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    }
-    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-    const d = typeof date === "string" ? new Date(date) : date;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
   const {
     register,
     handleSubmit,
@@ -107,8 +90,8 @@ export function CreditBatchForm({
     resolver: zodResolver(creditBatchFormSchema),
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? "",
-      startDate: formatDateForInput(creditBatch?.startDate),
-      endDate: formatDateForInput(creditBatch?.endDate),
+      startDate: toDateInputValue(creditBatch?.startDate),
+      endDate: toDateInputValue(creditBatch?.endDate),
       certifier: creditBatch?.certifier ?? "",
       status: (creditBatch?.status as CreditBatchStatus) ?? "draft",
       applicationIds: creditBatch?.applicationIds ?? [],
@@ -123,15 +106,6 @@ export function CreditBatchForm({
       stdNonReactiveCarbonPercent:
         creditBatch?.stdNonReactiveCarbonPercent ?? undefined,
       fDurableCalculated: creditBatch?.fDurableCalculated ?? undefined,
-      totalCo2eStoredTons: creditBatch?.totalCo2eStoredTons ?? undefined,
-      totalCo2eEmissionsTons: creditBatch?.totalCo2eEmissionsTons ?? undefined,
-      totalCo2eCounterfactualTons:
-        creditBatch?.totalCo2eCounterfactualTons ?? undefined,
-      bufferPoolPercent: creditBatch?.bufferPoolPercent ?? undefined,
-      registry: creditBatch?.registry ?? "",
-      weightTons: creditBatch?.weightTons ?? undefined,
-      value: creditBatch?.value ?? undefined,
-      currency: (creditBatch?.currency as CurrencyCode) ?? "TZS",
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
   });
@@ -142,6 +116,19 @@ export function CreditBatchForm({
     name: "durabilityOption",
     defaultValue: "200_year",
   });
+
+  // Clear opposite durability fields when option changes
+  useEffect(() => {
+    if (durabilityOption === "200_year") {
+      setValue("meanRandomReflectancePercent", undefined);
+      setValue("stdRandomReflectance", undefined);
+      setValue("meanNonReactiveCarbonPercent", undefined);
+      setValue("stdNonReactiveCarbonPercent", undefined);
+    } else if (durabilityOption === "1000_year") {
+      setValue("hToCorgRatio", undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durabilityOption]);
 
   // Watch selected applications
   const selectedApplicationIds = useWatch({
@@ -274,11 +261,11 @@ export function CreditBatchForm({
             credit batches.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-16 max-h-48 overflow-y-auto p-16 border border-[var(--color-border-primary)] rounded-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-16 max-h-[240px] overflow-y-auto p-16 border border-[var(--color-border-primary)] rounded-4">
             {applications.map((app) => (
               <label
                 key={app.id}
-                className={`flex items-center gap-16 p-16 rounded-4 cursor-pointer transition-colors ${
+                className={`flex items-center gap-16 p-16 rounded-4 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-[var(--color-interaction)] ${
                   selectedApplicationIds?.includes(app.id)
                     ? "bg-[var(--clr-dark-purple)] text-white"
                     : "bg-[var(--color-surface-light)] hover:bg-[var(--color-surface-medium)]"
@@ -470,70 +457,61 @@ export function CreditBatchForm({
         </FormField>
       </div>
 
-      {/* === Section 4: GHG Accounting === */}
+      {/* === Section 4: GHG Accounting (read-only, populated during verification) === */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           GHG Accounting
         </h3>
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Isometric GHG Module: Net CO2e = Stored - Emissions - Counterfactual
+          Populated during Isometric verification. Net CO2e = Stored - Emissions - Counterfactual
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
           <FormField
             id="totalCo2eStoredTons"
             label="CO2e Stored (tons)"
-            error={errors.totalCo2eStoredTons?.message}
             helperText="Total carbon durably stored"
           >
             <FormInput
               id="totalCo2eStoredTons"
               type="number"
               step="0.01"
-              placeholder="e.g., 100.5"
-              disabled={isSubmitting}
-              error={!!errors.totalCo2eStoredTons}
-              {...register("totalCo2eStoredTons", {
-                setValueAs: numericValue,
-              })}
+              placeholder="—"
+              disabled
+              value={creditBatch?.totalCo2eStoredTons ?? ""}
+
             />
           </FormField>
 
           <FormField
             id="totalCo2eEmissionsTons"
             label="CO2e Emissions (tons)"
-            error={errors.totalCo2eEmissionsTons?.message}
             helperText="Project emissions"
           >
             <FormInput
               id="totalCo2eEmissionsTons"
               type="number"
               step="0.01"
-              placeholder="e.g., 5.2"
-              disabled={isSubmitting}
-              error={!!errors.totalCo2eEmissionsTons}
-              {...register("totalCo2eEmissionsTons", {
-                setValueAs: numericValue,
-              })}
+              placeholder="—"
+              disabled
+              value={creditBatch?.totalCo2eEmissionsTons ?? ""}
+
             />
           </FormField>
 
           <FormField
             id="totalCo2eCounterfactualTons"
             label="CO2e Counterfactual (tons)"
-            error={errors.totalCo2eCounterfactualTons?.message}
             helperText="Baseline emissions"
           >
             <FormInput
               id="totalCo2eCounterfactualTons"
               type="number"
               step="0.01"
-              placeholder="e.g., 10.0"
-              disabled={isSubmitting}
-              error={!!errors.totalCo2eCounterfactualTons}
-              {...register("totalCo2eCounterfactualTons", {
-                setValueAs: numericValue,
-              })}
+              placeholder="—"
+              disabled
+              value={creditBatch?.totalCo2eCounterfactualTons ?? ""}
+
             />
           </FormField>
         </div>
@@ -541,104 +519,83 @@ export function CreditBatchForm({
         <FormField
           id="bufferPoolPercent"
           label="Buffer Pool (%)"
-          error={errors.bufferPoolPercent?.message}
           helperText="Risk-based buffer (2-20%)"
         >
           <FormInput
             id="bufferPoolPercent"
             type="number"
             step="0.1"
-            placeholder="e.g., 5.0"
-            disabled={isSubmitting}
-            error={!!errors.bufferPoolPercent}
-            {...register("bufferPoolPercent", {
-              setValueAs: numericValue,
-            })}
+            placeholder="—"
+            disabled
+            value={creditBatch?.bufferPoolPercent ?? ""}
           />
         </FormField>
       </div>
 
-      {/* === Section 5: Verification === */}
+      {/* === Section 5: Verification (read-only, populated after issuance) === */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Verification
         </h3>
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Registry information and credit valuation
+          Populated after registry issuance
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="registry"
-            label="Registry"
-            error={errors.registry?.message}
-          >
+          <FormField id="registry" label="Registry">
             <FormInput
               id="registry"
               type="text"
-              placeholder="e.g., Isometric"
-              disabled={isSubmitting}
-              error={!!errors.registry}
-              {...register("registry")}
+              placeholder="—"
+              disabled
+              value={creditBatch?.registry ?? ""}
+
             />
           </FormField>
 
           <FormField
             id="weightTons"
             label="Weight (tons)"
-            error={errors.weightTons?.message}
             helperText="Total credit weight"
           >
             <FormInput
               id="weightTons"
               type="number"
-              step="0.01"
-              placeholder="e.g., 85.3"
-              disabled={isSubmitting}
-              error={!!errors.weightTons}
-              {...register("weightTons", {
-                setValueAs: numericValue,
-              })}
+              placeholder="—"
+              disabled
+              value={creditBatch?.weightTons ?? ""}
+
             />
           </FormField>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="value"
-            label="Value"
-            error={errors.value?.message}
-            helperText="Credit value"
-          >
+          <FormField id="value" label="Value" helperText="Credit value">
             <FormInput
               id="value"
               type="number"
-              step="0.01"
-              placeholder="e.g., 15000"
-              disabled={isSubmitting}
-              error={!!errors.value}
-              {...register("value", {
-                setValueAs: numericValue,
-              })}
+              placeholder="—"
+              disabled
+              value={creditBatch?.value ?? ""}
+
             />
           </FormField>
 
-          <FormField
-            id="currency"
-            label="Currency"
-            error={errors.currency?.message}
-          >
-            <FormSelect
+          <FormField id="currency" label="Currency">
+            <FormInput
               id="currency"
-              placeholder="Select currency..."
-              disabled={isSubmitting}
-              error={!!errors.currency}
-              options={currencyOptions}
-              {...register("currency")}
+              type="text"
+              placeholder="—"
+              disabled
+              value={creditBatch?.currency ?? ""}
+
             />
           </FormField>
         </div>
+      </div>
 
+      {/* === Site Management Notes (editable) === */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <FormField
           id="siteManagementNotes"
           label="Site Management Notes"

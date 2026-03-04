@@ -201,8 +201,10 @@ export function CreditBatchList({
       } else {
         setCreateError(result.error || "Failed to create credit batch");
       }
-    } catch {
-      setCreateError("An error occurred while creating the credit batch");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "An error occurred while creating the credit batch";
+      console.error("Credit batch create error:", err);
+      setCreateError(message);
     }
   };
 
@@ -220,8 +222,10 @@ export function CreditBatchList({
       } else {
         setUpdateError(result.error || "Failed to update credit batch");
       }
-    } catch {
-      setUpdateError("An error occurred while updating the credit batch");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "An error occurred while updating the credit batch";
+      console.error("Credit batch update error:", err);
+      setUpdateError(message);
     }
   };
 

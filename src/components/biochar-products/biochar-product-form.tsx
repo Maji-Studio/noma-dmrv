@@ -5,7 +5,9 @@
  */
 "use client";
 
+import { useEffect, useRef } from "react";
 import { nullableNumericValue } from "@/lib/form-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -55,15 +57,14 @@ export function BiocharProductForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(biocharProductFormSchema),
     defaultValues: {
       facilityId: product?.facility?.id ?? "",
       formulationId: product?.formulation?.id ?? "",
-      productionDate: product?.productionDate
-        ? new Date(product.productionDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+      productionDate: product?.productionDate ?? formatLocalDate(new Date()),
       status: product?.status ?? "testing",
       linkedProductionRunId: product?.linkedProductionRun?.id ?? "",
       storageLocationId: product?.storageLocation?.id ?? "",
@@ -73,10 +74,20 @@ export function BiocharProductForm({
   });
 
   const selectedFacilityId = watch("facilityId");
+
+  // Clear dependent fields when facility changes
+  const initialFacilityIdRef = useRef(product?.facility?.id ?? "");
+  useEffect(() => {
+    if (selectedFacilityId && selectedFacilityId !== initialFacilityIdRef.current) {
+      setValue("linkedProductionRunId", "");
+      setValue("storageLocationId", "");
+    }
+  }, [selectedFacilityId, setValue]);
+
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as BiocharProductFormData);
+    return onSubmit(data as BiocharProductFormData);
   });
 
   return (
@@ -260,10 +271,13 @@ export function BiocharProductForm({
                   entityType="storageLocation"
                   value={field.value || ""}
                   onChange={field.onChange}
-                  placeholder="Select a storage location (optional)"
+                  placeholder="Select a product bin (optional)"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
-                  filterBy={selectedFacilityId ? { facilityId: selectedFacilityId } : undefined}
+                  filterBy={{
+                    ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
+                    type: "product_bin",
+                  }}
                 />
               )}
             />

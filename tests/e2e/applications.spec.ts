@@ -41,7 +41,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.selectOption('select[name="packaging"]', "loose");
     await page.fill('input[name="quantityKg"]', "100");
 
-    await page.click('button:has-text("Create Order")');
+    const dialog = page.locator('[role="dialog"]');
+    await dialog.locator('button:has-text("Create Order")').click();
     await waitForSideSheetClose(page);
 
     // Step 2: Create a delivery for this order
@@ -62,7 +63,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     }
     await page.fill('input[name="deliveredWetMassKg"]', "95");
 
-    await page.click('button:has-text("Create Delivery")');
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
     await waitForSideSheetClose(page);
 
     // Step 3: Create an application
@@ -91,7 +92,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
     await page.fill('input[name="cropType"]', "maize");
 
-    await page.click('button:has-text("Create Application")');
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
     await waitForSideSheetClose(page);
 
     // Verify application appears in list
@@ -142,7 +143,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="hToCorgRatio"]', "0.4");
 
     // Submit
-    await page.click('button:has-text("Create Credit Batch")');
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
     await waitForSideSheetClose(page);
 
     // Verify credit batch appears in list

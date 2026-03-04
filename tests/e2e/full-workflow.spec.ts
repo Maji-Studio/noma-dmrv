@@ -152,7 +152,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       id: ids.biocharStorageLocation,
       code: codes.biocharStorageLocation,
       name: `Biochar Storage ${testRunId}`,
-      type: "biochar_pile",
+      type: "biochar_bin",
       facilityId: ids.facility,
       capacityKg: 3000,
     });

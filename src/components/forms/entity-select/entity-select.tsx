@@ -255,7 +255,7 @@ export function EntitySelect({
   );
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
+    (e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
       const optionCount = options.length + (allowCreate && onCreateNew ? 1 : 0);
 
       switch (e.key) {
@@ -308,6 +308,7 @@ export function EntitySelect({
         <button
           type="button"
           onClick={handleToggle}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={isOpen}

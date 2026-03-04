@@ -128,7 +128,7 @@ export function StorageLocationList() {
   const storageLocations = storageLocationsData?.items ?? [];
   const totalStorageLocations = storageLocationsData?.total ?? 0;
   const totalPages = storageLocationsData?.totalPages ?? 0;
-  const totalCapacity = storageLocations.reduce((sum, sl) => sum + (sl.capacityKg ?? 0), 0);
+  const pageCapacity = storageLocations.reduce((sum, sl) => sum + (sl.capacityKg ?? 0), 0);
   const facilities = facilitiesData?.items ?? [];
 
   const handleCreate = async (data: StorageLocationFormData) => {
@@ -200,7 +200,7 @@ export function StorageLocationList() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard title="Storage Locations" value={totalStorageLocations} icon={<Cube size={24} weight="bold" />} description="Total storage locations" isLoading={isLoading} />
-        <StatCard title="Total Capacity" value={`${(totalCapacity / 1000).toFixed(1)} t`} icon={<Factory size={24} weight="bold" />} description="Combined capacity across all locations" isLoading={isLoading} />
+        <StatCard title="Page Capacity" value={`${(pageCapacity / 1000).toFixed(1)} t`} icon={<Factory size={24} weight="bold" />} description="Combined capacity on this page" isLoading={isLoading} />
       </div>
 
       <DataTable
@@ -243,9 +243,8 @@ export function StorageLocationList() {
             <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
               <option value="">All Types</option>
               <option value="feedstock_bin">Feedstock Bin</option>
-              <option value="feedstock_pile">Feedstock Pile</option>
-              <option value="biochar_pile">Biochar Pile</option>
-              <option value="product_pile">Product Pile</option>
+              <option value="biochar_bin">Biochar Bin</option>
+              <option value="product_bin">Product Bin</option>
             </select>
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
           </div>

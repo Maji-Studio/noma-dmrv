@@ -15,7 +15,7 @@ CREATE TYPE "public"."packaging_type" AS ENUM('loose', 'bagged');--> statement-b
 CREATE TYPE "public"."production_run_status" AS ENUM('draft', 'running', 'complete', 'void');--> statement-breakpoint
 CREATE TYPE "public"."sampling_method" AS ENUM('method_a', 'method_b');--> statement-breakpoint
 CREATE TYPE "public"."soil_temperature_source" AS ENUM('baseline', 'global_database');--> statement-breakpoint
-CREATE TYPE "public"."storage_location_type" AS ENUM('feedstock_bin', 'feedstock_pile', 'biochar_pile', 'product_pile');--> statement-breakpoint
+CREATE TYPE "public"."storage_location_type" AS ENUM('feedstock_bin', 'biochar_bin', 'product_bin');--> statement-breakpoint
 CREATE TYPE "public"."sync_status" AS ENUM('pending', 'succeeded', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."transport_entity_type" AS ENUM('feedstock', 'biochar', 'sample', 'delivery');--> statement-breakpoint
 CREATE TYPE "public"."transport_method" AS ENUM('road', 'rail', 'ship', 'pipeline', 'aircraft');--> statement-breakpoint
@@ -485,13 +485,11 @@ CREATE TABLE "drivers" (
 --> statement-breakpoint
 CREATE TABLE "operators" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"code" text NOT NULL,
 	"name" text NOT NULL,
 	"credentials" text,
 	"contact_phone" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "operators_code_unique" UNIQUE("code")
+	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "suppliers" (
@@ -566,6 +564,7 @@ CREATE TABLE "production_runs" (
 	"biochar_output_kg" real,
 	"biochar_storage_location_id" uuid,
 	"feedstock_storage_location_id" uuid,
+	"feedstock_mass_used_kg" real,
 	"emission_factors_used" jsonb,
 	"plc_data_file_url" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,

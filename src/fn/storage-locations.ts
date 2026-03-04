@@ -207,7 +207,7 @@ export async function createStorageLocationFn(
       "SL",
       storageLocations,
       storageLocations.code,
-      validated.code,
+      undefined,
       (code) =>
         createStorageLocation(user.id, {
           code,

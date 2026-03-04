@@ -6,10 +6,12 @@
  */
 "use client";
 
+import { type ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   House,
+  TreeStructure,
   Leaf,
   Grains,
   Factory,
@@ -29,11 +31,12 @@ import {
   SignOut,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth/client";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ElementType;
+  icon: ElementType;
 }
 
 interface NavSection {
@@ -52,14 +55,16 @@ const SECTION_ACCENTS = {
 
 const navSections: NavSection[] = [
   {
-    items: [{ href: "/facilities", label: "Dashboard", icon: House }],
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: House },
+      { href: "/chain-of-custody", label: "Chain of Custody", icon: TreeStructure },
+    ],
     accent: SECTION_ACCENTS.default,
   },
   {
     title: "Production",
     accent: SECTION_ACCENTS.production,
     items: [
-      { href: "/suppliers", label: "Suppliers", icon: Handshake },
       { href: "/feedstock-deliveries", label: "Feedstock Deliveries", icon: Leaf },
       { href: "/feedstocks", label: "Feedstocks", icon: Grains },
       { href: "/production-runs", label: "Production Runs", icon: Factory },
@@ -80,6 +85,8 @@ const navSections: NavSection[] = [
     title: "Distribution",
     accent: SECTION_ACCENTS.distribution,
     items: [
+      { href: "/suppliers", label: "Suppliers", icon: Handshake },
+      { href: "/customers", label: "Customers", icon: Users },
       { href: "/orders", label: "Orders", icon: ShoppingCart },
       { href: "/deliveries", label: "Deliveries", icon: Truck },
       { href: "/applications", label: "Applications", icon: MapPin },
@@ -164,6 +171,7 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { data: session, signOut } = useAuth();
 
   return (
     <aside
@@ -178,7 +186,7 @@ export function AppSidebar() {
     >
       {/* Brand header */}
       <div className="flex items-center h-56 px-16 border-b border-[var(--color-white-10)]">
-        <Link href="/facilities" className="flex items-center gap-10">
+        <Link href="/dashboard" className="flex items-center gap-10">
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-[12px] leading-none">
               D
@@ -253,14 +261,17 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="body-caption font-medium text-white truncate">
-              User
+              {session?.user?.name ?? "User"}
             </span>
-            <span className="text-[10px] text-[var(--color-white-25)] truncate">
-              user@example.com
-            </span>
+            {session?.user?.email && (
+              <span className="text-[10px] text-[var(--color-white-25)] truncate">
+                {session.user.email}
+              </span>
+            )}
           </div>
           <button
             type="button"
+            onClick={() => signOut()}
             className="flex items-center justify-center size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150"
             aria-label="Sign out"
           >

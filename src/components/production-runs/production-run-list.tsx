@@ -5,6 +5,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { parseLocalDateString } from "@/lib/date-utils";
+
+function formatDateField(d: string): string {
+  const dateObj = /^\d{4}-\d{2}-\d{2}$/.test(d)
+    ? parseLocalDateString(d)
+    : new Date(d);
+  return dateObj.toLocaleDateString();
+}
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -83,7 +91,7 @@ function createColumns(
     {
       accessorKey: "date",
       header: "Date",
-      cell: ({ row }) => new Date(row.original.date).toLocaleDateString(),
+      cell: ({ row }) => formatDateField(row.original.date),
     },
     {
       id: "facility",
@@ -361,7 +369,7 @@ export function ProductionRunList() {
             sideSheet.mode === "create"
               ? undefined
               : sideSheet.entity
-                ? new Date(sideSheet.entity.date).toLocaleDateString()
+                ? formatDateField(sideSheet.entity.date)
                 : undefined
           }
           editLabel="Edit Production Run"
@@ -371,7 +379,7 @@ export function ProductionRunList() {
               title: "General",
               fields: [
                 { label: "Code", value: sideSheet.entity.code },
-                { label: "Date", value: new Date(sideSheet.entity.date).toLocaleDateString() },
+                { label: "Date", value: formatDateField(sideSheet.entity.date) },
                 { label: "Status", value: <StatusBadge status={sideSheet.entity.status} /> },
               ],
             },
