@@ -5,6 +5,7 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -141,8 +142,8 @@ export function OrderForm({
       customerLocationId: order?.customerLocationId ?? "",
       biocharProductId: order?.biocharProductId ?? "",
       orderDate: order?.orderDate
-        ? new Date(order.orderDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
+        ? formatLocalDate(new Date(order.orderDate))
+        : formatLocalDate(new Date()),
       quantityKg: order?.quantityKg ?? undefined,
       packaging: (order?.packaging as PackagingType) ?? "loose",
       status: (order?.status as OrderStatus) ?? "draft",
@@ -163,6 +164,13 @@ export function OrderForm({
       }
     }
   }, [watchedCustomerId, selectedCustomerId, order?.customerId, setValue]);
+
+  // Auto-select location when customer has exactly one
+  useEffect(() => {
+    if (customerLocations.length === 1 && !watch("customerLocationId")) {
+      setValue("customerLocationId", customerLocations[0].id);
+    }
+  }, [customerLocations, setValue, watch]);
 
   const defaultSubmitLabel = isEditMode ? "Update Order" : "Create Order";
 

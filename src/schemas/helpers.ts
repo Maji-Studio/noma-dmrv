@@ -46,3 +46,29 @@ export const gpsCoordinatesSchema = z.object({
 });
 
 export type GpsCoordinates = z.infer<typeof gpsCoordinatesSchema>;
+
+// ============================================
+// Zod Preprocessors for Form String → Number Coercion
+// ============================================
+
+/** Preprocess form string values to number | null. Empty strings become null. */
+export const toNumberOrNull = (v: unknown): number | null | unknown => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") return v === "" ? null : Number(v);
+  return v;
+};
+
+/** Preprocess form string values to int | null. Empty strings become null. Rejects partial parses like "12abc". */
+export const toIntOrNull = (v: unknown): number | null | unknown => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    if (v === "") return null;
+    const trimmed = v.trim();
+    const num = Number(trimmed);
+    if (Number.isNaN(num) || !Number.isInteger(num)) return trimmed;
+    return num;
+  }
+  return v;
+};

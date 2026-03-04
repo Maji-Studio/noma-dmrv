@@ -3,7 +3,7 @@
  * Database queries for searchable entity selection
  */
 
-import { ilike, or, eq, and, SQL } from "drizzle-orm";
+import { ilike, or, eq, and, inArray, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   facilities,
@@ -21,6 +21,7 @@ import {
   formulations,
 } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
+import type { StorageLocationType } from "@/schemas/storage-locations";
 
 interface GetEntitiesParams {
   entityType: EntityType;
@@ -47,13 +48,18 @@ export async function getEntities(
       return getDrivers({ search, limit });
     case "operator":
       return getOperators({ search, limit });
-    case "storageLocation":
+    case "storageLocation": {
+      const typeFilter = filterBy?.type;
+      const types = typeFilter?.includes(",")
+        ? typeFilter.split(",").map((t) => t.trim()) as StorageLocationType[]
+        : typeFilter as StorageLocationType | undefined;
       return getStorageLocations({
         search,
         facilityId: filterBy?.facilityId,
-        type: filterBy?.type,
+        type: types,
         limit,
       });
+    }
     case "vehicle":
       return getVehicles({ search, limit });
     case "feedstockType":
@@ -483,7 +489,7 @@ async function getOperatorById(id: string): Promise<EntityOption | null> {
 async function getStorageLocations(params: {
   search?: string;
   facilityId?: string;
-  type?: string;
+  type?: StorageLocationType | StorageLocationType[];
   limit: number;
 }): Promise<EntityOption[]> {
   const { search, facilityId, type, limit } = params;
@@ -495,17 +501,11 @@ async function getStorageLocations(params: {
   }
 
   if (type) {
-    // Cast type to the enum type
-    conditions.push(
-      eq(
-        storageLocations.type,
-        type as
-          | "feedstock_bin"
-          | "feedstock_pile"
-          | "biochar_pile"
-          | "product_pile"
-      )
-    );
+    if (Array.isArray(type)) {
+      conditions.push(inArray(storageLocations.type, type));
+    } else {
+      conditions.push(eq(storageLocations.type, type));
+    }
   }
 
   if (search) {

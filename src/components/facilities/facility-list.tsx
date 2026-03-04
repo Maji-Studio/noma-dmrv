@@ -171,7 +171,7 @@ export function FacilityList() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard title="Active Facilities" value={totalFacilities} icon={<Factory size={24} weight="bold" />} description="Total production facilities" isLoading={isLoading} />
-        <StatCard title="Total Reactors" value={totalReactors} icon={<Lightning size={24} weight="bold" />} description="Across all facilities" isLoading={isLoading} />
+        <StatCard title="Total Reactors" value={totalReactors} icon={<Lightning size={24} weight="bold" />} description="Across facilities on this page" isLoading={isLoading} />
       </div>
 
       <DataTable

@@ -175,7 +175,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Data fetching
-  const { data: deliveriesData, isLoading } = useFeedstockDeliveries();
+  const { data: deliveriesData, isLoading, error: fetchError } = useFeedstockDeliveries();
   const createDelivery = useCreateFeedstockDelivery();
   const updateDelivery = useUpdateFeedstockDelivery();
   const deleteDelivery = useDeleteFeedstockDelivery();
@@ -229,6 +229,14 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const deliveries = deliveriesData?.items ?? [];
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col gap-32">
+        <ServerError message={fetchError.message || "Failed to load feedstock deliveries"} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-32">

@@ -78,9 +78,14 @@ function formatDurabilityOption(opt: DurabilityOption): string {
 // Component
 // ============================================
 
+type FacilityWithOptionalFields = Facility & {
+  timezone?: string;
+  facilityType?: string;
+};
+
 interface FacilityFormProps {
   /** Existing facility data for editing (undefined for create mode) */
-  facility?: Facility;
+  facility?: FacilityWithOptionalFields;
   /** Form submission handler */
   onSubmit: (data: FacilityFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -117,8 +122,8 @@ export function FacilityForm({
       contactPhone: facility?.contactPhone ?? "",
       defaultDurabilityOption:
         (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
-      timezone: ((facility as Record<string, unknown>)?.timezone as Timezone) ?? undefined,
-      facilityType: ((facility as Record<string, unknown>)?.facilityType as FacilityType) ?? undefined,
+      timezone: (facility?.timezone as Timezone) ?? undefined,
+      facilityType: (facility?.facilityType as FacilityType) ?? undefined,
     },
   });
 

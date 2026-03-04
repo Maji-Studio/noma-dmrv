@@ -190,7 +190,7 @@ export async function createProductionRunFn(
       "PR",
       productionRuns,
       productionRuns.code,
-      validated.code,
+      undefined,
       (code) =>
         createProductionRun(user.id, {
           code,
@@ -201,7 +201,7 @@ export async function createProductionRunFn(
           startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
           endTime: validated.endTime instanceof Date ? validated.endTime : new Date(validated.endTime),
           operatorId: validated.operatorId || null,
-          feedstocks: validated.feedstocks,
+          feedstockMassUsedKg: validated.feedstockMassUsedKg ?? null,
           feedingRateKgHr: validated.feedingRateKgHr ?? null,
           residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
           dieselOperationLiters: validated.dieselOperationLiters ?? null,
@@ -296,7 +296,7 @@ export async function updateProductionRunFn(
       startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
       endTime: validated.endTime instanceof Date ? validated.endTime : validated.endTime ? new Date(validated.endTime) : undefined,
       operatorId: validated.operatorId,
-      feedstocks: validated.feedstocks,
+      feedstockMassUsedKg: validated.feedstockMassUsedKg,
       feedingRateKgHr: validated.feedingRateKgHr,
       residenceTimeMinutes: validated.residenceTimeMinutes,
       dieselOperationLiters: validated.dieselOperationLiters,

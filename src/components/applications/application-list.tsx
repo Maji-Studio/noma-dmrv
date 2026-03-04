@@ -219,8 +219,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     if (!deletingApplicationId) return;
     setDeleteError(null);
     try {
-      await deleteApplication.mutateAsync(deletingApplicationId);
-      setDeletingApplicationId(null);
+      const result = await deleteApplication.mutateAsync(deletingApplicationId);
+      if (result.success) {
+        setDeletingApplicationId(null);
+      } else {
+        setDeleteError(result.error || "Failed to delete application");
+      }
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete application");
     }

@@ -23,17 +23,34 @@ export async function waitForSideSheetClose(page: Page) {
 export async function selectEntity(
   page: Page,
   fieldLabel: string,
-  optionId: string
+  optionId: string,
+  searchText?: string
 ) {
   const dialog = page.locator('[role="dialog"]');
   const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
   const fieldContainer = label.locator("..");
 
   await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
-  await page.waitForSelector(`[data-testid="entity-option-${optionId}"]`, {
+  await page.waitForSelector('[data-testid="entity-select-listbox"]', {
     timeout: 10000,
   });
-  await page.click(`[data-testid="entity-option-${optionId}"]`);
+
+  const optionSelector = `[data-testid="entity-option-${optionId}"]`;
+  const option = page.locator(optionSelector).first();
+
+  try {
+    await option.waitFor({ state: "visible", timeout: 3000 });
+  } catch {
+    if (searchText) {
+      const searchInput = page.locator('[data-testid="entity-select-search"]');
+      if (await searchInput.isVisible().catch(() => false)) {
+        await searchInput.fill(searchText);
+      }
+    }
+    await option.waitFor({ state: "visible", timeout: 10000 });
+  }
+
+  await option.click();
 }
 
 /** Click an EntitySelect trigger scoped to a field label within the dialog, then click the first option */

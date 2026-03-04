@@ -551,6 +551,30 @@ Or run tests again — the auto-cleanup in `cleanupTestData` fixture handles mos
 - Restart dev server periodically
 - Look for large state objects in React DevTools
 
+## Date/Time Issues
+
+### Date Fields Off by One Day
+
+**Symptoms**
+- Date picker shows yesterday's date when defaulting to "today"
+- Production run date is one day behind expected
+- Only happens in timezones behind UTC (e.g., UTC-5, UTC-8)
+
+**Root Cause**
+Using `new Date().toISOString().split("T")[0]` for `<input type="date">` default values. `toISOString()` converts to UTC, so 11 PM local time on March 3 in a negative-offset timezone (e.g., UTC-5) becomes March 4 04:00 UTC. Conversely, in positive-offset timezones (e.g., UTC+9), 1 AM March 4 becomes March 3 16:00 UTC.
+
+**Fix**
+Use `formatLocalDate` / `formatLocalDateTime` from `@/lib/date-utils`:
+```typescript
+import { formatLocalDate, formatLocalDateTime } from "@/lib/date-utils";
+
+// BAD — shifts date in non-UTC timezones
+date: new Date().toISOString().split("T")[0]
+
+// GOOD — uses local timezone
+date: formatLocalDate(new Date())
+```
+
 ## Common Error Messages
 
 ### "Hydration failed"

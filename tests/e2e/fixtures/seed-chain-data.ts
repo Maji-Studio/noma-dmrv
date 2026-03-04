@@ -133,7 +133,7 @@ export async function seedChainData(
         id: biocharStorageId,
         code: `E2E-SL-BC-${testRunId}`,
         name: `E2E Biochar Pile ${testRunId}`,
-        type: "biochar_pile",
+        type: "biochar_bin",
         facilityId: facilityId,
       });
 

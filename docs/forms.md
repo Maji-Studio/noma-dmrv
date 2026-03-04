@@ -359,9 +359,25 @@ import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-uti
 - `nullableNumericValue` — for nullable fields with `z.number().nullable().optional()`
 - `integerValue` — for integer-only fields
 
+## Zod Preprocessors for Nullable Numeric Fields
+
+For Zod schemas that need string-to-number coercion (e.g., form inputs → nullable numbers), use the shared preprocessors from `@/schemas/helpers`:
+
+```typescript
+import { toNumberOrNull, toIntOrNull } from "@/schemas/helpers";
+
+// Nullable float (empty → null, otherwise Number)
+fieldKg: z.preprocess(toNumberOrNull, z.number().positive().nullable()).optional(),
+
+// Nullable integer (empty → null, otherwise parseInt)
+durationMinutes: z.preprocess(toIntOrNull, z.number().int().positive().nullable()).optional(),
+```
+
+This is cleaner than the `z.union([z.number(), z.string().transform(...), z.null()])` pattern and ensures validation runs on the coerced number.
+
 ## Zod String-to-Number Transform Gotchas
 
-When using `z.union([z.number(), z.string().transform(...)])` for numeric fields, the string transform branch **bypasses** range validation on the number branch. Always validate inside the transform:
+When using `z.union([z.number(), z.string().transform(...)])` for numeric fields, the string transform branch **bypasses** range validation on the number branch. Prefer `z.preprocess()` (above) instead. If you must use `z.union`, always validate inside the transform:
 
 ```typescript
 // ❌ BAD — string "999" bypasses .min(-90).max(90)
@@ -389,6 +405,28 @@ gpsLatitude: z.union([
 ```
 
 Same applies to date transforms — always validate `isNaN(date.getTime())` after `new Date(val)`.
+
+### Date/DateTime Form Defaults
+
+Use `@/lib/date-utils` for date and datetime default values. **Never** use `toISOString()` — it converts to UTC, which shifts the date in non-UTC timezones (e.g., midnight March 3 in UTC-5 becomes March 3 05:00 UTC, but 11 PM March 2 in UTC-5 becomes March 3 in UTC).
+
+```typescript
+import { formatLocalDate, formatLocalDateTime } from "@/lib/date-utils";
+
+// BAD — UTC conversion shifts the date in negative-offset timezones
+date: new Date().toISOString().split("T")[0],
+startTime: new Date().toISOString().slice(0, 16),
+
+// GOOD — formats in user's local timezone
+date: formatLocalDate(new Date()),           // "2026-03-03"
+startTime: formatLocalDateTime(new Date()),  // "2026-03-03T14:30"
+```
+
+Available helpers:
+- `formatLocalDate(date)` → `"YYYY-MM-DD"` (for `<input type="date">`)
+- `formatLocalDateTime(date)` → `"YYYY-MM-DDTHH:MM"` (for `<input type="datetime-local">`)
+- `toDateInputValue(value)` → `"YYYY-MM-DD"` (accepts `string | Date | null`, passes through YYYY-MM-DD strings as-is)
+- `parseLocalDateString(str)` → `Date` (avoids UTC midnight shift when parsing `"YYYY-MM-DD"`)
 
 ## Examples
 

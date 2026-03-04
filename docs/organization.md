@@ -260,6 +260,12 @@ items/
 **When items would become complex:**
 If we added: filtering UI, bulk operations, multiple dialogs, filter state management, bulk selection logic → then refactor to complex pattern.
 
+## Non-CRUD Features
+
+Some features don't follow the standard list/form pattern:
+
+- **`src/components/chain-of-custody/`** — React Flow DAG visualization. Uses `chain-constants.ts` for static node/edge definitions, `use-chain-graph.ts` for layout computation, `chain-node.tsx` for custom node rendering.
+
 ## Summary
 
 - **Files**: kebab-case (`item-form.tsx`)

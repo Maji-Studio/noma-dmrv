@@ -26,27 +26,42 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await page.selectOption('select[name="status"]', "draft");
 
     // Select seeded facility (this enables reactor and feedstock selects)
-    await selectEntity(page, "Facility", seededData.facility.id);
+    await selectEntity(
+      page,
+      "Facility",
+      seededData.facility.id,
+      seededData.facility.name
+    );
 
     // Wait for cascading selects to load
     await page.waitForTimeout(1000);
 
     // Select the seeded reactor
-    await selectEntity(page, "Reactor", seededData.reactor.id);
+    await selectEntity(
+      page,
+      "Reactor",
+      seededData.reactor.id,
+      seededData.reactor.identifier
+    );
 
     // Fill date
     const today = new Date().toISOString().split("T")[0];
     await page.fill('input[name="date"]', today);
 
-    // Select a feedstock (seeded feedstock should be available after facility selection)
+    // Select feedstock source bin
     await page.waitForTimeout(500);
-    await selectEntity(page, "Feedstock", seededData.feedstock.id);
+    await selectEntity(
+      page,
+      "Feedstock Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name
+    );
 
-    // Fill feedstock mass
-    await page.fill('input[name="feedstocks.0.massUsedKg"]', "50");
+    // Fill feedstock mass used
+    await page.fill('input[name="feedstockMassUsedKg"]', "50");
 
     // Submit
-    await page.click('button:has-text("Create Production Run")');
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
 
     // Verify production run appears in list
