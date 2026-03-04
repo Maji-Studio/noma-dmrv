@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm dev:docker",
-    "dev:docker": "pnpm docker:up && pnpm db:wait && (pnpm db:seed:check || pnpm db:reset) && next dev -p 3100",
+    "dev:docker": "pnpm docker:up && pnpm db:wait && (pnpm db:reset) && next dev -p 3100",
     "dev:manual": "next dev -p 3100",
     "build": "next build",
     "start": "next start",
@@ -20,7 +20,9 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:check": "tsx src/db/seed.ts",
-    "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:seed",
+    "db:seed:demo": "tsx src/db/seed-data.ts",
+    "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
+    "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:push && pnpm db:ensure-admin",
     "env:local": "op inject -i .env.tpl -o .env",
     "env:vercel": "pnpm env:prod && pnpm env:preview && pnpm env:dev",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",
@@ -54,6 +56,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@noble/hashes": "^2.0.1",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20.19.33",
@@ -61,6 +64,7 @@
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "babel-plugin-react-compiler": "^1.0.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.4",
     "drizzle-kit": "^0.31.9",
     "eslint": "^9.39.2",

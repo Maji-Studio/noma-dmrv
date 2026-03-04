@@ -4,3 +4,4 @@
  */
 
 export { Sidebar } from "./sidebar";
+export { AppSidebar } from "./app-sidebar";

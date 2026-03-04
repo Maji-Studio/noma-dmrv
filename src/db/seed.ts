@@ -2,12 +2,12 @@ import { eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
-
 import * as schema from './schema';
+import { hashPassword } from '../../tests/e2e/fixtures/hash-password';
 
 config({ path: '.env.local' });
 
-const makeId = (n: number) => `00000000-0000-0000-0000-${n.toString().padStart(12, '0')}`;
+const makeId = (n: number) => `00000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
 
 const seedCodes = {
   facility: 'FAC-NOMA-001',
@@ -122,6 +122,58 @@ const timestamps = {
   sessionExpiry: new Date('2026-03-01T00:00:00.000Z'),
 } as const;
 
+const SEED_PASSWORD = 'admin123';
+
+/**
+ * Ensure the ADMIN_EMAIL user exists and has a valid password hash.
+ * Runs even when seed data already exists (idempotent).
+ */
+async function ensureAdminPassword(db: ReturnType<typeof drizzle>) {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) {
+    console.warn('ADMIN_EMAIL not set, skipping admin password update.');
+    return;
+  }
+
+  // Find admin user
+  const [adminUser] = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.email, adminEmail))
+    .limit(1);
+
+  if (!adminUser) {
+    console.warn(`Admin user ${adminEmail} not found in DB. Run a full db:reset to create.`);
+    return;
+  }
+
+  // Upsert a credential account with a valid hash
+  const passwordHash = await hashPassword(SEED_PASSWORD);
+
+  const [existingAccount] = await db
+    .select({ id: schema.accounts.id })
+    .from(schema.accounts)
+    .where(eq(schema.accounts.userId, adminUser.id))
+    .limit(1);
+
+  if (existingAccount) {
+    await db
+      .update(schema.accounts)
+      .set({ password: passwordHash })
+      .where(eq(schema.accounts.id, existingAccount.id));
+    console.log(`Updated password hash for ${adminEmail}.`);
+  } else {
+    await db.insert(schema.accounts).values({
+      id: `seed-account-admin-${Date.now()}`,
+      userId: adminUser.id,
+      accountId: `admin-account-${adminUser.id}`,
+      providerId: 'credential',
+      password: passwordHash,
+    });
+    console.log(`Created credential account for ${adminEmail}.`);
+  }
+}
+
 async function seed() {
   if (!process.env.DATABASE_URL) {
     console.error('ERROR: DATABASE_URL environment variable is not set');
@@ -144,7 +196,9 @@ async function seed() {
       .limit(1);
 
     if (existingFacility) {
-      console.log(`Seed data already present (facility ${seedCodes.facility}). Skipping.`);
+      console.log(`Seed data already present (facility ${seedCodes.facility}). Ensuring admin password...`);
+      // Always ensure admin account has a valid password hash
+      await ensureAdminPassword(db);
       return;
     }
 
@@ -202,20 +256,24 @@ async function seed() {
         throw new Error('Unable to resolve seeded users by email.');
       }
 
+      // Hash passwords using Better Auth's scrypt format
+      const adminPasswordHash = await hashPassword(SEED_PASSWORD);
+      const operatorPasswordHash = await hashPassword(SEED_PASSWORD);
+
       await tx.insert(schema.accounts).values([
         {
           id: 'seed-account-admin',
           userId: adminUserId,
           accountId: 'seed-admin-account',
           providerId: 'credential',
-          password: '$2b$12$seededhashplaceholder.admin',
+          password: adminPasswordHash,
         },
         {
           id: 'seed-account-operator',
           userId: operatorUserId,
           accountId: 'seed-operator-account',
           providerId: 'credential',
-          password: '$2b$12$seededhashplaceholder.operator',
+          password: operatorPasswordHash,
         },
       ]);
 
@@ -394,7 +452,6 @@ async function seed() {
 
       await tx.insert(schema.operators).values({
         id: ids.operator,
-        code: 'OP-001',
         name: 'Neema Kweka',
         credentials: 'Pyrolysis operations certification',
         contactPhone: '+255700000040',
@@ -421,8 +478,7 @@ async function seed() {
           unit: 'liter',
           source: 'IPCC 2021',
           sourceUrl: 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/',
-          methodologyVersion: '2006GL',
-          notes: 'Default stationary/mobile combustion factor.',
+          notes: 'Default stationary/mobile combustion factor (2006GL).',
           validFrom: '2025-01-01',
           validTo: '2027-12-31',
         },
@@ -435,8 +491,7 @@ async function seed() {
           unit: 'kWh',
           source: 'IEA 2024',
           sourceUrl: 'https://www.iea.org/data-and-statistics',
-          methodologyVersion: 'IEA-2024',
-          notes: 'Grid-average factor used for process electricity.',
+          notes: 'Grid-average factor used for process electricity (IEA-2024).',
           validFrom: '2025-01-01',
           validTo: '2027-12-31',
         },

@@ -335,6 +335,61 @@ When migrating an existing form to React Hook Form:
 - [ ] Test success and error paths
 - [ ] Verify accessibility (keyboard navigation, screen reader)
 
+## Numeric Input Coercion
+
+HTML inputs always return strings. Use the shared utilities from `@/lib/form-utils` with `setValueAs` to coerce values before they reach Zod validation.
+
+**Never use `valueAsNumber: true`** — it converts empty strings to `NaN`, which fails all Zod branches.
+
+```typescript
+import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-utils";
+
+// Optional number field (empty → undefined, otherwise parseFloat)
+{...register("fieldSizeHa", { setValueAs: numericValue })}
+
+// Nullable number field (empty → null, otherwise Number)
+{...register("massKg", { setValueAs: nullableNumericValue })}
+
+// Optional integer field (empty → undefined, otherwise parseInt)
+{...register("residenceTimeMinutes", { setValueAs: integerValue })}
+```
+
+**Which to use:**
+- `numericValue` — most common, for optional numeric fields with `z.number().optional()`
+- `nullableNumericValue` — for nullable fields with `z.number().nullable().optional()`
+- `integerValue` — for integer-only fields
+
+## Zod String-to-Number Transform Gotchas
+
+When using `z.union([z.number(), z.string().transform(...)])` for numeric fields, the string transform branch **bypasses** range validation on the number branch. Always validate inside the transform:
+
+```typescript
+// ❌ BAD — string "999" bypasses .min(-90).max(90)
+gpsLatitude: z.union([
+  z.number().min(-90).max(90),
+  z.string().transform((val) => {
+    if (val === "") return null;
+    return parseFloat(val); // No range check!
+  }),
+]),
+
+// ✅ GOOD — validate in the transform
+gpsLatitude: z.union([
+  z.number().min(-90).max(90),
+  z.string().transform((val, ctx) => {
+    if (val === "") return null;
+    const n = parseFloat(val);
+    if (isNaN(n) || n < -90 || n > 90) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Latitude must be between -90 and 90" });
+      return z.NEVER;
+    }
+    return n;
+  }),
+]),
+```
+
+Same applies to date transforms — always validate `isNaN(date.getTime())` after `new Date(val)`.
+
 ## Examples
 
 See these files for complete examples:

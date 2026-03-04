@@ -62,10 +62,10 @@ function VerifyEmailCallbackContent() {
     return (
       <div className="w-full max-w-md mx-auto">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-m">
+          <div className="w-16 h-16 mx-auto mb-24">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--clr-dark-purple)]" />
           </div>
-          <h1 className="title-heading-2 mb-xs">Verifying your email</h1>
+          <h1 className="title-heading-2 mb-16">Verifying your email</h1>
           <p className="body-medium text-[var(--color-text-secondary)]">
             Please wait while we verify your email address...
           </p>
@@ -78,9 +78,9 @@ function VerifyEmailCallbackContent() {
     return (
       <div className="w-full max-w-md mx-auto">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-m bg-green-50 rounded-full flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto mb-24 bg-[var(--color-status-success-bg)] rounded-full flex items-center justify-center">
             <svg
-              className="w-8 h-8 text-green-600"
+              className="w-8 h-8 text-[var(--color-status-success)]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -95,15 +95,15 @@ function VerifyEmailCallbackContent() {
             </svg>
           </div>
 
-          <h1 className="title-heading-2 mb-xs">Email verified!</h1>
-          <p className="body-medium text-[var(--color-text-secondary)] mb-m">
+          <h1 className="title-heading-2 mb-16">Email verified!</h1>
+          <p className="body-medium text-[var(--color-text-secondary)] mb-24">
             Your email has been successfully verified. Redirecting you to
             login...
           </p>
 
           <Link
             href="/login"
-            className="inline-block px-l py-s bg-[var(--clr-dark-purple)] text-white rounded-lg hover:opacity-90 transition-opacity body-medium"
+            className="inline-block px-32 py-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity body-medium"
           >
             Go to login
           </Link>
@@ -115,7 +115,7 @@ function VerifyEmailCallbackContent() {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-m bg-[var(--color-signal-red)]/10 rounded-full flex items-center justify-center">
+        <div className="w-16 h-16 mx-auto mb-24 bg-[var(--color-signal-red)]/10 rounded-full flex items-center justify-center">
           <svg
             className="w-8 h-8 text-[var(--color-signal-red)]"
             fill="none"
@@ -132,15 +132,15 @@ function VerifyEmailCallbackContent() {
           </svg>
         </div>
 
-        <h1 className="title-heading-2 mb-xs">Verification failed</h1>
-        <p className="body-medium text-[var(--color-text-secondary)] mb-m">
+        <h1 className="title-heading-2 mb-16">Verification failed</h1>
+        <p className="body-medium text-[var(--color-text-secondary)] mb-24">
           {error || "Unable to verify your email address"}
         </p>
 
-        <div className="space-y-s">
+        <div className="space-y-16">
           <Link
             href="/verify-email"
-            className="inline-block px-l py-s bg-[var(--clr-dark-purple)] text-white rounded-lg hover:opacity-90 transition-opacity body-medium"
+            className="inline-block px-32 py-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity body-medium"
           >
             Resend verification email
           </Link>

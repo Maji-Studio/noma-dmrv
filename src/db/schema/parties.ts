@@ -101,7 +101,6 @@ export const drivers = pgTable('drivers', {
 
 export const operators = pgTable('operators', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
   name: text('name').notNull(),
   credentials: text('credentials'),
   contactPhone: text('contact_phone'),
@@ -122,3 +121,18 @@ export const customerLocationsRelations = relations(
     }),
   })
 );
+
+// ============================================
+// Type Inference
+// ============================================
+
+export type Supplier = typeof suppliers.$inferSelect;
+export type NewSupplier = typeof suppliers.$inferInsert;
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
+export type CustomerLocation = typeof customerLocations.$inferSelect;
+export type NewCustomerLocation = typeof customerLocations.$inferInsert;
+export type Driver = typeof drivers.$inferSelect;
+export type NewDriver = typeof drivers.$inferInsert;
+export type Operator = typeof operators.$inferSelect;
+export type NewOperator = typeof operators.$inferInsert;

@@ -360,6 +360,170 @@ pnpm install
   ```
 - For React Hook Form: use `zodResolver(schema)`
 
+### Number Fields: "expected number, received NaN"
+
+**Symptoms**
+- Empty optional number inputs show "Invalid input: expected number, received NaN"
+- Density, mass, GPS, or other numeric fields fail validation when left blank
+
+**Root Cause**
+Using `valueAsNumber: true` in `register()` converts empty strings to `NaN` (via the DOM's `input.valueAsNumber`). `NaN` is type `number` in JS but Zod's `z.number()` rejects it, and it won't match `z.string()` or `z.null()` branches either.
+
+**Fix**
+Use `setValueAs` instead of `valueAsNumber` to convert empty strings to `null`:
+```typescript
+// BAD - empty input becomes NaN, fails all Zod union branches
+{...register("massKg", { valueAsNumber: true })}
+
+// GOOD - empty input becomes null, non-empty becomes number
+{...register("massKg", { setValueAs: (v: string) => v === "" ? null : Number(v) })}
+```
+
+And simplify the Zod schema (no need for string transform branch):
+```typescript
+// BAD - complex union to handle strings, numbers, and null
+massKg: z.union([
+  z.number().min(0),
+  z.string().transform(val => val === "" ? null : parseFloat(val))
+    .pipe(z.number().min(0).nullable()),
+  z.null(),
+]).optional().nullable()
+
+// GOOD - setValueAs handles conversion, schema just validates
+massKg: z.number().min(0, "Must be positive").nullable().optional()
+```
+
+### Optional UUID Fields: "Invalid UUID" on Empty Selection
+
+**Symptoms**
+- Optional entity select fields (e.g., linked production run, storage location) show "Invalid UUID" when left empty
+- Form defaults these fields to `""` which fails `z.string().uuid()`
+
+**Root Cause**
+Schema ordering: `z.string().uuid().optional().nullable().or(emptyToNull)` tries UUID validation first on `""`, which fails. While `.or(emptyToNull)` should catch it, the error reporting can be misleading.
+
+**Fix**
+Put `emptyToNull` first in the union so empty strings are handled before UUID validation:
+```typescript
+import { emptyToNull } from "./helpers";
+
+// BAD - tries UUID first, fails on "", error leaks
+linkedId: z.string().uuid().optional().nullable().or(emptyToNull)
+
+// GOOD - catches "" first, then validates UUID
+linkedId: emptyToNull.or(z.string().uuid("Invalid selection")).nullable().optional()
+```
+
+### Zod v4 `.uuid()` Rejects Seed Data IDs
+
+**Symptoms**
+- EntitySelect fields (facility, reactor, feedstock) show "Please select a valid facility/reactor/feedstock" on form submit
+- Values appear correctly selected in the UI but fail validation
+- Multiple UUID fields fail simultaneously
+- Error type is `invalid_format`, not `too_small`
+
+**Root Cause**
+Zod v4's `.uuid()` enforces strict RFC 4122 validation, checking version (position 13 must be `1`-`8`) and variant (position 17 must be `8`-`b`) bits. Zod v3 only checked the hex format pattern. Demo seed data uses sequential pseudo-UUIDs like `00000000-0000-0000-0000-000000000160` which lack valid version/variant bits and fail this stricter check.
+
+**Fix — use a relaxed UUID-format regex in schemas**
+
+Replace `.uuid()` with a custom regex that accepts any 8-4-4-4-12 hex string:
+```typescript
+// src/schemas/helpers.ts
+export const uuidFormat = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  "Please select a valid option"
+);
+```
+
+Then use `uuidFormat` instead of `z.string().uuid()` in form schemas:
+```typescript
+// BAD — rejects valid DB rows with non-RFC-4122 IDs
+facilityId: z.string().uuid("Please select a valid facility")
+
+// GOOD — accepts any UUID-shaped string from the database
+facilityId: uuidFormat
+```
+
+**Alternative fix — make seed IDs RFC 4122 compliant**
+
+Add version `4` and variant `a` bits to the seed helper:
+```typescript
+// BAD — no version/variant bits, fails Zod v4
+const makeId = (n: number) => `00000000-0000-0000-0000-${n.toString().padStart(12, '0')}`;
+
+// GOOD — version=4, variant=a, passes Zod v4
+const makeId = (n: number) => `00000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
+```
+After fixing, re-seed the database: `pnpm db:reset`
+
+**Prevention**
+- After Zod major version upgrades, test seed IDs against the UUID schema
+- Prefer the relaxed regex if you can't guarantee all IDs are RFC 4122 compliant
+
+## E2E Testing Issues
+
+### Rate Limiting Blocks Test Auth (429 Too Many Requests)
+
+**Symptoms**
+- E2E tests fail with "Failed to sign in. Please try again."
+- Login page shows error after form submission
+- Server logs show `POST /api/auth/sign-in/email 429`
+
+**Root Cause**
+Better Auth rate limits `/sign-in/email` to 10 attempts per 15 minutes. With 4 parallel Playwright workers each needing authentication, this limit is quickly exceeded.
+
+**Fix**
+Add `DISABLE_RATE_LIMIT=true` to `.env.local` for local development:
+```bash
+# .env.local
+DISABLE_RATE_LIMIT=true
+```
+Restart the dev server after adding this. The rate limit check is at `src/lib/auth/better-auth.ts:154`.
+
+### Auth Fixtures Use HTTP API Sign-In (Not UI)
+
+**Background**
+The auth fixtures (`tests/e2e/fixtures/auth-fixtures.ts`) authenticate via HTTP API (`POST /api/auth/sign-in/email`) instead of filling the login form through the browser UI. This is faster and more reliable because:
+
+- **scrypt is CPU-intensive**: Each password verification takes 8-10 seconds. With 4 parallel workers doing UI login simultaneously, the dev server gets overwhelmed and requests timeout.
+- **HTTP API auth** captures signed cookies from the response and injects them into the Playwright browser context, skipping UI interaction entirely.
+- **Origin header required**: Better Auth requires an `Origin` header matching `trustedOrigins`. The HTTP sign-in includes `Origin: ${baseURL}`.
+
+**Key function**: `createDirectAuthContext()` in `auth-fixtures.ts`
+
+### Tests Timeout on First Page Load (Dev Mode Compilation)
+
+**Symptoms**
+- Tests fail with "Target page, context or browser has been closed"
+- Tests pass on subsequent runs
+- Server logs show `Compiling...` during test execution
+
+**Root Cause**
+Next.js dev mode compiles pages on first request. With 4 workers hitting different routes simultaneously, compilation can take 10-30 seconds per page.
+
+**Fix**
+- Global timeout is set to 60s in `playwright.config.ts` to accommodate this
+- Run tests twice: first run warms up the dev server cache, second run is faster
+- For CI, consider using `pnpm build && pnpm start` instead of dev mode
+
+### Seed Data Collisions (Duplicate Key Errors)
+
+**Symptoms**
+- `duplicate key value violates unique constraint "facilities_code_unique"`
+- Tests fail on `seedChainData` in fixture setup
+
+**Root Cause**
+Leftover E2E data from previous test runs. The `testRunId` is unique per worker process, but cleanup may not complete if tests are interrupted. The `code` column has a unique constraint.
+
+**Fix**
+```bash
+# Reset the database to clear all stale test data
+pnpm db:reset
+```
+
+Or run tests again — the auto-cleanup in `cleanupTestData` fixture handles most cases.
+
 ## Performance Issues
 
 ### Slow Page Loads
