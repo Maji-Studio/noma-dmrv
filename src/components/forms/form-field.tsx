@@ -30,7 +30,10 @@ export function FormField({
       >
         {label}
         {required && (
-          <span className="text-[var(--color-signal-red)] ml-2">*</span>
+          <>
+            <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
+            <span className="sr-only">Required</span>
+          </>
         )}
       </label>
       {children}

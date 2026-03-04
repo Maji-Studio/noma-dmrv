@@ -203,6 +203,7 @@ export function SampleForm({
                         placeholder="Select a production run..."
                         disabled={isSubmitting || !!preselectedProductionRunId}
                         error={!!errors.productionRunId}
+                        autoSelectSingle
                       />
                     )}
                   />

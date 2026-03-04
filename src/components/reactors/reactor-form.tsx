@@ -138,6 +138,7 @@ export function ReactorForm({
                   placeholder="Select a facility..."
                   disabled={isSubmitting || !!preselectedFacilityId}
                   error={!!errors.facilityId}
+                  autoSelectSingle
                 />
               )}
             />

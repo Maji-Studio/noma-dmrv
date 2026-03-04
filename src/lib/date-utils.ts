@@ -62,6 +62,18 @@ export function formatLocalDateTime(date: Date): string {
   return `${y}-${mo}-${d}T${h}:${mi}`;
 }
 
+/** Format a Date as "HH:MM" in local timezone (for time inputs). */
+export function formatLocalTime(date: Date): string {
+  const h = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${mi}`;
+}
+
+/** Combine a date string "YYYY-MM-DD" and time string "HH:MM" into a Date. */
+export function combineDateAndTime(dateStr: string, timeStr: string): Date {
+  return new Date(`${dateStr}T${timeStr}`);
+}
+
 /** Convert a date value (string or Date) to "YYYY-MM-DD" for input[type="date"]. Passes through YYYY-MM-DD strings as-is. */
 export function toDateInputValue(value: string | Date | null | undefined): string {
   if (!value) return formatLocalDate(new Date());
