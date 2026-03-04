@@ -142,7 +142,7 @@ export function ProductionRunForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="facilityId" label="Facility" error={errors.facilityId?.message}>
+          <FormField id="facilityId" label="Facility" error={errors.facilityId?.message} required>
             <Controller
               name="facilityId"
               control={control}
@@ -159,7 +159,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message}>
+          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
               control={control}
@@ -179,7 +179,7 @@ export function ProductionRunForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-          <FormField id="date" label="Date" error={errors.date?.message}>
+          <FormField id="date" label="Date" error={errors.date?.message} required>
             <FormInput
               id="date"
               type="date"
@@ -191,7 +191,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message}>
+          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
               type="datetime-local"
@@ -203,7 +203,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End Time" error={errors.endTime?.message} required>
             <FormInput
               id="endTime"
               type="datetime-local"
@@ -216,22 +216,24 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-        <FormField id="operatorId" label="Operator (Optional)" error={errors.operatorId?.message}>
-          <Controller
-            name="operatorId"
-            control={control}
-            render={({ field }) => (
-              <EntitySelect
-                entityType="operator"
-                value={field.value || undefined}
-                onChange={field.onChange}
-                placeholder="Select an operator..."
-                disabled={isSubmitting}
-                error={!!errors.operatorId}
-              />
-            )}
-          />
-        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
+            <Controller
+              name="operatorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  entityType="operator"
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  placeholder="Select an operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.operatorId}
+                />
+              )}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Feedstock Input Section */}

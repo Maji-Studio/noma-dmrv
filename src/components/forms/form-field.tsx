@@ -10,6 +10,7 @@ interface FormFieldProps {
   label: string;
   error?: string;
   helperText?: string;
+  required?: boolean;
   children: React.ReactNode;
 }
 
@@ -18,6 +19,7 @@ export function FormField({
   label,
   error,
   helperText,
+  required,
   children,
 }: FormFieldProps) {
   return (
@@ -27,6 +29,9 @@ export function FormField({
         className="body-small font-medium text-[var(--color-text-secondary)] block mb-4"
       >
         {label}
+        {required && (
+          <span className="text-[var(--color-signal-red)] ml-2">*</span>
+        )}
       </label>
       {children}
       {helperText && !error && (

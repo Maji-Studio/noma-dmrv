@@ -197,7 +197,7 @@ async function getReactors(params: {
       or(
         ilike(reactors.code, searchPattern),
         ilike(reactors.identifier, searchPattern),
-        ilike(reactors.type, searchPattern)
+        ilike(reactors.reactorType, searchPattern)
       )!
     );
   }
@@ -209,7 +209,7 @@ async function getReactors(params: {
       id: reactors.id,
       code: reactors.code,
       identifier: reactors.identifier,
-      type: reactors.type,
+      reactorType: reactors.reactorType,
     })
     .from(reactors)
     .where(whereClause)
@@ -219,7 +219,7 @@ async function getReactors(params: {
     id: r.id,
     code: r.code,
     name: r.identifier,
-    subtitle: r.type,
+    subtitle: r.reactorType,
   }));
 }
 
@@ -229,7 +229,7 @@ async function getReactorById(id: string): Promise<EntityOption | null> {
       id: reactors.id,
       code: reactors.code,
       identifier: reactors.identifier,
-      type: reactors.type,
+      reactorType: reactors.reactorType,
     })
     .from(reactors)
     .where(eq(reactors.id, id))
@@ -241,7 +241,7 @@ async function getReactorById(id: string): Promise<EntityOption | null> {
     id: result.id,
     code: result.code,
     name: result.identifier,
-    subtitle: result.type,
+    subtitle: result.reactorType,
   };
 }
 

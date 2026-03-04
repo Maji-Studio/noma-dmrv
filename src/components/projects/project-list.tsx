@@ -11,6 +11,7 @@ import {
 } from "@/hooks/use-projects";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { ProjectForm } from "./project-form";
 
 export function ProjectList() {
@@ -25,12 +26,14 @@ export function ProjectList() {
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
+  const toast = useToast();
 
   const handleCreate = async (data: { name: string; description?: string }) => {
     setCreateError(null);
     try {
       await createProject.mutateAsync(data);
       setIsCreating(false);
+      toast.success("Project created successfully");
     } catch (error) {
       setCreateError(
         error instanceof Error ? error.message : "Failed to create project"
@@ -48,6 +51,7 @@ export function ProjectList() {
         ...data,
       });
       setEditingProject(null);
+      toast.success("Project updated successfully");
     } catch (error) {
       setUpdateError(
         error instanceof Error ? error.message : "Failed to update project"
@@ -65,6 +69,7 @@ export function ProjectList() {
     try {
       await deleteProject.mutateAsync(deletingProjectId);
       setDeletingProjectId(null);
+      toast.success("Project deleted successfully");
     } catch (error) {
       setDeleteError(
         error instanceof Error ? error.message : "Failed to delete project"

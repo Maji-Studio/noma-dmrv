@@ -22,6 +22,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { StorageLocationForm } from "./storage-location-form";
 import {
   formatStorageLocationType,
@@ -124,6 +125,7 @@ export function StorageLocationList() {
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
   const deleteStorageLocation = useDeleteStorageLocation();
+  const toast = useToast();
 
   const storageLocations = storageLocationsData?.items ?? [];
   const totalStorageLocations = storageLocationsData?.total ?? 0;
@@ -136,6 +138,7 @@ export function StorageLocationList() {
     try {
       await createStorageLocation.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Storage location created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create storage location");
     }
@@ -147,6 +150,7 @@ export function StorageLocationList() {
     try {
       await updateStorageLocation.mutateAsync({ storageLocationId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Storage location updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update storage location");
     }
@@ -159,6 +163,7 @@ export function StorageLocationList() {
     try {
       await deleteStorageLocation.mutateAsync(deletingStorageLocationId);
       setDeletingStorageLocationId(null);
+      toast.success("Storage location deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete storage location");
     }

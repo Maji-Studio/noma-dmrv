@@ -190,6 +190,7 @@ export function SampleForm({
                   id="productionRunId"
                   label="Production Run"
                   error={errors.productionRunId?.message}
+                  required
                 >
                   <Controller
                     name="productionRunId"
@@ -213,6 +214,7 @@ export function SampleForm({
                   id="samplingTime"
                   label="Sampling Time"
                   error={errors.samplingTime?.message}
+                  required
                 >
                   <FormInput
                     id="samplingTime"
@@ -326,6 +328,7 @@ export function SampleForm({
                 id="totalCarbonPercent"
                 label="Total Carbon (%)"
                 error={errors.totalCarbonPercent?.message}
+                required
               >
                 <FormInput
                   id="totalCarbonPercent"
@@ -345,6 +348,7 @@ export function SampleForm({
                 label="Organic Carbon (%)"
                 error={errors.organicCarbonPercent?.message}
                 helperText="C_org for stability calculations"
+                required
               >
                 <FormInput
                   id="organicCarbonPercent"
@@ -806,7 +810,7 @@ export function SampleForm({
         {/* === Nutrient Claims Section === */}
         <Accordion.Item value="nutrients">
           <Accordion.Header>
-            <Accordion.Trigger>Nutrient Claims (Optional)</Accordion.Trigger>
+            <Accordion.Trigger>Nutrient Claims</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
             <div className="space-y-24">

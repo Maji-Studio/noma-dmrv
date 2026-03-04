@@ -81,6 +81,7 @@ export function SupplierForm({
           <FormField
             id="name"
             label="Supplier Name"
+            required
             error={errors.name?.message}
           >
             <FormInput
@@ -101,26 +102,28 @@ export function SupplierForm({
           Location Information
         </h3>
 
-        <FormField
-          id="location"
-          label="Location (optional)"
-          error={errors.location?.message}
-          helperText="General location or region of the supplier"
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="location"
-            type="text"
-            placeholder="e.g., Nairobi, Kenya"
-            disabled={isSubmitting}
-            error={!!errors.location}
-            {...register("location")}
-          />
-        </FormField>
+            label="Location"
+            error={errors.location?.message}
+            helperText="General location or region of the supplier"
+          >
+            <FormInput
+              id="location"
+              type="text"
+              placeholder="e.g., Nairobi, Kenya"
+              disabled={isSubmitting}
+              error={!!errors.location}
+              {...register("location")}
+            />
+          </FormField>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="gpsLatitude"
-            label="GPS Latitude (optional)"
+            label="GPS Latitude"
             error={errors.gpsLatitude?.message}
             helperText="-90 to 90"
           >
@@ -137,7 +140,7 @@ export function SupplierForm({
 
           <FormField
             id="gpsLongitude"
-            label="GPS Longitude (optional)"
+            label="GPS Longitude"
             error={errors.gpsLongitude?.message}
             helperText="-180 to 180"
           >
@@ -153,19 +156,21 @@ export function SupplierForm({
           </FormField>
         </div>
 
-        <FormField
-          id="address"
-          label="Address (optional)"
-          error={errors.address?.message}
-        >
-          <FormTextarea
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="address"
-            placeholder="Full address"
-            disabled={isSubmitting}
-            error={!!errors.address}
-            {...register("address")}
-          />
-        </FormField>
+            label="Address"
+            error={errors.address?.message}
+          >
+            <FormTextarea
+              id="address"
+              placeholder="Full address"
+              disabled={isSubmitting}
+              error={!!errors.address}
+              {...register("address")}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Contact Information Section */}
@@ -174,25 +179,27 @@ export function SupplierForm({
           Contact Information
         </h3>
 
-        <FormField
-          id="contactName"
-          label="Contact Name (optional)"
-          error={errors.contactName?.message}
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="contactName"
-            type="text"
-            placeholder="e.g., John Doe"
-            disabled={isSubmitting}
-            error={!!errors.contactName}
-            {...register("contactName")}
-          />
-        </FormField>
+            label="Contact Name"
+            error={errors.contactName?.message}
+          >
+            <FormInput
+              id="contactName"
+              type="text"
+              placeholder="e.g., John Doe"
+              disabled={isSubmitting}
+              error={!!errors.contactName}
+              {...register("contactName")}
+            />
+          </FormField>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="contactEmail"
-            label="Contact Email (optional)"
+            label="Contact Email"
             error={errors.contactEmail?.message}
           >
             <FormInput
@@ -207,7 +214,7 @@ export function SupplierForm({
 
           <FormField
             id="contactPhone"
-            label="Contact Phone (optional)"
+            label="Contact Phone"
             error={errors.contactPhone?.message}
             helperText="International format supported"
           >
@@ -232,7 +239,7 @@ export function SupplierForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="annualRevenueUsd"
-            label="Annual Revenue (USD, optional)"
+            label="Annual Revenue (USD)"
             error={errors.annualRevenueUsd?.message}
             helperText="Approximate annual revenue in USD"
           >
@@ -250,7 +257,7 @@ export function SupplierForm({
 
           <FormField
             id="chainOfCustodyRef"
-            label="Chain of Custody Reference (optional)"
+            label="Chain of Custody Reference"
             error={errors.chainOfCustodyRef?.message}
             helperText="Certification or traceability reference"
           >
