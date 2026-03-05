@@ -106,6 +106,9 @@ export function useUpdateProductionSample(
       queryClient.invalidateQueries({
         queryKey: productionSampleKeys.list(variables.productionRunId),
       });
+      queryClient.invalidateQueries({
+        queryKey: productionRunKeys.lists(),
+      });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,

@@ -5,9 +5,11 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import { createVehicleFn } from "@/fn/quick-add";
+import { seedEntityCache } from "./cache-utils";
 import type { EntityOption } from "./types";
 
 // Icon components
@@ -83,6 +85,7 @@ export function VehicleQuickAddDialog({
   onClose,
   onSuccess,
 }: VehicleQuickAddDialogProps) {
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState<VehicleForm>({
     name: "",
     identifier: "",
@@ -165,6 +168,8 @@ export function VehicleQuickAddDialog({
         setIsSubmitting(false);
         return;
       }
+
+      seedEntityCache(queryClient, "vehicle", result.data);
 
       onSuccess(result.data);
       onClose();

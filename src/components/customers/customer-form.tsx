@@ -251,7 +251,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
           Loading locations...
         </p>
       ) : isError ? (
-        <p className="body-small text-[var(--color-signal-red)]">
+        <p className="body-small text-[var(--color-signal-red)]" role="alert" aria-live="assertive" aria-atomic="true">
           Failed to load locations. Please try refreshing.
         </p>
       ) : !locations || locations.length === 0 ? (

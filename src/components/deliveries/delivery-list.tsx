@@ -25,7 +25,7 @@ import {
   useUpdateDelivery,
   useDeliveryStats,
 } from "@/hooks/use-deliveries";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import type {
   DeliveryFormData,
   CreateDeliveryData,
@@ -107,7 +107,7 @@ function createColumns(
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => (
-        <StatusBadge status={row.original.status as "upcoming" | "delivered"} />
+        <StatusBadge status={row.original.status} />
       ),
     },
     {
@@ -160,12 +160,12 @@ export function DeliveryList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Global facility context
+  const { facilityId: contextFacilityId } = useFacilityContext();
+
   // Data fetching
   const { data: deliveriesData, isLoading, error: fetchError } = useDeliveries();
   const { data: statsData, isLoading: statsLoading } = useDeliveryStats();
-  const { data: facilitiesData } = useFacilities({ pageSize: 100 });
-
-  const facilities = facilitiesData?.items ?? [];
 
   // Mutations
   const createDelivery = useCreateDelivery();
@@ -198,12 +198,11 @@ export function DeliveryList() {
   const handleCreate = async (data: DeliveryFormData) => {
     setFormError(null);
     try {
-      const facilityId = facilities[0]?.id;
-      if (!facilityId) {
-        setFormError("No facility available. Please create a facility first.");
+      if (!contextFacilityId) {
+        setFormError("No facility selected. Please select a facility first.");
         return;
       }
-      const createData = { ...data, facilityId } as CreateDeliveryData;
+      const createData = { ...data, facilityId: contextFacilityId } as CreateDeliveryData;
       await createDelivery.mutateAsync(createData);
       closeSideSheet();
       toast.success("Delivery created successfully");
@@ -243,7 +242,7 @@ export function DeliveryList() {
   // Memoize columns
   const columns = useMemo(
     () => createColumns((delivery) => openEdit(delivery), handleDelete),
-    [],
+    [openEdit, handleDelete],
   );
 
   const deliveries = deliveriesData?.items ?? [];
@@ -372,9 +371,7 @@ export function DeliveryList() {
                     {
                       label: "Status",
                       value: (
-                        <StatusBadge
-                          status={sideSheetEntity.status as "upcoming" | "delivered"}
-                        />
+                        <StatusBadge status={sideSheetEntity.status} />
                       ),
                     },
                   ],

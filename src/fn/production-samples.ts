@@ -23,6 +23,24 @@ import {
 } from "@/schemas/production-samples";
 import type { ActionResult } from "@/types/actions";
 
+const productionRunIdSchema = z.string().uuid("Production run is required");
+
+function formatZodError(error: z.ZodError): string {
+  return `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`;
+}
+
+function logServerError(context: string, error: unknown): void {
+  console.error(`[production-samples] ${context}`, error);
+}
+
+async function requireAuth() {
+  const user = await getUser();
+  if (!user?.id) {
+    return null;
+  }
+  return user;
+}
+
 // ============================================
 // List Operations
 // ============================================
@@ -34,20 +52,23 @@ export async function getProductionSamplesFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionSampleWithRelations[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
+    const user = await requireAuth();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const samples = await getProductionSamplesData(user.id, productionRunId);
+    const validatedProductionRunId = productionRunIdSchema.safeParse(productionRunId);
+    if (!validatedProductionRunId.success) {
+      return { success: false, error: "Invalid input" };
+    }
+
+    const samples = await getProductionSamplesData(user.id, validatedProductionRunId.data);
     return { success: true, data: samples };
   } catch (error) {
+    logServerError("getProductionSamplesFn failed", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load production samples",
+      error: "Failed to load production samples",
     };
   }
 }
@@ -63,8 +84,8 @@ export async function createProductionSampleFn(
   data: z.infer<typeof createProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
+    const user = await requireAuth();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
@@ -99,15 +120,13 @@ export async function createProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodError(error),
       };
     }
+    logServerError("createProductionSampleFn failed", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to create production sample",
+      error: "Failed to create production sample",
     };
   }
 }
@@ -123,8 +142,8 @@ export async function updateProductionSampleFn(
   data: z.infer<typeof updateProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
+    const user = await requireAuth();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
@@ -143,8 +162,8 @@ export async function updateProductionSampleFn(
         volatileMatterPercent: validated.volatileMatterPercent,
         ashContentPercent: validated.ashContentPercent,
         photoUrl: validated.photoUrl || null,
-        sampledById: validated.sampledById,
-        notes: validated.notes,
+        sampledById: validated.sampledById ?? null,
+        notes: validated.notes ?? null,
       }
     );
 
@@ -153,15 +172,13 @@ export async function updateProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodError(error),
       };
     }
+    logServerError("updateProductionSampleFn failed", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to update production sample",
+      error: "Failed to update production sample",
     };
   }
 }
@@ -177,8 +194,8 @@ export async function deleteProductionSampleFn(
   data: z.infer<typeof deleteProductionSampleSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
+    const user = await requireAuth();
+    if (!user) {
       return { success: false, error: "Unauthorized" };
     }
 
@@ -190,15 +207,13 @@ export async function deleteProductionSampleFn(
     if (error instanceof z.ZodError) {
       return {
         success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+        error: formatZodError(error),
       };
     }
+    logServerError("deleteProductionSampleFn failed", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to delete production sample",
+      error: "Failed to delete production sample",
     };
   }
 }

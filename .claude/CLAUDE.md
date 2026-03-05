@@ -274,6 +274,20 @@ type ActionResult<T> =
   | { success: false; error: string };
 ```
 
+### Facility Context
+
+All pages in `(app)` are scoped to a selected facility via `useFacilityContext()`:
+
+```typescript
+import { useFacilityContext } from "@/hooks/use-facility-context";
+
+const { facilityId, selectedFacility, setFacilityId } = useFacilityContext();
+```
+
+- Persisted via URL query param (`?facility=<id>`) + localStorage using `nuqs` (`useQueryState`)
+- `FacilityProvider` wraps the app layout; `FacilitySelector` is in the sidebar
+- Forms receive `facilityId` from context — don't ask users to select facility in forms
+
 ### Authentication Guards
 
 **NEVER skip authentication checks!**
@@ -372,6 +386,7 @@ All env vars validated via Zod in `src/config/env.ts`:
 - `RESEND_API_KEY` - Email API key
 - `RESEND_FROM_EMAIL` - Sender email
 - `ADMIN_EMAIL` - Admin email address
+- `ADMIN_PASSWORD` - Admin user password (used by `pnpm db:reset`)
 - `ALLOW_SELF_SIGNUP` - `false` for invite-only
 
 **CRITICAL:** Never document secret VALUES, only variable NAMES.

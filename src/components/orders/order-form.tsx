@@ -53,6 +53,8 @@ function formatPackaging(type: PackagingType): string {
 interface OrderFormProps {
   /** Existing order data for editing (undefined for create mode) */
   order?: Order;
+  /** Pre-selected facility ID from global context */
+  defaultFacilityId?: string;
   /** Form submission handler */
   onSubmit: (data: OrderFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -65,6 +67,7 @@ interface OrderFormProps {
 
 export function OrderForm({
   order,
+  defaultFacilityId,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -120,7 +123,7 @@ export function OrderForm({
   } = useForm({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
-      facilityId: order?.facilityId ?? "",
+      facilityId: order?.facilityId ?? defaultFacilityId ?? "",
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
       biocharProductId: order?.biocharProductId ?? "",
@@ -193,7 +196,7 @@ export function OrderForm({
             <FormSelect
               id="facilityId"
               placeholder="Select facility..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || (!!defaultFacilityId && !isEditMode)}
               error={!!errors.facilityId}
               options={facilityOptions}
               {...register("facilityId")}

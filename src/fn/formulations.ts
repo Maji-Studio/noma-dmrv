@@ -216,7 +216,7 @@ export async function updateFormulationFn(
       code: validated.code,
       name: validated.name,
       biocharRatio: validated.biocharRatio,
-      description: validated.description,
+      description: validated.description || null,
       ingredients: validated.ingredients?.map((ing) => ({
         ingredientType: ing.ingredientType,
         name: ing.name,

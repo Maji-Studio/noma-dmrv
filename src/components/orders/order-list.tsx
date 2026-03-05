@@ -9,7 +9,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Package, MagnifyingGlass, Plus, X, Truck } from "@phosphor-icons/react";
 import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -89,10 +89,11 @@ function createColumns(
 // ============================================
 
 export function OrderList() {
+  // Global facility context
+  const { facilityId } = useFacilityContext();
+
   // Filter / pagination state
   const [searchQuery, setSearchQuery] = useState("");
-  const [facilityFilter, setFacilityFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -111,15 +112,14 @@ export function OrderList() {
 
   const filters: Partial<OrderFilterData> = useMemo(() => ({
     search: searchQuery || undefined,
-    facilityId: facilityFilter || undefined,
+    facilityId: facilityId || undefined,
     page: currentPage,
     pageSize,
     sortBy: "orderDate",
     sortOrder: "desc",
-  }), [searchQuery, facilityFilter, currentPage, pageSize]);
+  }), [searchQuery, facilityId, currentPage, pageSize]);
 
   const { data: ordersData, isLoading, error: fetchError } = useOrders(filters);
-  const { data: facilitiesData } = useFacilities({ pageSize: 100 });
 
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -191,8 +191,8 @@ export function OrderList() {
     }
   };
 
-  const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || facilityFilter;
+  const clearFilters = () => { setSearchQuery(""); setCurrentPage(1); };
+  const hasActiveFilters = !!searchQuery;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
@@ -259,10 +259,6 @@ export function OrderList() {
             <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]" aria-label="Search table" />
           </div>
           <div className="flex items-center gap-8">
-            <select value={facilityFilter} onChange={(e) => { setFacilityFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
-              <option value="">All Facilities</option>
-              {facilitiesData?.items?.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
           </div>
         </DataTable.Toolbar>
@@ -310,6 +306,7 @@ export function OrderList() {
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
           order={sideSheet?.entity as Order | undefined}
+          defaultFacilityId={facilityId ?? undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}

@@ -112,6 +112,7 @@ The auth layer uses Better Auth directly, but you can abstract it further:
 
 ## Notes
 
+- `ADMIN_PASSWORD` env var is required by `pnpm db:reset` / `ensure-admin.ts` (no default password)
 - `/admin/users` is intentionally a scaffold route in this template
 - Invite UI/workflow can be built on top of the existing auth and mail plumbing
 - Next.js 16 proxy runs in Node.js runtime (not Edge) to support database operations

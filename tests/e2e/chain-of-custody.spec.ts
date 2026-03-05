@@ -5,7 +5,7 @@
  * - Page loads and displays the header with title and facility selector
  * - Facility dropdown is populated with seeded facility
  * - Selecting a facility renders the React Flow DAG visualization
- * - All 12 entity nodes are rendered in the graph
+ * - All 14 entity nodes are rendered in the graph
  * - Edges (connections) are rendered between nodes
  * - Nodes with seeded data show non-zero counts
  * - Clickable nodes navigate to their entity list pages
@@ -67,12 +67,13 @@ test.describe("Chain of Custody Visualization", () => {
     const viewport = page.locator(".react-flow__viewport");
     await expect(viewport).toBeVisible({ timeout: 15000 });
 
-    // All 12 entity nodes should be rendered
+    // All 14 entity nodes should be rendered
     const expectedLabels = [
       "Reactors",
       "Feedstock Bin",
       "Biochar Bin",
       "Product Bin",
+      "Suppliers",
       "Feedstock Deliveries",
       "Feedstocks",
       "Production Runs",

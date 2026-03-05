@@ -5,9 +5,11 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import { createDriverFn } from "@/fn/quick-add";
+import { seedEntityCache } from "./cache-utils";
 import type { EntityOption } from "./types";
 
 // Icon components
@@ -77,6 +79,7 @@ export function DriverQuickAddDialog({
   onClose,
   onSuccess,
 }: DriverQuickAddDialogProps) {
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState<DriverForm>({
     name: "",
     licenseNumber: "",
@@ -114,6 +117,8 @@ export function DriverQuickAddDialog({
         setIsSubmitting(false);
         return;
       }
+
+      seedEntityCache(queryClient, "driver", result.data);
 
       onSuccess(result.data);
       onClose();

@@ -7,7 +7,7 @@
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { nullableNumericValue } from "@/lib/form-utils";
-import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
+import { formatLocalDateTime } from "@/lib/date-utils";
 import { FormField, FormInput } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
@@ -50,7 +50,7 @@ export function ProductionSampleForm({
       const ts = sample?.timestamp ? new Date(sample.timestamp) : new Date();
       return {
       productionRunId,
-      timestamp: `${formatLocalDate(ts)}T${formatLocalTime(ts)}`,
+      timestamp: formatLocalDateTime(ts),
       weightGrams: sample?.weightGrams ?? undefined,
       volumeMl: sample?.volumeMl ?? undefined,
       temperatureC: sample?.temperatureC ?? undefined,

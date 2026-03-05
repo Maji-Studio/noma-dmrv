@@ -172,7 +172,7 @@ export function FormulationForm({
 
         {fields.length === 0 && (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No ingredients added. Click "Add Ingredient" to add amendment components.
+            No ingredients added. Click &quot;Add Ingredient&quot; to add amendment components.
           </p>
         )}
 
@@ -189,6 +189,7 @@ export function FormulationForm({
                 type="button"
                 onClick={() => remove(index)}
                 disabled={isSubmitting}
+                aria-label={`Remove ingredient ${index + 1}`}
                 className="h-28 w-28 flex items-center justify-center text-[var(--color-signal-red)] hover:bg-[var(--color-signal-red)]/10 transition-colors"
               >
                 <Trash size={16} weight="bold" />
