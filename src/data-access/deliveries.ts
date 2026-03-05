@@ -44,7 +44,6 @@ export interface DeliveryDetail extends Delivery {
     code: string;
     orderDate: Date;
     quantityKg: number;
-    status: string;
   } | null;
   facility: {
     id: string;
@@ -70,8 +69,7 @@ export interface DeliveryStats {
   totalDeliveries: number;
   totalDeliveredWetMassKg: number;
   totalMassDryKg: number;
-  scheduledCount: number;
-  processingCount: number;
+  upcomingCount: number;
   deliveredCount: number;
 }
 
@@ -259,7 +257,6 @@ export async function getDeliveryWithRelations(
       orderCode: orders.code,
       orderDate: orders.orderDate,
       orderQuantityKg: orders.quantityKg,
-      orderStatus: orders.status,
       facilityCode: facilities.code,
       facilityName: facilities.name,
       biocharProductCode: biocharProducts.code,
@@ -302,7 +299,6 @@ export async function getDeliveryWithRelations(
           code: deliveryRow.orderCode ?? "",
           orderDate: deliveryRow.orderDate ?? new Date(0),
           quantityKg: deliveryRow.orderQuantityKg ?? 0,
-          status: deliveryRow.orderStatus ?? "",
         }
       : null,
     facility: deliveryRow.facilityId
@@ -387,8 +383,7 @@ export async function getDeliveryStats(
     totalDeliveries: Number(stats.totalDeliveries),
     totalDeliveredWetMassKg: Number(stats.totalDeliveredWetMassKg) || 0,
     totalMassDryKg: Number(stats.totalMassDryKg) || 0,
-    scheduledCount: statusCountMap.get("scheduled") ?? 0,
-    processingCount: statusCountMap.get("processing") ?? 0,
+    upcomingCount: statusCountMap.get("upcoming") ?? 0,
     deliveredCount: statusCountMap.get("delivered") ?? 0,
   };
 }
@@ -440,7 +435,7 @@ export async function createDelivery(
     biocharProductId?: string | null;
     driverId?: string | null;
     vehicleId?: string | null;
-    status?: "scheduled" | "processing" | "delivered";
+    status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
     massDryKg?: number | null;
     moistureContentPercent?: number | null;
@@ -487,7 +482,7 @@ export async function createDelivery(
       biocharProductId: data.biocharProductId ?? null,
       driverId: data.driverId ?? null,
       vehicleId: data.vehicleId ?? null,
-      status: data.status ?? "processing",
+      status: data.status ?? "upcoming",
       deliveredWetMassKg: data.deliveredWetMassKg ?? null,
       massDryKg: data.massDryKg ?? null,
       moistureContentPercent: data.moistureContentPercent ?? null,
@@ -515,7 +510,7 @@ export async function updateDelivery(
     biocharProductId?: string | null;
     driverId?: string | null;
     vehicleId?: string | null;
-    status?: "scheduled" | "processing" | "delivered";
+    status?: "upcoming" | "delivered";
     deliveredWetMassKg?: number | null;
     massDryKg?: number | null;
     moistureContentPercent?: number | null;

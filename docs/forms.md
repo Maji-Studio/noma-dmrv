@@ -317,6 +317,28 @@ const {
 });
 ```
 
+### Dynamic Field Arrays (useFieldArray)
+
+For forms with repeatable rows (e.g., formulation ingredients), use `useFieldArray`:
+
+```typescript
+import { useForm, useFieldArray } from "react-hook-form";
+
+const { control, register } = useForm<MyFormData>({ ... });
+const { fields, append, remove } = useFieldArray({ control, name: "ingredients" });
+
+// Render rows
+{fields.map((field, index) => (
+  <div key={field.id}>
+    <FormInput {...register(`ingredients.${index}.name`)} />
+    <Button onClick={() => remove(index)}>Remove</Button>
+  </div>
+))}
+<Button onClick={() => append(EMPTY_ROW)}>Add</Button>
+```
+
+**Reference**: `src/components/formulations/formulation-form.tsx`
+
 ## Migration Checklist
 
 When migrating an existing form to React Hook Form:

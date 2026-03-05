@@ -107,7 +107,7 @@ function createColumns(
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => (
-        <StatusBadge status={row.original.status as "scheduled" | "processing" | "delivered"} />
+        <StatusBadge status={row.original.status as "upcoming" | "delivered"} />
       ),
     },
     {
@@ -373,7 +373,7 @@ export function DeliveryList() {
                       label: "Status",
                       value: (
                         <StatusBadge
-                          status={sideSheetEntity.status as "scheduled" | "processing" | "delivered"}
+                          status={sideSheetEntity.status as "upcoming" | "delivered"}
                         />
                       ),
                     },

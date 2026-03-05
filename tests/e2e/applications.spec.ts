@@ -53,7 +53,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await page.fill('input[name="deliveryDate"]', today);
     // Select the first available order
-    await page.selectOption('select[name="status"]', "processing");
+    await page.selectOption('select[name="status"]', "upcoming");
     // The orderId select should have our order — select the first option
     const orderSelect = page.locator('select[name="orderId"]');
     const orderOptions = orderSelect.locator("option:not([value=''])");

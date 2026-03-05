@@ -38,8 +38,7 @@ const statusOptions: readonly { value: string; label: string }[] =
 
 function formatStatus(status: DeliveryStatus): string {
   const labels: Record<DeliveryStatus, string> = {
-    scheduled: "Scheduled",
-    processing: "Processing",
+    upcoming: "Upcoming",
     delivered: "Delivered",
   };
   return labels[status];
@@ -95,7 +94,7 @@ export function DeliveryForm({
     defaultValues: {
       orderId: delivery?.orderId ?? "",
       deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
-      status: (delivery?.status as DeliveryStatus) ?? "processing",
+      status: (delivery?.status as DeliveryStatus) ?? "upcoming",
       deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
       massDryKg: delivery?.massDryKg ?? undefined,
       moistureContentPercent: delivery?.moistureContentPercent ?? undefined,

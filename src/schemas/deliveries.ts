@@ -15,7 +15,7 @@ import { emptyToNull } from "./helpers";
 /**
  * Valid delivery statuses
  */
-export const deliveryStatuses = ["scheduled", "processing", "delivered"] as const;
+export const deliveryStatuses = ["upcoming", "delivered"] as const;
 
 export type DeliveryStatus = (typeof deliveryStatuses)[number];
 
@@ -41,7 +41,7 @@ const deliveryFormBaseSchema = z.object({
   biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  status: z.enum(deliveryStatuses).default("processing"),
+  status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
@@ -111,7 +111,7 @@ export const createDeliverySchema = z.object({
   biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  status: z.enum(deliveryStatuses).default("processing"),
+  status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,

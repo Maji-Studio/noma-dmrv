@@ -183,7 +183,7 @@ export function EntitySelect({
     entityType,
     search: debouncedSearch,
     filterBy,
-    enabled: isOpen || (autoSelectSingle && !value),
+    enabled: !disabled && (isOpen || (autoSelectSingle && !value)),
   });
 
   // Fetch selected entity details
@@ -192,6 +192,9 @@ export function EntitySelect({
   // Get display text for the selected value
   const displayText = useMemo(() => {
     if (selectedEntity) {
+      if (selectedEntity.subtitle) {
+        return `${selectedEntity.name} (${selectedEntity.subtitle})`;
+      }
       return selectedEntity.name;
     }
     return "";
@@ -241,10 +244,10 @@ export function EntitySelect({
 
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
-    if (autoSelectSingle && !value && options.length === 1 && !isLoading) {
+    if (autoSelectSingle && !disabled && !value && options.length === 1 && !isLoading) {
       onChange(options[0].id);
     }
-  }, [autoSelectSingle, value, options, isLoading, onChange]);
+  }, [autoSelectSingle, disabled, value, options, isLoading, onChange]);
 
   const handleSelect = useCallback(
     (option: EntityOption) => {
@@ -422,8 +425,7 @@ export function EntitySelect({
                   onClick={() => handleSelect(option)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={cn(
-                    "px-12 cursor-pointer transition-colors",
-                    option.subtitle ? "py-8" : "py-8",
+                    "px-12 py-8 cursor-pointer transition-colors",
                     index === clampedHighlightedIndex &&
                       "bg-[var(--color-background-medium)]",
                     option.id === value &&
@@ -434,7 +436,7 @@ export function EntitySelect({
                     {option.name}
                   </span>
                   {option.subtitle && (
-                    <span className="block text-[var(--text-xxs)] text-[var(--color-text-tertiary)] mt-2 leading-tight">
+                    <span className="block body-small text-[var(--color-text-secondary)] mt-2">
                       {option.subtitle}
                     </span>
                   )}

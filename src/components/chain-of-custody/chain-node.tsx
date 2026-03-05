@@ -5,6 +5,7 @@
 "use client";
 
 import { type ElementType } from "react";
+import Link from "next/link";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   STATUS_COLORS,
@@ -128,49 +129,53 @@ export function ChainNode({ data }: NodeProps) {
 
   const isEmpty = total === 0;
 
+  const card = (
+    <div
+      className={`
+        group flex border bg-[var(--color-background-white)] transition-colors
+        ${href ? "cursor-pointer" : "cursor-default"}
+        ${isEmpty
+          ? "border-dashed border-[var(--color-border-secondary)] opacity-40"
+          : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)]"
+        }
+      `}
+      style={{
+        width: 240,
+        minHeight: 110,
+        borderLeftWidth: "3px",
+        borderLeftStyle: "solid",
+        borderLeftColor: accent,
+      }}
+    >
+      <div className="flex-1 flex flex-col gap-6 p-12">
+        {/* Header */}
+        <div className="flex items-center gap-6">
+          <Icon size={18} weight="bold" style={{ color: accent }} className="shrink-0" />
+          <span className="title-chapter-title truncate" style={{ color: accent }}>
+            {label}
+          </span>
+        </div>
+
+        {/* Count */}
+        <p className="title-heading-3">{total}</p>
+
+        {/* Items list */}
+        <ItemsList items={items} total={total} />
+
+        {/* Status bar */}
+        <StatusBar byStatus={byStatus} total={total} />
+
+        {/* Status legend */}
+        <StatusLegend byStatus={byStatus} />
+      </div>
+    </div>
+  );
+
   return (
     <>
       <Handle type="target" position={Position.Left} className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0" />
 
-      <div
-        className={`
-          group flex border bg-[var(--color-background-white)] transition-colors
-          ${href ? "cursor-pointer" : "cursor-default"}
-          ${isEmpty
-            ? "border-dashed border-[var(--color-border-secondary)] opacity-40"
-            : "border-[var(--color-border-secondary)] hover:border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)]"
-          }
-        `}
-        style={{
-          width: 240,
-          minHeight: 110,
-          borderLeftWidth: "3px",
-          borderLeftStyle: "solid",
-          borderLeftColor: accent,
-        }}
-      >
-        <div className="flex-1 flex flex-col gap-6 p-12">
-          {/* Header */}
-          <div className="flex items-center gap-6">
-            <Icon size={18} weight="bold" style={{ color: accent }} className="shrink-0" />
-            <span className="title-chapter-title truncate" style={{ color: accent }}>
-              {label}
-            </span>
-          </div>
-
-          {/* Count */}
-          <p className="title-heading-3">{total}</p>
-
-          {/* Items list */}
-          <ItemsList items={items} total={total} />
-
-          {/* Status bar */}
-          <StatusBar byStatus={byStatus} total={total} />
-
-          {/* Status legend */}
-          <StatusLegend byStatus={byStatus} />
-        </div>
-      </div>
+      {href ? <Link href={href}>{card}</Link> : card}
 
       <Handle type="source" position={Position.Right} className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0" />
     </>

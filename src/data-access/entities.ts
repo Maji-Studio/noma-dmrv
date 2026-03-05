@@ -507,6 +507,29 @@ function formatStorageLocationSubtitle(
   return parts.join(" · ");
 }
 
+const storageLocationInventorySelect = {
+  feedstockTypeName: sql<string | null>`(
+    SELECT string_agg(sub.name, ', ' ORDER BY sub.name)
+    FROM (
+      SELECT DISTINCT ft.name
+      FROM feedstocks f
+      JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
+      WHERE f.storage_location_id = "storage_locations"."id"
+    ) sub
+  )`,
+  totalStoredKg: sql<number>`COALESCE((
+    SELECT SUM(f.mass_dry_kg)
+    FROM feedstocks f
+    WHERE f.storage_location_id = "storage_locations"."id"
+  ), 0)`,
+  totalConsumedKg: sql<number>`COALESCE((
+    SELECT SUM(pr.feedstock_mass_used_kg)
+    FROM production_runs pr
+    WHERE pr.feedstock_storage_location_id = "storage_locations"."id"
+    AND pr.feedstock_mass_used_kg IS NOT NULL
+  ), 0)`,
+};
+
 async function getStorageLocations(params: {
   search?: string;
   facilityId?: string;
@@ -547,23 +570,7 @@ async function getStorageLocations(params: {
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
-      feedstockTypeName: sql<string | null>`(
-        SELECT string_agg(DISTINCT ft.name, ', ')
-        FROM feedstocks f
-        JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
-        WHERE f.storage_location_id = ${storageLocations.id}
-      )`,
-      totalStoredKg: sql<number>`COALESCE((
-        SELECT SUM(f.mass_dry_kg)
-        FROM feedstocks f
-        WHERE f.storage_location_id = ${storageLocations.id}
-      ), 0)`,
-      totalConsumedKg: sql<number>`COALESCE((
-        SELECT SUM(pr.feedstock_mass_used_kg)
-        FROM production_runs pr
-        WHERE pr.feedstock_storage_location_id = ${storageLocations.id}
-        AND pr.feedstock_mass_used_kg IS NOT NULL
-      ), 0)`,
+      ...storageLocationInventorySelect,
     })
     .from(storageLocations)
     .where(whereClause)
@@ -586,23 +593,7 @@ async function getStorageLocationById(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
-      feedstockTypeName: sql<string | null>`(
-        SELECT string_agg(DISTINCT ft.name, ', ')
-        FROM feedstocks f
-        JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
-        WHERE f.storage_location_id = ${storageLocations.id}
-      )`,
-      totalStoredKg: sql<number>`COALESCE((
-        SELECT SUM(f.mass_dry_kg)
-        FROM feedstocks f
-        WHERE f.storage_location_id = ${storageLocations.id}
-      ), 0)`,
-      totalConsumedKg: sql<number>`COALESCE((
-        SELECT SUM(pr.feedstock_mass_used_kg)
-        FROM production_runs pr
-        WHERE pr.feedstock_storage_location_id = ${storageLocations.id}
-        AND pr.feedstock_mass_used_kg IS NOT NULL
-      ), 0)`,
+      ...storageLocationInventorySelect,
     })
     .from(storageLocations)
     .where(eq(storageLocations.id, id))
@@ -902,7 +893,6 @@ async function getFormulationsEntity(params: {
       code: formulations.code,
       name: formulations.name,
       biocharRatio: formulations.biocharRatio,
-      compostRatio: formulations.compostRatio,
     })
     .from(formulations)
     .where(whereClause)
@@ -923,7 +913,6 @@ async function getFormulationEntityById(id: string): Promise<EntityOption | null
       code: formulations.code,
       name: formulations.name,
       biocharRatio: formulations.biocharRatio,
-      compostRatio: formulations.compostRatio,
     })
     .from(formulations)
     .where(eq(formulations.id, id))
