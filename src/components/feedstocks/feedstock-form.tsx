@@ -85,16 +85,24 @@ export function FeedstockForm({
 
   // Auto-populate facilityId when delivery changes
   useEffect(() => {
-    if (!deliveryId) return;
+    if (!deliveryId) {
+      setValue("facilityId", "");
+      return;
+    }
 
     let active = true;
     getFeedstockDeliveryByIdFn(deliveryId)
       .then((result) => {
-        if (active && result.success) {
+        if (!active) return;
+        if (result.success) {
           setValue("facilityId", result.data.facilityId);
+        } else {
+          setValue("facilityId", "");
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setValue("facilityId", "");
+      });
     return () => { active = false; };
   }, [deliveryId, setValue]);
 

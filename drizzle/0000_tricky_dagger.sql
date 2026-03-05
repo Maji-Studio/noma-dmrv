@@ -4,13 +4,12 @@ CREATE TYPE "public"."biochar_product_status" AS ENUM('draft', 'testing', 'ready
 CREATE TYPE "public"."isometric_submission_status" AS ENUM('draft', 'submitted', 'accepted', 'rejected', 'superseded');--> statement-breakpoint
 CREATE TYPE "public"."certifier_provider" AS ENUM('isometric', 'puro_earth', 'verra');--> statement-breakpoint
 CREATE TYPE "public"."credit_batch_status" AS ENUM('draft', 'pending', 'verified', 'issued', 'rejected');--> statement-breakpoint
-CREATE TYPE "public"."delivery_status" AS ENUM('scheduled', 'processing', 'delivered');--> statement-breakpoint
+CREATE TYPE "public"."delivery_status" AS ENUM('upcoming', 'delivered');--> statement-breakpoint
 CREATE TYPE "public"."documentation_type" AS ENUM('weighbridge_ticket', 'bill_of_lading', 'lab_report', 'delivery_receipt', 'invoice', 'pdd', 'affidavit', 'calibration_certificate', 'photo', 'video', 'pdf');--> statement-breakpoint
 CREATE TYPE "public"."durability_option" AS ENUM('200_year', '1000_year');--> statement-breakpoint
 CREATE TYPE "public"."emissions_calculation_method" AS ENUM('energy_usage', 'distance_based');--> statement-breakpoint
 CREATE TYPE "public"."feedstock_status" AS ENUM('missing_data', 'complete');--> statement-breakpoint
 CREATE TYPE "public"."incident_severity" AS ENUM('low', 'medium', 'high');--> statement-breakpoint
-CREATE TYPE "public"."order_status" AS ENUM('draft', 'ordered', 'processed');--> statement-breakpoint
 CREATE TYPE "public"."packaging_type" AS ENUM('loose', 'bagged');--> statement-breakpoint
 CREATE TYPE "public"."production_run_status" AS ENUM('draft', 'running', 'complete', 'void');--> statement-breakpoint
 CREATE TYPE "public"."sampling_method" AS ENUM('method_a', 'method_b');--> statement-breakpoint
@@ -20,6 +19,7 @@ CREATE TYPE "public"."sync_status" AS ENUM('pending', 'succeeded', 'failed');-->
 CREATE TYPE "public"."transport_entity_type" AS ENUM('feedstock', 'biochar', 'sample', 'delivery');--> statement-breakpoint
 CREATE TYPE "public"."transport_method" AS ENUM('road', 'rail', 'ship', 'pipeline', 'aircraft');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('admin', 'operator', 'lab_technician', 'viewer');--> statement-breakpoint
+CREATE TYPE "public"."ingredient_type" AS ENUM('compost', 'mineral', 'lime', 'binder', 'amendment', 'other');--> statement-breakpoint
 CREATE TABLE "applications" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"code" text NOT NULL,
@@ -354,7 +354,6 @@ CREATE TABLE "reactors" (
 	"identifier" text NOT NULL,
 	"facility_id" uuid NOT NULL,
 	"reactor_type" text NOT NULL,
-	"type" text NOT NULL,
 	"sampling_method" "sampling_method" DEFAULT 'method_a' NOT NULL,
 	"capacity_kg" real,
 	"specifications" jsonb,
@@ -662,18 +661,28 @@ CREATE TABLE "biochar_products" (
 	CONSTRAINT "biochar_products_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
+CREATE TABLE "formulation_ingredients" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"formulation_id" uuid NOT NULL,
+	"ingredient_type" "ingredient_type" NOT NULL,
+	"name" text NOT NULL,
+	"ratio" real,
+	"description" text,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "formulation_ingredients_ratio_range" CHECK ("formulation_ingredients"."ratio" is null or ("formulation_ingredients"."ratio" >= 0 and "formulation_ingredients"."ratio" <= 1))
+);
+--> statement-breakpoint
 CREATE TABLE "formulations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"code" text NOT NULL,
 	"name" text NOT NULL,
 	"biochar_ratio" real,
-	"compost_ratio" real,
 	"description" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "formulations_code_unique" UNIQUE("code"),
-	CONSTRAINT "formulations_biochar_ratio_range" CHECK ("formulations"."biochar_ratio" is null or ("formulations"."biochar_ratio" >= 0 and "formulations"."biochar_ratio" <= 1)),
-	CONSTRAINT "formulations_compost_ratio_range" CHECK ("formulations"."compost_ratio" is null or ("formulations"."compost_ratio" >= 0 and "formulations"."compost_ratio" <= 1))
+	CONSTRAINT "formulations_biochar_ratio_range" CHECK ("formulations"."biochar_ratio" is null or ("formulations"."biochar_ratio" >= 0 and "formulations"."biochar_ratio" <= 1))
 );
 --> statement-breakpoint
 CREATE TABLE "deliveries" (
@@ -681,7 +690,7 @@ CREATE TABLE "deliveries" (
 	"code" text NOT NULL,
 	"facility_id" uuid NOT NULL,
 	"delivery_date" timestamp NOT NULL,
-	"status" "delivery_status" DEFAULT 'processing' NOT NULL,
+	"status" "delivery_status" DEFAULT 'upcoming' NOT NULL,
 	"order_id" uuid NOT NULL,
 	"customer_location_id" uuid,
 	"biochar_product_id" uuid,
@@ -704,7 +713,6 @@ CREATE TABLE "orders" (
 	"code" text NOT NULL,
 	"facility_id" uuid NOT NULL,
 	"order_date" timestamp NOT NULL,
-	"status" "order_status" DEFAULT 'ordered' NOT NULL,
 	"customer_id" uuid NOT NULL,
 	"customer_location_id" uuid NOT NULL,
 	"biochar_product_id" uuid NOT NULL,
@@ -848,6 +856,7 @@ ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_facility_id_faci
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_formulation_id_formulations_id_fk" FOREIGN KEY ("formulation_id") REFERENCES "public"."formulations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_linked_production_run_id_production_runs_id_fk" FOREIGN KEY ("linked_production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "formulation_ingredients" ADD CONSTRAINT "formulation_ingredients_formulation_id_formulations_id_fk" FOREIGN KEY ("formulation_id") REFERENCES "public"."formulations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deliveries" ADD CONSTRAINT "deliveries_customer_location_id_customer_locations_id_fk" FOREIGN KEY ("customer_location_id") REFERENCES "public"."customer_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

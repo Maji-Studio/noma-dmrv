@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Warehouse, CaretDown, Plus, Check, GearSix } from "@phosphor-icons/react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -17,6 +17,7 @@ export function FacilitySelector() {
     useFacilityContext();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   const selectedFacilityName = selectedFacility?.name ?? "Select facility";
 
@@ -78,6 +79,7 @@ export function FacilitySelector() {
           onClick={() => setIsOpen((prev) => !prev)}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
+          aria-controls={listboxId}
           className="w-full h-36 pl-32 pr-28 bg-[var(--color-white-100)]/[0.06] border border-[var(--color-white-10)] text-white body-caption cursor-pointer text-left hover:bg-[var(--color-white-100)]/[0.10] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clr-purple)] transition-colors duration-150"
         >
           <span className="block truncate">{selectedFacilityName}</span>
@@ -92,7 +94,7 @@ export function FacilitySelector() {
 
         {isOpen && (
           <div className="absolute z-50 mt-6 w-full border border-[var(--color-white-10)] bg-[#0f021a] shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
-            <ul role="listbox" aria-label="Select facility" className="max-h-[240px] overflow-y-auto py-4">
+            <ul role="listbox" id={listboxId} aria-label="Select facility" className="max-h-[240px] overflow-y-auto py-4">
               {facilities.map((facility) => {
                 const isSelected = facility.id === facilityId;
                 return (

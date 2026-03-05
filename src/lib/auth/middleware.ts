@@ -35,7 +35,7 @@ function matchesRoute(pathname: string, routes: string[]): boolean {
 
 /**
  * Update session function
- * Called from src/proxy.ts (Next.js 16 proxy) for all requests
+ * Called from proxy.ts (Next.js 16 proxy) for all requests
  */
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -61,6 +61,14 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute = matchesRoute(pathname, PUBLIC_ROUTES);
   const isAuthRoute = matchesRoute(pathname, AUTH_ROUTES);
   const isApiRoute = pathname.startsWith("/api");
+
+  // Root path: redirect to dashboard or login
+  if (pathname === "/") {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
 
   // If authenticated and on an auth page, redirect to app
   if (isAuthenticated && isAuthRoute) {
