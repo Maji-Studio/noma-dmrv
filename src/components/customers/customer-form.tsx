@@ -216,7 +216,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
     null
   );
 
-  const { data: locations, isLoading } = useCustomerLocations(customerId);
+  const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
   const deleteLocation = useDeleteCustomerLocation(customerId);
 
   const handleDeleteConfirm = async () => {
@@ -249,6 +249,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
       {isLoading ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
           Loading locations...
+        </p>
+      ) : isError ? (
+        <p className="body-small text-[var(--color-signal-red)]" role="alert" aria-live="assertive" aria-atomic="true">
+          Failed to load locations. Please try refreshing.
         </p>
       ) : !locations || locations.length === 0 ? (
         <p className="body-small text-[var(--color-text-tertiary)]">

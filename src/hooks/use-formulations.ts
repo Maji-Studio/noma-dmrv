@@ -5,7 +5,6 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Formulation } from "@/db/schema";
 import type {
   FormulationFilterData,
   CreateFormulationData,
@@ -13,7 +12,7 @@ import type {
 } from "@/schemas/formulations";
 import type {
   PaginatedFormulations,
-  FormulationWithRelations,
+  FormulationWithIngredients,
 } from "@/data-access/formulations";
 import {
   getFormulationsFn,
@@ -130,7 +129,7 @@ export function useFormulationCodeCheck(
  * Supports optional callbacks for custom behavior
  */
 export function useCreateFormulation(
-  callbacks?: MutationCallbacks<Formulation, CreateFormulationData>
+  callbacks?: MutationCallbacks<FormulationWithIngredients, CreateFormulationData>
 ) {
   const queryClient = useQueryClient();
 
@@ -170,7 +169,7 @@ export function useCreateFormulation(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useUpdateFormulation(
-  callbacks?: MutationCallbacks<Formulation, UpdateFormulationData>,
+  callbacks?: MutationCallbacks<FormulationWithIngredients, UpdateFormulationData>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
@@ -199,7 +198,7 @@ export function useUpdateFormulation(
       });
 
       // Snapshot previous values for rollback
-      const previousFormulation = queryClient.getQueryData<Formulation>(
+      const previousFormulation = queryClient.getQueryData<FormulationWithIngredients>(
         formulationKeys.detail(variables.formulationId)
       );
       const previousLists = queryClient.getQueriesData<PaginatedFormulations>({
@@ -207,14 +206,16 @@ export function useUpdateFormulation(
       });
 
       // Optimistically update the formulation detail cache
+      // Exclude ingredients (form-level shape differs from DB shape) and formulationId
+      const { ingredients: _ing, formulationId: _fid, ...formulationUpdates } = variables;
       if (previousFormulation) {
-        queryClient.setQueryData<Formulation>(
+        queryClient.setQueryData<FormulationWithIngredients>(
           formulationKeys.detail(variables.formulationId),
           (old) =>
             old
               ? {
                   ...old,
-                  ...variables,
+                  ...formulationUpdates,
                   updatedAt: new Date(),
                 }
               : old
@@ -231,9 +232,9 @@ export function useUpdateFormulation(
               item.id === variables.formulationId
                 ? ({
                     ...item,
-                    ...variables,
+                    ...formulationUpdates,
                     updatedAt: new Date(),
-                  } as FormulationWithRelations)
+                  } as FormulationWithIngredients)
                 : item
             ),
           };
@@ -259,7 +260,7 @@ export function useUpdateFormulation(
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousFormulation, previousLists } = context as {
-          previousFormulation?: Formulation;
+          previousFormulation?: FormulationWithIngredients;
           previousLists?: [readonly unknown[], PaginatedFormulations | undefined][];
         };
 
@@ -321,7 +322,7 @@ export function useDeleteFormulation(
       });
 
       // Snapshot previous values for rollback
-      const previousFormulation = queryClient.getQueryData<Formulation>(
+      const previousFormulation = queryClient.getQueryData<FormulationWithIngredients>(
         formulationKeys.detail(formulationId)
       );
       const previousLists = queryClient.getQueriesData<PaginatedFormulations>({
@@ -359,7 +360,7 @@ export function useDeleteFormulation(
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousFormulation, previousLists } = context as {
-          previousFormulation?: Formulation;
+          previousFormulation?: FormulationWithIngredients;
           previousLists?: [readonly unknown[], PaginatedFormulations | undefined][];
         };
 
@@ -470,11 +471,11 @@ export function useFormulationCacheInvalidation() {
     },
 
     /** Set formulation data in cache (useful for optimistic updates) */
-    setFormulationData: (formulationId: string, data: Formulation) =>
+    setFormulationData: (formulationId: string, data: FormulationWithIngredients) =>
       queryClient.setQueryData(formulationKeys.detail(formulationId), data),
 
     /** Get cached formulation data */
     getCachedFormulation: (formulationId: string) =>
-      queryClient.getQueryData<Formulation>(formulationKeys.detail(formulationId)),
+      queryClient.getQueryData<FormulationWithIngredients>(formulationKeys.detail(formulationId)),
   };
 }

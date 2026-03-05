@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from './schema';
-import { hashPassword } from '../../tests/e2e/fixtures/hash-password';
+import { hashPassword } from '../lib/auth/hash-password';
 
 config({ path: '.env.local' });
 
@@ -355,7 +355,6 @@ async function seed() {
         identifier: 'Kiln-A',
         facilityId: ids.facility,
         reactorType: 'auger',
-        type: 'continuous',
         samplingMethod: 'method_a',
         capacityKg: 500,
         specifications: {
@@ -695,7 +694,6 @@ async function seed() {
         code: 'BCF-01',
         name: 'Biochar Compost Blend 30/70',
         biocharRatio: 0.3,
-        compostRatio: 0.7,
         description: 'Field application blend for coffee farms.',
       });
 
@@ -722,7 +720,6 @@ async function seed() {
         code: 'OR-2026-001',
         facilityId: ids.facility,
         orderDate: timestamps.orderTime,
-        status: 'processed',
         customerId: ids.customer,
         customerLocationId: ids.customerLocation,
         biocharProductId: ids.biocharProduct,

@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { type Formulation, formulations } from "@/db/schema";
+import { formulations } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
   createFormulation,
@@ -16,6 +16,7 @@ import {
   isFormulationCodeAvailable as isFormulationCodeAvailableData,
   getFormulationOptions as getFormulationOptionsData,
   updateFormulation,
+  type FormulationWithIngredients,
   type PaginatedFormulations,
 } from "@/data-access/formulations";
 import { getUser } from "@/lib/auth/server";
@@ -65,11 +66,11 @@ export async function getFormulationsFn(
 }
 
 /**
- * Get a single formulation by ID
+ * Get a single formulation by ID (with ingredients)
  */
 export async function getFormulationByIdFn(
   formulationId: string
-): Promise<ActionResult<Formulation>> {
+): Promise<ActionResult<FormulationWithIngredients>> {
   try {
     const user = await getUser();
     if (!user?.id) {
@@ -144,11 +145,11 @@ export async function checkFormulationCodeFn(
 // ============================================
 
 /**
- * Create a new formulation
+ * Create a new formulation with optional ingredients
  */
 export async function createFormulationFn(
   data: z.infer<typeof createFormulationSchema>
-): Promise<ActionResult<Formulation>> {
+): Promise<ActionResult<FormulationWithIngredients>> {
   try {
     const user = await getUser();
     if (!user?.id) {
@@ -167,8 +168,13 @@ export async function createFormulationFn(
           code,
           name: validated.name,
           biocharRatio: validated.biocharRatio ?? null,
-          compostRatio: validated.compostRatio ?? null,
           description: validated.description || null,
+          ingredients: validated.ingredients?.map((ing) => ({
+            ingredientType: ing.ingredientType,
+            name: ing.name,
+            ratio: ing.ratio ?? null,
+            description: ing.description || null,
+          })),
         })
     );
 
@@ -193,11 +199,11 @@ export async function createFormulationFn(
 // ============================================
 
 /**
- * Update an existing formulation
+ * Update an existing formulation with ingredients
  */
 export async function updateFormulationFn(
   data: z.infer<typeof updateFormulationSchema>
-): Promise<ActionResult<Formulation>> {
+): Promise<ActionResult<FormulationWithIngredients>> {
   try {
     const user = await getUser();
     if (!user?.id) {
@@ -210,8 +216,13 @@ export async function updateFormulationFn(
       code: validated.code,
       name: validated.name,
       biocharRatio: validated.biocharRatio,
-      compostRatio: validated.compostRatio,
-      description: validated.description,
+      description: validated.description || null,
+      ingredients: validated.ingredients?.map((ing) => ({
+        ingredientType: ing.ingredientType,
+        name: ing.name,
+        ratio: ing.ratio ?? null,
+        description: ing.description || null,
+      })),
     });
 
     return { success: true, data: formulation };
@@ -235,7 +246,7 @@ export async function updateFormulationFn(
 // ============================================
 
 /**
- * Delete a formulation
+ * Delete a formulation (ingredients cascade via FK)
  */
 export async function deleteFormulationFn(
   data: z.infer<typeof deleteFormulationSchema>

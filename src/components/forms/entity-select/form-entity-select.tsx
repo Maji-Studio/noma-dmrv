@@ -40,6 +40,8 @@ interface FormEntitySelectProps<
   required?: boolean;
   /** Auto-select when there is exactly one option (defaults to true when required) */
   autoSelectSingle?: boolean;
+  /** Always show the search input while dropdown is open */
+  alwaysShowSearch?: boolean;
 }
 
 export function FormEntitySelect<
@@ -59,6 +61,7 @@ export function FormEntitySelect<
   filterBy,
   required,
   autoSelectSingle,
+  alwaysShowSearch = false,
 }: FormEntitySelectProps<TFieldValues, TName>) {
   const id = useId();
 
@@ -86,6 +89,7 @@ export function FormEntitySelect<
             onCreateNew={onCreateNew}
             filterBy={filterBy}
             autoSelectSingle={autoSelectSingle ?? required}
+            alwaysShowSearch={alwaysShowSearch}
           />
         </FormField>
       )}

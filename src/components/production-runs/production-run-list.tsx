@@ -33,7 +33,7 @@ import {
   useUpdateProductionRun,
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -42,6 +42,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ProductionRunForm } from "./production-run-form";
+import { ProductionSampleTable } from "./production-sample-table";
 import {
   formatProductionRunStatus,
   getStatusColorClass,
@@ -158,9 +159,11 @@ function createColumns(
 // ============================================
 
 export function ProductionRunList() {
+  // Global facility context
+  const { facilityId } = useFacilityContext();
+
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [facilityFilter, setFacilityFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -178,19 +181,18 @@ export function ProductionRunList() {
   const filters: Partial<ProductionRunFilterData> = useMemo(
     () => ({
       search: searchQuery || undefined,
-      facilityId: facilityFilter || undefined,
+      facilityId: facilityId || undefined,
       status: (statusFilter as ProductionRunStatus) || undefined,
       page: currentPage,
       pageSize,
       sortBy: "date",
       sortOrder: "desc",
     }),
-    [searchQuery, facilityFilter, statusFilter, currentPage, pageSize]
+    [searchQuery, facilityId, statusFilter, currentPage, pageSize]
   );
 
   const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters);
-  const { data: statsData, isLoading: statsLoading } = useProductionRunStats(facilityFilter || undefined);
-  const { data: facilitiesData } = useFacilities({ pageSize: 100 });
+  const { data: statsData, isLoading: statsLoading } = useProductionRunStats(facilityId || undefined);
 
   const createRun = useCreateProductionRun();
   const updateRun = useUpdateProductionRun();
@@ -215,7 +217,14 @@ export function ProductionRunList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateRun.mutateAsync({ productionRunId: sideSheet.entity.id, ...data });
+      const { date, startTime, endTime, ...rest } = data;
+      await updateRun.mutateAsync({
+        productionRunId: sideSheet.entity.id,
+        ...rest,
+        date: date instanceof Date ? date : new Date(date),
+        startTime: startTime instanceof Date ? startTime : new Date(startTime),
+        endTime: endTime instanceof Date ? endTime : new Date(endTime),
+      });
       setSideSheet(null);
       toast.success("Production run updated successfully");
     } catch (error) {
@@ -242,8 +251,8 @@ export function ProductionRunList() {
   const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
-  const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setStatusFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || facilityFilter || statusFilter;
+  const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
+  const hasActiveFilters = searchQuery || statusFilter;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
@@ -322,14 +331,6 @@ export function ProductionRunList() {
             />
           </div>
           <div className="flex items-center gap-8">
-            <select
-              value={facilityFilter}
-              onChange={(e) => { setFacilityFilter(e.target.value); setCurrentPage(1); }}
-              className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
-            >
-              <option value="">All Facilities</option>
-              {facilitiesData?.items?.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
@@ -432,11 +433,16 @@ export function ProductionRunList() {
           <ProductionRunForm
             key={sideSheet.entity?.id ?? "create"}
             productionRun={sideSheet.entity ?? undefined}
+            facilityId={facilityId ?? undefined}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createRun.isPending || updateRun.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Production Run"}
-          />
+          >
+            {sideSheet.entity && sideSheet.mode === "edit" && (
+              <ProductionSampleTable productionRunId={sideSheet.entity.id} />
+            )}
+          </ProductionRunForm>
         </EntitySideSheet>
       )}
     </div>

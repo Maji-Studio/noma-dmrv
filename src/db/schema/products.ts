@@ -1,6 +1,8 @@
 import {
   check,
+  integer,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -13,6 +15,19 @@ import { facilities, storageLocations } from './facilities';
 import { productionRuns } from './production';
 
 // ============================================
+// Enums
+// ============================================
+
+export const ingredientType = pgEnum('ingredient_type', [
+  'compost',
+  'mineral',
+  'lime',
+  'binder',
+  'amendment',
+  'other',
+]);
+
+// ============================================
 // Formulations - Product recipes
 // ============================================
 
@@ -22,8 +37,7 @@ export const formulations = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     code: text('code').notNull().unique(), // e.g., "BCF-01"
     name: text('name').notNull(), // e.g., "Raw Biochar", "BCF-01 - Organic"
-    biocharRatio: real('biochar_ratio'), // Ratio in [0, 1]
-    compostRatio: real('compost_ratio'), // Ratio in [0, 1]
+    biocharRatio: real('biochar_ratio'), // Ratio in [0, 1] — primary compliance field (§9.4.2 <50% rule)
     description: text('description'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -33,9 +47,31 @@ export const formulations = pgTable(
       'formulations_biochar_ratio_range',
       sql`${table.biocharRatio} is null or (${table.biocharRatio} >= 0 and ${table.biocharRatio} <= 1)`
     ),
+  ]
+);
+
+// ============================================
+// Formulation Ingredients - Multi-ingredient recipes
+// ============================================
+
+export const formulationIngredients = pgTable(
+  'formulation_ingredients',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    formulationId: uuid('formulation_id')
+      .notNull()
+      .references(() => formulations.id, { onDelete: 'cascade' }),
+    ingredientType: ingredientType('ingredient_type').notNull(),
+    name: text('name').notNull(), // Freeform: "cow manure compost", "rock dust", etc.
+    ratio: real('ratio'), // Ratio in [0, 1]
+    description: text('description'),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
     check(
-      'formulations_compost_ratio_range',
-      sql`${table.compostRatio} is null or (${table.compostRatio} >= 0 and ${table.compostRatio} <= 1)`
+      'formulation_ingredients_ratio_range',
+      sql`${table.ratio} is null or (${table.ratio} >= 0 and ${table.ratio} <= 1)`
     ),
   ]
 );
@@ -81,7 +117,18 @@ export const biocharProducts = pgTable('biochar_products', {
 
 export const formulationsRelations = relations(formulations, ({ many }) => ({
   biocharProducts: many(biocharProducts),
+  ingredients: many(formulationIngredients),
 }));
+
+export const formulationIngredientsRelations = relations(
+  formulationIngredients,
+  ({ one }) => ({
+    formulation: one(formulations, {
+      fields: [formulationIngredients.formulationId],
+      references: [formulations.id],
+    }),
+  })
+);
 
 export const biocharProductsRelations = relations(
   biocharProducts,
@@ -110,4 +157,5 @@ export const biocharProductsRelations = relations(
 // ============================================
 
 export type Formulation = InferSelectModel<typeof formulations>;
+export type FormulationIngredient = InferSelectModel<typeof formulationIngredients>;
 export type BiocharProduct = InferSelectModel<typeof biocharProducts>;

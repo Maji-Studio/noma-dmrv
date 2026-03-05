@@ -127,7 +127,6 @@ export async function getFacilityReactorsFn(
       id: string;
       code: string;
       identifier: string;
-      type: string;
       reactorType: string;
       capacityKg: number | null;
       samplingMethod: string;

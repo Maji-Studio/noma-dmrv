@@ -121,7 +121,6 @@ export async function getOrdersForSelectFn(
       id: string;
       code: string;
       orderDate: Date;
-      status: string;
       customerName: string | null;
     }>
   >
@@ -200,7 +199,6 @@ export async function createOrderFn(
           orderDate: validated.orderDate,
           quantityKg: validated.quantityKg,
           packaging: validated.packaging,
-          status: validated.status,
           value: validated.value ?? null,
           currency: validated.currency,
         })
@@ -248,7 +246,6 @@ export async function updateOrderFn(
       orderDate: validated.orderDate,
       quantityKg: validated.quantityKg,
       packaging: validated.packaging,
-      status: validated.status,
       value: validated.value,
       currency: validated.currency,
     });

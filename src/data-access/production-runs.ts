@@ -491,17 +491,35 @@ async function allocateFeedstockMass(
   const totalDryMass = batchesInBin.reduce((s, b) => s + (b.massDryKg ?? 0), 0);
 
   if (totalDryMass === 0) {
-    const equalShare = totalMassKg / batchesInBin.length;
-    return batchesInBin.map((b) => ({
-      feedstockId: b.id,
-      massUsedKg: equalShare,
-    }));
+    throw new Error(
+      "Cannot allocate feedstock: batches in this bin have no recorded dry mass. Please update feedstock batch weights first."
+    );
   }
 
   return batchesInBin.map((b) => ({
     feedstockId: b.id,
     massUsedKg: ((b.massDryKg ?? 0) / totalDryMass) * totalMassKg,
   }));
+}
+
+/**
+ * Validate that a storage location exists, belongs to the facility, and is the expected type.
+ */
+async function validateStorageLocation(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  locationId: string,
+  facilityId: string,
+  expectedType: "feedstock_bin" | "biochar_bin",
+  label: string,
+) {
+  const [loc] = await tx
+    .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+    .from(storageLocations)
+    .where(eq(storageLocations.id, locationId));
+
+  if (!loc) throw new Error(`${label} storage location not found`);
+  if (loc.facilityId !== facilityId) throw new Error(`${label} bin does not belong to the selected facility`);
+  if (loc.type !== expectedType) throw new Error(`Selected storage location is not a ${expectedType.replace("_", " ")}`);
 }
 
 // ============================================
@@ -598,6 +616,14 @@ export async function createProductionRun(
       })
       .returning();
 
+    // Validate storage locations belong to facility and are correct type
+    if (data.feedstockStorageLocationId) {
+      await validateStorageLocation(tx, data.feedstockStorageLocationId, data.facilityId, "feedstock_bin", "Feedstock");
+    }
+    if (data.biocharStorageLocationId) {
+      await validateStorageLocation(tx, data.biocharStorageLocationId, data.facilityId, "biochar_bin", "Biochar");
+    }
+
     // Auto-populate M:M feedstock relationships from bin contents
     if (data.feedstockStorageLocationId && data.feedstockMassUsedKg) {
       const allocated = await allocateFeedstockMass(
@@ -676,13 +702,14 @@ export async function updateProductionRun(
     }
   }
 
-  // If reactor is being changed, verify it belongs to the facility
-  if (data.reactorId && data.reactorId !== existing.reactorId) {
+  // Verify reactor belongs to the facility when reactor or facility changes
+  const effectiveReactorId = data.reactorId !== undefined ? data.reactorId : existing.reactorId;
+  if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
     const targetFacilityId = data.facilityId ?? existing.facilityId;
     const [reactor] = await db
       .select({ facilityId: reactors.facilityId })
       .from(reactors)
-      .where(eq(reactors.id, data.reactorId));
+      .where(eq(reactors.id, effectiveReactorId));
 
     if (!reactor) {
       throw new Error("Reactor not found");
@@ -728,23 +755,46 @@ export async function updateProductionRun(
       .set(updateData)
       .where(eq(productionRuns.id, productionRunId));
 
+    // Validate storage locations belong to facility and are correct type
+    const targetFacilityId = data.facilityId ?? existing.facilityId;
+
+    const effectiveFeedstockStorageId =
+      data.feedstockStorageLocationId !== undefined
+        ? data.feedstockStorageLocationId
+        : existing.feedstockStorageLocationId;
+
+    if (
+      effectiveFeedstockStorageId &&
+      (data.feedstockStorageLocationId !== undefined || data.facilityId !== undefined)
+    ) {
+      await validateStorageLocation(tx, effectiveFeedstockStorageId, targetFacilityId, "feedstock_bin", "Feedstock");
+    }
+
+    const effectiveBiocharStorageId =
+      data.biocharStorageLocationId !== undefined
+        ? data.biocharStorageLocationId
+        : existing.biocharStorageLocationId;
+
+    if (
+      effectiveBiocharStorageId &&
+      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
+    ) {
+      await validateStorageLocation(tx, effectiveBiocharStorageId, targetFacilityId, "biochar_bin", "Biochar");
+    }
+
+    // Re-allocate feedstock M:M when feedstock fields change
     if (feedstockFieldsChanged) {
       await tx
         .delete(productionRunFeedstocks)
         .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
 
-      // Use undefined check (not ??) so explicit null correctly clears the field
-      const storageLocationId =
-        data.feedstockStorageLocationId !== undefined
-          ? data.feedstockStorageLocationId
-          : existing.feedstockStorageLocationId;
       const massUsedKg =
         data.feedstockMassUsedKg !== undefined
           ? data.feedstockMassUsedKg
           : existing.feedstockMassUsedKg;
 
-      if (storageLocationId && massUsedKg) {
-        const allocated = await allocateFeedstockMass(storageLocationId, massUsedKg, tx);
+      if (effectiveFeedstockStorageId && massUsedKg) {
+        const allocated = await allocateFeedstockMass(effectiveFeedstockStorageId, massUsedKg, tx);
         await tx.insert(productionRunFeedstocks).values(
           allocated.map((a) => ({
             productionRunId,
