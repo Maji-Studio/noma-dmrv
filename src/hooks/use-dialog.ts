@@ -48,7 +48,7 @@ export function useDialog(
 
     dialog.addEventListener("cancel", handleCancel);
     return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onClose, isOpen]);
+  }, [onClose]);
 
   return dialogRef;
 }

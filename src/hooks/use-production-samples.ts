@@ -136,6 +136,9 @@ export function useDeleteProductionSample(
           queryKey: productionSampleKeys.list(productionRunId),
         });
       }
+      queryClient.invalidateQueries({
+        queryKey: productionRunKeys.lists(),
+      });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: callbacks?.onError,

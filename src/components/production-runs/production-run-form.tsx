@@ -87,7 +87,7 @@ export function ProductionRunForm({
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     defaultValues: {
-      facilityId: preselectedFacilityId || productionRun?.facilityId || "",
+      facilityId: productionRun?.facilityId || preselectedFacilityId || "",
       date: productionRun?.date ?? formatLocalDate(new Date()),
       reactorId: productionRun?.reactorId ?? "",
       status: (productionRun?.status as ProductionRunStatus) ?? "draft",

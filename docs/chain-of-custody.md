@@ -54,7 +54,7 @@ Transforms `ChainOfCustodyData` into React Flow nodes + edges using dagre for au
 
 ### `chain-constants.ts`
 Static configuration:
-- Node definitions (13 entities with icons, accent colors, routes)
+- Node definitions (14 entities with icons, accent colors, routes)
 - Edge definitions (15 connections)
 - Status color mapping
 - Layout constants (node size, dagre spacing)

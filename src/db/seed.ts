@@ -720,7 +720,6 @@ async function seed() {
         code: 'OR-2026-001',
         facilityId: ids.facility,
         orderDate: timestamps.orderTime,
-        status: 'processed',
         customerId: ids.customer,
         customerLocationId: ids.customerLocation,
         biocharProductId: ids.biocharProduct,

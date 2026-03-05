@@ -163,9 +163,36 @@ Interactive React Flow DAG showing material flow through the system, scoped per 
 - **Route**: `/chain-of-custody`
 - **Components**: `src/components/chain-of-custody/` (constants, node, page, hook)
 - **Data**: `src/data-access/chain-of-custody.ts` batch-fetches counts per entity to avoid N+1
-- **Layout**: dagre auto-layout (LR direction), 13 nodes, 13 edges
+- **Layout**: dagre auto-layout (LR direction), 14 nodes, 15 edges
 - **Nodes**: Color-coded by group (Infrastructure=purple, Production=orange, Distribution=rose, Credits=pink)
 - **Storage locations**: Split into 3 node types (Feedstock Bin, Biochar Bin, Product Bin) from single table using `storageLocationType` enum
+
+## Facility Context
+
+Global facility selection system that scopes all pages and forms to a single facility.
+
+**Components:**
+
+| File | Purpose |
+|------|---------|
+| `src/hooks/use-facility-context.ts` | `FacilityContext` + `useFacilityContext()` hook |
+| `src/components/navigation/facility-provider.tsx` | `FacilityProvider` — wraps `(app)` layout |
+| `src/components/navigation/facility-selector.tsx` | Sidebar dropdown for switching facilities |
+
+**How it works:**
+- `FacilityProvider` is mounted in `src/app/(app)/layout.tsx`
+- Selected facility persists via URL query param (`?facility=<id>`) + localStorage
+- Uses `nuqs` (`useQueryState`) for URL state management
+- `NuqsAdapter` is mounted in `src/app/providers.tsx`
+- Sidebar nav links append `?facility=<facilityId>` to all hrefs
+- Forms receive `facilityId` from context instead of asking the user to select it
+
+**Usage:**
+```typescript
+import { useFacilityContext } from "@/hooks/use-facility-context";
+
+const { facilityId, selectedFacility, facilities, setFacilityId } = useFacilityContext();
+```
 
 ## What Is Intentionally Scaffolded
 
@@ -205,7 +232,8 @@ Cross-cutting code is extracted to shared modules to avoid duplication:
 |--------|---------|
 | `src/data-access/utils.ts` | `requireAuth()` — auth guard used by all data-access files |
 | `src/hooks/types.ts` | `MutationCallbacks`, `OptimisticUpdateOptions` — shared React Query mutation types |
-| `src/schemas/helpers.ts` | `emptyToNull`, `latitudeSchema`, `longitudeSchema`, `gpsCoordinatesSchema` — reusable Zod schemas |
+| `src/schemas/helpers.ts` | `emptyToNull`, `optionalNumber`, `optionalPercent`, `latitudeSchema`, `longitudeSchema`, `gpsCoordinatesSchema` — reusable Zod schemas |
+| `src/components/forms/entity-select/cache-utils.ts` | `seedEntityCache()` — populates React Query cache after quick-add dialogs |
 | `src/types/actions.ts` | `ActionResult<T>` — standard server action return type |
 
 When adding new entities, import from these shared modules instead of re-declaring locally.
