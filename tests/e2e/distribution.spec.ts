@@ -187,7 +187,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     await adminPage.fill('input[name="deliveryDate"]', "2026-03-02");
 
     // Status
-    await adminPage.selectOption('select[name="status"]', "processing");
+    await adminPage.selectOption('select[name="status"]', "upcoming");
 
     // Order — select by the customer name that should be part of the option label
     // (DeliveryForm renders options as "CustomerName - Date")
@@ -308,17 +308,9 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
 // ============================================
 
 test.describe("Distribution Schema Constants", () => {
-  test("order status values are valid", () => {
-    const validStatuses = ["draft", "ordered", "processed"];
-    expect(validStatuses).toContain("draft");
-    expect(validStatuses).toContain("ordered");
-    expect(validStatuses).toContain("processed");
-  });
-
   test("delivery status values are valid", () => {
-    const validStatuses = ["scheduled", "processing", "delivered"];
-    expect(validStatuses).toContain("scheduled");
-    expect(validStatuses).toContain("processing");
+    const validStatuses = ["upcoming", "delivered"];
+    expect(validStatuses).toContain("upcoming");
     expect(validStatuses).toContain("delivered");
   });
 

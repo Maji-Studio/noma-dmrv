@@ -15,6 +15,20 @@
       "when": 1772596783876,
       "tag": "0001_luxuriant_dreaming_celestial",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772600991938,
+      "tag": "0002_plain_ben_urich",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772609804323,
+      "tag": "0003_yellow_sleepwalker",
+      "breakpoints": true
     }
   ]
 }

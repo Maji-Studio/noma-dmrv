@@ -491,11 +491,9 @@ async function allocateFeedstockMass(
   const totalDryMass = batchesInBin.reduce((s, b) => s + (b.massDryKg ?? 0), 0);
 
   if (totalDryMass === 0) {
-    const equalShare = totalMassKg / batchesInBin.length;
-    return batchesInBin.map((b) => ({
-      feedstockId: b.id,
-      massUsedKg: equalShare,
-    }));
+    throw new Error(
+      "Cannot allocate feedstock: batches in this bin have no recorded dry mass. Please update feedstock batch weights first."
+    );
   }
 
   return batchesInBin.map((b) => ({
@@ -597,6 +595,29 @@ export async function createProductionRun(
         plcDataFileUrl: data.plcDataFileUrl ?? null,
       })
       .returning();
+
+    // Validate storage locations belong to facility and are correct type
+    if (data.feedstockStorageLocationId) {
+      const [loc] = await tx
+        .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+        .from(storageLocations)
+        .where(eq(storageLocations.id, data.feedstockStorageLocationId));
+
+      if (!loc) throw new Error("Feedstock storage location not found");
+      if (loc.facilityId !== data.facilityId) throw new Error("Feedstock bin does not belong to the selected facility");
+      if (loc.type !== "feedstock_bin") throw new Error("Selected storage location is not a feedstock bin");
+    }
+
+    if (data.biocharStorageLocationId) {
+      const [loc] = await tx
+        .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+        .from(storageLocations)
+        .where(eq(storageLocations.id, data.biocharStorageLocationId));
+
+      if (!loc) throw new Error("Biochar storage location not found");
+      if (loc.facilityId !== data.facilityId) throw new Error("Biochar bin does not belong to the selected facility");
+      if (loc.type !== "biochar_bin") throw new Error("Selected storage location is not a biochar bin");
+    }
 
     // Auto-populate M:M feedstock relationships from bin contents
     if (data.feedstockStorageLocationId && data.feedstockMassUsedKg) {
@@ -742,6 +763,36 @@ export async function updateProductionRun(
         data.feedstockMassUsedKg !== undefined
           ? data.feedstockMassUsedKg
           : existing.feedstockMassUsedKg;
+
+      // Validate storage locations belong to facility and are correct type
+      const targetFacilityId = data.facilityId ?? existing.facilityId;
+
+      if (storageLocationId) {
+        const [loc] = await tx
+          .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+          .from(storageLocations)
+          .where(eq(storageLocations.id, storageLocationId));
+
+        if (!loc) throw new Error("Feedstock storage location not found");
+        if (loc.facilityId !== targetFacilityId) throw new Error("Feedstock bin does not belong to the selected facility");
+        if (loc.type !== "feedstock_bin") throw new Error("Selected storage location is not a feedstock bin");
+      }
+
+      const biocharStorageId =
+        data.biocharStorageLocationId !== undefined
+          ? data.biocharStorageLocationId
+          : existing.biocharStorageLocationId;
+
+      if (biocharStorageId) {
+        const [loc] = await tx
+          .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+          .from(storageLocations)
+          .where(eq(storageLocations.id, biocharStorageId));
+
+        if (!loc) throw new Error("Biochar storage location not found");
+        if (loc.facilityId !== targetFacilityId) throw new Error("Biochar bin does not belong to the selected facility");
+        if (loc.type !== "biochar_bin") throw new Error("Selected storage location is not a biochar bin");
+      }
 
       if (storageLocationId && massUsedKg) {
         const allocated = await allocateFeedstockMass(storageLocationId, massUsedKg, tx);

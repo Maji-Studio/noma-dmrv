@@ -7,7 +7,6 @@
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ListChecks, Plus } from "@phosphor-icons/react";
-import type { Formulation } from "@/db/schema";
 import {
   useCreateFormulation,
   useDeleteFormulation,
@@ -23,7 +22,8 @@ import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
-import type { FormulationWithRelations } from "@/data-access/formulations";
+import { INGREDIENT_TYPE_LABELS } from "@/schemas/formulations";
+import type { FormulationWithIngredients } from "@/data-access/formulations";
 
 // ============================================
 // Helpers
@@ -34,14 +34,26 @@ function formatRatio(ratio: number | null): string {
   return `${(ratio * 100).toFixed(0)}%`;
 }
 
+function formatIngredientsSummary(
+  ingredients: FormulationWithIngredients["ingredients"]
+): string {
+  if (!ingredients || ingredients.length === 0) return "\u2014";
+  return ingredients
+    .map((ing) => {
+      const ratio = ing.ratio != null ? ` (${(ing.ratio * 100).toFixed(0)}%)` : "";
+      return `${ing.name}${ratio}`;
+    })
+    .join(", ");
+}
+
 // ============================================
 // Column Definitions
 // ============================================
 
 function createColumns(
-  onEdit: (formulation: FormulationWithRelations) => void,
+  onEdit: (formulation: FormulationWithIngredients) => void,
   onDelete: (formulationId: string) => void
-): ColumnDef<FormulationWithRelations>[] {
+): ColumnDef<FormulationWithIngredients>[] {
   return [
     {
       accessorKey: "code",
@@ -64,11 +76,13 @@ function createColumns(
       ),
     },
     {
-      accessorKey: "compostRatio",
-      header: "Compost Ratio",
+      id: "ingredients",
+      header: "Ingredients",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
-          {formatRatio(row.original.compostRatio)}
+        <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
+          {row.original.ingredients?.length
+            ? `${row.original.ingredients.length} ingredient${row.original.ingredients.length !== 1 ? "s" : ""}`
+            : "\u2014"}
         </span>
       ),
     },
@@ -119,8 +133,8 @@ function createColumns(
 
 type SideSheetState =
   | { mode: "create"; entity: null }
-  | { mode: "view"; entity: FormulationWithRelations }
-  | { mode: "edit"; entity: FormulationWithRelations };
+  | { mode: "view"; entity: FormulationWithIngredients }
+  | { mode: "edit"; entity: FormulationWithIngredients };
 
 // ============================================
 // Component
@@ -182,8 +196,8 @@ export function FormulationList() {
   };
 
   const openCreate = () => { setFormError(null); setSideSheet({ mode: "create", entity: null }); };
-  const openView = (formulation: FormulationWithRelations) => { setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
-  const openEdit = (formulation: FormulationWithRelations) => { setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
+  const openView = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
+  const openEdit = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
   const closeSideSheet = () => { setSideSheet(null); setFormError(null); };
 
   const handleModeChange = (mode: SideSheetMode) => {
@@ -208,6 +222,41 @@ export function FormulationList() {
       </div>
     );
   }
+
+  // Build view sections for side sheet
+  const viewSections = (() => {
+    if (sideSheet?.mode !== "view" || !sideSheet.entity) return undefined;
+    const entity = sideSheet.entity;
+
+    const sections = [
+      {
+        title: "General Information",
+        fields: [
+          { label: "Code", value: entity.code },
+          { label: "Name", value: entity.name },
+          { label: "Description", value: entity.description },
+        ],
+      },
+      {
+        title: "Composition",
+        fields: [
+          { label: "Biochar Ratio", value: formatRatio(entity.biocharRatio) },
+        ],
+      },
+    ];
+
+    if (entity.ingredients && entity.ingredients.length > 0) {
+      sections.push({
+        title: "Ingredients",
+        fields: entity.ingredients.map((ing) => ({
+          label: `${INGREDIENT_TYPE_LABELS[ing.ingredientType as keyof typeof INGREDIENT_TYPE_LABELS] ?? ing.ingredientType}`,
+          value: `${ing.name}${ing.ratio != null ? ` — ${(ing.ratio * 100).toFixed(0)}%` : ""}${ing.description ? ` (${ing.description})` : ""}`,
+        })),
+      });
+    }
+
+    return sections;
+  })();
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
@@ -286,28 +335,12 @@ export function FormulationList() {
         title={sideSheet?.mode === "create" ? "Create Formulation" : (sideSheet?.entity?.code ?? "")}
         subtitle={sideSheet?.mode === "create" ? "Fill in the form to create a new formulation." : sideSheet?.entity?.name}
         editLabel="Edit Formulation"
-        sections={sideSheet?.mode === "view" && sideSheet.entity ? [
-          {
-            title: "General Information",
-            fields: [
-              { label: "Code", value: sideSheet.entity.code },
-              { label: "Name", value: sideSheet.entity.name },
-              { label: "Description", value: sideSheet.entity.description },
-            ],
-          },
-          {
-            title: "Composition",
-            fields: [
-              { label: "Biochar Ratio", value: formatRatio(sideSheet.entity.biocharRatio) },
-              { label: "Compost Ratio", value: formatRatio(sideSheet.entity.compostRatio) },
-            ],
-          },
-        ] : undefined}
+        sections={viewSections}
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <FormulationForm
           key={editingEntity?.id ?? "create"}
-          formulation={editingEntity as Formulation | undefined}
+          formulation={editingEntity ?? undefined}
           onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}

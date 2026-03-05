@@ -78,7 +78,6 @@ test.describe("Formulations Database Operations", () => {
       code: `E2E-FORM-${testId.toUpperCase()}`,
       name: `Test Formulation ${testId}`,
       biocharRatio: 0.7,
-      compostRatio: 0.3,
     });
 
     expect(formulation).toBeDefined();
@@ -86,7 +85,6 @@ test.describe("Formulations Database Operations", () => {
     expect(formulation.code).toContain("E2E-FORM-");
     expect(formulation.name).toContain("Test Formulation");
     expect(formulation.biocharRatio).toBe(0.7);
-    expect(formulation.compostRatio).toBe(0.3);
 
     // Clean up
     await deleteTestFormulation(formulation.id);
@@ -116,8 +114,7 @@ test.describe("Formulations Database Operations", () => {
           code: `E2E-MULTI-${i}-${testId.toUpperCase()}`,
           name: `Multi Formulation ${i} ${testId}`,
           biocharRatio: 0.5 + i * 0.1,
-          compostRatio: 0.3 - i * 0.05,
-        });
+            });
         formulations.push(formulation);
       }
 
@@ -140,7 +137,6 @@ test.describe("Formulations Database Operations", () => {
       code: `E2E-FIELDS-${testId.toUpperCase()}`,
       name: `Fields Test ${testId}`,
       biocharRatio: 0.8,
-      compostRatio: 0.2,
       description: "Test description",
     });
 
@@ -150,7 +146,6 @@ test.describe("Formulations Database Operations", () => {
       expect(formulation.code).toBeDefined();
       expect(formulation.name).toBeDefined();
       expect(formulation.biocharRatio).toBe(0.8);
-      expect(formulation.compostRatio).toBe(0.2);
     } finally {
       await deleteTestFormulation(formulation.id);
     }
@@ -178,7 +173,6 @@ test.describe("Biochar Products Database Operations", () => {
       code: `E2E-BP-FORM-${uniqueId.toUpperCase()}`,
       name: `E2E Biochar Products Test Formulation ${uniqueId}`,
       biocharRatio: 0.7,
-      compostRatio: 0.3,
     });
   });
 

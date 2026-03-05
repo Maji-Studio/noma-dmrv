@@ -4,7 +4,8 @@
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import { createDriverFn } from "@/fn/quick-add";
 import type { EntityOption } from "./types";
@@ -76,7 +77,6 @@ export function DriverQuickAddDialog({
   onClose,
   onSuccess,
 }: DriverQuickAddDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [formData, setFormData] = useState<DriverForm>({
     name: "",
     licenseNumber: "",
@@ -85,34 +85,11 @@ export function DriverQuickAddDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle dialog open/close with native dialog API
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (isOpen) {
-      setFormData({ name: "", licenseNumber: "", contactPhone: "" });
-      setError(null);
-      setIsSubmitting(false);
-      dialog.showModal();
-    } else {
-      dialog.close();
-    }
-  }, [isOpen]);
-
-  // Handle ESC key
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    const handleCancel = (e: Event) => {
-      e.preventDefault();
-      onClose();
-    };
-
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onClose]);
+  const dialogRef = useDialog(isOpen, onClose, () => {
+    setFormData({ name: "", licenseNumber: "", contactPhone: "" });
+    setError(null);
+    setIsSubmitting(false);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -116,7 +116,6 @@ export async function seedChainData(
         code: `E2E-FORM-${testRunId}`,
         name: `E2E Seed Formulation ${testRunId}`,
         biocharRatio: 0.7,
-        compostRatio: 0.3,
       });
 
       // 7. Storage Locations (need facility)

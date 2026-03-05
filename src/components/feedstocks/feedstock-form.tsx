@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -68,20 +69,22 @@ export function FeedstockForm({
   const watchWetMass = watch("massWetKg");
   const watchMoisture = watch("moistureContentPercent");
 
-  // Auto-calculate dry mass from wet mass and moisture
+  // Auto-calculate dry mass from wet mass and moisture using shared utility
   const calculatedDryMass =
     typeof watchWetMass === "number" &&
     typeof watchMoisture === "number" &&
-    watchWetMass > 0 &&
+    watchWetMass >= 0 &&
     watchMoisture >= 0 &&
     watchMoisture <= 100
-      ? watchWetMass * (1 - watchMoisture / 100)
+      ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
-  // Sync calculated dry mass into the form
+  // Sync calculated dry mass into the form (clear when inputs become invalid)
   useEffect(() => {
     if (calculatedDryMass !== null) {
-      setValue("massDryKg", Math.round(calculatedDryMass * 100) / 100);
+      setValue("massDryKg", calculatedDryMass);
+    } else {
+      setValue("massDryKg", "" as unknown as number);
     }
   }, [calculatedDryMass, setValue]);
 

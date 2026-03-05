@@ -42,6 +42,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ProductionRunForm } from "./production-run-form";
+import { ProductionSampleTable } from "./production-sample-table";
 import {
   formatProductionRunStatus,
   getStatusColorClass,
@@ -215,7 +216,14 @@ export function ProductionRunList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateRun.mutateAsync({ productionRunId: sideSheet.entity.id, ...data });
+      const { date, startTime, endTime, ...rest } = data;
+      await updateRun.mutateAsync({
+        productionRunId: sideSheet.entity.id,
+        ...rest,
+        date: date instanceof Date ? date : new Date(date),
+        startTime: startTime instanceof Date ? startTime : new Date(startTime),
+        endTime: endTime instanceof Date ? endTime : new Date(endTime),
+      });
       setSideSheet(null);
       toast.success("Production run updated successfully");
     } catch (error) {
@@ -436,7 +444,11 @@ export function ProductionRunList() {
             onCancel={closeSideSheet}
             isSubmitting={createRun.isPending || updateRun.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Production Run"}
-          />
+          >
+            {sideSheet.entity && sideSheet.mode === "edit" && (
+              <ProductionSampleTable productionRunId={sideSheet.entity.id} />
+            )}
+          </ProductionRunForm>
         </EntitySideSheet>
       )}
     </div>

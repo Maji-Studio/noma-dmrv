@@ -89,7 +89,6 @@ export async function getOrders(
     search,
     facilityId,
     customerId,
-    status,
     fromDate,
     toDate,
     page = 1,
@@ -114,10 +113,6 @@ export async function getOrders(
     conditions.push(eq(orders.customerId, customerId));
   }
 
-  if (status) {
-    conditions.push(eq(orders.status, status));
-  }
-
   if (fromDate) {
     conditions.push(gte(orders.orderDate, fromDate));
   }
@@ -133,7 +128,6 @@ export async function getOrders(
     code: orders.code,
     orderDate: orders.orderDate,
     quantityKg: orders.quantityKg,
-    status: orders.status,
     createdAt: orders.createdAt,
     updatedAt: orders.updatedAt,
   }[sortBy] ?? orders.orderDate;
@@ -162,7 +156,6 @@ export async function getOrders(
       orderDate: orders.orderDate,
       quantityKg: orders.quantityKg,
       packaging: orders.packaging,
-      status: orders.status,
       value: orders.value,
       currency: orders.currency,
       createdAt: orders.createdAt,
@@ -258,7 +251,6 @@ export async function getOrderWithRelations(
       orderDate: orders.orderDate,
       quantityKg: orders.quantityKg,
       packaging: orders.packaging,
-      status: orders.status,
       value: orders.value,
       currency: orders.currency,
       createdAt: orders.createdAt,
@@ -305,7 +297,6 @@ export async function getOrderWithRelations(
     orderDate: orderRow.orderDate,
     quantityKg: orderRow.quantityKg,
     packaging: orderRow.packaging,
-    status: orderRow.status,
     value: orderRow.value,
     currency: orderRow.currency,
     createdAt: orderRow.createdAt,
@@ -346,7 +337,7 @@ export async function getOrderWithRelations(
 export async function getOrdersForSelect(
   userId: string,
   facilityId?: string
-): Promise<Array<{ id: string; code: string; orderDate: Date; status: string; customerName: string | null }>> {
+): Promise<Array<{ id: string; code: string; orderDate: Date; customerName: string | null }>> {
   requireAuth(userId);
 
   const conditions: SQL[] = [];
@@ -361,7 +352,6 @@ export async function getOrdersForSelect(
       id: orders.id,
       code: orders.code,
       orderDate: orders.orderDate,
-      status: orders.status,
       customerName: customers.name,
     })
     .from(orders)
@@ -388,7 +378,6 @@ export async function createOrder(
     orderDate: Date;
     quantityKg: number;
     packaging: "loose" | "bagged";
-    status?: "draft" | "ordered" | "processed";
     value?: number | null;
     currency?: string;
   }
@@ -417,7 +406,6 @@ export async function createOrder(
         orderDate: data.orderDate,
         quantityKg: data.quantityKg,
         packaging: data.packaging,
-        status: data.status ?? "draft",
         value: data.value ?? null,
         currency: data.currency ?? "TZS",
       })
@@ -451,7 +439,6 @@ export async function updateOrder(
     orderDate?: Date;
     quantityKg?: number;
     packaging?: "loose" | "bagged";
-    status?: "draft" | "ordered" | "processed";
     value?: number | null;
     currency?: string;
   }

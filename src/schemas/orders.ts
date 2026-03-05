@@ -4,18 +4,10 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
 
 // ============================================
 // Constants and Enums
 // ============================================
-
-/**
- * Valid order statuses
- */
-export const orderStatuses = ["draft", "ordered", "processed"] as const;
-
-export type OrderStatus = (typeof orderStatuses)[number];
 
 /**
  * Packaging types
@@ -46,7 +38,6 @@ export const orderFormSchema = z.object({
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
 
   // Optional fields
-  status: z.enum(orderStatuses).default("draft"),
   value: z
     .number()
     .min(0, "Value must be non-negative")
@@ -85,7 +76,6 @@ export const updateOrderSchema = z.object({
   orderDate: z.coerce.date().optional(),
   quantityKg: z.number().min(0.01).finite().optional(),
   packaging: z.enum(packagingTypes).optional(),
-  status: z.enum(orderStatuses).optional(),
   value: z.number().min(0).finite().optional().nullable(),
   currency: z.string().max(10).optional(),
 });
@@ -118,9 +108,6 @@ export const orderFilterSchema = z.object({
   // Filter by customer
   customerId: z.string().uuid().optional(),
 
-  // Filter by status
-  status: z.enum(orderStatuses).optional(),
-
   // Filter by date range
   fromDate: z.coerce.date().optional(),
   toDate: z.coerce.date().optional(),
@@ -131,7 +118,7 @@ export const orderFilterSchema = z.object({
 
   // Sorting
   sortBy: z
-    .enum(["code", "orderDate", "quantityKg", "status", "createdAt", "updatedAt"])
+    .enum(["code", "orderDate", "quantityKg", "createdAt", "updatedAt"])
     .default("orderDate"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
@@ -143,7 +130,6 @@ export const orderSelectSchema = z.object({
   id: z.string().uuid(),
   code: z.string(),
   orderDate: z.date(),
-  status: z.enum(orderStatuses),
   customerName: z.string().optional(),
 });
 

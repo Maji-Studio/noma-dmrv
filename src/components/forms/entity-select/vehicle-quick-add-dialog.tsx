@@ -4,7 +4,8 @@
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import { createVehicleFn } from "@/fn/quick-add";
 import type { EntityOption } from "./types";
@@ -82,7 +83,6 @@ export function VehicleQuickAddDialog({
   onClose,
   onSuccess,
 }: VehicleQuickAddDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [formData, setFormData] = useState<VehicleForm>({
     name: "",
     identifier: "",
@@ -94,7 +94,7 @@ export function VehicleQuickAddDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const resetForm = () => {
+  const dialogRef = useDialog(isOpen, onClose, () => {
     setFormData({
       name: "",
       identifier: "",
@@ -105,34 +105,7 @@ export function VehicleQuickAddDialog({
     });
     setError(null);
     setIsSubmitting(false);
-  };
-
-  // Handle dialog open/close with native dialog API
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (isOpen) {
-      resetForm();
-      dialog.showModal();
-    } else {
-      dialog.close();
-    }
-  }, [isOpen]);
-
-  // Handle ESC key
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    const handleCancel = (e: Event) => {
-      e.preventDefault();
-      onClose();
-    };
-
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onClose]);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -15,11 +15,10 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { OrderForm } from "./order-form";
-import type { OrderFormData, OrderFilterData, OrderStatus } from "@/schemas/orders";
+import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
 import type { OrderWithRelations } from "@/data-access/orders";
 
 function formatDate(date: Date): string {
@@ -63,11 +62,6 @@ function createColumns(
       cell: ({ row }) => row.original.quantityKg.toLocaleString(),
     },
     {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusBadge status={row.original.status as "draft" | "ordered" | "processed"} />,
-    },
-    {
       accessorKey: "deliveryCount",
       header: "Deliveries",
       cell: ({ row }) => (
@@ -98,7 +92,7 @@ export function OrderList() {
   // Filter / pagination state
   const [searchQuery, setSearchQuery] = useState("");
   const [facilityFilter, setFacilityFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -118,12 +112,11 @@ export function OrderList() {
   const filters: Partial<OrderFilterData> = useMemo(() => ({
     search: searchQuery || undefined,
     facilityId: facilityFilter || undefined,
-    status: statusFilter || undefined,
     page: currentPage,
     pageSize,
     sortBy: "orderDate",
     sortOrder: "desc",
-  }), [searchQuery, facilityFilter, statusFilter, currentPage, pageSize]);
+  }), [searchQuery, facilityFilter, currentPage, pageSize]);
 
   const { data: ordersData, isLoading, error: fetchError } = useOrders(filters);
   const { data: facilitiesData } = useFacilities({ pageSize: 100 });
@@ -198,8 +191,8 @@ export function OrderList() {
     }
   };
 
-  const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setStatusFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || facilityFilter || statusFilter;
+  const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setCurrentPage(1); };
+  const hasActiveFilters = searchQuery || facilityFilter;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
@@ -270,12 +263,6 @@ export function OrderList() {
               <option value="">All Facilities</option>
               {facilitiesData?.items?.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
-            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as OrderStatus | ""); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
-              <option value="">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="ordered">Ordered</option>
-              <option value="processed">Processed</option>
-            </select>
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
           </div>
         </DataTable.Toolbar>
@@ -299,7 +286,6 @@ export function OrderList() {
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
                     { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
-                    { label: "Status", value: <StatusBadge status={sideSheetEntity.status as "draft" | "ordered" | "processed"} /> },
                   ],
                 },
                 {
