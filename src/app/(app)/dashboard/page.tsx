@@ -41,30 +41,32 @@ export default function DashboardPage() {
         <div className="w-48 h-2 bg-[var(--color-border-primary)] mx-auto mb-32" />
 
         {/* Upcoming features */}
-        <div className="text-left space-y-16">
+        <div>
           <p className="label-small uppercase tracking-wider text-[var(--color-text-tertiary)]">
             Coming soon
           </p>
-          {UPCOMING_FEATURES.map((feature) => (
-            <div
-              key={feature.title}
-              className="flex items-start gap-16 p-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-secondary)]"
-            >
-              <feature.icon
-                size={24}
-                weight="duotone"
-                className="text-[var(--color-text-tertiary)] shrink-0 mt-2"
-              />
-              <div>
-                <p className="body-medium font-medium text-[var(--color-text-primary)]">
-                  {feature.title}
-                </p>
-                <p className="body-small text-[var(--color-text-tertiary)]">
-                  {feature.description}
-                </p>
-              </div>
-            </div>
-          ))}
+          <ul className="text-left space-y-16">
+            {UPCOMING_FEATURES.map((feature) => (
+              <li
+                key={feature.title}
+                className="flex items-start gap-16 p-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-secondary)]"
+              >
+                <feature.icon
+                  size={24}
+                  weight="duotone"
+                  className="text-[var(--color-text-tertiary)] shrink-0 mt-2"
+                />
+                <div>
+                  <p className="body-medium font-medium text-[var(--color-text-primary)]">
+                    {feature.title}
+                  </p>
+                  <p className="body-small text-[var(--color-text-tertiary)]">
+                    {feature.description}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>

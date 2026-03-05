@@ -133,17 +133,38 @@ export const updateProductionRunSchema = z.object({
   facilityId: z.string().uuid().optional(),
   date: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]).optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
   startTime: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]).optional(),
   endTime: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockMassUsedKg: z.number().positive().optional().nullable(),
@@ -226,7 +247,14 @@ export const productionRunReadingSchema = z.object({
   productionRunId: z.string().uuid("Invalid production run ID"),
   timestamp: z.union([
     z.date(),
-    z.string().transform((val) => new Date(val)),
+    z.string().transform((val, ctx) => {
+      const date = new Date(val);
+      if (isNaN(date.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid timestamp" });
+        return z.NEVER;
+      }
+      return date;
+    }),
   ]),
   temperatureC: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
   pressureBar: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),

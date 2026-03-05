@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from './schema';
-import { hashPassword } from '../../tests/e2e/fixtures/hash-password';
+import { hashPassword } from '../lib/auth/hash-password';
 
 config({ path: '.env.local' });
 

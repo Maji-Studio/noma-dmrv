@@ -21,6 +21,7 @@ import {
   type FeedstockWithRelations,
   type FeedstockStats,
 } from "@/data-access/feedstocks";
+import { getFeedstockDeliveryById as getFeedstockDeliveryByIdData } from "@/data-access/feedstock-deliveries";
 import { getUser } from "@/lib/auth/server";
 import {
   createFeedstockSchema,
@@ -29,6 +30,19 @@ import {
   feedstockFilterSchema,
 } from "@/schemas/feedstocks";
 import type { ActionResult } from "@/types/actions";
+
+async function resolveFeedstockTypeIdFromDelivery(
+  userId: string,
+  feedstockDeliveryId: string
+): Promise<string> {
+  const delivery = await getFeedstockDeliveryByIdData(userId, feedstockDeliveryId);
+  if (!delivery.feedstockTypeId) {
+    throw new Error(
+      "Selected delivery has no feedstock type. Add one on the delivery first."
+    );
+  }
+  return delivery.feedstockTypeId;
+}
 
 // ============================================
 // Feedstock List/Query Operations
@@ -160,6 +174,10 @@ export async function createFeedstockFn(
     }
 
     const validated = createFeedstockSchema.parse(data);
+    const resolvedFeedstockTypeId = await resolveFeedstockTypeIdFromDelivery(
+      user.id,
+      validated.feedstockDeliveryId
+    );
 
     const feedstock = await withAutoCode(
       "FS",
@@ -171,7 +189,7 @@ export async function createFeedstockFn(
           code,
           facilityId: validated.facilityId,
           feedstockDeliveryId: validated.feedstockDeliveryId,
-          feedstockTypeId: validated.feedstockTypeId,
+          feedstockTypeId: resolvedFeedstockTypeId,
           massDryKg: typeof validated.massDryKg === "number" ? validated.massDryKg : 0,
           massWetKg: validated.massWetKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
@@ -210,10 +228,13 @@ export async function updateFeedstockFn(
     }
 
     const validated = updateFeedstockSchema.parse(data);
+    const resolvedFeedstockTypeId = validated.feedstockDeliveryId
+      ? await resolveFeedstockTypeIdFromDelivery(user.id, validated.feedstockDeliveryId)
+      : validated.feedstockTypeId;
 
     const feedstock = await updateFeedstock(user.id, validated.feedstockId, {
       feedstockDeliveryId: validated.feedstockDeliveryId,
-      feedstockTypeId: validated.feedstockTypeId,
+      feedstockTypeId: resolvedFeedstockTypeId,
       facilityId: validated.facilityId,
       massDryKg: validated.massDryKg,
       massWetKg: validated.massWetKg,

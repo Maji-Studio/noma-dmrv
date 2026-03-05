@@ -17,10 +17,6 @@ export const feedstockFormSchema = z
       .string()
       .min(1, "Please select a feedstock delivery")
       .uuid("Please select a valid feedstock delivery"),
-    feedstockTypeId: z
-      .string()
-      .min(1, "Please select a feedstock type")
-      .uuid("Please select a valid feedstock type"),
     facilityId: z
       .string()
       .min(1, "Facility is required")

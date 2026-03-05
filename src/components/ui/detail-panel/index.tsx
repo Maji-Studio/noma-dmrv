@@ -150,9 +150,9 @@ function EntityDetailPanel({
               {/* Render fields in rows of 2 */}
               {chunkFields(section.fields).map((row, rowIdx) => (
                 <DetailRow key={rowIdx}>
-                  {row.map((field) => (
+                  {row.map((field, fieldIdx) => (
                     <DetailField
-                      key={field.label}
+                      key={`${rowIdx}-${fieldIdx}`}
                       label={field.label}
                       value={field.value}
                     />

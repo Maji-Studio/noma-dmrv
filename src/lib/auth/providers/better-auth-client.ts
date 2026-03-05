@@ -110,6 +110,15 @@ export async function signInWithPassword(
     const normalizedRole: "admin" | "user" =
       data.user.role === "admin" ? "admin" : "user";
 
+    // Validate that we have a valid session from the server
+    const sessionId = data.session?.id || data.token;
+    if (!sessionId) {
+      return {
+        success: false,
+        error: "Authentication succeeded but no session was created. Please try again.",
+      };
+    }
+
     return {
       success: true,
       data: {
@@ -123,7 +132,7 @@ export async function signInWithPassword(
           updatedAt: new Date(data.user.updatedAt),
         },
         session: {
-          id: data.session?.id || data.token || crypto.randomUUID(),
+          id: sessionId,
           userId: data.session?.userId || data.user.id,
           expiresAt: data.session?.expiresAt
             ? new Date(data.session.expiresAt)

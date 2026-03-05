@@ -4,26 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, toNumberOrNull } from "./helpers";
-
-// ============================================
-// Reusable field schemas
-// ============================================
-
-const optionalNumber = z.preprocess(
-  toNumberOrNull,
-  z.number().finite().nullable().optional()
-);
-
-const optionalPercent = z.preprocess(
-  toNumberOrNull,
-  z
-    .number()
-    .min(0, "Must be 0–100")
-    .max(100, "Must be 0–100")
-    .nullable()
-    .optional()
-);
+import { emptyToNull, optionalNumber, optionalPercent } from "./helpers";
 
 // ============================================
 // Form Schema
@@ -45,7 +26,7 @@ export const productionSampleFormSchema = z.object({
   ashContentPercent: optionalPercent,
 
   // Metadata
-  photoUrl: z.string().url().nullable().optional().or(z.literal("")),
+  photoUrl: emptyToNull.or(z.string().url()).nullable().optional(),
   sampledById: emptyToNull.or(z.string().uuid()).nullable().optional(),
   notes: z.string().nullable().optional(),
 });

@@ -67,7 +67,7 @@ test.describe("Chain of Custody Visualization", () => {
     const viewport = page.locator(".react-flow__viewport");
     await expect(viewport).toBeVisible({ timeout: 15000 });
 
-    // All 12 entity nodes should be rendered
+    // All 13 entity nodes should be rendered
     const expectedLabels = [
       "Reactors",
       "Feedstock Bin",

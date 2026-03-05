@@ -24,10 +24,14 @@ export function useDialog(
     if (!dialog) return;
 
     if (isOpen) {
-      dialog.showModal();
+      if (!dialog.open) {
+        dialog.showModal();
+      }
       onOpen?.();
     } else {
-      dialog.close();
+      if (dialog.open) {
+        dialog.close();
+      }
     }
     // onOpen intentionally excluded — only react to isOpen changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,7 +48,7 @@ export function useDialog(
 
     dialog.addEventListener("cancel", handleCancel);
     return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onClose]);
+  }, [onClose, isOpen]);
 
   return dialogRef;
 }

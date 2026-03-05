@@ -4,9 +4,9 @@ Interactive DAG (Directed Acyclic Graph) that shows the complete biochar traceab
 
 ## Overview
 
-The chain-of-custody page renders a React Flow graph with 13 entity nodes and 15 edges representing the full production-to-credit pipeline. Storage Locations are split into three bin types (Feedstock Bin, Biochar Bin, Product Bin), giving 13 nodes total:
+The chain-of-custody page renders a React Flow graph with 14 entity nodes and edges representing the full production-to-credit pipeline. Storage Locations are split into three bin types (Feedstock Bin, Biochar Bin, Product Bin), giving 14 nodes total:
 
-Reactors, Feedstock Bin, Biochar Bin, Product Bin, Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches.
+Suppliers, Reactors, Feedstock Bin, Biochar Bin, Product Bin, Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches.
 
 ```text
 Facility → Reactors, Feedstock Bin, Biochar Bin, Product Bin,
@@ -87,7 +87,7 @@ Test file: `tests/e2e/chain-of-custody.spec.ts`
 
 Tests cover:
 - Page loads with header and populated facility dropdown
-- Selecting a facility renders all 13 entity nodes
+- Selecting a facility renders all 14 entity nodes
 - Edges are rendered between nodes (15 connections)
 - Seeded data shows correct non-zero counts on nodes
 - Clickable nodes navigate to entity list pages
