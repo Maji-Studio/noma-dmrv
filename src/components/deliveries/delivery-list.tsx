@@ -163,12 +163,14 @@ export function DeliveryList() {
   // Global facility context
   const { facilityId: contextFacilityId } = useFacilityContext();
 
-  // Data fetching — scope to selected facility
+  // Data fetching — scope to selected facility (only query when facility is selected)
   const { data: deliveriesData, isLoading, error: fetchError } = useDeliveries(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    { enabled: !!contextFacilityId },
   );
   const { data: statsData, isLoading: statsLoading } = useDeliveryStats(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    { enabled: !!contextFacilityId },
   );
 
   // Mutations

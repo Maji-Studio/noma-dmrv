@@ -56,7 +56,10 @@ export const deliveryKeys = {
 /**
  * Hook to fetch paginated list of deliveries with filtering
  */
-export function useDeliveries(filters?: Partial<DeliveryFilterData>) {
+export function useDeliveries(
+  filters?: Partial<DeliveryFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: deliveryKeys.list(filters),
     queryFn: async () => {
@@ -67,6 +70,7 @@ export function useDeliveries(filters?: Partial<DeliveryFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 
@@ -109,11 +113,10 @@ export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
 /**
  * Hook to fetch delivery statistics
  */
-export function useDeliveryStats(filters?: {
-  facilityId?: string;
-  fromDate?: Date;
-  toDate?: Date;
-}) {
+export function useDeliveryStats(
+  filters?: { facilityId?: string; fromDate?: Date; toDate?: Date },
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: deliveryKeys.stats(filters),
     queryFn: async () => {
@@ -124,6 +127,7 @@ export function useDeliveryStats(filters?: {
       return result.data;
     },
     staleTime: 30000,
+    enabled: options?.enabled,
   });
 }
 
