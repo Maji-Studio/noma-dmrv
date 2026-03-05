@@ -31,18 +31,7 @@ test.describe("Feedstock UI CRUD", () => {
     // Wait for facilityId auto-population from delivery
     await page.waitForTimeout(1000);
 
-    // Select seeded feedstock type (required)
-    await selectEntity(
-      page,
-      "Feedstock Type",
-      seededData.feedstockType.id,
-      seededData.feedstockType.name
-    );
-
-    // Fill required numeric field
-    await page.fill('input[name="massDryKg"]', "75");
-
-    // Fill optional fields for coverage
+    // Fill required numeric fields (dry mass is auto-calculated)
     await page.fill('input[name="massWetKg"]', "100");
     await page.fill('input[name="moistureContentPercent"]', "25");
 

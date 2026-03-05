@@ -151,9 +151,6 @@ export function useCreateBiocharProduct(
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
 
-      // Pre-populate the detail cache with the new product
-      queryClient.setQueryData(biocharProductKeys.detail(data.id), data);
-
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {

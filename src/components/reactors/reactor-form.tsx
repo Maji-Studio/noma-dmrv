@@ -42,6 +42,14 @@ const samplingMethodOptions: readonly { value: string; label: string }[] =
     label: formatSamplingMethod(method),
   }));
 
+function isReactorType(value: string | null | undefined): value is ReactorType {
+  return !!value && reactorTypes.includes(value as ReactorType);
+}
+
+function isSamplingMethod(value: string | null | undefined): value is SamplingMethod {
+  return !!value && samplingMethods.includes(value as SamplingMethod);
+}
+
 // ============================================
 // Component
 // ============================================
@@ -70,6 +78,12 @@ export function ReactorForm({
   submitLabel,
 }: ReactorFormProps) {
   const isEditMode = !!reactor;
+  const defaultReactorType = isReactorType(reactor?.reactorType)
+    ? reactor.reactorType
+    : undefined;
+  const defaultSamplingMethod = isSamplingMethod(reactor?.samplingMethod)
+    ? reactor.samplingMethod
+    : "method_a";
 
   const {
     register,
@@ -81,8 +95,8 @@ export function ReactorForm({
     defaultValues: {
       identifier: reactor?.identifier ?? "",
       facilityId: preselectedFacilityId || reactor?.facilityId || "",
-      reactorType: (reactor?.reactorType as ReactorType) ?? undefined,
-      samplingMethod: (reactor?.samplingMethod as SamplingMethod) ?? "method_a",
+      reactorType: defaultReactorType,
+      samplingMethod: defaultSamplingMethod,
       capacityKg: reactor?.capacityKg ?? undefined,
       specifications: undefined,
     },

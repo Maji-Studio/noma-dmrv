@@ -15,7 +15,6 @@ import {
   Leaf,
   Grains,
   Factory,
-  Warehouse,
   Handshake,
   Users,
   Truck,
@@ -33,6 +32,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { useAuth, authClient } from "@/lib/auth/client";
+import { FacilitySelector } from "./facility-selector";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
 interface NavItem {
   href: string;
@@ -77,7 +78,6 @@ const navSections: NavSection[] = [
     title: "Infrastructure",
     accent: SECTION_ACCENTS.infrastructure,
     items: [
-      { href: "/facilities", label: "Facilities", icon: Warehouse },
       { href: "/reactors", label: "Reactors", icon: Flask },
       { href: "/storage-locations", label: "Storage Locations", icon: Package },
     ],
@@ -112,15 +112,20 @@ function NavLink({
   item,
   isActive,
   accent,
+  facilityParam,
 }: {
   item: NavItem;
   isActive: boolean;
   accent: string;
+  facilityParam: string | null;
 }) {
   const Icon = item.icon;
+  const href = facilityParam
+    ? `${item.href}?facility=${facilityParam}`
+    : item.href;
   return (
     <Link
-      href={item.href}
+      href={href}
       className={cn(
         "group relative flex items-center gap-10 h-36 px-12 transition-all duration-150",
         isActive
@@ -173,6 +178,7 @@ function SectionLabel({ title, accent }: { title: string; accent: string }) {
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
 
@@ -201,6 +207,9 @@ export function AppSidebar() {
         </Link>
       </div>
 
+      {/* Facility Selector */}
+      <FacilitySelector />
+
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-12 px-6">
         <div className="flex flex-col gap-20">
@@ -221,6 +230,7 @@ export function AppSidebar() {
                       item={item}
                       isActive={isActive}
                       accent={accent}
+                      facilityParam={facilityParam}
                     />
                   );
                 })}
@@ -243,6 +253,7 @@ export function AppSidebar() {
                 item={item}
                 isActive={isActive}
                 accent={SECTION_ACCENTS.default}
+                facilityParam={facilityParam}
               />
             );
           })}

@@ -8,7 +8,7 @@
 import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date-utils";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
@@ -87,7 +87,7 @@ export function ProductionRunForm({
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     defaultValues: {
-      facilityId: preselectedFacilityId || productionRun?.facilityId || "",
+      facilityId: productionRun?.facilityId || preselectedFacilityId || "",
       date: productionRun?.date ?? formatLocalDate(new Date()),
       reactorId: productionRun?.reactorId ?? "",
       status: (productionRun?.status as ProductionRunStatus) ?? "draft",
@@ -113,17 +113,17 @@ export function ProductionRunForm({
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = watch("facilityId");
 
+  // Capture initial facility ID once to avoid stale closure in effect
+  const initialFacilityIdRef = useRef(preselectedFacilityId || productionRun?.facilityId || "");
+
   // Clear dependent fields when facility changes (skip if facility matches initial value)
-  const initialFacilityId = preselectedFacilityId || productionRun?.facilityId || "";
   useEffect(() => {
-    if (watchedFacilityId && watchedFacilityId !== initialFacilityId) {
+    if (watchedFacilityId && watchedFacilityId !== initialFacilityIdRef.current) {
       setValue("reactorId", "");
       setValue("feedstockStorageLocationId", "");
       setValue("biocharStorageLocationId", "");
     }
-    // Only run when facility changes, not on every render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedFacilityId]);
+  }, [watchedFacilityId, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 

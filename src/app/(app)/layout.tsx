@@ -4,6 +4,7 @@
  */
 import { requireAuth } from "@/lib/auth/server";
 import { AppSidebar } from "@/components/navigation";
+import { FacilityProvider } from "@/components/navigation/facility-provider";
 
 export default async function AppLayout({
   children,
@@ -14,9 +15,11 @@ export default async function AppLayout({
   await requireAuth();
 
   return (
-    <div className="min-h-screen flex">
-      <AppSidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
+    <FacilityProvider>
+      <div className="min-h-screen flex">
+        <AppSidebar />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    </FacilityProvider>
   );
 }

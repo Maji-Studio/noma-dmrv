@@ -161,6 +161,7 @@ export function EntitySelect({
   onCreateNew,
   filterBy,
   autoSelectSingle = false,
+  alwaysShowSearch = false,
 }: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -205,7 +206,10 @@ export function EntitySelect({
     const maxIndex = options.length + (allowCreate && onCreateNew ? 1 : 0) - 1;
     return Math.min(Math.max(0, highlightedIndex), Math.max(0, maxIndex));
   }, [highlightedIndex, options.length, allowCreate, onCreateNew]);
-  const showSearch = searchQuery.length > 0 || options.length > SEARCH_VISIBILITY_THRESHOLD;
+  const showSearch =
+    alwaysShowSearch ||
+    searchQuery.length > 0 ||
+    options.length > SEARCH_VISIBILITY_THRESHOLD;
 
   // Close dropdown when clicking outside
   useEffect(() => {

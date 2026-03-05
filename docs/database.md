@@ -180,6 +180,7 @@ This template starts with a clean schema for multi-project applications.
 
 **Notable migrations:**
 - `0002`: Added `formulation_ingredients` table and `ingredient_type` enum; dropped `compost_ratio` from `formulations` (replaced by multi-ingredient model)
+- `0003`: Simplified delivery status enum from `scheduled`/`processing`/`delivered` to `upcoming`/`delivered`; migrated existing rows
 
 **Migration approach:** Incremental migrations tracked in `/drizzle/` directory.
 

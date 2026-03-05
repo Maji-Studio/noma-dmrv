@@ -397,6 +397,31 @@ durationMinutes: z.preprocess(toIntOrNull, z.number().int().positive().nullable(
 
 This is cleaner than the `z.union([z.number(), z.string().transform(...), z.null()])` pattern and ensures validation runs on the coerced number.
 
+### Pre-built Optional Number Schemas
+
+For the most common cases, use the ready-made schemas instead of writing `z.preprocess(...)` each time:
+
+```typescript
+import { optionalNumber, optionalPercent } from "@/schemas/helpers";
+
+// Optional finite number (empty → null)
+massKg: optionalNumber,
+
+// Optional 0–100 percent (empty → null, validates range)
+moisturePercent: optionalPercent,
+```
+
+### Entity Select Cache Seeding
+
+After a quick-add dialog creates a new entity, use `seedEntityCache` to make it immediately available in EntitySelect dropdowns without a full list refetch:
+
+```typescript
+import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
+
+// After successful quick-add
+seedEntityCache(queryClient, "driver", { id: newDriver.id, label: newDriver.name });
+```
+
 ## Zod String-to-Number Transform Gotchas
 
 When using `z.union([z.number(), z.string().transform(...)])` for numeric fields, the string transform branch **bypasses** range validation on the number branch. Prefer `z.preprocess()` (above) instead. If you must use `z.union`, always validate inside the transform:

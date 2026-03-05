@@ -9,6 +9,7 @@
  * - Facility, Customer, CustomerLocation, BiocharProduct seeded via seededData
  */
 import { test, expect } from "./fixtures";
+import { deliveryStatuses } from "../../src/schemas/deliveries";
 
 // ============================================
 // Test Constants
@@ -309,9 +310,8 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
 
 test.describe("Distribution Schema Constants", () => {
   test("delivery status values are valid", () => {
-    const validStatuses = ["upcoming", "delivered"];
-    expect(validStatuses).toContain("upcoming");
-    expect(validStatuses).toContain("delivered");
+    expect(deliveryStatuses).toContain("upcoming");
+    expect(deliveryStatuses).toContain("delivered");
   });
 
   test("packaging types are valid", () => {
