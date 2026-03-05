@@ -1,5 +1,5 @@
 {
-  "id": "4074884a-128b-43c1-8064-a21ccc666fd4",
+  "id": "f275a891-03cd-4403-acf8-cc8379601295",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2237,12 +2237,6 @@
         },
         "reactor_type": {
           "name": "reactor_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -4492,6 +4486,90 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.formulation_ingredients": {
+      "name": "formulation_ingredients",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "formulation_id": {
+          "name": "formulation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ingredient_type": {
+          "name": "ingredient_type",
+          "type": "ingredient_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ratio": {
+          "name": "ratio",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "formulation_ingredients_formulation_id_formulations_id_fk": {
+          "name": "formulation_ingredients_formulation_id_formulations_id_fk",
+          "tableFrom": "formulation_ingredients",
+          "tableTo": "formulations",
+          "columnsFrom": [
+            "formulation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "formulation_ingredients_ratio_range": {
+          "name": "formulation_ingredients_ratio_range",
+          "value": "\"formulation_ingredients\".\"ratio\" is null or (\"formulation_ingredients\".\"ratio\" >= 0 and \"formulation_ingredients\".\"ratio\" <= 1)"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.formulations": {
       "name": "formulations",
       "schema": "",
@@ -4517,12 +4595,6 @@
         },
         "biochar_ratio": {
           "name": "biochar_ratio",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "compost_ratio": {
-          "name": "compost_ratio",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -4565,10 +4637,6 @@
         "formulations_biochar_ratio_range": {
           "name": "formulations_biochar_ratio_range",
           "value": "\"formulations\".\"biochar_ratio\" is null or (\"formulations\".\"biochar_ratio\" >= 0 and \"formulations\".\"biochar_ratio\" <= 1)"
-        },
-        "formulations_compost_ratio_range": {
-          "name": "formulations_compost_ratio_range",
-          "value": "\"formulations\".\"compost_ratio\" is null or (\"formulations\".\"compost_ratio\" >= 0 and \"formulations\".\"compost_ratio\" <= 1)"
         }
       },
       "isRLSEnabled": false
@@ -4608,7 +4676,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'processing'"
+          "default": "'upcoming'"
         },
         "order_id": {
           "name": "order_id",
@@ -4828,14 +4896,6 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "order_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ordered'"
         },
         "customer_id": {
           "name": "customer_id",
@@ -5534,8 +5594,7 @@
       "name": "delivery_status",
       "schema": "public",
       "values": [
-        "scheduled",
-        "processing",
+        "upcoming",
         "delivered"
       ]
     },
@@ -5587,15 +5646,6 @@
         "low",
         "medium",
         "high"
-      ]
-    },
-    "public.order_status": {
-      "name": "order_status",
-      "schema": "public",
-      "values": [
-        "draft",
-        "ordered",
-        "processed"
       ]
     },
     "public.packaging_type": {
@@ -5679,6 +5729,18 @@
         "operator",
         "lab_technician",
         "viewer"
+      ]
+    },
+    "public.ingredient_type": {
+      "name": "ingredient_type",
+      "schema": "public",
+      "values": [
+        "compost",
+        "mineral",
+        "lime",
+        "binder",
+        "amendment",
+        "other"
       ]
     }
   },
