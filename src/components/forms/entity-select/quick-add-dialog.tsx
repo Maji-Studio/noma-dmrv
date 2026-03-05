@@ -4,7 +4,8 @@
  */
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import type { QuickAddDialogProps, EntityOption, EntityType } from "./types";
 
@@ -103,43 +104,15 @@ export function QuickAddDialog({
   onSubmit,
   isSubmitting = false,
 }: QuickAddDialogInternalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [formData, setFormData] = useState<QuickAddForm>({ code: "", name: "" });
   const [error, setError] = useState<string | null>(null);
 
-  // Reset form state
   const resetForm = useCallback(() => {
     setFormData({ code: "", name: "" });
     setError(null);
   }, []);
 
-  // Handle dialog open/close with native dialog API
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (isOpen) {
-      dialog.showModal();
-      resetForm();
-    } else {
-      dialog.close();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- resetForm is stable, only run on isOpen change
-  }, [isOpen]);
-
-  // Handle ESC key
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    const handleCancel = (e: Event) => {
-      e.preventDefault();
-      onClose();
-    };
-
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onClose]);
+  const dialogRef = useDialog(isOpen, onClose, resetForm);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

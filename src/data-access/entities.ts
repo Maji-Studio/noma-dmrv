@@ -507,6 +507,26 @@ function formatStorageLocationSubtitle(
   return parts.join(" · ");
 }
 
+const feedstockInventoryAggregate = db
+  .select({
+    storageLocationId: feedstocks.storageLocationId,
+    feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`,
+    totalStoredKg: sql<number>`SUM(${feedstocks.massDryKg})`,
+  })
+  .from(feedstocks)
+  .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+  .groupBy(feedstocks.storageLocationId)
+  .as("feedstock_inventory_agg");
+
+const productionRunConsumptionAggregate = db
+  .select({
+    storageLocationId: productionRuns.feedstockStorageLocationId,
+    totalConsumedKg: sql<number>`SUM(${productionRuns.feedstockMassUsedKg})`,
+  })
+  .from(productionRuns)
+  .groupBy(productionRuns.feedstockStorageLocationId)
+  .as("production_run_consumption_agg");
+
 async function getStorageLocations(params: {
   search?: string;
   facilityId?: string;
@@ -547,25 +567,19 @@ async function getStorageLocations(params: {
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
-      feedstockTypeName: sql<string | null>`(
-        SELECT string_agg(DISTINCT ft.name, ', ')
-        FROM feedstocks f
-        JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
-        WHERE f.storage_location_id = ${storageLocations.id}
-      )`,
-      totalStoredKg: sql<number>`COALESCE((
-        SELECT SUM(f.mass_dry_kg)
-        FROM feedstocks f
-        WHERE f.storage_location_id = ${storageLocations.id}
-      ), 0)`,
-      totalConsumedKg: sql<number>`COALESCE((
-        SELECT SUM(pr.feedstock_mass_used_kg)
-        FROM production_runs pr
-        WHERE pr.feedstock_storage_location_id = ${storageLocations.id}
-        AND pr.feedstock_mass_used_kg IS NOT NULL
-      ), 0)`,
+      feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
+      totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
     })
     .from(storageLocations)
+    .leftJoin(
+      feedstockInventoryAggregate,
+      eq(storageLocations.id, feedstockInventoryAggregate.storageLocationId)
+    )
+    .leftJoin(
+      productionRunConsumptionAggregate,
+      eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
+    )
     .where(whereClause)
     .limit(limit);
 
@@ -586,25 +600,19 @@ async function getStorageLocationById(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
-      feedstockTypeName: sql<string | null>`(
-        SELECT string_agg(DISTINCT ft.name, ', ')
-        FROM feedstocks f
-        JOIN feedstock_types ft ON f.feedstock_type_id = ft.id
-        WHERE f.storage_location_id = ${storageLocations.id}
-      )`,
-      totalStoredKg: sql<number>`COALESCE((
-        SELECT SUM(f.mass_dry_kg)
-        FROM feedstocks f
-        WHERE f.storage_location_id = ${storageLocations.id}
-      ), 0)`,
-      totalConsumedKg: sql<number>`COALESCE((
-        SELECT SUM(pr.feedstock_mass_used_kg)
-        FROM production_runs pr
-        WHERE pr.feedstock_storage_location_id = ${storageLocations.id}
-        AND pr.feedstock_mass_used_kg IS NOT NULL
-      ), 0)`,
+      feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
+      totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
     })
     .from(storageLocations)
+    .leftJoin(
+      feedstockInventoryAggregate,
+      eq(storageLocations.id, feedstockInventoryAggregate.storageLocationId)
+    )
+    .leftJoin(
+      productionRunConsumptionAggregate,
+      eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
+    )
     .where(eq(storageLocations.id, id))
     .limit(1);
 
@@ -902,7 +910,6 @@ async function getFormulationsEntity(params: {
       code: formulations.code,
       name: formulations.name,
       biocharRatio: formulations.biocharRatio,
-      compostRatio: formulations.compostRatio,
     })
     .from(formulations)
     .where(whereClause)
@@ -923,7 +930,6 @@ async function getFormulationEntityById(id: string): Promise<EntityOption | null
       code: formulations.code,
       name: formulations.name,
       biocharRatio: formulations.biocharRatio,
-      compostRatio: formulations.compostRatio,
     })
     .from(formulations)
     .where(eq(formulations.id, id))
@@ -956,7 +962,8 @@ async function getFeedstockDeliveriesEntity(params: {
     conditions.push(
       or(
         ilike(feedstockDeliveries.code, searchPattern),
-        ilike(suppliers.name, searchPattern)
+        ilike(suppliers.name, searchPattern),
+        ilike(feedstockTypes.name, searchPattern)
       )!
     );
   }
@@ -970,9 +977,11 @@ async function getFeedstockDeliveriesEntity(params: {
       deliveryDate: feedstockDeliveries.deliveryDate,
       facilityId: feedstockDeliveries.facilityId,
       supplierName: suppliers.name,
+      feedstockTypeName: feedstockTypes.name,
     })
     .from(feedstockDeliveries)
     .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
+    .leftJoin(feedstockTypes, eq(feedstockDeliveries.feedstockTypeId, feedstockTypes.id))
     .where(whereClause)
     .limit(limit);
 
@@ -980,7 +989,7 @@ async function getFeedstockDeliveriesEntity(params: {
     id: r.id,
     code: r.code,
     name: `${r.code} (${new Date(r.deliveryDate).toLocaleDateString()})`,
-    subtitle: r.supplierName ?? undefined,
+    subtitle: [r.supplierName, r.feedstockTypeName].filter(Boolean).join(" · ") || undefined,
   }));
 }
 
@@ -994,9 +1003,11 @@ async function getFeedstockDeliveryEntityById(
       deliveryDate: feedstockDeliveries.deliveryDate,
       facilityId: feedstockDeliveries.facilityId,
       supplierName: suppliers.name,
+      feedstockTypeName: feedstockTypes.name,
     })
     .from(feedstockDeliveries)
     .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
+    .leftJoin(feedstockTypes, eq(feedstockDeliveries.feedstockTypeId, feedstockTypes.id))
     .where(eq(feedstockDeliveries.id, id))
     .limit(1);
 
@@ -1006,6 +1017,6 @@ async function getFeedstockDeliveryEntityById(
     id: result.id,
     code: result.code,
     name: `${result.code} (${new Date(result.deliveryDate).toLocaleDateString()})`,
-    subtitle: result.supplierName ?? undefined,
+    subtitle: [result.supplierName, result.feedstockTypeName].filter(Boolean).join(" · ") || undefined,
   };
 }

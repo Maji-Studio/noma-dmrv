@@ -317,6 +317,28 @@ const {
 });
 ```
 
+### Dynamic Field Arrays (useFieldArray)
+
+For forms with repeatable rows (e.g., formulation ingredients), use `useFieldArray`:
+
+```typescript
+import { useForm, useFieldArray } from "react-hook-form";
+
+const { control, register } = useForm<MyFormData>({ ... });
+const { fields, append, remove } = useFieldArray({ control, name: "ingredients" });
+
+// Render rows
+{fields.map((field, index) => (
+  <div key={field.id}>
+    <FormInput {...register(`ingredients.${index}.name`)} />
+    <Button onClick={() => remove(index)}>Remove</Button>
+  </div>
+))}
+<Button onClick={() => append(EMPTY_ROW)}>Add</Button>
+```
+
+**Reference**: `src/components/formulations/formulation-form.tsx`
+
 ## Migration Checklist
 
 When migrating an existing form to React Hook Form:
@@ -374,6 +396,31 @@ durationMinutes: z.preprocess(toIntOrNull, z.number().int().positive().nullable(
 ```
 
 This is cleaner than the `z.union([z.number(), z.string().transform(...), z.null()])` pattern and ensures validation runs on the coerced number.
+
+### Pre-built Optional Number Schemas
+
+For the most common cases, use the ready-made schemas instead of writing `z.preprocess(...)` each time:
+
+```typescript
+import { optionalNumber, optionalPercent } from "@/schemas/helpers";
+
+// Optional finite number (empty → null)
+massKg: optionalNumber,
+
+// Optional 0–100 percent (empty → null, validates range)
+moisturePercent: optionalPercent,
+```
+
+### Entity Select Cache Seeding
+
+After a quick-add dialog creates a new entity, use `seedEntityCache` to make it immediately available in EntitySelect dropdowns without a full list refetch:
+
+```typescript
+import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
+
+// After successful quick-add
+seedEntityCache(queryClient, "driver", { id: newDriver.id, label: newDriver.name });
+```
 
 ## Zod String-to-Number Transform Gotchas
 

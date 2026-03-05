@@ -11,7 +11,6 @@ import {
 import {
   deliveryStatus,
   emissionsCalculationMethod,
-  orderStatus,
   packagingType,
   transportEntityType,
   transportMethod,
@@ -48,7 +47,6 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => facilities.id),
   orderDate: timestamp('order_date').notNull(),
-  status: orderStatus('status').default('ordered').notNull(),
 
   // --- Customer Details ---
   customerId: uuid('customer_id')
@@ -84,7 +82,7 @@ export const deliveries = pgTable(
       .notNull()
       .references(() => facilities.id),
     deliveryDate: timestamp('delivery_date').notNull(),
-    status: deliveryStatus('status').default('processing').notNull(),
+    status: deliveryStatus('status').default('upcoming').notNull(),
 
     // --- Linked Order ---
     orderId: uuid('order_id')

@@ -38,11 +38,14 @@ const statusOptions: readonly { value: string; label: string }[] =
 
 function formatStatus(status: DeliveryStatus): string {
   const labels: Record<DeliveryStatus, string> = {
-    scheduled: "Scheduled",
-    processing: "Processing",
+    upcoming: "Upcoming",
     delivered: "Delivered",
   };
   return labels[status];
+}
+
+function isDeliveryStatus(value: string | null | undefined): value is DeliveryStatus {
+  return !!value && deliveryStatuses.includes(value as DeliveryStatus);
 }
 
 // ============================================
@@ -74,6 +77,9 @@ export function DeliveryForm({
   // Fetch orders for dropdown
   const { data: ordersData } = useOrdersForSelect();
   const orders = ordersData ?? [];
+  const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status)
+    ? delivery.status
+    : "upcoming";
 
   const orderOptions = orders.map((o) => ({
     value: o.id,
@@ -95,7 +101,7 @@ export function DeliveryForm({
     defaultValues: {
       orderId: delivery?.orderId ?? "",
       deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
-      status: (delivery?.status as DeliveryStatus) ?? "processing",
+      status: defaultStatus,
       deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
       massDryKg: delivery?.massDryKg ?? undefined,
       moistureContentPercent: delivery?.moistureContentPercent ?? undefined,

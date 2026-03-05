@@ -17,10 +17,6 @@ export const feedstockFormSchema = z
       .string()
       .min(1, "Please select a feedstock delivery")
       .uuid("Please select a valid feedstock delivery"),
-    feedstockTypeId: z
-      .string()
-      .min(1, "Please select a feedstock type")
-      .uuid("Please select a valid feedstock type"),
     facilityId: z
       .string()
       .min(1, "Facility is required")
@@ -80,6 +76,13 @@ export const feedstockFormSchema = z
             });
             return z.NEVER;
           }
+          if (n < 0 || n > 100) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Moisture must be between 0 and 100",
+            });
+            return z.NEVER;
+          }
           return n;
         }),
     ]),
@@ -103,6 +106,13 @@ export const feedstockFormSchema = z
             });
             return z.NEVER;
           }
+          if (n < 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Dry mass must be 0 or greater",
+            });
+            return z.NEVER;
+          }
           return n;
         }),
     ]),
@@ -117,8 +127,7 @@ export const feedstockFormSchema = z
       .max(2000, "Notes must be less than 2000 characters")
       .optional()
       .or(z.literal("")),
-  })
-;
+  });
 
 // ============================================
 // Server Action Schemas

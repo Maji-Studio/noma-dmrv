@@ -15,7 +15,7 @@ import {
   useStorageLocations,
   useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -98,8 +98,9 @@ type SideSheetState =
 // ============================================
 
 export function StorageLocationList() {
+  const { facilityId } = useFacilityContext();
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [facilityFilter, setFacilityFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -109,18 +110,27 @@ export function StorageLocationList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Build a filter key so pagination resets when filters change
+  const filterKey = `${facilityId ?? ""}-${typeFilter}-${searchQuery}`;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
+  const effectivePage = filterKey !== lastFilterKey ? 1 : currentPage;
+
   const filters: Partial<StorageLocationFilterData> = useMemo(() => ({
     search: searchQuery || undefined,
-    facilityId: facilityFilter || undefined,
+    facilityId: facilityId || undefined,
     type: (typeFilter as StorageLocationFilterData["type"]) || undefined,
-    page: currentPage,
+    page: effectivePage,
     pageSize,
     sortBy: "code",
     sortOrder: "asc",
-  }), [searchQuery, facilityFilter, typeFilter, currentPage, pageSize]);
+  }), [searchQuery, facilityId, typeFilter, effectivePage, pageSize]);
 
   const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters);
-  const { data: facilitiesData } = useFacilities({ pageSize: 100 });
 
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
@@ -131,7 +141,6 @@ export function StorageLocationList() {
   const totalStorageLocations = storageLocationsData?.total ?? 0;
   const totalPages = storageLocationsData?.totalPages ?? 0;
   const pageCapacity = storageLocations.reduce((sum, sl) => sum + (sl.capacityKg ?? 0), 0);
-  const facilities = facilitiesData?.items ?? [];
 
   const handleCreate = async (data: StorageLocationFormData) => {
     setFormError(null);
@@ -184,8 +193,8 @@ export function StorageLocationList() {
     }
   };
 
-  const clearFilters = () => { setSearchQuery(""); setFacilityFilter(""); setTypeFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || facilityFilter || typeFilter;
+  const clearFilters = () => { setSearchQuery(""); setTypeFilter(""); setCurrentPage(1); };
+  const hasActiveFilters = searchQuery || typeFilter;
 
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
@@ -241,10 +250,6 @@ export function StorageLocationList() {
             <input type="text" placeholder="Search storage locations..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]" aria-label="Search table" />
           </div>
           <div className="flex items-center gap-8">
-            <select value={facilityFilter} onChange={(e) => { setFacilityFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
-              <option value="">All Facilities</option>
-              {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
             <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
               <option value="">All Types</option>
               <option value="feedstock_bin">Feedstock Bin</option>
@@ -298,6 +303,7 @@ export function StorageLocationList() {
         <StorageLocationForm
           key={editingEntity?.id ?? "create"}
           storageLocation={editingEntity as StorageLocation | undefined}
+          defaultFacilityId={facilityId ?? undefined}
           onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}

@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -15,8 +16,6 @@ import {
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
-import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
-import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { getFeedstockDeliveryByIdFn } from "@/fn/feedstock-deliveries";
 
 // ============================================
@@ -40,8 +39,6 @@ export function FeedstockForm({
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
 
-  const feedstockTypeDialog = useQuickAddDialog();
-
   const {
     register,
     handleSubmit,
@@ -53,7 +50,6 @@ export function FeedstockForm({
     resolver: zodResolver(feedstockFormSchema),
     defaultValues: {
       feedstockDeliveryId: feedstock?.feedstockDeliveryId ?? "",
-      feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       facilityId: feedstock?.facilityId ?? "",
       massWetKg: feedstock?.massWetKg ?? ("" as unknown as number),
       moistureContentPercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
@@ -68,35 +64,39 @@ export function FeedstockForm({
   const watchWetMass = watch("massWetKg");
   const watchMoisture = watch("moistureContentPercent");
 
-  // Auto-calculate dry mass from wet mass and moisture
+  // Auto-calculate dry mass from wet mass and moisture using shared utility
   const calculatedDryMass =
     typeof watchWetMass === "number" &&
     typeof watchMoisture === "number" &&
-    watchWetMass > 0 &&
+    watchWetMass >= 0 &&
     watchMoisture >= 0 &&
     watchMoisture <= 100
-      ? watchWetMass * (1 - watchMoisture / 100)
+      ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
-  // Sync calculated dry mass into the form
+  // Sync calculated dry mass into the form (clear when inputs become invalid)
   useEffect(() => {
     if (calculatedDryMass !== null) {
-      setValue("massDryKg", Math.round(calculatedDryMass * 100) / 100);
+      setValue("massDryKg", calculatedDryMass);
+    } else {
+      setValue("massDryKg", "" as unknown as number);
     }
   }, [calculatedDryMass, setValue]);
 
   // Auto-populate facilityId when delivery changes
   useEffect(() => {
-    if (!deliveryId || isEditMode) return;
+    if (!deliveryId) return;
 
     let active = true;
-    getFeedstockDeliveryByIdFn(deliveryId).then((result) => {
-      if (active && result.success) {
-        setValue("facilityId", result.data.facilityId);
-      }
-    });
+    getFeedstockDeliveryByIdFn(deliveryId)
+      .then((result) => {
+        if (active && result.success) {
+          setValue("facilityId", result.data.facilityId);
+        }
+      })
+      .catch(() => {});
     return () => { active = false; };
-  }, [deliveryId, setValue, isEditMode]);
+  }, [deliveryId, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
@@ -113,7 +113,7 @@ export function FeedstockForm({
             Reference
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={control}
               name="feedstockDeliveryId"
@@ -122,19 +122,6 @@ export function FeedstockForm({
               placeholder="Select delivery..."
               disabled={isSubmitting}
               required
-            />
-
-            <FormEntitySelect
-              control={control}
-              name="feedstockTypeId"
-              label="Feedstock Type"
-              entityType="feedstockType"
-              required
-              placeholder="Select feedstock type..."
-              disabled={isSubmitting}
-              allowCreate
-              createLabel="Add new feedstock type"
-              onCreateNew={() => feedstockTypeDialog.open()}
             />
           </div>
         </div>
@@ -286,15 +273,6 @@ export function FeedstockForm({
           </Button>
         </div>
       </form>
-
-      <FeedstockTypeQuickAddDialog
-        isOpen={feedstockTypeDialog.isOpen}
-        onClose={feedstockTypeDialog.close}
-        onSuccess={(feedstockType) => {
-          setValue("feedstockTypeId", feedstockType.id);
-          feedstockTypeDialog.close();
-        }}
-      />
     </>
   );
 }

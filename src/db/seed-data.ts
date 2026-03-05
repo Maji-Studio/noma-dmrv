@@ -269,7 +269,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Alpha',
           facilityId: ids.facilityMoshi,
           reactorType: 'auger',
-          type: 'continuous',
           samplingMethod: 'method_a',
           capacityKg: 750,
           specifications: {
@@ -284,7 +283,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Beta',
           facilityId: ids.facilityMoshi,
           reactorType: 'fixed-bed',
-          type: 'batch',
           samplingMethod: 'method_b',
           capacityKg: 500,
           specifications: {
@@ -299,7 +297,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Gamma',
           facilityId: ids.facilityArusha,
           reactorType: 'auger',
-          type: 'continuous',
           samplingMethod: 'method_a',
           capacityKg: 1000,
           specifications: {
@@ -839,7 +836,6 @@ async function seedDemoData() {
           code: 'BCF-STD-01',
           name: 'Standard Biochar Blend',
           biocharRatio: 0.4,
-          compostRatio: 0.6,
           description: 'Balanced blend for general agricultural use',
         },
         {
@@ -847,7 +843,6 @@ async function seedDemoData() {
           code: 'BCF-PRM-01',
           name: 'Premium High-Carbon Blend',
           biocharRatio: 0.7,
-          compostRatio: 0.3,
           description: 'High biochar content for maximum carbon sequestration',
         },
         {
@@ -855,8 +850,49 @@ async function seedDemoData() {
           code: 'BCF-ORG-01',
           name: 'Certified Organic Blend',
           biocharRatio: 0.5,
-          compostRatio: 0.5,
           description: 'Organic-certified blend with verified compost',
+        },
+      ]);
+
+      // Seed formulation ingredients
+      await tx.insert(schema.formulationIngredients).values([
+        // Standard Biochar Blend: 60% cow manure compost
+        {
+          formulationId: ids.formulationStandard,
+          ingredientType: 'compost',
+          name: 'Cow manure compost',
+          ratio: 0.6,
+          sortOrder: 0,
+        },
+        // Premium: 20% green waste compost, 10% rock dust
+        {
+          formulationId: ids.formulationPremium,
+          ingredientType: 'compost',
+          name: 'Green waste compost',
+          ratio: 0.2,
+          sortOrder: 0,
+        },
+        {
+          formulationId: ids.formulationPremium,
+          ingredientType: 'mineral',
+          name: 'Rock dust',
+          ratio: 0.1,
+          sortOrder: 1,
+        },
+        // Organic: 40% vermicompost, 10% agricultural lime
+        {
+          formulationId: ids.formulationOrganic,
+          ingredientType: 'compost',
+          name: 'Vermicompost',
+          ratio: 0.4,
+          sortOrder: 0,
+        },
+        {
+          formulationId: ids.formulationOrganic,
+          ingredientType: 'lime',
+          name: 'Agricultural lime',
+          ratio: 0.1,
+          sortOrder: 1,
         },
       ]);
 
@@ -911,7 +947,6 @@ async function seedDemoData() {
           code: 'OR-2026-101',
           facilityId: ids.facilityMoshi,
           orderDate: demoTimestamps.order1Date,
-          status: 'processed',
           customerId: ids.customerCoffee,
           customerLocationId: ids.locationCoffeeNorth,
           biocharProductId: ids.biocharProduct1,
@@ -924,7 +959,6 @@ async function seedDemoData() {
           code: 'OR-2026-102',
           facilityId: ids.facilityMoshi,
           orderDate: demoTimestamps.order2Date,
-          status: 'processed',
           customerId: ids.customerTea,
           customerLocationId: ids.locationTeaEast,
           biocharProductId: ids.biocharProduct2,
@@ -937,7 +971,6 @@ async function seedDemoData() {
           code: 'OR-2026-103',
           facilityId: ids.facilityMoshi,
           orderDate: demoTimestamps.order3Date,
-          status: 'processed',
           customerId: ids.customerCoffee,
           customerLocationId: ids.locationCoffeeSouth,
           biocharProductId: ids.biocharProduct3,

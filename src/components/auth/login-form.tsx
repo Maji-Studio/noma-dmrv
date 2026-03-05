@@ -40,7 +40,7 @@ export function LoginForm() {
     const result = await signIn(data.email, data.password);
 
     if (result.success) {
-      router.push("/facilities");
+      router.push("/dashboard");
     } else {
       setServerError(result.error || "Failed to sign in");
 

@@ -49,7 +49,6 @@ export interface TestFormulation {
   code: string;
   name: string;
   biocharRatio: number | null;
-  compostRatio: number | null;
   description: string | null;
 }
 
@@ -337,7 +336,6 @@ export async function createTestFormulation(
       code: overrides.code || `E2E-FORM-${testId.toUpperCase()}`,
       name: overrides.name || `E2E Test Formulation ${testId}`,
       biocharRatio: overrides.biocharRatio ?? 0.7,
-      compostRatio: overrides.compostRatio ?? 0.3,
       description: overrides.description ?? null,
     };
 
@@ -346,7 +344,6 @@ export async function createTestFormulation(
       code: formulation.code,
       name: formulation.name,
       biocharRatio: formulation.biocharRatio,
-      compostRatio: formulation.compostRatio,
       description: formulation.description,
     });
 

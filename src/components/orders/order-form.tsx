@@ -14,10 +14,8 @@ import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import {
   orderFormSchema,
-  orderStatuses,
   packagingTypes,
   type OrderFormData,
-  type OrderStatus,
   type PackagingType,
 } from "@/schemas/orders";
 import type { Order } from "@/db/schema";
@@ -30,12 +28,6 @@ import { useState, useEffect } from "react";
 // Constants for select options
 // ============================================
 
-const statusOptions: readonly { value: string; label: string }[] =
-  orderStatuses.map((status) => ({
-    value: status,
-    label: formatStatus(status),
-  }));
-
 const packagingOptions: readonly { value: string; label: string }[] =
   packagingTypes.map((type) => ({
     value: type,
@@ -45,15 +37,6 @@ const packagingOptions: readonly { value: string; label: string }[] =
 // ============================================
 // Formatting helpers
 // ============================================
-
-function formatStatus(status: OrderStatus): string {
-  const labels: Record<OrderStatus, string> = {
-    draft: "Draft",
-    ordered: "Ordered",
-    processed: "Processed",
-  };
-  return labels[status];
-}
 
 function formatPackaging(type: PackagingType): string {
   const labels: Record<PackagingType, string> = {
@@ -70,6 +53,8 @@ function formatPackaging(type: PackagingType): string {
 interface OrderFormProps {
   /** Existing order data for editing (undefined for create mode) */
   order?: Order;
+  /** Pre-selected facility ID from global context */
+  defaultFacilityId?: string;
   /** Form submission handler */
   onSubmit: (data: OrderFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -82,6 +67,7 @@ interface OrderFormProps {
 
 export function OrderForm({
   order,
+  defaultFacilityId,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -137,7 +123,7 @@ export function OrderForm({
   } = useForm({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
-      facilityId: order?.facilityId ?? "",
+      facilityId: order?.facilityId ?? defaultFacilityId ?? "",
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
       biocharProductId: order?.biocharProductId ?? "",
@@ -146,7 +132,6 @@ export function OrderForm({
         : formatLocalDate(new Date()),
       quantityKg: order?.quantityKg ?? undefined,
       packaging: (order?.packaging as PackagingType) ?? "loose",
-      status: (order?.status as OrderStatus) ?? "draft",
       value: order?.value ?? undefined,
       currency: order?.currency ?? "TZS",
     },
@@ -201,9 +186,7 @@ export function OrderForm({
               {...register("orderDate")}
             />
           </FormField>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="facilityId"
             label="Facility"
@@ -213,20 +196,10 @@ export function OrderForm({
             <FormSelect
               id="facilityId"
               placeholder="Select facility..."
-              disabled={isSubmitting}
+              disabled={isSubmitting || (!!defaultFacilityId && !isEditMode)}
               error={!!errors.facilityId}
               options={facilityOptions}
               {...register("facilityId")}
-            />
-          </FormField>
-
-          <FormField id="status" label="Status" error={errors.status?.message}>
-            <FormSelect
-              id="status"
-              disabled={isSubmitting}
-              error={!!errors.status}
-              options={statusOptions}
-              {...register("status")}
             />
           </FormField>
         </div>

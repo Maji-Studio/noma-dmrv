@@ -178,6 +178,10 @@ This template starts with a clean schema for multi-project applications.
 2. Project tables (projects, project_members)
 3. Example CRUD tables (items)
 
+**Notable migrations:**
+- `0002`: Added `formulation_ingredients` table and `ingredient_type` enum; dropped `compost_ratio` from `formulations` (replaced by multi-ingredient model)
+- `0003`: Simplified delivery status enum from `scheduled`/`processing`/`delivered` to `upcoming`/`delivered`; migrated existing rows
+
 **Migration approach:** Incremental migrations tracked in `/drizzle/` directory.
 
 ---
@@ -755,6 +759,7 @@ Every biochar entity has a unique human-readable `code` column. Codes follow the
 | `PR`   | Production Run     | PR-2026-012    |
 | `SAM`  | Sample             | SAM-2026-007   |
 | `BCF`  | Formulation        | BCF-2026-001   |
+| `PS`   | Production Sample  | PS-2026-001    |
 | `BP`   | Biochar Product    | BP-2026-004    |
 | `CUS`  | Customer           | CUS-2026-001   |
 | `OR`   | Order              | OR-2026-003    |

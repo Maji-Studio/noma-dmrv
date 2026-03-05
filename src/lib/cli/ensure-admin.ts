@@ -8,16 +8,20 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from '../../db/schema';
-import { hashPassword } from '../../../tests/e2e/fixtures/hash-password';
+import { hashPassword } from '../auth/hash-password';
 
 config({ path: '.env.local' });
-
-const ADMIN_PASSWORD = 'admin123';
 
 async function ensureAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) {
     console.error('ERROR: ADMIN_EMAIL environment variable is not set');
+    process.exit(1);
+  }
+
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    console.error('ERROR: ADMIN_PASSWORD environment variable is not set');
     process.exit(1);
   }
 
@@ -30,7 +34,7 @@ async function ensureAdmin() {
   const db = drizzle(pool, { schema });
 
   try {
-    const passwordHash = await hashPassword(ADMIN_PASSWORD);
+    const passwordHash = await hashPassword(adminPassword);
 
     // Check if user exists
     const [existing] = await db
@@ -63,21 +67,23 @@ async function ensureAdmin() {
       }
       console.log(`Updated admin credentials for ${adminEmail}`);
     } else {
-      // Create user + credential account
-      const userId = crypto.randomUUID();
-      await db.insert(schema.users).values({
-        id: userId,
-        email: adminEmail,
-        name: 'Admin',
-        role: 'admin',
-        emailVerified: true,
-      });
-      await db.insert(schema.accounts).values({
-        id: `admin-account-${Date.now()}`,
-        userId,
-        accountId: `admin-${userId}`,
-        providerId: 'credential',
-        password: passwordHash,
+      // Create user + credential account in a transaction
+      await db.transaction(async (tx) => {
+        const userId = crypto.randomUUID();
+        await tx.insert(schema.users).values({
+          id: userId,
+          email: adminEmail,
+          name: 'Admin',
+          role: 'admin',
+          emailVerified: true,
+        });
+        await tx.insert(schema.accounts).values({
+          id: `admin-account-${Date.now()}`,
+          userId,
+          accountId: `admin-${userId}`,
+          providerId: 'credential',
+          password: passwordHash,
+        });
       });
       console.log(`Created admin user ${adminEmail}`);
     }

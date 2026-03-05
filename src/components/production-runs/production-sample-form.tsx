@@ -1,0 +1,298 @@
+/**
+ * ProductionSampleForm component
+ * Form for creating/editing in-process field measurements during pyrolysis runs
+ */
+"use client";
+
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { nullableNumericValue } from "@/lib/form-utils";
+import { formatLocalDateTime } from "@/lib/date-utils";
+import { FormField, FormInput } from "@/components/forms";
+import { EntitySelect } from "@/components/forms/entity-select";
+import { FormTextarea } from "@/components/forms/form-textarea";
+import { Button } from "@/components/ui";
+import {
+  productionSampleFormSchema,
+  type ProductionSampleFormData,
+} from "@/schemas/production-samples";
+import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
+
+// ============================================
+// Component
+// ============================================
+
+interface ProductionSampleFormProps {
+  productionRunId: string;
+  sample?: ProductionSampleWithRelations;
+  onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
+  onCancel?: () => void;
+  isSubmitting?: boolean;
+}
+
+export function ProductionSampleForm({
+  productionRunId,
+  sample,
+  onSubmit,
+  onCancel,
+  isSubmitting = false,
+}: ProductionSampleFormProps) {
+  const isEditMode = !!sample;
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(productionSampleFormSchema),
+    defaultValues: (() => {
+      const ts = sample?.timestamp ? new Date(sample.timestamp) : new Date();
+      return {
+      productionRunId,
+      timestamp: formatLocalDateTime(ts),
+      weightGrams: sample?.weightGrams ?? undefined,
+      volumeMl: sample?.volumeMl ?? undefined,
+      temperatureC: sample?.temperatureC ?? undefined,
+      moistureContentPercent: sample?.moistureContentPercent ?? undefined,
+      fixedCarbonPercent: sample?.fixedCarbonPercent ?? undefined,
+      volatileMatterPercent: sample?.volatileMatterPercent ?? undefined,
+      ashContentPercent: sample?.ashContentPercent ?? undefined,
+      photoUrl: sample?.photoUrl ?? "",
+      sampledById: sample?.sampledById ?? "",
+      notes: sample?.notes ?? "",
+    };
+    })(),
+  });
+
+  return (
+    <form onSubmit={handleSubmit((data) => onSubmit(data as ProductionSampleFormData))} className="space-y-32">
+      {/* Sample Info */}
+      <div className="space-y-20">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Sample Info
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="timestamp"
+            label="Timestamp"
+            error={errors.timestamp?.message}
+            required
+          >
+            <FormInput
+              id="timestamp"
+              type="datetime-local"
+              disabled={isSubmitting}
+              error={!!errors.timestamp}
+              {...register("timestamp")}
+            />
+          </FormField>
+
+          <FormField
+            id="sampledById"
+            label="Sampled By"
+            error={errors.sampledById?.message}
+          >
+            <Controller
+              name="sampledById"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  entityType="operator"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="Select operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.sampledById}
+                />
+              )}
+            />
+          </FormField>
+        </div>
+      </div>
+
+      {/* Physical Measurements */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Physical Measurements
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+          <FormField
+            id="weightGrams"
+            label="Weight (g)"
+            error={errors.weightGrams?.message}
+          >
+            <FormInput
+              id="weightGrams"
+              type="number"
+              step="0.01"
+              placeholder="e.g. 250"
+              disabled={isSubmitting}
+              error={!!errors.weightGrams}
+              {...register("weightGrams", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+
+          <FormField
+            id="volumeMl"
+            label="Volume (mL)"
+            error={errors.volumeMl?.message}
+          >
+            <FormInput
+              id="volumeMl"
+              type="number"
+              step="0.01"
+              placeholder="e.g. 500"
+              disabled={isSubmitting}
+              error={!!errors.volumeMl}
+              {...register("volumeMl", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+
+          <FormField
+            id="temperatureC"
+            label="Temperature (\u00B0C)"
+            error={errors.temperatureC?.message}
+          >
+            <FormInput
+              id="temperatureC"
+              type="number"
+              step="0.1"
+              placeholder="e.g. 550"
+              disabled={isSubmitting}
+              error={!!errors.temperatureC}
+              {...register("temperatureC", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+        </div>
+      </div>
+
+      {/* Proximate Analysis */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Proximate Analysis
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="moistureContentPercent"
+            label="Moisture Content (%)"
+            error={errors.moistureContentPercent?.message}
+          >
+            <FormInput
+              id="moistureContentPercent"
+              type="number"
+              step="0.01"
+              placeholder="e.g. 5.2"
+              disabled={isSubmitting}
+              error={!!errors.moistureContentPercent}
+              {...register("moistureContentPercent", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+
+          <FormField
+            id="fixedCarbonPercent"
+            label="Fixed Carbon (%)"
+            error={errors.fixedCarbonPercent?.message}
+          >
+            <FormInput
+              id="fixedCarbonPercent"
+              type="number"
+              step="0.01"
+              placeholder="e.g. 75.0"
+              disabled={isSubmitting}
+              error={!!errors.fixedCarbonPercent}
+              {...register("fixedCarbonPercent", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+
+          <FormField
+            id="volatileMatterPercent"
+            label="Volatile Matter (%)"
+            error={errors.volatileMatterPercent?.message}
+          >
+            <FormInput
+              id="volatileMatterPercent"
+              type="number"
+              step="0.01"
+              placeholder="e.g. 15.0"
+              disabled={isSubmitting}
+              error={!!errors.volatileMatterPercent}
+              {...register("volatileMatterPercent", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+
+          <FormField
+            id="ashContentPercent"
+            label="Ash Content (%)"
+            error={errors.ashContentPercent?.message}
+          >
+            <FormInput
+              id="ashContentPercent"
+              type="number"
+              step="0.01"
+              placeholder="e.g. 4.8"
+              disabled={isSubmitting}
+              error={!!errors.ashContentPercent}
+              {...register("ashContentPercent", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Notes
+        </h3>
+
+        <FormField id="notes" label="Notes" error={errors.notes?.message}>
+          <FormTextarea
+            id="notes"
+            rows={3}
+            placeholder="Observations, conditions, etc."
+            disabled={isSubmitting}
+            {...register("notes")}
+          />
+        </FormField>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
+        {onCancel && (
+          <Button
+            type="button"
+            variant="default"
+            onClick={onCancel}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" variant="primary" disabled={isSubmitting}>
+          {isSubmitting
+            ? "Saving..."
+            : isEditMode
+              ? "Save Changes"
+              : "Add Sample"}
+        </Button>
+      </div>
+    </form>
+  );
+}
