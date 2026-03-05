@@ -92,28 +92,29 @@ export async function getFormulations(
 
   const orderFn = sortOrder === "desc" ? desc : asc;
 
-  // Count total for pagination
-  const [{ totalCount }] = await db
-    .select({ totalCount: count() })
-    .from(formulations)
-    .where(whereClause);
-
-  const total = Number(totalCount);
-  const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // Get formulations with relational query for ingredients
-  const formulationList = await db.query.formulations.findMany({
-    where: whereClause,
-    orderBy: [orderFn(sortColumn)],
-    limit: pageSize,
-    offset,
-    with: {
-      ingredients: {
-        orderBy: [asc(formulationIngredients.sortOrder)],
+  // Run count and list queries in parallel
+  const [countResult, formulationList] = await Promise.all([
+    db
+      .select({ totalCount: count() })
+      .from(formulations)
+      .where(whereClause),
+    db.query.formulations.findMany({
+      where: whereClause,
+      orderBy: [orderFn(sortColumn)],
+      limit: pageSize,
+      offset,
+      with: {
+        ingredients: {
+          orderBy: [asc(formulationIngredients.sortOrder)],
+        },
       },
-    },
-  });
+    }),
+  ]);
+
+  const total = Number(countResult[0].totalCount);
+  const totalPages = Math.ceil(total / pageSize);
 
   return {
     items: formulationList,
@@ -316,21 +317,22 @@ export async function deleteFormulation(
 ): Promise<void> {
   requireAuth(userId);
 
-  const [existing] = await db
-    .select({ id: formulations.id })
-    .from(formulations)
-    .where(eq(formulations.id, formulationId));
+  const [existingResult, productCountResult] = await Promise.all([
+    db
+      .select({ id: formulations.id })
+      .from(formulations)
+      .where(eq(formulations.id, formulationId)),
+    db
+      .select({ count: count() })
+      .from(biocharProducts)
+      .where(eq(biocharProducts.formulationId, formulationId)),
+  ]);
 
-  if (!existing) {
+  if (existingResult.length === 0) {
     throw new Error("Formulation not found");
   }
 
-  const [productCount] = await db
-    .select({ count: count() })
-    .from(biocharProducts)
-    .where(eq(biocharProducts.formulationId, formulationId));
-
-  if (Number(productCount.count) > 0) {
+  if (Number(productCountResult[0].count) > 0) {
     throw new Error(
       "Cannot delete formulation with associated biochar products. Remove products first."
     );

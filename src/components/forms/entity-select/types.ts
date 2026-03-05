@@ -51,6 +51,8 @@ export interface EntitySelectProps {
   filterBy?: Record<string, string>;
   /** Auto-select when there is exactly one option available */
   autoSelectSingle?: boolean;
+  /** Always show the search input while dropdown is open */
+  alwaysShowSearch?: boolean;
 }
 
 export interface UseEntityOptionsParams {

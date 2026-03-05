@@ -15,13 +15,14 @@ import {
   vehicles,
   type Delivery,
 } from "@/db/schema";
-import type { DeliveryFilterData } from "@/schemas/deliveries";
+import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
 
 // ============================================
 // Types
 // ============================================
 
 export interface DeliveryWithRelations extends Delivery {
+  status: DeliveryStatus;
   orderCode: string | null;
   facilityName: string | null;
   customerName: string | null;

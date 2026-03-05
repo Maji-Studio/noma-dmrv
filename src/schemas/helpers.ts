@@ -63,6 +63,23 @@ export const toNumberOrNull = (v: unknown): unknown => {
   return v;
 };
 
+/** Optional numeric field: preprocess form string → number | null, then validate as finite number. */
+export const optionalNumber = z.preprocess(
+  toNumberOrNull,
+  z.number().finite().nullable().optional()
+);
+
+/** Optional percent field: preprocess form string → number | null, then validate 0–100 range. */
+export const optionalPercent = z.preprocess(
+  toNumberOrNull,
+  z
+    .number()
+    .min(0, "Must be 0–100")
+    .max(100, "Must be 0–100")
+    .nullable()
+    .optional()
+);
+
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {
   if (v === null || v === undefined) return null;

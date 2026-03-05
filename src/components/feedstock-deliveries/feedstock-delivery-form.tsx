@@ -21,6 +21,8 @@ import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 
+const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+
 // ============================================
 // Component
 // ============================================
@@ -147,6 +149,7 @@ export function FeedstockDeliveryForm({
               placeholder="Select driver..."
               disabled={isSubmitting}
               allowCreate
+              alwaysShowSearch
               createLabel="Add new driver"
               onCreateNew={() => driverDialog.open()}
             />
@@ -159,6 +162,7 @@ export function FeedstockDeliveryForm({
               placeholder="Select vehicle..."
               disabled={isSubmitting}
               allowCreate
+              alwaysShowSearch
               createLabel="Add new vehicle"
               onCreateNew={() => vehicleDialog.open()}
             />
@@ -216,6 +220,7 @@ export function FeedstockDeliveryForm({
               placeholder="Select feedstock type..."
               disabled={isSubmitting}
               allowCreate
+              alwaysShowSearch
               createLabel="Add new feedstock type"
               onCreateNew={() => feedstockTypeDialog.open()}
             />
@@ -268,21 +273,23 @@ export function FeedstockDeliveryForm({
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="notes"
-              label="Notes"
-              error={errors.notes?.message}
-              helperText="Additional delivery notes or documentation references"
-            >
-              <FormTextarea
+            <div className="md:col-span-2">
+              <FormField
                 id="notes"
-                placeholder="Enter any additional notes, weighbridge ticket references, bill of lading numbers, etc."
-                disabled={isSubmitting}
-                error={!!errors.notes}
-                rows={4}
-                {...register("notes")}
-              />
-            </FormField>
+                label="Notes"
+                error={errors.notes?.message}
+                helperText="Additional delivery notes or documentation references"
+              >
+                <FormTextarea
+                  id="notes"
+                  placeholder="Enter any additional notes, weighbridge ticket references, bill of lading numbers, etc."
+                  disabled={isSubmitting}
+                  error={!!errors.notes}
+                  rows={4}
+                  {...register("notes")}
+                />
+              </FormField>
+            </div>
           </div>
         </div>
 
@@ -309,7 +316,7 @@ export function FeedstockDeliveryForm({
         isOpen={driverDialog.isOpen}
         onClose={driverDialog.close}
         onSuccess={(driver) => {
-          setValue("driverId", driver.id);
+          setValue("driverId", driver.id, SET_VALUE_OPTS);
           driverDialog.close();
         }}
       />
@@ -318,7 +325,7 @@ export function FeedstockDeliveryForm({
         isOpen={vehicleDialog.isOpen}
         onClose={vehicleDialog.close}
         onSuccess={(vehicle) => {
-          setValue("vehicleId", vehicle.id);
+          setValue("vehicleId", vehicle.id, SET_VALUE_OPTS);
           vehicleDialog.close();
         }}
       />
@@ -327,7 +334,7 @@ export function FeedstockDeliveryForm({
         isOpen={feedstockTypeDialog.isOpen}
         onClose={feedstockTypeDialog.close}
         onSuccess={(feedstockType) => {
-          setValue("feedstockTypeId", feedstockType.id);
+          setValue("feedstockTypeId", feedstockType.id, SET_VALUE_OPTS);
           feedstockTypeDialog.close();
         }}
       />

@@ -106,6 +106,9 @@ export function useUpdateProductionSample(
       queryClient.invalidateQueries({
         queryKey: productionSampleKeys.list(variables.productionRunId),
       });
+      queryClient.invalidateQueries({
+        queryKey: productionRunKeys.lists(),
+      });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -133,9 +136,6 @@ export function useDeleteProductionSample(
           queryKey: productionSampleKeys.list(productionRunId),
         });
       }
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.lists(),
-      });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: callbacks?.onError,
