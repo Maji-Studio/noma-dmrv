@@ -163,9 +163,13 @@ export function DeliveryList() {
   // Global facility context
   const { facilityId: contextFacilityId } = useFacilityContext();
 
-  // Data fetching
-  const { data: deliveriesData, isLoading, error: fetchError } = useDeliveries();
-  const { data: statsData, isLoading: statsLoading } = useDeliveryStats();
+  // Data fetching — scope to selected facility
+  const { data: deliveriesData, isLoading, error: fetchError } = useDeliveries(
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined
+  );
+  const { data: statsData, isLoading: statsLoading } = useDeliveryStats(
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined
+  );
 
   // Mutations
   const createDelivery = useCreateDelivery();
