@@ -702,13 +702,14 @@ export async function updateProductionRun(
     }
   }
 
-  // If reactor is being changed, verify it belongs to the facility
-  if (data.reactorId && data.reactorId !== existing.reactorId) {
+  // Verify reactor belongs to the facility when reactor or facility changes
+  const effectiveReactorId = data.reactorId !== undefined ? data.reactorId : existing.reactorId;
+  if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
     const targetFacilityId = data.facilityId ?? existing.facilityId;
     const [reactor] = await db
       .select({ facilityId: reactors.facilityId })
       .from(reactors)
-      .where(eq(reactors.id, data.reactorId));
+      .where(eq(reactors.id, effectiveReactorId));
 
     if (!reactor) {
       throw new Error("Reactor not found");

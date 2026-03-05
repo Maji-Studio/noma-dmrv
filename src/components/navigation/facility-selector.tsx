@@ -99,6 +99,8 @@ export function FacilitySelector() {
                   <li key={facility.id}>
                     <button
                       type="button"
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => {
                         setFacilityId(facility.id);
                         setIsOpen(false);

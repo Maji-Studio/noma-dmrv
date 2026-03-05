@@ -110,15 +110,25 @@ export function StorageLocationList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Build a filter key so pagination resets when filters change
+  const filterKey = `${facilityId ?? ""}-${typeFilter}-${searchQuery}`;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
+  const effectivePage = filterKey !== lastFilterKey ? 1 : currentPage;
+
   const filters: Partial<StorageLocationFilterData> = useMemo(() => ({
     search: searchQuery || undefined,
     facilityId: facilityId || undefined,
     type: (typeFilter as StorageLocationFilterData["type"]) || undefined,
-    page: currentPage,
+    page: effectivePage,
     pageSize,
     sortBy: "code",
     sortOrder: "asc",
-  }), [searchQuery, facilityId, typeFilter, currentPage, pageSize]);
+  }), [searchQuery, facilityId, typeFilter, effectivePage, pageSize]);
 
   const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters);
 

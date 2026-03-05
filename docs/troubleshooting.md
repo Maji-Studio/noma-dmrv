@@ -210,7 +210,8 @@ pnpm dev
 - User created but not admin
 
 **Fixes**
-- Verify email in `ADMIN_EMAIL` env var
+- Verify `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set in `.env.local`
+- `ADMIN_PASSWORD` is required — the script no longer uses a default password
 - Emails are case-sensitive
 - Restart server after changing ADMIN_EMAIL
 - Check user's email in database matches exactly

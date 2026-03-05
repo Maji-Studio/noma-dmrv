@@ -88,11 +88,13 @@ export function FeedstockForm({
     if (!deliveryId) return;
 
     let active = true;
-    getFeedstockDeliveryByIdFn(deliveryId).then((result) => {
-      if (active && result.success) {
-        setValue("facilityId", result.data.facilityId);
-      }
-    });
+    getFeedstockDeliveryByIdFn(deliveryId)
+      .then((result) => {
+        if (active && result.success) {
+          setValue("facilityId", result.data.facilityId);
+        }
+      })
+      .catch(() => {});
     return () => { active = false; };
   }, [deliveryId, setValue]);
 
