@@ -132,7 +132,7 @@ export function DeliveryForm({
     if (calculatedDryMass !== null) {
       setValue("massDryKg", calculatedDryMass);
     } else {
-      setValue("massDryKg", "" as unknown as number);
+      setValue("massDryKg", undefined as unknown as number);
     }
   }, [calculatedDryMass, setValue]);
 
