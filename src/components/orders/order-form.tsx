@@ -139,6 +139,13 @@ export function OrderForm({
 
   const watchedCustomerId = watch("customerId");
 
+  // Sync facilityId when defaultFacilityId arrives after mount (create mode only)
+  useEffect(() => {
+    if (!order?.facilityId && defaultFacilityId) {
+      setValue("facilityId", defaultFacilityId);
+    }
+  }, [defaultFacilityId, order?.facilityId, setValue]);
+
   // Update customer locations when customer changes
   useEffect(() => {
     if (watchedCustomerId !== selectedCustomerId) {

@@ -702,10 +702,12 @@ export async function updateProductionRun(
     }
   }
 
+  // Compute effective facility once — used for reactor + storage location validation
+  const targetFacilityId = data.facilityId ?? existing.facilityId;
+
   // Verify reactor belongs to the facility when reactor or facility changes
   const effectiveReactorId = data.reactorId !== undefined ? data.reactorId : existing.reactorId;
   if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
-    const targetFacilityId = data.facilityId ?? existing.facilityId;
     const [reactor] = await db
       .select({ facilityId: reactors.facilityId })
       .from(reactors)
@@ -754,9 +756,6 @@ export async function updateProductionRun(
       .update(productionRuns)
       .set(updateData)
       .where(eq(productionRuns.id, productionRunId));
-
-    // Validate storage locations belong to facility and are correct type
-    const targetFacilityId = data.facilityId ?? existing.facilityId;
 
     const effectiveFeedstockStorageId =
       data.feedstockStorageLocationId !== undefined
