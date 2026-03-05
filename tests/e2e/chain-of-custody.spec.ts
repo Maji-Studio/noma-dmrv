@@ -85,9 +85,12 @@ test.describe("Chain of Custody Visualization", () => {
       "Credit Batches",
     ];
 
+    const nodes = page.locator(".react-flow__node");
+    await expect(nodes).toHaveCount(expectedLabels.length, { timeout: 10000 });
+
     for (const label of expectedLabels) {
       await expect(
-        page.locator(".react-flow__node").filter({ hasText: label }).first()
+        nodes.filter({ hasText: label }).first()
       ).toBeVisible({ timeout: 10000 });
     }
 
