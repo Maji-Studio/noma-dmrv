@@ -64,11 +64,6 @@ export const storageLocationFormSchema = z.object({
     .max(1000, "Description must be less than 1000 characters")
     .optional()
     .or(z.literal("")),
-  supplierReferenceId: z
-    .string()
-    .max(100, "Supplier reference ID must be less than 100 characters")
-    .optional()
-    .or(z.literal("")),
 });
 
 // ============================================

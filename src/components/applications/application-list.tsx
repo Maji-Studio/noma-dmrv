@@ -16,6 +16,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
+import { useToast } from "@/components/ui/toast";
 import { ApplicationForm } from "./application-form";
 import type { Application } from "@/db/schema/application";
 import {
@@ -172,6 +173,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const createApplication = useCreateApplication();
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
+  const toast = useToast();
 
   const deliveryOptions = deliveries.map((d) => ({
     id: d.id,
@@ -185,6 +187,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       const result = await createApplication.mutateAsync(data);
       if (result.success) {
         setSideSheet(null);
+        toast.success("Application created successfully");
       } else {
         setCreateError(result.error || "Failed to create application");
       }
@@ -203,6 +206,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       });
       if (result.success) {
         setSideSheet(null);
+        toast.success("Application updated successfully");
       } else {
         setUpdateError(result.error || "Failed to update application");
       }
@@ -222,6 +226,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       const result = await deleteApplication.mutateAsync(deletingApplicationId);
       if (result.success) {
         setDeletingApplicationId(null);
+        toast.success("Application deleted successfully");
       } else {
         setDeleteError(result.error || "Failed to delete application");
       }

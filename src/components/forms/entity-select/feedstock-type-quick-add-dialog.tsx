@@ -199,6 +199,10 @@ export function FeedstockTypeQuickAddDialog({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-24 p-24">
+          <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
+            Feedstock types will be sourced from the Isometric registry in the future. Add a placeholder entry for now.
+          </p>
+
           {error && (
             <div className="px-12 py-8 bg-[var(--color-signal-red-light)] text-[var(--color-signal-red)] text-[var(--text-s)] rounded-none">
               {error}

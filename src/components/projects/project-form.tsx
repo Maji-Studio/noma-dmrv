@@ -34,7 +34,7 @@ export function ProjectForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
-      <FormField id="name" label="Project Name" error={errors.name?.message}>
+      <FormField id="name" label="Project Name" error={errors.name?.message} required>
         <FormInput
           id="name"
           type="text"
@@ -47,7 +47,7 @@ export function ProjectForm({
 
       <FormField
         id="description"
-        label="Description (optional)"
+        label="Description"
         error={errors.description?.message}
       >
         <FormTextarea

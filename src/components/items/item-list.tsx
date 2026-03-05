@@ -11,6 +11,7 @@ import {
   useUpdateItem,
   useArchiveItem,
 } from "@/hooks/use-items";
+import { useToast } from "@/components/ui/toast";
 
 interface ItemListProps {
   projectId: string;
@@ -24,11 +25,13 @@ export function ItemList({ projectId }: ItemListProps) {
   const createItem = useCreateItem(projectId);
   const updateItem = useUpdateItem(projectId);
   const archiveItem = useArchiveItem(projectId);
+  const toast = useToast();
 
   const handleCreate = async (data: { title: string; description?: string }) => {
     const result = await createItem.mutateAsync(data);
     if (result.success) {
       setIsCreating(false);
+      toast.success("Item created successfully");
     }
   };
 
@@ -41,6 +44,7 @@ export function ItemList({ projectId }: ItemListProps) {
     });
     if (result.success) {
       setEditingItem(null);
+      toast.success("Item updated successfully");
     }
   };
 

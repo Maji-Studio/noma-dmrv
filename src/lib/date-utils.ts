@@ -5,6 +5,45 @@
  * Avoids UTC conversion bugs from toISOString().split("T")[0].
  */
 
+import { formatInTimeZone } from "date-fns-tz";
+
+// ============================================
+// Facility Timezone Display Helpers
+// ============================================
+
+/** Format a UTC date in a facility's local timezone. */
+export function formatFacilityTime(
+  utcDate: Date,
+  timezone: string,
+  fmt = "yyyy-MM-dd HH:mm"
+): string {
+  return formatInTimeZone(utcDate, timezone, fmt);
+}
+
+/** Format a UTC date as date-only in a facility's local timezone. */
+export function formatFacilityDate(utcDate: Date, timezone: string): string {
+  return formatInTimeZone(utcDate, timezone, "yyyy-MM-dd");
+}
+
+/** Get the UTC offset label for an IANA timezone, e.g. "UTC+3" or "UTC-5". */
+export function getUtcOffsetLabel(timezone: string): string {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    timeZoneName: "shortOffset",
+  }).formatToParts(now);
+  const offsetPart = parts.find((p) => p.type === "timeZoneName");
+  // Returns e.g. "GMT+3" — normalise to "UTC+3"
+  return offsetPart?.value.replace("GMT", "UTC") ?? "UTC";
+}
+
+/** Format an IANA timezone for dropdown display, e.g. "Africa/Nairobi (UTC+3)". */
+export function formatTimezoneLabel(timezone: string): string {
+  const readable = timezone.replace(/_/g, " ");
+  const offset = getUtcOffsetLabel(timezone);
+  return `${readable} (${offset})`;
+}
+
 /** Format a Date as "YYYY-MM-DD" in local timezone. */
 export function formatLocalDate(date: Date): string {
   const y = date.getFullYear();
@@ -21,6 +60,18 @@ export function formatLocalDateTime(date: Date): string {
   const h = String(date.getHours()).padStart(2, "0");
   const mi = String(date.getMinutes()).padStart(2, "0");
   return `${y}-${mo}-${d}T${h}:${mi}`;
+}
+
+/** Format a Date as "HH:MM" in local timezone (for time inputs). */
+export function formatLocalTime(date: Date): string {
+  const h = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${mi}`;
+}
+
+/** Combine a date string "YYYY-MM-DD" and time string "HH:MM" into a Date. */
+export function combineDateAndTime(dateStr: string, timeStr: string): Date {
+  return new Date(`${dateStr}T${timeStr}`);
 }
 
 /** Convert a date value (string or Date) to "YYYY-MM-DD" for input[type="date"]. Passes through YYYY-MM-DD strings as-is. */

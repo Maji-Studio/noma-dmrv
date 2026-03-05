@@ -86,6 +86,7 @@ export function CustomerForm({
             id="name"
             label="Customer Name"
             error={errors.name?.message}
+            required
           >
             <FormInput
               id="name"
@@ -108,7 +109,7 @@ export function CustomerForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="contactEmail"
-            label="Contact Email (optional)"
+            label="Contact Email"
             error={errors.contactEmail?.message}
           >
             <FormInput
@@ -123,7 +124,7 @@ export function CustomerForm({
 
           <FormField
             id="contactPhone"
-            label="Contact Phone (optional)"
+            label="Contact Phone"
             error={errors.contactPhone?.message}
             helperText="International format supported"
           >
@@ -145,35 +146,37 @@ export function CustomerForm({
           Business Information
         </h3>
 
-        <FormField
-          id="cropType"
-          label="Crop Type (optional)"
-          error={errors.cropType?.message}
-          helperText="Primary crop grown by this customer"
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="cropType"
-            type="text"
-            placeholder="e.g., Coffee, Maize, Tea"
-            disabled={isSubmitting}
-            error={!!errors.cropType}
-            {...register("cropType")}
-          />
-        </FormField>
+            label="Crop Type"
+            error={errors.cropType?.message}
+            helperText="Primary crop grown by this customer"
+          >
+            <FormInput
+              id="cropType"
+              type="text"
+              placeholder="e.g., Coffee, Maize, Tea"
+              disabled={isSubmitting}
+              error={!!errors.cropType}
+              {...register("cropType")}
+            />
+          </FormField>
 
-        <FormField
-          id="address"
-          label="Address (optional)"
-          error={errors.address?.message}
-        >
-          <FormTextarea
+          <FormField
             id="address"
-            placeholder="Full address"
-            disabled={isSubmitting}
-            error={!!errors.address}
-            {...register("address")}
-          />
-        </FormField>
+            label="Address"
+            error={errors.address?.message}
+          >
+            <FormTextarea
+              id="address"
+              placeholder="Full address"
+              disabled={isSubmitting}
+              error={!!errors.address}
+              {...register("address")}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Locations Section — only in edit mode */}

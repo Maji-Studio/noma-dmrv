@@ -160,6 +160,7 @@ export function EntitySelect({
   createLabel,
   onCreateNew,
   filterBy,
+  autoSelectSingle = false,
 }: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -173,6 +174,7 @@ export function EntitySelect({
   const debouncedSearch = useDebounce(searchQuery, 200);
 
   // Fetch options based on search
+  // Also fetch eagerly when autoSelectSingle is enabled (to detect single-option case)
   const {
     data: options = [],
     isLoading,
@@ -181,7 +183,7 @@ export function EntitySelect({
     entityType,
     search: debouncedSearch,
     filterBy,
-    enabled: isOpen,
+    enabled: isOpen || (autoSelectSingle && !value),
   });
 
   // Fetch selected entity details
@@ -236,6 +238,13 @@ export function EntitySelect({
       }
     }
   }, [clampedHighlightedIndex, isOpen]);
+
+  // Auto-select when there is exactly one option and no current value
+  useEffect(() => {
+    if (autoSelectSingle && !value && options.length === 1 && !isLoading) {
+      onChange(options[0].id);
+    }
+  }, [autoSelectSingle, value, options, isLoading, onChange]);
 
   const handleSelect = useCallback(
     (option: EntityOption) => {
@@ -388,7 +397,7 @@ export function EntitySelect({
             role="listbox"
             aria-label={`${ENTITY_TYPE_LABELS[entityType] || entityType} options`}
             data-testid="entity-select-listbox"
-            className="max-h-[240px] overflow-y-auto"
+            className="max-h-[280px] overflow-y-auto"
           >
             {isLoading ? (
               <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
@@ -413,7 +422,8 @@ export function EntitySelect({
                   onClick={() => handleSelect(option)}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   className={cn(
-                    "px-12 py-8 cursor-pointer transition-colors",
+                    "px-12 cursor-pointer transition-colors",
+                    option.subtitle ? "py-8" : "py-8",
                     index === clampedHighlightedIndex &&
                       "bg-[var(--color-background-medium)]",
                     option.id === value &&
@@ -423,6 +433,11 @@ export function EntitySelect({
                   <span className="text-[var(--text-s)] text-[var(--color-text-primary)]">
                     {option.name}
                   </span>
+                  {option.subtitle && (
+                    <span className="block text-[var(--text-xxs)] text-[var(--color-text-tertiary)] mt-2 leading-tight">
+                      {option.subtitle}
+                    </span>
+                  )}
                 </li>
               ))
             )}

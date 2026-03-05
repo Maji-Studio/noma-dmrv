@@ -75,6 +75,7 @@ export function CustomerLocationForm({
           id="name"
           label="Location Name"
           error={errors.name?.message}
+          required
         >
           <FormInput
             id="name"
@@ -88,7 +89,7 @@ export function CustomerLocationForm({
 
         <FormField
           id="address"
-          label="Address (optional)"
+          label="Address"
           error={errors.address?.message}
         >
           <FormTextarea
@@ -112,6 +113,7 @@ export function CustomerLocationForm({
             id="gpsLatitude"
             label="GPS Latitude"
             error={errors.gpsLatitude?.message}
+            required
             helperText="Between -90 and 90"
           >
             <FormInput
@@ -131,6 +133,7 @@ export function CustomerLocationForm({
             id="gpsLongitude"
             label="GPS Longitude"
             error={errors.gpsLongitude?.message}
+            required
             helperText="Between -180 and 180"
           >
             <FormInput
