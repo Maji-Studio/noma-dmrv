@@ -14,6 +14,7 @@ import {
   Truck,
   MapPin,
   Certificate,
+  UserCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
 // ============================================
@@ -48,6 +49,7 @@ export const CHAIN_NODE_DEFS: ChainNodeDef[] = [
   { id: "biocharBin", label: "Biochar Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
   { id: "productBin", label: "Product Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
   // Chain-of-custody flow
+  { id: "suppliers", label: "Suppliers", icon: UserCircle, accent: "var(--clr-purple)", href: "/suppliers" },
   { id: "feedstockDeliveries", label: "Feedstock Deliveries", icon: Leaf, accent: "var(--clr-orange)", href: "/feedstock-deliveries" },
   { id: "feedstocks", label: "Feedstocks", icon: Grains, accent: "var(--clr-orange)", href: "/feedstocks" },
   { id: "productionRuns", label: "Production Runs", icon: Factory, accent: "var(--clr-orange)", href: "/production-runs" },
@@ -70,6 +72,7 @@ export interface ChainEdgeDef {
 
 export const CHAIN_EDGE_DEFS: ChainEdgeDef[] = [
   // Feedstock intake
+  { source: "suppliers", target: "feedstockDeliveries" },
   { source: "feedstockDeliveries", target: "feedstocks" },
   { source: "feedstocks", target: "feedstockBin" },
   // Production

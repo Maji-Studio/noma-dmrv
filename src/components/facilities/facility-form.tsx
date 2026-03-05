@@ -6,6 +6,7 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { formatTimezoneLabel } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,11 +15,9 @@ import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import {
   facilityFormSchema,
-  facilityTypes,
   timezones,
   durabilityOptions,
   type FacilityFormData,
-  type FacilityType,
   type Timezone,
   type DurabilityOption,
 } from "@/schemas/facilities";
@@ -28,16 +27,10 @@ import type { Facility } from "@/db/schema/facilities";
 // Constants for select options
 // ============================================
 
-const facilityTypeOptions: readonly { value: string; label: string }[] =
-  facilityTypes.map((type) => ({
-    value: type,
-    label: formatFacilityType(type),
-  }));
-
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({
     value: tz,
-    label: formatTimezone(tz),
+    label: formatTimezoneLabel(tz),
   }));
 
 const durabilityOptions_: readonly { value: string; label: string }[] =
@@ -49,22 +42,6 @@ const durabilityOptions_: readonly { value: string; label: string }[] =
 // ============================================
 // Formatting helpers
 // ============================================
-
-function formatFacilityType(type: FacilityType): string {
-  const labels: Record<FacilityType, string> = {
-    production: "Production",
-    storage: "Storage",
-    processing: "Processing",
-    distribution: "Distribution",
-  };
-  return labels[type];
-}
-
-function formatTimezone(tz: Timezone): string {
-  // Convert IANA timezone to human-readable format
-  // e.g., "Africa/Nairobi" -> "Africa/Nairobi (EAT)"
-  return tz.replace(/_/g, " ");
-}
 
 function formatDurabilityOption(opt: DurabilityOption): string {
   const labels: Record<DurabilityOption, string> = {
@@ -80,7 +57,6 @@ function formatDurabilityOption(opt: DurabilityOption): string {
 
 type FacilityWithOptionalFields = Facility & {
   timezone?: string;
-  facilityType?: string;
 };
 
 interface FacilityFormProps {
@@ -123,7 +99,6 @@ export function FacilityForm({
       defaultDurabilityOption:
         (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
       timezone: (facility?.timezone as Timezone) ?? undefined,
-      facilityType: (facility?.facilityType as FacilityType) ?? undefined,
     },
   });
 
@@ -143,7 +118,7 @@ export function FacilityForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="name" label="Facility Name" error={errors.name?.message}>
+          <FormField id="name" label="Facility Name" error={errors.name?.message} required>
             <FormInput
               id="name"
               type="text"
@@ -155,16 +130,18 @@ export function FacilityForm({
           </FormField>
         </div>
 
-        <FormField id="country" label="Country" error={errors.country?.message}>
-          <FormInput
-            id="country"
-            type="text"
-            placeholder="e.g., Kenya"
-            disabled={isSubmitting}
-            error={!!errors.country}
-            {...register("country")}
-          />
-        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField id="country" label="Country" error={errors.country?.message} required>
+            <FormInput
+              id="country"
+              type="text"
+              placeholder="e.g., Kenya"
+              disabled={isSubmitting}
+              error={!!errors.country}
+              {...register("country")}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Facility Type & Configuration Section */}
@@ -174,21 +151,6 @@ export function FacilityForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="facilityType"
-            label="Facility Type"
-            error={errors.facilityType?.message}
-          >
-            <FormSelect
-              id="facilityType"
-              placeholder="Select facility type..."
-              disabled={isSubmitting}
-              error={!!errors.facilityType}
-              options={facilityTypeOptions}
-              {...register("facilityType")}
-            />
-          </FormField>
-
           <FormField
             id="defaultDurabilityOption"
             label="Default Durability Option"
@@ -226,40 +188,44 @@ export function FacilityForm({
           Address & Location
         </h3>
 
-        <FormField
-          id="location"
-          label="Location (optional)"
-          error={errors.location?.message}
-          helperText="Brief location description, e.g., city or region"
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="location"
-            type="text"
-            placeholder="e.g., Nairobi, Kenya"
-            disabled={isSubmitting}
-            error={!!errors.location}
-            {...register("location")}
-          />
-        </FormField>
+            label="Location"
+            error={errors.location?.message}
+            helperText="Brief location description, e.g., city or region"
+          >
+            <FormInput
+              id="location"
+              type="text"
+              placeholder="e.g., Nairobi, Kenya"
+              disabled={isSubmitting}
+              error={!!errors.location}
+              {...register("location")}
+            />
+          </FormField>
+        </div>
 
-        <FormField
-          id="address"
-          label="Address (optional)"
-          error={errors.address?.message}
-        >
-          <FormTextarea
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="address"
-            placeholder="Full street address"
-            disabled={isSubmitting}
-            error={!!errors.address}
-            {...register("address")}
-          />
-        </FormField>
+            label="Address"
+            error={errors.address?.message}
+          >
+            <FormTextarea
+              id="address"
+              placeholder="Full street address"
+              disabled={isSubmitting}
+              error={!!errors.address}
+              {...register("address")}
+            />
+          </FormField>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="gpsLatitude"
-            label="GPS Latitude (optional)"
+            label="GPS Latitude"
             error={errors.gpsLatitude?.message}
             helperText="Between -90 and 90"
           >
@@ -278,7 +244,7 @@ export function FacilityForm({
 
           <FormField
             id="gpsLongitude"
-            label="GPS Longitude (optional)"
+            label="GPS Longitude"
             error={errors.gpsLongitude?.message}
             helperText="Between -180 and 180"
           >
@@ -306,7 +272,7 @@ export function FacilityForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="contactEmail"
-            label="Contact Email (optional)"
+            label="Contact Email"
             error={errors.contactEmail?.message}
           >
             <FormInput
@@ -321,7 +287,7 @@ export function FacilityForm({
 
           <FormField
             id="contactPhone"
-            label="Contact Phone (optional)"
+            label="Contact Phone"
             error={errors.contactPhone?.message}
             helperText="International format supported"
           >

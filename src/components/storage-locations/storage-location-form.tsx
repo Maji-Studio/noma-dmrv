@@ -49,6 +49,15 @@ interface StorageLocationFormProps {
   defaultFacilityId?: string;
 }
 
+// Placeholder examples per storage type
+const namePlaceholders: Record<string, string> = {
+  feedstock_bin: "e.g., Feedstock Bin 1",
+  biochar_bin: "e.g., Biochar Bin A",
+  product_bin: "e.g., Product Bin West",
+};
+
+const DEFAULT_NAME_PLACEHOLDER = "e.g., Bin 1";
+
 export function StorageLocationForm({
   storageLocation,
   onSubmit,
@@ -63,6 +72,7 @@ export function StorageLocationForm({
     register,
     handleSubmit,
     control,
+    watch,
     formState: { errors },
   } = useForm<StorageLocationFormData>({
     resolver: zodResolver(storageLocationFormSchema),
@@ -75,9 +85,10 @@ export function StorageLocationForm({
       longitude: storageLocation?.longitude ?? undefined,
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
-      supplierReferenceId: storageLocation?.supplierReferenceId ?? "",
     },
   });
+
+  const selectedType = watch("type");
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Location"
@@ -96,23 +107,6 @@ export function StorageLocationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="name"
-            label="Location Name"
-            error={errors.name?.message}
-          >
-            <FormInput
-              id="name"
-              type="text"
-              placeholder="e.g., Feedstock Bin 1"
-              disabled={isSubmitting}
-              error={!!errors.name}
-              {...register("name")}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormEntitySelect
             control={control}
             name="facilityId"
@@ -120,12 +114,14 @@ export function StorageLocationForm({
             entityType="facility"
             placeholder="Select a facility..."
             disabled={isSubmitting}
+            required
           />
 
           <FormField
             id="type"
             label="Storage Type"
             error={errors.type?.message}
+            required
           >
             <FormSelect
               id="type"
@@ -137,39 +133,52 @@ export function StorageLocationForm({
             />
           </FormField>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="name"
+            label="Location Name"
+            error={errors.name?.message}
+            required
+          >
+            <FormInput
+              id="name"
+              type="text"
+              placeholder={namePlaceholders[selectedType ?? ""] ?? DEFAULT_NAME_PLACEHOLDER}
+              disabled={isSubmitting}
+              error={!!errors.name}
+              {...register("name")}
+            />
+          </FormField>
+        </div>
       </div>
 
-      {/* Capacity Section */}
+      {/* Capacity & Location Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Capacity
+          Capacity & Location
         </h3>
 
-        <FormField
-          id="capacityKg"
-          label="Capacity (kg)"
-          error={errors.capacityKg?.message}
-          helperText="Maximum storage capacity in kilograms"
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="capacityKg"
-            type="number"
-            step="any"
-            placeholder="e.g., 5000"
-            disabled={isSubmitting}
-            error={!!errors.capacityKg}
-            {...register("capacityKg", {
-              setValueAs: numericValue,
-            })}
-          />
-        </FormField>
-      </div>
-
-      {/* Location Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          GPS Coordinates (Optional)
-        </h3>
+            label="Capacity (kg)"
+            error={errors.capacityKg?.message}
+            helperText="Maximum storage capacity in kilograms"
+          >
+            <FormInput
+              id="capacityKg"
+              type="number"
+              step="any"
+              placeholder="e.g., 5000"
+              disabled={isSubmitting}
+              error={!!errors.capacityKg}
+              {...register("capacityKg", {
+                setValueAs: numericValue,
+              })}
+            />
+          </FormField>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -215,23 +224,25 @@ export function StorageLocationForm({
       {/* Storage Details Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Storage Details (Optional)
+          Storage Details
         </h3>
 
-        <FormField
-          id="storageMethod"
-          label="Storage Method"
-          error={errors.storageMethod?.message}
-        >
-          <FormInput
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="storageMethod"
-            type="text"
-            placeholder="e.g., Covered, Open, Indoor"
-            disabled={isSubmitting}
-            error={!!errors.storageMethod}
-            {...register("storageMethod")}
-          />
-        </FormField>
+            label="Storage Method"
+            error={errors.storageMethod?.message}
+          >
+            <FormInput
+              id="storageMethod"
+              type="text"
+              placeholder="e.g., Covered, Open, Indoor"
+              disabled={isSubmitting}
+              error={!!errors.storageMethod}
+              {...register("storageMethod")}
+            />
+          </FormField>
+        </div>
 
         <FormField
           id="storageDescription"
@@ -244,22 +255,6 @@ export function StorageLocationForm({
             disabled={isSubmitting}
             error={!!errors.storageDescription}
             {...register("storageDescription")}
-          />
-        </FormField>
-
-        <FormField
-          id="supplierReferenceId"
-          label="Supplier Reference ID"
-          error={errors.supplierReferenceId?.message}
-          helperText="External reference from supplier system"
-        >
-          <FormInput
-            id="supplierReferenceId"
-            type="text"
-            placeholder="e.g., SUP-REF-001"
-            disabled={isSubmitting}
-            error={!!errors.supplierReferenceId}
-            {...register("supplierReferenceId")}
           />
         </FormField>
       </div>

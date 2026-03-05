@@ -76,11 +76,12 @@ export function BiocharProductForm({
   const selectedFacilityId = watch("facilityId");
 
   // Clear dependent fields when facility changes
-  const initialFacilityIdRef = useRef(product?.facility?.id ?? "");
+  const previousSelectedFacilityRef = useRef(selectedFacilityId);
   useEffect(() => {
-    if (selectedFacilityId && selectedFacilityId !== initialFacilityIdRef.current) {
+    if (selectedFacilityId !== previousSelectedFacilityRef.current) {
       setValue("linkedProductionRunId", "");
       setValue("storageLocationId", "");
+      previousSelectedFacilityRef.current = selectedFacilityId;
     }
   }, [selectedFacilityId, setValue]);
 
@@ -119,6 +120,7 @@ export function BiocharProductForm({
             id="facilityId"
             label="Facility"
             error={errors.facilityId?.message}
+            required
           >
             <Controller
               name="facilityId"
@@ -131,6 +133,7 @@ export function BiocharProductForm({
                   placeholder="Select a facility"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
+                  autoSelectSingle
                 />
               )}
             />
@@ -140,6 +143,7 @@ export function BiocharProductForm({
             id="formulationId"
             label="Formulation"
             error={errors.formulationId?.message}
+            required
           >
             <Controller
               name="formulationId"
@@ -152,6 +156,7 @@ export function BiocharProductForm({
                   placeholder="Select a formulation"
                   disabled={isSubmitting}
                   error={!!fieldState.error}
+                  autoSelectSingle
                 />
               )}
             />
@@ -191,7 +196,7 @@ export function BiocharProductForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="massKg"
-            label="Mass (kg, optional)"
+            label="Mass (kg)"
             error={errors.massKg?.message}
             helperText="Total mass of the biochar product"
           >
@@ -209,7 +214,7 @@ export function BiocharProductForm({
 
           <FormField
             id="densityKgM3"
-            label="Density (kg/m³, optional)"
+            label="Density (kg/m³)"
             error={errors.densityKgM3?.message}
             helperText="Bulk density of the product"
           >
@@ -230,7 +235,7 @@ export function BiocharProductForm({
       {/* Relations Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Related Records (Optional)
+          Related Records
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -248,7 +253,7 @@ export function BiocharProductForm({
                   entityType="productionRun"
                   value={field.value || ""}
                   onChange={field.onChange}
-                  placeholder="Select a production run (optional)"
+                  placeholder="Select a production run..."
                   disabled={isSubmitting}
                   error={!!fieldState.error}
                   filterBy={selectedFacilityId ? { facilityId: selectedFacilityId } : undefined}
@@ -271,7 +276,7 @@ export function BiocharProductForm({
                   entityType="storageLocation"
                   value={field.value || ""}
                   onChange={field.onChange}
-                  placeholder="Select a product bin (optional)"
+                  placeholder="Select a product bin..."
                   disabled={isSubmitting}
                   error={!!fieldState.error}
                   filterBy={{

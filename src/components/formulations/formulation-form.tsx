@@ -76,6 +76,7 @@ export function FormulationForm({
             id="name"
             label="Formulation Name"
             error={errors.name?.message}
+            required
           >
             <FormInput
               id="name"
@@ -98,7 +99,7 @@ export function FormulationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharRatio"
-            label="Biochar Ratio (optional)"
+            label="Biochar Ratio"
             error={errors.biocharRatio?.message}
             helperText="Value between 0 and 1 (e.g., 0.7 for 70%)"
           >
@@ -117,7 +118,7 @@ export function FormulationForm({
 
           <FormField
             id="compostRatio"
-            label="Compost Ratio (optional)"
+            label="Compost Ratio"
             error={errors.compostRatio?.message}
             helperText="Value between 0 and 1 (e.g., 0.3 for 30%)"
           >
@@ -142,19 +143,21 @@ export function FormulationForm({
           Additional Information
         </h3>
 
-        <FormField
-          id="description"
-          label="Description (optional)"
-          error={errors.description?.message}
-        >
-          <FormTextarea
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
             id="description"
-            placeholder="Enter a description for this formulation..."
-            disabled={isSubmitting}
-            error={!!errors.description}
-            {...register("description")}
-          />
-        </FormField>
+            label="Description"
+            error={errors.description?.message}
+          >
+            <FormTextarea
+              id="description"
+              placeholder="Enter a description for this formulation..."
+              disabled={isSubmitting}
+              error={!!errors.description}
+              {...register("description")}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Form Actions */}

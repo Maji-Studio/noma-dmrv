@@ -40,6 +40,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { ProductionRunForm } from "./production-run-form";
 import {
   formatProductionRunStatus,
@@ -194,6 +195,7 @@ export function ProductionRunList() {
   const createRun = useCreateProductionRun();
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
+  const toast = useToast();
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -203,6 +205,7 @@ export function ProductionRunList() {
     try {
       await createRun.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Production run created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create production run");
     }
@@ -214,6 +217,7 @@ export function ProductionRunList() {
     try {
       await updateRun.mutateAsync({ productionRunId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Production run updated successfully");
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update production run");
     }
@@ -227,6 +231,7 @@ export function ProductionRunList() {
     try {
       await deleteRun.mutateAsync(deletingRunId);
       setDeletingRunId(null);
+      toast.success("Production run deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete production run");
     }

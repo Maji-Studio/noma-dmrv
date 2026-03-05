@@ -191,6 +191,7 @@ export function OrderForm({
             id="orderDate"
             label="Order Date"
             error={errors.orderDate?.message}
+            required
           >
             <FormInput
               id="orderDate"
@@ -207,6 +208,7 @@ export function OrderForm({
             id="facilityId"
             label="Facility"
             error={errors.facilityId?.message}
+            required
           >
             <FormSelect
               id="facilityId"
@@ -241,6 +243,7 @@ export function OrderForm({
             id="customerId"
             label="Customer"
             error={errors.customerId?.message}
+            required
           >
             <FormSelect
               id="customerId"
@@ -256,6 +259,7 @@ export function OrderForm({
             id="customerLocationId"
             label="Delivery Location"
             error={errors.customerLocationId?.message}
+            required
           >
             <FormSelect
               id="customerLocationId"
@@ -284,6 +288,7 @@ export function OrderForm({
             id="biocharProductId"
             label="Biochar Product"
             error={errors.biocharProductId?.message}
+            required
           >
             <FormSelect
               id="biocharProductId"
@@ -299,6 +304,7 @@ export function OrderForm({
             id="packaging"
             label="Packaging"
             error={errors.packaging?.message}
+            required
           >
             <FormSelect
               id="packaging"
@@ -315,6 +321,7 @@ export function OrderForm({
             id="quantityKg"
             label="Quantity (kg)"
             error={errors.quantityKg?.message}
+            required
           >
             <FormInput
               id="quantityKg"
@@ -331,7 +338,7 @@ export function OrderForm({
 
           <FormField
             id="value"
-            label="Value (optional)"
+            label="Value"
             error={errors.value?.message}
           >
             <FormInput

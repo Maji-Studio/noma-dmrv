@@ -22,6 +22,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { FacilityForm } from "./facility-form";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
@@ -109,6 +110,7 @@ export function FacilityList() {
   const createFacility = useCreateFacility();
   const updateFacility = useUpdateFacility();
   const deleteFacility = useDeleteFacility();
+  const toast = useToast();
 
   const facilities = facilitiesData?.items ?? [];
   const totalFacilities = facilitiesData?.total ?? 0;
@@ -120,6 +122,7 @@ export function FacilityList() {
     try {
       await createFacility.mutateAsync(data);
       setSideSheet(null);
+      toast.success("Facility created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create facility");
     }
@@ -131,6 +134,7 @@ export function FacilityList() {
     try {
       await updateFacility.mutateAsync({ facilityId: sideSheet.entity.id, ...data });
       setSideSheet(null);
+      toast.success("Facility updated successfully");
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update facility");
     }
@@ -143,6 +147,7 @@ export function FacilityList() {
     try {
       await deleteFacility.mutateAsync(deletingFacilityId);
       setDeletingFacilityId(null);
+      toast.success("Facility deleted successfully");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Failed to delete facility");
     }
