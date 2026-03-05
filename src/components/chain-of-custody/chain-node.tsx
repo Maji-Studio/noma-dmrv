@@ -175,7 +175,7 @@ export function ChainNode({ data }: NodeProps) {
     <>
       <Handle type="target" position={Position.Left} className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0" />
 
-      {href ? <Link href={href} prefetch={false}>{card}</Link> : card}
+      {href ? <Link href={href} prefetch={false} onClick={(e) => e.stopPropagation()}>{card}</Link> : card}
 
       <Handle type="source" position={Position.Right} className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0" />
     </>

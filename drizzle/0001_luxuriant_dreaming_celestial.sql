@@ -1,1 +1,0 @@
-ALTER TABLE "reactors" DROP COLUMN "type";
