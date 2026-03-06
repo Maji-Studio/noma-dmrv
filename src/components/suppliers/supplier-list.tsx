@@ -275,6 +275,7 @@ export function SupplierList() {
                 { label: "Code", value: sideSheet.entity.code },
                 { label: "Name", value: sideSheet.entity.name },
                 { label: "Location", value: sideSheet.entity.location },
+                { label: "Source Region", value: sideSheet.entity.sourceRegion },
                 { label: "Address", value: sideSheet.entity.address },
               ],
             },

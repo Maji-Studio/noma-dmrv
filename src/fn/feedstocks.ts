@@ -22,6 +22,7 @@ import {
   type FeedstockStats,
 } from "@/data-access/feedstocks";
 import { getFeedstockDeliveryById as getFeedstockDeliveryByIdData } from "@/data-access/feedstock-deliveries";
+import { getSupplierById as getSupplierByIdData } from "@/data-access/suppliers";
 import { getUser } from "@/lib/auth/server";
 import {
   createFeedstockSchema,
@@ -31,17 +32,21 @@ import {
 } from "@/schemas/feedstocks";
 import type { ActionResult } from "@/types/actions";
 
-async function resolveFeedstockTypeIdFromDelivery(
+async function resolveDeliveryDerivedFields(
   userId: string,
   feedstockDeliveryId: string
-): Promise<string> {
+): Promise<{ feedstockTypeId: string; sourceRegion: string | null }> {
   const delivery = await getFeedstockDeliveryByIdData(userId, feedstockDeliveryId);
   if (!delivery.feedstockTypeId) {
     throw new Error(
       "Selected delivery has no feedstock type. Add one on the delivery first."
     );
   }
-  return delivery.feedstockTypeId;
+  const supplier = await getSupplierByIdData(userId, delivery.supplierId);
+  return {
+    feedstockTypeId: delivery.feedstockTypeId,
+    sourceRegion: supplier.sourceRegion ?? null,
+  };
 }
 
 // ============================================
@@ -174,7 +179,7 @@ export async function createFeedstockFn(
     }
 
     const validated = createFeedstockSchema.parse(data);
-    const resolvedFeedstockTypeId = await resolveFeedstockTypeIdFromDelivery(
+    const derived = await resolveDeliveryDerivedFields(
       user.id,
       validated.feedstockDeliveryId
     );
@@ -189,12 +194,12 @@ export async function createFeedstockFn(
           code,
           facilityId: validated.facilityId,
           feedstockDeliveryId: validated.feedstockDeliveryId,
-          feedstockTypeId: resolvedFeedstockTypeId,
+          feedstockTypeId: derived.feedstockTypeId,
           massDryKg: typeof validated.massDryKg === "number" ? validated.massDryKg : 0,
           massWetKg: validated.massWetKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
           storageLocationId: validated.storageLocationId || null,
-          feedstockSourceRegion: validated.feedstockSourceRegion || null,
+          feedstockSourceRegion: derived.sourceRegion,
           notes: validated.notes || null,
         })
     );
@@ -228,19 +233,19 @@ export async function updateFeedstockFn(
     }
 
     const validated = updateFeedstockSchema.parse(data);
-    const resolvedFeedstockTypeId = validated.feedstockDeliveryId
-      ? await resolveFeedstockTypeIdFromDelivery(user.id, validated.feedstockDeliveryId)
-      : validated.feedstockTypeId;
+    const derived = validated.feedstockDeliveryId
+      ? await resolveDeliveryDerivedFields(user.id, validated.feedstockDeliveryId)
+      : null;
 
     const feedstock = await updateFeedstock(user.id, validated.feedstockId, {
       feedstockDeliveryId: validated.feedstockDeliveryId,
-      feedstockTypeId: resolvedFeedstockTypeId,
+      feedstockTypeId: derived?.feedstockTypeId ?? validated.feedstockTypeId,
       facilityId: validated.facilityId,
       massDryKg: validated.massDryKg,
       massWetKg: validated.massWetKg,
       moistureContentPercent: validated.moistureContentPercent,
       storageLocationId: validated.storageLocationId,
-      feedstockSourceRegion: validated.feedstockSourceRegion,
+      feedstockSourceRegion: derived?.sourceRegion,
       notes: validated.notes,
     });
 

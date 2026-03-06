@@ -178,7 +178,6 @@ export function FeedstockDeliveryForm({
               placeholder="Select driver..."
               disabled={isSubmitting}
               allowCreate
-              alwaysShowSearch
               createLabel="Add new driver"
               onCreateNew={() => driverDialog.open()}
             />

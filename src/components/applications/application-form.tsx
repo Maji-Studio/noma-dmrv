@@ -72,42 +72,32 @@ function DryMassCard({
   if (!hasMoisture && !hasApplied) return null;
 
   return (
-    <div className="col-span-full">
-      <div
-        className="border border-[var(--color-border-primary)] bg-[var(--color-background-sunken)] p-16"
-      >
-        <div className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mb-12">
-          Calculated Dry Mass
+    <div className="col-span-full mt-4">
+      {!hasMoisture ? (
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+          <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
+            No moisture content on delivery — enter dry mass manually or update the delivery record.
+          </span>
         </div>
-
-        {!hasMoisture ? (
-          <div className="flex items-center gap-10">
-            <div className="w-6 h-6 bg-[var(--color-text-tertiary)] rounded-full" />
-            <span className="body-small text-[var(--color-text-secondary)]">
-              No moisture content on delivery — enter dry mass manually or update the delivery record.
-            </span>
-          </div>
-        ) : !hasApplied ? (
-          <div className="flex items-center gap-10">
-            <div className="w-6 h-6 bg-[var(--color-text-tertiary)] rounded-full" />
-            <span className="body-small text-[var(--color-text-secondary)]">
-              Enter biochar applied (kg) to see the dry mass calculation.
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-baseline gap-24">
-            <div>
-              <span className="font-mono text-[var(--text-2xl)] font-semibold text-[var(--color-text-primary)]">
-                {formatKg(dryKg)}
-              </span>
-              <span className="body-small text-[var(--color-text-tertiary)] ml-8">dry</span>
-            </div>
-            <div className="body-small text-[var(--color-text-tertiary)] font-mono">
-              {formatKg(appliedKg)} &times; (1 &minus; {moisturePercent?.toFixed(1)}%) = {formatKg(dryKg)}
-            </div>
-          </div>
-        )}
-      </div>
+      ) : !hasApplied ? (
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+          <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
+            Enter biochar applied to see dry mass.
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-baseline gap-12 py-12 px-16 border-l-2 border-[var(--color-text-brand)] bg-[var(--color-background-sunken)]">
+          <span className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] shrink-0">
+            Dry mass
+          </span>
+          <span className="font-mono text-[var(--text-lg)] font-semibold text-[var(--color-text-primary)]">
+            {formatKg(dryKg)}
+          </span>
+          <span className="body-small text-[var(--color-text-quaternary)] font-mono">
+            {formatKg(appliedKg)} &times; (1 &minus; {moisturePercent?.toFixed(1)}%)
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -145,6 +135,7 @@ export function ApplicationForm({
     register,
     handleSubmit,
     control,
+    setError,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -186,10 +177,19 @@ export function ApplicationForm({
 
     // Auto-calculate dry tons from moisture, or fall back to manual entry
     const calculatedDryKg = calculateDryMass(data.biocharAppliedTons, moisturePercent);
-    const biocharAppliedDryTons = applicationKgToTons(calculatedDryKg ?? data.biocharAppliedDryTons);
+    const dryKgValue = calculatedDryKg ?? data.biocharAppliedDryTons;
+    const biocharAppliedDryTons = applicationKgToTons(dryKgValue);
 
     if (biocharAppliedTons == null) {
       throw new Error("Biochar applied mass is required");
+    }
+
+    if (biocharAppliedDryTons == null) {
+      setError("biocharAppliedDryTons", {
+        type: "manual",
+        message: "Dry mass is required when delivery has no moisture data",
+      });
+      return;
     }
 
     await onSubmit({
@@ -258,7 +258,7 @@ export function ApplicationForm({
           </FormField>
 
           {/* Show manual dry input only when delivery has no moisture data */}
-          {!moisturePercent && selectedDelivery && (
+          {moisturePercent == null && selectedDelivery && (
             <FormField
               id="biocharAppliedDryTons"
               label="Biochar Applied Dry (kg)"

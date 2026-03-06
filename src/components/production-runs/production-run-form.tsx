@@ -16,6 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormFileUpload, SectionLabel } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
+import { useEntityById } from "@/hooks/use-entities";
 import { Button } from "@/components/ui";
 import {
   productionRunFormSchema,
@@ -34,6 +35,143 @@ const statusOptions: readonly { value: string; label: string }[] = productionRun
   value: status,
   label: formatProductionRunStatus(status),
 }));
+
+// ============================================
+// Process Flow Visual
+// ============================================
+
+function ProcessFlowPreview({
+  sourceBinName,
+  feedstockKg,
+  reactorName,
+  biocharKg,
+  destinationBinName,
+}: {
+  sourceBinName: string | null;
+  feedstockKg: number | null;
+  reactorName: string | null;
+  biocharKg: number | null;
+  destinationBinName: string | null;
+}) {
+  const hasSource = !!sourceBinName;
+  const hasFeedstock = feedstockKg !== null && feedstockKg > 0;
+  const hasReactor = !!reactorName;
+  const hasBiochar = biocharKg !== null && biocharKg > 0;
+  const hasDestination = !!destinationBinName;
+
+  if (!hasSource && !hasReactor && !hasDestination) return null;
+
+  const yieldPercent =
+    hasFeedstock && hasBiochar
+      ? ((biocharKg / feedstockKg) * 100).toFixed(1)
+      : null;
+
+  return (
+    <div className="flex items-stretch gap-0 text-center">
+      {/* Source bin */}
+      <div
+        className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
+          hasSource
+            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
+        }`}
+      >
+        <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-[0.06em]">
+          Input
+        </span>
+        {hasSource ? (
+          <>
+            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
+              {sourceBinName}
+            </span>
+            {hasFeedstock && (
+              <span className="body-caption text-[var(--color-text-secondary)] mt-1">
+                {feedstockKg.toLocaleString()} kg
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="body-small text-[var(--color-text-quaternary)] mt-2">
+            Select bin
+          </span>
+        )}
+      </div>
+
+      {/* Arrow to reactor */}
+      <div className="flex items-center justify-center px-4">
+        <svg width="24" height="16" viewBox="0 0 24 16" fill="none" className="text-[var(--color-text-tertiary)]">
+          <path d="M0 8H18M18 8L13 3M18 8L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+
+      {/* Reactor / machine */}
+      <div
+        className={`flex-1 border px-12 py-10 flex flex-col items-center justify-center transition-colors ${
+          hasReactor
+            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
+        }`}
+      >
+        {/* Reactor icon */}
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="text-[var(--color-text-tertiary)] mb-2">
+          <rect x="3" y="4" width="14" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M7 1v3M13 1v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M6 10h8M6 13h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
+        </svg>
+        {hasReactor ? (
+          <span className="body-small font-medium text-[var(--color-text-primary)]">
+            {reactorName}
+          </span>
+        ) : (
+          <span className="body-small text-[var(--color-text-quaternary)]">
+            Select reactor
+          </span>
+        )}
+        {yieldPercent && (
+          <span className="body-caption text-[var(--color-text-secondary)] mt-1">
+            {yieldPercent}% yield
+          </span>
+        )}
+      </div>
+
+      {/* Arrow to output */}
+      <div className="flex items-center justify-center px-4">
+        <svg width="24" height="16" viewBox="0 0 24 16" fill="none" className="text-[var(--color-text-tertiary)]">
+          <path d="M0 8H18M18 8L13 3M18 8L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+
+      {/* Destination bin */}
+      <div
+        className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
+          hasDestination
+            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
+        }`}
+      >
+        <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-[0.06em]">
+          Output
+        </span>
+        {hasDestination ? (
+          <>
+            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
+              {destinationBinName}
+            </span>
+            {hasBiochar && (
+              <span className="body-caption text-[var(--color-text-secondary)] mt-1">
+                {biocharKg.toLocaleString()} kg
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="body-small text-[var(--color-text-quaternary)] mt-2">
+            Select bin
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ============================================
 // Component
@@ -100,6 +238,17 @@ export function ProductionRunForm({
 
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+
+  // Watch fields for flow preview
+  const watchedReactorId = useWatch({ control, name: "reactorId" });
+  const watchedSourceBinId = useWatch({ control, name: "feedstockStorageLocationId" });
+  const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
+  const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
+
+  // Entity lookups for flow preview labels
+  const { data: selectedReactor } = useEntityById("reactor", watchedReactorId || undefined);
+  const { data: selectedSourceBin } = useEntityById("storageLocation", watchedSourceBinId || undefined);
+  const { data: selectedDestBin } = useEntityById("storageLocation", watchedDestBinId || undefined);
 
   // Watch wet mass + moisture for dry mass preview
   const watchWetMass = useWatch({ control, name: "feedstockWetMassKg" });
@@ -441,6 +590,18 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
+      </div>
+
+      {/* ── Process Flow ── */}
+      <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Process Flow</SectionLabel>
+        <ProcessFlowPreview
+          sourceBinName={selectedSourceBin?.name ?? null}
+          feedstockKg={typeof watchWetMass === "number" ? watchWetMass : null}
+          reactorName={selectedReactor?.name ?? null}
+          biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
+          destinationBinName={selectedDestBin?.name ?? null}
+        />
       </div>
 
       {/* ── Production Readings ── */}

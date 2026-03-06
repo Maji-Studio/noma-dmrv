@@ -124,7 +124,7 @@ export function CustomerLocationQuickAddDialog({
           </button>
         </div>
 
-        <div className="flex flex-col gap-24 p-24" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit(); } }}>
+        <div className="flex flex-col gap-24 p-24" onKeyDown={(e) => { if (e.key === "Enter" && !createLocation.isPending && e.target instanceof HTMLInputElement) { e.preventDefault(); handleSubmit(); } }}>
           {error && (
             <div
               role="alert"

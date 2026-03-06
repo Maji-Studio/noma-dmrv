@@ -215,7 +215,9 @@ export function CustomerList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load customers"} />
+        <div className="border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10 p-16 flex items-center gap-12" role="alert">
+          <span className="text-[var(--color-signal-red)] body-small font-medium">Failed to load customers</span>
+        </div>
       </div>
     );
   }
@@ -349,7 +351,7 @@ export function CustomerList() {
             customerId={sideSheet.entity && sideSheet.mode === "edit" ? sideSheet.entity.id : undefined}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
-            isSubmitting={createCustomer.isPending || updateCustomer.isPending}
+            isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Customer"}
           />
         </EntitySideSheet>

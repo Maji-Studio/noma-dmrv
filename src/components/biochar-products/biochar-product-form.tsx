@@ -64,6 +64,11 @@ function TransferFlowPreview({
             <span className="body-caption text-[var(--color-text-secondary)] mt-1">
               {availableKg.toLocaleString()} kg available
             </span>
+            {hasMass && (
+              <span className="body-caption font-medium text-[var(--clr-orange)] mt-1">
+                &minus;{massKg.toLocaleString()} kg
+              </span>
+            )}
           </>
         ) : (
           <span className="body-small text-[var(--color-text-quaternary)] mt-2">
@@ -100,9 +105,16 @@ function TransferFlowPreview({
           Destination
         </span>
         {hasDestination ? (
-          <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
-            {destinationBinLabel}
-          </span>
+          <>
+            <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
+              {destinationBinLabel}
+            </span>
+            {hasMass && (
+              <span className="body-caption font-medium text-green-600 mt-1">
+                +{massKg.toLocaleString()} kg
+              </span>
+            )}
+          </>
         ) : (
           <span className="body-small text-[var(--color-text-quaternary)] mt-2">
             Select a bin

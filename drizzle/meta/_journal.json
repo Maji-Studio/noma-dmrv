@@ -43,6 +43,13 @@
       "when": 1772791992014,
       "tag": "0005_flaky_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772794272292,
+      "tag": "0006_lazy_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }
