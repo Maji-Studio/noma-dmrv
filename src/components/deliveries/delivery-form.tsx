@@ -5,8 +5,10 @@
  */
 "use client";
 
+import { useEffect } from "react";
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -95,6 +97,7 @@ export function DeliveryForm({
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
@@ -111,7 +114,27 @@ export function DeliveryForm({
     },
   });
 
-  const deliveredWetMassKg = watch("deliveredWetMassKg");
+  const watchWetMass = watch("deliveredWetMassKg");
+  const watchMoisture = watch("moistureContentPercent");
+
+  // Auto-calculate dry mass from wet mass and moisture using shared utility
+  const calculatedDryMass =
+    typeof watchWetMass === "number" &&
+    typeof watchMoisture === "number" &&
+    watchWetMass >= 0 &&
+    watchMoisture >= 0 &&
+    watchMoisture <= 100
+      ? deriveMassDryKg(watchWetMass, watchMoisture)
+      : null;
+
+  // Sync calculated dry mass into the form (clear when inputs become invalid)
+  useEffect(() => {
+    if (calculatedDryMass !== null) {
+      setValue("massDryKg", calculatedDryMass);
+    } else {
+      setValue("massDryKg", undefined as unknown as number);
+    }
+  }, [calculatedDryMass, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
@@ -193,28 +216,26 @@ export function DeliveryForm({
             />
           </FormField>
 
-          <FormField
-            id="massDryKg"
-            label="Dry Mass (kg)"
-            error={errors.massDryKg?.message}
-            helperText={
-              deliveredWetMassKg
-                ? `Must be ≤ ${deliveredWetMassKg} kg`
-                : "Must be less than or equal to wet mass"
-            }
-          >
-            <FormInput
-              id="massDryKg"
-              type="number"
-              step="0.01"
-              placeholder="e.g., 800"
-              disabled={isSubmitting}
-              error={!!errors.massDryKg}
-              {...register("massDryKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
+          {/* Auto-calculated dry mass (read-only) */}
+          <div className="flex flex-col justify-center gap-4">
+            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+            <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+              <span className="body-medium font-medium text-[var(--color-text-primary)]">
+                {calculatedDryMass !== null
+                  ? `${calculatedDryMass.toFixed(2)} kg`
+                  : "—"}
+              </span>
+              {calculatedDryMass !== null && (
+                <span className="body-small text-[var(--color-text-quaternary)]">
+                  = {watchWetMass} × (1 − {watchMoisture}%)
+                </span>
+              )}
+            </div>
+            {errors.massDryKg?.message && (
+              <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
+            )}
+            <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
+          </div>
 
           <FormField
             id="moistureContentPercent"
@@ -236,13 +257,6 @@ export function DeliveryForm({
           </FormField>
         </div>
 
-        {/* Validation hint */}
-        <div className="p-24 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
-          <p className="body-small text-[var(--color-text-secondary)]">
-            <strong>Note:</strong> Dry mass must always be less than or equal to
-            wet mass. This is validated automatically.
-          </p>
-        </div>
       </div>
 
       {/* Form Actions */}
