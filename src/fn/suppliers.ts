@@ -197,6 +197,7 @@ export async function createSupplierFn(
           contactName: validated.contactName || null,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
+          sourceRegion: validated.sourceRegion || null,
         })
     );
 
@@ -244,6 +245,7 @@ export async function updateSupplierFn(
       contactName: validated.contactName,
       contactEmail: validated.contactEmail,
       contactPhone: validated.contactPhone,
+      sourceRegion: validated.sourceRegion,
     });
 
     return { success: true, data: supplier };

@@ -225,6 +225,36 @@ export function CreditBatchForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durabilityOption]);
 
+  // Watch dates for auto-selection
+  const watchedStartDate = useWatch({ control, name: "startDate" });
+  const watchedEndDate = useWatch({ control, name: "endDate" });
+
+  // Auto-select production runs and applications within date range
+  useEffect(() => {
+    if (!watchedStartDate || !watchedEndDate) return;
+    const start = new Date(watchedStartDate);
+    const end = new Date(watchedEndDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return;
+
+    const matchingRunIds = productionRuns
+      .filter((run) => {
+        if (!run.date) return false;
+        const d = new Date(run.date);
+        return d >= start && d <= end;
+      })
+      .map((run) => run.id);
+    setValue("productionRunIds", matchingRunIds, { shouldValidate: true });
+
+    const matchingAppIds = applications
+      .filter((app) => {
+        if (!app.applicationDate) return false;
+        const d = new Date(app.applicationDate);
+        return d >= start && d <= end;
+      })
+      .map((app) => app.id);
+    setValue("applicationIds", matchingAppIds, { shouldValidate: true });
+  }, [watchedStartDate, watchedEndDate, productionRuns, applications, setValue]);
+
   // Watch selected production runs
   const selectedProductionRunIds = useWatch({
     control,

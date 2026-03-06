@@ -11,6 +11,7 @@ import { Users, Plus, MapTrifold } from "@phosphor-icons/react";
 import type { Customer } from "@/db/schema";
 import {
   useCreateCustomer,
+  useCreateCustomerLocation,
   useDeleteCustomer,
   useCustomers,
   useUpdateCustomer,
@@ -23,7 +24,7 @@ import { Button } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { CustomerForm } from "./customer-form";
+import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 
@@ -126,6 +127,7 @@ export function CustomerList() {
 
   const { data: customersData, isLoading, error: fetchError } = useCustomers();
   const createCustomer = useCreateCustomer();
+  const createLocation = useCreateCustomerLocation();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
   const toast = useToast();
@@ -163,10 +165,18 @@ export function CustomerList() {
   useOpenCreateIntent(openCreate);
 
   // Handlers
-  const handleCreate = async (data: CustomerFormData) => {
+  const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
     setCreateError(null);
     try {
-      await createCustomer.mutateAsync(data);
+      const customer = await createCustomer.mutateAsync(data);
+      if (pendingLocations?.length) {
+        for (const loc of pendingLocations) {
+          await createLocation.mutateAsync({
+            customerId: customer.id,
+            ...loc,
+          });
+        }
+      }
       setSideSheet(null);
       toast.success("Customer created successfully");
     } catch (error) {
@@ -205,7 +215,9 @@ export function CustomerList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <ServerError message={fetchError.message || "Failed to load customers"} />
+        <div className="border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10 p-16 flex items-center gap-12" role="alert">
+          <span className="text-[var(--color-signal-red)] body-small font-medium">Failed to load customers</span>
+        </div>
       </div>
     );
   }
@@ -339,7 +351,7 @@ export function CustomerList() {
             customerId={sideSheet.entity && sideSheet.mode === "edit" ? sideSheet.entity.id : undefined}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
-            isSubmitting={createCustomer.isPending || updateCustomer.isPending}
+            isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Customer"}
           />
         </EntitySideSheet>

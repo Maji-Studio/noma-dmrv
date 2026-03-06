@@ -386,6 +386,7 @@ async function seedDemoData() {
           contactName: 'Asha Mallya',
           contactEmail: 'asha@kili-forestry.coop',
           contactPhone: '+255700200001',
+          sourceRegion: 'Kilimanjaro',
         },
         {
           id: ids.supplierMeru,
@@ -398,6 +399,7 @@ async function seedDemoData() {
           contactName: 'John Kimaro',
           contactEmail: 'john@meru-agri.co.tz',
           contactPhone: '+255700200002',
+          sourceRegion: 'Arumeru',
         },
         {
           id: ids.supplierVictoria,
@@ -410,6 +412,7 @@ async function seedDemoData() {
           contactName: 'Grace Mushi',
           contactEmail: 'grace@victoria-rice.tz',
           contactPhone: '+255700200003',
+          sourceRegion: 'Mwanza',
         },
       ]);
 

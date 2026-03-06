@@ -418,6 +418,7 @@ async function seed() {
         contactName: 'Asha Mallya',
         contactEmail: 'ashara@kili-forest.coop',
         contactPhone: '+255700000010',
+        sourceRegion: 'Kilimanjaro',
       });
 
       await tx.insert(schema.customers).values({

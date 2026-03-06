@@ -1,4 +1,4 @@
-name: Sync database schema
+name: Database management
 
 on:
   push:

@@ -48,8 +48,10 @@ export const applicationFormSchema = z.object({
     .number({ error: "Biochar applied (kg) is required" })
     .min(0, "Must be a positive number"),
   biocharAppliedDryTons: z
-    .number({ error: "Biochar applied dry (kg) is required" })
-    .min(0, "Must be a positive number"),
+    .number()
+    .min(0, "Must be a positive number")
+    .optional()
+    .nullable(),
 
   // === Section 2: Field Details ===
   fieldSizeHa: z
@@ -116,7 +118,7 @@ export const updateApplicationSchema = z.object({
   applicationDate: z.coerce.date().optional(),
   deliveryId: z.string().uuid().optional(),
   biocharAppliedTons: z.number().min(0).optional(),
-  biocharAppliedDryTons: z.number().min(0).optional(),
+  biocharAppliedDryTons: z.number().min(0).optional().nullable(),
   fieldSizeHa: z.number().min(0).optional().nullable(),
   fieldIdentifier: z.string().max(255).optional().nullable(),
   cropType: z.string().max(100).optional().nullable(),

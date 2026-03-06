@@ -20,6 +20,7 @@ import {
   getDeliveryWithRelationsFn,
   getDeliveriesForSelectFn,
   getDeliveryStatsFn,
+  getTransportLegsForDeliveryFn,
   checkDeliveryCodeFn,
   createDeliveryFn,
   updateDeliveryFn,
@@ -45,6 +46,8 @@ export const deliveryKeys = {
     [...deliveryKeys.all, "select", orderId] as const,
   stats: (filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }) =>
     [...deliveryKeys.all, "stats", filters] as const,
+  transportLegs: (deliveryId: string) =>
+    [...deliveryKeys.all, "transportLegs", deliveryId] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...deliveryKeys.all, "codeCheck", code, excludeId] as const,
 };
@@ -128,6 +131,25 @@ export function useDeliveryStats(
     },
     staleTime: 30000,
     enabled: options?.enabled,
+  });
+}
+
+/**
+ * Hook to fetch transport legs for a delivery
+ */
+export function useTransportLegsForDelivery(deliveryId: string | undefined) {
+  return useQuery({
+    queryKey: deliveryKeys.transportLegs(deliveryId ?? ""),
+    queryFn: async () => {
+      if (!deliveryId) return [];
+      const result = await getTransportLegsForDeliveryFn(deliveryId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: !!deliveryId,
+    staleTime: 30000,
   });
 }
 

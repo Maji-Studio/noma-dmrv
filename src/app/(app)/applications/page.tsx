@@ -31,6 +31,7 @@ export default async function ApplicationsPage({
       massDryKg: deliveries.massDryKg,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
       orderQuantityKg: orders.quantityKg,
+      moistureContentPercent: deliveries.moistureContentPercent,
     })
     .from(deliveries)
     .leftJoin(orders, eq(deliveries.orderId, orders.id))

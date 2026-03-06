@@ -96,7 +96,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.verification,
     items: [
       { href: "/credit-batches", label: "Credit Batches", icon: Certificate },
-      { href: "/samples", label: "Samples", icon: TestTube },
+      { href: "/samples", label: "Lab Samples", icon: TestTube },
     ],
   },
 ];
