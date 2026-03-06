@@ -95,6 +95,7 @@
     "contact_name": "Name of the primary contact person",
     "contact_email": "Email for supplier communications",
     "contact_phone": "Phone number for supplier communications",
+    "source_region": "Geographic region where feedstock is sourced",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },
