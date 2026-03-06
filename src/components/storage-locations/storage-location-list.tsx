@@ -21,7 +21,7 @@ import {
   useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { formatMass, getPaginationLabel } from "@/lib/format-utils";
+import { formatMass, formatSafeDate, getPaginationLabel } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -48,6 +48,11 @@ type SideSheetState =
 function formatPercent(value: number | null) {
   if (value == null) return "—";
   return `${value.toFixed(1)}%`;
+}
+
+function formatDateOrFallback(value: Date | null) {
+  if (!value) return "No completed applications";
+  return formatSafeDate(value);
 }
 
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
@@ -111,6 +116,21 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
     {
       label: "Product Batches",
       value: String(storageLocation.productInventory.batchCount),
+    },
+    {
+      label: "Successfully Applied",
+      value:
+        storageLocation.productInventory.appliedApplicationCount > 0
+          ? formatMass(storageLocation.productInventory.appliedDryMassKg)
+          : "No completed applications",
+    },
+    {
+      label: "Applied Events",
+      value: String(storageLocation.productInventory.appliedApplicationCount),
+    },
+    {
+      label: "Last Application",
+      value: formatDateOrFallback(storageLocation.productInventory.lastAppliedAt),
     },
     {
       label: "Formulations",

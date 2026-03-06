@@ -141,7 +141,7 @@ export function QuickAddDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="p-0 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-md w-full"
+      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-md w-full"
       aria-labelledby="quick-add-dialog-title"
     >
       <div className="flex flex-col">

@@ -61,6 +61,7 @@ Refresh local Isometric requirements docs with minimal tokens while preserving s
 - Top priority gaps revalidated.
 - `changes.md` appended.
 - No database schema changes included in this docs-only update.
+- If the bump changes schema, validation, or workflow behavior in the app, run `pnpm test:e2e` and keep the relevant Playwright paths green before merge.
 
 ## Quick Refresh Checklist (8 steps)
 1. Pull metadata for pinned slugs.

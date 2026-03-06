@@ -62,13 +62,8 @@ function ReadOnlyBadge() {
 }
 
 // ============================================
-// Component
-// ============================================
-
-// ============================================
 // Format helpers for selector cards
 // ============================================
-
 
 function formatKg(value: number | null): string {
   if (value == null) return "—";
@@ -105,6 +100,23 @@ function DataRow({ label, value, accent }: { label: string; value: string; accen
       </span>
     </div>
   );
+}
+
+function parseWatchedDate(value: unknown): Date | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsedDate = new Date(value);
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  }
+
+  return null;
 }
 
 // ============================================
@@ -232,9 +244,9 @@ export function CreditBatchForm({
   // Auto-select production runs and applications within date range
   useEffect(() => {
     if (!watchedStartDate || !watchedEndDate) return;
-    const start = new Date(watchedStartDate);
-    const end = new Date(watchedEndDate);
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return;
+    const start = parseWatchedDate(watchedStartDate);
+    const end = parseWatchedDate(watchedEndDate);
+    if (!start || !end || end < start) return;
 
     const matchingRunIds = productionRuns
       .filter((run) => {

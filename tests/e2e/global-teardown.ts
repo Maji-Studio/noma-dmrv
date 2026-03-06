@@ -47,7 +47,30 @@ export default async function globalTeardown() {
       await client.query(`
         DELETE FROM production_run_feedstocks
         WHERE production_run_id IN (
-          SELECT id FROM production_runs WHERE code LIKE 'E2E-%'
+          SELECT id FROM production_runs
+          WHERE code LIKE 'E2E-%'
+             OR facility_id IN (
+                  SELECT id FROM facilities
+                  WHERE code LIKE 'E2E-%'
+                     OR name LIKE 'UI %'
+                     OR name LIKE 'Chain %'
+                     OR name LIKE 'Duplicate Test %'
+                )
+             OR reactor_id IN (
+                  SELECT id FROM reactors
+                  WHERE code LIKE 'E2E-%'
+                     OR identifier LIKE 'UI %'
+                     OR identifier LIKE 'Chain %'
+                )
+             OR feedstock_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+             OR biochar_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+        )
+        OR feedstock_id IN (
+          SELECT id FROM feedstocks WHERE code LIKE 'E2E-%'
         )
       `);
 
@@ -58,7 +81,27 @@ export default async function globalTeardown() {
         DELETE FROM samples
         WHERE sample_code LIKE 'E2E-%'
            OR production_run_id IN (
-                SELECT id FROM production_runs WHERE code LIKE 'E2E-%'
+                SELECT id FROM production_runs
+                WHERE code LIKE 'E2E-%'
+                   OR facility_id IN (
+                        SELECT id FROM facilities
+                        WHERE code LIKE 'E2E-%'
+                           OR name LIKE 'UI %'
+                           OR name LIKE 'Chain %'
+                           OR name LIKE 'Duplicate Test %'
+                      )
+                   OR reactor_id IN (
+                        SELECT id FROM reactors
+                        WHERE code LIKE 'E2E-%'
+                           OR identifier LIKE 'UI %'
+                           OR identifier LIKE 'Chain %'
+                      )
+                   OR feedstock_storage_location_id IN (
+                        SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                      )
+                   OR biochar_storage_location_id IN (
+                        SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                      )
               )
       `);
 
@@ -66,7 +109,27 @@ export default async function globalTeardown() {
       await client.query(`
         DELETE FROM production_samples
         WHERE production_run_id IN (
-          SELECT id FROM production_runs WHERE code LIKE 'E2E-%'
+          SELECT id FROM production_runs
+          WHERE code LIKE 'E2E-%'
+             OR facility_id IN (
+                  SELECT id FROM facilities
+                  WHERE code LIKE 'E2E-%'
+                     OR name LIKE 'UI %'
+                     OR name LIKE 'Chain %'
+                     OR name LIKE 'Duplicate Test %'
+                )
+             OR reactor_id IN (
+                  SELECT id FROM reactors
+                  WHERE code LIKE 'E2E-%'
+                     OR identifier LIKE 'UI %'
+                     OR identifier LIKE 'Chain %'
+                )
+             OR feedstock_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+             OR biochar_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
         )
       `);
 
@@ -87,12 +150,65 @@ export default async function globalTeardown() {
 
       // ─── Production runs ───
       await client.query(`DELETE FROM production_runs WHERE code LIKE 'E2E-%'`);
+      await client.query(`
+        DELETE FROM production_runs
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+        OR reactor_id IN (
+          SELECT id FROM reactors
+          WHERE code LIKE 'E2E-%'
+             OR identifier LIKE 'UI %'
+             OR identifier LIKE 'Chain %'
+        )
+        OR feedstock_storage_location_id IN (
+          SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+        )
+        OR biochar_storage_location_id IN (
+          SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+        )
+      `);
 
       // ─── Feedstocks ───
-      await client.query(`DELETE FROM feedstocks WHERE code LIKE 'E2E-%'`);
+      await client.query(`
+        DELETE FROM feedstocks
+        WHERE code LIKE 'E2E-%'
+           OR facility_id IN (
+                SELECT id FROM facilities
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
+              )
+           OR feedstock_delivery_id IN (
+                SELECT id FROM feedstock_deliveries
+                WHERE code LIKE 'E2E-%'
+                   OR facility_id IN (
+                        SELECT id FROM facilities
+                        WHERE code LIKE 'E2E-%'
+                           OR name LIKE 'UI %'
+                           OR name LIKE 'Chain %'
+                           OR name LIKE 'Duplicate Test %'
+                      )
+              )
+      `);
 
       // ─── Feedstock deliveries ───
-      await client.query(`DELETE FROM feedstock_deliveries WHERE code LIKE 'E2E-%'`);
+      await client.query(`
+        DELETE FROM feedstock_deliveries
+        WHERE code LIKE 'E2E-%'
+           OR facility_id IN (
+                SELECT id FROM facilities
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
+              )
+      `);
 
       // ─── Formulations ───
       await client.query(`DELETE FROM formulations WHERE code LIKE 'E2E-%'`);

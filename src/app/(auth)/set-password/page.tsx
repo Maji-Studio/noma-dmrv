@@ -15,7 +15,7 @@ export default function SetPasswordPage() {
         </p>
       </div>
 
-      <div className="bg-[var(--color-background-white)] rounded-[var(--radius-8)] border border-[var(--color-border-primary)] p-32 shadow-sm">
+      <div className="bg-[var(--color-background-white)] rounded-[8px] border border-[var(--color-border-primary)] p-32 shadow-sm">
         <Suspense
           fallback={
             <div className="text-center py-32 text-[var(--color-text-secondary)]">

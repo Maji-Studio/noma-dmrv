@@ -92,7 +92,7 @@ export default function QuickAddDemoPage() {
       <div className="grid gap-24 md:grid-cols-2">
         {/* Form Section */}
         <div className="space-y-84">
-          <div className="border border-[var(--color-border-primary)] p-24 rounded-[var(--radius-8)]">
+          <div className="border border-[var(--color-border-primary)] p-24 rounded-[8px]">
             <h2 className="title-heading-3 mb-16">Entity Selection Form</h2>
 
             <div className="space-y-46">
@@ -135,7 +135,7 @@ export default function QuickAddDemoPage() {
           </div>
 
           {/* Selected Values */}
-          <div className="border border-[var(--color-border-primary)] p-24 rounded-[var(--radius-8)] bg-[var(--color-background-light)]">
+          <div className="border border-[var(--color-border-primary)] p-24 rounded-[8px] bg-[var(--color-background-light)]">
             <h3 className="label-medium mb-8">Selected Values</h3>
             <pre className="text-[var(--text-xs)] text-[var(--color-text-secondary)] font-mono">
               {JSON.stringify(
@@ -153,7 +153,7 @@ export default function QuickAddDemoPage() {
 
         {/* Created Entities Section */}
         <div className="space-y-84">
-          <div className="border border-[var(--color-border-primary)] p-24 rounded-[var(--radius-8)]">
+          <div className="border border-[var(--color-border-primary)] p-24 rounded-[8px]">
             <h2 className="title-heading-3 mb-16">Newly Created Entities</h2>
 
             {createdEntities.drivers.length === 0 &&
@@ -244,7 +244,7 @@ export default function QuickAddDemoPage() {
           </div>
 
           {/* Instructions */}
-          <div className="border border-[var(--color-border-primary)] p-24 rounded-[var(--radius-8)] bg-[var(--color-background-light)]">
+          <div className="border border-[var(--color-border-primary)] p-24 rounded-[8px] bg-[var(--color-background-light)]">
             <h3 className="label-medium mb-8">How it Works</h3>
             <ol className="text-[var(--text-s)] text-[var(--color-text-secondary)] space-y-8 list-decimal list-inside">
               <li>Click on any entity select dropdown</li>

@@ -81,7 +81,7 @@ This file provides guidance to Claude Code when working with this Next.js templa
 
 ## Project Overview
 
-**noma-dmrv** is a biochar carbon credit MRV (Monitoring, Reporting, Verification) system built on a Next.js 16 App Router template. It uses Better Auth for authentication, PostgreSQL with Drizzle ORM (45+ tables), and implements 16 entity CRUD workflows covering the full traceability chain: Facility → Reactor → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
+**noma-dmrv** is a biochar carbon credit MRV (Monitoring, Reporting, Verification) system built on a Next.js 16 App Router template. It uses Better Auth for authentication, PostgreSQL with Drizzle ORM (60+ tables across 15 domain schema files), and implements 16 entity CRUD workflows plus a Chain of Custody visualization covering the full traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
 
 ## Essential Commands
 
@@ -130,16 +130,17 @@ db/ (Database connection & schema)
 │   │   │   ├── [projectId]/ # Project-scoped routes (items example)
 │   │   │   ├── facilities/  # Flat entity routes (biochar entities)
 │   │   │   ├── production-runs/
-│   │   │   └── ...          # 16 entity routes total
+│   │   │   ├── chain-of-custody/ # React Flow DAG visualization
+│   │   │   └── ...          # 16 entity routes + chain-of-custody
 │   │   ├── admin/         # Admin panel
 │   │   └── api/           # API routes
 │   ├── components/        # React components (per-entity folders)
 │   ├── config/            # Configuration
 │   ├── data-access/       # Database queries + auth guards
-│   ├── db/                # Database & schema (45+ tables)
+│   ├── db/                # Database & schema (60+ tables, 15 domain files)
 │   ├── fn/                # Server actions
 │   ├── hooks/             # React Query hooks
-│   ├── lib/               # Utilities
+│   ├── lib/               # Utilities (format-utils, form-utils, calculations/)
 │   ├── schemas/           # Zod form + action schemas
 │   └── types/             # TypeScript types
 ├── tests/e2e/             # Playwright E2E tests
@@ -230,9 +231,12 @@ const {
 - Use `ServerError` for server-side errors (use `setError('root.serverError', {...})`)
 - Use `FormError` for field-level errors (handled by FormField)
 - Client-side validation happens before server calls
-- For numeric inputs use helpers from `@/lib/form-utils`: `{...register("massKg", { setValueAs: nullableNumericValue })}`
+- For numeric inputs use helpers from `@/schemas/helpers`: `toNumberOrNull`, `optionalNumber`, `optionalPercent`, `toIntOrNull`
 - Never use `valueAsNumber: true` — it converts `""` to `NaN` which breaks Zod validation
 - For optional UUID fields (EntitySelect), use `emptyToNull` from `@/schemas/helpers` first in the union: `emptyToNull.or(z.string().uuid())`
+- For GPS coordinate fields, use `latitudeSchema` and `longitudeSchema` from `@/schemas/helpers`
+- Use `<SectionLabel>` from `@/components/forms/section-label` for form section headers
+- Use `<FormFileUpload>` from `@/components/forms/form-file-upload` for file upload UI (mockup — no S3 backend yet)
 - See `docs/forms.md` for complete guide, `docs/troubleshooting.md` for gotchas
 
 ### Accessibility
@@ -305,6 +309,14 @@ export async function createItem(userId: string, data: any) {
 }
 ```
 
+### Quick-Add Pattern
+
+Quick-add dialogs let users create prerequisite entities inline (e.g., add a driver while filling a delivery form):
+
+- Quick-add schemas live in `src/schemas/quick-add.ts` with minimal required fields
+- After creation, call `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to populate the EntitySelect dropdown immediately
+- `useOpenCreateIntent()` hook (`@/hooks/use-open-create-intent`) detects `?create=true` URL param to auto-open create dialogs via deep-linking
+
 ### React Query Integration
 
 - **Query Keys**: `["resource", projectId, ...specifics]`
@@ -357,6 +369,25 @@ Follow this checklist when creating new features:
 
 See `TEMPLATE_USAGE.md` for detailed examples.
 
+## Chain of Custody Visualization
+
+Interactive React Flow DAG showing the complete biochar traceability chain for a facility:
+
+- **14 nodes**: Suppliers, Reactors, 3 Storage Location bins (Feedstock/Biochar/Product), Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches
+- **Color groups**: Infrastructure (purple), Production (orange), Distribution (rose), Credits (pink)
+- **Layout**: Dagre automatic DAG layout, minimap, zoom controls
+- **Data**: Nodes show entity counts grouped by status; animated edges when source has in-progress items
+- **Architecture**: Standard layered pattern — `data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`
+- **Docs**: `docs/chain-of-custody.md`
+
+## Production Run Extensions
+
+Production runs have three child entity types managed via inline tables/forms on the run detail page:
+
+- **Production Run Readings** (`src/components/production-run-readings/`) — Time-series telemetry (temperature, pressure, gas composition)
+- **Production Samples** (`src/components/production-runs/production-sample-form.tsx`) — In-process field measurements with file upload
+- **Production Incidents** (`src/components/production-runs/production-incident-form.tsx`) — Exception records with severity and corrective actions
+
 ## Design System Compliance
 
 All UI MUST follow the design system in `docs/design-system.md`:
@@ -394,14 +425,17 @@ All env vars validated via Zod in `src/config/env.ts`:
 ## Isometric Requirements Docs
 
 For Biochar + Soil Storage requirements work, always consult:
-- `docs/isometric/README.md` (scope and usage)
+- `docs/isometric/README.md` (scope, file index, and usage guide)
 - `docs/isometric/versions.json` (single source of pinned protocol/module versions)
 - `docs/isometric/requirements-shortlist.md` (source-linked requirement summaries)
-- `docs/isometric/schema-mapping.md` (current schema coverage and gaps)
+- `docs/isometric/schema-mapping.md` (40-row requirement-to-schema coverage map with priority/gap notes)
+- `docs/isometric/p0-compliance-checklist.md` (15 P0-priority compliance gaps for execution tracking)
+- `docs/isometric/simple-implementation-guide.md` (plain-language implementation notes, derived-vs-stored decisions, glossary)
 - `docs/isometric/condition-registry.md` (conditional field enforcement triggers)
 - `docs/isometric/update-playbook.md` (refresh workflow)
+- `docs/isometric/changes.md` (local changelog for documentation updates)
 
-All local summaries are non-authoritative interpretations. Verify against linked Isometric Registry URLs when implementing logic or making claims.
+All local summaries are non-authoritative interpretations (last refreshed: 2026-02-11). Verify against linked Isometric Registry URLs when implementing logic or making claims.
 
 ## Important Documentation Files
 
@@ -415,16 +449,28 @@ All local summaries are non-authoritative interpretations. Verify against linked
 - **Forms** - `docs/forms.md` (React Hook Form integration guide)
 - **Security** - `docs/security.md` (security best practices and guidelines)
 - **Mail Setup** - `docs/mail-setup.md` (email configuration with Resend)
+- **Chain of Custody** - `docs/chain-of-custody.md` (React Flow DAG visualization architecture)
+- **Schema Overview** - `docs/schema-overview.md` (all 60+ tables with descriptions and source links)
 - **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
 - **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
 
 ## E2E Testing
 
-Playwright tests cover all 16 entities plus a full-chain smoke test:
+Playwright tests cover entities plus full-chain smoke tests:
 
 - **Fixtures**: `tests/e2e/fixtures/auth-fixtures.ts` provides `adminPage`, `seededData`, `cleanupTestData`
 - **Seed data**: `tests/e2e/fixtures/seed-chain-data.ts` seeds 13 prerequisite entities
 - **Chain test**: `tests/e2e/full-chain-ui.spec.ts` creates all 8 core entities in one session
-- **Per-entity tests**: `tests/e2e/facilities.spec.ts`, `production-runs.spec.ts`, `distribution.spec.ts`, `applications.spec.ts`
+- **Per-entity tests**: `facilities.spec.ts`, `production-runs.spec.ts`, `distribution.spec.ts`, `applications.spec.ts`, `feedstocks.spec.ts`, `samples.spec.ts`, `products.spec.ts`, `credit-batches.spec.ts`
+- **Visualization tests**: `chain-of-custody.spec.ts`
+- **Other tests**: `layout.spec.ts`, `security.spec.ts`, `full-workflow.spec.ts`
+- **Global teardown**: `tests/e2e/global-teardown.ts` cleans up test data
 
 Run: `pnpm test:e2e` (requires dev server running)
+
+## CI/CD Workflows
+
+- **Migration workflow** (`.github/workflows/migrate.yml`) — Auto-triggers on schema changes to `main`; supports `workflow_dispatch` with actions: `ensure-admin` (idempotent), `push-schema` (safe), `reset-and-push` (destructive, requires `CONFIRM` input)
+- **Claude PR Assistant** (`.github/workflows/claude.yml`) — AI-assisted PR review
+- **Claude Code Review** (`.github/workflows/claude-code-review.yml`) — Automated code review
+- **CodeRabbit** (`.coderabbit.yaml`) — Auto-reviews on `main` and `staging` branches

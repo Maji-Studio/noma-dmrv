@@ -97,7 +97,7 @@ export function ProjectList() {
       </div>
 
       {isCreating ? (
-        <div className="p-32 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)]">
+        <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
           <h2 className="title-heading-3 mb-24">Create Project</h2>
           {createError ? <ServerError message={createError} /> : null}
           <ProjectForm
@@ -113,7 +113,7 @@ export function ProjectList() {
       ) : null}
 
       {editingProject ? (
-        <div className="p-32 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)]">
+        <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
           <h2 className="title-heading-3 mb-24">Edit Project</h2>
           {updateError ? <ServerError message={updateError} /> : null}
           <ProjectForm
@@ -133,7 +133,7 @@ export function ProjectList() {
       ) : null}
 
       {!projects || projects.length === 0 ? (
-        <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] rounded-[var(--radius-8)] flex flex-col items-center justify-center gap-24 text-center">
+        <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
           <div className="flex flex-col gap-16">
             <h2 className="title-heading-3">No projects yet</h2>
             <p className="body-large text-[var(--color-text-secondary)]">
@@ -146,7 +146,7 @@ export function ProjectList() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="p-32 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)]"
+              className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
             >
               <div className="flex items-start justify-between gap-24">
                 <div className="flex flex-col gap-16 min-w-0">

@@ -1,5 +1,5 @@
 {
-  "id": "bd3cbd13-9f23-449a-abb7-be2377c7eced",
+  "id": "32b601b7-ab9b-483c-aa8d-f1ca77d4eac4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1640,7 +1640,7 @@
           "name": "certifier",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'isometric'"
         },
         "registry": {
@@ -1864,6 +1864,10 @@
         "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon": {
           "name": "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon",
           "value": "\"credit_batches\".\"durability_option\" <> '1000_year'::durability_option or (\n        \"credit_batches\".\"mean_random_reflectance_percent\" is not null and\n        \"credit_batches\".\"mean_non_reactive_carbon_percent\" is not null\n      )"
+        },
+        "credit_batches_certifier_is_isometric": {
+          "name": "credit_batches_certifier_is_isometric",
+          "value": "\"credit_batches\".\"certifier\" = 'isometric'"
         }
       },
       "isRLSEnabled": false
@@ -2568,12 +2572,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "storage_location_id": {
-          "name": "storage_location_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "wet_mass_kg": {
           "name": "wet_mass_kg",
           "type": "real",
@@ -2667,19 +2665,6 @@
           "tableTo": "feedstock_types",
           "columnsFrom": [
             "feedstock_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "feedstock_deliveries_storage_location_id_storage_locations_id_fk": {
-          "name": "feedstock_deliveries_storage_location_id_storage_locations_id_fk",
-          "tableFrom": "feedstock_deliveries",
-          "tableTo": "storage_locations",
-          "columnsFrom": [
-            "storage_location_id"
           ],
           "columnsTo": [
             "id"
@@ -3360,6 +3345,12 @@
         },
         "contact_phone": {
           "name": "contact_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_region": {
+          "name": "source_region",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -4094,12 +4085,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "credit_batch_id": {
-          "name": "credit_batch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "sample_code": {
           "name": "sample_code",
           "type": "text",
@@ -4399,19 +4384,6 @@
           "tableTo": "production_runs",
           "columnsFrom": [
             "production_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "samples_credit_batch_id_credit_batches_id_fk": {
-          "name": "samples_credit_batch_id_credit_batches_id_fk",
-          "tableFrom": "samples",
-          "tableTo": "credit_batches",
-          "columnsFrom": [
-            "credit_batch_id"
           ],
           "columnsTo": [
             "id"
@@ -4983,6 +4955,10 @@
         "deliveries_truck_mass_on_departure_non_negative": {
           "name": "deliveries_truck_mass_on_departure_non_negative",
           "value": "\"deliveries\".\"truck_mass_on_departure_kg\" is null or \"deliveries\".\"truck_mass_on_departure_kg\" >= 0"
+        },
+        "deliveries_truck_mass_arrival_gte_departure": {
+          "name": "deliveries_truck_mass_arrival_gte_departure",
+          "value": "\"deliveries\".\"truck_mass_on_arrival_kg\" is null or \"deliveries\".\"truck_mass_on_departure_kg\" is null or \"deliveries\".\"truck_mass_on_arrival_kg\" >= \"deliveries\".\"truck_mass_on_departure_kg\""
         }
       },
       "isRLSEnabled": false
@@ -5026,7 +5002,7 @@
           "name": "customer_location_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "biochar_product_id": {
           "name": "biochar_product_id",

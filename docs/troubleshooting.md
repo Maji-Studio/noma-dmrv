@@ -525,6 +525,26 @@ pnpm db:reset
 
 Or run tests again — the auto-cleanup in `cleanupTestData` fixture handles most cases.
 
+### E2E Schema Drift After Local Schema Changes
+
+**Symptoms**
+- E2E setup fails on insert with errors like `column "source_region" of relation "suppliers" does not exist`
+- Playwright passes on one machine and fails immediately on another
+
+**Root Cause**
+- The local Postgres instance is behind the repo’s current Drizzle schema, so fixture inserts no longer match the actual database.
+
+**Fix**
+```bash
+# Bring the local database schema up to date
+pnpm drizzle-kit push --force
+
+# Then rerun Playwright
+pnpm test:e2e
+```
+
+If the database has been left in a partially migrated state, use your normal local reset flow first and then re-apply the schema.
+
 ## Performance Issues
 
 ### Slow Page Loads

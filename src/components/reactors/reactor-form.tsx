@@ -8,6 +8,7 @@
 import { numericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
@@ -85,6 +86,8 @@ export function ReactorForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(reactorFormSchema),
@@ -97,6 +100,15 @@ export function ReactorForm({
       specifications: undefined,
     },
   });
+
+  useEffect(() => {
+    if (!reactor?.facilityId && contextFacilityId) {
+      const currentFacilityId = watch("facilityId");
+      if (!currentFacilityId) {
+        setValue("facilityId", contextFacilityId);
+      }
+    }
+  }, [contextFacilityId, reactor?.facilityId, setValue, watch]);
 
   const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
 

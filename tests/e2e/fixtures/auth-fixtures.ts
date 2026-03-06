@@ -335,13 +335,38 @@ async function createDirectAuthContext(
   user: TestUser,
   baseURL: string
 ): Promise<BrowserContext> {
-  // Sign in via HTTP API to get valid signed cookies
-  const response = await fetch(`${baseURL}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Origin": baseURL },
-    body: JSON.stringify({ email: user.email, password: user.password }),
-    redirect: "manual",
-  });
+  const signInUrl = `${baseURL}/api/auth/sign-in/email`;
+  let response: Response | null = null;
+  let lastError: unknown;
+
+  // The dev server can accept the first page load before the auth route is ready.
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    try {
+      response = await fetch(signInUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Origin": baseURL },
+        body: JSON.stringify({ email: user.email, password: user.password }),
+        redirect: "manual",
+      });
+      if (response.ok || (response.status !== 404 && response.status < 500)) {
+        break;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt === 10) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+  }
+
+  if (!response) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`API sign-in failed for ${user.email}`);
+  }
 
   if (!response.ok) {
     const body = await response.text();

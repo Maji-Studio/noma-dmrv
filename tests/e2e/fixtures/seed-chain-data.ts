@@ -217,6 +217,14 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .where(eq(schema.creditBatches.facilityId, data.facility.id));
       if (facilityBatches.length > 0) {
         await tx
+          .delete(schema.creditBatchProductionRuns)
+          .where(
+            inArray(
+              schema.creditBatchProductionRuns.creditBatchId,
+              facilityBatches.map((b) => b.id)
+            )
+          );
+        await tx
           .delete(schema.creditBatchApplications)
           .where(
             inArray(
@@ -230,38 +238,29 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       }
 
       // Find and delete applications linked to facility-scoped deliveries
+      const facilityDeliveries = await tx
+        .select({ id: schema.deliveries.id })
+        .from(schema.deliveries)
+        .where(eq(schema.deliveries.facilityId, data.facility.id));
+      if (facilityDeliveries.length > 0) {
+        await tx
+          .delete(schema.applications)
+          .where(
+            inArray(
+              schema.applications.deliveryId,
+              facilityDeliveries.map((delivery) => delivery.id)
+            )
+          );
+        await tx
+          .delete(schema.deliveries)
+          .where(eq(schema.deliveries.facilityId, data.facility.id));
+      }
+
       const facilityOrders = await tx
         .select({ id: schema.orders.id })
         .from(schema.orders)
         .where(eq(schema.orders.facilityId, data.facility.id));
       if (facilityOrders.length > 0) {
-        const facilityDeliveries = await tx
-          .select({ id: schema.deliveries.id })
-          .from(schema.deliveries)
-          .where(
-            inArray(
-              schema.deliveries.orderId,
-              facilityOrders.map((o) => o.id)
-            )
-          );
-        if (facilityDeliveries.length > 0) {
-          await tx
-            .delete(schema.applications)
-            .where(
-              inArray(
-                schema.applications.deliveryId,
-                facilityDeliveries.map((d) => d.id)
-              )
-            );
-          await tx
-            .delete(schema.deliveries)
-            .where(
-              inArray(
-                schema.deliveries.orderId,
-                facilityOrders.map((o) => o.id)
-              )
-            );
-        }
         await tx
           .delete(schema.orders)
           .where(eq(schema.orders.facilityId, data.facility.id));

@@ -12,7 +12,6 @@ import {
   deleteTestFacility,
   type TestFacility,
 } from "./fixtures";
-import { selectEntity } from "./fixtures/page-helpers";
 import * as crypto from "crypto";
 
 // ============================================
@@ -79,8 +78,9 @@ test.describe("Facility + Reactor UI CRUD", () => {
     const reactorIdentifier = `UI Reactor ${RUN_ID}`;
 
     // Navigate to reactors list
-    await page.goto("/reactors");
+    await page.goto(`/reactors?facility=${seededData.facility.id}`);
     await expect(page).toHaveURL(/\/reactors/);
+    await page.waitForLoadState("networkidle");
 
     // Open the create side sheet
     await page.getByRole("button", { name: /New Reactor/i }).click();
@@ -91,22 +91,12 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Fill in the identifier (required)
     await page.fill('input[name="identifier"]', reactorIdentifier);
 
-    // Select the facility via EntitySelect
-    await selectEntity(
-      page,
-      "Facility",
-      seededData.facility.id,
-      seededData.facility.name
-    );
-
     // Select reactor type via native select
     await page.selectOption('select[name="reactorType"]', "fixed-bed");
 
-    // Fill the "Type" text field (operational type, required)
-    await page.fill('input[name="type"]', "primary pyrolysis");
-
     // Select sampling method (default is method_a, keep it)
     await page.selectOption('select[name="samplingMethod"]', "method_a");
+    await page.fill('input[name="capacityKg"]', "500");
 
     // Submit the form
     await page.getByRole("button", { name: /Create Reactor/i }).click();

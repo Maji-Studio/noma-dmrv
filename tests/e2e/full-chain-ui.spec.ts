@@ -48,6 +48,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       try {
         await db.transaction(async (tx) => {
           const fieldIdentifierPrefix = `E2E-Field-${runId}`;
+          const chainReactorIdentifier = `Chain Reactor ${runId}`;
 
           // Find chain-created facilities by name
           const chainFacilities = await tx
@@ -56,13 +57,20 @@ test.describe("Full Chain UI Smoke Test", () => {
             .where(ilike(schema.facilities.name, `Chain Facility ${runId}%`));
           const facilityIds = chainFacilities.map((f) => f.id);
 
-          const chainReactors = facilityIds.length
+          const chainReactorsByFacility = facilityIds.length
             ? await tx
                 .select({ id: schema.reactors.id })
                 .from(schema.reactors)
                 .where(inArray(schema.reactors.facilityId, facilityIds))
             : [];
-          const reactorIds = chainReactors.map((r) => r.id);
+          const chainReactorsByIdentifier = await tx
+            .select({ id: schema.reactors.id })
+            .from(schema.reactors)
+            .where(eq(schema.reactors.identifier, chainReactorIdentifier));
+          const reactorIds = uniq([
+            ...chainReactorsByFacility.map((r) => r.id),
+            ...chainReactorsByIdentifier.map((r) => r.id),
+          ]);
 
           const runsByFacility = facilityIds.length
             ? await tx
@@ -128,13 +136,28 @@ test.describe("Full Chain UI Smoke Test", () => {
           ]) {
             deliveriesById.set(delivery.id, delivery);
           }
-          const deliveryIds = Array.from(deliveriesById.keys());
+          const relatedOrderIds = uniq([
+            ...orderIds,
+            ...Array.from(deliveriesById.values())
+              .map((delivery) => delivery.orderId)
+              .filter((id): id is string => Boolean(id)),
+          ]);
+          const deliveriesByRelatedOrders = relatedOrderIds.length
+            ? await tx
+                .select({ id: schema.deliveries.id, orderId: schema.deliveries.orderId })
+                .from(schema.deliveries)
+                .where(inArray(schema.deliveries.orderId, relatedOrderIds))
+            : [];
+          for (const delivery of deliveriesByRelatedOrders) {
+            deliveriesById.set(delivery.id, delivery);
+          }
+          const allDeliveryIds = Array.from(deliveriesById.keys());
 
-          const appsByDelivery = deliveryIds.length
+          const appsByDelivery = allDeliveryIds.length
             ? await tx
                 .select({ id: schema.applications.id })
                 .from(schema.applications)
-                .where(inArray(schema.applications.deliveryId, deliveryIds))
+                .where(inArray(schema.applications.deliveryId, allDeliveryIds))
             : [];
           const applicationIds = uniq([
             ...appsByField.map((a) => a.id),
@@ -202,8 +225,8 @@ test.describe("Full Chain UI Smoke Test", () => {
             ...facilityIds,
             ...reactorIds,
             ...productionRunIds,
-            ...orderIds,
-            ...deliveryIds,
+            ...relatedOrderIds,
+            ...allDeliveryIds,
             ...applicationIds,
             ...creditBatchIds,
             ...feedstockIds,
@@ -239,6 +262,9 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.ghgMaterialityAssessments)
               .where(inArray(schema.ghgMaterialityAssessments.creditBatchId, creditBatchIds));
+            await tx
+              .delete(schema.creditBatchProductionRuns)
+              .where(inArray(schema.creditBatchProductionRuns.creditBatchId, creditBatchIds));
           }
 
           if (applicationIds.length) {
@@ -265,24 +291,24 @@ test.describe("Full Chain UI Smoke Test", () => {
               .where(inArray(schema.applications.id, applicationIds));
           }
 
-          if (deliveryIds.length) {
+          if (allDeliveryIds.length) {
             await tx
               .delete(schema.transportLegs)
               .where(
                 and(
                   eq(schema.transportLegs.entityType, "delivery"),
-                  inArray(schema.transportLegs.entityId, deliveryIds)
+                  inArray(schema.transportLegs.entityId, allDeliveryIds)
                 )
               );
             await tx
               .delete(schema.deliveries)
-              .where(inArray(schema.deliveries.id, deliveryIds));
+              .where(inArray(schema.deliveries.id, allDeliveryIds));
           }
 
-          if (orderIds.length) {
+          if (relatedOrderIds.length) {
             await tx
               .delete(schema.orders)
-              .where(inArray(schema.orders.id, orderIds));
+              .where(inArray(schema.orders.id, relatedOrderIds));
           }
 
           if (productionRunIds.length) {
@@ -388,7 +414,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 2. REACTOR ────────────────────────────────────────
     await test.step("Create Reactor", async () => {
-      await page.goto("/reactors");
+      await page.goto(`/reactors?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Reactor")');
@@ -396,16 +422,8 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="identifier"]', `Chain Reactor ${runId}`);
       await page.selectOption('select[name="reactorType"]', "fixed-bed");
-      await page.fill('input[name="type"]', "primary pyrolysis");
       await page.selectOption('select[name="samplingMethod"]', "method_a");
-
-      // Use seeded facility for deterministic option lookup (dropdown can be paginated).
-      await selectEntityById(
-        page,
-        "Facility",
-        seededData.facility.id,
-        seededData.facility.name
-      );
+      await page.fill('input[name="capacityKg"]', "500");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Reactor")').click();
       await waitForSideSheetClose(page);
@@ -419,7 +437,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 3. PRODUCTION RUN ─────────────────────────────────
     await test.step("Create Production Run", async () => {
-      await page.goto("/production-runs");
+      await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Production Run")');
@@ -427,29 +445,19 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.selectOption('select[name="status"]', "draft");
 
-      // Select the seeded facility (has feedstocks and storage locations)
       await selectEntityById(
         page,
-        "Facility",
-        seededData.facility.id,
-        seededData.facility.name
+        "Reactor",
+        seededData.reactor.id,
+        seededData.reactor.identifier
       );
-      await page.waitForTimeout(1000); // wait for cascading selects
-
-      // Select a reactor (seeded facility's reactors won't include our UI-created one,
-      // but the seeded facility should have the one from the facility create — we need
-      // to use the seeded facility which has feedstocks)
-      // Actually, select first available reactor for the seeded facility
-      await selectFirstEntity(page, "Reactor");
 
       // Fill date
       await page.fill('input[name="date"]', today);
 
-      // Select feedstock source bin
-      await page.waitForTimeout(500);
       await selectEntityById(
         page,
-        "Feedstock Source Bin",
+        "Source Bin",
         seededData.feedstockStorageLocation.id,
         seededData.feedstockStorageLocation.name
       );
@@ -490,15 +498,13 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 5. ORDER ──────────────────────────────────────────
     await test.step("Create Order", async () => {
-      await page.goto("/orders");
+      await page.goto(`/orders?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Order")');
       await waitForSideSheet(page);
 
       await page.fill('input[name="orderDate"]', today);
-      await page.selectOption('select[name="facilityId"]', seededData.facility.id);
-      await page.selectOption('select[name="status"]', "draft");
       await page.selectOption('select[name="customerId"]', seededData.customer.id);
 
       // Wait for cascading customer location select
@@ -528,7 +534,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 6. DELIVERY ───────────────────────────────────────
     await test.step("Create Delivery", async () => {
-      await page.goto("/deliveries");
+      await page.goto(`/deliveries?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Delivery")');
@@ -559,7 +565,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 7. APPLICATION ────────────────────────────────────
     await test.step("Create Application", async () => {
-      await page.goto("/applications");
+      await page.goto(`/applications?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Application")');
@@ -591,16 +597,14 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     // ─── 8. CREDIT BATCH ───────────────────────────────────
     await test.step("Create Credit Batch", async () => {
-      await page.goto("/credit-batches");
+      await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
       await page.click('button:has-text("New Credit Batch")');
       await waitForSideSheet(page);
 
-      await page.selectOption('select[name="facilityId"]', seededData.facility.id);
       await page.fill('input[name="startDate"]', today);
       await page.fill('input[name="endDate"]', today);
-      await page.selectOption('select[name="status"]', "draft");
 
       // Select application checkbox if available
       const appCheckboxes = page.locator('input[type="checkbox"]');
@@ -620,9 +624,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);
 
-      await expect(
-        page.locator("table tbody tr, [role='row']").first()
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
     });
     } finally {
       // Clean up chain-created entities regardless of test outcome
