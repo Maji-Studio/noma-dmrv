@@ -13,7 +13,6 @@ import {
   drivers,
   vehicles,
   facilities,
-  storageLocations,
 } from "@/db/schema";
 import type { FeedstockDeliveryFilterData } from "@/schemas/feedstock-deliveries";
 
@@ -33,7 +32,6 @@ export interface FeedstockDeliveryWithRelations {
   gpsLatitude: number | null;
   gpsLongitude: number | null;
   feedstockTypeId: string | null;
-  storageLocationId: string | null;
   wetMassKg: number | null;
   moisturePercent: number | null;
   notes: string | null;
@@ -47,8 +45,6 @@ export interface FeedstockDeliveryWithRelations {
   vehicleName: string | null;
   feedstockTypeName: string | null;
   feedstockTypeCategory: string | null;
-  storageLocationName: string | null;
-  storageLocationCode: string | null;
 }
 
 export interface PaginatedFeedstockDeliveries {
@@ -177,7 +173,6 @@ export async function getFeedstockDeliveries(
       gpsLatitude: feedstockDeliveries.gpsLatitude,
       gpsLongitude: feedstockDeliveries.gpsLongitude,
       feedstockTypeId: feedstockDeliveries.feedstockTypeId,
-      storageLocationId: feedstockDeliveries.storageLocationId,
       wetMassKg: feedstockDeliveries.wetMassKg,
       moisturePercent: feedstockDeliveries.moisturePercent,
       notes: feedstockDeliveries.notes,
@@ -190,8 +185,6 @@ export async function getFeedstockDeliveries(
       vehicleName: vehicles.name,
       feedstockTypeName: feedstockTypes.name,
       feedstockTypeCategory: feedstockTypes.category,
-      storageLocationName: storageLocations.name,
-      storageLocationCode: storageLocations.code,
     })
     .from(feedstockDeliveries)
     .leftJoin(facilities, eq(feedstockDeliveries.facilityId, facilities.id))
@@ -199,7 +192,6 @@ export async function getFeedstockDeliveries(
     .leftJoin(drivers, eq(feedstockDeliveries.driverId, drivers.id))
     .leftJoin(vehicles, eq(feedstockDeliveries.vehicleId, vehicles.id))
     .leftJoin(feedstockTypes, eq(feedstockDeliveries.feedstockTypeId, feedstockTypes.id))
-    .leftJoin(storageLocations, eq(feedstockDeliveries.storageLocationId, storageLocations.id))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -237,7 +229,6 @@ export async function getFeedstockDeliveryById(
       gpsLatitude: feedstockDeliveries.gpsLatitude,
       gpsLongitude: feedstockDeliveries.gpsLongitude,
       feedstockTypeId: feedstockDeliveries.feedstockTypeId,
-      storageLocationId: feedstockDeliveries.storageLocationId,
       wetMassKg: feedstockDeliveries.wetMassKg,
       moisturePercent: feedstockDeliveries.moisturePercent,
       notes: feedstockDeliveries.notes,
@@ -250,8 +241,6 @@ export async function getFeedstockDeliveryById(
       vehicleName: vehicles.name,
       feedstockTypeName: feedstockTypes.name,
       feedstockTypeCategory: feedstockTypes.category,
-      storageLocationName: storageLocations.name,
-      storageLocationCode: storageLocations.code,
     })
     .from(feedstockDeliveries)
     .leftJoin(facilities, eq(feedstockDeliveries.facilityId, facilities.id))
@@ -259,7 +248,6 @@ export async function getFeedstockDeliveryById(
     .leftJoin(drivers, eq(feedstockDeliveries.driverId, drivers.id))
     .leftJoin(vehicles, eq(feedstockDeliveries.vehicleId, vehicles.id))
     .leftJoin(feedstockTypes, eq(feedstockDeliveries.feedstockTypeId, feedstockTypes.id))
-    .leftJoin(storageLocations, eq(feedstockDeliveries.storageLocationId, storageLocations.id))
     .where(eq(feedstockDeliveries.id, deliveryId));
 
   if (!delivery) {
@@ -342,7 +330,6 @@ export async function createFeedstockDelivery(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     feedstockTypeId?: string | null;
-    storageLocationId?: string | null;
     wetMassKg?: number | null;
     moisturePercent?: number | null;
     notes?: string | null;
@@ -377,7 +364,6 @@ export async function createFeedstockDelivery(
         gpsLatitude: data.gpsLatitude ?? null,
         gpsLongitude: data.gpsLongitude ?? null,
         feedstockTypeId: data.feedstockTypeId ?? null,
-        storageLocationId: data.storageLocationId ?? null,
         wetMassKg: data.wetMassKg ?? null,
         moisturePercent: data.moisturePercent ?? null,
         notes: data.notes ?? null,
@@ -413,7 +399,6 @@ export async function updateFeedstockDelivery(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     feedstockTypeId?: string | null;
-    storageLocationId?: string | null;
     wetMassKg?: number | null;
     moisturePercent?: number | null;
     notes?: string | null;

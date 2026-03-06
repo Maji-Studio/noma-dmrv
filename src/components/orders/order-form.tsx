@@ -218,7 +218,6 @@ export function OrderForm({
             id="customerLocationId"
             label="Delivery Location"
             error={errors.customerLocationId?.message}
-            required
           >
             <FormSelect
               id="customerLocationId"

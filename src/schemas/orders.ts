@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { emptyToNull } from "@/schemas/helpers";
 
 // ============================================
 // Constants and Enums
@@ -28,7 +29,7 @@ export const orderFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
   customerId: z.string().min(1, "Please select a customer").uuid("Invalid customer"),
-  customerLocationId: z.string().min(1, "Please select a customer location").uuid("Invalid customer location"),
+  customerLocationId: emptyToNull.or(z.string().uuid("Invalid customer location")).optional().nullable(),
   biocharProductId: z.string().min(1, "Please select a biochar product").uuid("Invalid biochar product"),
   orderDate: z.coerce.date({ error: "Order date is required" }),
   quantityKg: z
@@ -71,7 +72,7 @@ export const updateOrderSchema = z.object({
     .optional(),
   facilityId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
-  customerLocationId: z.string().uuid().optional(),
+  customerLocationId: z.string().uuid().optional().nullable(),
   biocharProductId: z.string().uuid().optional(),
   orderDate: z.coerce.date().optional(),
   quantityKg: z.number().min(0.01).finite().optional(),

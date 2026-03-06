@@ -5,15 +5,14 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useForm, Controller, useWatch } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { formatLocalDate } from "@/lib/date-utils";
 import { FormField, FormInput, FormTextarea, FormFileUpload, FormEntitySelect } from "@/components/forms";
-import { EntitySelect } from "@/components/forms/entity-select";
 import { Button } from "@/components/ui";
 import {
   feedstockDeliveryFormSchema,
@@ -79,7 +78,6 @@ export function FeedstockDeliveryForm({
       gpsLatitude: delivery?.gpsLatitude ?? null,
       gpsLongitude: delivery?.gpsLongitude ?? null,
       feedstockTypeId: delivery?.feedstockTypeId ?? "",
-      storageLocationId: delivery?.storageLocationId ?? "",
       wetMassKg: delivery?.wetMassKg ?? null,
       moisturePercent: delivery?.moisturePercent ?? null,
       notes: delivery?.notes ?? "",
@@ -90,21 +88,11 @@ export function FeedstockDeliveryForm({
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
 
-  const prevFacilityRef = useRef(watchedFacilityId);
-
   useEffect(() => {
     if (!delivery && contextFacilityId && !watchedFacilityId) {
       setValue("facilityId", contextFacilityId);
     }
   }, [delivery, contextFacilityId, watchedFacilityId, setValue]);
-
-  // Clear storage location when facility changes
-  useEffect(() => {
-    if (prevFacilityRef.current && watchedFacilityId !== prevFacilityRef.current) {
-      setValue("storageLocationId", "", SET_VALUE_OPTS);
-    }
-    prevFacilityRef.current = watchedFacilityId;
-  }, [watchedFacilityId, setValue]);
 
   // Display-only dry mass preview (not stored — lives on the feedstock entity)
   const previewDryMass =
@@ -265,28 +253,6 @@ export function FeedstockDeliveryForm({
               onCreateNew={() => feedstockTypeDialog.open()}
               hideSearch
             />
-
-            <FormField
-              id="storageLocationId"
-              label="Destination Bin"
-              error={errors.storageLocationId?.message}
-            >
-              <Controller
-                name="storageLocationId"
-                control={control}
-                render={({ field }) => (
-                  <EntitySelect
-                    entityType="storageLocation"
-                    value={field.value || undefined}
-                    onChange={field.onChange}
-                    placeholder="Select bin..."
-                    disabled={isSubmitting || !watchedFacilityId}
-                    error={!!errors.storageLocationId}
-                    filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "feedstock_bin" } : undefined}
-                  />
-                )}
-              />
-            </FormField>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">

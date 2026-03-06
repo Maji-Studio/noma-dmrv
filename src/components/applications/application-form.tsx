@@ -3,7 +3,7 @@
  * Reusable application form with React Hook Form integration
  *
  * Form sections:
- * 1. Application Details — code, applicationDate, delivery, biocharAppliedTons, biocharAppliedDryTons
+ * 1. Application Details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
  * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Soil Temperature — soilTemperatureSource (enum toggle), soilTemperatureC
  */
@@ -31,8 +31,10 @@ import type { Application } from "@/db/schema/application";
 import {
   applicationKgToTons,
   applicationTonsToKg,
+  calculateDryMass,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
+  formatKg,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 
@@ -51,6 +53,64 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
     label: formatSoilTemperatureSource(source as SoilTemperatureSource),
   }),
 );
+
+// ============================================
+// Dry Mass Calculation Card
+// ============================================
+
+function DryMassCard({
+  appliedKg,
+  moisturePercent,
+}: {
+  appliedKg: number | null | undefined;
+  moisturePercent: number | null | undefined;
+}) {
+  const dryKg = calculateDryMass(appliedKg, moisturePercent);
+  const hasMoisture = moisturePercent != null;
+  const hasApplied = appliedKg != null && appliedKg > 0;
+
+  if (!hasMoisture && !hasApplied) return null;
+
+  return (
+    <div className="col-span-full">
+      <div
+        className="border border-[var(--color-border-primary)] bg-[var(--color-background-sunken)] p-16"
+      >
+        <div className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mb-12">
+          Calculated Dry Mass
+        </div>
+
+        {!hasMoisture ? (
+          <div className="flex items-center gap-10">
+            <div className="w-6 h-6 bg-[var(--color-text-tertiary)] rounded-full" />
+            <span className="body-small text-[var(--color-text-secondary)]">
+              No moisture content on delivery — enter dry mass manually or update the delivery record.
+            </span>
+          </div>
+        ) : !hasApplied ? (
+          <div className="flex items-center gap-10">
+            <div className="w-6 h-6 bg-[var(--color-text-tertiary)] rounded-full" />
+            <span className="body-small text-[var(--color-text-secondary)]">
+              Enter biochar applied (kg) to see the dry mass calculation.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-24">
+            <div>
+              <span className="font-mono text-[var(--text-2xl)] font-semibold text-[var(--color-text-primary)]">
+                {formatKg(dryKg)}
+              </span>
+              <span className="body-small text-[var(--color-text-tertiary)] ml-8">dry</span>
+            </div>
+            <div className="body-small text-[var(--color-text-tertiary)] font-mono">
+              {formatKg(appliedKg)} &times; (1 &minus; {moisturePercent?.toFixed(1)}%) = {formatKg(dryKg)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ============================================
 // Component
@@ -109,6 +169,7 @@ export function ApplicationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
+  const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
 
   const deliveryOptions = deliveries.map((d) => ({
     value: d.id,
@@ -116,12 +177,19 @@ export function ApplicationForm({
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
 
+  const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
+  const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
+  const appliedKgValid = appliedKgNum != null && !isNaN(appliedKgNum) && appliedKgNum > 0 ? appliedKgNum : null;
+
   const handleFormSubmit = handleSubmit(async (data) => {
     const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
-    const biocharAppliedDryTons = applicationKgToTons(data.biocharAppliedDryTons);
 
-    if (biocharAppliedTons == null || biocharAppliedDryTons == null) {
-      throw new Error("Biochar applied masses are required");
+    // Auto-calculate dry tons from moisture, or fall back to manual entry
+    const calculatedDryKg = calculateDryMass(data.biocharAppliedTons, moisturePercent);
+    const biocharAppliedDryTons = applicationKgToTons(calculatedDryKg ?? data.biocharAppliedDryTons);
+
+    if (biocharAppliedTons == null) {
+      throw new Error("Biochar applied mass is required");
     }
 
     await onSubmit({
@@ -140,7 +208,7 @@ export function ApplicationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message}>
+          <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
             <FormInput
               id="applicationDate"
               type="date"
@@ -156,6 +224,7 @@ export function ApplicationForm({
             id="deliveryId"
             label="Delivery"
             error={errors.deliveryId?.message}
+            required
             helperText={
               selectedDelivery
                 ? formatApplicationDeliveryHelperText(selectedDelivery)
@@ -174,7 +243,7 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="biocharAppliedTons" label="Biochar Applied (kg)" error={errors.biocharAppliedTons?.message}>
+          <FormField id="biocharAppliedTons" label="Biochar Applied (kg)" error={errors.biocharAppliedTons?.message} required>
             <FormInput
               id="biocharAppliedTons"
               type="number"
@@ -188,23 +257,32 @@ export function ApplicationForm({
             />
           </FormField>
 
-          <FormField
-            id="biocharAppliedDryTons"
-            label="Biochar Applied Dry (kg)"
-            error={errors.biocharAppliedDryTons?.message}
-          >
-            <FormInput
+          {/* Show manual dry input only when delivery has no moisture data */}
+          {!moisturePercent && selectedDelivery && (
+            <FormField
               id="biocharAppliedDryTons"
-              type="number"
-              step="any"
-              placeholder="e.g., 4500"
-              disabled={isSubmitting}
-              error={!!errors.biocharAppliedDryTons}
-              {...register("biocharAppliedDryTons", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
+              label="Biochar Applied Dry (kg)"
+              error={errors.biocharAppliedDryTons?.message}
+              helperText="No moisture % on delivery — enter dry mass manually"
+            >
+              <FormInput
+                id="biocharAppliedDryTons"
+                type="number"
+                step="any"
+                placeholder="e.g., 4500"
+                disabled={isSubmitting}
+                error={!!errors.biocharAppliedDryTons}
+                {...register("biocharAppliedDryTons", {
+                  setValueAs: numericValue,
+                })}
+              />
+            </FormField>
+          )}
+
+          <DryMassCard
+            appliedKg={appliedKgValid}
+            moisturePercent={moisturePercent}
+          />
         </div>
       </div>
 

@@ -53,7 +53,6 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => customers.id),
   customerLocationId: uuid('customer_location_id')
-    .notNull()
     .references(() => customerLocations.id),
   // --- Order Details ---
   biocharProductId: uuid('biochar_product_id')

@@ -11,6 +11,7 @@ import { Users, Plus, MapTrifold } from "@phosphor-icons/react";
 import type { Customer } from "@/db/schema";
 import {
   useCreateCustomer,
+  useCreateCustomerLocation,
   useDeleteCustomer,
   useCustomers,
   useUpdateCustomer,
@@ -23,7 +24,7 @@ import { Button } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { CustomerForm } from "./customer-form";
+import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 
@@ -126,6 +127,7 @@ export function CustomerList() {
 
   const { data: customersData, isLoading, error: fetchError } = useCustomers();
   const createCustomer = useCreateCustomer();
+  const createLocation = useCreateCustomerLocation();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
   const toast = useToast();
@@ -163,10 +165,18 @@ export function CustomerList() {
   useOpenCreateIntent(openCreate);
 
   // Handlers
-  const handleCreate = async (data: CustomerFormData) => {
+  const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
     setCreateError(null);
     try {
-      await createCustomer.mutateAsync(data);
+      const customer = await createCustomer.mutateAsync(data);
+      if (pendingLocations?.length) {
+        for (const loc of pendingLocations) {
+          await createLocation.mutateAsync({
+            customerId: customer.id,
+            ...loc,
+          });
+        }
+      }
       setSideSheet(null);
       toast.success("Customer created successfully");
     } catch (error) {

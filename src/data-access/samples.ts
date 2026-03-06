@@ -21,7 +21,6 @@ export interface SampleWithRelations {
   id: string;
   sampleCode: string;
   productionRunId: string;
-  creditBatchId: string | null;
   samplingTime: Date;
   weightGrams: number | null;
   volumeMl: number | null;
@@ -185,7 +184,6 @@ export async function getSamples(
       id: samples.id,
       sampleCode: samples.sampleCode,
       productionRunId: samples.productionRunId,
-      creditBatchId: samples.creditBatchId,
       samplingTime: samples.samplingTime,
       weightGrams: samples.weightGrams,
       volumeMl: samples.volumeMl,
@@ -272,7 +270,6 @@ export async function getSampleById(
       id: samples.id,
       sampleCode: samples.sampleCode,
       productionRunId: samples.productionRunId,
-      creditBatchId: samples.creditBatchId,
       samplingTime: samples.samplingTime,
       weightGrams: samples.weightGrams,
       volumeMl: samples.volumeMl,

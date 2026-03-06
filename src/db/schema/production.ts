@@ -14,7 +14,6 @@ import { incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
 import { feedstocks } from './feedstock';
-import { creditBatches } from './credits';
 
 // ============================================
 // Production Runs - Pyrolysis batches
@@ -127,9 +126,6 @@ export const samples = pgTable('samples', {
   productionRunId: uuid('production_run_id')
     .notNull()
     .references(() => productionRuns.id),
-  creditBatchId: uuid('credit_batch_id').references(
-    () => creditBatches.id
-  ),
   sampleCode: text('sample_code').notNull(),
   samplingTime: timestamp('sampling_time').notNull(),
   weightGrams: real('weight_grams'),
@@ -313,10 +309,6 @@ export const samplesRelations = relations(samples, ({ one }) => ({
   productionRun: one(productionRuns, {
     fields: [samples.productionRunId],
     references: [productionRuns.id],
-  }),
-  creditBatch: one(creditBatches, {
-    fields: [samples.creditBatchId],
-    references: [creditBatches.id],
   }),
 }));
 
