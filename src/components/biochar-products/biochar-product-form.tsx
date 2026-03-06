@@ -141,7 +141,7 @@ export function BiocharProductForm({
     control,
     getValues,
     setValue,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(biocharProductFormSchema),
     defaultValues: {
@@ -196,16 +196,16 @@ export function BiocharProductForm({
 
   // Auto-fill mass from linked production run
   useEffect(() => {
-    if (!linkedRunPreview || linkedRunPreview.biocharOutputKg === null) return;
+    if (product || dirtyFields.massKg || linkedRunPreview?.biocharOutputKg == null) return;
+
     const currentMass = getValues("massKg");
-    const shouldPrefillMass = currentMass === undefined || currentMass === null;
-    if (shouldPrefillMass) {
+    if (currentMass === undefined || currentMass === null) {
       setValue("massKg", linkedRunPreview.biocharOutputKg, {
-        shouldDirty: !shouldPrefillMass,
+        shouldDirty: false,
         shouldValidate: true,
       });
     }
-  }, [getValues, linkedRunPreview, setValue]);
+  }, [dirtyFields.massKg, getValues, linkedRunPreview, product, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
@@ -227,7 +227,9 @@ export function BiocharProductForm({
           massKg={massKgNum}
           destinationBinLabel={
             selectedStorageLocation?.name
-              ?? product?.storageLocation?.name
+              ?? ((storageLocationId == null || storageLocationId === "")
+                ? product?.storageLocation?.name ?? null
+                : null)
               ?? null
           }
         />

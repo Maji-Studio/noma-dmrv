@@ -20,7 +20,7 @@ export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 /**
  * Certifier provider options
  */
-export const certifierProviders = ["isometric", "puro_earth", "verra"] as const;
+export const certifierProviders = ["isometric"] as const;
 export type CertifierProvider = (typeof certifierProviders)[number];
 
 /**
@@ -275,13 +275,22 @@ export function formatCreditBatchStatus(status: CreditBatchStatus): string {
 /**
  * Format certifier provider for display
  */
-export function formatCertifierProvider(provider: CertifierProvider): string {
-  const labels: Record<CertifierProvider, string> = {
-    isometric: "Isometric",
-    puro_earth: "Puro.earth",
-    verra: "Verra",
-  };
-  return labels[provider];
+export function formatCertifierProvider(
+  provider: string | null | undefined
+): string {
+  if (provider === "isometric" || !provider) {
+    return "Isometric";
+  }
+
+  if (provider === "puro_earth") {
+    return "Puro.earth";
+  }
+
+  if (provider === "verra") {
+    return "Verra";
+  }
+
+  return provider;
 }
 
 /**

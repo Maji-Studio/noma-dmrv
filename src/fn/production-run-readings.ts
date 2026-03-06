@@ -18,6 +18,7 @@ import {
   createProductionRunReadingSchema,
   updateProductionRunReadingSchema,
   deleteProductionRunReadingSchema,
+  productionRunReadingListFiltersSchema,
 } from "@/schemas/production-run-readings";
 import type { ActionResult } from "@/types/actions";
 
@@ -36,13 +37,25 @@ export async function getProductionRunReadingsListFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const readings = await getListData(user.id, productionRunId, facilityId);
+    const filters = productionRunReadingListFiltersSchema.parse({
+      productionRunId,
+      facilityId,
+    });
+
+    const readings = await getListData(user.id, filters.productionRunId, filters.facilityId);
     return { success: true, data: readings };
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+
+    console.error("[production-run-readings] Failed to load readings:", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load readings",
+      error: "Failed to load readings",
     };
   }
 }
@@ -82,10 +95,11 @@ export async function createProductionRunReadingFn(
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
+
+    console.error("[production-run-readings] Failed to create reading:", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create reading",
+      error: "Failed to create reading",
     };
   }
 }
@@ -100,16 +114,7 @@ export async function updateProductionRunReadingFn(
     }
 
     const validated = updateProductionRunReadingSchema.parse(data);
-    const timestamp = validated.timestamp
-      ? (toValidTimestamp(validated.timestamp) ?? undefined)
-      : undefined;
-
-    if (validated.timestamp && !timestamp) {
-      return {
-        success: false,
-        error: "Validation error: Invalid timestamp",
-      };
-    }
+    const timestamp = validated.timestamp ?? undefined;
 
     const reading = await updateData(user.id, validated.readingId, {
       timestamp,
@@ -126,10 +131,11 @@ export async function updateProductionRunReadingFn(
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
+
+    console.error("[production-run-readings] Failed to update reading:", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update reading",
+      error: "Failed to update reading",
     };
   }
 }
@@ -154,10 +160,11 @@ export async function deleteProductionRunReadingFn(
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
+
+    console.error("[production-run-readings] Failed to delete reading:", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete reading",
+      error: "Failed to delete reading",
     };
   }
 }

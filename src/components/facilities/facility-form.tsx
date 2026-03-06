@@ -5,27 +5,19 @@ import { formatTimezoneLabel } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import { FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import {
   facilityFormSchema,
   timezones,
-  durabilityOptions,
   type FacilityFormData,
   type Timezone,
-  type DurabilityOption,
 } from "@/schemas/facilities";
 import type { Facility } from "@/db/schema/facilities";
 
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
-
-const durabilityOptions_: readonly { value: string; label: string }[] =
-  durabilityOptions.map((opt) => ({
-    value: opt,
-    label: opt === "200_year" ? "200 Year" : "1000 Year",
-  }));
 
 type FacilityWithOptionalFields = Facility & { timezone?: string };
 
@@ -61,8 +53,6 @@ export function FacilityForm({
       gpsLongitude: facility?.gpsLongitude ?? undefined,
       contactEmail: facility?.contactEmail ?? "",
       contactPhone: facility?.contactPhone ?? "",
-      defaultDurabilityOption:
-        (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
       timezone: (facility?.timezone as Timezone) ?? undefined,
     },
   });
@@ -99,21 +89,7 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField
-          id="defaultDurabilityOption"
-          label="Default Durability Option"
-          error={errors.defaultDurabilityOption?.message}
-        >
-          <FormSelect
-            id="defaultDurabilityOption"
-            disabled={isSubmitting}
-            error={!!errors.defaultDurabilityOption}
-            options={durabilityOptions_}
-            {...register("defaultDurabilityOption")}
-          />
-        </FormField>
-
+      <div className="grid grid-cols-1 gap-y-20">
         <FormField id="timezone" label="Timezone" error={errors.timezone?.message}>
           <FormSelect
             id="timezone"

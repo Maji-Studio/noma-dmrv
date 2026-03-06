@@ -26,6 +26,7 @@ import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/fe
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+const ENABLE_ATTACHMENTS = false;
 
 // ============================================
 // Component
@@ -68,7 +69,7 @@ export function FeedstockDeliveryForm({
   } = useForm({
     resolver: zodResolver(feedstockDeliveryFormSchema),
     defaultValues: {
-      facilityId: delivery?.facilityId ?? contextFacilityId ?? "",
+      facilityId: delivery?.facilityId ?? contextFacilityId ?? undefined,
       deliveryDate: delivery?.deliveryDate
         ? formatLocalDate(new Date(delivery.deliveryDate))
         : formatLocalDate(new Date()),
@@ -119,6 +120,20 @@ export function FeedstockDeliveryForm({
           <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
             Delivery Information
           </h3>
+
+          {!contextFacilityId && !delivery && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+              <FormEntitySelect
+                control={control}
+                name="facilityId"
+                label="Facility"
+                entityType="facility"
+                placeholder="Select facility..."
+                disabled={isSubmitting}
+                required
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
@@ -328,12 +343,16 @@ export function FeedstockDeliveryForm({
               <FormField
                 id="attachments"
                 label="Attachments"
-                helperText="UI mock only for now: selected files are not uploaded or saved yet."
+                helperText={
+                  ENABLE_ATTACHMENTS
+                    ? "UI mock only for now: selected files are not uploaded or saved yet."
+                    : "Attachments are disabled and selected files are not saved."
+                }
               >
                 <FormFileUpload
                   id="attachments"
                   accept="image/*,.pdf,.csv,.xlsx"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !ENABLE_ATTACHMENTS}
                 />
               </FormField>
             </div>

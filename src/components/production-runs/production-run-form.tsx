@@ -122,7 +122,7 @@ export function ProductionRunForm({
   }, [productionRun, contextFacilityId, watchedFacilityId, setValue]);
 
   // Capture initial facility ID once to avoid stale closure in effect
-  const initialFacilityIdRef = useRef(contextFacilityId || productionRun?.facilityId || "");
+  const initialFacilityIdRef = useRef(productionRun?.facilityId || contextFacilityId || "");
 
   // Clear dependent fields when facility changes (skip if facility matches initial value)
   useEffect(() => {

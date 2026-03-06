@@ -23,12 +23,9 @@ import { FormField, FormInput, FormSelect, FormTextarea, SectionLabel } from "@/
 import { Button } from "@/components/ui";
 import {
   creditBatchFormSchema,
-  certifierProviders,
   durabilityOptions,
-  formatCertifierProvider,
   formatDurabilityOption,
   type CreditBatchFormData,
-  type CertifierProvider,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
@@ -36,12 +33,6 @@ import type { CreditBatch } from "@/db/schema/credits";
 // ============================================
 // Constants for select options
 // ============================================
-
-const certifierOptions: readonly { value: string; label: string }[] =
-  certifierProviders.map((provider) => ({
-    value: provider,
-    label: formatCertifierProvider(provider as CertifierProvider),
-  }));
 
 const durabilityOptionsList: readonly { value: string; label: string }[] =
   durabilityOptions.map((option) => ({
@@ -179,7 +170,7 @@ export function CreditBatchForm({
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
-      certifier: (creditBatch?.certifier as CertifierProvider) ?? "isometric",
+      certifier: "isometric",
       productionRunIds: creditBatch?.productionRunIds ?? [],
       applicationIds: creditBatch?.applicationIds ?? [],
       durabilityOption:
@@ -290,13 +281,13 @@ export function CreditBatchForm({
           label="Certifier"
           error={errors.certifier?.message}
         >
-          <FormSelect
+          <input type="hidden" value="isometric" {...register("certifier")} />
+          <FormInput
             id="certifier"
-            placeholder="Select certifier..."
-            disabled={isSubmitting}
+            value="Isometric"
+            readOnly
+            disabled
             error={!!errors.certifier}
-            options={certifierOptions}
-            {...register("certifier")}
           />
         </FormField>
       </div>

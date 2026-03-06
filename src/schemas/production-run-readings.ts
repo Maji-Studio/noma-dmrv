@@ -53,6 +53,11 @@ export const productionRunReadingFormSchema = z.object({
 
 export const createProductionRunReadingSchema = productionRunReadingFormSchema;
 
+export const productionRunReadingListFiltersSchema = z.object({
+  productionRunId: z.string().uuid("Invalid production run ID").optional(),
+  facilityId: z.string().uuid("Invalid facility ID").optional(),
+});
+
 export const updateProductionRunReadingSchema = z.object({
   readingId: z.string().uuid("Invalid reading ID"),
   timestamp: z

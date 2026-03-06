@@ -25,6 +25,30 @@ export type DeliveryStatus = (typeof deliveryStatuses)[number];
 
 const optionalNumber = z.number().finite().optional().nullable();
 
+function validateTruckMasses(
+  value: {
+    truckMassOnArrivalKg?: number | null;
+    truckMassOnDepartureKg?: number | null;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnArrivalKg"],
+      message: "Truck mass on arrival must be >= 0",
+    });
+  }
+
+  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnDepartureKg"],
+      message: "Truck mass on departure must be >= 0",
+    });
+  }
+}
+
 // ============================================
 // Delivery Form Schema (Client-side validation)
 // ============================================
@@ -92,21 +116,7 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
     }
   }
 
-  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnArrivalKg"],
-      message: "Truck mass on arrival must be >= 0",
-    });
-  }
-
-  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnDepartureKg"],
-      message: "Truck mass on departure must be >= 0",
-    });
-  }
+  validateTruckMasses(value, ctx);
 });
 
 // ============================================
@@ -156,21 +166,7 @@ export const createDeliverySchema = z.object({
     });
   }
 
-  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnArrivalKg"],
-      message: "Truck mass on arrival must be >= 0",
-    });
-  }
-
-  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnDepartureKg"],
-      message: "Truck mass on departure must be >= 0",
-    });
-  }
+  validateTruckMasses(value, ctx);
 });
 
 /**
@@ -218,21 +214,7 @@ export const updateDeliverySchema = z.object({
     });
   }
 
-  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnArrivalKg"],
-      message: "Truck mass on arrival must be >= 0",
-    });
-  }
-
-  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnDepartureKg"],
-      message: "Truck mass on departure must be >= 0",
-    });
-  }
+  validateTruckMasses(value, ctx);
 });
 
 /**

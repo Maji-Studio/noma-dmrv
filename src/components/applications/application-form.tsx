@@ -6,7 +6,6 @@
  * 1. Application Details — code, applicationDate, delivery, biocharAppliedTons, biocharAppliedDryTons
  * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Soil Temperature — soilTemperatureSource (enum toggle), soilTemperatureC
- * 4. Soil Temperature — soilTemperatureSource, soilTemperatureC
  */
 "use client";
 
@@ -15,6 +14,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
 import { FormField, FormInput, FormSelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -86,7 +86,7 @@ export function ApplicationForm({
     handleSubmit,
     control,
     formState: { errors },
-  } = useForm({
+  } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
     defaultValues: {
       applicationDate: application?.applicationDate
@@ -117,10 +117,17 @@ export function ApplicationForm({
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
 
   const handleFormSubmit = handleSubmit(async (data) => {
+    const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
+    const biocharAppliedDryTons = applicationKgToTons(data.biocharAppliedDryTons);
+
+    if (biocharAppliedTons == null || biocharAppliedDryTons == null) {
+      throw new Error("Biochar applied masses are required");
+    }
+
     await onSubmit({
       ...data,
-      biocharAppliedTons: applicationKgToTons(data.biocharAppliedTons)!,
-      biocharAppliedDryTons: applicationKgToTons(data.biocharAppliedDryTons)!,
+      biocharAppliedTons,
+      biocharAppliedDryTons,
     });
   });
 
