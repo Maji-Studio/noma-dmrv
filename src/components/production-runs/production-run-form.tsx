@@ -449,7 +449,7 @@ export function ProductionRunForm({
         <FormField
           id="plcDataFile"
           label="Readings CSV"
-          helperText="Upload the PLC export CSV for this production run."
+          helperText="UI mock only for now: selected CSV files are not uploaded or saved yet."
         >
           <FormFileUpload
             id="plcDataFile"

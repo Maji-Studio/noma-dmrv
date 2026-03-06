@@ -5,8 +5,9 @@
  */
 "use client";
 
+import { useEffect } from "react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
@@ -62,7 +63,6 @@ export function FeedstockDeliveryForm({
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
     formState: { errors },
   } = useForm({
@@ -85,8 +85,15 @@ export function FeedstockDeliveryForm({
     },
   });
 
-  const watchWetMass = watch("wetMassKg");
-  const watchMoisture = watch("moisturePercent");
+  const watchWetMass = useWatch({ control, name: "wetMassKg" });
+  const watchMoisture = useWatch({ control, name: "moisturePercent" });
+  const watchedFacilityId = useWatch({ control, name: "facilityId" });
+
+  useEffect(() => {
+    if (!delivery && contextFacilityId && !watchedFacilityId) {
+      setValue("facilityId", contextFacilityId);
+    }
+  }, [delivery, contextFacilityId, watchedFacilityId, setValue]);
 
   // Display-only dry mass preview (not stored — lives on the feedstock entity)
   const previewDryMass =
@@ -248,9 +255,9 @@ export function FeedstockDeliveryForm({
                     value={field.value || undefined}
                     onChange={field.onChange}
                     placeholder="Select bin..."
-                    disabled={isSubmitting || !contextFacilityId}
+                    disabled={isSubmitting || !watchedFacilityId}
                     error={!!errors.storageLocationId}
-                    filterBy={contextFacilityId ? { facilityId: contextFacilityId, type: "feedstock_bin" } : undefined}
+                    filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "feedstock_bin" } : undefined}
                   />
                 )}
               />
@@ -321,7 +328,7 @@ export function FeedstockDeliveryForm({
               <FormField
                 id="attachments"
                 label="Attachments"
-                helperText="Upload delivery notes, weighbridge tickets, or photos"
+                helperText="UI mock only for now: selected files are not uploaded or saved yet."
               >
                 <FormFileUpload
                   id="attachments"

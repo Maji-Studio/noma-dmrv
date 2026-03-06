@@ -575,7 +575,11 @@ CREATE TABLE "production_runs" (
 	"plc_data_file_url" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "production_runs_code_unique" UNIQUE("code")
+	CONSTRAINT "production_runs_code_unique" UNIQUE("code"),
+	CONSTRAINT "production_runs_feedstock_wet_mass_non_negative" CHECK ("production_runs"."feedstock_wet_mass_kg" is null or "production_runs"."feedstock_wet_mass_kg" >= 0),
+	CONSTRAINT "production_runs_feedstock_dry_mass_non_negative" CHECK ("production_runs"."feedstock_mass_dry_kg" is null or "production_runs"."feedstock_mass_dry_kg" >= 0),
+	CONSTRAINT "production_runs_feedstock_moisture_percent_range" CHECK ("production_runs"."feedstock_moisture_percent" is null or ("production_runs"."feedstock_moisture_percent" >= 0 and "production_runs"."feedstock_moisture_percent" <= 100)),
+	CONSTRAINT "production_runs_feedstock_dry_lte_wet" CHECK ("production_runs"."feedstock_wet_mass_kg" is null or "production_runs"."feedstock_mass_dry_kg" is null or "production_runs"."feedstock_mass_dry_kg" <= "production_runs"."feedstock_wet_mass_kg")
 );
 --> statement-breakpoint
 CREATE TABLE "production_samples" (
@@ -714,7 +718,9 @@ CREATE TABLE "deliveries" (
 	CONSTRAINT "deliveries_code_unique" UNIQUE("code"),
 	CONSTRAINT "deliveries_mass_dry_non_negative" CHECK ("deliveries"."mass_dry_kg" is null or "deliveries"."mass_dry_kg" >= 0),
 	CONSTRAINT "deliveries_delivered_wet_mass_non_negative" CHECK ("deliveries"."delivered_wet_mass_kg" is null or "deliveries"."delivered_wet_mass_kg" >= 0),
-	CONSTRAINT "deliveries_mass_dry_lte_wet_mass" CHECK ("deliveries"."mass_dry_kg" is null or "deliveries"."delivered_wet_mass_kg" is null or "deliveries"."mass_dry_kg" <= "deliveries"."delivered_wet_mass_kg")
+	CONSTRAINT "deliveries_mass_dry_lte_wet_mass" CHECK ("deliveries"."mass_dry_kg" is null or "deliveries"."delivered_wet_mass_kg" is null or "deliveries"."mass_dry_kg" <= "deliveries"."delivered_wet_mass_kg"),
+	CONSTRAINT "deliveries_truck_mass_on_arrival_non_negative" CHECK ("deliveries"."truck_mass_on_arrival_kg" is null or "deliveries"."truck_mass_on_arrival_kg" >= 0),
+	CONSTRAINT "deliveries_truck_mass_on_departure_non_negative" CHECK ("deliveries"."truck_mass_on_departure_kg" is null or "deliveries"."truck_mass_on_departure_kg" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "orders" (

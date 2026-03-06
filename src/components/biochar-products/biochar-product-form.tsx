@@ -199,13 +199,13 @@ export function BiocharProductForm({
     if (!linkedRunPreview || linkedRunPreview.biocharOutputKg === null) return;
     const currentMass = getValues("massKg");
     const shouldPrefillMass = currentMass === undefined || currentMass === null;
-    if (shouldPrefillMass || !isEditMode) {
+    if (shouldPrefillMass) {
       setValue("massKg", linkedRunPreview.biocharOutputKg, {
         shouldDirty: !shouldPrefillMass,
         shouldValidate: true,
       });
     }
-  }, [getValues, isEditMode, linkedRunPreview, setValue]);
+  }, [getValues, linkedRunPreview, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 

@@ -54,7 +54,7 @@ export function ProductionRunReadingForm({
   const onFormSubmit = handleSubmit((data) => onSubmit(data));
 
   return (
-    <div className="space-y-20">
+    <form onSubmit={onFormSubmit} className="space-y-20">
       {/* Timestamp */}
       <FormField
         id="timestamp"
@@ -140,12 +140,7 @@ export function ProductionRunReadingForm({
             Cancel
           </Button>
         )}
-        <Button
-          type="button"
-          variant="primary"
-          disabled={isSubmitting}
-          onClick={onFormSubmit}
-        >
+        <Button type="submit" variant="primary" disabled={isSubmitting}>
           {isSubmitting
             ? "Saving..."
             : isEditMode
@@ -153,6 +148,6 @@ export function ProductionRunReadingForm({
               : "Add Reading"}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }

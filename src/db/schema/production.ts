@@ -1,4 +1,5 @@
 import {
+  check,
   pgTable,
   text,
   timestamp,
@@ -8,7 +9,7 @@ import {
   integer,
   jsonb,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
@@ -20,52 +21,73 @@ import { creditBatches } from './credits';
 // Isometric Protocol: Section 9 (Pyrolysis Reactor System Requirements)
 // ============================================
 
-export const productionRuns = pgTable('production_runs', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // e.g., "PR-2025-043"
-  facilityId: uuid('facility_id')
-    .notNull()
-    .references(() => facilities.id),
-  date: date('date').notNull(),
-  status: productionRunStatus('status').default('running').notNull(),
+export const productionRuns = pgTable(
+  'production_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(), // e.g., "PR-2025-043"
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    date: date('date').notNull(),
+    status: productionRunStatus('status').default('running').notNull(),
 
-  // --- Overview ---
-  startTime: timestamp('start_time').defaultNow().notNull(),
-  endTime: timestamp('end_time').defaultNow().notNull(),
-  reactorId: uuid('reactor_id')
-    .notNull()
-    .references(() => reactors.id),
-  operatorId: uuid('operator_id').references(() => operators.id),
+    // --- Overview ---
+    startTime: timestamp('start_time').defaultNow().notNull(),
+    endTime: timestamp('end_time').defaultNow().notNull(),
+    reactorId: uuid('reactor_id')
+      .notNull()
+      .references(() => reactors.id),
+    operatorId: uuid('operator_id').references(() => operators.id),
 
-  // --- Processing Parameters (Isometric Protocol Section 9) ---
-  feedingRateKgHr: real('feeding_rate_kg_hr'),
-  residenceTimeMinutes: integer('residence_time_minutes'),
+    // --- Processing Parameters (Isometric Protocol Section 9) ---
+    feedingRateKgHr: real('feeding_rate_kg_hr'),
+    residenceTimeMinutes: integer('residence_time_minutes'),
 
-  // --- Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6) ---
-  dieselOperationLiters: real('diesel_operation_liters'),
-  dieselGensetLiters: real('diesel_genset_liters'),
-  preprocessingFuelLiters: real('preprocessing_fuel_liters'),
-  electricityKwh: real('electricity_kwh'),
+    // --- Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6) ---
+    dieselOperationLiters: real('diesel_operation_liters'),
+    dieselGensetLiters: real('diesel_genset_liters'),
+    preprocessingFuelLiters: real('preprocessing_fuel_liters'),
+    electricityKwh: real('electricity_kwh'),
 
-  // --- Biochar Output ---
-  biocharOutputKg: real('biochar_output_kg'),
-  biocharStorageLocationId: uuid('biochar_storage_location_id').references(
-    () => storageLocations.id
-  ),
-  feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
-    () => storageLocations.id
-  ),
-  feedstockWetMassKg: real('feedstock_wet_mass_kg'),
-  feedstockMoisturePercent: real('feedstock_moisture_percent'),
-  feedstockMassDryKg: real('feedstock_mass_dry_kg'),
+    // --- Biochar Output ---
+    biocharOutputKg: real('biochar_output_kg'),
+    biocharStorageLocationId: uuid('biochar_storage_location_id').references(
+      () => storageLocations.id
+    ),
+    feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
+      () => storageLocations.id
+    ),
+    feedstockWetMassKg: real('feedstock_wet_mass_kg'),
+    feedstockMoisturePercent: real('feedstock_moisture_percent'),
+    feedstockMassDryKg: real('feedstock_mass_dry_kg'),
 
-  // --- Metadata ---
-  emissionFactorsUsed: jsonb('emission_factors_used'), // Snapshot of factors used
-  plcDataFileUrl: text('plc_data_file_url'), // URL to uploaded PLC CSV data file
+    // --- Metadata ---
+    emissionFactorsUsed: jsonb('emission_factors_used'), // Snapshot of factors used
+    plcDataFileUrl: text('plc_data_file_url'), // URL to uploaded PLC CSV data file
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'production_runs_feedstock_wet_mass_non_negative',
+      sql`${table.feedstockWetMassKg} is null or ${table.feedstockWetMassKg} >= 0`
+    ),
+    check(
+      'production_runs_feedstock_dry_mass_non_negative',
+      sql`${table.feedstockMassDryKg} is null or ${table.feedstockMassDryKg} >= 0`
+    ),
+    check(
+      'production_runs_feedstock_moisture_percent_range',
+      sql`${table.feedstockMoisturePercent} is null or (${table.feedstockMoisturePercent} >= 0 and ${table.feedstockMoisturePercent} <= 100)`
+    ),
+    check(
+      'production_runs_feedstock_dry_lte_wet',
+      sql`${table.feedstockWetMassKg} is null or ${table.feedstockMassDryKg} is null or ${table.feedstockMassDryKg} <= ${table.feedstockWetMassKg}`
+    ),
+  ]
+);
 
 // ============================================
 // Production Run Readings - Time-series monitoring data

@@ -3918,7 +3918,24 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "production_runs_feedstock_wet_mass_non_negative": {
+          "name": "production_runs_feedstock_wet_mass_non_negative",
+          "value": "\"production_runs\".\"feedstock_wet_mass_kg\" is null or \"production_runs\".\"feedstock_wet_mass_kg\" >= 0"
+        },
+        "production_runs_feedstock_dry_mass_non_negative": {
+          "name": "production_runs_feedstock_dry_mass_non_negative",
+          "value": "\"production_runs\".\"feedstock_mass_dry_kg\" is null or \"production_runs\".\"feedstock_mass_dry_kg\" >= 0"
+        },
+        "production_runs_feedstock_moisture_percent_range": {
+          "name": "production_runs_feedstock_moisture_percent_range",
+          "value": "\"production_runs\".\"feedstock_moisture_percent\" is null or (\"production_runs\".\"feedstock_moisture_percent\" >= 0 and \"production_runs\".\"feedstock_moisture_percent\" <= 100)"
+        },
+        "production_runs_feedstock_dry_lte_wet": {
+          "name": "production_runs_feedstock_dry_lte_wet",
+          "value": "\"production_runs\".\"feedstock_wet_mass_kg\" is null or \"production_runs\".\"feedstock_mass_dry_kg\" is null or \"production_runs\".\"feedstock_mass_dry_kg\" <= \"production_runs\".\"feedstock_wet_mass_kg\""
+        }
+      },
       "isRLSEnabled": false
     },
     "public.production_samples": {
@@ -4958,6 +4975,14 @@
         "deliveries_mass_dry_lte_wet_mass": {
           "name": "deliveries_mass_dry_lte_wet_mass",
           "value": "\"deliveries\".\"mass_dry_kg\" is null or \"deliveries\".\"delivered_wet_mass_kg\" is null or \"deliveries\".\"mass_dry_kg\" <= \"deliveries\".\"delivered_wet_mass_kg\""
+        },
+        "deliveries_truck_mass_on_arrival_non_negative": {
+          "name": "deliveries_truck_mass_on_arrival_non_negative",
+          "value": "\"deliveries\".\"truck_mass_on_arrival_kg\" is null or \"deliveries\".\"truck_mass_on_arrival_kg\" >= 0"
+        },
+        "deliveries_truck_mass_on_departure_non_negative": {
+          "name": "deliveries_truck_mass_on_departure_non_negative",
+          "value": "\"deliveries\".\"truck_mass_on_departure_kg\" is null or \"deliveries\".\"truck_mass_on_departure_kg\" >= 0"
         }
       },
       "isRLSEnabled": false
