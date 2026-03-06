@@ -9,6 +9,8 @@ export { FormField } from "./form-field";
 export { FormInput } from "./form-input";
 export { FormTextarea } from "./form-textarea";
 export { FormSelect } from "./form-select";
+export { FormFileUpload } from "./form-file-upload";
+export { SectionLabel } from "./section-label";
 
 // Entity Select
 export {

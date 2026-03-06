@@ -54,11 +54,6 @@ export const formulationIngredientSchema = z.object({
     .min(1, "Ingredient name is required")
     .max(255, "Name must be less than 255 characters"),
   ratio: optionalRatioSchema,
-  description: z
-    .string()
-    .max(500, "Description must be less than 500 characters")
-    .optional()
-    .or(z.literal("")),
 });
 
 export type FormulationIngredientFormData = z.infer<

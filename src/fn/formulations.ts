@@ -173,7 +173,6 @@ export async function createFormulationFn(
             ingredientType: ing.ingredientType,
             name: ing.name,
             ratio: ing.ratio ?? null,
-            description: ing.description || null,
           })),
         })
     );
@@ -221,7 +220,6 @@ export async function updateFormulationFn(
         ingredientType: ing.ingredientType,
         name: ing.name,
         ratio: ing.ratio ?? null,
-        description: ing.description || null,
       })),
     });
 

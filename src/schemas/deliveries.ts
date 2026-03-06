@@ -45,6 +45,8 @@ const deliveryFormBaseSchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
+  truckMassOnArrivalKg: optionalNumber,
+  truckMassOnDepartureKg: optionalNumber,
 });
 
 /**
@@ -115,6 +117,8 @@ export const createDeliverySchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
+  truckMassOnArrivalKg: optionalNumber,
+  truckMassOnDepartureKg: optionalNumber,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -159,6 +163,8 @@ export const updateDeliverySchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
+  truckMassOnArrivalKg: optionalNumber,
+  truckMassOnDepartureKg: optionalNumber,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({

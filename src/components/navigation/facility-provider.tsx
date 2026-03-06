@@ -48,7 +48,7 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
   );
 
   // Keep within schema limit (max 100) so the sidebar facilities query does not fail.
-  const { data: facilitiesData, isLoading } = useFacilities({ pageSize: 100 });
+  const { data: facilitiesData, isLoading, isError } = useFacilities({ pageSize: 100 });
   const facilities = useMemo(() => facilitiesData?.items ?? [], [facilitiesData]);
 
   // Resolve facility selection from URL -> localStorage -> first facility.
@@ -103,6 +103,7 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     facilities,
     selectedFacility,
     isLoading,
+    isError,
   };
 
   return (

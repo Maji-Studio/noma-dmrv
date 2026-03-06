@@ -1,10 +1,10 @@
 /**
  * Chain of Custody Page — Interactive DAG visualizer
- * Shows entity counts and status distribution for a selected facility.
+ * Shows entity counts and status distribution for the facility selected in the sidebar.
  */
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ReactFlow,
@@ -17,7 +17,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { TreeStructure } from "@phosphor-icons/react/dist/ssr";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useChainOfCustody } from "@/hooks/use-chain-of-custody";
 import { ChainNode } from "./chain-node";
 import { useChainGraph } from "./use-chain-graph";
@@ -29,20 +29,15 @@ const nodeTypes: NodeTypes = {
 
 export function ChainOfCustodyPage() {
   const router = useRouter();
-  const { data: facilitiesData, isLoading: facilitiesLoading, isError: facilitiesError } = useFacilities();
-  const facilityList = facilitiesData?.items ?? [];
+  const {
+    facilityId,
+    selectedFacility,
+    isLoading: facilitiesLoading,
+    isError: facilitiesError,
+  } = useFacilityContext();
 
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
-
-  // Auto-select first facility when data loads
-  const activeFacilityId = selectedFacilityId ?? facilityList[0]?.id ?? null;
-
-  const { data: chainData, isLoading: chainLoading, isError: chainError } = useChainOfCustody(activeFacilityId);
+  const { data: chainData, isLoading: chainLoading, isError: chainError } = useChainOfCustody(facilityId);
   const { nodes, edges } = useChainGraph(chainData);
-
-  const handleFacilityChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedFacilityId(e.target.value || null);
-  }, []);
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     const href = (node.data as { href?: string | null }).href;
@@ -60,23 +55,16 @@ export function ChainOfCustodyPage() {
             <TreeStructure size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <h1 className="title-heading-2">Chain of Custody</h1>
           </div>
-
-          <select
-            aria-label="Facility"
-            value={activeFacilityId ?? ""}
-            onChange={handleFacilityChange}
-            disabled={facilitiesLoading || facilityList.length === 0}
-            className="h-[44px] px-16 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-medium min-w-[220px]"
-          >
-            {facilityList.length === 0 && (
-              <option value="">No facilities</option>
-            )}
-            {facilityList.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.code} — {f.name}
-              </option>
-            ))}
-          </select>
+          <div className="text-right">
+            <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+              Facility
+            </p>
+            <p className="body-medium text-[var(--color-text-secondary)]">
+              {selectedFacility
+                ? `${selectedFacility.code} - ${selectedFacility.name}`
+                : "Selected in sidebar"}
+            </p>
+          </div>
         </header>
 
         {/* Canvas */}
@@ -97,7 +85,7 @@ export function ChainOfCustodyPage() {
           ) : nodes.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <p className="body-medium text-[var(--color-text-secondary)]">
-                Select a facility to view its chain of custody.
+                Select a facility in the sidebar to view its chain of custody.
               </p>
             </div>
           ) : (

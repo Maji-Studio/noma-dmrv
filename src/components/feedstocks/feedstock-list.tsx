@@ -14,6 +14,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FeedstockForm } from "./feedstock-form";
 import {
   useCreateFeedstock,
@@ -237,6 +238,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setCreateError(null);
     setUpdateError(null);
   };
+  useOpenCreateIntent(openCreate);
 
   const columns = useMemo(
     () => createColumns(openEdit, handleDelete),

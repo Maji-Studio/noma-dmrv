@@ -223,7 +223,7 @@ export function VehicleQuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="e.g., Truck 1"
+              placeholder="e.g., Feedstock Truck 01"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
               autoFocus
               data-testid="vehicle-name-input"
@@ -242,7 +242,7 @@ export function VehicleQuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, identifier: e.target.value }))
               }
-              placeholder="e.g., T 123 ABC"
+              placeholder="e.g., T 123 DEC"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
               data-testid="vehicle-identifier-input"
             />

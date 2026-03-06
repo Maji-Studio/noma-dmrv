@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { MapPin, Plus, Leaf, Thermometer } from "@phosphor-icons/react";
@@ -18,6 +18,10 @@ import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { ApplicationForm } from "./application-form";
+import {
+  formatApplicationKgFromTons,
+  type ApplicationDeliveryOption,
+} from "./mass-utils";
 import type { Application } from "@/db/schema/application";
 import {
   useApplications,
@@ -58,19 +62,19 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedTons",
-      header: "Biochar Applied",
+      header: "Biochar Applied (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
-          {row.original.biocharAppliedTons?.toFixed(2) ?? "—"} t
+          {formatApplicationKgFromTons(row.original.biocharAppliedTons)}
         </span>
       ),
     },
     {
       accessorKey: "biocharAppliedDryTons",
-      header: "Dry Biochar",
+      header: "Dry Biochar (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
-          {row.original.biocharAppliedDryTons?.toFixed(2) ?? "—"} t
+          {formatApplicationKgFromTons(row.original.biocharAppliedDryTons)}
         </span>
       ),
     },
@@ -152,7 +156,7 @@ function createColumns(
 // ============================================
 
 interface ApplicationListProps {
-  deliveries?: { id: string; deliveryDate: Date | string }[];
+  deliveries?: ApplicationDeliveryOption[];
 }
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
@@ -174,11 +178,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
-
-  const deliveryOptions = deliveries.map((d) => ({
-    id: d.id,
-    deliveryDate: d.deliveryDate,
-  }));
 
   // Handlers
   const handleCreate = async (data: ApplicationFormData) => {
@@ -241,7 +240,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
   // Memoize columns
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   const items = applications?.items ?? [];
   const totalApplications = items.length;
@@ -283,7 +282,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         />
         <StatCard
           title="Biochar Applied"
-          value={`${totalBiochar.toFixed(2)} t`}
+          value={formatApplicationKgFromTons(totalBiochar)}
           icon={<Leaf size={24} weight="bold" />}
           description="Total biochar applied"
           isLoading={isLoading}
@@ -388,13 +387,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 {
                   label: "Biochar Applied",
                   value: sideSheet.entity.biocharAppliedTons != null
-                    ? `${sideSheet.entity.biocharAppliedTons.toFixed(2)} t`
+                    ? formatApplicationKgFromTons(sideSheet.entity.biocharAppliedTons)
                     : null,
                 },
                 {
-                  label: "Biochar Applied (Dry)",
+                  label: "Biochar Applied Dry",
                   value: sideSheet.entity.biocharAppliedDryTons != null
-                    ? `${sideSheet.entity.biocharAppliedDryTons.toFixed(2)} t dry`
+                    ? formatApplicationKgFromTons(sideSheet.entity.biocharAppliedDryTons)
                     : null,
                 },
               ],
@@ -429,30 +428,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 },
               ],
             },
-            {
-              title: "Transport",
-              fields: [
-                {
-                  label: "Truck Mass on Arrival",
-                  value: sideSheet.entity.truckMassOnArrivalKg != null
-                    ? `${sideSheet.entity.truckMassOnArrivalKg} kg`
-                    : null,
-                },
-                {
-                  label: "Truck Mass on Departure",
-                  value: sideSheet.entity.truckMassOnDepartureKg != null
-                    ? `${sideSheet.entity.truckMassOnDepartureKg} kg`
-                    : null,
-                },
-              ],
-            },
           ] : undefined}
         >
           {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
           <ApplicationForm
             key={sideSheet.entity?.id ?? "create"}
             application={sideSheet.entity ?? undefined}
-            deliveries={deliveryOptions}
+            deliveries={deliveries}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createApplication.isPending || updateApplication.isPending}

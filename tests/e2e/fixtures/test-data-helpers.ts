@@ -41,7 +41,6 @@ export interface TestSupplier {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
-  chainOfCustodyRef: string | null;
 }
 
 export interface TestFormulation {
@@ -288,7 +287,6 @@ export async function createTestSupplier(
       contactName: overrides.contactName ?? null,
       contactEmail: overrides.contactEmail ?? null,
       contactPhone: overrides.contactPhone ?? null,
-      chainOfCustodyRef: overrides.chainOfCustodyRef ?? null,
     };
 
     await db.insert(schema.suppliers).values({
@@ -299,7 +297,6 @@ export async function createTestSupplier(
       contactName: supplier.contactName,
       contactEmail: supplier.contactEmail,
       contactPhone: supplier.contactPhone,
-      chainOfCustodyRef: supplier.chainOfCustodyRef,
     });
 
     return supplier;

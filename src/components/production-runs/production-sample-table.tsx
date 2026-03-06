@@ -1,11 +1,10 @@
 /**
  * ProductionSampleTable component
- * Inline table of production samples with add/edit dialog, rendered within production run detail
+ * Inline table of production samples with inline add/edit form, rendered within production run detail
  */
 "use client";
 
 import { useState } from "react";
-import { useDialog } from "@/hooks/use-dialog";
 import { Plus, Pencil, Trash } from "@phosphor-icons/react";
 import {
   useProductionSamples,
@@ -20,53 +19,6 @@ import { useToast } from "@/components/ui/toast";
 import { ProductionSampleForm } from "./production-sample-form";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import type { ProductionSampleFormData } from "@/schemas/production-samples";
-
-// ============================================
-// Sample Dialog
-// ============================================
-
-function SampleDialog({
-  isOpen,
-  onClose,
-  productionRunId,
-  sample,
-  onSubmit,
-  isSubmitting,
-  formError,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  productionRunId: string;
-  sample?: ProductionSampleWithRelations;
-  onSubmit: (data: ProductionSampleFormData) => Promise<void>;
-  isSubmitting: boolean;
-  formError: string | null;
-}) {
-  const dialogRef = useDialog(isOpen, onClose);
-
-  if (!isOpen) return null;
-
-  return (
-    <dialog
-      ref={dialogRef}
-      className="p-32 border border-[var(--color-border-primary)] backdrop:bg-black/50 w-full max-w-[640px]"
-      aria-labelledby="sample-dialog-title"
-    >
-      <h2 id="sample-dialog-title" className="title-heading-3 mb-24">
-        {sample ? "Edit Sample" : "Add Production Sample"}
-      </h2>
-      {formError && <ServerError message={formError} />}
-      <ProductionSampleForm
-        key={sample?.id ?? "create"}
-        productionRunId={productionRunId}
-        sample={sample}
-        onSubmit={onSubmit}
-        onCancel={onClose}
-        isSubmitting={isSubmitting}
-      />
-    </dialog>
-  );
-}
 
 // ============================================
 // Helpers
@@ -103,29 +55,30 @@ export function ProductionSampleTable({
   const deleteSample = useDeleteProductionSample(productionRunId);
   const toast = useToast();
 
-  const [dialogState, setDialogState] = useState<{
-    open: boolean;
-    sample?: ProductionSampleWithRelations;
-  }>({ open: false });
+  // Inline form state: "closed" | { mode: "create" } | { mode: "edit", sample }
+  const [inlineForm, setInlineForm] = useState<
+    | { open: false }
+    | { open: true; sample?: ProductionSampleWithRelations }
+  >({ open: false });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const openCreate = () => {
     setFormError(null);
-    setDialogState({ open: true });
+    setInlineForm({ open: true });
   };
   const openEdit = (sample: ProductionSampleWithRelations) => {
     setFormError(null);
-    setDialogState({ open: true, sample });
+    setInlineForm({ open: true, sample });
   };
-  const closeDialog = () => setDialogState({ open: false });
+  const closeForm = () => setInlineForm({ open: false });
 
   const handleSubmit = async (data: ProductionSampleFormData) => {
     setFormError(null);
     try {
-      if (dialogState.sample) {
+      if (inlineForm.open && inlineForm.sample) {
         await updateSample.mutateAsync({
-          productionSampleId: dialogState.sample.id,
+          productionSampleId: inlineForm.sample.id,
           ...data,
         });
         toast.success("Sample updated");
@@ -133,7 +86,7 @@ export function ProductionSampleTable({
         await createSample.mutateAsync(data);
         toast.success("Sample added");
       }
-      closeDialog();
+      closeForm();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to save sample");
     }
@@ -151,17 +104,21 @@ export function ProductionSampleTable({
     }
   };
 
+  const isSubmitting = createSample.isPending || updateSample.isPending;
+
   return (
-    <div className="space-y-16 pt-24 border-t border-[var(--color-border-tertiary)]">
+    <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Production Samples
         </h3>
-        <Button variant="default" size="small" onClick={openCreate}>
-          <Plus size={16} weight="bold" />
-          Add Sample
-        </Button>
+        {!inlineForm.open && (
+          <Button variant="default" size="small" onClick={openCreate}>
+            <Plus size={16} weight="bold" />
+            Add Sample
+          </Button>
+        )}
       </div>
 
       {/* Error */}
@@ -172,11 +129,11 @@ export function ProductionSampleTable({
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           Loading samples...
         </p>
-      ) : !samples?.length ? (
+      ) : !samples?.length && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           No samples recorded yet. Click &ldquo;Add Sample&rdquo; to record an in-process measurement.
         </p>
-      ) : (
+      ) : samples?.length ? (
         <div className="overflow-x-auto">
           <table className="w-full body-small">
             <thead>
@@ -213,6 +170,7 @@ export function ProductionSampleTable({
                         onClick={() => openEdit(s)}
                         className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
                         aria-label="Edit sample"
+                        disabled={inlineForm.open}
                       >
                         <Pencil size={16} />
                       </button>
@@ -221,6 +179,7 @@ export function ProductionSampleTable({
                         onClick={() => setDeletingId(s.id)}
                         className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
                         aria-label="Delete sample"
+                        disabled={inlineForm.open}
                       >
                         <Trash size={16} />
                       </button>
@@ -231,18 +190,25 @@ export function ProductionSampleTable({
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
 
-      {/* Add/Edit Dialog */}
-      <SampleDialog
-        isOpen={dialogState.open}
-        onClose={closeDialog}
-        productionRunId={productionRunId}
-        sample={dialogState.sample}
-        onSubmit={handleSubmit}
-        isSubmitting={createSample.isPending || updateSample.isPending}
-        formError={formError}
-      />
+      {/* Inline Add/Edit Form */}
+      {inlineForm.open && (
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
+          <h4 className="title-heading-4 mb-16">
+            {inlineForm.sample ? "Edit Sample" : "Add Production Sample"}
+          </h4>
+          {formError && <div className="mb-16"><ServerError message={formError} /></div>}
+          <ProductionSampleForm
+            key={inlineForm.sample?.id ?? "create"}
+            productionRunId={productionRunId}
+            sample={inlineForm.sample}
+            onSubmit={handleSubmit}
+            onCancel={closeForm}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      )}
 
       {/* Delete Confirmation */}
       <DeleteConfirmDialog

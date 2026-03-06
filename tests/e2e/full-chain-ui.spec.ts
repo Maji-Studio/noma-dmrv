@@ -456,7 +456,8 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.feedstockStorageLocation.id,
         seededData.feedstockStorageLocation.name
       );
-      await page.fill('input[name="feedstockMassUsedKg"]', "50");
+      await page.fill('input[name="feedstockWetMassKg"]', "50");
+      await page.fill('input[name="feedstockMoisturePercent"]', "15");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
       await waitForSideSheetClose(page);
@@ -578,8 +579,8 @@ test.describe("Full Chain UI Smoke Test", () => {
         await deliverySelect.selectOption(deliveryValue);
       }
 
-      await page.fill('input[name="biocharAppliedTons"]', "5");
-      await page.fill('input[name="biocharAppliedDryTons"]', "4.5");
+      await page.fill('input[name="biocharAppliedTons"]', "5000");
+      await page.fill('input[name="biocharAppliedDryTons"]', "4500");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 

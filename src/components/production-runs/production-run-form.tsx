@@ -5,13 +5,15 @@
  */
 "use client";
 
-import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-utils";
+import { nullableNumericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useEffect, useRef } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, FormFileUpload, SectionLabel } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { Button } from "@/components/ui";
@@ -34,26 +36,12 @@ const statusOptions: readonly { value: string; label: string }[] = productionRun
 }));
 
 // ============================================
-// Section header
-// ============================================
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-      {children}
-    </h3>
-  );
-}
-
-// ============================================
 // Component
 // ============================================
 
 interface ProductionRunFormProps {
   /** Existing production run data for editing (undefined for create mode) */
   productionRun?: ProductionRunWithRelations;
-  /** Pre-selected facility ID */
-  facilityId?: string;
   /** Form submission handler */
   onSubmit: (data: ProductionRunFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -68,7 +56,6 @@ interface ProductionRunFormProps {
 
 export function ProductionRunForm({
   productionRun,
-  facilityId: preselectedFacilityId,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -76,18 +63,18 @@ export function ProductionRunForm({
   children,
 }: ProductionRunFormProps) {
   const isEditMode = !!productionRun;
+  const { facilityId: contextFacilityId } = useFacilityContext();
 
   const {
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     defaultValues: {
-      facilityId: productionRun?.facilityId || preselectedFacilityId || "",
+      facilityId: productionRun?.facilityId || contextFacilityId || "",
       date: productionRun?.date ?? formatLocalDate(new Date()),
       reactorId: productionRun?.reactorId ?? "",
       status: (productionRun?.status as ProductionRunStatus) ?? "draft",
@@ -97,7 +84,8 @@ export function ProductionRunForm({
       endTime: productionRun?.endTime ? formatLocalTime(new Date(productionRun.endTime)) : "",
       operatorId: productionRun?.operatorId ?? "",
       feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
-      feedstockMassUsedKg: productionRun?.feedstockMassUsedKg ?? undefined,
+      feedstockWetMassKg: productionRun?.feedstockWetMassKg ?? undefined,
+      feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? undefined,
       feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
       residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
       dieselOperationLiters: productionRun?.dieselOperationLiters ?? undefined,
@@ -111,10 +99,30 @@ export function ProductionRunForm({
   });
 
   // Watch facility to filter reactors and storage locations
-  const watchedFacilityId = watch("facilityId");
+  const watchedFacilityId = useWatch({ control, name: "facilityId" });
+
+  // Watch wet mass + moisture for dry mass preview
+  const watchWetMass = useWatch({ control, name: "feedstockWetMassKg" });
+  const watchMoisture = useWatch({ control, name: "feedstockMoisturePercent" });
+
+  const previewDryMass =
+    typeof watchWetMass === "number" &&
+    typeof watchMoisture === "number" &&
+    watchWetMass >= 0 &&
+    watchMoisture >= 0 &&
+    watchMoisture <= 100
+      ? deriveMassDryKg(watchWetMass, watchMoisture)
+      : null;
+
+  // Sync facilityId from context when creating (context may load after mount)
+  useEffect(() => {
+    if (!productionRun && contextFacilityId && !watchedFacilityId) {
+      setValue("facilityId", contextFacilityId);
+    }
+  }, [productionRun, contextFacilityId, watchedFacilityId, setValue]);
 
   // Capture initial facility ID once to avoid stale closure in effect
-  const initialFacilityIdRef = useRef(preselectedFacilityId || productionRun?.facilityId || "");
+  const initialFacilityIdRef = useRef(contextFacilityId || productionRun?.facilityId || "");
 
   // Clear dependent fields when facility changes (skip if facility matches initial value)
   useEffect(() => {
@@ -134,7 +142,7 @@ export function ProductionRunForm({
       ...data,
       date: new Date(dateStr + "T00:00:00"), // local midnight
       startTime: combineDateAndTime(dateStr, data.startTime as string),
-      endTime: combineDateAndTime(dateStr, data.endTime as string),
+      endTime: data.endTime ? combineDateAndTime(dateStr, data.endTime as string) : undefined,
     };
     return onSubmit(combined as ProductionRunFormData);
   });
@@ -145,25 +153,7 @@ export function ProductionRunForm({
       <div className="space-y-16">
         <SectionLabel>Run Setup</SectionLabel>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
-          <FormField id="facilityId" label="Facility" error={errors.facilityId?.message} required>
-            <Controller
-              name="facilityId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  entityType="facility"
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Select a facility..."
-                  disabled={isSubmitting || !!preselectedFacilityId}
-                  error={!!errors.facilityId}
-                  autoSelectSingle
-                />
-              )}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
@@ -194,29 +184,9 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="date" label="Date" error={errors.date?.message} required>
             <FormInput id="date" type="date" disabled={isSubmitting} error={!!errors.date} {...register("date")} />
-          </FormField>
-
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
-            <FormInput
-              id="startTime"
-              type="time"
-              disabled={isSubmitting}
-              error={!!errors.startTime}
-              {...register("startTime")}
-            />
-          </FormField>
-
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message} required>
-            <FormInput
-              id="endTime"
-              type="time"
-              disabled={isSubmitting}
-              error={!!errors.endTime}
-              {...register("endTime")}
-            />
           </FormField>
 
           <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
@@ -236,6 +206,28 @@ export function ProductionRunForm({
             />
           </FormField>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
+            <FormInput
+              id="startTime"
+              type="time"
+              disabled={isSubmitting}
+              error={!!errors.startTime}
+              {...register("startTime")}
+            />
+          </FormField>
+
+          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+            <FormInput
+              id="endTime"
+              type="time"
+              disabled={isSubmitting}
+              error={!!errors.endTime}
+              {...register("endTime")}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* ── Feedstock & Processing ── */}
@@ -244,7 +236,7 @@ export function ProductionRunForm({
 
         {!watchedFacilityId && (
           <p className="text-[var(--color-text-tertiary)] body-caption">
-            Select a facility above to choose a feedstock source bin.
+            Select a facility in the sidebar to choose a feedstock source bin.
           </p>
         )}
         <FormField
@@ -268,21 +260,53 @@ export function ProductionRunForm({
             )}
           />
         </FormField>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
-          <FormField id="feedstockMassUsedKg" label="Mass Used (kg)" error={errors.feedstockMassUsedKg?.message}>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+          <FormField id="feedstockWetMassKg" label="Wet Mass (kg)" error={errors.feedstockWetMassKg?.message}>
             <FormInput
-              id="feedstockMassUsedKg"
+              id="feedstockWetMassKg"
               type="number"
               step="0.1"
               placeholder="e.g. 500"
               disabled={isSubmitting}
-              error={!!errors.feedstockMassUsedKg}
-              {...register("feedstockMassUsedKg", {
+              error={!!errors.feedstockWetMassKg}
+              {...register("feedstockWetMassKg", {
                 setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
 
+          <FormField id="feedstockMoisturePercent" label="Moisture Content (%)" error={errors.feedstockMoisturePercent?.message}>
+            <FormInput
+              id="feedstockMoisturePercent"
+              type="number"
+              step="0.1"
+              placeholder="e.g. 15"
+              disabled={isSubmitting}
+              error={!!errors.feedstockMoisturePercent}
+              {...register("feedstockMoisturePercent", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+        </div>
+
+        {/* Dry mass preview (display only — computed server-side) */}
+        <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+          <span className="body-small text-[var(--color-text-tertiary)]">Est. Dry Mass (kg)</span>
+          <span className="body-medium font-medium text-[var(--color-text-primary)]">
+            {previewDryMass !== null
+              ? `${previewDryMass.toFixed(2)} kg`
+              : "—"}
+          </span>
+          {previewDryMass !== null && (
+            <span className="body-small text-[var(--color-text-quaternary)]">
+              = {Number(watchWetMass ?? 0).toFixed(2)} × (1 − {Number(watchMoisture ?? 0).toFixed(2)}%)
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed Rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
@@ -292,7 +316,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
               {...register("feedingRateKgHr", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
@@ -317,7 +341,7 @@ export function ProductionRunForm({
       <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
         <SectionLabel>Output & Energy</SectionLabel>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="biocharStorageLocationId"
             label="Biochar Storage"
@@ -348,7 +372,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.biocharOutputKg}
               {...register("biocharOutputKg", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
@@ -364,7 +388,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
               {...register("dieselOperationLiters", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
@@ -378,7 +402,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
               {...register("dieselGensetLiters", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
@@ -396,7 +420,7 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
               {...register("preprocessingFuelLiters", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
@@ -410,11 +434,30 @@ export function ProductionRunForm({
               disabled={isSubmitting}
               error={!!errors.electricityKwh}
               {...register("electricityKwh", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
         </div>
+
+      </div>
+
+      {/* ── Production Readings ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Production Readings</SectionLabel>
+
+        <FormField
+          id="plcDataFile"
+          label="Readings CSV"
+          helperText="Upload the PLC export CSV for this production run."
+        >
+          <FormFileUpload
+            id="plcDataFile"
+            accept=".csv"
+            multiple={false}
+            disabled={isSubmitting}
+          />
+        </FormField>
       </div>
 
       {/* ── Slot for extra content (e.g. production samples table) ── */}

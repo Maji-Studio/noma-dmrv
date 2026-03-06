@@ -95,8 +95,6 @@
     "contact_name": "Name of the primary contact person",
     "contact_email": "Email for supplier communications",
     "contact_phone": "Phone number for supplier communications",
-    "annual_revenue_usd": "Estimated annual revenue in USD",
-    "chain_of_custody_ref": "External chain-of-custody reference number",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },
@@ -155,7 +153,7 @@
     "gps_latitude": "Latitude at point of delivery",
     "gps_longitude": "Longitude at point of delivery",
     "feedstock_type_id": "FK to the feedstock type classification",
-    "weight_kg": "Total delivered weight in kilograms",
+    "wet_mass_kg": "Total delivered wet mass in kilograms (including moisture)",
     "moisture_percent": "Moisture content at delivery as percentage",
     "notes": "Free-text delivery notes",
     "createdAt": "Timestamp when the record was created",

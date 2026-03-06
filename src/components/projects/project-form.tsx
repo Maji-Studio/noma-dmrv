@@ -38,7 +38,7 @@ export function ProjectForm({
         <FormInput
           id="name"
           type="text"
-          placeholder="e.g. Marketing Site"
+          placeholder="e.g. Dark Earth Carbon Tanzania MRV"
           disabled={isSubmitting}
           error={!!errors.name}
           {...register("name")}
@@ -52,7 +52,7 @@ export function ProjectForm({
       >
         <FormTextarea
           id="description"
-          placeholder="Describe the purpose of this project"
+          placeholder="Track feedstock sourcing, pyrolysis runs, biochar deliveries, field applications, and carbon credit issuance."
           disabled={isSubmitting}
           error={!!errors.description}
           {...register("description")}

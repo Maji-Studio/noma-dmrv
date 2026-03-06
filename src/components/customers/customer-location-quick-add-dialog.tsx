@@ -1,13 +1,11 @@
 /**
  * Customer Location Quick Add Dialog
  * Inline dialog for quickly adding new customer locations from the customer edit form.
- *
- * Uses a div-based overlay instead of native <dialog> to avoid focus-trapping
- * conflicts with the parent Base UI modal (EntitySideSheet / SlideOverPanel).
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import { useCreateCustomerLocation } from "@/hooks/use-customers";
 
@@ -85,9 +83,9 @@ export function CustomerLocationQuickAddDialog({
 }: CustomerLocationQuickAddDialogProps) {
   if (!isOpen) return null;
 
-  // Unmounts when isOpen becomes false, so inner state resets automatically
   return (
     <CustomerLocationQuickAddDialogInner
+      isOpen={isOpen}
       onClose={onClose}
       customerId={customerId}
     />
@@ -95,37 +93,22 @@ export function CustomerLocationQuickAddDialog({
 }
 
 function CustomerLocationQuickAddDialogInner({
+  isOpen,
   onClose,
   customerId,
-}: Omit<CustomerLocationQuickAddDialogProps, "isOpen">) {
-  const nameRef = useRef<HTMLInputElement>(null);
+}: CustomerLocationQuickAddDialogProps) {
   const [formData, setFormData] = useState({
     name: "",
+    address: "",
     gpsLatitude: "",
     gpsLongitude: "",
-    address: "",
   });
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateCustomerLocation();
+  const dialogRef = useDialog(isOpen, onClose);
 
-  // Focus the name input on mount
-  useEffect(() => {
-    nameRef.current?.focus();
-  }, []);
-
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [onClose]);
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setError(null);
 
     if (!formData.name.trim()) {
@@ -133,14 +116,26 @@ function CustomerLocationQuickAddDialogInner({
       return;
     }
 
-    const lat = parseFloat(formData.gpsLatitude);
-    const lng = parseFloat(formData.gpsLongitude);
+    if (!formData.address.trim()) {
+      setError("Location is required");
+      return;
+    }
 
-    if (isNaN(lat) || lat < -90 || lat > 90) {
+    const lat =
+      formData.gpsLatitude.trim() === ""
+        ? null
+        : Number(formData.gpsLatitude);
+    const lng =
+      formData.gpsLongitude.trim() === ""
+        ? null
+        : Number(formData.gpsLongitude);
+
+    if (lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) {
       setError("Latitude must be a number between -90 and 90");
       return;
     }
-    if (isNaN(lng) || lng < -180 || lng > 180) {
+
+    if (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180)) {
       setError("Longitude must be a number between -180 and 180");
       return;
     }
@@ -149,9 +144,9 @@ function CustomerLocationQuickAddDialogInner({
       await createLocation.mutateAsync({
         customerId,
         name: formData.name.trim(),
+        address: formData.address.trim(),
         gpsLatitude: lat,
         gpsLongitude: lng,
-        address: formData.address.trim() || undefined,
       });
       onClose();
     } catch (err) {
@@ -165,23 +160,13 @@ function CustomerLocationQuickAddDialogInner({
     "flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
+    <dialog
+      ref={dialogRef}
+      className="w-full max-w-lg p-0 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50"
       data-testid="location-quick-add-dialog"
-      role="dialog"
       aria-labelledby="location-quick-add-dialog-title"
-      aria-modal="true"
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Panel */}
-      <div className="relative z-10 w-full max-w-lg border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-        {/* Header */}
+      <div className="flex flex-col bg-[var(--color-background-white)]">
         <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
           <h2
             id="location-quick-add-dialog-title"
@@ -192,17 +177,19 @@ function CustomerLocationQuickAddDialogInner({
           <button
             type="button"
             onClick={onClose}
-            className="p-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            className="p-4 rounded-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
             aria-label="Close dialog"
           >
             <XIcon className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form body */}
-        <div className="flex flex-col gap-24 p-24">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-24 p-24">
           {error && (
-            <div role="alert" className="px-12 py-8 bg-[var(--color-signal-red-light)] text-[var(--color-signal-red)] text-[var(--text-s)]">
+            <div
+              role="alert"
+              className="px-12 py-8 bg-[var(--color-signal-red-light)] text-[var(--color-signal-red)] text-[var(--text-s)]"
+            >
               {error}
             </div>
           )}
@@ -212,24 +199,40 @@ function CustomerLocationQuickAddDialogInner({
               Name <span className="text-[var(--color-signal-red)]">*</span>
             </label>
             <input
-              ref={nameRef}
               id="location-name"
               type="text"
               value={formData.name}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="e.g., North Field"
+              placeholder="e.g., Demonstration Plot A"
               className={inputClass}
               data-testid="location-name-input"
+              autoFocus
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-24">
+          <div className="flex flex-col gap-16">
+            <label htmlFor="location-address" className="label-medium">
+              Location <span className="text-[var(--color-signal-red)]">*</span>
+            </label>
+            <input
+              id="location-address"
+              type="text"
+              value={formData.address}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, address: e.target.value }))
+              }
+              placeholder="e.g., Moshi Rural District, Kilimanjaro Region"
+              className={inputClass}
+              data-testid="location-address-input"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-24">
             <div className="flex flex-col gap-16">
               <label htmlFor="location-latitude" className="label-medium">
-                GPS Latitude{" "}
-                <span className="text-[var(--color-signal-red)]">*</span>
+                GPS Latitude
               </label>
               <input
                 id="location-latitude"
@@ -244,7 +247,7 @@ function CustomerLocationQuickAddDialogInner({
                     gpsLatitude: e.target.value,
                   }))
                 }
-                placeholder="e.g., -1.2921"
+                placeholder="e.g., -3.3349"
                 className={inputClass}
                 data-testid="location-latitude-input"
               />
@@ -252,8 +255,7 @@ function CustomerLocationQuickAddDialogInner({
 
             <div className="flex flex-col gap-16">
               <label htmlFor="location-longitude" className="label-medium">
-                GPS Longitude{" "}
-                <span className="text-[var(--color-signal-red)]">*</span>
+                GPS Longitude
               </label>
               <input
                 id="location-longitude"
@@ -268,45 +270,26 @@ function CustomerLocationQuickAddDialogInner({
                     gpsLongitude: e.target.value,
                   }))
                 }
-                placeholder="e.g., 36.8219"
+                placeholder="e.g., 37.3404"
                 className={inputClass}
                 data-testid="location-longitude-input"
               />
             </div>
           </div>
 
-          <div className="flex flex-col gap-16">
-            <label htmlFor="location-address" className="label-medium">
-              Address
-            </label>
-            <input
-              id="location-address"
-              type="text"
-              value={formData.address}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, address: e.target.value }))
-              }
-              placeholder="e.g., Kiambu County, Kenya"
-              className={inputClass}
-              data-testid="location-address-input"
-            />
-          </div>
-
-          {/* Actions */}
           <div className="flex gap-16 justify-end pt-16">
             <button
               type="button"
               onClick={onClose}
               disabled={createLocation.isPending}
-              className="h-40 px-12 border border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] disabled:opacity-50"
+              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
             >
               Cancel
             </button>
             <button
-              type="button"
-              onClick={handleSubmit}
+              type="submit"
               disabled={createLocation.isPending}
-              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white hover:opacity-90 disabled:opacity-50"
+              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
               data-testid="location-submit-button"
             >
               {createLocation.isPending && (
@@ -315,8 +298,8 @@ function CustomerLocationQuickAddDialogInner({
               {createLocation.isPending ? "Adding..." : "Add Location"}
             </button>
           </div>
-        </div>
+        </form>
       </div>
-    </div>
+    </dialog>
   );
 }

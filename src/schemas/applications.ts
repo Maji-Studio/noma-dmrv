@@ -39,7 +39,6 @@ export type ApplicationMethod = (typeof applicationMethods)[number];
  * 1. Application Details — code, applicationDate, delivery, biocharAppliedTons, biocharAppliedDryTons
  * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Soil Temperature — soilTemperatureSource, soilTemperatureC
- * 4. Truck Weighing — truckMassOnArrivalKg, truckMassOnDepartureKg
  */
 export const applicationFormSchema = z.object({
   // === Section 1: Application Details ===
@@ -92,17 +91,6 @@ export const applicationFormSchema = z.object({
     .optional()
     .nullable(),
 
-  // === Section 4: Truck Weighing ===
-  truckMassOnArrivalKg: z
-    .number()
-    .min(0, "Mass must be a positive number")
-    .optional()
-    .nullable(),
-  truckMassOnDepartureKg: z
-    .number()
-    .min(0, "Mass must be a positive number")
-    .optional()
-    .nullable(),
 });
 
 // ============================================
@@ -138,8 +126,6 @@ export const updateApplicationSchema = z.object({
   gisBoundaryReference: z.string().max(255).optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-  truckMassOnArrivalKg: z.number().min(0).optional().nullable(),
-  truckMassOnDepartureKg: z.number().min(0).optional().nullable(),
   status: z.enum(applicationStatuses).optional(),
 });
 

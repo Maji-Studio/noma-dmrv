@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
 import { creditBatchConditionSchema } from "./isometric";
 
 // ============================================
@@ -17,6 +16,12 @@ export const creditBatchStatuses = [
   "rejected",
 ] as const;
 export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
+
+/**
+ * Certifier provider options
+ */
+export const certifierProviders = ["isometric", "puro_earth", "verra"] as const;
+export type CertifierProvider = (typeof certifierProviders)[number];
 
 /**
  * Durability options (Isometric Protocol)
@@ -49,14 +54,14 @@ export const creditBatchFormSchema = z
     facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
-    certifier: z
-      .string()
-      .max(100, "Certifier must be less than 100 characters")
-      .optional()
-      .or(z.literal("")),
-    status: z.enum(creditBatchStatuses).default("draft"),
+    certifier: z.enum(certifierProviders).default("isometric"),
 
-    // === Section 2: Applications (M:M) ===
+    // === Section 2: Production Runs (M:M) ===
+    productionRunIds: z
+      .array(z.string().uuid())
+      .default([]),
+
+    // === Section 3: Applications (M:M) ===
     applicationIds: z
       .array(z.string().uuid())
       .min(0, "Select at least one application")
@@ -212,8 +217,8 @@ export const updateCreditBatchSchema = z.object({
   facilityId: z.string().uuid().optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
-  certifier: z.string().max(100).optional().nullable(),
-  status: z.enum(creditBatchStatuses).optional(),
+  certifier: z.enum(certifierProviders).optional(),
+  productionRunIds: z.array(z.string().uuid()).optional(),
   applicationIds: z.array(z.string().uuid()).optional(),
   durabilityOption: z.enum(durabilityOptions).optional(),
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
@@ -265,6 +270,18 @@ export function formatCreditBatchStatus(status: CreditBatchStatus): string {
     rejected: "Rejected",
   };
   return labels[status];
+}
+
+/**
+ * Format certifier provider for display
+ */
+export function formatCertifierProvider(provider: CertifierProvider): string {
+  const labels: Record<CertifierProvider, string> = {
+    isometric: "Isometric",
+    puro_earth: "Puro.earth",
+    verra: "Verra",
+  };
+  return labels[provider];
 }
 
 /**

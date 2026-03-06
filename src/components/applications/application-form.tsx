@@ -6,14 +6,14 @@
  * 1. Application Details — code, applicationDate, delivery, biocharAppliedTons, biocharAppliedDryTons
  * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Soil Temperature — soilTemperatureSource (enum toggle), soilTemperatureC
- * 4. Truck Weighing — truckMassOnArrivalKg, truckMassOnDepartureKg
+ * 4. Soil Temperature — soilTemperatureSource, soilTemperatureC
  */
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect } from "@/components/forms";
 import { Button } from "@/components/ui";
@@ -28,6 +28,13 @@ import {
   type SoilTemperatureSource,
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
+import {
+  applicationKgToTons,
+  applicationTonsToKg,
+  formatApplicationDeliveryHelperText,
+  formatApplicationDeliveryOptionLabel,
+  type ApplicationDeliveryOption,
+} from "./mass-utils";
 
 // ============================================
 // Constants for select options
@@ -53,7 +60,7 @@ interface ApplicationFormProps {
   /** Existing application data for editing (undefined for create mode) */
   application?: Application;
   /** Available deliveries for selection */
-  deliveries?: Array<{ id: string; deliveryDate: Date | string }>;
+  deliveries?: ApplicationDeliveryOption[];
   /** Form submission handler */
   onSubmit: (data: ApplicationFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -77,6 +84,7 @@ export function ApplicationForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(applicationFormSchema),
@@ -85,8 +93,8 @@ export function ApplicationForm({
         ? formatLocalDate(new Date(application.applicationDate))
         : formatLocalDate(new Date()),
       deliveryId: application?.deliveryId ?? "",
-      biocharAppliedTons: application?.biocharAppliedTons ?? undefined,
-      biocharAppliedDryTons: application?.biocharAppliedDryTons ?? undefined,
+      biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
+      biocharAppliedDryTons: applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
       fieldSizeHa: application?.fieldSizeHa ?? undefined,
       fieldIdentifier: application?.fieldIdentifier ?? "",
       cropType: application?.cropType ?? "",
@@ -96,20 +104,28 @@ export function ApplicationForm({
       gisBoundaryReference: application?.gisBoundaryReference ?? "",
       soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
       soilTemperatureC: application?.soilTemperatureC ?? undefined,
-      truckMassOnArrivalKg: application?.truckMassOnArrivalKg ?? undefined,
-      truckMassOnDepartureKg: application?.truckMassOnDepartureKg ?? undefined,
     },
   });
 
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
+  const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
 
   const deliveryOptions = deliveries.map((d) => ({
     value: d.id,
-    label: new Date(d.deliveryDate).toLocaleDateString(),
+    label: formatApplicationDeliveryOptionLabel(d),
   }));
+  const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+
+  const handleFormSubmit = handleSubmit(async (data) => {
+    await onSubmit({
+      ...data,
+      biocharAppliedTons: applicationKgToTons(data.biocharAppliedTons) ?? 0,
+      biocharAppliedDryTons: applicationKgToTons(data.biocharAppliedDryTons) ?? 0,
+    });
+  });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-20">
+    <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* === Section 1: Application Details === */}
       <div className="space-y-20">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
@@ -128,8 +144,17 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryId" label="Delivery" error={errors.deliveryId?.message}>
+        <div className="grid grid-cols-1 gap-y-20">
+          <FormField
+            id="deliveryId"
+            label="Delivery"
+            error={errors.deliveryId?.message}
+            helperText={
+              selectedDelivery
+                ? formatApplicationDeliveryHelperText(selectedDelivery)
+                : "Choose a delivery by order, formulation, and kg."
+            }
+          >
             <FormSelect
               id="deliveryId"
               placeholder="Select delivery..."
@@ -142,12 +167,12 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="biocharAppliedTons" label="Biochar Applied (Tons)" error={errors.biocharAppliedTons?.message}>
+          <FormField id="biocharAppliedTons" label="Biochar Applied (kg)" error={errors.biocharAppliedTons?.message}>
             <FormInput
               id="biocharAppliedTons"
               type="number"
               step="any"
-              placeholder="e.g., 10.5"
+              placeholder="e.g., 5000"
               disabled={isSubmitting}
               error={!!errors.biocharAppliedTons}
               {...register("biocharAppliedTons", {
@@ -158,14 +183,14 @@ export function ApplicationForm({
 
           <FormField
             id="biocharAppliedDryTons"
-            label="Biochar Applied Dry (Tons)"
+            label="Biochar Applied Dry (kg)"
             error={errors.biocharAppliedDryTons?.message}
           >
             <FormInput
               id="biocharAppliedDryTons"
               type="number"
               step="any"
-              placeholder="e.g., 8.5"
+              placeholder="e.g., 4500"
               disabled={isSubmitting}
               error={!!errors.biocharAppliedDryTons}
               {...register("biocharAppliedDryTons", {
@@ -206,7 +231,7 @@ export function ApplicationForm({
             <FormInput
               id="fieldIdentifier"
               type="text"
-              placeholder="e.g., North Field A"
+              placeholder="e.g., Demonstration Plot A"
               disabled={isSubmitting}
               error={!!errors.fieldIdentifier}
               {...register("fieldIdentifier")}
@@ -219,7 +244,7 @@ export function ApplicationForm({
             <FormInput
               id="cropType"
               type="text"
-              placeholder="e.g., Maize"
+              placeholder="e.g., Coffee"
               disabled={isSubmitting}
               error={!!errors.cropType}
               {...register("cropType")}
@@ -253,7 +278,7 @@ export function ApplicationForm({
               id="gpsLatitude"
               type="number"
               step="any"
-              placeholder="e.g., -1.2921"
+              placeholder="e.g., -3.3349"
               disabled={isSubmitting}
               error={!!errors.gpsLatitude}
               {...register("gpsLatitude", {
@@ -272,7 +297,7 @@ export function ApplicationForm({
               id="gpsLongitude"
               type="number"
               step="any"
-              placeholder="e.g., 36.8219"
+              placeholder="e.g., 37.3404"
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
               {...register("gpsLongitude", {
@@ -292,7 +317,7 @@ export function ApplicationForm({
             <FormInput
               id="gisBoundaryReference"
               type="text"
-              placeholder="e.g., https://gis.example.com/layer/123"
+              placeholder="e.g., https://maps.example.com/dec/plot-a"
               disabled={isSubmitting}
               error={!!errors.gisBoundaryReference}
               {...register("gisBoundaryReference")}
@@ -340,54 +365,6 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}
               {...register("soilTemperatureC", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
-      </div>
-
-      {/* === Section 4: Truck Weighing === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Truck Weighing at Field Site
-        </h3>
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Weigh the delivery truck before and after unloading to independently verify the mass of biochar applied. The difference (arrival − departure) should match the applied amount above.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="truckMassOnArrivalKg"
-            label="Truck Mass Before Unloading (kg)"
-            error={errors.truckMassOnArrivalKg?.message}
-          >
-            <FormInput
-              id="truckMassOnArrivalKg"
-              type="number"
-              step="any"
-              placeholder="e.g., 15000"
-              disabled={isSubmitting}
-              error={!!errors.truckMassOnArrivalKg}
-              {...register("truckMassOnArrivalKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="truckMassOnDepartureKg"
-            label="Truck Mass After Unloading (kg)"
-            error={errors.truckMassOnDepartureKg?.message}
-          >
-            <FormInput
-              id="truckMassOnDepartureKg"
-              type="number"
-              step="any"
-              placeholder="e.g., 5000"
-              disabled={isSubmitting}
-              error={!!errors.truckMassOnDepartureKg}
-              {...register("truckMassOnDepartureKg", {
                 setValueAs: numericValue,
               })}
             />

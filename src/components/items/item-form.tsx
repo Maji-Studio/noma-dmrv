@@ -37,7 +37,7 @@ export function ItemForm({
         <FormInput
           id="title"
           type="text"
-          placeholder="Enter item title"
+          placeholder="e.g., Feedstock intake checklist"
           disabled={isSubmitting}
           error={!!errors.title}
           {...register("title")}
@@ -51,7 +51,7 @@ export function ItemForm({
       >
         <FormTextarea
           id="description"
-          placeholder="Enter item description"
+          placeholder="Describe the MRV task, workflow, or operating note"
           disabled={isSubmitting}
           error={!!errors.description}
           {...register("description")}

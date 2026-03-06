@@ -5,12 +5,14 @@
  */
 
 import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   productionRuns,
   productionRunFeedstocks,
   productionRunReadings,
+  incidentReports,
   facilities,
   reactors,
   operators,
@@ -51,7 +53,9 @@ export interface ProductionRunWithRelations {
   biocharOutputKg: number | null;
   biocharStorageLocationId: string | null;
   feedstockStorageLocationId: string | null;
-  feedstockMassUsedKg: number | null;
+  feedstockWetMassKg: number | null;
+  feedstockMoisturePercent: number | null;
+  feedstockMassDryKg: number | null;
   emissionFactorsUsed: unknown | null;
   plcDataFileUrl: string | null;
   createdAt: Date;
@@ -207,7 +211,9 @@ export async function getProductionRuns(
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
-      feedstockMassUsedKg: productionRuns.feedstockMassUsedKg,
+      feedstockWetMassKg: productionRuns.feedstockWetMassKg,
+      feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
+      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
       emissionFactorsUsed: productionRuns.emissionFactorsUsed,
       plcDataFileUrl: productionRuns.plcDataFileUrl,
       createdAt: productionRuns.createdAt,
@@ -329,7 +335,9 @@ export async function getProductionRunById(
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
-      feedstockMassUsedKg: productionRuns.feedstockMassUsedKg,
+      feedstockWetMassKg: productionRuns.feedstockWetMassKg,
+      feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
+      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
       emissionFactorsUsed: productionRuns.emissionFactorsUsed,
       plcDataFileUrl: productionRuns.plcDataFileUrl,
       createdAt: productionRuns.createdAt,
@@ -540,7 +548,8 @@ export async function createProductionRun(
     startTime: Date;
     endTime: Date;
     operatorId?: string | null;
-    feedstockMassUsedKg?: number | null;
+    feedstockWetMassKg?: number | null;
+    feedstockMoisturePercent?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
     dieselOperationLiters?: number | null;
@@ -589,6 +598,12 @@ export async function createProductionRun(
     throw new Error("Reactor does not belong to the selected facility");
   }
 
+  // Compute dry mass from wet mass + moisture
+  const computedDryMass =
+    data.feedstockWetMassKg != null && data.feedstockMoisturePercent != null
+      ? deriveMassDryKg(data.feedstockWetMassKg, data.feedstockMoisturePercent)
+      : null;
+
   // Create production run + M:M allocation in a transaction
   const run = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -602,7 +617,9 @@ export async function createProductionRun(
         endTime: data.endTime,
         reactorId: data.reactorId,
         operatorId: data.operatorId ?? null,
-        feedstockMassUsedKg: data.feedstockMassUsedKg ?? null,
+        feedstockWetMassKg: data.feedstockWetMassKg ?? null,
+        feedstockMoisturePercent: data.feedstockMoisturePercent ?? null,
+        feedstockMassDryKg: computedDryMass,
         feedingRateKgHr: data.feedingRateKgHr ?? null,
         residenceTimeMinutes: data.residenceTimeMinutes ?? null,
         dieselOperationLiters: data.dieselOperationLiters ?? null,
@@ -625,10 +642,10 @@ export async function createProductionRun(
     }
 
     // Auto-populate M:M feedstock relationships from bin contents
-    if (data.feedstockStorageLocationId && data.feedstockMassUsedKg) {
+    if (data.feedstockStorageLocationId && computedDryMass) {
       const allocated = await allocateFeedstockMass(
         data.feedstockStorageLocationId,
-        data.feedstockMassUsedKg,
+        computedDryMass,
         tx
       );
       await tx.insert(productionRunFeedstocks).values(
@@ -665,7 +682,8 @@ export async function updateProductionRun(
     startTime?: Date;
     endTime?: Date;
     operatorId?: string | null;
-    feedstockMassUsedKg?: number | null;
+    feedstockWetMassKg?: number | null;
+    feedstockMoisturePercent?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
     dieselOperationLiters?: number | null;
@@ -735,7 +753,19 @@ export async function updateProductionRun(
   if (data.startTime !== undefined) updateData.startTime = data.startTime;
   if (data.endTime !== undefined) updateData.endTime = data.endTime;
   if (data.operatorId !== undefined) updateData.operatorId = data.operatorId;
-  if (data.feedstockMassUsedKg !== undefined) updateData.feedstockMassUsedKg = data.feedstockMassUsedKg;
+  if (data.feedstockWetMassKg !== undefined) updateData.feedstockWetMassKg = data.feedstockWetMassKg;
+  if (data.feedstockMoisturePercent !== undefined) updateData.feedstockMoisturePercent = data.feedstockMoisturePercent;
+
+  // Recompute dry mass when either wet mass or moisture changes
+  const effectiveWetMass = data.feedstockWetMassKg !== undefined ? data.feedstockWetMassKg : existing.feedstockWetMassKg;
+  const effectiveMoisture = data.feedstockMoisturePercent !== undefined ? data.feedstockMoisturePercent : existing.feedstockMoisturePercent;
+  if (data.feedstockWetMassKg !== undefined || data.feedstockMoisturePercent !== undefined) {
+    updateData.feedstockMassDryKg =
+      effectiveWetMass != null && effectiveMoisture != null
+        ? deriveMassDryKg(effectiveWetMass, effectiveMoisture)
+        : null;
+  }
+
   if (data.feedingRateKgHr !== undefined) updateData.feedingRateKgHr = data.feedingRateKgHr;
   if (data.residenceTimeMinutes !== undefined) updateData.residenceTimeMinutes = data.residenceTimeMinutes;
   if (data.dieselOperationLiters !== undefined) updateData.dieselOperationLiters = data.dieselOperationLiters;
@@ -749,7 +779,8 @@ export async function updateProductionRun(
 
   const feedstockFieldsChanged =
     data.feedstockStorageLocationId !== undefined ||
-    data.feedstockMassUsedKg !== undefined;
+    data.feedstockWetMassKg !== undefined ||
+    data.feedstockMoisturePercent !== undefined;
 
   await db.transaction(async (tx) => {
     await tx
@@ -787,13 +818,10 @@ export async function updateProductionRun(
         .delete(productionRunFeedstocks)
         .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
 
-      const massUsedKg =
-        data.feedstockMassUsedKg !== undefined
-          ? data.feedstockMassUsedKg
-          : existing.feedstockMassUsedKg;
+      const dryMassKg = (updateData.feedstockMassDryKg as number | null) ?? existing.feedstockMassDryKg;
 
-      if (effectiveFeedstockStorageId && massUsedKg) {
-        const allocated = await allocateFeedstockMass(effectiveFeedstockStorageId, massUsedKg, tx);
+      if (effectiveFeedstockStorageId && dryMassKg) {
+        const allocated = await allocateFeedstockMass(effectiveFeedstockStorageId, dryMassKg, tx);
         await tx.insert(productionRunFeedstocks).values(
           allocated.map((a) => ({
             productionRunId,
@@ -841,6 +869,11 @@ export async function deleteProductionRun(
   await db
     .delete(productionRunReadings)
     .where(eq(productionRunReadings.productionRunId, productionRunId));
+
+  // Delete incident reports
+  await db
+    .delete(incidentReports)
+    .where(eq(incidentReports.productionRunId, productionRunId));
 
   // Note: Foreign key constraints will prevent deletion if there are
   // dependent samples or credit batches. The error will be caught by the server action.

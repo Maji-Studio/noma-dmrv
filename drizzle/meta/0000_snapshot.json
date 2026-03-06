@@ -1,5 +1,5 @@
 {
-  "id": "f275a891-03cd-4403-acf8-cc8379601295",
+  "id": "bd3cbd13-9f23-449a-abb7-be2377c7eced",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -112,18 +112,6 @@
         },
         "co2e_stored_tonnes": {
           "name": "co2e_stored_tonnes",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "truck_mass_on_arrival_kg": {
-          "name": "truck_mass_on_arrival_kg",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "truck_mass_on_departure_kg": {
-          "name": "truck_mass_on_departure_kg",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -1531,6 +1519,80 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.credit_batch_production_runs": {
+      "name": "credit_batch_production_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "credit_batch_id": {
+          "name": "credit_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "production_run_id": {
+          "name": "production_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "credit_batch_production_runs_credit_batch_id_credit_batches_id_fk": {
+          "name": "credit_batch_production_runs_credit_batch_id_credit_batches_id_fk",
+          "tableFrom": "credit_batch_production_runs",
+          "tableTo": "credit_batches",
+          "columnsFrom": [
+            "credit_batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "credit_batch_production_runs_production_run_id_production_runs_id_fk": {
+          "name": "credit_batch_production_runs_production_run_id_production_runs_id_fk",
+          "tableFrom": "credit_batch_production_runs",
+          "tableTo": "production_runs",
+          "columnsFrom": [
+            "production_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "credit_batch_production_runs_credit_batch_id_production_run_id_pk": {
+          "name": "credit_batch_production_runs_credit_batch_id_production_run_id_pk",
+          "columns": [
+            "credit_batch_id",
+            "production_run_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.credit_batches": {
       "name": "credit_batches",
       "schema": "",
@@ -1578,7 +1640,8 @@
           "name": "certifier",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "default": "'isometric'"
         },
         "registry": {
           "name": "registry",
@@ -2505,8 +2568,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "weight_kg": {
-          "name": "weight_kg",
+        "storage_location_id": {
+          "name": "storage_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wet_mass_kg": {
+          "name": "wet_mass_kg",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -2598,6 +2667,19 @@
           "tableTo": "feedstock_types",
           "columnsFrom": [
             "feedstock_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "feedstock_deliveries_storage_location_id_storage_locations_id_fk": {
+          "name": "feedstock_deliveries_storage_location_id_storage_locations_id_fk",
+          "tableFrom": "feedstock_deliveries",
+          "tableTo": "storage_locations",
+          "columnsFrom": [
+            "storage_location_id"
           ],
           "columnsTo": [
             "id"
@@ -2961,13 +3043,13 @@
           "name": "gps_latitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "real",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "address": {
           "name": "address",
@@ -3012,11 +3094,11 @@
       "checkConstraints": {
         "customer_locations_gps_latitude_range": {
           "name": "customer_locations_gps_latitude_range",
-          "value": "\"customer_locations\".\"gps_latitude\" >= -90 and \"customer_locations\".\"gps_latitude\" <= 90"
+          "value": "\"customer_locations\".\"gps_latitude\" is null or (\"customer_locations\".\"gps_latitude\" >= -90 and \"customer_locations\".\"gps_latitude\" <= 90)"
         },
         "customer_locations_gps_longitude_range": {
           "name": "customer_locations_gps_longitude_range",
-          "value": "\"customer_locations\".\"gps_longitude\" >= -180 and \"customer_locations\".\"gps_longitude\" <= 180"
+          "value": "\"customer_locations\".\"gps_longitude\" is null or (\"customer_locations\".\"gps_longitude\" >= -180 and \"customer_locations\".\"gps_longitude\" <= 180)"
         }
       },
       "isRLSEnabled": false
@@ -3278,18 +3360,6 @@
         },
         "contact_phone": {
           "name": "contact_phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "annual_revenue_usd": {
-          "name": "annual_revenue_usd",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "chain_of_custody_ref": {
-          "name": "chain_of_custody_ref",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3724,8 +3794,20 @@
           "primaryKey": false,
           "notNull": false
         },
-        "feedstock_mass_used_kg": {
-          "name": "feedstock_mass_used_kg",
+        "feedstock_wet_mass_kg": {
+          "name": "feedstock_wet_mass_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedstock_moisture_percent": {
+          "name": "feedstock_moisture_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedstock_mass_dry_kg": {
+          "name": "feedstock_mass_dry_kg",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -4716,6 +4798,18 @@
         },
         "mass_dry_kg": {
           "name": "mass_dry_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "truck_mass_on_arrival_kg": {
+          "name": "truck_mass_on_arrival_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "truck_mass_on_departure_kg": {
+          "name": "truck_mass_on_departure_kg",
           "type": "real",
           "primaryKey": false,
           "notNull": false

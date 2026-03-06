@@ -131,8 +131,8 @@ export async function getCustomerLocationsFn(
     Array<{
       id: string;
       name: string;
-      gpsLatitude: number;
-      gpsLongitude: number;
+      gpsLatitude: number | null;
+      gpsLongitude: number | null;
       address: string | null;
       createdAt: Date;
       updatedAt: Date;
@@ -387,7 +387,7 @@ export async function createCustomerLocationFn(
       name: validated.name,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      address: validated.address || null,
+      address: validated.address,
     });
 
     return { success: true, data: location };

@@ -105,6 +105,10 @@ export const deliveries = pgTable(
     deliveredWetMassKg: real('delivered_wet_mass_kg'),
     massDryKg: real('mass_dry_kg'),
 
+    // --- Truck Weighing (Isometric: independent mass verification at delivery site) ---
+    truckMassOnArrivalKg: real('truck_mass_on_arrival_kg'),
+    truckMassOnDepartureKg: real('truck_mass_on_departure_kg'),
+
     // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),

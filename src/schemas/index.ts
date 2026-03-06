@@ -12,5 +12,6 @@ export * from "./facilities";
 export * from "./customers";
 export * from "./suppliers";
 export * from "./production-runs";
+export * from "./production-incidents";
 export * from "./orders";
 export * from "./deliveries";

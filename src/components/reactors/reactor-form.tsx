@@ -2,17 +2,16 @@
  * ReactorForm component
  * Reusable reactor form with React Hook Form integration
  * Used in both create and edit slide-overs for reactors
- * Includes facility dropdown selection
  */
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
-import { EntitySelect } from "@/components/forms/entity-select";
 import { Button } from "@/components/ui";
 import {
   reactorFormSchema,
@@ -57,8 +56,6 @@ function isSamplingMethod(value: string | null | undefined): value is SamplingMe
 interface ReactorFormProps {
   /** Existing reactor data for editing (undefined for create mode) */
   reactor?: Reactor;
-  /** Pre-selected facility ID (for creating reactor from facility page) */
-  facilityId?: string;
   /** Form submission handler */
   onSubmit: (data: ReactorFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -71,13 +68,13 @@ interface ReactorFormProps {
 
 export function ReactorForm({
   reactor,
-  facilityId: preselectedFacilityId,
   onSubmit,
   onCancel,
   isSubmitting = false,
   submitLabel,
 }: ReactorFormProps) {
   const isEditMode = !!reactor;
+  const { facilityId: contextFacilityId } = useFacilityContext();
   const defaultReactorType = isReactorType(reactor?.reactorType)
     ? reactor.reactorType
     : undefined;
@@ -88,13 +85,12 @@ export function ReactorForm({
   const {
     register,
     handleSubmit,
-    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(reactorFormSchema),
     defaultValues: {
       identifier: reactor?.identifier ?? "",
-      facilityId: preselectedFacilityId || reactor?.facilityId || "",
+      facilityId: reactor?.facilityId || contextFacilityId || "",
       reactorType: defaultReactorType,
       samplingMethod: defaultSamplingMethod,
       capacityKg: reactor?.capacityKg ?? undefined,
@@ -127,7 +123,7 @@ export function ReactorForm({
             <FormInput
               id="identifier"
               type="text"
-              placeholder="e.g., Reactor 001"
+              placeholder="e.g., Rotary Kiln 01"
               disabled={isSubmitting}
               error={!!errors.identifier}
               {...register("identifier")}
@@ -135,30 +131,6 @@ export function ReactorForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="facilityId"
-            label="Facility"
-            error={errors.facilityId?.message}
-            required
-          >
-            <Controller
-              name="facilityId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  entityType="facility"
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Select a facility..."
-                  disabled={isSubmitting || !!preselectedFacilityId}
-                  error={!!errors.facilityId}
-                  autoSelectSingle
-                />
-              )}
-            />
-          </FormField>
-        </div>
       </div>
 
       {/* Reactor Configuration Section */}

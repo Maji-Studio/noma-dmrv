@@ -20,6 +20,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
 import { INGREDIENT_TYPE_LABELS } from "@/schemas/formulations";
@@ -199,6 +200,7 @@ export function FormulationList() {
   const openView = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "view", entity: formulation }); };
   const openEdit = (formulation: FormulationWithIngredients) => { setFormError(null); setSideSheet({ mode: "edit", entity: formulation }); };
   const closeSideSheet = () => { setSideSheet(null); setFormError(null); };
+  useOpenCreateIntent(openCreate);
 
   const handleModeChange = (mode: SideSheetMode) => {
     if (!sideSheet) return;

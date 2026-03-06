@@ -58,8 +58,6 @@ export function SupplierForm({
       contactName: supplier?.contactName ?? "",
       contactEmail: supplier?.contactEmail ?? "",
       contactPhone: supplier?.contactPhone ?? "",
-      annualRevenueUsd: supplier?.annualRevenueUsd ?? null,
-      chainOfCustodyRef: supplier?.chainOfCustodyRef ?? "",
     },
   });
 
@@ -87,7 +85,7 @@ export function SupplierForm({
             <FormInput
               id="name"
               type="text"
-              placeholder="e.g., Green Biomass Co."
+              placeholder="e.g., Agricultural Residues Co-op"
               disabled={isSubmitting}
               error={!!errors.name}
               {...register("name")}
@@ -112,7 +110,7 @@ export function SupplierForm({
             <FormInput
               id="location"
               type="text"
-              placeholder="e.g., Nairobi, Kenya"
+              placeholder="e.g., Northern Tanzania"
               disabled={isSubmitting}
               error={!!errors.location}
               {...register("location")}
@@ -131,7 +129,7 @@ export function SupplierForm({
               id="gpsLatitude"
               type="number"
               step="any"
-              placeholder="e.g., -1.2921"
+              placeholder="e.g., -3.3349"
               disabled={isSubmitting}
               error={!!errors.gpsLatitude}
               {...register("gpsLatitude", { setValueAs: nullableNumericValue })}
@@ -148,7 +146,7 @@ export function SupplierForm({
               id="gpsLongitude"
               type="number"
               step="any"
-              placeholder="e.g., 36.8219"
+              placeholder="e.g., 37.3404"
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
               {...register("gpsLongitude", { setValueAs: nullableNumericValue })}
@@ -157,19 +155,21 @@ export function SupplierForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="address"
-            label="Address"
-            error={errors.address?.message}
-          >
-            <FormTextarea
+          <div className="md:col-span-2">
+            <FormField
               id="address"
-              placeholder="Full address"
-              disabled={isSubmitting}
-              error={!!errors.address}
-              {...register("address")}
-            />
-          </FormField>
+              label="Address"
+              error={errors.address?.message}
+            >
+              <FormTextarea
+                id="address"
+                placeholder="Supplier yard, collection center, or cooperative address"
+                disabled={isSubmitting}
+                error={!!errors.address}
+                {...register("address")}
+              />
+            </FormField>
+          </div>
         </div>
       </div>
 
@@ -188,7 +188,7 @@ export function SupplierForm({
             <FormInput
               id="contactName"
               type="text"
-              placeholder="e.g., John Doe"
+              placeholder="e.g., Feedstock Coordinator"
               disabled={isSubmitting}
               error={!!errors.contactName}
               {...register("contactName")}
@@ -205,7 +205,7 @@ export function SupplierForm({
             <FormInput
               id="contactEmail"
               type="email"
-              placeholder="e.g., supplier@example.com"
+              placeholder="e.g., procurement.partner@example.com"
               disabled={isSubmitting}
               error={!!errors.contactEmail}
               {...register("contactEmail")}
@@ -221,53 +221,10 @@ export function SupplierForm({
             <FormInput
               id="contactPhone"
               type="tel"
-              placeholder="e.g., +254 712 345678"
+              placeholder="e.g., +255 754 000 000"
               disabled={isSubmitting}
               error={!!errors.contactPhone}
               {...register("contactPhone")}
-            />
-          </FormField>
-        </div>
-      </div>
-
-      {/* Business & Certification Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Business & Certification
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="annualRevenueUsd"
-            label="Annual Revenue (USD)"
-            error={errors.annualRevenueUsd?.message}
-            helperText="Approximate annual revenue in USD"
-          >
-            <FormInput
-              id="annualRevenueUsd"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="e.g., 100000"
-              disabled={isSubmitting}
-              error={!!errors.annualRevenueUsd}
-              {...register("annualRevenueUsd", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-
-          <FormField
-            id="chainOfCustodyRef"
-            label="Chain of Custody Reference"
-            error={errors.chainOfCustodyRef?.message}
-            helperText="Certification or traceability reference"
-          >
-            <FormInput
-              id="chainOfCustodyRef"
-              type="text"
-              placeholder="e.g., COC-2024-001"
-              disabled={isSubmitting}
-              error={!!errors.chainOfCustodyRef}
-              {...register("chainOfCustodyRef")}
             />
           </FormField>
         </div>
