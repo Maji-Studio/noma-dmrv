@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -80,7 +80,7 @@ export function CustomerLocationForm({
           <FormInput
             id="name"
             type="text"
-            placeholder="e.g., Main Farm, North Field"
+            placeholder="e.g., Coffee Block A"
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name")}
@@ -89,12 +89,13 @@ export function CustomerLocationForm({
 
         <FormField
           id="address"
-          label="Address"
+          label="Location"
           error={errors.address?.message}
+          required
         >
           <FormTextarea
             id="address"
-            placeholder="Physical address of the location"
+            placeholder="Physical address or site description for this field location"
             disabled={isSubmitting}
             error={!!errors.address}
             {...register("address")}
@@ -113,18 +114,17 @@ export function CustomerLocationForm({
             id="gpsLatitude"
             label="GPS Latitude"
             error={errors.gpsLatitude?.message}
-            required
             helperText="Between -90 and 90"
           >
             <FormInput
               id="gpsLatitude"
               type="number"
               step="any"
-              placeholder="e.g., -1.2921"
+              placeholder="e.g., -3.3349"
               disabled={isSubmitting}
               error={!!errors.gpsLatitude}
               {...register("gpsLatitude", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
@@ -133,18 +133,17 @@ export function CustomerLocationForm({
             id="gpsLongitude"
             label="GPS Longitude"
             error={errors.gpsLongitude?.message}
-            required
             helperText="Between -180 and 180"
           >
             <FormInput
               id="gpsLongitude"
               type="number"
               step="any"
-              placeholder="e.g., 36.8219"
+              placeholder="e.g., 37.3404"
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
               {...register("gpsLongitude", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>

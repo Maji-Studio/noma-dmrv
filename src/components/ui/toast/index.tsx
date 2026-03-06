@@ -13,7 +13,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { X, CheckCircle, XCircle, Warning, Info } from "@phosphor-icons/react";
+import { X, CheckCircle, XCircle, Warning, Info } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
 // ============================================
@@ -75,7 +75,6 @@ export function ToastProvider({ children }: ToastProviderProps) {
 
       setToasts((prev) => [...prev, toast]);
 
-      // Auto-dismiss after duration
       if (duration > 0) {
         setTimeout(() => {
           removeToast(id);
@@ -131,7 +130,7 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
 
   return (
     <div
-      className="fixed bottom-16 right-16 z-50 flex flex-col gap-8 max-w-[420px]"
+      className="pointer-events-none fixed bottom-24 right-24 z-50 flex flex-col gap-8 sm:max-w-[380px]"
       role="region"
       aria-label="Notifications"
     >
@@ -151,11 +150,26 @@ interface ToastItemProps {
   onDismiss: (id: string) => void;
 }
 
-const variantStyles: Record<ToastVariant, string> = {
-  success: "bg-[var(--color-signal-green,#10B981)] text-white",
-  error: "bg-[var(--color-signal-red)] text-white",
-  warning: "bg-[var(--color-signal-yellow,#F59E0B)] text-[var(--color-text-primary)]",
-  info: "bg-[var(--color-interaction)] text-white",
+const variantStyles: Record<
+  ToastVariant,
+  { accent: string; icon: string }
+> = {
+  success: {
+    accent: "bg-[var(--clr-dark-purple)]",
+    icon: "text-[var(--clr-dark-purple)]",
+  },
+  error: {
+    accent: "bg-[var(--clr-red)]",
+    icon: "text-[var(--clr-red)]",
+  },
+  warning: {
+    accent: "bg-[var(--color-signal-orange)]",
+    icon: "text-[var(--color-signal-orange)]",
+  },
+  info: {
+    accent: "bg-[var(--clr-dark-purple-60)]",
+    icon: "text-[var(--clr-dark-purple)]",
+  },
 };
 
 const variantIcons: Record<ToastVariant, typeof CheckCircle> = {
@@ -167,24 +181,30 @@ const variantIcons: Record<ToastVariant, typeof CheckCircle> = {
 
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
   const Icon = variantIcons[toast.variant];
+  const styles = variantStyles[toast.variant];
+  const isAssertive = toast.variant === "error" || toast.variant === "warning";
 
   return (
     <div
-      className={cn(
-        "flex items-center gap-12 px-16 py-12 rounded-8 shadow-lg animate-slide-in-right",
-        variantStyles[toast.variant]
-      )}
-      role="alert"
+      className="pointer-events-auto relative overflow-hidden border border-[var(--color-border-primary)] bg-[var(--color-background-white)] shadow-[0_4px_16px_var(--color-black-10)] animate-slide-in-right"
+      role={isAssertive ? "alert" : "status"}
+      aria-live={isAssertive ? "assertive" : "polite"}
+      aria-atomic="true"
     >
-      <Icon size={20} weight="fill" className="flex-shrink-0" />
-      <p className="body-small flex-1">{toast.message}</p>
-      <button
-        onClick={() => onDismiss(toast.id)}
-        className="flex-shrink-0 p-4 rounded-4 hover:bg-white/20 transition-colors"
-        aria-label="Dismiss notification"
-      >
-        <X size={16} weight="bold" />
-      </button>
+      <div className={cn("absolute inset-y-0 left-0 w-3", styles.accent)} aria-hidden="true" />
+      <div className="flex items-center gap-12 pl-16 pr-8 py-12">
+        <Icon size={20} weight="fill" className={cn("shrink-0", styles.icon)} aria-hidden="true" />
+        <p className="body-small min-w-0 flex-1 text-[var(--color-text-primary)]">
+          {toast.message}
+        </p>
+        <button
+          onClick={() => onDismiss(toast.id)}
+          className="flex h-28 w-28 shrink-0 items-center justify-center text-[var(--color-text-tertiary)] transition-colors duration-300 hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]"
+          aria-label="Dismiss notification"
+        >
+          <X size={14} weight="bold" />
+        </button>
+      </div>
     </div>
   );
 }

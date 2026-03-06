@@ -28,8 +28,8 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
   const [editingLocation, setEditingLocation] = useState<{
     id: string;
     name: string;
-    gpsLatitude: number;
-    gpsLongitude: number;
+    gpsLatitude: number | null;
+    gpsLongitude: number | null;
     address: string | null;
   } | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
@@ -241,7 +241,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     Longitude
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Address
+                    Location
                   </th>
                   <th className="px-16 py-12 text-right text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
                     Actions
@@ -256,10 +256,14 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                   >
                     <td className="px-16 py-12 body-medium">{location.name}</td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
-                      {location.gpsLatitude.toFixed(6)}
+                      {location.gpsLatitude !== null
+                        ? location.gpsLatitude.toFixed(6)
+                        : "—"}
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
-                      {location.gpsLongitude.toFixed(6)}
+                      {location.gpsLongitude !== null
+                        ? location.gpsLongitude.toFixed(6)
+                        : "—"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
                       {location.address || "—"}

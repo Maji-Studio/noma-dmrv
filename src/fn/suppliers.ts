@@ -197,8 +197,6 @@ export async function createSupplierFn(
           contactName: validated.contactName || null,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
-          annualRevenueUsd: validated.annualRevenueUsd ?? null,
-          chainOfCustodyRef: validated.chainOfCustodyRef || null,
         })
     );
 
@@ -246,8 +244,6 @@ export async function updateSupplierFn(
       contactName: validated.contactName,
       contactEmail: validated.contactEmail,
       contactPhone: validated.contactPhone,
-      annualRevenueUsd: validated.annualRevenueUsd,
-      chainOfCustodyRef: validated.chainOfCustodyRef,
     });
 
     return { success: true, data: supplier };

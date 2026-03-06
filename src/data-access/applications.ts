@@ -110,8 +110,6 @@ export async function createApplication(
       gisBoundaryReference: data.gisBoundaryReference || null,
       soilTemperatureSource: data.soilTemperatureSource ?? null,
       soilTemperatureC: data.soilTemperatureC ?? null,
-      truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
-      truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
     })
     .returning();
 
@@ -146,8 +144,6 @@ export async function updateApplication(
   if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
   if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
   if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
-  if (data.truckMassOnArrivalKg !== undefined) updateData.truckMassOnArrivalKg = data.truckMassOnArrivalKg;
-  if (data.truckMassOnDepartureKg !== undefined) updateData.truckMassOnDepartureKg = data.truckMassOnDepartureKg;
   if (data.status !== undefined) updateData.status = data.status;
 
   const [application] = await db

@@ -95,8 +95,6 @@
     "contact_name": "John Kamau",
     "contact_email": "john@macfarms.co.ke",
     "contact_phone": "+254722334455",
-    "annual_revenue_usd": 120000,
-    "chain_of_custody_ref": "COC-2025-001",
     "createdAt": "2025-01-20T09:00:00Z",
     "updatedAt": "2025-04-10T11:00:00Z"
   },
@@ -155,7 +153,7 @@
     "gps_latitude": "-1.2864",
     "gps_longitude": "36.8172",
     "feedstock_type_id": "fst_001",
-    "weight_kg": 2800,
+    "wet_mass_kg": 2800,
     "moisture_percent": 14.2,
     "notes": "Clean shell, no contaminants",
     "createdAt": "2025-06-10T07:30:00Z",

@@ -108,6 +108,8 @@ export function DeliveryForm({
       deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
       massDryKg: delivery?.massDryKg ?? undefined,
       moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
+      truckMassOnArrivalKg: delivery?.truckMassOnArrivalKg ?? undefined,
+      truckMassOnDepartureKg: delivery?.truckMassOnDepartureKg ?? undefined,
       biocharProductId: delivery?.biocharProductId ?? undefined,
       driverId: delivery?.driverId ?? undefined,
       vehicleId: delivery?.vehicleId ?? undefined,
@@ -227,7 +229,7 @@ export function DeliveryForm({
               </span>
               {calculatedDryMass !== null && (
                 <span className="body-small text-[var(--color-text-quaternary)]">
-                  = {watchWetMass} × (1 − {watchMoisture}%)
+                  = {Number(watchWetMass ?? 0).toFixed(2)} × (1 − {Number(watchMoisture ?? 0).toFixed(2)}%)
                 </span>
               )}
             </div>
@@ -257,6 +259,54 @@ export function DeliveryForm({
           </FormField>
         </div>
 
+      </div>
+
+      {/* Truck Weighing Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Truck Weighing at Delivery Site
+        </h3>
+        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+          Weigh the delivery truck before and after unloading to independently verify the delivered mass. The difference (arrival − departure) should match the delivered amount above.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="truckMassOnArrivalKg"
+            label="Truck Mass Before Unloading (kg)"
+            error={errors.truckMassOnArrivalKg?.message}
+          >
+            <FormInput
+              id="truckMassOnArrivalKg"
+              type="number"
+              step="any"
+              placeholder="e.g., 15000"
+              disabled={isSubmitting}
+              error={!!errors.truckMassOnArrivalKg}
+              {...register("truckMassOnArrivalKg", {
+                setValueAs: numericValue,
+              })}
+            />
+          </FormField>
+
+          <FormField
+            id="truckMassOnDepartureKg"
+            label="Truck Mass After Unloading (kg)"
+            error={errors.truckMassOnDepartureKg?.message}
+          >
+            <FormInput
+              id="truckMassOnDepartureKg"
+              type="number"
+              step="any"
+              placeholder="e.g., 5000"
+              disabled={isSubmitting}
+              error={!!errors.truckMassOnDepartureKg}
+              {...register("truckMassOnDepartureKg", {
+                setValueAs: numericValue,
+              })}
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Form Actions */}

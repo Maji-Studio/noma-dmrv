@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Users, Plus, ShieldCheck } from "@phosphor-icons/react";
+import { Users, Plus } from "@phosphor-icons/react";
 import type { Supplier } from "@/db/schema";
 import {
   useCreateSupplier,
@@ -21,6 +21,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SupplierForm } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
@@ -65,18 +66,6 @@ function createColumns(
           {row.original.contactName || row.original.contactEmail || "\u2014"}
         </span>
       ),
-    },
-    {
-      accessorKey: "chainOfCustodyRef",
-      header: "Chain of Custody",
-      cell: ({ row }) =>
-        row.original.chainOfCustodyRef ? (
-          <span className="inline-flex items-center px-8 py-2 bg-[var(--color-surface-light)]">
-            {row.original.chainOfCustodyRef}
-          </span>
-        ) : (
-          <span className="text-[var(--color-text-secondary)]">{"\u2014"}</span>
-        ),
     },
     {
       id: "actions",
@@ -134,8 +123,6 @@ export function SupplierList() {
 
   // Computed stats
   const totalSuppliers = suppliers.length;
-  const withCustodyCount = suppliers.filter((s) => s.chainOfCustodyRef).length;
-
   // Handlers
   const handleCreate = async (data: SupplierFormData) => {
     setCreateError(null);
@@ -189,6 +176,7 @@ export function SupplierList() {
   const openView = (supplier: SupplierWithRelations) => { setSideSheet({ entity: supplier, mode: "view" }); };
   const openEdit = (supplier: SupplierWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  useOpenCreateIntent(openCreate);
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
@@ -218,13 +206,6 @@ export function SupplierList() {
           value={totalSuppliers}
           icon={<Users size={24} weight="bold" />}
           description="Biomass feedstock providers"
-          isLoading={isLoading}
-        />
-        <StatCard
-          title="With Chain of Custody"
-          value={withCustodyCount}
-          icon={<ShieldCheck size={24} weight="bold" />}
-          description="Certified supply chain"
           isLoading={isLoading}
         />
       </div>
@@ -303,12 +284,6 @@ export function SupplierList() {
                 { label: "Contact Name", value: sideSheet.entity.contactName },
                 { label: "Contact Email", value: sideSheet.entity.contactEmail },
                 { label: "Contact Phone", value: sideSheet.entity.contactPhone },
-              ],
-            },
-            {
-              title: "Compliance",
-              fields: [
-                { label: "Chain of Custody Ref", value: sideSheet.entity.chainOfCustodyRef },
               ],
             },
           ] : undefined}

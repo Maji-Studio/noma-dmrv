@@ -12,10 +12,15 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
 import type { EntitySelectProps, EntityOption } from "./types";
 import { useDebounce } from "@/hooks/use-debounce";
+import { DriverQuickAddDialog } from "./driver-quick-add-dialog";
+import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
+import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
+import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -131,7 +136,7 @@ function SpinnerIcon({ className }: { className?: string }) {
 }
 
 // Human-readable entity type labels
-const ENTITY_TYPE_LABELS: Record<string, string> = {
+const ENTITY_TYPE_LABELS = {
   facility: "facility",
   reactor: "reactor",
   supplier: "supplier",
@@ -145,7 +150,19 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   productionRun: "production run",
   formulation: "formulation",
   feedstockDelivery: "feedstock delivery",
-};
+} as const;
+
+const ENTITY_CREATE_ROUTES = {
+  facility: "/facilities",
+  reactor: "/reactors",
+  supplier: "/suppliers",
+  customer: "/customers",
+  storageLocation: "/storage-locations",
+  feedstock: "/feedstocks",
+  productionRun: "/production-runs",
+  formulation: "/formulations",
+  feedstockDelivery: "/feedstock-deliveries",
+} as const;
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
 export function EntitySelect({
@@ -162,10 +179,16 @@ export function EntitySelect({
   filterBy,
   autoSelectSingle = false,
   alwaysShowSearch = false,
+  hideSearch = false,
 }: EntitySelectProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
+  const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
+  const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
+  const [isFeedstockTypeDialogOpen, setIsFeedstockTypeDialogOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -201,15 +224,52 @@ export function EntitySelect({
     return "";
   }, [selectedEntity]);
 
+  const handleCreatedEntity = useCallback(
+    (entity: EntityOption) => {
+      onChange(entity.id);
+      setIsOpen(false);
+      setSearchQuery("");
+    },
+    [onChange]
+  );
+
+  const defaultCreateAction = useMemo(() => {
+    switch (entityType) {
+      case "driver":
+        return () => setIsDriverDialogOpen(true);
+      case "operator":
+        return () => setIsOperatorDialogOpen(true);
+      case "vehicle":
+        return () => setIsVehicleDialogOpen(true);
+      case "feedstockType":
+        return () => setIsFeedstockTypeDialogOpen(true);
+      default: {
+        const route = ENTITY_CREATE_ROUTES[
+          entityType as keyof typeof ENTITY_CREATE_ROUTES
+        ];
+        if (!route) {
+          return undefined;
+        }
+        return () => router.push(`${route}?create=true`);
+      }
+    }
+  }, [entityType, router]);
+
+  const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
+  const hasCreateAction = Boolean(resolvedCreateAction);
+  const shouldShowCreateAction =
+    hasCreateAction && !isLoading && (!fetchError || allowCreate) && (allowCreate || options.length === 0);
+
   // Clamp highlighted index when options change
   const clampedHighlightedIndex = useMemo(() => {
-    const maxIndex = options.length + (allowCreate && onCreateNew ? 1 : 0) - 1;
+    const maxIndex = options.length + (shouldShowCreateAction ? 1 : 0) - 1;
     return Math.min(Math.max(0, highlightedIndex), Math.max(0, maxIndex));
-  }, [highlightedIndex, options.length, allowCreate, onCreateNew]);
+  }, [highlightedIndex, options.length, shouldShowCreateAction]);
   const showSearch =
-    alwaysShowSearch ||
-    searchQuery.length > 0 ||
-    options.length > SEARCH_VISIBILITY_THRESHOLD;
+    !hideSearch &&
+    (alwaysShowSearch ||
+      searchQuery.length > 0 ||
+      options.length > SEARCH_VISIBILITY_THRESHOLD);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -272,7 +332,7 @@ export function EntitySelect({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
-      const optionCount = options.length + (allowCreate && onCreateNew ? 1 : 0);
+      const optionCount = options.length + (shouldShowCreateAction ? 1 : 0);
 
       switch (e.key) {
         case "ArrowDown":
@@ -285,9 +345,13 @@ export function EntitySelect({
           break;
         case "Enter":
           e.preventDefault();
-          if (clampedHighlightedIndex === options.length && allowCreate && onCreateNew) {
+          if (
+            clampedHighlightedIndex === options.length &&
+            shouldShowCreateAction &&
+            resolvedCreateAction
+          ) {
             // Create new option selected
-            onCreateNew();
+            resolvedCreateAction();
             setIsOpen(false);
             setSearchQuery("");
           } else if (options[clampedHighlightedIndex]) {
@@ -305,7 +369,7 @@ export function EntitySelect({
           break;
       }
     },
-    [options, clampedHighlightedIndex, allowCreate, onCreateNew, handleSelect]
+    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction]
   );
 
   const handleToggle = useCallback(() => {
@@ -415,11 +479,8 @@ export function EntitySelect({
               <li className="px-16 py-12 text-[var(--text-s)] text-[var(--color-signal-red)]">
                 Error loading options
               </li>
-            ) : options.length === 0 ? (
-              <li className="px-16 py-12 text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-                {searchQuery ? "No results found" : "No options available"}
-              </li>
-            ) : (
+            ) : options.length === 0 ? null
+            : (
               options.map((option, index) => (
                 <li
                   key={option.id}
@@ -449,13 +510,13 @@ export function EntitySelect({
             )}
 
             {/* Quick-add option */}
-            {allowCreate && onCreateNew && !isLoading && (
+            {shouldShowCreateAction && resolvedCreateAction && (
               <li
                 role="option"
                 aria-selected={false}
                 data-testid="entity-select-create"
                 onClick={() => {
-                  onCreateNew();
+                  resolvedCreateAction();
                   setIsOpen(false);
                   setSearchQuery("");
                 }}
@@ -475,6 +536,27 @@ export function EntitySelect({
           </ul>
         </div>
       )}
+
+      <DriverQuickAddDialog
+        isOpen={isDriverDialogOpen}
+        onClose={() => setIsDriverDialogOpen(false)}
+        onSuccess={handleCreatedEntity}
+      />
+      <OperatorQuickAddDialog
+        isOpen={isOperatorDialogOpen}
+        onClose={() => setIsOperatorDialogOpen(false)}
+        onSuccess={handleCreatedEntity}
+      />
+      <VehicleQuickAddDialog
+        isOpen={isVehicleDialogOpen}
+        onClose={() => setIsVehicleDialogOpen(false)}
+        onSuccess={handleCreatedEntity}
+      />
+      <FeedstockTypeQuickAddDialog
+        isOpen={isFeedstockTypeDialogOpen}
+        onClose={() => setIsFeedstockTypeDialogOpen(false)}
+        onSuccess={handleCreatedEntity}
+      />
     </div>
   );
 }

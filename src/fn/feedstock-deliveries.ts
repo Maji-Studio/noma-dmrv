@@ -201,7 +201,8 @@ export async function createFeedstockDeliveryFn(
           gpsLatitude: validated.gpsLatitude ?? null,
           gpsLongitude: validated.gpsLongitude ?? null,
           feedstockTypeId: validated.feedstockTypeId || null,
-          weightKg: validated.weightKg ?? null,
+          storageLocationId: validated.storageLocationId || null,
+          wetMassKg: validated.wetMassKg ?? null,
           moisturePercent: validated.moisturePercent ?? null,
           notes: validated.notes || null,
         })
@@ -255,7 +256,8 @@ export async function updateFeedstockDeliveryFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       feedstockTypeId: validated.feedstockTypeId,
-      weightKg: validated.weightKg,
+      storageLocationId: validated.storageLocationId,
+      wetMassKg: validated.wetMassKg,
       moisturePercent: validated.moisturePercent,
       notes: validated.notes,
     });

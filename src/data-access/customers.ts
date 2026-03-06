@@ -33,8 +33,8 @@ export interface CustomerDetail extends Customer {
   locations: Array<{
     id: string;
     name: string;
-    gpsLatitude: number;
-    gpsLongitude: number;
+    gpsLatitude: number | null;
+    gpsLongitude: number | null;
     address: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -246,8 +246,8 @@ export async function getCustomerLocations(
   Array<{
     id: string;
     name: string;
-    gpsLatitude: number;
-    gpsLongitude: number;
+    gpsLatitude: number | null;
+    gpsLongitude: number | null;
     address: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -452,8 +452,8 @@ export async function createCustomerLocation(
   data: {
     customerId: string;
     name: string;
-    gpsLatitude: number;
-    gpsLongitude: number;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
     address?: string | null;
   }
 ): Promise<CustomerLocation> {
@@ -474,8 +474,8 @@ export async function createCustomerLocation(
     .values({
       customerId: data.customerId,
       name: data.name,
-      gpsLatitude: data.gpsLatitude,
-      gpsLongitude: data.gpsLongitude,
+      gpsLatitude: data.gpsLatitude ?? null,
+      gpsLongitude: data.gpsLongitude ?? null,
       address: data.address ?? null,
     })
     .returning();
@@ -491,8 +491,8 @@ export async function updateCustomerLocation(
   locationId: string,
   data: {
     name?: string;
-    gpsLatitude?: number;
-    gpsLongitude?: number;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
     address?: string | null;
   }
 ): Promise<CustomerLocation> {
@@ -508,12 +508,24 @@ export async function updateCustomerLocation(
     throw new Error("Customer location not found");
   }
 
+  const updateData: {
+    name?: string;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
+    address?: string | null;
+    updatedAt: Date;
+  } = {
+    updatedAt: new Date(),
+  };
+
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
+  if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
+  if (data.address !== undefined) updateData.address = data.address;
+
   const [updated] = await db
     .update(customerLocations)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(customerLocations.id, locationId))
     .returning();
 

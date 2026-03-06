@@ -192,7 +192,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       deliveryDate: new Date(),
       supplierId: ids.supplier,
       feedstockTypeId: ids.feedstockType,
-      weightKg: 500,
+      wetMassKg: 500,
       moisturePercent: 15,
       status: "complete",
     });

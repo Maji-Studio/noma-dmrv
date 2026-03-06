@@ -177,7 +177,7 @@ export function FeedstockTypeQuickAddDialog({
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-24 p-24">
           <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-            Feedstock types will be sourced from the Isometric registry in the future. Add a placeholder entry for now.
+            Feedstock types will be sourced from the Isometric registry in the future. Add the agricultural or forestry residue used in Dark Earth Carbon operations for now.
           </p>
 
           {error && (
@@ -220,7 +220,7 @@ export function FeedstockTypeQuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="e.g., Mixed Wood Chips"
+              placeholder="e.g., Coffee husks"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
               autoFocus
               data-testid="feedstock-name-input"
@@ -237,7 +237,7 @@ export function FeedstockTypeQuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, description: e.target.value }))
               }
-              placeholder="Optional description of this feedstock type"
+              placeholder="Optional description of the residue stream, sourcing context, or preparation"
               rows={3}
               className="flex w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-16 py-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] resize-none"
               data-testid="feedstock-description-input"

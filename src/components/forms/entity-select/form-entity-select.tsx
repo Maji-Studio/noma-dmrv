@@ -42,6 +42,8 @@ interface FormEntitySelectProps<
   autoSelectSingle?: boolean;
   /** Always show the search input while dropdown is open */
   alwaysShowSearch?: boolean;
+  /** Hide the search input entirely */
+  hideSearch?: boolean;
 }
 
 export function FormEntitySelect<
@@ -62,6 +64,7 @@ export function FormEntitySelect<
   required,
   autoSelectSingle,
   alwaysShowSearch = false,
+  hideSearch = false,
 }: FormEntitySelectProps<TFieldValues, TName>) {
   const id = useId();
 
@@ -90,6 +93,7 @@ export function FormEntitySelect<
             filterBy={filterBy}
             autoSelectSingle={autoSelectSingle ?? required}
             alwaysShowSearch={alwaysShowSearch}
+            hideSearch={hideSearch}
           />
         </FormField>
       )}

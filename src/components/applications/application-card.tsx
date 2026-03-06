@@ -5,13 +5,14 @@
 "use client";
 
 import { format } from "date-fns";
-import { PencilSimple, Trash, MapPin, Thermometer, Truck } from "@phosphor-icons/react/dist/ssr";
+import { PencilSimple, Trash, MapPin, Thermometer } from "@phosphor-icons/react/dist/ssr";
 import type { Application } from "@/db/schema/application";
 import {
   formatApplicationStatus,
   formatApplicationMethod,
   formatSoilTemperatureSource,
 } from "@/schemas/applications";
+import { formatApplicationKgFromTons } from "./mass-utils";
 
 interface ApplicationCardProps {
   application: Application;
@@ -26,10 +27,6 @@ export function ApplicationCard({
 }: ApplicationCardProps) {
   const hasGps = application.gpsLatitude != null && application.gpsLongitude != null;
   const hasSoilTemp = application.soilTemperatureC != null;
-  const hasTruckWeighing =
-    application.truckMassOnArrivalKg != null ||
-    application.truckMassOnDepartureKg != null;
-
   return (
     <div className="border border-[var(--color-border-primary)] rounded-[var(--radius-8)] p-24 bg-[var(--color-background-light)] hover:border-[var(--color-border-secondary)] transition-colors">
       {/* Header */}
@@ -60,7 +57,7 @@ export function ApplicationCard({
             Biochar Applied
           </p>
           <p className="body-medium font-medium">
-            {application.biocharAppliedTons?.toFixed(2) ?? "-"} t
+            {formatApplicationKgFromTons(application.biocharAppliedTons)}
           </p>
         </div>
         <div>
@@ -68,7 +65,7 @@ export function ApplicationCard({
             Dry Biochar
           </p>
           <p className="body-medium font-medium">
-            {application.biocharAppliedDryTons?.toFixed(2) ?? "-"} t
+            {formatApplicationKgFromTons(application.biocharAppliedDryTons)}
           </p>
         </div>
         <div>
@@ -122,15 +119,6 @@ export function ApplicationCard({
                   ({formatSoilTemperatureSource(application.soilTemperatureSource as "baseline" | "global_database")})
                 </span>
               )}
-            </span>
-          </div>
-        )}
-        {hasTruckWeighing && (
-          <div className="flex items-center gap-16 text-[var(--text-s)] text-[var(--color-text-secondary)]">
-            <Truck size={16} />
-            <span>
-              {application.truckMassOnArrivalKg?.toLocaleString() ?? "-"} →{" "}
-              {application.truckMassOnDepartureKg?.toLocaleString() ?? "-"} kg
             </span>
           </div>
         )}

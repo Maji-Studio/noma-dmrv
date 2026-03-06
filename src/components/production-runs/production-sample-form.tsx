@@ -8,7 +8,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, FormFileUpload, SectionLabel } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { Button } from "@/components/ui";
@@ -65,15 +65,17 @@ export function ProductionSampleForm({
     })(),
   });
 
-  return (
-    <form onSubmit={handleSubmit((data) => onSubmit(data as ProductionSampleFormData))} className="space-y-32">
-      {/* Sample Info */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Sample Info
-        </h3>
+  // Use a div instead of form to avoid nesting inside the parent ProductionRunForm's <form>
+  // We handle submission manually via the button onClick below
+  const onFormSubmit = handleSubmit((data) => onSubmit(data as ProductionSampleFormData));
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+  return (
+    <div className="space-y-24">
+      {/* Sample Info */}
+      <div className="space-y-16">
+        <SectionLabel>Sample Info</SectionLabel>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="timestamp"
             label="Timestamp"
@@ -113,12 +115,10 @@ export function ProductionSampleForm({
       </div>
 
       {/* Physical Measurements */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Physical Measurements
-        </h3>
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Physical Measurements</SectionLabel>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
           <FormField
             id="weightGrams"
             label="Weight (g)"
@@ -176,12 +176,10 @@ export function ProductionSampleForm({
       </div>
 
       {/* Proximate Analysis */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Proximate Analysis
-        </h3>
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Proximate Analysis</SectionLabel>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="moistureContentPercent"
             label="Moisture Content (%)"
@@ -256,11 +254,21 @@ export function ProductionSampleForm({
         </div>
       </div>
 
-      {/* Notes */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Notes
-        </h3>
+      {/* Documentation */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Documentation</SectionLabel>
+
+        <FormField
+          id="attachments"
+          label="Attachments"
+          helperText="Upload sample photos or measurement records"
+        >
+          <FormFileUpload
+            id="attachments"
+            accept="image/*,.pdf,.csv"
+            disabled={isSubmitting}
+          />
+        </FormField>
 
         <FormField id="notes" label="Notes" error={errors.notes?.message}>
           <FormTextarea
@@ -274,7 +282,7 @@ export function ProductionSampleForm({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
+      <div className="flex items-center justify-end gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
         {onCancel && (
           <Button
             type="button"
@@ -285,7 +293,7 @@ export function ProductionSampleForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
+        <Button type="button" variant="primary" disabled={isSubmitting} onClick={onFormSubmit}>
           {isSubmitting
             ? "Saving..."
             : isEditMode
@@ -293,6 +301,6 @@ export function ProductionSampleForm({
               : "Add Sample"}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }

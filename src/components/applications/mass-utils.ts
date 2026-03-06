@@ -1,0 +1,81 @@
+const KG_PER_TONNE = 1000;
+
+export interface ApplicationDeliveryOption {
+  id: string;
+  code: string;
+  deliveryDate: Date | string;
+  orderCode: string | null;
+  formulationName: string | null;
+  massDryKg: number | null;
+  deliveredWetMassKg: number | null;
+  orderQuantityKg: number | null;
+}
+
+export function applicationTonsToKg(value: number | null | undefined): number | null {
+  if (value == null) {
+    return null;
+  }
+
+  return value * KG_PER_TONNE;
+}
+
+export function applicationKgToTons(value: number | null | undefined): number | null {
+  if (value == null) {
+    return null;
+  }
+
+  return value / KG_PER_TONNE;
+}
+
+export function formatKg(value: number | null | undefined): string {
+  if (value == null) {
+    return "—";
+  }
+
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`;
+}
+
+function formatDeliveryDate(value: Date | string): string {
+  return new Date(value).toLocaleDateString();
+}
+
+export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
+  if (delivery.massDryKg != null) {
+    return `${formatKg(delivery.massDryKg)} dry`;
+  }
+
+  if (delivery.deliveredWetMassKg != null) {
+    return `${formatKg(delivery.deliveredWetMassKg)} delivered`;
+  }
+
+  if (delivery.orderQuantityKg != null) {
+    return `${formatKg(delivery.orderQuantityKg)} ordered`;
+  }
+
+  return null;
+}
+
+export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDeliveryOption): string {
+  return [
+    delivery.orderCode ?? delivery.code,
+    delivery.formulationName ?? "Unknown formulation",
+    getApplicationDeliveryMassLabel(delivery),
+    formatDeliveryDate(delivery.deliveryDate),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliveryOption): string {
+  return [
+    `Delivery ${delivery.code}`,
+    getApplicationDeliveryMassLabel(delivery),
+    formatDeliveryDate(delivery.deliveryDate),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function formatApplicationKgFromTons(value: number | null | undefined): string {
+  return formatKg(applicationTonsToKg(value));
+}
