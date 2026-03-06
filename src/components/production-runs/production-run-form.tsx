@@ -114,24 +114,25 @@ export function ProductionRunForm({
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
+  // Track previous facility to detect real changes
+  const prevFacilityRef = useRef(watchedFacilityId);
+
   // Sync facilityId from context when creating (context may load after mount)
   useEffect(() => {
-    if (!productionRun && contextFacilityId && !watchedFacilityId) {
+    if (!productionRun && contextFacilityId && contextFacilityId !== watchedFacilityId) {
       setValue("facilityId", contextFacilityId);
     }
   }, [productionRun, contextFacilityId, watchedFacilityId, setValue]);
 
-  // Capture initial facility ID once to avoid stale closure in effect
-  const initialFacilityIdRef = useRef(productionRun?.facilityId || contextFacilityId || "");
-
-  // Clear dependent fields when facility changes (skip if facility matches initial value)
+  // Clear dependent fields when facility actually changes
   useEffect(() => {
-    if (watchedFacilityId && watchedFacilityId !== initialFacilityIdRef.current) {
+    if (prevFacilityRef.current && watchedFacilityId !== prevFacilityRef.current && !productionRun) {
       setValue("reactorId", "");
       setValue("feedstockStorageLocationId", "");
       setValue("biocharStorageLocationId", "");
     }
-  }, [watchedFacilityId, setValue]);
+    prevFacilityRef.current = watchedFacilityId;
+  }, [watchedFacilityId, setValue, productionRun]);
 
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 

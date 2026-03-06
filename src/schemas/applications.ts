@@ -45,10 +45,10 @@ export const applicationFormSchema = z.object({
   applicationDate: z.coerce.date({ error: "Application date is required" }),
   deliveryId: z.string().min(1, "Please select a delivery").uuid("Invalid delivery"),
   biocharAppliedTons: z
-    .number({ error: "Biochar applied (tons) is required" })
+    .number({ error: "Biochar applied (kg) is required" })
     .min(0, "Must be a positive number"),
   biocharAppliedDryTons: z
-    .number({ error: "Biochar applied dry (tons) is required" })
+    .number({ error: "Biochar applied dry (kg) is required" })
     .min(0, "Must be a positive number"),
 
   // === Section 2: Field Details ===
