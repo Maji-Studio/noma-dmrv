@@ -137,6 +137,10 @@ export const deliveries = pgTable(
       'deliveries_truck_mass_on_departure_non_negative',
       sql`${table.truckMassOnDepartureKg} is null or ${table.truckMassOnDepartureKg} >= 0`
     ),
+    check(
+      'deliveries_truck_mass_arrival_gte_departure',
+      sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnDepartureKg} is null or ${table.truckMassOnArrivalKg} >= ${table.truckMassOnDepartureKg}`
+    ),
   ]
 );
 

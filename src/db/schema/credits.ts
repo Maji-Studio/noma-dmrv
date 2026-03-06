@@ -34,7 +34,7 @@ export const creditBatches = pgTable(
     // Reactor traceable via FK chain: CreditBatch → Application → Delivery → BiocharProduct → ProductionRun → Reactor
     startDate: date('start_date').notNull(),
     endDate: date('end_date').notNull(),
-    certifier: text('certifier').default('isometric'), // certifier_provider enum value
+    certifier: text('certifier').notNull().default('isometric'),
     registry: text('registry'), // e.g., "Isometric"
 
     // --- Credit Details (Isometric Protocol Section 8) ---
@@ -113,6 +113,10 @@ export const creditBatches = pgTable(
         ${table.meanRandomReflectancePercent} is not null and
         ${table.meanNonReactiveCarbonPercent} is not null
       )`
+    ),
+    check(
+      'credit_batches_certifier_is_isometric',
+      sql`${table.certifier} = 'isometric'`
     ),
   ]
 );

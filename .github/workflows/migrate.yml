@@ -19,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'CONFIRM')
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.confirmation == 'CONFIRM'
 
     steps:
       - name: Checkout code

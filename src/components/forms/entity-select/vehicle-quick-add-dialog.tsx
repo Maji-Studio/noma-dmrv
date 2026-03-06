@@ -138,14 +138,16 @@ export function VehicleQuickAddDialog({
     }
 
     // Parse numeric fields
-    const fuelConsumption = parseFloat(formData.fuelConsumptionLPerKm);
+    const fuelConsumptionPer100Km = parseFloat(formData.fuelConsumptionLPerKm);
     const modelYear = parseInt(formData.modelYear, 10);
 
-    if (isNaN(fuelConsumption) || fuelConsumption <= 0) {
+    if (isNaN(fuelConsumptionPer100Km) || fuelConsumptionPer100Km <= 0) {
       setError("Please enter a valid fuel consumption value");
       setIsSubmitting(false);
       return;
     }
+
+    const fuelConsumption = fuelConsumptionPer100Km / 100;
 
     if (isNaN(modelYear) || modelYear < 1900) {
       setError("Please enter a valid model year");
@@ -299,15 +301,15 @@ export function VehicleQuickAddDialog({
           <div className="grid grid-cols-2 gap-24">
             <div className="flex flex-col gap-16">
               <label htmlFor="vehicle-consumption" className="label-medium">
-                Fuel Consumption (L/km){" "}
+                Fuel Consumption (L/100 km){" "}
                 <span className="text-[var(--color-signal-red)]">*</span>
               </label>
               <input
                 id="vehicle-consumption"
                 type="number"
-                step="0.01"
-                min="0.01"
-                max="10"
+                step="0.1"
+                min="0.1"
+                max="1000"
                 value={formData.fuelConsumptionLPerKm}
                 onChange={(e) =>
                   setFormData((prev) => ({
@@ -315,7 +317,7 @@ export function VehicleQuickAddDialog({
                     fuelConsumptionLPerKm: e.target.value,
                   }))
                 }
-                placeholder="e.g., 0.3"
+                placeholder="e.g., 30"
                 className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
                 data-testid="vehicle-consumption-input"
               />

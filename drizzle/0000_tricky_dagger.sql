@@ -406,6 +406,7 @@ CREATE TABLE "feedstock_deliveries" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "feedstock_deliveries_code_unique" UNIQUE("code"),
+	CONSTRAINT "feedstock_deliveries_wet_mass_kg_non_negative" CHECK ("feedstock_deliveries"."wet_mass_kg" is null or "feedstock_deliveries"."wet_mass_kg" >= 0),
 	CONSTRAINT "feedstock_deliveries_gps_latitude_range" CHECK ("feedstock_deliveries"."gps_latitude" is null or ("feedstock_deliveries"."gps_latitude" >= -90 and "feedstock_deliveries"."gps_latitude" <= 90)),
 	CONSTRAINT "feedstock_deliveries_gps_longitude_range" CHECK ("feedstock_deliveries"."gps_longitude" is null or ("feedstock_deliveries"."gps_longitude" >= -180 and "feedstock_deliveries"."gps_longitude" <= 180))
 );
