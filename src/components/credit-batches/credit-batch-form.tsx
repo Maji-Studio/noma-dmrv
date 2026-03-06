@@ -3,11 +3,12 @@
  * Reusable credit batch form with React Hook Form integration
  *
  * Form sections:
- * 1. Overview — startDate, endDate, certifier, status
- * 2. Applications — Multi-select (M:M via credit_batch_applications)
- * 3. Durability — Toggle 200-year vs 1000-year with conditional fields
- * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool % (read-only)
- * 5. Verification — registry, weight, value, currency (read-only)
+ * 1. Overview — startDate, endDate, certifier
+ * 2. Production Runs — Multi-select cards
+ * 3. Applications — Multi-select (M:M via credit_batch_applications)
+ * 4. Durability — Toggle 200-year vs 1000-year with conditional fields
+ * 5. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool % (read-only)
+ * 6. Verification — registry, weight, value, currency (read-only)
  */
 "use client";
 
@@ -189,6 +190,20 @@ export function CreditBatchForm({
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
   });
+
+  // Sync facilityId from context when it arrives after mount
+  useEffect(() => {
+    if (!creditBatch && contextFacilityId) {
+      setValue("facilityId", contextFacilityId);
+    }
+  }, [creditBatch, contextFacilityId, setValue]);
+
+  // Sync durability option from facility default when it arrives
+  useEffect(() => {
+    if (!creditBatch && selectedFacility?.defaultDurabilityOption) {
+      setValue("durabilityOption", selectedFacility.defaultDurabilityOption as DurabilityOption);
+    }
+  }, [creditBatch, selectedFacility?.defaultDurabilityOption, setValue]);
 
   // Watch durability option for conditional rendering
   const durabilityOption = useWatch({

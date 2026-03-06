@@ -114,7 +114,15 @@ export async function updateProductionRunReadingFn(
     }
 
     const validated = updateProductionRunReadingSchema.parse(data);
-    const timestamp = validated.timestamp ?? undefined;
+
+    let timestamp: Date | undefined;
+    if (validated.timestamp) {
+      const parsed = toValidTimestamp(validated.timestamp);
+      if (!parsed) {
+        return { success: false, error: "Validation error: Invalid timestamp" };
+      }
+      timestamp = parsed;
+    }
 
     const reading = await updateData(user.id, validated.readingId, {
       timestamp,

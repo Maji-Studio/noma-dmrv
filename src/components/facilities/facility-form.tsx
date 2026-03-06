@@ -53,7 +53,9 @@ export function FacilityForm({
       gpsLongitude: facility?.gpsLongitude ?? undefined,
       contactEmail: facility?.contactEmail ?? "",
       contactPhone: facility?.contactPhone ?? "",
-      timezone: (facility?.timezone as Timezone) ?? undefined,
+      timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
+        ? facility.timezone as Timezone
+        : undefined),
     },
   });
 

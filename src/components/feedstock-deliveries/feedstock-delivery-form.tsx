@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -90,11 +90,21 @@ export function FeedstockDeliveryForm({
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
 
+  const prevFacilityRef = useRef(watchedFacilityId);
+
   useEffect(() => {
     if (!delivery && contextFacilityId && !watchedFacilityId) {
       setValue("facilityId", contextFacilityId);
     }
   }, [delivery, contextFacilityId, watchedFacilityId, setValue]);
+
+  // Clear storage location when facility changes
+  useEffect(() => {
+    if (prevFacilityRef.current && watchedFacilityId !== prevFacilityRef.current) {
+      setValue("storageLocationId", "", SET_VALUE_OPTS);
+    }
+    prevFacilityRef.current = watchedFacilityId;
+  }, [watchedFacilityId, setValue]);
 
   // Display-only dry mass preview (not stored — lives on the feedstock entity)
   const previewDryMass =

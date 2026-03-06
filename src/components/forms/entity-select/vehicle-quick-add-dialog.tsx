@@ -138,16 +138,19 @@ export function VehicleQuickAddDialog({
     }
 
     // Parse numeric fields
-    const fuelConsumptionPer100Km = parseFloat(formData.fuelConsumptionLPerKm);
     const modelYear = parseInt(formData.modelYear, 10);
+    const isElectric = formData.fuelType === "Electric";
 
-    if (isNaN(fuelConsumptionPer100Km) || fuelConsumptionPer100Km <= 0) {
-      setError("Please enter a valid fuel consumption value");
-      setIsSubmitting(false);
-      return;
+    let fuelConsumption = 0;
+    if (!isElectric) {
+      const fuelConsumptionPer100Km = parseFloat(formData.fuelConsumptionLPerKm);
+      if (isNaN(fuelConsumptionPer100Km) || fuelConsumptionPer100Km < 0.1 || fuelConsumptionPer100Km > 1000) {
+        setError("Please enter a valid fuel consumption value (0.1–1000 L/100 km)");
+        setIsSubmitting(false);
+        return;
+      }
+      fuelConsumption = fuelConsumptionPer100Km / 100;
     }
-
-    const fuelConsumption = fuelConsumptionPer100Km / 100;
 
     if (isNaN(modelYear) || modelYear < 1900) {
       setError("Please enter a valid model year");
@@ -299,29 +302,31 @@ export function VehicleQuickAddDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-24">
-            <div className="flex flex-col gap-16">
-              <label htmlFor="vehicle-consumption" className="label-medium">
-                Fuel Consumption (L/100 km){" "}
-                <span className="text-[var(--color-signal-red)]">*</span>
-              </label>
-              <input
-                id="vehicle-consumption"
-                type="number"
-                step="0.1"
-                min="0.1"
-                max="1000"
-                value={formData.fuelConsumptionLPerKm}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    fuelConsumptionLPerKm: e.target.value,
-                  }))
-                }
-                placeholder="e.g., 30"
-                className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                data-testid="vehicle-consumption-input"
-              />
-            </div>
+            {formData.fuelType !== "Electric" && (
+              <div className="flex flex-col gap-16">
+                <label htmlFor="vehicle-consumption" className="label-medium">
+                  Fuel Consumption (L/100 km){" "}
+                  <span className="text-[var(--color-signal-red)]">*</span>
+                </label>
+                <input
+                  id="vehicle-consumption"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  max="1000"
+                  value={formData.fuelConsumptionLPerKm}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      fuelConsumptionLPerKm: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g., 30"
+                  className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+                  data-testid="vehicle-consumption-input"
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-16">
               <label htmlFor="vehicle-year" className="label-medium">
