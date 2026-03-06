@@ -6,11 +6,11 @@
 import { z } from "zod";
 
 // ============================================
-// GPS Coordinate Validation (Required for customer locations)
+// GPS Coordinate Validation
 // ============================================
 
 /**
- * GPS latitude validation (-90 to 90) - Required for customer locations
+ * GPS latitude validation (-90 to 90)
  */
 const requiredLatitudeSchema = z
   .number()
@@ -18,12 +18,19 @@ const requiredLatitudeSchema = z
   .max(90, "Latitude must be between -90 and 90");
 
 /**
- * GPS longitude validation (-180 to 180) - Required for customer locations
+ * GPS longitude validation (-180 to 180)
  */
 const requiredLongitudeSchema = z
   .number()
   .min(-180, "Longitude must be between -180 and 180")
   .max(180, "Longitude must be between -180 and 180");
+
+const optionalLatitudeSchema = requiredLatitudeSchema.nullable().optional();
+const optionalLongitudeSchema = requiredLongitudeSchema.nullable().optional();
+const customerLocationTextSchema = z
+  .string()
+  .min(1, "Location is required")
+  .max(500, "Location must be less than 500 characters");
 
 // ============================================
 // Customer Form Schema (Client-side validation)
@@ -78,15 +85,9 @@ export const customerLocationFormSchema = z.object({
     .string()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
-  gpsLatitude: requiredLatitudeSchema,
-  gpsLongitude: requiredLongitudeSchema,
-
-  // Optional fields
-  address: z
-    .string()
-    .max(500, "Address must be less than 500 characters")
-    .optional()
-    .or(z.literal("")),
+  address: customerLocationTextSchema,
+  gpsLatitude: optionalLatitudeSchema,
+  gpsLongitude: optionalLongitudeSchema,
 });
 
 // ============================================
@@ -138,13 +139,9 @@ export const createCustomerLocationSchema = z.object({
     .string()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
-  gpsLatitude: requiredLatitudeSchema,
-  gpsLongitude: requiredLongitudeSchema,
-  address: z
-    .string()
-    .max(500, "Address must be less than 500 characters")
-    .optional()
-    .or(z.literal("")),
+  address: customerLocationTextSchema,
+  gpsLatitude: optionalLatitudeSchema,
+  gpsLongitude: optionalLongitudeSchema,
 });
 
 /**
@@ -153,9 +150,9 @@ export const createCustomerLocationSchema = z.object({
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Invalid location ID"),
   name: z.string().min(1).max(255).optional(),
-  gpsLatitude: requiredLatitudeSchema.optional(),
-  gpsLongitude: requiredLongitudeSchema.optional(),
-  address: z.string().max(500).optional().nullable().or(z.literal("")),
+  gpsLatitude: optionalLatitudeSchema,
+  gpsLongitude: optionalLongitudeSchema,
+  address: customerLocationTextSchema.optional(),
 });
 
 /**

@@ -41,7 +41,9 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ProductionRunForm } from "./production-run-form";
+import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
   formatProductionRunStatus,
@@ -223,7 +225,11 @@ export function ProductionRunList() {
         ...rest,
         date: date instanceof Date ? date : new Date(date),
         startTime: startTime instanceof Date ? startTime : new Date(startTime),
-        endTime: endTime instanceof Date ? endTime : new Date(endTime),
+        endTime: endTime !== undefined
+          ? endTime instanceof Date
+            ? endTime
+            : new Date(endTime)
+          : undefined,
       });
       setSideSheet(null);
       toast.success("Production run updated successfully");
@@ -250,11 +256,12 @@ export function ProductionRunList() {
   const openView = (run: ProductionRunWithRelations) => { setSideSheet({ entity: run, mode: "view" }); };
   const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  useOpenCreateIntent(openCreate);
 
   const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || statusFilter;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -433,14 +440,21 @@ export function ProductionRunList() {
           <ProductionRunForm
             key={sideSheet.entity?.id ?? "create"}
             productionRun={sideSheet.entity ?? undefined}
-            facilityId={facilityId ?? undefined}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createRun.isPending || updateRun.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Production Run"}
           >
             {sideSheet.entity && sideSheet.mode === "edit" && (
-              <ProductionSampleTable productionRunId={sideSheet.entity.id} />
+              <>
+                <ProductionSampleTable productionRunId={sideSheet.entity.id} />
+                <ProductionIncidentTable
+                  productionRunId={sideSheet.entity.id}
+                  facilityId={sideSheet.entity.facilityId}
+                  defaultReactorId={sideSheet.entity.reactorId}
+                  defaultOperatorId={sideSheet.entity.operatorId}
+                />
+              </>
             )}
           </ProductionRunForm>
         </EntitySideSheet>

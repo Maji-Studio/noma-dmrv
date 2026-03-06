@@ -19,7 +19,7 @@ import {
   type PackagingType,
 } from "@/schemas/orders";
 import type { Order } from "@/db/schema";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
 import { useBiocharProducts } from "@/hooks/use-biochar-products";
 import { useState, useEffect } from "react";
@@ -53,8 +53,6 @@ function formatPackaging(type: PackagingType): string {
 interface OrderFormProps {
   /** Existing order data for editing (undefined for create mode) */
   order?: Order;
-  /** Pre-selected facility ID from global context */
-  defaultFacilityId?: string;
   /** Form submission handler */
   onSubmit: (data: OrderFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -67,19 +65,18 @@ interface OrderFormProps {
 
 export function OrderForm({
   order,
-  defaultFacilityId,
   onSubmit,
   onCancel,
   isSubmitting = false,
   submitLabel,
 }: OrderFormProps) {
   const isEditMode = !!order;
+  const { facilityId: contextFacilityId } = useFacilityContext();
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(
     order?.customerId ?? undefined
   );
 
   // Fetch related data for dropdowns
-  const { data: facilitiesData } = useFacilities({ pageSize: 100 });
   const { data: customersData } = useCustomers({ pageSize: 100 });
   const { data: productsData } = useBiocharProducts({ pageSize: 100 });
   const { data: customerLocationsData } = useCustomerLocations(
@@ -87,17 +84,11 @@ export function OrderForm({
     !!selectedCustomerId
   );
 
-  const facilities = facilitiesData?.items ?? [];
   const customers = customersData?.items ?? [];
   const products = productsData?.items ?? [];
 
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
-
-  const facilityOptions = facilities.map((f) => ({
-    value: f.id,
-    label: f.name,
-  }));
 
   const customerOptions = customers.map((c) => ({
     value: c.id,
@@ -123,7 +114,7 @@ export function OrderForm({
   } = useForm({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
-      facilityId: order?.facilityId ?? defaultFacilityId ?? "",
+      facilityId: order?.facilityId ?? contextFacilityId ?? "",
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
       biocharProductId: order?.biocharProductId ?? "",
@@ -139,16 +130,15 @@ export function OrderForm({
 
   const watchedCustomerId = watch("customerId");
 
-  // Sync facilityId when defaultFacilityId arrives after mount (create mode only)
-  // Only set if the user hasn't already manually selected a facility
+  // Sync facilityId when contextFacilityId arrives after mount (create mode only)
   useEffect(() => {
-    if (!order?.facilityId && defaultFacilityId) {
+    if (!order?.facilityId && contextFacilityId) {
       const currentValue = watch("facilityId");
       if (!currentValue) {
-        setValue("facilityId", defaultFacilityId);
+        setValue("facilityId", contextFacilityId);
       }
     }
-  }, [defaultFacilityId, order?.facilityId, setValue, watch]);
+  }, [contextFacilityId, order?.facilityId, setValue, watch]);
 
   // Update customer locations when customer changes
   useEffect(() => {
@@ -198,21 +188,6 @@ export function OrderForm({
             />
           </FormField>
 
-          <FormField
-            id="facilityId"
-            label="Facility"
-            error={errors.facilityId?.message}
-            required
-          >
-            <FormSelect
-              id="facilityId"
-              placeholder="Select facility..."
-              disabled={isSubmitting || (!!defaultFacilityId && !isEditMode)}
-              error={!!errors.facilityId}
-              options={facilityOptions}
-              {...register("facilityId")}
-            />
-          </FormField>
         </div>
       </div>
 

@@ -6,6 +6,7 @@
 
 import {
   createDriver,
+  createOperator,
   createVehicle,
   createFeedstockType,
 } from "@/data-access/quick-add";
@@ -13,9 +14,11 @@ import { drivers, vehicles, feedstockTypes } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
   driverQuickAddSchema,
+  operatorQuickAddSchema,
   vehicleQuickAddSchema,
   feedstockTypeQuickAddSchema,
   type DriverQuickAddData,
+  type OperatorQuickAddData,
   type VehicleQuickAddData,
   type FeedstockTypeQuickAddData,
 } from "@/schemas/quick-add";
@@ -58,6 +61,38 @@ export async function createDriverFn(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to create driver",
+    };
+  }
+}
+
+// ============================================
+// Operator Quick Add
+// ============================================
+
+export async function createOperatorFn(
+  data: OperatorQuickAddData
+): Promise<ActionResult<EntityOption>> {
+  try {
+    const user = await getUser();
+    if (!user || !user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const parsed = operatorQuickAddSchema.safeParse(data);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input",
+      };
+    }
+
+    const operator = await createOperator(parsed.data);
+    return { success: true, data: operator };
+  } catch (error) {
+    console.error("Error creating operator:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create operator",
     };
   }
 }

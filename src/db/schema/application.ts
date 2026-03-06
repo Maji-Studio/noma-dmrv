@@ -62,10 +62,6 @@ export const applications = pgTable(
     // These are the per-application calculated outputs
     co2eStoredTonnes: real('co2e_stored_tonnes'), // This application's contribution
 
-    // --- Truck Weighing (Isometric: BiocharApplication requirement) ---
-    truckMassOnArrivalKg: real('truck_mass_on_arrival_kg'),
-    truckMassOnDepartureKg: real('truck_mass_on_departure_kg'),
-
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

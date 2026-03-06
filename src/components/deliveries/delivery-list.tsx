@@ -415,6 +415,20 @@ export function DeliveryList() {
                   fields: [
                     { label: "Driver", value: sideSheetEntity.driverName },
                     { label: "Vehicle", value: sideSheetEntity.vehicleName },
+                    {
+                      label: "Truck Mass on Arrival",
+                      value:
+                        sideSheetEntity.truckMassOnArrivalKg != null
+                          ? `${sideSheetEntity.truckMassOnArrivalKg.toLocaleString()} kg`
+                          : null,
+                    },
+                    {
+                      label: "Truck Mass on Departure",
+                      value:
+                        sideSheetEntity.truckMassOnDepartureKg != null
+                          ? `${sideSheetEntity.truckMassOnDepartureKg.toLocaleString()} kg`
+                          : null,
+                    },
                   ],
                 },
               ]

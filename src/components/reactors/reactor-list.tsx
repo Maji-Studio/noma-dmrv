@@ -16,6 +16,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -207,6 +208,7 @@ export function ReactorList() {
     setCreateError(null);
     setUpdateError(null);
   };
+  useOpenCreateIntent(openCreate);
 
   // Handlers
   const handleCreate = async (data: ReactorFormData) => {

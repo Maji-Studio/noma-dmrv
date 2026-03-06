@@ -1,0 +1,178 @@
+"use server";
+
+/**
+ * Production Incidents Server Actions
+ * CRUD operations for production incident reports
+ */
+
+import { z } from "zod";
+import {
+  getProductionIncidents as getProductionIncidentsData,
+  createProductionIncident,
+  updateProductionIncident,
+  deleteProductionIncident,
+  type ProductionIncidentWithRelations,
+} from "@/data-access/production-incidents";
+import { getUser } from "@/lib/auth/server";
+import {
+  createProductionIncidentSchema,
+  updateProductionIncidentSchema,
+  deleteProductionIncidentSchema,
+} from "@/schemas/production-incidents";
+import type { ActionResult } from "@/types/actions";
+
+const productionRunIdSchema = z.string().uuid("Production run is required");
+
+function formatZodError(error: z.ZodError): string {
+  return `Validation error: ${error.issues.map((issue) => issue.message).join(", ")}`;
+}
+
+function logServerError(context: string, error: unknown): void {
+  console.error(`[production-incidents] ${context}`, error);
+}
+
+async function requireAuth() {
+  const user = await getUser();
+  if (!user?.id) {
+    return null;
+  }
+  return user;
+}
+
+export async function getProductionIncidentsFn(
+  productionRunId: string
+): Promise<ActionResult<ProductionIncidentWithRelations[]>> {
+  try {
+    const user = await requireAuth();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validatedProductionRunId = productionRunIdSchema.safeParse(productionRunId);
+    if (!validatedProductionRunId.success) {
+      return { success: false, error: "Invalid input" };
+    }
+
+    const incidents = await getProductionIncidentsData(user.id, validatedProductionRunId.data);
+    return { success: true, data: incidents };
+  } catch (error) {
+    logServerError("getProductionIncidentsFn failed", error);
+    return {
+      success: false,
+      error: "Failed to load production incidents",
+    };
+  }
+}
+
+export async function createProductionIncidentFn(
+  data: z.infer<typeof createProductionIncidentSchema>
+): Promise<ActionResult<ProductionIncidentWithRelations>> {
+  try {
+    const user = await requireAuth();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = createProductionIncidentSchema.parse(data);
+
+    const incident = await createProductionIncident(user.id, {
+      productionRunId: validated.productionRunId,
+      incidentTime:
+        validated.incidentTime instanceof Date
+          ? validated.incidentTime
+          : new Date(validated.incidentTime),
+      operatorId: validated.operatorId ?? null,
+      reactorId: validated.reactorId ?? null,
+      description: validated.description,
+      severity: validated.severity,
+      correctiveActions: validated.correctiveActions || null,
+      notes: validated.notes || null,
+    });
+
+    return { success: true, data: incident };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: formatZodError(error),
+      };
+    }
+    logServerError("createProductionIncidentFn failed", error);
+    return {
+      success: false,
+      error: "Failed to create production incident",
+    };
+  }
+}
+
+export async function updateProductionIncidentFn(
+  data: z.infer<typeof updateProductionIncidentSchema>
+): Promise<ActionResult<ProductionIncidentWithRelations>> {
+  try {
+    const user = await requireAuth();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = updateProductionIncidentSchema.parse(data);
+
+    const incident = await updateProductionIncident(
+      user.id,
+      validated.productionIncidentId,
+      {
+        incidentTime:
+          validated.incidentTime instanceof Date
+            ? validated.incidentTime
+            : new Date(validated.incidentTime),
+        operatorId: validated.operatorId ?? null,
+        reactorId: validated.reactorId ?? null,
+        description: validated.description,
+        severity: validated.severity,
+        correctiveActions: validated.correctiveActions || null,
+        notes: validated.notes || null,
+      }
+    );
+
+    return { success: true, data: incident };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: formatZodError(error),
+      };
+    }
+    logServerError("updateProductionIncidentFn failed", error);
+    return {
+      success: false,
+      error: "Failed to update production incident",
+    };
+  }
+}
+
+export async function deleteProductionIncidentFn(
+  data: z.infer<typeof deleteProductionIncidentSchema>
+): Promise<ActionResult<void>> {
+  try {
+    const user = await requireAuth();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = deleteProductionIncidentSchema.parse(data);
+    await deleteProductionIncident(user.id, validated.productionIncidentId);
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: formatZodError(error),
+      };
+    }
+    logServerError("deleteProductionIncidentFn failed", error);
+    return {
+      success: false,
+      error: "Failed to delete production incident",
+    };
+  }
+}

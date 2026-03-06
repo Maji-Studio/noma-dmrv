@@ -3,30 +3,30 @@
  * Reusable credit batch form with React Hook Form integration
  *
  * Form sections:
- * 1. Overview — code, facility, startDate, endDate, certifier, status
- * 2. Applications — Multi-select (M:M via credit_batch_applications)
- * 3. Durability — Toggle 200-year vs 1000-year with conditional fields
- * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool %
- * 5. Verification — registry, weight, value, currency
+ * 1. Overview — startDate, endDate, certifier
+ * 2. Production Runs — Multi-select cards
+ * 3. Applications — Multi-select (M:M via credit_batch_applications)
+ * 4. Durability — Toggle 200-year vs 1000-year with conditional fields
+ * 5. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool % (read-only)
+ * 6. Verification — registry, weight, value, currency (read-only)
  */
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
+import { formatSafeDate } from "@/lib/format-utils";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormSelect } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormTextarea, SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
   creditBatchFormSchema,
-  creditBatchStatuses,
   durabilityOptions,
-  formatCreditBatchStatus,
   formatDurabilityOption,
   type CreditBatchFormData,
-  type CreditBatchStatus,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
@@ -35,12 +35,6 @@ import type { CreditBatch } from "@/db/schema/credits";
 // Constants for select options
 // ============================================
 
-const statusOptions: readonly { value: string; label: string }[] =
-  creditBatchStatuses.map((status) => ({
-    value: status,
-    label: formatCreditBatchStatus(status as CreditBatchStatus),
-  }));
-
 const durabilityOptionsList: readonly { value: string; label: string }[] =
   durabilityOptions.map((option) => ({
     value: option,
@@ -48,16 +42,100 @@ const durabilityOptionsList: readonly { value: string; label: string }[] =
   }));
 
 // ============================================
+// Section helpers
+// ============================================
+
+function SectionHint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="body-caption text-[var(--color-text-tertiary)]">
+      {children}
+    </p>
+  );
+}
+
+function ReadOnlyBadge() {
+  return (
+    <span className="inline-flex items-center px-8 py-2 body-caption text-[var(--color-text-tertiary)] bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
+      Auto-populated
+    </span>
+  );
+}
+
+// ============================================
 // Component
 // ============================================
 
+// ============================================
+// Format helpers for selector cards
+// ============================================
+
+
+function formatKg(value: number | null): string {
+  if (value == null) return "—";
+  return `${value.toFixed(1)} kg`;
+}
+
+function formatTons(value: number | null): string {
+  if (value == null) return "—";
+  return `${value.toFixed(2)} t`;
+}
+
+const STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
+  draft: { label: "Draft", bg: "bg-[var(--color-surface-medium)]", text: "text-[var(--color-text-secondary)]" },
+  running: { label: "Running", bg: "bg-[var(--color-warning-light)]", text: "text-[var(--color-warning)]" },
+  complete: { label: "Complete", bg: "bg-[var(--color-success-light)]", text: "text-[var(--color-success)]" },
+  void: { label: "Void", bg: "bg-[var(--color-error-light)]", text: "text-[var(--color-error)]" },
+};
+
+function RunStatusBadge({ status }: { status: string }) {
+  const style = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
+  return (
+    <span className={`inline-block px-6 py-1 text-[10px] font-medium uppercase tracking-wider ${style.bg} ${style.text}`}>
+      {style.label}
+    </span>
+  );
+}
+
+function DataRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-8">
+      <span className="text-[10px] uppercase tracking-wider opacity-60">{label}</span>
+      <span className={`body-caption font-mono tabular-nums ${accent ? "text-[var(--color-signal-green)] font-medium" : ""}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ============================================
+// Rich data types for selectors
+// ============================================
+
+export interface ProductionRunOption {
+  id: string;
+  code: string;
+  date: string | null;
+  feedstockMassDryKg: number | null;
+  biocharOutputKg: number | null;
+  status: string;
+}
+
+export interface ApplicationOption {
+  id: string;
+  code: string;
+  applicationDate: Date | null;
+  biocharAppliedDryTons: number | null;
+  fieldIdentifier: string | null;
+  co2eStoredTonnes: number | null;
+}
+
 interface CreditBatchFormProps {
   /** Existing credit batch data for editing (undefined for create mode) */
-  creditBatch?: CreditBatch & { applicationIds?: string[] };
-  /** Available facilities for selection */
-  facilities?: Array<{ id: string; name: string }>;
+  creditBatch?: CreditBatch & { applicationIds?: string[]; productionRunIds?: string[] };
   /** Available applications for multi-select */
-  applications?: Array<{ id: string; code: string }>;
+  applications?: ApplicationOption[];
+  /** Available production runs for multi-select */
+  productionRuns?: ProductionRunOption[];
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -70,14 +148,15 @@ interface CreditBatchFormProps {
 
 export function CreditBatchForm({
   creditBatch,
-  facilities = [],
   applications = [],
+  productionRuns = [],
   onSubmit,
   onCancel,
   isSubmitting = false,
   submitLabel,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
+  const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
 
   const {
     register,
@@ -89,14 +168,16 @@ export function CreditBatchForm({
   } = useForm({
     resolver: zodResolver(creditBatchFormSchema),
     defaultValues: {
-      facilityId: creditBatch?.facilityId ?? "",
+      facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
-      certifier: creditBatch?.certifier ?? "",
-      status: (creditBatch?.status as CreditBatchStatus) ?? "draft",
+      certifier: "isometric",
+      productionRunIds: creditBatch?.productionRunIds ?? [],
       applicationIds: creditBatch?.applicationIds ?? [],
       durabilityOption:
-        (creditBatch?.durabilityOption as DurabilityOption) ?? "200_year",
+        (creditBatch?.durabilityOption as DurabilityOption) ??
+        (selectedFacility?.defaultDurabilityOption as DurabilityOption) ??
+        "200_year",
       hToCorgRatio: creditBatch?.hToCorgRatio ?? undefined,
       meanRandomReflectancePercent:
         creditBatch?.meanRandomReflectancePercent ?? undefined,
@@ -109,6 +190,20 @@ export function CreditBatchForm({
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
   });
+
+  // Sync facilityId from context when it arrives after mount
+  useEffect(() => {
+    if (!creditBatch && contextFacilityId) {
+      setValue("facilityId", contextFacilityId);
+    }
+  }, [creditBatch, contextFacilityId, setValue]);
+
+  // Sync durability option from facility default when it arrives
+  useEffect(() => {
+    if (!creditBatch && selectedFacility?.defaultDurabilityOption) {
+      setValue("durabilityOption", selectedFacility.defaultDurabilityOption as DurabilityOption);
+    }
+  }, [creditBatch, selectedFacility?.defaultDurabilityOption, setValue]);
 
   // Watch durability option for conditional rendering
   const durabilityOption = useWatch({
@@ -130,6 +225,13 @@ export function CreditBatchForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durabilityOption]);
 
+  // Watch selected production runs
+  const selectedProductionRunIds = useWatch({
+    control,
+    name: "productionRunIds",
+    defaultValue: [],
+  });
+
   // Watch selected applications
   const selectedApplicationIds = useWatch({
     control,
@@ -141,17 +243,12 @@ export function CreditBatchForm({
     ? "Update Credit Batch"
     : "Create Credit Batch";
 
-  const facilityOptions = facilities.map((f) => ({
-    value: f.id,
-    label: f.name,
-  }));
-
-  const handleApplicationToggle = (appId: string) => {
-    const current = getValues("applicationIds") || [];
-    const updated = current.includes(appId)
-      ? current.filter((id) => id !== appId)
-      : [...current, appId];
-    setValue("applicationIds", updated, { shouldValidate: true });
+  const toggleArrayField = (fieldName: "productionRunIds" | "applicationIds", id: string) => {
+    const current = getValues(fieldName) || [];
+    const updated = current.includes(id)
+      ? current.filter((v) => v !== id)
+      : [...current, id];
+    setValue(fieldName, updated, { shouldValidate: true });
   };
 
   const handleFormSubmit = handleSubmit((data) => {
@@ -159,31 +256,12 @@ export function CreditBatchForm({
   });
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* === Section 1: Overview === */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Overview
-        </h3>
+    <form onSubmit={handleFormSubmit} className="space-y-24">
+      {/* ── Overview ── */}
+      <div className="space-y-16">
+        <SectionLabel>Overview</SectionLabel>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="facilityId"
-            label="Facility"
-            error={errors.facilityId?.message}
-          >
-            <FormSelect
-              id="facilityId"
-              placeholder="Select facility..."
-              disabled={isSubmitting}
-              error={!!errors.facilityId}
-              options={facilityOptions}
-              {...register("facilityId")}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="startDate"
             label="Start Date"
@@ -213,92 +291,141 @@ export function CreditBatchForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
+        <FormField
+          id="certifier"
+          label="Certifier"
+          error={errors.certifier?.message}
+        >
+          <input type="hidden" value="isometric" {...register("certifier")} />
+          <FormInput
             id="certifier"
-            label="Certifier"
-            error={errors.certifier?.message}
-          >
-            <FormInput
-              id="certifier"
-              type="text"
-              placeholder="e.g., Isometric"
-              disabled={isSubmitting}
-              error={!!errors.certifier}
-              {...register("certifier")}
-            />
-          </FormField>
-
-          <FormField
-            id="status"
-            label="Status"
-            error={errors.status?.message}
-          >
-            <FormSelect
-              id="status"
-              placeholder="Select status..."
-              disabled={isSubmitting}
-              error={!!errors.status}
-              options={statusOptions}
-              {...register("status")}
-            />
-          </FormField>
-        </div>
+            value="Isometric"
+            readOnly
+            disabled
+            error={!!errors.certifier}
+          />
+        </FormField>
       </div>
 
-      {/* === Section 2: Applications === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Applications
-        </h3>
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+      {/* ── Production Runs ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Production Runs</SectionLabel>
+        <SectionHint>
+          Select production runs included in this credit batch
+        </SectionHint>
+
+        {productionRuns.length === 0 ? (
+          <div className="p-24 bg-[var(--color-background-medium)] body-small text-[var(--color-text-secondary)]">
+            No production runs available. Create production runs first to link
+            them to credit batches.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-h-[360px] overflow-y-auto p-8 border border-[var(--color-border-primary)]">
+            {productionRuns.map((run) => {
+              const isSelected = selectedProductionRunIds?.includes(run.id) ?? false;
+              return (
+                <label
+                  key={run.id}
+                  className={`flex flex-col gap-8 p-12 cursor-pointer transition-colors duration-200 border ${
+                    isSelected
+                      ? "bg-[var(--clr-dark-purple)] text-[var(--color-text-white-primary)] border-[var(--clr-dark-purple)]"
+                      : "bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] border-transparent"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleArrayField("productionRunIds", run.id)}
+                    disabled={isSubmitting}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center justify-between gap-8">
+                    <span className="body-small font-medium">{run.code}</span>
+                    <RunStatusBadge status={run.status} />
+                  </div>
+                  <div className="text-[11px] opacity-70">{formatSafeDate(run.date)}</div>
+                  <div className="flex flex-col gap-2">
+                    <DataRow label="Input" value={formatKg(run.feedstockMassDryKg)} />
+                    <DataRow label="Output" value={formatKg(run.biocharOutputKg)} />
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        {errors.productionRunIds && (
+          <p className="body-caption text-[var(--color-signal-red)]">
+            {errors.productionRunIds.message}
+          </p>
+        )}
+      </div>
+
+      {/* ── Applications ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Applications</SectionLabel>
+        <SectionHint>
           Select applications to include in this credit batch
-        </p>
+        </SectionHint>
 
         {applications.length === 0 ? (
-          <div className="p-24 bg-[var(--color-surface-light)] rounded-4 text-[var(--text-s)] text-[var(--color-text-secondary)]">
+          <div className="p-24 bg-[var(--color-background-medium)] body-small text-[var(--color-text-secondary)]">
             No applications available. Create applications first to link them to
             credit batches.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-16 max-h-[240px] overflow-y-auto p-16 border border-[var(--color-border-primary)] rounded-4">
-            {applications.map((app) => (
-              <label
-                key={app.id}
-                className={`flex items-center gap-16 p-16 rounded-4 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-[var(--color-interaction)] ${
-                  selectedApplicationIds?.includes(app.id)
-                    ? "bg-[var(--clr-dark-purple)] text-white"
-                    : "bg-[var(--color-surface-light)] hover:bg-[var(--color-surface-medium)]"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedApplicationIds?.includes(app.id) ?? false}
-                  onChange={() => handleApplicationToggle(app.id)}
-                  disabled={isSubmitting}
-                  className="sr-only"
-                />
-                <span className="text-[var(--text-s)]">{app.code}</span>
-              </label>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-h-[360px] overflow-y-auto p-8 border border-[var(--color-border-primary)]">
+            {applications.map((app) => {
+              const isSelected = selectedApplicationIds?.includes(app.id) ?? false;
+              return (
+                <label
+                  key={app.id}
+                  className={`flex flex-col gap-8 p-12 cursor-pointer transition-colors duration-200 border ${
+                    isSelected
+                      ? "bg-[var(--clr-dark-purple)] text-[var(--color-text-white-primary)] border-[var(--clr-dark-purple)]"
+                      : "bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] border-transparent"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleArrayField("applicationIds", app.id)}
+                    disabled={isSubmitting}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center justify-between gap-8">
+                    <span className="body-small font-medium">{app.code}</span>
+                    {app.fieldIdentifier && (
+                      <span className="text-[10px] uppercase tracking-wider opacity-60 truncate max-w-[120px]">
+                        {app.fieldIdentifier}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] opacity-70">{formatSafeDate(app.applicationDate)}</div>
+                  <div className="flex flex-col gap-2">
+                    <DataRow label="Applied" value={formatTons(app.biocharAppliedDryTons)} />
+                    {app.co2eStoredTonnes != null && (
+                      <DataRow label="CO₂e" value={formatTons(app.co2eStoredTonnes)} accent />
+                    )}
+                  </div>
+                </label>
+              );
+            })}
           </div>
         )}
         {errors.applicationIds && (
-          <p className="text-[var(--text-xs)] text-[var(--color-error)]">
+          <p className="body-caption text-[var(--color-signal-red)]">
             {errors.applicationIds.message}
           </p>
         )}
       </div>
 
-      {/* === Section 3: Durability === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Durability
-        </h3>
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+      {/* ── Durability ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Durability</SectionLabel>
+        <SectionHint>
           Isometric Protocol: Choose durability crediting option (200-year or
           1000-year)
-        </p>
+        </SectionHint>
 
         <FormField
           id="durabilityOption"
@@ -317,12 +444,12 @@ export function CreditBatchForm({
 
         {/* Conditional fields for 200-year */}
         {durabilityOption === "200_year" && (
-          <div className="p-24 bg-[var(--color-surface-light)] rounded-4 space-y-24">
-            <p className="text-[var(--text-xs)] text-[var(--color-text-secondary)] font-medium">
+          <div className="p-24 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] space-y-16">
+            <p className="body-caption font-medium text-[var(--color-text-secondary)]">
               200-Year Durability (Woolf et al., 2021)
             </p>
-            <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-              Formula: F_durable,200 = min(0.95, 1 - [c + (a + b*ln(T_soil))*H/C_org])
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              F_durable,200 = min(0.95, 1 - [c + (a + b*ln(T_soil))*H/C_org])
             </p>
             <FormField
               id="hToCorgRatio"
@@ -347,15 +474,15 @@ export function CreditBatchForm({
 
         {/* Conditional fields for 1000-year */}
         {durabilityOption === "1000_year" && (
-          <div className="p-24 bg-[var(--color-surface-light)] rounded-4 space-y-24">
-            <p className="text-[var(--text-xs)] text-[var(--color-text-secondary)] font-medium">
+          <div className="p-24 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] space-y-16">
+            <p className="body-caption font-medium text-[var(--color-text-secondary)]">
               1000-Year Durability (Sanei et al., 2024)
             </p>
-            <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+            <p className="body-caption text-[var(--color-text-tertiary)]">
               Based on petrographic analysis (R_0) and TGA (non-reactive carbon)
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
               <FormField
                 id="meanRandomReflectancePercent"
                 label="Mean R_0 Reflectance (%)"
@@ -395,7 +522,7 @@ export function CreditBatchForm({
               </FormField>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
               <FormField
                 id="meanNonReactiveCarbonPercent"
                 label="Mean Non-Reactive Carbon (%)"
@@ -457,16 +584,17 @@ export function CreditBatchForm({
         </FormField>
       </div>
 
-      {/* === Section 4: GHG Accounting (read-only, populated during verification) === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          GHG Accounting
-        </h3>
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+      {/* ── GHG Accounting (read-only) ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <div className="flex items-center justify-between">
+          <SectionLabel>GHG Accounting</SectionLabel>
+          <ReadOnlyBadge />
+        </div>
+        <SectionHint>
           Populated during Isometric verification. Net CO2e = Stored - Emissions - Counterfactual
-        </p>
+        </SectionHint>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
           <FormField
             id="totalCo2eStoredTons"
             label="CO2e Stored (tons)"
@@ -479,7 +607,6 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.totalCo2eStoredTons ?? ""}
-
             />
           </FormField>
 
@@ -495,7 +622,6 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.totalCo2eEmissionsTons ?? ""}
-
             />
           </FormField>
 
@@ -511,7 +637,6 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.totalCo2eCounterfactualTons ?? ""}
-
             />
           </FormField>
         </div>
@@ -532,16 +657,17 @@ export function CreditBatchForm({
         </FormField>
       </div>
 
-      {/* === Section 5: Verification (read-only, populated after issuance) === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Verification
-        </h3>
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+      {/* ── Verification (read-only) ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Verification</SectionLabel>
+          <ReadOnlyBadge />
+        </div>
+        <SectionHint>
           Populated after registry issuance
-        </p>
+        </SectionHint>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="registry" label="Registry">
             <FormInput
               id="registry"
@@ -549,7 +675,6 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.registry ?? ""}
-
             />
           </FormField>
 
@@ -564,12 +689,11 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.weightTons ?? ""}
-
             />
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="value" label="Value" helperText="Credit value">
             <FormInput
               id="value"
@@ -577,7 +701,6 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.value ?? ""}
-
             />
           </FormField>
 
@@ -588,36 +711,34 @@ export function CreditBatchForm({
               placeholder="—"
               disabled
               value={creditBatch?.currency ?? ""}
-
             />
           </FormField>
         </div>
       </div>
 
-      {/* === Site Management Notes (editable) === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+      {/* ── Site Management Notes ── */}
+      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Site Management</SectionLabel>
+
         <FormField
           id="siteManagementNotes"
-          label="Site Management Notes"
+          label="Notes"
           error={errors.siteManagementNotes?.message}
           helperText="Irrigation, tillage, fertilizer summary"
         >
-          <textarea
+          <FormTextarea
             id="siteManagementNotes"
             placeholder="Enter site management notes..."
             disabled={isSubmitting}
-            className={`w-full h-[48px] px-16 border rounded-4 text-[var(--text-m)] min-h-[100px] resize-y ${
-              errors.siteManagementNotes
-                ? "border-[var(--color-error)]"
-                : "border-[var(--color-border-primary)]"
-            } focus:outline-none focus:ring-2 focus:ring-[var(--clr-dark-purple)] disabled:bg-[var(--color-surface-light)] disabled:cursor-not-allowed`}
+            rows={4}
+            error={!!errors.siteManagementNotes}
             {...register("siteManagementNotes")}
           />
         </FormField>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
+      {/* ── Form Actions ── */}
+      <div className="flex items-center justify-end gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
         {onCancel && (
           <Button
             type="button"

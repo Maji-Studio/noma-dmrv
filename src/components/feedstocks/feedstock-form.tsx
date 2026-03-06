@@ -5,11 +5,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormFileUpload, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
   feedstockFormSchema,
@@ -44,7 +44,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
-    watch,
+    getValues,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
@@ -60,9 +60,9 @@ export function FeedstockForm({
     },
   });
 
-  const deliveryId = watch("feedstockDeliveryId");
-  const watchWetMass = watch("massWetKg");
-  const watchMoisture = watch("moistureContentPercent");
+  const deliveryId = useWatch({ control, name: "feedstockDeliveryId" });
+  const watchWetMass = useWatch({ control, name: "massWetKg" });
+  const watchMoisture = useWatch({ control, name: "moistureContentPercent" });
 
   // Auto-calculate dry mass from wet mass and moisture using shared utility
   const calculatedDryMass =
@@ -96,6 +96,20 @@ export function FeedstockForm({
         if (!active) return;
         if (result.success) {
           setValue("facilityId", result.data.facilityId);
+          if (result.data.wetMassKg !== null) {
+            const currentWetMass = getValues("massWetKg");
+            const shouldPrefillWetMass =
+              currentWetMass === undefined ||
+              currentWetMass === null ||
+              currentWetMass === "";
+
+            if (shouldPrefillWetMass || !isEditMode) {
+              setValue("massWetKg", result.data.wetMassKg, {
+                shouldDirty: shouldPrefillWetMass ? false : true,
+                shouldValidate: true,
+              });
+            }
+          }
         } else {
           setValue("facilityId", "");
         }
@@ -104,7 +118,7 @@ export function FeedstockForm({
         if (active) setValue("facilityId", "");
       });
     return () => { active = false; };
-  }, [deliveryId, setValue]);
+  }, [deliveryId, getValues, isEditMode, setValue]);
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
@@ -227,7 +241,7 @@ export function FeedstockForm({
             >
               <FormInput
                 id="feedstockSourceRegion"
-                placeholder="e.g., Western Kenya"
+                placeholder="e.g., Northern Tanzania"
                 disabled={isSubmitting}
                 error={!!errors.feedstockSourceRegion}
                 {...register("feedstockSourceRegion")}
@@ -243,21 +257,37 @@ export function FeedstockForm({
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="notes"
-              label="Notes"
-              error={errors.notes?.message}
-              helperText="Additional notes or documentation references"
-            >
-              <FormTextarea
+            <div className="md:col-span-2">
+              <FormField
+                id="attachments"
+                label="Attachments"
+                helperText="Upload photos, delivery notes, weighbridge tickets, or lab reports"
+              >
+                <FormFileUpload
+                  id="attachments"
+                  accept="image/*,.pdf,.csv,.xlsx"
+                  disabled={isSubmitting}
+                />
+              </FormField>
+            </div>
+
+            <div className="md:col-span-2">
+              <FormField
                 id="notes"
-                placeholder="Enter any additional notes..."
-                disabled={isSubmitting}
-                error={!!errors.notes}
-                rows={4}
-                {...register("notes")}
-              />
-            </FormField>
+                label="Notes"
+                error={errors.notes?.message}
+                helperText="Additional notes or documentation references"
+              >
+                <FormTextarea
+                  id="notes"
+                  placeholder="Enter supplier batch notes, traceability references, or receiving observations..."
+                  disabled={isSubmitting}
+                  error={!!errors.notes}
+                  rows={4}
+                  {...register("notes")}
+                />
+              </FormField>
+            </div>
           </div>
         </div>
 

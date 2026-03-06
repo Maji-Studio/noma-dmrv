@@ -1,16 +1,26 @@
-name: Run database migrations
+name: Sync database schema
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
+      - "src/db/schema/**"
       - "drizzle/**"
       - "drizzle.config.ts"
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type CONFIRM to reset and push the schema manually"
+        required: true
+        type: string
 
 jobs:
-  migrate:
+  sync-schema:
     runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.confirmation == 'CONFIRM'
 
     steps:
       - name: Checkout code
@@ -30,8 +40,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run migrations
-        run: pnpm db:migrate
+      - name: Reset database and push schema
+        run: pnpm db:reset
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           NODE_ENV: production

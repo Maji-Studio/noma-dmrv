@@ -68,22 +68,29 @@ export const productionRunFormSchema = z.object({
   ]),
   endTime: z.union([
     z.date(),
-    z.string().min(1, "Please enter an end time").transform((val, ctx) => {
-      if (/^\d{2}:\d{2}$/.test(val)) return val;
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
-        return z.NEVER;
+    z.string(),
+  ])
+    .optional()
+    .transform((val, ctx) => {
+      if (val === undefined || val === null || val === "") return undefined;
+      if (typeof val === "string" && /^\d{2}:\d{2}$/.test(val)) return val;
+      if (typeof val === "string") {
+        const date = new Date(val);
+        if (isNaN(date.getTime())) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid end time" });
+          return z.NEVER;
+        }
+        return date;
       }
-      return date;
+      return val;
     }),
-  ]),
 
   // Operator (optional)
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
-  feedstockMassUsedKg: z.preprocess(toNumberOrNull, z.number().positive("Mass must be a positive number").nullable()).optional(),
+  feedstockWetMassKg: z.preprocess(toNumberOrNull, z.number().positive("Wet mass must be a positive number").nullable()).optional(),
+  feedstockMoisturePercent: z.preprocess(toNumberOrNull, z.number().min(0, "Moisture must be 0–100").max(100, "Moisture must be 0–100").nullable()).optional(),
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
@@ -167,7 +174,8 @@ export const updateProductionRunSchema = z.object({
     }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockMassUsedKg: z.number().positive().optional().nullable(),
+  feedstockWetMassKg: z.number().positive().optional().nullable(),
+  feedstockMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
   residenceTimeMinutes: z.number().int().positive().optional().nullable(),
   dieselOperationLiters: z.number().min(0).optional().nullable(),

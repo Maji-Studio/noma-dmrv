@@ -306,7 +306,6 @@ export function OrderList() {
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
           order={sideSheet?.entity as Order | undefined}
-          defaultFacilityId={facilityId ?? undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}

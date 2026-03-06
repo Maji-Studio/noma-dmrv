@@ -6,8 +6,10 @@
  */
 
 import { z } from "zod";
-import { productionRuns } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { productionRuns, storageLocations } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
+import { db } from "@/db";
 import {
   createProductionRun,
   deleteProductionRun,
@@ -88,6 +90,43 @@ export async function getProductionRunByIdFn(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to load production run",
+    };
+  }
+}
+
+export async function getProductionRunBiocharPreviewFn(
+  productionRunId: string
+): Promise<
+  ActionResult<{
+    biocharOutputKg: number | null;
+    biocharStorageLocationCode: string | null;
+  }>
+> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const [run] = await db
+      .select({
+        biocharOutputKg: productionRuns.biocharOutputKg,
+        biocharStorageLocationCode: storageLocations.code,
+      })
+      .from(productionRuns)
+      .leftJoin(storageLocations, eq(productionRuns.biocharStorageLocationId, storageLocations.id))
+      .where(eq(productionRuns.id, productionRunId))
+      .limit(1);
+
+    if (!run) {
+      return { success: false, error: "Production run not found" };
+    }
+
+    return { success: true, data: run };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to load production run preview",
     };
   }
 }
@@ -199,9 +238,16 @@ export async function createProductionRunFn(
           reactorId: validated.reactorId,
           status: validated.status,
           startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
-          endTime: validated.endTime instanceof Date ? validated.endTime : new Date(validated.endTime),
+          endTime: validated.endTime
+            ? validated.endTime instanceof Date
+              ? validated.endTime
+              : new Date(validated.endTime)
+            : validated.startTime instanceof Date
+              ? validated.startTime
+              : new Date(validated.startTime),
           operatorId: validated.operatorId || null,
-          feedstockMassUsedKg: validated.feedstockMassUsedKg ?? null,
+          feedstockWetMassKg: validated.feedstockWetMassKg ?? null,
+          feedstockMoisturePercent: validated.feedstockMoisturePercent ?? null,
           feedingRateKgHr: validated.feedingRateKgHr ?? null,
           residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
           dieselOperationLiters: validated.dieselOperationLiters ?? null,
@@ -296,7 +342,8 @@ export async function updateProductionRunFn(
       startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
       endTime: validated.endTime instanceof Date ? validated.endTime : validated.endTime ? new Date(validated.endTime) : undefined,
       operatorId: validated.operatorId,
-      feedstockMassUsedKg: validated.feedstockMassUsedKg,
+      feedstockWetMassKg: validated.feedstockWetMassKg,
+      feedstockMoisturePercent: validated.feedstockMoisturePercent,
       feedingRateKgHr: validated.feedingRateKgHr,
       residenceTimeMinutes: validated.residenceTimeMinutes,
       dieselOperationLiters: validated.dieselOperationLiters,

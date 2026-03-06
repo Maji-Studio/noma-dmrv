@@ -18,7 +18,6 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { BiocharProductForm } from "./biochar-product-form";
@@ -85,9 +84,10 @@ function createColumns(
       ),
     },
     {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <StatusBadge status={row.original.status as StatusValue} />,
+      id: "storageLocation",
+      header: "Storage",
+      accessorFn: (row) => row.storageLocation?.name ?? "",
+      cell: ({ row }) => row.original.storageLocation?.name || "\u2014",
     },
     {
       id: "actions",
@@ -304,26 +304,20 @@ export function BiocharProductList() {
         editLabel="Edit Product"
         sections={sideSheet?.mode === "view" && sideSheet.entity ? [
           {
-            title: "General Information",
+            title: "Product",
             fields: [
               { label: "Code", value: sideSheet.entity.code },
               { label: "Production Date", value: formatDate(sideSheet.entity.productionDate) },
-              { label: "Status", value: <StatusBadge status={sideSheet.entity.status as StatusValue} /> },
-            ],
-          },
-          {
-            title: "Production",
-            fields: [
-              { label: "Facility", value: sideSheet.entity.facility?.name },
               { label: "Formulation", value: sideSheet.entity.formulation?.name },
               { label: "Mass", value: formatMass(sideSheet.entity.massKg) },
             ],
           },
           {
-            title: "References",
+            title: "Source & Storage",
             fields: [
               { label: "Production Run", value: sideSheet.entity.linkedProductionRun?.code },
-              { label: "Storage Location", value: sideSheet.entity.storageLocation?.name },
+              { label: "Product Bin", value: sideSheet.entity.storageLocation?.name },
+              { label: "Facility", value: sideSheet.entity.facility?.name },
             ],
           },
         ] : undefined}

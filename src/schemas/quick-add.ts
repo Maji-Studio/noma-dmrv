@@ -34,6 +34,29 @@ export const driverQuickAddSchema = z.object({
 });
 
 // ============================================
+// Operator Quick Add Schema
+// ============================================
+
+export const operatorQuickAddSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Operator name is required")
+    .max(255, "Operator name must be less than 255 characters"),
+  credentials: z
+    .string()
+    .max(255, "Credentials must be less than 255 characters")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+  contactPhone: z
+    .string()
+    .max(30, "Phone number must be less than 30 characters")
+    .optional()
+    .nullable()
+    .or(z.literal("")),
+});
+
+// ============================================
 // Vehicle Quick Add Schema
 // ============================================
 
@@ -118,5 +141,6 @@ export const feedstockTypeQuickAddSchema = z.object({
 // ============================================
 
 export type DriverQuickAddData = z.infer<typeof driverQuickAddSchema>;
+export type OperatorQuickAddData = z.infer<typeof operatorQuickAddSchema>;
 export type VehicleQuickAddData = z.infer<typeof vehicleQuickAddSchema>;
 export type FeedstockTypeQuickAddData = z.infer<typeof feedstockTypeQuickAddSchema>;

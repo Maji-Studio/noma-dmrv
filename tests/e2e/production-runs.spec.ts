@@ -57,8 +57,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
       seededData.feedstockStorageLocation.name
     );
 
-    // Fill feedstock mass used
-    await page.fill('input[name="feedstockMassUsedKg"]', "50");
+    // Fill feedstock wet mass and moisture
+    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await page.fill('input[name="feedstockMoisturePercent"]', "15");
 
     // Submit
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();

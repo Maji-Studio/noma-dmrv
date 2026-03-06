@@ -2,8 +2,7 @@
  * Chain of Custody E2E Tests
  *
  * Covers:
- * - Page loads and displays the header with title and facility selector
- * - Facility dropdown is populated with seeded facility
+ * - Page loads and displays the header with title and sidebar-scoped facility context
  * - Selecting a facility renders the React Flow DAG visualization
  * - All 14 entity nodes are rendered in the graph
  * - Edges (connections) are rendered between nodes
@@ -18,7 +17,7 @@ import { test, expect } from "./fixtures";
 // ============================================
 
 test.describe("Chain of Custody Visualization", () => {
-  test("page loads with header and facility selector populated", async ({
+  test("page loads with header and uses sidebar facility context", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -26,22 +25,19 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/chain-of-custody");
+    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
     await expect(page).toHaveURL(/\/chain-of-custody/);
 
     // Header title is visible
     await expect(page.getByRole("heading", { name: /Chain of Custody/i })).toBeVisible();
 
-    // Facility selector is visible
-    const select = page.locator("select");
-    await expect(select).toBeVisible({ timeout: 15000 });
+    // Header reflects the facility already selected in the sidebar context
+    await expect(page.getByText(`${seededData.facility.code} - ${seededData.facility.name}`)).toBeVisible({
+      timeout: 15000,
+    });
 
-    // Wait for facilities to load — the dropdown should eventually contain our seeded facility
-    // The React Query hook fetches facilities async, so we need to poll
-    await expect(async () => {
-      const html = await select.innerHTML();
-      expect(html).toContain(seededData.facility.code);
-    }).toPass({ timeout: 15000 });
+    // The page should not render its own facility selector anymore
+    await expect(page.locator("header select")).toHaveCount(0);
   });
 
   test("selecting a facility renders the DAG visualization with nodes and edges", async ({
@@ -52,16 +48,7 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/chain-of-custody");
-
-    // Wait for facilities to load and select the seeded facility
-    const select = page.locator("select");
-    await expect(select).toBeVisible({ timeout: 15000 });
-    await expect(async () => {
-      const html = await select.innerHTML();
-      expect(html).toContain(seededData.facility.id);
-    }).toPass({ timeout: 15000 });
-    await select.selectOption(seededData.facility.id);
+    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
 
     // Wait for React Flow canvas to render
     const viewport = page.locator(".react-flow__viewport");
@@ -108,16 +95,7 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/chain-of-custody");
-
-    // Wait for facilities to load and select the seeded facility
-    const select = page.locator("select");
-    await expect(select).toBeVisible({ timeout: 15000 });
-    await expect(async () => {
-      const html = await select.innerHTML();
-      expect(html).toContain(seededData.facility.id);
-    }).toPass({ timeout: 15000 });
-    await select.selectOption(seededData.facility.id);
+    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
 
     // Wait for React Flow to render
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
@@ -144,16 +122,7 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/chain-of-custody");
-
-    // Wait for facilities to load and select the seeded facility
-    const select = page.locator("select");
-    await expect(select).toBeVisible({ timeout: 15000 });
-    await expect(async () => {
-      const html = await select.innerHTML();
-      expect(html).toContain(seededData.facility.id);
-    }).toPass({ timeout: 15000 });
-    await select.selectOption(seededData.facility.id);
+    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
 
     // Wait for React Flow to render
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
@@ -176,15 +145,7 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/chain-of-custody");
-
-    const select = page.locator("select");
-    await expect(select).toBeVisible({ timeout: 15000 });
-    await expect(async () => {
-      const html = await select.innerHTML();
-      expect(html).toContain(seededData.facility.id);
-    }).toPass({ timeout: 15000 });
-    await select.selectOption(seededData.facility.id);
+    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
 
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
 
@@ -211,15 +172,7 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/chain-of-custody");
-
-    const select = page.locator("select");
-    await expect(select).toBeVisible({ timeout: 15000 });
-    await expect(async () => {
-      const html = await select.innerHTML();
-      expect(html).toContain(seededData.facility.id);
-    }).toPass({ timeout: 15000 });
-    await select.selectOption(seededData.facility.id);
+    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
 
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
 

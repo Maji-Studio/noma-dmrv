@@ -91,7 +91,7 @@ export function CustomerForm({
             <FormInput
               id="name"
               type="text"
-              placeholder="e.g., Smith Farm"
+              placeholder="e.g., Regenerative Farm Partner"
               disabled={isSubmitting}
               error={!!errors.name}
               {...register("name")}
@@ -115,7 +115,7 @@ export function CustomerForm({
             <FormInput
               id="contactEmail"
               type="email"
-              placeholder="e.g., customer@example.com"
+              placeholder="e.g., field.partner@example.com"
               disabled={isSubmitting}
               error={!!errors.contactEmail}
               {...register("contactEmail")}
@@ -131,7 +131,7 @@ export function CustomerForm({
             <FormInput
               id="contactPhone"
               type="tel"
-              placeholder="e.g., +254 712 345678"
+              placeholder="e.g., +255 754 000 000"
               disabled={isSubmitting}
               error={!!errors.contactPhone}
               {...register("contactPhone")}
@@ -151,31 +151,33 @@ export function CustomerForm({
             id="cropType"
             label="Crop Type"
             error={errors.cropType?.message}
-            helperText="Primary crop grown by this customer"
+            helperText="Primary crop or land use for this biochar application site"
           >
             <FormInput
               id="cropType"
               type="text"
-              placeholder="e.g., Coffee, Maize, Tea"
+              placeholder="e.g., Coffee, maize, vegetables"
               disabled={isSubmitting}
               error={!!errors.cropType}
               {...register("cropType")}
             />
           </FormField>
 
-          <FormField
-            id="address"
-            label="Address"
-            error={errors.address?.message}
-          >
-            <FormTextarea
+          <div className="md:col-span-2">
+            <FormField
               id="address"
-              placeholder="Full address"
-              disabled={isSubmitting}
-              error={!!errors.address}
-              {...register("address")}
-            />
-          </FormField>
+              label="Address"
+              error={errors.address?.message}
+            >
+              <FormTextarea
+                id="address"
+                placeholder="Farm, nursery, or project site address"
+                disabled={isSubmitting}
+                error={!!errors.address}
+                {...register("address")}
+              />
+            </FormField>
+          </div>
         </div>
       </div>
 
@@ -273,8 +275,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
                 <div className="min-w-0">
                   <p className="body-small font-medium truncate">{loc.name}</p>
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                    {loc.gpsLatitude.toFixed(4)}, {loc.gpsLongitude.toFixed(4)}
-                    {loc.address ? ` — ${loc.address}` : ""}
+                    {loc.address || "Location not set"}
+                    {loc.gpsLatitude !== null && loc.gpsLongitude !== null
+                      ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
+                      : ""}
                   </p>
                 </div>
               </div>

@@ -12,14 +12,14 @@ import { useFeedstockDeliveryStats } from "@/hooks/use-feedstock-deliveries";
 // Helper Functions
 // ============================================
 
-function formatWeight(weightKg: number): string {
-  if (weightKg >= 1000000) {
-    return `${(weightKg / 1000000).toFixed(1)}k t`;
+function formatWetMass(wetMassKg: number): string {
+  if (wetMassKg >= 1000000) {
+    return `${(wetMassKg / 1000000).toFixed(1)}k t`;
   }
-  if (weightKg >= 1000) {
-    return `${(weightKg / 1000).toFixed(1)} t`;
+  if (wetMassKg >= 1000) {
+    return `${(wetMassKg / 1000).toFixed(1)} t`;
   }
-  return `${weightKg.toFixed(0)} kg`;
+  return `${wetMassKg.toFixed(0)} kg`;
 }
 
 function formatMoisture(moisturePercent: number | null): string {
@@ -49,8 +49,8 @@ export function FeedstockDeliveryStats({ facilityId }: FeedstockDeliveryStatsPro
       />
 
       <StatCard
-        title="Total Weight"
-        value={formatWeight(stats?.totalWeightKg ?? 0)}
+        title="Total Wet Mass"
+        value={formatWetMass(stats?.totalWetMassKg ?? 0)}
         icon={<Scales size={20} />}
         isLoading={isLoading}
         description="Total feedstock received"

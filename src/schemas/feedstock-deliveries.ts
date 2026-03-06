@@ -88,14 +88,15 @@ export const feedstockDeliveryFormSchema = z.object({
 
   // Feedstock details
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  weightKg: z.union([
-    z.number().min(0, "Weight must be positive"),
+  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  wetMassKg: z.union([
+    z.number().min(0, "Wet mass must be positive"),
     z.string().transform((val, ctx) => {
       if (val === "") return null;
       const n = parseFloat(val);
       if (isNaN(n)) return null;
       if (n < 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Weight must be positive" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Wet mass must be positive" });
         return z.NEVER;
       }
       return n;
@@ -165,7 +166,8 @@ export const updateFeedstockDeliverySchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  weightKg: z.number().min(0).optional().nullable(),
+  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  wetMassKg: z.number().min(0).optional().nullable(),
   moisturePercent: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),
 });
@@ -214,7 +216,7 @@ export const feedstockDeliveryFilterSchema = z.object({
 
   // Sorting
   sortBy: z
-    .enum(["code", "deliveryDate", "weightKg", "createdAt", "updatedAt"])
+    .enum(["code", "deliveryDate", "wetMassKg", "createdAt", "updatedAt"])
     .default("deliveryDate"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });

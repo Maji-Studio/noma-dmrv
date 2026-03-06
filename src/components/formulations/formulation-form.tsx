@@ -32,7 +32,6 @@ const EMPTY_INGREDIENT = {
   ingredientType: "compost" as const,
   name: "",
   ratio: null,
-  description: "",
 };
 
 // ============================================
@@ -72,7 +71,6 @@ export function FormulationForm({
         ingredientType: ing.ingredientType,
         name: ing.name,
         ratio: ing.ratio ?? null,
-        description: ing.description ?? "",
       })) ?? [],
     },
   });
@@ -115,7 +113,7 @@ export function FormulationForm({
             <FormInput
               id="name"
               type="text"
-              placeholder="e.g., Raw Biochar"
+              placeholder="e.g., Soil Amendment Blend"
               disabled={isSubmitting}
               error={!!errors.name}
               {...register("name")}
@@ -221,7 +219,7 @@ export function FormulationForm({
                 <FormInput
                   id={`ingredients.${index}.name`}
                   type="text"
-                  placeholder="e.g., Cow manure compost"
+                  placeholder="e.g., Mature compost"
                   disabled={isSubmitting}
                   error={!!errors.ingredients?.[index]?.name}
                   {...register(`ingredients.${index}.name`)}
@@ -248,21 +246,6 @@ export function FormulationForm({
                 />
               </FormField>
             </div>
-
-            <FormField
-              id={`ingredients.${index}.description`}
-              label="Description"
-              error={errors.ingredients?.[index]?.description?.message}
-            >
-              <FormInput
-                id={`ingredients.${index}.description`}
-                type="text"
-                placeholder="Optional notes about this ingredient"
-                disabled={isSubmitting}
-                error={!!errors.ingredients?.[index]?.description}
-                {...register(`ingredients.${index}.description`)}
-              />
-            </FormField>
           </div>
         ))}
 
@@ -294,19 +277,21 @@ export function FormulationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="description"
-            label="Description"
-            error={errors.description?.message}
-          >
-            <FormTextarea
+          <div className="md:col-span-2">
+            <FormField
               id="description"
-              placeholder="Enter a description for this formulation..."
-              disabled={isSubmitting}
-              error={!!errors.description}
-              {...register("description")}
-            />
-          </FormField>
+              label="Description"
+              error={errors.description?.message}
+            >
+              <FormTextarea
+                id="description"
+                placeholder="Describe the biochar blend, target use case, and any agronomic or product notes."
+                disabled={isSubmitting}
+                error={!!errors.description}
+                {...register("description")}
+              />
+            </FormField>
+          </div>
         </div>
       </div>
 

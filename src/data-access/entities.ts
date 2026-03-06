@@ -18,6 +18,8 @@ import {
   feedstocks,
   feedstockDeliveries,
   productionRuns,
+  productionRunFeedstocks,
+  biocharProducts,
   formulations,
 } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
@@ -491,27 +493,53 @@ function formatStorageLocationSubtitle(
   feedstockTypeName: string | null,
   totalStoredKg: number,
   totalConsumedKg: number,
+  totalProducedKg: number,
+  totalAllocatedKg: number,
+  totalProductKg: number,
+  biocharEquivalentKg: number,
 ): string {
-  const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
+  switch (type) {
+    case "feedstock_bin": {
+      const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
+      if (!feedstockTypeName && remainingKg === 0) {
+        return "Empty";
+      }
 
-  if (!feedstockTypeName && remainingKg === 0) {
-    return "Empty";
+      const parts: string[] = [];
+      if (feedstockTypeName) {
+        parts.push(feedstockTypeName);
+      }
+      parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+      return parts.join(" · ");
+    }
+    case "biochar_bin": {
+      const availableBiocharKg = Math.max(0, totalProducedKg - totalAllocatedKg);
+      if (availableBiocharKg === 0) {
+        return "Empty";
+      }
+      return `${Math.round(availableBiocharKg).toLocaleString()} kg biochar available`;
+    }
+    case "product_bin": {
+      if (totalProductKg === 0) {
+        return "Empty";
+      }
+
+      const parts = [`${Math.round(totalProductKg).toLocaleString()} kg products`];
+      if (biocharEquivalentKg > 0) {
+        parts.push(`${Math.round(biocharEquivalentKg).toLocaleString()} kg biochar eq`);
+      }
+      return parts.join(" · ");
+    }
+    default:
+      return "Empty";
   }
-
-  const parts: string[] = [];
-  if (feedstockTypeName) {
-    parts.push(feedstockTypeName);
-  }
-  parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
-
-  return parts.join(" · ");
 }
 
 const feedstockInventoryAggregate = db
   .select({
     storageLocationId: feedstocks.storageLocationId,
-    feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`,
-    totalStoredKg: sql<number>`SUM(${feedstocks.massDryKg})`,
+    feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
+    totalStoredKg: sql<number>`SUM(${feedstocks.massDryKg})`.as("total_stored_kg"),
   })
   .from(feedstocks)
   .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
@@ -521,11 +549,63 @@ const feedstockInventoryAggregate = db
 const productionRunConsumptionAggregate = db
   .select({
     storageLocationId: productionRuns.feedstockStorageLocationId,
-    totalConsumedKg: sql<number>`SUM(${productionRuns.feedstockMassUsedKg})`,
+    totalConsumedKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`.as("total_consumed_kg"),
   })
   .from(productionRuns)
+  .leftJoin(
+    productionRunFeedstocks,
+    eq(productionRunFeedstocks.productionRunId, productionRuns.id)
+  )
   .groupBy(productionRuns.feedstockStorageLocationId)
   .as("production_run_consumption_agg");
+
+const biocharOutputAggregate = db
+  .select({
+    storageLocationId: productionRuns.biocharStorageLocationId,
+    totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`.as("total_produced_kg"),
+  })
+  .from(productionRuns)
+  .groupBy(productionRuns.biocharStorageLocationId)
+  .as("biochar_output_agg");
+
+const biocharAllocationAggregate = db
+  .select({
+    storageLocationId: productionRuns.biocharStorageLocationId,
+    totalAllocatedKg: sql<number>`
+      COALESCE(
+        SUM(
+          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+        ),
+        0
+      )
+    `.as("total_allocated_kg"),
+  })
+  .from(productionRuns)
+  .innerJoin(
+    biocharProducts,
+    eq(biocharProducts.linkedProductionRunId, productionRuns.id)
+  )
+  .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+  .groupBy(productionRuns.biocharStorageLocationId)
+  .as("biochar_allocation_agg");
+
+const productInventoryAggregate = db
+  .select({
+    storageLocationId: biocharProducts.storageLocationId,
+    totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`.as("total_product_kg"),
+    biocharEquivalentKg: sql<number>`
+      COALESCE(
+        SUM(
+          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+        ),
+        0
+      )
+    `.as("biochar_equivalent_kg"),
+  })
+  .from(biocharProducts)
+  .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+  .groupBy(biocharProducts.storageLocationId)
+  .as("product_inventory_agg");
 
 async function getStorageLocations(params: {
   search?: string;
@@ -570,6 +650,10 @@ async function getStorageLocations(params: {
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+      totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
+      totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
+      totalProductKg: sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
+      biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
     .leftJoin(
@@ -580,6 +664,18 @@ async function getStorageLocations(params: {
       productionRunConsumptionAggregate,
       eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
     )
+    .leftJoin(
+      biocharOutputAggregate,
+      eq(storageLocations.id, biocharOutputAggregate.storageLocationId)
+    )
+    .leftJoin(
+      biocharAllocationAggregate,
+      eq(storageLocations.id, biocharAllocationAggregate.storageLocationId)
+    )
+    .leftJoin(
+      productInventoryAggregate,
+      eq(storageLocations.id, productInventoryAggregate.storageLocationId)
+    )
     .where(whereClause)
     .limit(limit);
 
@@ -587,7 +683,16 @@ async function getStorageLocations(params: {
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: formatStorageLocationSubtitle(r.type, r.feedstockTypeName, r.totalStoredKg, r.totalConsumedKg),
+    subtitle: formatStorageLocationSubtitle(
+      r.type,
+      r.feedstockTypeName,
+      r.totalStoredKg,
+      r.totalConsumedKg,
+      r.totalProducedKg,
+      r.totalAllocatedKg,
+      r.totalProductKg,
+      r.biocharEquivalentKg
+    ),
   }));
 }
 
@@ -603,6 +708,10 @@ async function getStorageLocationById(
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+      totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
+      totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
+      totalProductKg: sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
+      biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
     .leftJoin(
@@ -613,6 +722,18 @@ async function getStorageLocationById(
       productionRunConsumptionAggregate,
       eq(storageLocations.id, productionRunConsumptionAggregate.storageLocationId)
     )
+    .leftJoin(
+      biocharOutputAggregate,
+      eq(storageLocations.id, biocharOutputAggregate.storageLocationId)
+    )
+    .leftJoin(
+      biocharAllocationAggregate,
+      eq(storageLocations.id, biocharAllocationAggregate.storageLocationId)
+    )
+    .leftJoin(
+      productInventoryAggregate,
+      eq(storageLocations.id, productInventoryAggregate.storageLocationId)
+    )
     .where(eq(storageLocations.id, id))
     .limit(1);
 
@@ -622,7 +743,16 @@ async function getStorageLocationById(
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: formatStorageLocationSubtitle(result.type, result.feedstockTypeName, result.totalStoredKg, result.totalConsumedKg),
+    subtitle: formatStorageLocationSubtitle(
+      result.type,
+      result.feedstockTypeName,
+      result.totalStoredKg,
+      result.totalConsumedKg,
+      result.totalProducedKg,
+      result.totalAllocatedKg,
+      result.totalProductKg,
+      result.biocharEquivalentKg
+    ),
   };
 }
 
@@ -845,10 +975,13 @@ async function getProductionRunsEntity(params: {
       code: productionRuns.code,
       date: productionRuns.date,
       status: productionRuns.status,
-      facilityCode: facilities.code,
+      facilityName: facilities.name,
+      biocharOutputKg: productionRuns.biocharOutputKg,
+      biocharStorageName: storageLocations.name,
     })
     .from(productionRuns)
     .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
+    .leftJoin(storageLocations, eq(productionRuns.biocharStorageLocationId, storageLocations.id))
     .where(whereClause)
     .limit(limit);
 
@@ -856,7 +989,11 @@ async function getProductionRunsEntity(params: {
     id: r.id,
     code: r.code,
     name: r.date ? new Date(r.date).toLocaleDateString() : r.code,
-    subtitle: r.facilityCode ? `${r.facilityCode} - ${r.status}` : r.status,
+    subtitle: [
+      r.facilityName ? `${r.facilityName} · ${r.status}` : r.status,
+      r.biocharOutputKg !== null ? `${Math.round(r.biocharOutputKg).toLocaleString()} kg biochar` : undefined,
+      r.biocharStorageName ? `→ ${r.biocharStorageName}` : undefined,
+    ].filter(Boolean).join(" · "),
   }));
 }
 
@@ -867,10 +1004,13 @@ async function getProductionRunEntityById(id: string): Promise<EntityOption | nu
       code: productionRuns.code,
       date: productionRuns.date,
       status: productionRuns.status,
-      facilityCode: facilities.code,
+      facilityName: facilities.name,
+      biocharOutputKg: productionRuns.biocharOutputKg,
+      biocharStorageName: storageLocations.name,
     })
     .from(productionRuns)
     .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
+    .leftJoin(storageLocations, eq(productionRuns.biocharStorageLocationId, storageLocations.id))
     .where(eq(productionRuns.id, id))
     .limit(1);
 
@@ -880,7 +1020,11 @@ async function getProductionRunEntityById(id: string): Promise<EntityOption | nu
     id: result.id,
     code: result.code,
     name: result.date ? new Date(result.date).toLocaleDateString() : result.code,
-    subtitle: result.facilityCode ? `${result.facilityCode} - ${result.status}` : result.status,
+    subtitle: [
+      result.facilityName ? `${result.facilityName} · ${result.status}` : result.status,
+      result.biocharOutputKg !== null ? `${Math.round(result.biocharOutputKg).toLocaleString()} kg biochar` : undefined,
+      result.biocharStorageName ? `→ ${result.biocharStorageName}` : undefined,
+    ].filter(Boolean).join(" · "),
   };
 }
 
@@ -978,6 +1122,7 @@ async function getFeedstockDeliveriesEntity(params: {
       facilityId: feedstockDeliveries.facilityId,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
+      wetMassKg: feedstockDeliveries.wetMassKg,
     })
     .from(feedstockDeliveries)
     .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
@@ -985,12 +1130,18 @@ async function getFeedstockDeliveriesEntity(params: {
     .where(whereClause)
     .limit(limit);
 
-  return results.map((r) => ({
-    id: r.id,
-    code: r.code,
-    name: `${r.code} (${new Date(r.deliveryDate).toLocaleDateString()})`,
-    subtitle: [r.supplierName, r.feedstockTypeName].filter(Boolean).join(" · ") || undefined,
-  }));
+  return results.map((r) => {
+    const nameParts = [r.feedstockTypeName, r.supplierName].filter(Boolean);
+    const name = nameParts.length > 0
+      ? `${nameParts.join(" from ")} · ${new Date(r.deliveryDate).toLocaleDateString()}`
+      : `${r.code} · ${new Date(r.deliveryDate).toLocaleDateString()}`;
+    return {
+      id: r.id,
+      code: r.code,
+      name,
+      subtitle: r.wetMassKg !== null ? `${r.wetMassKg.toLocaleString()} kg wet` : undefined,
+    };
+  });
 }
 
 async function getFeedstockDeliveryEntityById(
@@ -1004,6 +1155,7 @@ async function getFeedstockDeliveryEntityById(
       facilityId: feedstockDeliveries.facilityId,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
+      wetMassKg: feedstockDeliveries.wetMassKg,
     })
     .from(feedstockDeliveries)
     .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
@@ -1013,10 +1165,15 @@ async function getFeedstockDeliveryEntityById(
 
   if (!result) return null;
 
+  const nameParts = [result.feedstockTypeName, result.supplierName].filter(Boolean);
+  const name = nameParts.length > 0
+    ? `${nameParts.join(" from ")} · ${new Date(result.deliveryDate).toLocaleDateString()}`
+    : `${result.code} · ${new Date(result.deliveryDate).toLocaleDateString()}`;
+
   return {
     id: result.id,
     code: result.code,
-    name: `${result.code} (${new Date(result.deliveryDate).toLocaleDateString()})`,
-    subtitle: [result.supplierName, result.feedstockTypeName].filter(Boolean).join(" · ") || undefined,
+    name,
+    subtitle: result.wetMassKg !== null ? `${result.wetMassKg.toLocaleString()} kg wet` : undefined,
   };
 }

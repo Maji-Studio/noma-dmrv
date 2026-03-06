@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   creditBatches,
   creditBatchApplications,
+  creditBatchProductionRuns,
   type CreditBatch,
 } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
@@ -21,6 +22,7 @@ export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
   applicationCount: number;
   applicationIds: string[];
+  productionRunIds: string[];
 }
 
 /**
@@ -44,13 +46,22 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
     return [];
   }
 
-  const applicationData = await db
-    .select({
-      creditBatchId: creditBatchApplications.creditBatchId,
-      applicationId: creditBatchApplications.applicationId,
-    })
-    .from(creditBatchApplications)
-    .where(inArray(creditBatchApplications.creditBatchId, batchIds));
+  const [applicationData, productionRunData] = await Promise.all([
+    db
+      .select({
+        creditBatchId: creditBatchApplications.creditBatchId,
+        applicationId: creditBatchApplications.applicationId,
+      })
+      .from(creditBatchApplications)
+      .where(inArray(creditBatchApplications.creditBatchId, batchIds)),
+    db
+      .select({
+        creditBatchId: creditBatchProductionRuns.creditBatchId,
+        productionRunId: creditBatchProductionRuns.productionRunId,
+      })
+      .from(creditBatchProductionRuns)
+      .where(inArray(creditBatchProductionRuns.creditBatchId, batchIds)),
+  ]);
 
   // Group by batch ID
   const applicationsByBatch = applicationData.reduce(
@@ -64,11 +75,23 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
     {} as Record<string, string[]>
   );
 
+  const productionRunsByBatch = productionRunData.reduce(
+    (acc, row) => {
+      if (!acc[row.creditBatchId]) {
+        acc[row.creditBatchId] = [];
+      }
+      acc[row.creditBatchId].push(row.productionRunId);
+      return acc;
+    },
+    {} as Record<string, string[]>
+  );
+
   return batches.map((b) => ({
     ...b.creditBatch,
     facility: b.facilityName ? { name: b.facilityName } : null,
     applicationCount: applicationsByBatch[b.creditBatch.id]?.length ?? 0,
     applicationIds: applicationsByBatch[b.creditBatch.id] ?? [],
+    productionRunIds: productionRunsByBatch[b.creditBatch.id] ?? [],
   }));
 }
 
@@ -93,19 +116,24 @@ export async function getCreditBatchById(
     return null;
   }
 
-  // Get application IDs
-  const applicationData = await db
-    .select({
-      applicationId: creditBatchApplications.applicationId,
-    })
-    .from(creditBatchApplications)
-    .where(eq(creditBatchApplications.creditBatchId, id));
+  // Get application IDs and production run IDs
+  const [applicationData, productionRunData] = await Promise.all([
+    db
+      .select({ applicationId: creditBatchApplications.applicationId })
+      .from(creditBatchApplications)
+      .where(eq(creditBatchApplications.creditBatchId, id)),
+    db
+      .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+      .from(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.creditBatchId, id)),
+  ]);
 
   return {
     ...batch.creditBatch,
     facility: batch.facilityName ? { name: batch.facilityName } : null,
     applicationCount: applicationData.length,
     applicationIds: applicationData.map((a) => a.applicationId),
+    productionRunIds: productionRunData.map((p) => p.productionRunId),
   };
 }
 
@@ -132,7 +160,7 @@ export async function createCreditBatch(
   data: CreateCreditBatchData & { code: string }
 ): Promise<CreditBatchWithRelations> {
   requireAuth(userId);
-  const { applicationIds, ...batchData } = data;
+  const { applicationIds, productionRunIds, ...batchData } = data;
 
   const creditBatch = await db.transaction(async (tx) => {
     // Insert the credit batch
@@ -143,8 +171,7 @@ export async function createCreditBatch(
         facilityId: batchData.facilityId,
         startDate: batchData.startDate.toISOString().split("T")[0],
         endDate: batchData.endDate.toISOString().split("T")[0],
-        certifier: batchData.certifier || null,
-        status: batchData.status,
+        certifier: batchData.certifier,
         durabilityOption: batchData.durabilityOption,
         hToCorgRatio: batchData.hToCorgRatio ?? null,
         meanRandomReflectancePercent:
@@ -178,6 +205,16 @@ export async function createCreditBatch(
       );
     }
 
+    // Insert production run links if any
+    if (productionRunIds && productionRunIds.length > 0) {
+      await tx.insert(creditBatchProductionRuns).values(
+        productionRunIds.map((productionRunId) => ({
+          creditBatchId: batch.id,
+          productionRunId,
+        }))
+      );
+    }
+
     return batch;
   });
 
@@ -192,6 +229,7 @@ export async function createCreditBatch(
     facility: facility ?? null,
     applicationCount: applicationIds?.length ?? 0,
     applicationIds: applicationIds ?? [],
+    productionRunIds: productionRunIds ?? [],
   };
 }
 
@@ -204,7 +242,7 @@ export async function updateCreditBatch(
   data: Omit<UpdateCreditBatchData, "creditBatchId">
 ): Promise<CreditBatchWithRelations> {
   requireAuth(userId);
-  const { applicationIds, ...updateFields } = data;
+  const { applicationIds, productionRunIds, ...updateFields } = data;
 
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
@@ -219,9 +257,7 @@ export async function updateCreditBatch(
   if (updateFields.endDate !== undefined)
     updateData.endDate = updateFields.endDate.toISOString().split("T")[0];
   if (updateFields.certifier !== undefined)
-    updateData.certifier = updateFields.certifier || null;
-  if (updateFields.status !== undefined)
-    updateData.status = updateFields.status;
+    updateData.certifier = updateFields.certifier;
   if (updateFields.durabilityOption !== undefined)
     updateData.durabilityOption = updateFields.durabilityOption;
   if (updateFields.hToCorgRatio !== undefined)
@@ -266,17 +302,31 @@ export async function updateCreditBatch(
 
     // Update application links if provided
     if (applicationIds !== undefined) {
-      // Delete existing links
       await tx
         .delete(creditBatchApplications)
         .where(eq(creditBatchApplications.creditBatchId, id));
 
-      // Insert new links
       if (applicationIds.length > 0) {
         await tx.insert(creditBatchApplications).values(
           applicationIds.map((applicationId) => ({
             creditBatchId: id,
             applicationId,
+          }))
+        );
+      }
+    }
+
+    // Update production run links if provided
+    if (productionRunIds !== undefined) {
+      await tx
+        .delete(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.creditBatchId, id));
+
+      if (productionRunIds.length > 0) {
+        await tx.insert(creditBatchProductionRuns).values(
+          productionRunIds.map((productionRunId) => ({
+            creditBatchId: id,
+            productionRunId,
           }))
         );
       }
@@ -297,10 +347,13 @@ export async function updateCreditBatch(
 export async function deleteCreditBatch(userId: string, id: string): Promise<void> {
   requireAuth(userId);
   await db.transaction(async (tx) => {
-    // Delete application links first (junction table)
+    // Delete junction table links first
     await tx
       .delete(creditBatchApplications)
       .where(eq(creditBatchApplications.creditBatchId, id));
+    await tx
+      .delete(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.creditBatchId, id));
 
     // Delete the credit batch
     await tx.delete(creditBatches).where(eq(creditBatches.id, id));
