@@ -9,17 +9,97 @@ on:
       - "drizzle.config.ts"
   workflow_dispatch:
     inputs:
-      confirmation:
-        description: "Type CONFIRM to reset and push the schema manually"
+      action:
+        description: "Action to perform"
         required: true
+        type: choice
+        options:
+          - ensure-admin
+          - push-schema
+          - reset-and-push
+        default: ensure-admin
+      confirmation:
+        description: "Type CONFIRM for destructive actions (reset-and-push)"
+        required: false
         type: string
 
 jobs:
-  sync-schema:
+  ensure-admin:
     runs-on: ubuntu-latest
     environment: production
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'ensure-admin'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure admin user
+        run: pnpm db:ensure-admin
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+  push-schema:
+    runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'push-schema' &&
+      github.event.inputs.confirmation == 'CONFIRM'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push schema
+        run: pnpm db:push
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Ensure admin user
+        run: pnpm db:ensure-admin
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+  reset-and-push:
+    runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'reset-and-push' &&
       github.event.inputs.confirmation == 'CONFIRM'
 
     steps:
