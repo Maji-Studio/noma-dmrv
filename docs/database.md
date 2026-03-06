@@ -181,6 +181,7 @@ This template starts with a clean schema for multi-project applications.
 **Notable migrations:**
 - `0002`: Added `formulation_ingredients` table and `ingredient_type` enum; dropped `compost_ratio` from `formulations` (replaced by multi-ingredient model)
 - `0003`: Simplified delivery status enum from `scheduled`/`processing`/`delivered` to `upcoming`/`delivered`; migrated existing rows
+- `0004` (staging): Schema refinements — moved truck weighing fields from `applications` to `deliveries`; added `credit_batch_production_runs` M:M junction table; renamed `feedstock_deliveries.weight_kg` → `wet_mass_kg` and added `storage_location_id` FK; split `production_runs.feedstock_mass_used_kg` into `feedstock_wet_mass_kg` / `feedstock_moisture_percent` / `feedstock_mass_dry_kg`; made `customer_locations` GPS nullable; removed `suppliers.annual_revenue_usd` and `chain_of_custody_ref`
 
 **Migration approach:** Incremental migrations tracked in `/drizzle/` directory.
 

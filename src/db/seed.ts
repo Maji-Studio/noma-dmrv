@@ -418,8 +418,6 @@ async function seed() {
         contactName: 'Asha Mallya',
         contactEmail: 'ashara@kili-forest.coop',
         contactPhone: '+255700000010',
-        annualRevenueUsd: 48000,
-        chainOfCustodyRef: 'COC-KILI-2026',
       });
 
       await tx.insert(schema.customers).values({
@@ -528,7 +526,7 @@ async function seed() {
         gpsLatitude: -3.3335,
         gpsLongitude: 37.3383,
         feedstockTypeId: ids.feedstockTypeWoodchips,
-        weightKg: 3200,
+        wetMassKg: 3200,
         moisturePercent: 18,
         notes: 'Load inspected at gate and weighed on calibrated scale.',
       });
@@ -741,6 +739,8 @@ async function seed() {
         moistureContentPercent: 6.0,
         deliveredWetMassKg: 2200,
         massDryKg: 2068,
+        truckMassOnArrivalKg: 8400,
+        truckMassOnDepartureKg: 6200,
         driverId: ids.driver,
         vehicleId: ids.vehicle,
       });
@@ -813,8 +813,6 @@ async function seed() {
         fieldIdentifier: 'NORTH-12',
         gisBoundaryReference: 'gis://fields/north-12',
         co2eStoredTonnes: 1.1,
-        truckMassOnArrivalKg: 8400,
-        truckMassOnDepartureKg: 6200,
         soilTemperatureSource: 'baseline',
         soilTemperatureC: 24.9,
       });

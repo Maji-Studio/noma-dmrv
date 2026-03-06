@@ -18,6 +18,8 @@ export interface FacilityContextValue {
   selectedFacility: Facility | undefined;
   /** Whether the facilities are still loading */
   isLoading: boolean;
+  /** Whether loading facilities failed */
+  isError: boolean;
 }
 
 export const FacilityContext = createContext<FacilityContextValue | null>(null);

@@ -55,7 +55,9 @@ export const productionRuns = pgTable('production_runs', {
   feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
     () => storageLocations.id
   ),
-  feedstockMassUsedKg: real('feedstock_mass_used_kg'),
+  feedstockWetMassKg: real('feedstock_wet_mass_kg'),
+  feedstockMoisturePercent: real('feedstock_moisture_percent'),
+  feedstockMassDryKg: real('feedstock_mass_dry_kg'),
 
   // --- Metadata ---
   emissionFactorsUsed: jsonb('emission_factors_used'), // Snapshot of factors used

@@ -22,6 +22,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
@@ -159,6 +160,7 @@ export function CustomerList() {
     setCreateError(null);
     setUpdateError(null);
   };
+  useOpenCreateIntent(openCreate);
 
   // Handlers
   const handleCreate = async (data: CustomerFormData) => {

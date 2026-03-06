@@ -92,23 +92,6 @@ export const supplierFormSchema = z.object({
     .optional()
     .or(z.literal("")),
 
-  // Business Information
-  annualRevenueUsd: z.union([
-    z.number().min(0, "Annual revenue must be a positive number"),
-    z.string().transform((val) => {
-      if (val === "") return null;
-      const n = parseFloat(val);
-      return isNaN(n) ? null : n;
-    }),
-    z.null(),
-  ]).optional().nullable(),
-
-  // Certification/Compliance
-  chainOfCustodyRef: z
-    .string()
-    .max(255, "Chain of custody reference must be less than 255 characters")
-    .optional()
-    .or(z.literal("")),
 });
 
 // ============================================
@@ -141,8 +124,6 @@ export const updateSupplierSchema = z.object({
   contactName: z.string().max(255).optional().nullable().or(z.literal("")),
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
-  annualRevenueUsd: z.number().min(0).optional().nullable(),
-  chainOfCustodyRef: z.string().max(255).optional().nullable().or(z.literal("")),
 });
 
 /**

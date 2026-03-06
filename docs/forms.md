@@ -257,7 +257,47 @@ function MyForm() {
 - `FormError` includes `role="alert"` for screen readers
 - `ServerError` includes `role="alert"` and `aria-live="polite"`
 
-### 5. Design System Compliance
+### 5. File Upload (Mockup)
+
+Use `FormFileUpload` for file attachment fields. This is currently a UI mockup — file upload infrastructure (S3, API routes) is not yet implemented.
+
+```typescript
+import { FormField, FormFileUpload } from "@/components/forms";
+
+<FormField
+  id="attachments"
+  label="Attachments"
+  helperText="Upload photos, delivery notes, or lab reports"
+>
+  <FormFileUpload
+    id="attachments"
+    accept="image/*,.pdf,.csv,.xlsx"
+    multiple          // default: true
+    maxSizeMb={10}    // default: 10
+    disabled={isSubmitting}
+  />
+</FormField>
+```
+
+**Props:**
+- `id` — HTML id for the hidden file input
+- `accept` — Accepted MIME types / extensions (default: `"image/*,.pdf,.csv,.xlsx"`)
+- `multiple` — Allow multiple files (default: `true`)
+- `maxSizeMb` — Max file size hint shown in the UI (default: `10`)
+- `disabled` — Disable interaction
+- `error` — Show error border
+- `onChange` — Callback receiving an array of `{ name, size, type }` entries
+
+**Placement:** In forms with a "Documentation" section, the upload field should appear **before** the notes textarea.
+
+**Design:** The component follows the brutalist aesthetic — dashed border, no border-radius, design system color tokens for all states (default, hover, drag-over, error, disabled).
+
+### 6. Notes and Documentation Fields
+
+- Notes, description, and address textarea fields should always span full width when inside a grid layout
+- Wrap them in `<div className="md:col-span-2">` (for 2-column grids) or `md:col-span-3` (for 3-column grids) so they span all columns on medium+ screens
+
+### 7. Design System Compliance
 
 - All form components use design system tokens
 - No hardcoded colors or spacing

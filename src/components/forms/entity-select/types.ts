@@ -53,6 +53,8 @@ export interface EntitySelectProps {
   autoSelectSingle?: boolean;
   /** Always show the search input while dropdown is open */
   alwaysShowSearch?: boolean;
+  /** Hide the search input entirely */
+  hideSearch?: boolean;
 }
 
 export interface UseEntityOptionsParams {

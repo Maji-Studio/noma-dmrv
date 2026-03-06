@@ -86,8 +86,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     }
 
     // Fill required and optional fields
-    await page.fill('input[name="biocharAppliedTons"]', "5");
-    await page.fill('input[name="biocharAppliedDryTons"]', "4.5");
+    await page.fill('input[name="biocharAppliedTons"]', "5000");
+    await page.fill('input[name="biocharAppliedDryTons"]', "4500");
     await page.fill('input[name="fieldSizeHa"]', "2");
     await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
     await page.fill('input[name="cropType"]', "maize");

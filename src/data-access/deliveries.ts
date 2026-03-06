@@ -84,6 +84,63 @@ import { requireAuth } from "./utils";
 // Read Operations
 // ============================================
 
+type DeliveryColumnAvailability = {
+  truckMassOnArrivalKg: boolean;
+  truckMassOnDepartureKg: boolean;
+};
+
+let deliveryColumnAvailabilityPromise: Promise<DeliveryColumnAvailability> | null = null;
+
+async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailability> {
+  if (!deliveryColumnAvailabilityPromise) {
+    deliveryColumnAvailabilityPromise = db
+      .execute<{ column_name: string }>(sql`
+        select column_name
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'deliveries'
+          and column_name in ('truck_mass_on_arrival_kg', 'truck_mass_on_departure_kg')
+      `)
+      .then(({ rows }) => {
+        const columns = new Set(rows.map((row) => row.column_name));
+
+        return {
+          truckMassOnArrivalKg: columns.has("truck_mass_on_arrival_kg"),
+          truckMassOnDepartureKg: columns.has("truck_mass_on_departure_kg"),
+        };
+      });
+  }
+
+  return deliveryColumnAvailabilityPromise;
+}
+
+function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
+  return {
+    id: deliveries.id,
+    code: deliveries.code,
+    facilityId: deliveries.facilityId,
+    orderId: deliveries.orderId,
+    customerLocationId: deliveries.customerLocationId,
+    biocharProductId: deliveries.biocharProductId,
+    storageLocationId: deliveries.storageLocationId,
+    deliveryDate: deliveries.deliveryDate,
+    status: deliveries.status,
+    deliveredWetMassKg: deliveries.deliveredWetMassKg,
+    massDryKg: deliveries.massDryKg,
+    moistureContentPercent: deliveries.moistureContentPercent,
+    truckMassOnArrivalKg: columns.truckMassOnArrivalKg
+      ? deliveries.truckMassOnArrivalKg
+      : sql<number | null>`null`.as("truck_mass_on_arrival_kg"),
+    truckMassOnDepartureKg: columns.truckMassOnDepartureKg
+      ? deliveries.truckMassOnDepartureKg
+      : sql<number | null>`null`.as("truck_mass_on_departure_kg"),
+    driverId: deliveries.driverId,
+    vehicleId: deliveries.vehicleId,
+    createdAt: deliveries.createdAt,
+    updatedAt: deliveries.updatedAt,
+  };
+}
+
 /**
  * Get all deliveries with pagination and filtering
  */
@@ -92,6 +149,7 @@ export async function getDeliveries(
   filters?: Partial<DeliveryFilterData>
 ): Promise<PaginatedDeliveries> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
   const {
     search,
@@ -162,22 +220,7 @@ export async function getDeliveries(
   // Get deliveries with related entity names
   const deliveryList = await db
     .select({
-      id: deliveries.id,
-      code: deliveries.code,
-      facilityId: deliveries.facilityId,
-      orderId: deliveries.orderId,
-      customerLocationId: deliveries.customerLocationId,
-      biocharProductId: deliveries.biocharProductId,
-      storageLocationId: deliveries.storageLocationId,
-      deliveryDate: deliveries.deliveryDate,
-      status: deliveries.status,
-      deliveredWetMassKg: deliveries.deliveredWetMassKg,
-      massDryKg: deliveries.massDryKg,
-      moistureContentPercent: deliveries.moistureContentPercent,
-      driverId: deliveries.driverId,
-      vehicleId: deliveries.vehicleId,
-      createdAt: deliveries.createdAt,
-      updatedAt: deliveries.updatedAt,
+      ...getDeliveryBaseSelection(deliveryColumns),
       orderCode: orders.code,
       facilityName: facilities.name,
       customerName: customers.name,
@@ -214,9 +257,10 @@ export async function getDeliveryById(
   deliveryId: string
 ): Promise<Delivery> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
   const [delivery] = await db
-    .select()
+    .select(getDeliveryBaseSelection(deliveryColumns))
     .from(deliveries)
     .where(eq(deliveries.id, deliveryId));
 
@@ -235,26 +279,12 @@ export async function getDeliveryWithRelations(
   deliveryId: string
 ): Promise<DeliveryDetail> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
   // Get delivery with related data
   const [deliveryRow] = await db
     .select({
-      id: deliveries.id,
-      code: deliveries.code,
-      facilityId: deliveries.facilityId,
-      orderId: deliveries.orderId,
-      customerLocationId: deliveries.customerLocationId,
-      biocharProductId: deliveries.biocharProductId,
-      storageLocationId: deliveries.storageLocationId,
-      deliveryDate: deliveries.deliveryDate,
-      status: deliveries.status,
-      deliveredWetMassKg: deliveries.deliveredWetMassKg,
-      massDryKg: deliveries.massDryKg,
-      moistureContentPercent: deliveries.moistureContentPercent,
-      driverId: deliveries.driverId,
-      vehicleId: deliveries.vehicleId,
-      createdAt: deliveries.createdAt,
-      updatedAt: deliveries.updatedAt,
+      ...getDeliveryBaseSelection(deliveryColumns),
       orderCode: orders.code,
       orderDate: orders.orderDate,
       orderQuantityKg: orders.quantityKg,
@@ -290,6 +320,8 @@ export async function getDeliveryWithRelations(
     deliveredWetMassKg: deliveryRow.deliveredWetMassKg,
     massDryKg: deliveryRow.massDryKg,
     moistureContentPercent: deliveryRow.moistureContentPercent,
+    truckMassOnArrivalKg: deliveryRow.truckMassOnArrivalKg,
+    truckMassOnDepartureKg: deliveryRow.truckMassOnDepartureKg,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
     createdAt: deliveryRow.createdAt,
@@ -440,9 +472,12 @@ export async function createDelivery(
     deliveredWetMassKg?: number | null;
     massDryKg?: number | null;
     moistureContentPercent?: number | null;
+    truckMassOnArrivalKg?: number | null;
+    truckMassOnDepartureKg?: number | null;
   }
 ): Promise<Delivery> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
   // Validate massDryKg <= deliveredWetMassKg
   if (
@@ -487,8 +522,14 @@ export async function createDelivery(
       deliveredWetMassKg: data.deliveredWetMassKg ?? null,
       massDryKg: data.massDryKg ?? null,
       moistureContentPercent: data.moistureContentPercent ?? null,
+      ...(deliveryColumns.truckMassOnArrivalKg
+        ? { truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null }
+        : {}),
+      ...(deliveryColumns.truckMassOnDepartureKg
+        ? { truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null }
+        : {}),
     })
-    .returning();
+    .returning(getDeliveryBaseSelection(deliveryColumns));
 
   return delivery;
 }
@@ -515,13 +556,16 @@ export async function updateDelivery(
     deliveredWetMassKg?: number | null;
     massDryKg?: number | null;
     moistureContentPercent?: number | null;
+    truckMassOnArrivalKg?: number | null;
+    truckMassOnDepartureKg?: number | null;
   }
 ): Promise<Delivery> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
   // Verify delivery exists
   const [existing] = await db
-    .select()
+    .select(getDeliveryBaseSelection(deliveryColumns))
     .from(deliveries)
     .where(eq(deliveries.id, deliveryId));
 
@@ -561,10 +605,16 @@ export async function updateDelivery(
     .update(deliveries)
     .set({
       ...data,
+      ...(deliveryColumns.truckMassOnArrivalKg
+        ? {}
+        : { truckMassOnArrivalKg: undefined }),
+      ...(deliveryColumns.truckMassOnDepartureKg
+        ? {}
+        : { truckMassOnDepartureKg: undefined }),
       updatedAt: new Date(),
     })
     .where(eq(deliveries.id, deliveryId))
-    .returning();
+    .returning(getDeliveryBaseSelection(deliveryColumns));
 
   return updated;
 }

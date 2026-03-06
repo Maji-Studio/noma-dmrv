@@ -172,7 +172,7 @@ export function DriverQuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder="Enter driver name"
+              placeholder="e.g., Driver name"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
               autoFocus
               data-testid="driver-name-input"
@@ -207,7 +207,7 @@ export function DriverQuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, contactPhone: e.target.value }))
               }
-              placeholder="Optional phone number"
+              placeholder="e.g., +255 754 000 000"
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
               data-testid="driver-phone-input"
             />

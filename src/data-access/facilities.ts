@@ -9,6 +9,11 @@ import {
   facilities,
   reactors,
   storageLocations,
+  feedstocks,
+  productionRuns,
+  productionRunFeedstocks,
+  biocharProducts,
+  formulations,
   type Facility,
 } from "@/db/schema";
 import type { FacilityFilterData } from "@/schemas/facilities";
@@ -20,6 +25,22 @@ import type { FacilityFilterData } from "@/schemas/facilities";
 export interface FacilityWithRelations extends Facility {
   reactorCount: number;
   storageLocationCount: number;
+  reactorPreview: Array<{
+    id: string;
+    code: string;
+    identifier: string;
+    reactorType: string;
+  }>;
+  storageSummary: {
+    feedstockBinCount: number;
+    biocharBinCount: number;
+    productBinCount: number;
+  };
+  inventorySummary: {
+    feedstockDryKg: number;
+    biocharKg: number;
+    productKg: number;
+  };
 }
 
 export interface PaginatedFacilities {
@@ -143,45 +164,177 @@ export async function getFacilities(
   // Get counts for each facility
   const facilityIds = facilityList.map((f) => f.id);
 
-  // Get reactor counts
-  const reactorCounts =
-    facilityIds.length > 0
-      ? await db
+  // Run all enrichment queries in parallel
+  const [
+    reactorPreviewRows,
+    storageCountsByType,
+    feedstockInventoryRows,
+    feedstockConsumptionRows,
+    biocharOutputRows,
+    biocharAllocationRows,
+    productInventoryRows,
+  ] = facilityIds.length > 0
+    ? await Promise.all([
+        db
           .select({
+            id: reactors.id,
             facilityId: reactors.facilityId,
-            count: count(),
+            code: reactors.code,
+            identifier: reactors.identifier,
+            reactorType: reactors.reactorType,
           })
           .from(reactors)
           .where(inArray(reactors.facilityId, facilityIds))
-          .groupBy(reactors.facilityId)
-      : [];
-
-  // Get storage location counts
-  const storageCounts =
-    facilityIds.length > 0
-      ? await db
+          .orderBy(asc(reactors.facilityId), asc(reactors.code)),
+        db
           .select({
             facilityId: storageLocations.facilityId,
+            type: storageLocations.type,
             count: count(),
           })
           .from(storageLocations)
           .where(inArray(storageLocations.facilityId, facilityIds))
-          .groupBy(storageLocations.facilityId)
-      : [];
+          .groupBy(storageLocations.facilityId, storageLocations.type),
+        db
+          .select({
+            facilityId: feedstocks.facilityId,
+            totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
+          })
+          .from(feedstocks)
+          .where(inArray(feedstocks.facilityId, facilityIds))
+          .groupBy(feedstocks.facilityId),
+        db
+          .select({
+            facilityId: productionRuns.facilityId,
+            totalConsumedKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
+          })
+          .from(productionRuns)
+          .leftJoin(
+            productionRunFeedstocks,
+            eq(productionRunFeedstocks.productionRunId, productionRuns.id)
+          )
+          .where(inArray(productionRuns.facilityId, facilityIds))
+          .groupBy(productionRuns.facilityId),
+        db
+          .select({
+            facilityId: productionRuns.facilityId,
+            totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
+          })
+          .from(productionRuns)
+          .where(inArray(productionRuns.facilityId, facilityIds))
+          .groupBy(productionRuns.facilityId),
+        db
+          .select({
+            facilityId: biocharProducts.facilityId,
+            totalAllocatedKg: sql<number>`
+              COALESCE(
+                SUM(
+                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+                ),
+                0
+              )
+            `,
+          })
+          .from(biocharProducts)
+          .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+          .where(inArray(biocharProducts.facilityId, facilityIds))
+          .groupBy(biocharProducts.facilityId),
+        db
+          .select({
+            facilityId: biocharProducts.facilityId,
+            totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
+          })
+          .from(biocharProducts)
+          .where(inArray(biocharProducts.facilityId, facilityIds))
+          .groupBy(biocharProducts.facilityId),
+      ])
+    : [[], [], [], [], [], [], []];
 
-  // Create maps for quick lookup
-  const reactorCountMap = new Map(
-    reactorCounts.map((r) => [r.facilityId, Number(r.count)])
+  // Derive reactor counts and preview (max 4) from preview rows
+  const reactorCountMap = new Map<string, number>();
+  const reactorPreviewMap = new Map<
+    string,
+    Array<{ id: string; code: string; identifier: string; reactorType: string }>
+  >();
+  for (const reactor of reactorPreviewRows) {
+    reactorCountMap.set(reactor.facilityId, (reactorCountMap.get(reactor.facilityId) ?? 0) + 1);
+    const existing = reactorPreviewMap.get(reactor.facilityId) ?? [];
+    if (existing.length < 4) {
+      existing.push({
+        id: reactor.id,
+        code: reactor.code,
+        identifier: reactor.identifier,
+        reactorType: reactor.reactorType,
+      });
+      reactorPreviewMap.set(reactor.facilityId, existing);
+    }
+  }
+
+  const storageSummaryMap = new Map<
+    string,
+    { feedstockBinCount: number; biocharBinCount: number; productBinCount: number }
+  >();
+  for (const row of storageCountsByType) {
+    const summary = storageSummaryMap.get(row.facilityId) ?? {
+      feedstockBinCount: 0,
+      biocharBinCount: 0,
+      productBinCount: 0,
+    };
+
+    if (row.type === "feedstock_bin") {
+      summary.feedstockBinCount = Number(row.count);
+    } else if (row.type === "biochar_bin") {
+      summary.biocharBinCount = Number(row.count);
+    } else if (row.type === "product_bin") {
+      summary.productBinCount = Number(row.count);
+    }
+
+    storageSummaryMap.set(row.facilityId, summary);
+  }
+
+  const feedstockInventoryMap = new Map(
+    feedstockInventoryRows.map((row) => [row.facilityId, Number(row.totalDryKg)])
   );
-  const storageCountMap = new Map(
-    storageCounts.map((s) => [s.facilityId, Number(s.count)])
+  const feedstockConsumptionMap = new Map(
+    feedstockConsumptionRows.map((row) => [row.facilityId, Number(row.totalConsumedKg)])
+  );
+  const biocharOutputMap = new Map(
+    biocharOutputRows.map((row) => [row.facilityId, Number(row.totalProducedKg)])
+  );
+  const biocharAllocationMap = new Map(
+    biocharAllocationRows.map((row) => [row.facilityId, Number(row.totalAllocatedKg)])
+  );
+  const productInventoryMap = new Map(
+    productInventoryRows.map((row) => [row.facilityId, Number(row.totalProductKg)])
   );
 
   // Combine data
   const items: FacilityWithRelations[] = facilityList.map((f) => ({
     ...f,
     reactorCount: reactorCountMap.get(f.id) ?? 0,
-    storageLocationCount: storageCountMap.get(f.id) ?? 0,
+    storageLocationCount:
+      (storageSummaryMap.get(f.id)?.feedstockBinCount ?? 0) +
+      (storageSummaryMap.get(f.id)?.biocharBinCount ?? 0) +
+      (storageSummaryMap.get(f.id)?.productBinCount ?? 0),
+    reactorPreview: reactorPreviewMap.get(f.id) ?? [],
+    storageSummary: storageSummaryMap.get(f.id) ?? {
+      feedstockBinCount: 0,
+      biocharBinCount: 0,
+      productBinCount: 0,
+    },
+    inventorySummary: {
+      feedstockDryKg: Math.max(
+        0,
+        (feedstockInventoryMap.get(f.id) ?? 0) -
+          (feedstockConsumptionMap.get(f.id) ?? 0)
+      ),
+      biocharKg: Math.max(
+        0,
+        (biocharOutputMap.get(f.id) ?? 0) -
+          (biocharAllocationMap.get(f.id) ?? 0)
+      ),
+      productKg: productInventoryMap.get(f.id) ?? 0,
+    },
   }));
 
   return {

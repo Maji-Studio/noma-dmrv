@@ -5,12 +5,14 @@
  */
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { formatLocalDate } from "@/lib/date-utils";
-import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormFileUpload, FormEntitySelect } from "@/components/forms";
+import { EntitySelect } from "@/components/forms/entity-select";
 import { Button } from "@/components/ui";
 import {
   feedstockDeliveryFormSchema,
@@ -49,6 +51,7 @@ export function FeedstockDeliveryForm({
   submitLabel,
 }: FeedstockDeliveryFormProps) {
   const isEditMode = !!delivery;
+  const { facilityId: contextFacilityId } = useFacilityContext();
 
   // Quick-add dialogs
   const driverDialog = useQuickAddDialog();
@@ -65,7 +68,7 @@ export function FeedstockDeliveryForm({
   } = useForm({
     resolver: zodResolver(feedstockDeliveryFormSchema),
     defaultValues: {
-      facilityId: delivery?.facilityId ?? "",
+      facilityId: delivery?.facilityId ?? contextFacilityId ?? "",
       deliveryDate: delivery?.deliveryDate
         ? formatLocalDate(new Date(delivery.deliveryDate))
         : formatLocalDate(new Date()),
@@ -75,13 +78,14 @@ export function FeedstockDeliveryForm({
       gpsLatitude: delivery?.gpsLatitude ?? null,
       gpsLongitude: delivery?.gpsLongitude ?? null,
       feedstockTypeId: delivery?.feedstockTypeId ?? "",
-      weightKg: delivery?.weightKg ?? null,
+      storageLocationId: delivery?.storageLocationId ?? "",
+      wetMassKg: delivery?.wetMassKg ?? null,
       moisturePercent: delivery?.moisturePercent ?? null,
       notes: delivery?.notes ?? "",
     },
   });
 
-  const watchWetMass = watch("weightKg");
+  const watchWetMass = watch("wetMassKg");
   const watchMoisture = watch("moisturePercent");
 
   // Display-only dry mass preview (not stored — lives on the feedstock entity)
@@ -127,16 +131,6 @@ export function FeedstockDeliveryForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormEntitySelect
-              control={control}
-              name="facilityId"
-              label="Facility"
-              entityType="facility"
-              placeholder="Select facility..."
-              disabled={isSubmitting}
-              required
-            />
-
             <FormEntitySelect
               control={control}
               name="supplierId"
@@ -194,7 +188,7 @@ export function FeedstockDeliveryForm({
                 id="gpsLatitude"
                 type="number"
                 step="any"
-                placeholder="e.g., -1.2921"
+                placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
                 error={!!errors.gpsLatitude}
                 {...register("gpsLatitude", { setValueAs: numericValue })}
@@ -211,7 +205,7 @@ export function FeedstockDeliveryForm({
                 id="gpsLongitude"
                 type="number"
                 step="any"
-                placeholder="e.g., 36.8219"
+                placeholder="e.g., 37.3404"
                 disabled={isSubmitting}
                 error={!!errors.gpsLongitude}
                 {...register("gpsLongitude", { setValueAs: numericValue })}
@@ -235,28 +229,49 @@ export function FeedstockDeliveryForm({
               placeholder="Select feedstock type..."
               disabled={isSubmitting}
               allowCreate
-              alwaysShowSearch
               createLabel="Add new feedstock type"
               onCreateNew={() => feedstockTypeDialog.open()}
+              hideSearch
             />
+
+            <FormField
+              id="storageLocationId"
+              label="Destination Bin"
+              error={errors.storageLocationId?.message}
+            >
+              <Controller
+                name="storageLocationId"
+                control={control}
+                render={({ field }) => (
+                  <EntitySelect
+                    entityType="storageLocation"
+                    value={field.value || undefined}
+                    onChange={field.onChange}
+                    placeholder="Select bin..."
+                    disabled={isSubmitting || !contextFacilityId}
+                    error={!!errors.storageLocationId}
+                    filterBy={contextFacilityId ? { facilityId: contextFacilityId, type: "feedstock_bin" } : undefined}
+                  />
+                )}
+              />
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
-              id="weightKg"
-              label="Weight / Wet Mass (kg)"
-              error={errors.weightKg?.message}
-              helperText="Total delivered weight including moisture"
+              id="wetMassKg"
+              label="Wet Mass (kg)"
+              error={errors.wetMassKg?.message}
             >
               <FormInput
-                id="weightKg"
+                id="wetMassKg"
                 type="number"
                 step="0.01"
                 min="0"
                 placeholder="e.g., 1500"
                 disabled={isSubmitting}
-                error={!!errors.weightKg}
-                {...register("weightKg", { setValueAs: numericValue })}
+                error={!!errors.wetMassKg}
+                {...register("wetMassKg", { setValueAs: numericValue })}
               />
             </FormField>
 
@@ -264,7 +279,6 @@ export function FeedstockDeliveryForm({
               id="moisturePercent"
               label="Moisture Content (%)"
               error={errors.moisturePercent?.message}
-              helperText="0-100%"
             >
               <FormInput
                 id="moisturePercent"
@@ -305,6 +319,20 @@ export function FeedstockDeliveryForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <div className="md:col-span-2">
               <FormField
+                id="attachments"
+                label="Attachments"
+                helperText="Upload delivery notes, weighbridge tickets, or photos"
+              >
+                <FormFileUpload
+                  id="attachments"
+                  accept="image/*,.pdf,.csv,.xlsx"
+                  disabled={isSubmitting}
+                />
+              </FormField>
+            </div>
+
+            <div className="md:col-span-2">
+              <FormField
                 id="notes"
                 label="Notes"
                 error={errors.notes?.message}
@@ -312,7 +340,7 @@ export function FeedstockDeliveryForm({
               >
                 <FormTextarea
                   id="notes"
-                  placeholder="Enter any additional notes, weighbridge ticket references, bill of lading numbers, etc."
+                  placeholder="Enter delivery note IDs, weighbridge tickets, supplier batch references, or unloading observations."
                   disabled={isSubmitting}
                   error={!!errors.notes}
                   rows={4}

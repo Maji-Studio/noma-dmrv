@@ -7,7 +7,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Calendar, Package, Gauge, Plus } from "@phosphor-icons/react";
+import { Calendar, Package, Plus } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -15,6 +15,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FeedstockDeliveryForm } from "./feedstock-delivery-form";
 import {
   useCreateFeedstockDelivery,
@@ -38,17 +39,12 @@ function formatDate(date: Date): string {
   });
 }
 
-function formatWeight(weightKg: number | null): string {
-  if (weightKg === null) return "—";
-  if (weightKg >= 1000) {
-    return `${(weightKg / 1000).toFixed(2)} t`;
+function formatWetMass(wetMassKg: number | null): string {
+  if (wetMassKg === null) return "—";
+  if (wetMassKg >= 1000) {
+    return `${(wetMassKg / 1000).toFixed(2)} t`;
   }
-  return `${weightKg.toFixed(1)} kg`;
-}
-
-function formatMoisture(moisturePercent: number | null): string {
-  if (moisturePercent === null) return "—";
-  return `${moisturePercent.toFixed(1)}%`;
+  return `${wetMassKg.toFixed(1)} kg`;
 }
 
 // ============================================
@@ -102,18 +98,10 @@ function createColumns(
       ),
     },
     {
-      accessorKey: "weightKg",
-      header: "Weight",
-      cell: ({ row }) => <span className="font-mono">{formatWeight(row.original.weightKg)}</span>,
-    },
-    {
-      accessorKey: "moisturePercent",
-      header: "Moisture",
+      accessorKey: "wetMassKg",
+      header: "Wet Mass",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Gauge size={16} className="text-[var(--color-text-tertiary)]" />
-          <span className="font-mono">{formatMoisture(row.original.moisturePercent)}</span>
-        </div>
+        <span className="font-mono">{formatWetMass(row.original.wetMassKg)}</span>
       ),
     },
     {
@@ -229,6 +217,7 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
   const openView = (delivery: FeedstockDeliveryWithRelations) => { setSideSheet({ entity: delivery, mode: "view" }); };
   const openEdit = (delivery: FeedstockDeliveryWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: delivery, mode: "edit" }); };
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  useOpenCreateIntent(openCreate);
 
   // Memoize columns
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
@@ -324,7 +313,9 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
               : sideSheet.entity
                 ? [
                     sideSheet.entity.feedstockTypeName,
-                    sideSheet.entity.weightKg !== null ? formatWeight(sideSheet.entity.weightKg) : null,
+                    sideSheet.entity.wetMassKg !== null
+                      ? formatWetMass(sideSheet.entity.wetMassKg)
+                      : null,
                   ].filter(Boolean).join(" \u00B7 ") || "Feedstock delivery"
                 : undefined
           }
@@ -345,8 +336,13 @@ export function FeedstockDeliveryList({ stats }: { stats?: React.ReactNode }) {
               title: "Feedstock Details",
               fields: [
                 { label: "Feedstock Type", value: sideSheet.entity.feedstockTypeName },
-                { label: "Weight", value: sideSheet.entity.weightKg !== null ? formatWeight(sideSheet.entity.weightKg) : null },
-                { label: "Moisture", value: sideSheet.entity.moisturePercent !== null ? formatMoisture(sideSheet.entity.moisturePercent) : <StatusBadge status="pending" label="Missing" size="small" /> },
+                {
+                  label: "Wet Mass",
+                  value:
+                    sideSheet.entity.wetMassKg !== null
+                      ? formatWetMass(sideSheet.entity.wetMassKg)
+                      : <StatusBadge status="pending" label="Missing" size="small" />,
+                },
                 { label: "Category", value: sideSheet.entity.feedstockTypeCategory ? <span className="capitalize">{sideSheet.entity.feedstockTypeCategory}</span> : null },
                 { label: "Status", value: <StatusBadge status={sideSheet.entity.status === "complete" ? "complete" : "pending"} label={sideSheet.entity.status === "complete" ? "Complete" : "Missing Data"} /> },
               ],

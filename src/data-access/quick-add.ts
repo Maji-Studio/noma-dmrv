@@ -6,7 +6,7 @@
 
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { drivers, vehicles, feedstockTypes } from "@/db/schema";
+import { drivers, operators, vehicles, feedstockTypes } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 // ============================================
@@ -56,6 +56,40 @@ export async function createDriver(data: CreateDriverData): Promise<EntityOption
     if (error instanceof Error && error.message.includes("unique")) {
       throw new Error("A driver with this code already exists");
     }
+    throw error;
+  }
+}
+
+// ============================================
+// Operator Quick Add
+// ============================================
+
+export interface CreateOperatorData {
+  name: string;
+  credentials?: string | null;
+  contactPhone?: string | null;
+}
+
+export async function createOperator(
+  data: CreateOperatorData
+): Promise<EntityOption> {
+  try {
+    const [operator] = await db
+      .insert(operators)
+      .values({
+        name: data.name,
+        credentials: data.credentials ?? null,
+        contactPhone: data.contactPhone ?? null,
+      })
+      .returning();
+
+    return {
+      id: operator.id,
+      code: operator.name,
+      name: operator.name,
+      subtitle: operator.credentials ?? undefined,
+    };
+  } catch (error) {
     throw error;
   }
 }

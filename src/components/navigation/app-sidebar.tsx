@@ -26,8 +26,6 @@ import {
   Certificate,
   TestTube,
   ListChecks,
-  GearSix,
-  BookOpen,
   SignOut,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
@@ -97,15 +95,10 @@ const navSections: NavSection[] = [
     title: "Verification",
     accent: SECTION_ACCENTS.verification,
     items: [
-      { href: "/samples", label: "Samples", icon: TestTube },
       { href: "/credit-batches", label: "Credit Batches", icon: Certificate },
+      { href: "/samples", label: "Samples", icon: TestTube },
     ],
   },
-];
-
-const footerItems: NavItem[] = [
-  { href: "/management", label: "Management", icon: GearSix },
-  { href: "/knowledge-hub", label: "Knowledge Hub", icon: BookOpen },
 ];
 
 function NavLink({
@@ -242,23 +235,6 @@ export function AppSidebar() {
 
       {/* Footer — pinned to bottom, never scrolls */}
       <div className="shrink-0 px-6 pb-12 flex flex-col gap-4">
-        <div className="border-t border-[var(--color-white-10)] pt-10 flex flex-col gap-1">
-          {footerItems.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              pathname.startsWith(`${item.href}/`);
-            return (
-              <NavLink
-                key={item.href}
-                item={item}
-                isActive={isActive}
-                accent={SECTION_ACCENTS.default}
-                facilityParam={facilityParam}
-              />
-            );
-          })}
-        </div>
-
         {/* User row */}
         <div className="flex items-center gap-10 px-12 py-8 mt-2 bg-[var(--color-white-100)]/[0.03]">
           <div

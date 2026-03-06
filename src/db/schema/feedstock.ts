@@ -34,7 +34,10 @@ export const feedstockDeliveries = pgTable(
     feedstockTypeId: uuid('feedstock_type_id').references(
       () => feedstockTypes.id
     ),
-    weightKg: real('weight_kg'),
+    storageLocationId: uuid('storage_location_id').references(
+      () => storageLocations.id
+    ),
+    wetMassKg: real('wet_mass_kg'),
     moisturePercent: real('moisture_percent'),
 
     // --- Documentation ---
@@ -162,6 +165,10 @@ export const feedstockDeliveriesRelations = relations(
     feedstockType: one(feedstockTypes, {
       fields: [feedstockDeliveries.feedstockTypeId],
       references: [feedstockTypes.id],
+    }),
+    storageLocation: one(storageLocations, {
+      fields: [feedstockDeliveries.storageLocationId],
+      references: [storageLocations.id],
     }),
     feedstocks: many(feedstocks),
   })

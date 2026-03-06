@@ -18,8 +18,6 @@ export const suppliers = pgTable(
     contactName: text('contact_name'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
-    annualRevenueUsd: real('annual_revenue_usd'),
-    chainOfCustodyRef: text('chain_of_custody_ref'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -63,8 +61,8 @@ export const customerLocations = pgTable(
       .notNull()
       .references(() => customers.id),
     name: text('name').notNull(),
-    gpsLatitude: real('gps_latitude').notNull(),
-    gpsLongitude: real('gps_longitude').notNull(),
+    gpsLatitude: real('gps_latitude'),
+    gpsLongitude: real('gps_longitude'),
     address: text('address'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -72,11 +70,11 @@ export const customerLocations = pgTable(
   (table) => [
     check(
       'customer_locations_gps_latitude_range',
-      sql`${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90`
+      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
     ),
     check(
       'customer_locations_gps_longitude_range',
-      sql`${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180`
+      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
   ]
 );

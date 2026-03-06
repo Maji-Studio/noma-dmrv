@@ -34,7 +34,6 @@ export type IngredientInput = {
   ingredientType: FormulationIngredient["ingredientType"];
   name: string;
   ratio?: number | null;
-  description?: string | null;
 };
 
 // ============================================
@@ -201,7 +200,6 @@ export async function createFormulation(
             ingredientType: ing.ingredientType,
             name: ing.name,
             ratio: ing.ratio ?? null,
-            description: ing.description ?? null,
             sortOrder: index,
           }))
         )
@@ -284,7 +282,6 @@ export async function updateFormulation(
               ingredientType: ing.ingredientType,
               name: ing.name,
               ratio: ing.ratio ?? null,
-              description: ing.description ?? null,
               sortOrder: index,
             }))
           )
