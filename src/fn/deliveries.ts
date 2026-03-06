@@ -16,6 +16,7 @@ import {
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   getDeliveriesForSelect as getDeliveriesForSelectData,
   getDeliveryStats as getDeliveryStatsData,
+  getTransportLegsForDelivery as getTransportLegsForDeliveryData,
   isDeliveryCodeAvailable as isDeliveryCodeAvailableData,
   updateDelivery,
   type PaginatedDeliveries,
@@ -29,6 +30,7 @@ import {
   updateDeliverySchema,
   deliveryFilterSchema,
 } from "@/schemas/deliveries";
+import type { TransportLeg } from "@/db/schema";
 import type { ActionResult } from "@/types/actions";
 
 // ============================================
@@ -194,6 +196,29 @@ export async function checkDeliveryCodeFn(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to check delivery code",
+    };
+  }
+}
+
+/**
+ * Get transport legs for a delivery
+ */
+export async function getTransportLegsForDeliveryFn(
+  deliveryId: string
+): Promise<ActionResult<TransportLeg[]>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const legs = await getTransportLegsForDeliveryData(user.id, deliveryId);
+    return { success: true, data: legs };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to load transport legs",
     };
   }
 }

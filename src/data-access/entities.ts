@@ -21,6 +21,7 @@ import {
   productionRunFeedstocks,
   biocharProducts,
   formulations,
+  creditBatches,
 } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
@@ -74,6 +75,8 @@ export async function getEntities(
       return getFormulationsEntity({ search, limit });
     case "feedstockDelivery":
       return getFeedstockDeliveriesEntity({ search, limit });
+    case "creditBatch":
+      return getCreditBatchesEntity({ search, facilityId: filterBy?.facilityId, limit });
     default:
       return [];
   }
@@ -110,6 +113,8 @@ export async function getEntityById(
       return getFormulationEntityById(id);
     case "feedstockDelivery":
       return getFeedstockDeliveryEntityById(id);
+    case "creditBatch":
+      return getCreditBatchEntityById(id);
     default:
       return null;
   }
@@ -1175,5 +1180,79 @@ async function getFeedstockDeliveryEntityById(
     code: result.code,
     name,
     subtitle: result.wetMassKg !== null ? `${result.wetMassKg.toLocaleString()} kg wet` : undefined,
+  };
+}
+
+// ============================================
+// Credit Batches
+// ============================================
+
+async function getCreditBatchesEntity(params: {
+  search?: string;
+  facilityId?: string;
+  limit: number;
+}): Promise<EntityOption[]> {
+  const { search, facilityId, limit } = params;
+
+  const conditions: SQL[] = [];
+
+  if (facilityId) {
+    conditions.push(eq(creditBatches.facilityId, facilityId));
+  }
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push(
+      or(
+        ilike(creditBatches.code, searchPattern),
+        ilike(creditBatches.registry, searchPattern)
+      )!
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const results = await db
+    .select({
+      id: creditBatches.id,
+      code: creditBatches.code,
+      status: creditBatches.status,
+      startDate: creditBatches.startDate,
+      endDate: creditBatches.endDate,
+      facilityName: facilities.name,
+    })
+    .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
+    .where(whereClause)
+    .limit(limit);
+
+  return results.map((r) => ({
+    id: r.id,
+    code: r.code,
+    name: r.code,
+    subtitle: [r.facilityName, r.status].filter(Boolean).join(" · "),
+  }));
+}
+
+async function getCreditBatchEntityById(id: string): Promise<EntityOption | null> {
+  const [result] = await db
+    .select({
+      id: creditBatches.id,
+      code: creditBatches.code,
+      status: creditBatches.status,
+      facilityName: facilities.name,
+    })
+    .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
+    .where(eq(creditBatches.id, id))
+    .limit(1);
+
+  if (!result) return null;
+
+  return {
+    id: result.id,
+    code: result.code,
+    name: result.code,
+    subtitle: [result.facilityName, result.status].filter(Boolean).join(" · "),
   };
 }

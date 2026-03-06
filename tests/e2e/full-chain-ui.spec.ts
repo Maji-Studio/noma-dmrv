@@ -255,9 +255,6 @@ test.describe("Full Chain UI Smoke Test", () => {
               .delete(schema.creditBatchApplications)
               .where(inArray(schema.creditBatchApplications.creditBatchId, creditBatchIds));
             await tx
-              .delete(schema.samples)
-              .where(inArray(schema.samples.creditBatchId, creditBatchIds));
-            await tx
               .delete(schema.creditBatches)
               .where(inArray(schema.creditBatches.id, creditBatchIds));
           }

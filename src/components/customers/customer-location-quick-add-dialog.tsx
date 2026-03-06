@@ -1,66 +1,15 @@
 /**
  * Customer Location Quick Add Dialog
- * Inline dialog for quickly adding new customer locations from the customer edit form.
+ * Dialog for quickly adding new customer locations from the customer edit form.
+ * Uses native <dialog> with showModal() — same pattern as operator/driver quick-add dialogs.
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { X } from "@phosphor-icons/react";
 import { useDialog } from "@/hooks/use-dialog";
-import { cn } from "@/lib/utils";
 import { useCreateCustomerLocation } from "@/hooks/use-customers";
-
-// ============================================
-// Icon components
-// ============================================
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M15 5L5 15M5 5l10 10"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("animate-spin", className)}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="2"
-      />
-      <path
-        d="M8 2a6 6 0 0 1 6 6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 // ============================================
 // Types
@@ -81,22 +30,6 @@ export function CustomerLocationQuickAddDialog({
   onClose,
   customerId,
 }: CustomerLocationQuickAddDialogProps) {
-  if (!isOpen) return null;
-
-  return (
-    <CustomerLocationQuickAddDialogInner
-      isOpen={isOpen}
-      onClose={onClose}
-      customerId={customerId}
-    />
-  );
-}
-
-function CustomerLocationQuickAddDialogInner({
-  isOpen,
-  onClose,
-  customerId,
-}: CustomerLocationQuickAddDialogProps) {
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -105,10 +38,15 @@ function CustomerLocationQuickAddDialogInner({
   });
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateCustomerLocation();
-  const dialogRef = useDialog(isOpen, onClose);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const resetForm = useCallback(() => {
+    setFormData({ name: "", address: "", gpsLatitude: "", gpsLongitude: "" });
+    setError(null);
+  }, []);
+
+  const dialogRef = useDialog(isOpen, onClose, resetForm);
+
+  const handleSubmit = async () => {
     setError(null);
 
     if (!formData.name.trim()) {
@@ -156,17 +94,19 @@ function CustomerLocationQuickAddDialogInner({
     }
   };
 
+  if (!isOpen) return null;
+
   const inputClass =
     "flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
-  return (
+  return createPortal(
     <dialog
       ref={dialogRef}
-      className="w-full max-w-lg p-0 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50"
+      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full m-auto"
       data-testid="location-quick-add-dialog"
       aria-labelledby="location-quick-add-dialog-title"
     >
-      <div className="flex flex-col bg-[var(--color-background-white)]">
+      <div className="flex flex-col">
         <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
           <h2
             id="location-quick-add-dialog-title"
@@ -180,11 +120,11 @@ function CustomerLocationQuickAddDialogInner({
             className="p-4 rounded-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
             aria-label="Close dialog"
           >
-            <XIcon className="w-5 h-5" />
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-24 p-24">
+        <div className="flex flex-col gap-24 p-24" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit(); } }}>
           {error && (
             <div
               role="alert"
@@ -214,7 +154,8 @@ function CustomerLocationQuickAddDialogInner({
 
           <div className="flex flex-col gap-16">
             <label htmlFor="location-address" className="label-medium">
-              Location <span className="text-[var(--color-signal-red)]">*</span>
+              Location{" "}
+              <span className="text-[var(--color-signal-red)]">*</span>
             </label>
             <input
               id="location-address"
@@ -287,19 +228,18 @@ function CustomerLocationQuickAddDialogInner({
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSubmit}
               disabled={createLocation.isPending}
               className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
               data-testid="location-submit-button"
             >
-              {createLocation.isPending && (
-                <SpinnerIcon className="w-4 h-4" />
-              )}
               {createLocation.isPending ? "Adding..." : "Add Location"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
-    </dialog>
+    </dialog>,
+    document.body
   );
 }

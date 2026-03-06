@@ -122,6 +122,8 @@ export async function getOrdersForSelectFn(
       code: string;
       orderDate: Date;
       customerName: string | null;
+      biocharProductCode: string | null;
+      quantityKg: number;
     }>
   >
 > {

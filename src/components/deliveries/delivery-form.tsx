@@ -15,12 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
-import {
-  deliveryFormSchema,
-  deliveryStatuses,
-  type DeliveryFormData,
-  type DeliveryStatus,
-} from "@/schemas/deliveries";
+import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 
@@ -28,11 +23,10 @@ import { useOrdersForSelect } from "@/hooks/use-orders";
 // Constants for select options
 // ============================================
 
-const statusOptions: readonly { value: string; label: string }[] =
-  deliveryStatuses.map((status) => ({
-    value: status,
-    label: formatStatus(status),
-  }));
+const statusOptions: readonly { value: string; label: string }[] = deliveryStatuses.map((status) => ({
+  value: status,
+  label: formatStatus(status),
+}));
 
 // ============================================
 // Formatting helpers
@@ -67,30 +61,25 @@ interface DeliveryFormProps {
   submitLabel?: string;
 }
 
-export function DeliveryForm({
-  delivery,
-  onSubmit,
-  onCancel,
-  isSubmitting = false,
-  submitLabel,
-}: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel }: DeliveryFormProps) {
   const isEditMode = !!delivery;
 
   // Fetch orders for dropdown
   const { data: ordersData } = useOrdersForSelect();
   const orders = ordersData ?? [];
-  const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status)
-    ? delivery.status
-    : "upcoming";
+  const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
 
   const orderOptions = orders.map((o) => ({
     value: o.id,
-    label: [
-      o.customerName,
-      o.orderDate ? new Date(o.orderDate).toLocaleDateString() : undefined,
-    ]
-      .filter(Boolean)
-      .join(" - ") || "Order",
+    label:
+      [
+        o.customerName,
+        o.biocharProductCode,
+        o.quantityKg ? `${o.quantityKg} kg` : undefined,
+        o.orderDate ? new Date(o.orderDate).toLocaleDateString() : undefined,
+      ]
+        .filter(Boolean)
+        .join(" — ") || "Order",
   }));
 
   const {
@@ -153,30 +142,13 @@ export function DeliveryForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="deliveryDate"
-            label="Delivery Date"
-            error={errors.deliveryDate?.message}
-          >
+          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message}>
             <FormInput
               id="deliveryDate"
               type="date"
               disabled={isSubmitting}
               error={!!errors.deliveryDate}
               {...register("deliveryDate")}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="orderId" label="Order" error={errors.orderId?.message}>
-            <FormSelect
-              id="orderId"
-              placeholder="Select order..."
-              disabled={isSubmitting}
-              error={!!errors.orderId}
-              options={orderOptions}
-              {...register("orderId")}
             />
           </FormField>
 
@@ -190,20 +162,32 @@ export function DeliveryForm({
             />
           </FormField>
         </div>
+
+        <FormField id="orderId" label="Order" error={errors.orderId?.message}>
+          <FormSelect
+            id="orderId"
+            placeholder="Select order..."
+            disabled={isSubmitting}
+            error={!!errors.orderId}
+            options={orderOptions}
+            {...register("orderId")}
+          />
+        </FormField>
       </div>
 
-      {/* Mass Measurements Section */}
+      {/* Mass & Moisture Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Mass Measurements
+          Mass & Moisture
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="deliveredWetMassKg"
             label="Wet Mass (kg)"
             error={errors.deliveredWetMassKg?.message}
-            helperText="Total delivered weight including moisture"
+            helperText="As-received weight"
+            required
           >
             <FormInput
               id="deliveredWetMassKg"
@@ -218,37 +202,19 @@ export function DeliveryForm({
             />
           </FormField>
 
-          {/* Auto-calculated dry mass (read-only) */}
-          <div className="flex flex-col justify-center gap-4">
-            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
-            <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-              <span className="body-medium font-medium text-[var(--color-text-primary)]">
-                {calculatedDryMass !== null
-                  ? `${calculatedDryMass.toFixed(2)} kg`
-                  : "—"}
-              </span>
-              {calculatedDryMass !== null && (
-                <span className="body-small text-[var(--color-text-quaternary)]">
-                  = {Number(watchWetMass ?? 0).toFixed(2)} × (1 − {Number(watchMoisture ?? 0).toFixed(2)}%)
-                </span>
-              )}
-            </div>
-            {errors.massDryKg?.message && (
-              <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
-            )}
-            <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
-          </div>
-
           <FormField
             id="moistureContentPercent"
-            label="Moisture Content (%)"
+            label="Moisture (%)"
             error={errors.moistureContentPercent?.message}
-            helperText="Value between 0 and 100"
+            helperText="0–100%"
+            required
           >
             <FormInput
               id="moistureContentPercent"
               type="number"
               step="0.1"
+              min="0"
+              max="100"
               placeholder="e.g., 20"
               disabled={isSubmitting}
               error={!!errors.moistureContentPercent}
@@ -259,6 +225,22 @@ export function DeliveryForm({
           </FormField>
         </div>
 
+        {/* Dry mass preview (display only — auto-calculated) */}
+        <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+          <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+          <span className="body-medium font-medium text-[var(--color-text-primary)]">
+            {calculatedDryMass !== null ? `${calculatedDryMass.toFixed(2)} kg` : "—"}
+          </span>
+          {calculatedDryMass !== null && (
+            <span className="body-small text-[var(--color-text-quaternary)]">
+              = {Number(watchWetMass ?? 0).toFixed(0)} × (1 − {Number(watchMoisture ?? 0)}%)
+            </span>
+          )}
+        </div>
+        {errors.massDryKg?.message && (
+          <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
+        )}
+        <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
       </div>
 
       {/* Truck Weighing Section */}
@@ -266,9 +248,6 @@ export function DeliveryForm({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Truck Weighing at Delivery Site
         </h3>
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Weigh the delivery truck before and after unloading to independently verify the delivered mass. The difference (arrival − departure) should match the delivered amount above.
-        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -312,17 +291,12 @@ export function DeliveryForm({
       {/* Form Actions */}
       <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
         {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
+          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         )}
         <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
+          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
         </Button>
       </div>
     </form>

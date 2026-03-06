@@ -13,7 +13,9 @@ import {
   biocharProducts,
   drivers,
   vehicles,
+  transportLegs,
   type Delivery,
+  type TransportLeg,
 } from "@/db/schema";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
 
@@ -648,6 +650,27 @@ export async function deleteDelivery(
 // ============================================
 // Utility Operations
 // ============================================
+
+/**
+ * Get transport legs linked to a delivery
+ */
+export async function getTransportLegsForDelivery(
+  userId: string,
+  deliveryId: string
+): Promise<TransportLeg[]> {
+  requireAuth(userId);
+
+  return db
+    .select()
+    .from(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, "delivery"),
+        eq(transportLegs.entityId, deliveryId)
+      )
+    )
+    .orderBy(transportLegs.createdAt);
+}
 
 /**
  * Check if a delivery code is available

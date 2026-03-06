@@ -22,6 +22,27 @@
       "when": 1772786706970,
       "tag": "0002_panoramic_mindworm",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772789407590,
+      "tag": "0003_dear_archangel",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772790741856,
+      "tag": "0004_green_martin_li",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772791992014,
+      "tag": "0005_flaky_proteus",
+      "breakpoints": true
     }
   ]
 }

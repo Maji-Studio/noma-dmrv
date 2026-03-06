@@ -150,6 +150,7 @@ const ENTITY_TYPE_LABELS = {
   productionRun: "production run",
   formulation: "formulation",
   feedstockDelivery: "feedstock delivery",
+  creditBatch: "credit batch",
 } as const;
 
 const ENTITY_CREATE_ROUTES = {
@@ -162,6 +163,7 @@ const ENTITY_CREATE_ROUTES = {
   productionRun: "/production-runs",
   formulation: "/formulations",
   feedstockDelivery: "/feedstock-deliveries",
+  creditBatch: "/credit-batches",
 } as const;
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
