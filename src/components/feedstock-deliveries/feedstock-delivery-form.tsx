@@ -8,6 +8,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { formatLocalDate } from "@/lib/date-utils";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui";
@@ -58,6 +59,7 @@ export function FeedstockDeliveryForm({
     register,
     handleSubmit,
     control,
+    watch,
     setValue,
     formState: { errors },
   } = useForm({
@@ -78,6 +80,19 @@ export function FeedstockDeliveryForm({
       notes: delivery?.notes ?? "",
     },
   });
+
+  const watchWetMass = watch("weightKg");
+  const watchMoisture = watch("moisturePercent");
+
+  // Display-only dry mass preview (not stored — lives on the feedstock entity)
+  const previewDryMass =
+    typeof watchWetMass === "number" &&
+    typeof watchMoisture === "number" &&
+    watchWetMass >= 0 &&
+    watchMoisture >= 0 &&
+    watchMoisture <= 100
+      ? deriveMassDryKg(watchWetMass, watchMoisture)
+      : null;
 
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
@@ -229,9 +244,9 @@ export function FeedstockDeliveryForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
               id="weightKg"
-              label="Weight (kg)"
+              label="Weight / Wet Mass (kg)"
               error={errors.weightKg?.message}
-              helperText="Total weight in kilograms"
+              helperText="Total delivered weight including moisture"
             >
               <FormInput
                 id="weightKg"
@@ -263,6 +278,21 @@ export function FeedstockDeliveryForm({
                 {...register("moisturePercent", { setValueAs: numericValue })}
               />
             </FormField>
+          </div>
+
+          {/* Dry mass preview (display only — not stored on this entity) */}
+          <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+            <span className="body-small text-[var(--color-text-tertiary)]">Est. Dry Mass (kg)</span>
+            <span className="body-medium font-medium text-[var(--color-text-primary)]">
+              {previewDryMass !== null
+                ? `${previewDryMass.toFixed(2)} kg`
+                : "—"}
+            </span>
+            {previewDryMass !== null && (
+              <span className="body-small text-[var(--color-text-quaternary)]">
+                = {watchWetMass} × (1 − {watchMoisture}%)
+              </span>
+            )}
           </div>
         </div>
 
