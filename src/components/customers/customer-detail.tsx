@@ -15,6 +15,7 @@ import {
   useDeleteCustomerLocation,
 } from "@/hooks/use-customers";
 import { ServerError } from "@/components/forms";
+import { Button } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { CustomerLocationForm } from "./customer-location-form";
 import type { CustomerLocationFormData } from "@/schemas/customers";
@@ -99,7 +100,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
 
   if (error || !customer) {
     return (
-      <div className="p-32 border border-[var(--color-signal-red)] rounded-[var(--radius-8)] bg-[var(--color-signal-red)]/10">
+      <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
         <p className="body-medium text-[var(--color-signal-red)]">
           {error instanceof Error ? error.message : "Failed to load customer"}
         </p>
@@ -122,7 +123,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       </div>
 
       {/* Customer Header */}
-      <div className="p-32 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)]">
+      <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
         <div className="flex items-start justify-between gap-24">
           <div>
             <h1 className="title-heading-2">{customer.name}</h1>
@@ -171,19 +172,19 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
             Locations ({customer.locations.length})
           </h2>
           {!isAddingLocation && !editingLocation && (
-            <button
-              type="button"
+            <Button
+              size="large"
+              variant="primary"
               onClick={() => setIsAddingLocation(true)}
-              className="h-[48px] px-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity"
             >
               Add Location
-            </button>
+            </Button>
           )}
         </div>
 
         {/* Add Location Form */}
         {isAddingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)]">
+          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Add New Location</h3>
             {createError && <ServerError message={createError} />}
             <CustomerLocationForm
@@ -200,7 +201,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
 
         {/* Edit Location Form */}
         {editingLocation && (
-          <div className="p-32 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)]">
+          <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Edit Location</h3>
             {updateError && <ServerError message={updateError} />}
             <CustomerLocationForm
@@ -218,7 +219,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
 
         {/* Locations List */}
         {customer.locations.length === 0 ? (
-          <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] rounded-[var(--radius-8)] flex flex-col items-center justify-center gap-24 text-center">
+          <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
             <div className="flex flex-col gap-16">
               <h3 className="title-heading-4">No locations yet</h3>
               <p className="body-medium text-[var(--color-text-secondary)]">

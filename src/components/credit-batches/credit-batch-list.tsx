@@ -23,7 +23,11 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
-import { CreditBatchForm } from "./credit-batch-form";
+import {
+  CreditBatchForm,
+  type ProductionRunOption,
+  type ApplicationOption,
+} from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import {
   useCreditBatches,
@@ -65,22 +69,8 @@ function CreditStatusBadge({ status }: { status: CreditBatchStatus }) {
 // ============================================
 
 interface CreditBatchListProps {
-  applications?: Array<{
-    id: string;
-    code: string;
-    applicationDate: Date | null;
-    biocharAppliedDryTons: number | null;
-    fieldIdentifier: string | null;
-    co2eStoredTonnes: number | null;
-  }>;
-  productionRuns?: Array<{
-    id: string;
-    code: string;
-    date: string | null;
-    feedstockMassDryKg: number | null;
-    biocharOutputKg: number | null;
-    status: string;
-  }>;
+  applications?: ApplicationOption[];
+  productionRuns?: ProductionRunOption[];
 }
 
 export function CreditBatchList({

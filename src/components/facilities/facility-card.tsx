@@ -8,17 +8,13 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { FacilityWithRelations } from "@/data-access/facilities";
+import { formatMass } from "@/lib/format-utils";
 
 interface FacilityCardProps {
   facility: FacilityWithRelations;
   onView: (facility: FacilityWithRelations) => void;
   onEdit: (facility: FacilityWithRelations) => void;
   onDelete: (facilityId: string) => void;
-}
-
-function formatMass(kg: number) {
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
-  return `${Math.round(kg).toLocaleString()} kg`;
 }
 
 export function FacilityCard({

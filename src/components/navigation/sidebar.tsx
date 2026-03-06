@@ -42,7 +42,7 @@ export function Sidebar({ projectId }: SidebarProps) {
               key={link.href}
               href={link.href}
               className={cn(
-                "flex items-center gap-16 px-24 py-16 rounded-[var(--radius-8)] transition-colors duration-300",
+                "flex items-center gap-16 px-24 py-16 rounded-[8px] transition-colors duration-300",
                 isActive
                   ? "bg-[var(--clr-dark-purple)] text-[var(--color-text-white-primary)]"
                   : "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-medium)]"

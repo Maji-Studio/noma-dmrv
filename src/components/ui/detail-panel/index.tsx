@@ -49,7 +49,7 @@ function DetailSection({ title, children, className }: DetailSectionProps) {
       <h3 className="title-heading-4 text-[var(--color-text-primary)]">
         {title}
       </h3>
-      <div className="bg-[var(--color-background-light)] p-16 rounded-[var(--radius-8)] flex flex-col gap-16">
+      <div className="bg-[var(--color-background-light)] p-16 rounded-[8px] flex flex-col gap-16">
         {children}
       </div>
     </div>

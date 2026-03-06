@@ -258,6 +258,8 @@ export async function createDeliveryFn(
           deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
           massDryKg: validated.massDryKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
+          truckMassOnArrivalKg: validated.truckMassOnArrivalKg ?? null,
+          truckMassOnDepartureKg: validated.truckMassOnDepartureKg ?? null,
         });
       }
     );
@@ -307,6 +309,8 @@ export async function updateDeliveryFn(
       deliveredWetMassKg: validated.deliveredWetMassKg,
       massDryKg: validated.massDryKg,
       moistureContentPercent: validated.moistureContentPercent,
+      truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
+      truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
     });
 
     return { success: true, data: delivery };

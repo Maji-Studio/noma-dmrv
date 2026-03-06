@@ -255,7 +255,7 @@ CREATE TABLE "credit_batches" (
 	"status" "credit_batch_status" DEFAULT 'pending' NOT NULL,
 	"start_date" date NOT NULL,
 	"end_date" date NOT NULL,
-	"certifier" text DEFAULT 'isometric',
+	"certifier" text DEFAULT 'isometric' NOT NULL,
 	"registry" text,
 	"weight_tons" real,
 	"value" real,
@@ -293,7 +293,8 @@ CREATE TABLE "credit_batches" (
 	CONSTRAINT "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon" CHECK ("credit_batches"."durability_option" <> '1000_year'::durability_option or (
         "credit_batches"."mean_random_reflectance_percent" is not null and
         "credit_batches"."mean_non_reactive_carbon_percent" is not null
-      ))
+      )),
+	CONSTRAINT "credit_batches_certifier_is_isometric" CHECK ("credit_batches"."certifier" = 'isometric')
 );
 --> statement-breakpoint
 CREATE TABLE "documents" (
@@ -399,14 +400,12 @@ CREATE TABLE "feedstock_deliveries" (
 	"gps_latitude" real,
 	"gps_longitude" real,
 	"feedstock_type_id" uuid,
-	"storage_location_id" uuid,
 	"wet_mass_kg" real,
 	"moisture_percent" real,
 	"notes" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "feedstock_deliveries_code_unique" UNIQUE("code"),
-	CONSTRAINT "feedstock_deliveries_wet_mass_kg_non_negative" CHECK ("feedstock_deliveries"."wet_mass_kg" is null or "feedstock_deliveries"."wet_mass_kg" >= 0),
 	CONSTRAINT "feedstock_deliveries_gps_latitude_range" CHECK ("feedstock_deliveries"."gps_latitude" is null or ("feedstock_deliveries"."gps_latitude" >= -90 and "feedstock_deliveries"."gps_latitude" <= 90)),
 	CONSTRAINT "feedstock_deliveries_gps_longitude_range" CHECK ("feedstock_deliveries"."gps_longitude" is null or ("feedstock_deliveries"."gps_longitude" >= -180 and "feedstock_deliveries"."gps_longitude" <= 180))
 );
@@ -510,6 +509,7 @@ CREATE TABLE "suppliers" (
 	"contact_name" text,
 	"contact_email" text,
 	"contact_phone" text,
+	"source_region" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "suppliers_code_unique" UNIQUE("code"),
@@ -605,7 +605,6 @@ CREATE TABLE "production_samples" (
 CREATE TABLE "samples" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"production_run_id" uuid NOT NULL,
-	"credit_batch_id" uuid,
 	"sample_code" text NOT NULL,
 	"sampling_time" timestamp NOT NULL,
 	"weight_grams" real,
@@ -721,7 +720,8 @@ CREATE TABLE "deliveries" (
 	CONSTRAINT "deliveries_delivered_wet_mass_non_negative" CHECK ("deliveries"."delivered_wet_mass_kg" is null or "deliveries"."delivered_wet_mass_kg" >= 0),
 	CONSTRAINT "deliveries_mass_dry_lte_wet_mass" CHECK ("deliveries"."mass_dry_kg" is null or "deliveries"."delivered_wet_mass_kg" is null or "deliveries"."mass_dry_kg" <= "deliveries"."delivered_wet_mass_kg"),
 	CONSTRAINT "deliveries_truck_mass_on_arrival_non_negative" CHECK ("deliveries"."truck_mass_on_arrival_kg" is null or "deliveries"."truck_mass_on_arrival_kg" >= 0),
-	CONSTRAINT "deliveries_truck_mass_on_departure_non_negative" CHECK ("deliveries"."truck_mass_on_departure_kg" is null or "deliveries"."truck_mass_on_departure_kg" >= 0)
+	CONSTRAINT "deliveries_truck_mass_on_departure_non_negative" CHECK ("deliveries"."truck_mass_on_departure_kg" is null or "deliveries"."truck_mass_on_departure_kg" >= 0),
+	CONSTRAINT "deliveries_truck_mass_arrival_gte_departure" CHECK ("deliveries"."truck_mass_on_arrival_kg" is null or "deliveries"."truck_mass_on_departure_kg" is null or "deliveries"."truck_mass_on_arrival_kg" >= "deliveries"."truck_mass_on_departure_kg")
 );
 --> statement-breakpoint
 CREATE TABLE "orders" (
@@ -730,7 +730,7 @@ CREATE TABLE "orders" (
 	"facility_id" uuid NOT NULL,
 	"order_date" timestamp NOT NULL,
 	"customer_id" uuid NOT NULL,
-	"customer_location_id" uuid NOT NULL,
+	"customer_location_id" uuid,
 	"biochar_product_id" uuid NOT NULL,
 	"quantity_kg" real NOT NULL,
 	"packaging" "packaging_type" NOT NULL,
@@ -850,7 +850,6 @@ ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_supplier
 ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_vehicle_id_vehicles_id_fk" FOREIGN KEY ("vehicle_id") REFERENCES "public"."vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_feedstock_type_id_feedstock_types_id_fk" FOREIGN KEY ("feedstock_type_id") REFERENCES "public"."feedstock_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_feedstock_delivery_id_feedstock_deliveries_id_fk" FOREIGN KEY ("feedstock_delivery_id") REFERENCES "public"."feedstock_deliveries"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_feedstock_type_id_feedstock_types_id_fk" FOREIGN KEY ("feedstock_type_id") REFERENCES "public"."feedstock_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -870,7 +869,6 @@ ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_feedstock_storage_
 ALTER TABLE "production_samples" ADD CONSTRAINT "production_samples_production_run_id_production_runs_id_fk" FOREIGN KEY ("production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "production_samples" ADD CONSTRAINT "production_samples_sampled_by_id_operators_id_fk" FOREIGN KEY ("sampled_by_id") REFERENCES "public"."operators"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "samples" ADD CONSTRAINT "samples_production_run_id_production_runs_id_fk" FOREIGN KEY ("production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "samples" ADD CONSTRAINT "samples_credit_batch_id_credit_batches_id_fk" FOREIGN KEY ("credit_batch_id") REFERENCES "public"."credit_batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_formulation_id_formulations_id_fk" FOREIGN KEY ("formulation_id") REFERENCES "public"."formulations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_linked_production_run_id_production_runs_id_fk" FOREIGN KEY ("linked_production_run_id") REFERENCES "public"."production_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
