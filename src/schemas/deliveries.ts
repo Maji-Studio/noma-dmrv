@@ -91,6 +91,22 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
       });
     }
   }
+
+  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnArrivalKg"],
+      message: "Truck mass on arrival must be >= 0",
+    });
+  }
+
+  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnDepartureKg"],
+      message: "Truck mass on departure must be >= 0",
+    });
+  }
 });
 
 // ============================================
@@ -139,6 +155,22 @@ export const createDeliverySchema = z.object({
       message: "Dry mass must be less than or equal to wet mass",
     });
   }
+
+  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnArrivalKg"],
+      message: "Truck mass on arrival must be >= 0",
+    });
+  }
+
+  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnDepartureKg"],
+      message: "Truck mass on departure must be >= 0",
+    });
+  }
 });
 
 /**
@@ -183,6 +215,22 @@ export const updateDeliverySchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["massDryKg"],
       message: "Dry mass must be less than or equal to wet mass",
+    });
+  }
+
+  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnArrivalKg"],
+      message: "Truck mass on arrival must be >= 0",
+    });
+  }
+
+  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnDepartureKg"],
+      message: "Truck mass on departure must be >= 0",
     });
   }
 });

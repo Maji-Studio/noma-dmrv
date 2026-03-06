@@ -21,6 +21,11 @@ import {
 } from "@/schemas/production-run-readings";
 import type { ActionResult } from "@/types/actions";
 
+function toValidTimestamp(timestamp: string | Date): Date | null {
+  const parsed = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export async function getProductionRunReadingsListFn(
   productionRunId?: string,
   facilityId?: string
@@ -52,13 +57,18 @@ export async function createProductionRunReadingFn(
     }
 
     const validated = createProductionRunReadingSchema.parse(data);
+    const timestamp = toValidTimestamp(validated.timestamp);
+
+    if (!timestamp) {
+      return {
+        success: false,
+        error: "Validation error: Invalid timestamp",
+      };
+    }
 
     const reading = await createData(user.id, {
       productionRunId: validated.productionRunId,
-      timestamp:
-        validated.timestamp instanceof Date
-          ? validated.timestamp
-          : new Date(validated.timestamp),
+      timestamp,
       temperatureC: validated.temperatureC ?? null,
       pressureBar: validated.pressureBar ?? null,
       gasFlowRate: validated.gasFlowRate ?? null,
@@ -90,14 +100,19 @@ export async function updateProductionRunReadingFn(
     }
 
     const validated = updateProductionRunReadingSchema.parse(data);
+    const timestamp = validated.timestamp
+      ? (toValidTimestamp(validated.timestamp) ?? undefined)
+      : undefined;
+
+    if (validated.timestamp && !timestamp) {
+      return {
+        success: false,
+        error: "Validation error: Invalid timestamp",
+      };
+    }
 
     const reading = await updateData(user.id, validated.readingId, {
-      timestamp:
-        validated.timestamp instanceof Date
-          ? validated.timestamp
-          : validated.timestamp
-            ? new Date(validated.timestamp)
-            : undefined,
+      timestamp,
       temperatureC: validated.temperatureC,
       pressureBar: validated.pressureBar,
       gasFlowRate: validated.gasFlowRate,

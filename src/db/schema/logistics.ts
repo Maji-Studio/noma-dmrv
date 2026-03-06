@@ -129,6 +129,14 @@ export const deliveries = pgTable(
       'deliveries_mass_dry_lte_wet_mass',
       sql`${table.massDryKg} is null or ${table.deliveredWetMassKg} is null or ${table.massDryKg} <= ${table.deliveredWetMassKg}`
     ),
+    check(
+      'deliveries_truck_mass_on_arrival_non_negative',
+      sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnArrivalKg} >= 0`
+    ),
+    check(
+      'deliveries_truck_mass_on_departure_non_negative',
+      sql`${table.truckMassOnDepartureKg} is null or ${table.truckMassOnDepartureKg} >= 0`
+    ),
   ]
 );
 

@@ -119,8 +119,8 @@ export function ApplicationForm({
   const handleFormSubmit = handleSubmit(async (data) => {
     await onSubmit({
       ...data,
-      biocharAppliedTons: applicationKgToTons(data.biocharAppliedTons) ?? 0,
-      biocharAppliedDryTons: applicationKgToTons(data.biocharAppliedDryTons) ?? 0,
+      biocharAppliedTons: applicationKgToTons(data.biocharAppliedTons)!,
+      biocharAppliedDryTons: applicationKgToTons(data.biocharAppliedDryTons)!,
     });
   });
 
