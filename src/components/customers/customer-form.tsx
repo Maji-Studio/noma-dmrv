@@ -360,7 +360,11 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
     <div
       className="p-16 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] flex flex-col gap-16"
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
+        if (
+          e.key === "Enter" &&
+          e.target instanceof HTMLInputElement &&
+          ["text", "number", "search", "email", "tel", "url"].includes(e.target.type)
+        ) {
           e.preventDefault();
         }
       }}

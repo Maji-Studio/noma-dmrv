@@ -170,6 +170,7 @@ export async function createSupplier(
     contactName?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
+    sourceRegion?: string | null;
   }
 ): Promise<Supplier> {
   requireAuth(userId);
@@ -197,6 +198,7 @@ export async function createSupplier(
         contactName: data.contactName ?? null,
         contactEmail: data.contactEmail ?? null,
         contactPhone: data.contactPhone ?? null,
+        sourceRegion: data.sourceRegion ?? null,
       })
       .returning();
 
@@ -229,6 +231,7 @@ export async function updateSupplier(
     contactName?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
+    sourceRegion?: string | null;
   }
 ): Promise<Supplier> {
   requireAuth(userId);

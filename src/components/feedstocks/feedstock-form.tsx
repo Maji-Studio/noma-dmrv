@@ -55,7 +55,6 @@ export function FeedstockForm({
       moistureContentPercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
       massDryKg: feedstock?.massDryKg ?? ("" as unknown as number),
       storageLocationId: feedstock?.storageLocationId ?? "",
-      feedstockSourceRegion: feedstock?.feedstockSourceRegion ?? "",
       notes: feedstock?.notes ?? "",
     },
   });
@@ -233,20 +232,6 @@ export function FeedstockForm({
               disabled={isSubmitting}
               filterBy={{ type: "feedstock_bin" }}
             />
-
-            <FormField
-              id="feedstockSourceRegion"
-              label="Source Region"
-              error={errors.feedstockSourceRegion?.message}
-            >
-              <FormInput
-                id="feedstockSourceRegion"
-                placeholder="e.g., Northern Tanzania"
-                disabled={isSubmitting}
-                error={!!errors.feedstockSourceRegion}
-                {...register("feedstockSourceRegion")}
-              />
-            </FormField>
           </div>
         </div>
 

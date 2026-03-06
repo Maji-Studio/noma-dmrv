@@ -92,6 +92,12 @@ export const supplierFormSchema = z.object({
     .optional()
     .or(z.literal("")),
 
+  // Sourcing
+  sourceRegion: z
+    .string()
+    .max(255, "Source region must be less than 255 characters")
+    .optional()
+    .or(z.literal("")),
 });
 
 // ============================================
@@ -124,6 +130,7 @@ export const updateSupplierSchema = z.object({
   contactName: z.string().max(255).optional().nullable().or(z.literal("")),
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
+  sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
 });
 
 /**

@@ -215,16 +215,8 @@ export function EntitySelect({
   // Fetch selected entity details
   const { data: selectedEntity } = useEntityById(entityType, value);
 
-  // Get display text for the selected value
-  const displayText = useMemo(() => {
-    if (selectedEntity) {
-      if (selectedEntity.subtitle) {
-        return `${selectedEntity.name} (${selectedEntity.subtitle})`;
-      }
-      return selectedEntity.name;
-    }
-    return "";
-  }, [selectedEntity]);
+  // Get display text for the selected value (name only; subtitle shown in dropdown)
+  const displayText = selectedEntity?.name ?? "";
 
   const handleCreatedEntity = useCallback(
     (entity: EntityOption) => {

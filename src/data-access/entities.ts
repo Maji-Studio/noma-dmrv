@@ -1137,14 +1137,20 @@ async function getFeedstockDeliveriesEntity(params: {
 
   return results.map((r) => {
     const nameParts = [r.feedstockTypeName, r.supplierName].filter(Boolean);
-    const name = nameParts.length > 0
-      ? `${nameParts.join(" from ")} · ${new Date(r.deliveryDate).toLocaleDateString()}`
-      : `${r.code} · ${new Date(r.deliveryDate).toLocaleDateString()}`;
+    const parts: string[] = [];
+    if (nameParts.length > 0) {
+      parts.push(nameParts.join(" from "));
+    } else {
+      parts.push(r.code);
+    }
+    if (r.wetMassKg !== null) {
+      parts.push(`${r.wetMassKg.toLocaleString()} kg`);
+    }
+    parts.push(new Date(r.deliveryDate).toLocaleDateString());
     return {
       id: r.id,
       code: r.code,
-      name,
-      subtitle: r.wetMassKg !== null ? `${r.wetMassKg.toLocaleString()} kg wet` : undefined,
+      name: parts.join(" · "),
     };
   });
 }
@@ -1171,15 +1177,21 @@ async function getFeedstockDeliveryEntityById(
   if (!result) return null;
 
   const nameParts = [result.feedstockTypeName, result.supplierName].filter(Boolean);
-  const name = nameParts.length > 0
-    ? `${nameParts.join(" from ")} · ${new Date(result.deliveryDate).toLocaleDateString()}`
-    : `${result.code} · ${new Date(result.deliveryDate).toLocaleDateString()}`;
+  const parts: string[] = [];
+  if (nameParts.length > 0) {
+    parts.push(nameParts.join(" from "));
+  } else {
+    parts.push(result.code);
+  }
+  if (result.wetMassKg !== null) {
+    parts.push(`${result.wetMassKg.toLocaleString()} kg`);
+  }
+  parts.push(new Date(result.deliveryDate).toLocaleDateString());
 
   return {
     id: result.id,
     code: result.code,
-    name,
-    subtitle: result.wetMassKg !== null ? `${result.wetMassKg.toLocaleString()} kg wet` : undefined,
+    name: parts.join(" · "),
   };
 }
 

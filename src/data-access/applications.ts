@@ -100,7 +100,7 @@ export async function createApplication(
       applicationDate: data.applicationDate,
       deliveryId: data.deliveryId,
       biocharAppliedTons: data.biocharAppliedTons,
-      biocharAppliedDryTons: data.biocharAppliedDryTons ?? data.biocharAppliedTons,
+      biocharAppliedDryTons: data.biocharAppliedDryTons ?? null,
       fieldSizeHa: data.fieldSizeHa ?? null,
       fieldIdentifier: data.fieldIdentifier || null,
       cropType: data.cropType || null,

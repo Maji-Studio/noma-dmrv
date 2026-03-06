@@ -141,7 +141,8 @@ export function useTransportLegsForDelivery(deliveryId: string | undefined) {
   return useQuery({
     queryKey: deliveryKeys.transportLegs(deliveryId ?? ""),
     queryFn: async () => {
-      const result = await getTransportLegsForDeliveryFn(deliveryId!);
+      if (!deliveryId) return [];
+      const result = await getTransportLegsForDeliveryFn(deliveryId);
       if (!result.success) {
         throw new Error(result.error);
       }
