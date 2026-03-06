@@ -119,7 +119,6 @@ export const feedstockFormSchema = z
 
     // Storage
     storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-    feedstockSourceRegion: z.string().max(255).optional().or(z.literal("")),
 
     // Documentation
     notes: z
@@ -144,7 +143,6 @@ export const updateFeedstockSchema = z.object({
   moistureContentPercent: z.number().min(0).max(100).optional(),
   massDryKg: z.number().min(0).optional(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockSourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),
 });
 

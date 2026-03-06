@@ -88,7 +88,6 @@ export const feedstockDeliveryFormSchema = z.object({
 
   // Feedstock details
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   wetMassKg: z.union([
     z.number().min(0, "Wet mass must be positive"),
     z.string().transform((val, ctx) => {
@@ -166,7 +165,6 @@ export const updateFeedstockDeliverySchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   wetMassKg: z.number().min(0).optional().nullable(),
   moisturePercent: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),

@@ -58,6 +58,7 @@ export function SupplierForm({
       contactName: supplier?.contactName ?? "",
       contactEmail: supplier?.contactEmail ?? "",
       contactPhone: supplier?.contactPhone ?? "",
+      sourceRegion: supplier?.sourceRegion ?? "",
     },
   });
 
@@ -114,6 +115,22 @@ export function SupplierForm({
               disabled={isSubmitting}
               error={!!errors.location}
               {...register("location")}
+            />
+          </FormField>
+
+          <FormField
+            id="sourceRegion"
+            label="Source Region"
+            error={errors.sourceRegion?.message}
+            helperText="Feedstock sourcing region (used for Isometric SC assessment)"
+          >
+            <FormInput
+              id="sourceRegion"
+              type="text"
+              placeholder="e.g., Kilimanjaro"
+              disabled={isSubmitting}
+              error={!!errors.sourceRegion}
+              {...register("sourceRegion")}
             />
           </FormField>
         </div>

@@ -337,7 +337,7 @@ export async function getOrderWithRelations(
 export async function getOrdersForSelect(
   userId: string,
   facilityId?: string
-): Promise<Array<{ id: string; code: string; orderDate: Date; customerName: string | null }>> {
+): Promise<Array<{ id: string; code: string; orderDate: Date; customerName: string | null; biocharProductCode: string | null; quantityKg: number }>> {
   requireAuth(userId);
 
   const conditions: SQL[] = [];
@@ -353,9 +353,12 @@ export async function getOrdersForSelect(
       code: orders.code,
       orderDate: orders.orderDate,
       customerName: customers.name,
+      biocharProductCode: biocharProducts.code,
+      quantityKg: orders.quantityKg,
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
     .where(whereClause)
     .orderBy(desc(orders.orderDate));
 }
@@ -373,7 +376,7 @@ export async function createOrder(
     code: string;
     facilityId: string;
     customerId: string;
-    customerLocationId: string;
+    customerLocationId?: string | null;
     biocharProductId: string;
     orderDate: Date;
     quantityKg: number;
@@ -434,7 +437,7 @@ export async function updateOrder(
     code?: string;
     facilityId?: string;
     customerId?: string;
-    customerLocationId?: string;
+    customerLocationId?: string | null;
     biocharProductId?: string;
     orderDate?: Date;
     quantityKg?: number;

@@ -9,6 +9,19 @@ export interface ApplicationDeliveryOption {
   massDryKg: number | null;
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
+  moistureContentPercent: number | null;
+}
+
+/**
+ * Calculate dry mass from wet mass and moisture content.
+ * Formula: dryKg = wetKg * (1 - moisturePercent / 100)
+ */
+export function calculateDryMass(
+  wetKg: number | null | undefined,
+  moisturePercent: number | null | undefined,
+): number | null {
+  if (wetKg == null || moisturePercent == null) return null;
+  return wetKg * (1 - moisturePercent / 100);
 }
 
 export function applicationTonsToKg(value: number | null | undefined): number | null {
@@ -58,7 +71,7 @@ export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOpt
 export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDeliveryOption): string {
   return [
     delivery.orderCode ?? delivery.code,
-    delivery.formulationName ?? "Unknown formulation",
+    delivery.formulationName,
     getApplicationDeliveryMassLabel(delivery),
     formatDeliveryDate(delivery.deliveryDate),
   ]
