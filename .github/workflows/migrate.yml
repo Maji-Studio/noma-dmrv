@@ -7,10 +7,20 @@ on:
     paths:
       - "drizzle/**"
       - "drizzle.config.ts"
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type CONFIRM to run migrations manually'
+        required: true
+        type: string
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'CONFIRM')
 
     steps:
       - name: Checkout code

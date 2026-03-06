@@ -290,7 +290,7 @@ export function FeedstockDeliveryForm({
             </span>
             {previewDryMass !== null && (
               <span className="body-small text-[var(--color-text-quaternary)]">
-                = {watchWetMass} × (1 − {watchMoisture}%)
+                = {Number(watchWetMass ?? 0).toFixed(2)} × (1 − {Number(watchMoisture ?? 0).toFixed(2)}%)
               </span>
             )}
           </div>
