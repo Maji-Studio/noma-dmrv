@@ -44,7 +44,12 @@ async function ensureAdmin() {
       .limit(1);
 
     if (existing) {
-      // Update password hash
+      // Update password hash and ensure emailVerified
+      await db
+        .update(schema.users)
+        .set({ emailVerified: true })
+        .where(eq(schema.users.id, existing.id));
+
       const [account] = await db
         .select({ id: schema.accounts.id })
         .from(schema.accounts)
