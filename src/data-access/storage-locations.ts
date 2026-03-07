@@ -225,6 +225,7 @@ async function enrichStorageLocationRows(
           .where(
             and(
               eq(applications.status, "applied"),
+              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IS NOT NULL`,
               sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IN (${storageLocationIdsSql})`
             )
           )
@@ -323,7 +324,9 @@ async function enrichStorageLocationRows(
     productInventoryRows.map((row) => [row.storageLocationId ?? "", row])
   );
   const productApplicationMap = new Map(
-    productApplicationRows.map((row) => [row.storageLocationId, row])
+    productApplicationRows
+      .filter((row) => row.storageLocationId != null)
+      .map((row) => [row.storageLocationId, row])
   );
 
   return rows.map((row) => {

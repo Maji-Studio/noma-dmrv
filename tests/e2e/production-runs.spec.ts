@@ -35,7 +35,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     const today = new Date().toISOString().split("T")[0];
     await page.fill('input[name="date"]', today);
 
-    await page.waitForTimeout(500);
+    await page.waitForLoadState("networkidle");
     await selectEntity(
       page,
       "Source Bin",

@@ -22,6 +22,19 @@ export default async function globalTeardown() {
     process.env.DATABASE_URL ||
     "postgresql://postgres:postgres@localhost:5432/app_template_test";
 
+  const url = new URL(databaseUrl);
+  const dbName = url.pathname.replace(/^\//, "");
+  const hostname = url.hostname;
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+  const isTestDb = dbName.includes("_test") || dbName.includes("_e2e");
+  if (!isLocalHost && !isTestDb) {
+    console.error(
+      `[global-teardown] ABORTED: database "${dbName}" on host "${hostname}" does not look like a test database. ` +
+      `Host must be localhost/127.0.0.1, or DB name must contain "_test" or "_e2e".`
+    );
+    process.exit(1);
+  }
+
   const pool = new Pool({ connectionString: databaseUrl });
 
   try {

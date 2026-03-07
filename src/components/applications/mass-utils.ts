@@ -22,6 +22,7 @@ export function calculateDryMass(
   moisturePercent: number | null | undefined,
 ): number | null {
   if (wetKg == null || moisturePercent == null) return null;
+  if (wetKg < 0 || moisturePercent < 0 || moisturePercent > 100) return null;
   return deriveMassDryKg(wetKg, moisturePercent);
 }
 
