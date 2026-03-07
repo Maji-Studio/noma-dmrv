@@ -62,7 +62,7 @@ function Item({ children, value, className }: AccordionItemProps) {
     <BaseAccordion.Item
       value={value}
       className={cn(
-        "border border-[var(--color-border-tertiary)] rounded-[var(--radius-8)] bg-[var(--color-background-white)] overflow-hidden",
+        "border border-[var(--color-border-tertiary)] rounded-[8px] bg-[var(--color-background-white)] overflow-hidden",
         className
       )}
     >

@@ -5,6 +5,7 @@
 "use client";
 
 import { useDialog } from "@/hooks/use-dialog";
+import { Button } from "@/components/ui";
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export function DeleteConfirmDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="p-32 rounded-[var(--radius-8)] border border-[var(--color-border-primary)] backdrop:bg-black/50"
+      className="p-32 border border-[var(--color-border-primary)] backdrop:bg-black/50"
       aria-labelledby="dialog-title"
       aria-describedby="dialog-description"
     >
@@ -42,22 +43,23 @@ export function DeleteConfirmDialog({
           {message}
         </p>
         <div className="flex gap-16 justify-end">
-          <button
-            type="button"
+          <Button
+            size="large"
+            variant="default"
             onClick={onCancel}
             disabled={isPending}
-            className="h-[48px] px-16 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="large"
+            variant="default"
+            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
             onClick={onConfirm}
             disabled={isPending}
-            className="h-[48px] px-16 bg-[var(--color-signal-red)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
           >
             {isPending ? "Deleting..." : "Delete"}
-          </button>
+          </Button>
         </div>
       </div>
     </dialog>

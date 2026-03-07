@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
  */
 
 const statusBadgeVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap body-caption-fit font-medium rounded-[var(--radius-4)] border transition-colors",
+  "inline-flex items-center justify-center whitespace-nowrap body-caption-fit font-medium rounded-[4px] border transition-colors",
   {
     variants: {
       /**

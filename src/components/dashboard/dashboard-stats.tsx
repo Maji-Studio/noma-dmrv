@@ -22,7 +22,7 @@ export function DashboardStats({ projectId, facilityId }: DashboardStatsProps) {
 
   if (error) {
     return (
-      <div className="p-16 bg-[var(--clr-red-10)] border border-[var(--clr-red-40)] rounded-[var(--radius-8)]">
+      <div className="p-16 bg-[var(--clr-red-10)] border border-[var(--clr-red-40)]">
         <p className="body-small text-[var(--clr-red)]">
           Failed to load dashboard statistics. Please try again later.
         </p>

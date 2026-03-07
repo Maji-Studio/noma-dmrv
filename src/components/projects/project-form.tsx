@@ -3,6 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import { Button } from "@/components/ui";
 import { projectFormSchema, type ProjectFormData } from "@/schemas/projects";
 
 interface ProjectFormProps {
@@ -61,22 +62,13 @@ export function ProjectForm({
 
       <div className="flex items-center justify-end gap-16">
         {onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-[48px] px-16 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-bg-secondary)] transition-colors"
-            disabled={isSubmitting}
-          >
+          <Button size="large" variant="default" onClick={onCancel} disabled={isSubmitting}>
             Cancel
-          </button>
+          </Button>
         ) : null}
-        <button
-          type="submit"
-          className="h-[48px] px-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity disabled:opacity-50"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" size="large" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? "Saving..." : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -30,7 +30,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
           <Link
             href="/facilities"
-            className="group p-24 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] hover:border-[var(--clr-dark-purple)] transition-colors"
+            className="group p-24 border border-[var(--color-border-primary)] rounded-[8px] hover:border-[var(--clr-dark-purple)] transition-colors"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-16">
@@ -51,7 +51,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
 
           <Link
             href="/production-runs"
-            className="group p-24 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] hover:border-[var(--clr-dark-purple)] transition-colors"
+            className="group p-24 border border-[var(--color-border-primary)] rounded-[8px] hover:border-[var(--clr-dark-purple)] transition-colors"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-16">
@@ -72,7 +72,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
 
           <Link
             href="/orders"
-            className="group p-24 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] hover:border-[var(--clr-dark-purple)] transition-colors"
+            className="group p-24 border border-[var(--color-border-primary)] rounded-[8px] hover:border-[var(--clr-dark-purple)] transition-colors"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-16">
@@ -93,7 +93,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
 
           <Link
             href="/credit-batches"
-            className="group p-24 border border-[var(--color-border-primary)] rounded-[var(--radius-8)] hover:border-[var(--clr-dark-purple)] transition-colors"
+            className="group p-24 border border-[var(--color-border-primary)] rounded-[8px] hover:border-[var(--clr-dark-purple)] transition-colors"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-16">

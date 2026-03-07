@@ -14,6 +14,9 @@ import {
   productionRunFeedstocks,
   biocharProducts,
   formulations,
+  deliveries,
+  orders,
+  applications,
   type StorageLocation,
 } from "@/db/schema";
 import type { StorageLocationFilterData } from "@/schemas/storage-locations";
@@ -50,6 +53,9 @@ export interface StorageLocationWithFacility extends StorageLocation {
     currentMassKg: number;
     biocharEquivalentKg: number;
     formulationNames: string[];
+    appliedApplicationCount: number;
+    appliedDryMassKg: number;
+    lastAppliedAt: Date | null;
   };
   lastActivity: StorageLocationLastActivity | null;
 }
@@ -110,6 +116,7 @@ async function enrichStorageLocationRows(
     biocharOutputRows,
     biocharAllocationRows,
     productInventoryRows,
+    productApplicationRows,
     lastActivityRows,
   ] = storageLocationIds.length > 0
     ? await Promise.all([
@@ -192,6 +199,39 @@ async function enrichStorageLocationRows(
           .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
           .where(inArray(biocharProducts.storageLocationId, storageLocationIds))
           .groupBy(biocharProducts.storageLocationId),
+        db
+          .select({
+            storageLocationId: sql<string>`
+              COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})
+            `,
+            appliedApplicationCount: count(),
+            appliedDryMassKg: sql<number>`
+              COALESCE(
+                SUM(
+                  COALESCE(${applications.biocharAppliedDryTons}, 0) * 1000
+                ),
+                0
+              )
+            `,
+            lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})`,
+          })
+          .from(applications)
+          .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+          .leftJoin(orders, eq(deliveries.orderId, orders.id))
+          .leftJoin(
+            biocharProducts,
+            sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`
+          )
+          .where(
+            and(
+              eq(applications.status, "applied"),
+              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IS NOT NULL`,
+              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IN (${storageLocationIdsSql})`
+            )
+          )
+          .groupBy(
+            sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})`
+          ),
         db.execute<{
           storage_location_id: string;
           activity_type: "in" | "out";
@@ -238,7 +278,23 @@ async function enrichStorageLocationRows(
           ORDER BY storage_location_id, created_at DESC
         `),
       ])
-    : [[], [], [], [], [], { rows: [] as Array<{ storage_location_id: string; activity_type: "in" | "out"; activity_date: Date; mass_kg: number | null; label: string }> }];
+    : [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        {
+          rows: [] as Array<{
+            storage_location_id: string;
+            activity_type: "in" | "out";
+            activity_date: Date;
+            mass_kg: number | null;
+            label: string;
+          }>,
+        },
+      ];
 
   const lastActivityMap = new Map(
     lastActivityRows.rows.map((row) => [
@@ -267,6 +323,11 @@ async function enrichStorageLocationRows(
   const productInventoryMap = new Map(
     productInventoryRows.map((row) => [row.storageLocationId ?? "", row])
   );
+  const productApplicationMap = new Map(
+    productApplicationRows
+      .filter((row) => row.storageLocationId != null)
+      .map((row) => [row.storageLocationId, row])
+  );
 
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
@@ -290,6 +351,7 @@ async function enrichStorageLocationRows(
     const allocatedKg = Number(biocharAllocationRow?.allocatedKg ?? 0);
 
     const productInventoryRow = productInventoryMap.get(row.id);
+    const productApplicationRow = productApplicationMap.get(row.id);
 
     return {
       ...row,
@@ -318,6 +380,13 @@ async function enrichStorageLocationRows(
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),
+        appliedApplicationCount: Number(
+          productApplicationRow?.appliedApplicationCount ?? 0
+        ),
+        appliedDryMassKg: Number(productApplicationRow?.appliedDryMassKg ?? 0),
+        lastAppliedAt: productApplicationRow?.lastAppliedAt
+          ? new Date(productApplicationRow.lastAppliedAt)
+          : null,
       },
       lastActivity: lastActivityMap.get(row.id) ?? null,
     };

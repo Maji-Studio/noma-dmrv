@@ -3,12 +3,14 @@
 import {
   ArrowDown,
   ArrowUp,
+  CheckCircle,
   Package,
   PencilSimple,
   Trash,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
+import { formatMass } from "@/lib/format-utils";
 import {
   formatStorageLocationType,
   type StorageLocationType,
@@ -19,12 +21,6 @@ interface StorageLocationCardProps {
   onView: (storageLocation: StorageLocationWithFacility) => void;
   onEdit: (storageLocation: StorageLocationWithFacility) => void;
   onDelete: (storageLocationId: string) => void;
-}
-
-function formatMass(kg: number | null) {
-  if (kg == null) return "—";
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
-  return `${Math.round(kg).toLocaleString()} kg`;
 }
 
 function getTypeAccent(type: StorageLocationType) {
@@ -132,6 +128,26 @@ export function StorageLocationCard({
               <span className="body-caption truncate">
                 {storageLocation.feedstockInventory.feedstockTypes.join(", ")}
               </span>
+            </div>
+          )}
+
+        {storageLocation.type === "product_bin" &&
+          storageLocation.productInventory.appliedApplicationCount > 0 && (
+            <div className="flex items-center gap-6 text-[var(--color-signal-green)]">
+              <CheckCircle size={12} weight="fill" />
+              <span className="body-caption">
+                Applied {formatMass(storageLocation.productInventory.appliedDryMassKg)}
+                <span className="mx-4">&middot;</span>
+                {storageLocation.productInventory.appliedApplicationCount} successful
+                {storageLocation.productInventory.appliedApplicationCount === 1
+                  ? " application"
+                  : " applications"}
+              </span>
+              {storageLocation.productInventory.lastAppliedAt && (
+                <span className="ml-auto truncate text-[var(--color-text-tertiary)]">
+                  {formatTimeAgo(storageLocation.productInventory.lastAppliedAt)}
+                </span>
+              )}
             </div>
           )}
 

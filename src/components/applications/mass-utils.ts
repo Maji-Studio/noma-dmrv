@@ -1,4 +1,5 @@
-const KG_PER_TONNE = 1000;
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 
 export interface ApplicationDeliveryOption {
   id: string;
@@ -21,7 +22,8 @@ export function calculateDryMass(
   moisturePercent: number | null | undefined,
 ): number | null {
   if (wetKg == null || moisturePercent == null) return null;
-  return wetKg * (1 - moisturePercent / 100);
+  if (wetKg < 0 || moisturePercent < 0 || moisturePercent > 100) return null;
+  return deriveMassDryKg(wetKg, moisturePercent);
 }
 
 export function applicationTonsToKg(value: number | null | undefined): number | null {

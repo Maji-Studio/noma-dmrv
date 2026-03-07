@@ -1,161 +1,148 @@
-/**
- * ApplicationCard component
- * Displays a single application record with key details
- */
 "use client";
 
-import { format } from "date-fns";
-import { PencilSimple, Trash, MapPin, Thermometer } from "@phosphor-icons/react/dist/ssr";
+import {
+  Plant,
+  PencilSimple,
+  Trash,
+} from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui";
 import type { Application } from "@/db/schema/application";
 import {
   formatApplicationStatus,
   formatApplicationMethod,
-  formatSoilTemperatureSource,
 } from "@/schemas/applications";
+import { formatSafeDate } from "@/lib/format-utils";
 import { formatApplicationKgFromTons } from "./mass-utils";
 
 interface ApplicationCardProps {
   application: Application;
+  onView?: (application: Application) => void;
   onEdit?: (application: Application) => void;
   onDelete?: (applicationId: string) => void;
 }
 
 export function ApplicationCard({
   application,
+  onView,
   onEdit,
   onDelete,
 }: ApplicationCardProps) {
-  const hasGps = application.gpsLatitude != null && application.gpsLongitude != null;
-  const hasSoilTemp = application.soilTemperatureC != null;
+  const statusClass =
+    application.status === "applied"
+      ? "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]"
+      : "bg-[var(--clr-orange-10)] text-[var(--clr-orange)]";
+
   return (
-    <div className="border border-[var(--color-border-primary)] rounded-[var(--radius-8)] p-24 bg-[var(--color-background-light)] hover:border-[var(--color-border-secondary)] transition-colors">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-16">
-        <div>
-          <h3 className="title-heading-4 mb-16">{application.code}</h3>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Applied: {format(new Date(application.applicationDate), "MMM d, yyyy")}
-          </p>
-        </div>
-        <div className="flex items-center gap-16">
+    <article
+      className={`flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors${onView ? " hover:border-[var(--color-border-primary)] cursor-pointer" : ""}`}
+      role={onView ? "button" : undefined}
+      tabIndex={onView ? 0 : undefined}
+      onClick={onView ? () => onView(application) : undefined}
+      onKeyDown={onView ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onView(application);
+        }
+      } : undefined}
+    >
+      <div className="flex flex-1 flex-col gap-16 p-20">
+        {/* Header: code badge + status */}
+        <div className="flex items-center justify-between gap-12">
+          <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-pink)]">
+            <Plant size={12} weight="bold" />
+            {application.code}
+          </span>
           <span
-            className={`px-16 py-16 rounded-[var(--radius-4)] text-[var(--text-xs)] font-medium ${
-              application.status === "applied"
-                ? "bg-[var(--color-success-light)] text-[var(--color-success)]"
-                : "bg-[var(--color-warning-light)] text-[var(--color-warning)]"
-            }`}
+            className={`px-8 py-4 text-[var(--text-xs)] font-medium ${statusClass}`}
           >
-            {formatApplicationStatus(application.status as "delivered" | "applied")}
+            {formatApplicationStatus(application.status)}
           </span>
         </div>
-      </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-16 mb-16">
+        {/* Date + method */}
         <div>
-          <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] uppercase">
-            Biochar Applied
-          </p>
-          <p className="body-medium font-medium">
-            {formatApplicationKgFromTons(application.biocharAppliedTons)}
-          </p>
+          <h3 className="title-heading-3 text-[var(--color-text-primary)]">
+            {formatSafeDate(application.applicationDate)}
+          </h3>
+          {application.applicationMethodType && (
+            <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">
+              {formatApplicationMethod(application.applicationMethodType as "manual" | "mechanical")}
+              {application.fieldIdentifier && ` · ${application.fieldIdentifier}`}
+            </p>
+          )}
         </div>
-        <div>
-          <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] uppercase">
-            Dry Biochar
-          </p>
-          <p className="body-medium font-medium">
-            {formatApplicationKgFromTons(application.biocharAppliedDryTons)}
-          </p>
-        </div>
-        <div>
-          <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] uppercase">
-            Field Size
-          </p>
-          <p className="body-medium font-medium">
-            {application.fieldSizeHa?.toFixed(2) ?? "-"} ha
-          </p>
-        </div>
-        <div>
-          <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] uppercase">
-            Crop Type
-          </p>
-          <p className="body-medium font-medium">
-            {application.cropType || "-"}
-          </p>
-        </div>
-      </div>
 
-      {/* Field Details Row */}
-      <div className="flex flex-wrap gap-16 mb-16 text-[var(--text-s)] text-[var(--color-text-secondary)]">
-        {application.fieldIdentifier && (
-          <span>Field: {application.fieldIdentifier}</span>
-        )}
-        {application.applicationMethodType && (
-          <span>
-            Method: {formatApplicationMethod(application.applicationMethodType as "manual" | "mechanical")}
-          </span>
-        )}
-      </div>
-
-      {/* Indicators Row */}
-      <div className="flex flex-wrap items-center gap-16 mb-16">
-        {hasGps && (
-          <div className="flex items-center gap-16 text-[var(--text-s)] text-[var(--color-text-secondary)]">
-            <MapPin size={16} />
-            <span>
-              {application.gpsLatitude?.toFixed(4)}, {application.gpsLongitude?.toFixed(4)}
-            </span>
+        {/* 3-col metrics */}
+        <div className="grid grid-cols-3 gap-12">
+          <div>
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              Biochar
+            </p>
+            <p className="title-heading-3">
+              {formatApplicationKgFromTons(application.biocharAppliedTons)}
+            </p>
           </div>
-        )}
-        {hasSoilTemp && (
-          <div className="flex items-center gap-16 text-[var(--text-s)] text-[var(--color-text-secondary)]">
-            <Thermometer size={16} />
-            <span>
-              {application.soilTemperatureC?.toFixed(1)}°C
-              {application.soilTemperatureSource && (
-                <span className="text-[var(--color-text-tertiary)]">
-                  {" "}
-                  ({formatSoilTemperatureSource(application.soilTemperatureSource as "baseline" | "global_database")})
-                </span>
-              )}
+          <div>
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              Dry Mass
+            </p>
+            <p className="body-small text-[var(--color-text-primary)]">
+              {formatApplicationKgFromTons(application.biocharAppliedDryTons)}
+            </p>
+          </div>
+          <div>
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              Field Size
+            </p>
+            <p className="body-small text-[var(--color-text-primary)]">
+              {application.fieldSizeHa != null
+                ? `${application.fieldSizeHa.toFixed(2)} ha`
+                : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* CO2e line */}
+        {application.co2eStoredTonnes != null && (
+          <div className="flex items-center justify-between border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] px-12 py-8">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              CO2e Stored
+            </span>
+            <span className="body-small font-medium text-[var(--color-signal-green)]">
+              {application.co2eStoredTonnes.toFixed(2)} t
             </span>
           </div>
         )}
       </div>
 
-      {/* CO2e if available */}
-      {application.co2eStoredTonnes != null && (
-        <div className="mb-16 p-16 bg-[var(--color-success-light)] rounded-[var(--radius-4)]">
-          <p className="text-[var(--text-s)] text-[var(--color-success)] font-medium">
-            CO2e Stored: {application.co2eStoredTonnes.toFixed(2)} tonnes
-          </p>
-        </div>
-      )}
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          {application.cropType || "No crop type"}
+        </span>
 
-      {/* Actions */}
-      {(onEdit || onDelete) && (
-        <div className="flex items-center gap-16 pt-24 border-t border-[var(--color-border-secondary)]">
-          {onEdit && (
-            <button
-              onClick={() => onEdit(application)}
-              className="flex items-center gap-8 px-12 py-6 text-[var(--text-s)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            >
-              <PencilSimple size={16} />
-              Edit
-            </button>
-          )}
-          {onDelete && (
-            <button
-              onClick={() => onDelete(application.id)}
-              className="flex items-center gap-8 px-12 py-6 text-[var(--text-s)] text-[var(--color-error)] hover:text-[var(--color-error-dark)] transition-colors"
-            >
-              <Trash size={16} />
-              Delete
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+        {(onEdit || onDelete) && (
+          <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
+            {onEdit && (
+              <Button size="small" variant="default" onClick={() => onEdit(application)}>
+                <PencilSimple size={16} />
+                Edit
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                size="small"
+                variant="default"
+                className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
+                onClick={() => onDelete(application.id)}
+                aria-label="Delete application"
+              >
+                <Trash size={16} />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
   );
 }

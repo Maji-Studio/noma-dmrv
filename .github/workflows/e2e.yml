@@ -1,0 +1,81 @@
+name: E2E
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: noma_dmrv_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      ALLOW_SELF_SIGNUP: "false"
+      DISABLE_RATE_LIMIT: "true"
+
+    steps:
+      - name: Generate ephemeral auth secret
+        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Write local env file for CLI scripts
+        run: |
+          cat <<EOF > .env.local
+          DATABASE_URL=${DATABASE_URL}
+          NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+          BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+          ALLOW_SELF_SIGNUP=${ALLOW_SELF_SIGNUP}
+          DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+          EOF
+
+      - name: Apply schema
+        run: pnpm drizzle-kit push --force
+
+      - name: Run Playwright suite
+        run: pnpm test:e2e
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore

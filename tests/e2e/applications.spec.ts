@@ -14,21 +14,26 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
+    const ordersUrl = `/orders?facility=${seededData.facility.id}`;
+    const deliveriesUrl = `/deliveries?facility=${seededData.facility.id}`;
+    const applicationsUrl = `/applications?facility=${seededData.facility.id}`;
+
     // First, we need a delivery to exist. Create an order and delivery first.
     // Step 1: Create an order
-    await page.goto("/orders");
+    await page.goto(ordersUrl);
     await page.waitForLoadState("networkidle");
     await page.click('button:has-text("New Order")');
     await waitForSideSheet(page);
 
     const today = new Date().toISOString().split("T")[0];
     await page.fill('input[name="orderDate"]', today);
-    await page.selectOption('select[name="facilityId"]', seededData.facility.id);
-    await page.selectOption('select[name="status"]', "draft");
     await page.selectOption('select[name="customerId"]', seededData.customer.id);
 
     // Wait for customer locations to load (cascading from customer selection)
-    await page.waitForTimeout(1000);
+    await page.waitForSelector(
+      'select[name="customerLocationId"]:not([disabled])',
+      { timeout: 8000 }
+    );
     await page.selectOption(
       'select[name="customerLocationId"]',
       seededData.customerLocation.id
@@ -46,7 +51,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheetClose(page);
 
     // Step 2: Create a delivery for this order
-    await page.goto("/deliveries");
+    await page.goto(deliveriesUrl);
     await page.waitForLoadState("networkidle");
     await page.click('button:has-text("New Delivery")');
     await waitForSideSheet(page);
@@ -67,7 +72,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheetClose(page);
 
     // Step 3: Create an application
-    await page.goto("/applications");
+    await page.goto(applicationsUrl);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New Application")');
@@ -106,7 +111,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto("/credit-batches");
+    await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New Credit Batch")');
@@ -115,13 +120,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     const today = new Date().toISOString().split("T")[0];
 
     // Fill Overview section
-    await page.selectOption(
-      'select[name="facilityId"]',
-      seededData.facility.id
-    );
     await page.fill('input[name="startDate"]', today);
     await page.fill('input[name="endDate"]', today);
-    await page.selectOption('select[name="status"]', "draft");
 
     // Select applications (checkbox toggle)
     // The application checkboxes should be visible - click the first one if available
@@ -148,8 +148,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     // Verify credit batch appears in list
     await page.waitForLoadState("networkidle");
-    await expect(
-      page.locator("table tbody tr, [role='row']").first()
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
   });
 });

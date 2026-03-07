@@ -26,7 +26,7 @@ export function FormField({
     <div>
       <label
         htmlFor={id}
-        className="body-small font-medium text-[var(--color-text-secondary)] block mb-4"
+        className="body-small font-medium text-[var(--color-text-secondary)] block mb-6"
       >
         {label}
         {required && (
