@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { Item } from "@/db/schema";
 import { itemFormSchema, type ItemFormData } from "@/schemas/items";
 import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import { Button } from "@/components/ui";
 
 interface ItemFormProps {
   item?: Item;
@@ -59,21 +60,12 @@ export function ItemForm({
       </FormField>
 
       <div className="flex items-center gap-16 justify-end">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-[48px] px-16 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-bg-secondary)] transition-colors"
-          disabled={isSubmitting}
-        >
+        <Button size="large" variant="default" onClick={onCancel} disabled={isSubmitting}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          className="h-[48px] px-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity disabled:opacity-50"
-          disabled={isSubmitting}
-        >
+        </Button>
+        <Button type="submit" size="large" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? "Saving..." : item ? "Update" : "Create"}
-        </button>
+        </Button>
       </div>
     </form>
   );

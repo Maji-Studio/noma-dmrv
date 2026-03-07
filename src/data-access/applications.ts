@@ -1,6 +1,9 @@
 import { desc, eq, count } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, type Application } from "@/db/schema/application";
+import { deliveries } from "@/db/schema/logistics";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { tonnesToKg, kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
 
 import { requireAuth } from "./utils";
@@ -10,6 +13,49 @@ import { requireAuth } from "./utils";
 // ============================================
 
 const DEFAULT_PAGE_SIZE = 100;
+
+async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<number | null> {
+  const [delivery] = await db
+    .select({
+      moistureContentPercent: deliveries.moistureContentPercent,
+    })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  return delivery.moistureContentPercent;
+}
+
+async function resolveApplicationDryMassTons(input: {
+  deliveryId: string;
+  biocharAppliedTons: number;
+  biocharAppliedDryTons?: number | null;
+  fallbackDryTons?: number | null;
+}): Promise<number> {
+  if (input.biocharAppliedDryTons != null) {
+    return input.biocharAppliedDryTons;
+  }
+
+  const moistureContentPercent = await getDeliveryMoistureContentPercent(input.deliveryId);
+
+  if (moistureContentPercent != null) {
+    return kgToTonnes(
+      deriveMassDryKg(
+        tonnesToKg(input.biocharAppliedTons),
+        moistureContentPercent
+      )
+    );
+  }
+
+  if (input.fallbackDryTons != null) {
+    return input.fallbackDryTons;
+  }
+
+  throw new Error("Dry mass is required when delivery has no moisture content");
+}
 
 /**
  * Get applications with pagination
@@ -93,6 +139,12 @@ export async function createApplication(
   data: CreateApplicationData & { code: string }
 ): Promise<Application> {
   requireAuth(userId);
+  const biocharAppliedDryTons = await resolveApplicationDryMassTons({
+    deliveryId: data.deliveryId,
+    biocharAppliedTons: data.biocharAppliedTons,
+    biocharAppliedDryTons: data.biocharAppliedDryTons,
+  });
+
   const [application] = await db
     .insert(applications)
     .values({
@@ -100,7 +152,7 @@ export async function createApplication(
       applicationDate: data.applicationDate,
       deliveryId: data.deliveryId,
       biocharAppliedTons: data.biocharAppliedTons,
-      biocharAppliedDryTons: data.biocharAppliedDryTons ?? null,
+      biocharAppliedDryTons,
       fieldSizeHa: data.fieldSizeHa ?? null,
       fieldIdentifier: data.fieldIdentifier || null,
       cropType: data.cropType || null,
@@ -125,16 +177,41 @@ export async function updateApplication(
   data: Omit<UpdateApplicationData, "applicationId">
 ): Promise<Application> {
   requireAuth(userId);
+  const existingApplication = await getApplicationById(userId, id);
+
+  if (!existingApplication) {
+    throw new Error("Application not found");
+  }
+
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
   };
+
+  const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
+  const effectiveAppliedTons =
+    data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
+  const shouldRecalculateDryMass =
+    data.deliveryId !== undefined ||
+    data.biocharAppliedTons !== undefined ||
+    data.biocharAppliedDryTons !== undefined;
+
+  if (shouldRecalculateDryMass) {
+    updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons({
+      deliveryId: effectiveDeliveryId,
+      biocharAppliedTons: effectiveAppliedTons,
+      biocharAppliedDryTons: data.biocharAppliedDryTons,
+      fallbackDryTons:
+        data.deliveryId === undefined && data.biocharAppliedTons === undefined
+          ? existingApplication.biocharAppliedDryTons
+          : null,
+    });
+  }
 
   // Only include fields that are explicitly provided
   if (data.code !== undefined) updateData.code = data.code;
   if (data.applicationDate !== undefined) updateData.applicationDate = data.applicationDate;
   if (data.deliveryId !== undefined) updateData.deliveryId = data.deliveryId;
   if (data.biocharAppliedTons !== undefined) updateData.biocharAppliedTons = data.biocharAppliedTons;
-  if (data.biocharAppliedDryTons !== undefined) updateData.biocharAppliedDryTons = data.biocharAppliedDryTons;
   if (data.fieldSizeHa !== undefined) updateData.fieldSizeHa = data.fieldSizeHa;
   if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = data.fieldIdentifier || null;
   if (data.cropType !== undefined) updateData.cropType = data.cropType || null;

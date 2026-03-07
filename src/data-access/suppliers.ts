@@ -106,6 +106,7 @@ export async function getSuppliers(
       contactName: suppliers.contactName,
       contactEmail: suppliers.contactEmail,
       contactPhone: suppliers.contactPhone,
+      sourceRegion: suppliers.sourceRegion,
       createdAt: suppliers.createdAt,
       updatedAt: suppliers.updatedAt,
     })

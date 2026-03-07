@@ -35,9 +35,10 @@ test.describe("Order + Delivery UI CRUD", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData; // ensure fixture is active for auto-cleanup
+    const ordersUrl = `${ORDERS_URL}?facility=${seededData.facility.id}`;
 
     // Navigate to the orders list
-    await adminPage.goto(ORDERS_URL);
+    await adminPage.goto(ordersUrl);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
     // Open the "New Order" side sheet
@@ -48,15 +49,6 @@ test.describe("Order + Delivery UI CRUD", () => {
 
     // Order Date
     await adminPage.fill('input[name="orderDate"]', "2026-03-02");
-
-    // Facility
-    await adminPage.selectOption(
-      'select[name="facilityId"]',
-      seededData.facility.id
-    );
-
-    // Status
-    await adminPage.selectOption('select[name="status"]', "draft");
 
     // Customer — selecting triggers an async load of customer locations
     await adminPage.selectOption(
@@ -139,19 +131,19 @@ test.describe("Order + Delivery UI CRUD", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData;
+    const ordersUrl = `${ORDERS_URL}?facility=${seededData.facility.id}`;
+    const deliveriesUrl = `${DELIVERIES_URL}?facility=${seededData.facility.id}`;
 
     // ---- First, ensure an order exists to select in the delivery form ----
     // We create one inline so this test is self-contained even when run in isolation.
 
-    await adminPage.goto(ORDERS_URL);
+    await adminPage.goto(ordersUrl);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
     await adminPage.click('button:has-text("New Order")');
     await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
 
     await adminPage.fill('input[name="orderDate"]', "2026-03-02");
-    await adminPage.selectOption('select[name="facilityId"]', seededData.facility.id);
-    await adminPage.selectOption('select[name="status"]', "draft");
     await adminPage.selectOption('select[name="customerId"]', seededData.customer.id);
     await adminPage.waitForSelector(
       'select[name="customerLocationId"]:not([disabled])',
@@ -176,7 +168,7 @@ test.describe("Order + Delivery UI CRUD", () => {
 
     // ---- Navigate to Deliveries and open the creation form ----
 
-    await adminPage.goto(DELIVERIES_URL);
+    await adminPage.goto(deliveriesUrl);
     await expect(adminPage).toHaveURL(new RegExp(DELIVERIES_URL), {
       timeout: 10000,
     });

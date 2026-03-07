@@ -148,6 +148,7 @@ These serve as reference implementations - customize or remove as needed.
 - `pnpm build` - Build for production
 - `pnpm start` - Run production server
 - `pnpm lint` - Run ESLint checks
+- `pnpm test:e2e` - Run the full Playwright suite
 
 ### Docker & Database
 - `pnpm docker:up` - Start PostgreSQL container
@@ -194,6 +195,12 @@ See `docs/design-system.md` for the complete design system reference.
 - **[Forms](docs/forms.md)** - React Hook Form integration with Zod validation
 - **[Security](docs/security.md)** - Security best practices and guidelines
 - **[Mail Setup](docs/mail-setup.md)** - Email configuration with Resend
+
+## E2E Testing
+
+- `pnpm test:e2e` runs the full Playwright suite in `tests/e2e`.
+- Before running locally, make sure the local Postgres schema matches the current repo schema. If your DB is behind, refresh it with `pnpm drizzle-kit push --force` or your usual reset flow before rerunning Playwright.
+- Pull requests now run the full Playwright suite in GitHub Actions via `.github/workflows/e2e.yml`.
 
 ## License
 

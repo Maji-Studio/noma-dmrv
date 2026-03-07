@@ -11,7 +11,7 @@ import { TrendUp, TrendDown, Minus } from "@phosphor-icons/react";
  * -----------------------------------------------------------------------------------------------*/
 
 const statCardVariants = cva(
-  "group flex flex-col overflow-hidden bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] transition-colors duration-300 rounded-[var(--radius-8)]",
+  "group flex flex-col overflow-hidden bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] transition-colors duration-300",
   {
     variants: {
       interactive: {
@@ -26,7 +26,7 @@ const statCardVariants = cva(
 );
 
 const trendBadgeVariants = cva(
-  "inline-flex items-center gap-4 body-caption-fit font-medium rounded-[var(--radius-4)] px-6 py-2",
+  "inline-flex items-center gap-4 body-caption-fit font-medium px-6 py-2",
   {
     variants: {
       trend: {
@@ -108,7 +108,7 @@ const StatCardSkeleton = () => (
         <div className="h-28 w-64 bg-[var(--color-surface-light)] animate-pulse" />
         <div className="h-14 w-120 bg-[var(--color-surface-light)] animate-pulse" />
       </div>
-      <div className="w-32 h-32 bg-[var(--color-surface-light)] rounded-[var(--radius-4)] animate-pulse shrink-0" />
+      <div className="w-32 h-32 bg-[var(--color-surface-light)] animate-pulse shrink-0" />
     </div>
   </div>
 );

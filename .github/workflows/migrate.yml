@@ -23,7 +23,105 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: database-management-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  migrate-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  verify-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: migrate-staging
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck application
+        run: pnpm typecheck
+
+      - name: Verify staging schema matches Drizzle definitions
+        run: pnpm db:verify-schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  migrate-production:
+    runs-on: ubuntu-latest
+    environment: production
+    needs: verify-staging
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Verify production schema matches Drizzle definitions
+        run: pnpm db:verify-schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
   ensure-admin:
     runs-on: ubuntu-latest
     environment: production

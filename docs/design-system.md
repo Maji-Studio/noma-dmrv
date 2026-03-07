@@ -37,10 +37,20 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 
 ### Common Patterns
 
-- **Card Padding:** `p-32` (32px) standard for auth cards
-- **Form Spacing:** `space-y-24` (24px) between form groups
-- **Label Spacing:** `mb-8` (8px) label to input
+- **Auth Card Padding:** `p-32` (32px) standard for auth page cards
+- **Entity Card Body Padding:** `p-20` (20px) for entity cards (facility, credit batch, etc.)
+- **Entity Card Footer:** `px-20 py-12` with `border-t border-[var(--color-border-tertiary)]`
+- **Entity Card Border:** `border border-[var(--color-border-secondary)]` with `hover:border-[var(--color-border-primary)]`
+- **Entity Card Metrics:** `grid grid-cols-3 gap-12` for 3-column metric grids
+- **Form Spacing (side sheet):** `space-y-20` (20px) between form fields in side sheet forms
+- **Form Spacing (full page):** `space-y-24` (24px) for auth and full-page forms
+- **Form Section Divider:** `pt-20 border-t border-[var(--color-border-tertiary)]`
+- **Label Spacing:** `mb-6` (6px) label to input
 - **Header Spacing:** `mb-32` (32px) header to content
+- **Border Radius:** `rounded-none` for most elements (brutalist); only UI primitives (StatusBadge, Card component, Accordion) use radius tokens
+- **Buttons:** Always use `Button` component — never raw `<button>` with manual styling
+- **Delete Buttons in Cards:** `Button size="small" variant="default"` with `border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]`
+- **Disabled State:** `disabled:opacity-40` (via Button component)
 
 ---
 
@@ -1030,6 +1040,67 @@ A flexible compound component for building card layouts with images, overlays, a
 - `small` - 16px padding
 - `medium` - 24px padding (default)
 - `large` - 40px padding
+
+### Entity Card Pattern
+
+All biochar entity cards (Facility, CreditBatch, StorageLocation, Application) follow a consistent structure:
+
+```tsx
+<article
+  className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-border-primary)] cursor-pointer"
+  onClick={() => onView(entity)}
+>
+  <div className="flex flex-1 flex-col gap-16 p-20">
+    {/* Header: accent badge + secondary info */}
+    <div className="flex items-center justify-between gap-12">
+      {/* Use area accent: purple, orange, rose, or dark-purple */}
+      <span className="inline-flex items-center gap-6 border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-purple)]">
+        <Icon size={12} weight="bold" />
+        {entity.code}
+      </span>
+      <span className="body-caption text-[var(--color-text-tertiary)]">
+        {secondaryLabel}
+      </span>
+    </div>
+
+    {/* Title */}
+    <h3 className="title-heading-3 text-[var(--color-text-primary)]">{entity.name}</h3>
+
+    {/* 3-col metrics */}
+    <div className="grid grid-cols-3 gap-12">
+      <div>
+        <p className="body-caption text-[var(--color-text-tertiary)]">Label</p>
+        <p className="title-heading-3">{value}</p>
+      </div>
+      {/* ... */}
+    </div>
+  </div>
+
+  {/* Footer */}
+  <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
+    <span className="body-caption text-[var(--color-text-tertiary)]">{footer}</span>
+    <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
+      <Button size="small" variant="default" onClick={() => onEdit(entity)}>
+        <PencilSimple size={16} /> Edit
+      </Button>
+      <Button size="small" variant="default"
+        className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
+        onClick={() => onDelete(entity.id)}
+      >
+        <Trash size={16} />
+      </Button>
+    </div>
+  </div>
+</article>
+```
+
+**Key rules:**
+- No border-radius — brutalist square corners
+- `border-secondary` default, `border-primary` on hover
+- Body `p-20`, footer `px-20 py-12`
+- Always use `Button` component for actions
+- Code badges use area accent colors (purple, orange, rose, dark-purple)
+- Metric labels use `body-caption`, primary values use `title-heading-3`
 
 ### Component Guidelines
 

@@ -36,6 +36,7 @@
 - Re-extract from Isometric MCP for every version bump.
 - Keep summaries concise and source-linked.
 - Core tables stay certifier-agnostic; certifier-specific mapping belongs in `certification_*` integration tables.
+- If an Isometric change affects schema, validation, or operator workflow, keep the relevant Playwright coverage passing before opening the PR.
 
 ## Freshness
 

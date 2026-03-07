@@ -72,7 +72,7 @@ export default function VerifyEmailPage() {
         </p>
       </div>
 
-      <div className="bg-[var(--color-background-white)] rounded-[var(--radius-8)] border border-[var(--color-border-primary)] p-32 space-y-24 shadow-sm">
+      <div className="bg-[var(--color-background-white)] rounded-[8px] border border-[var(--color-border-primary)] p-32 space-y-24 shadow-sm">
         <div className="space-y-16">
           <p className="body-small text-[var(--color-text-secondary)]">
             Please check your inbox and click the verification link to activate
