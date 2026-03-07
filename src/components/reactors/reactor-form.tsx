@@ -86,7 +86,7 @@ export function ReactorForm({
   const {
     register,
     handleSubmit,
-    watch,
+    getValues,
     setValue,
     formState: { errors },
   } = useForm({
@@ -103,12 +103,12 @@ export function ReactorForm({
 
   useEffect(() => {
     if (!reactor?.facilityId && contextFacilityId) {
-      const currentFacilityId = watch("facilityId");
+      const currentFacilityId = getValues("facilityId");
       if (!currentFacilityId) {
         setValue("facilityId", contextFacilityId);
       }
     }
-  }, [contextFacilityId, reactor?.facilityId, setValue, watch]);
+  }, [contextFacilityId, reactor?.facilityId, setValue, getValues]);
 
   const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
 

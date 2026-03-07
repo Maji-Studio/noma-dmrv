@@ -27,11 +27,13 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_e2e
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
-      BETTER_AUTH_SECRET: better-auth-secret-for-ci-tests-123456
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
 
     steps:
+      - name: Generate ephemeral auth secret
+        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@v4
 

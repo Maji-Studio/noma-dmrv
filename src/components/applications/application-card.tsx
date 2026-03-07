@@ -34,8 +34,16 @@ export function ApplicationCard({
 
   return (
     <article
-      className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-border-primary)] cursor-pointer"
-      onClick={() => onView?.(application)}
+      className={`flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors${onView ? " hover:border-[var(--color-border-primary)] cursor-pointer" : ""}`}
+      role={onView ? "button" : undefined}
+      tabIndex={onView ? 0 : undefined}
+      onClick={onView ? () => onView(application) : undefined}
+      onKeyDown={onView ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onView(application);
+        }
+      } : undefined}
     >
       <div className="flex flex-1 flex-col gap-16 p-20">
         {/* Header: code badge + status */}
@@ -87,7 +95,9 @@ export function ApplicationCard({
               Field Size
             </p>
             <p className="body-small text-[var(--color-text-primary)]">
-              {application.fieldSizeHa?.toFixed(2) ?? "—"} ha
+              {application.fieldSizeHa != null
+                ? `${application.fieldSizeHa.toFixed(2)} ha`
+                : "—"}
             </p>
           </div>
         </div>
