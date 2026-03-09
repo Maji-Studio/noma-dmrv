@@ -4,13 +4,14 @@
  * Uses Base UI Accordion for collapsible form sections
  *
  * Form sections:
- * 1. Sample Info - code, samplingTime, production run
+ * 1. Sample Info - production run, samplingTime, lab details
  * 2. Carbon Analysis - totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
  * 3. Elemental - H, N, O, S percentages
  * 4. Proximate - ash, volatile matter, moisture
- * 5. Physical - bulkDensity, pH, surfaceArea
- * 6. Stability - hToCOrgRatio (calculated)
+ * 5. Physical - bulkDensity, pH, surfaceArea, saltContent
+ * 6. Stability - durability option, H:C ratio, O:C ratio
  * 7. 1000-Year Durability (conditional) - R₀ reflectance, TGA non-reactive carbon
+ * 8. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
  */
 "use client";
 
@@ -20,7 +21,7 @@ import { formatLocalDateTime } from "@/lib/date-utils";
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
@@ -176,7 +177,7 @@ export function SampleForm({
   const defaultExpandedSections = ["sample-info", "carbon-analysis"];
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-32">
+    <form onSubmit={handleFormSubmit} className="space-y-20">
       <Accordion.Root defaultValue={defaultExpandedSections}>
         {/* === Section 1: Sample Info === */}
         <Accordion.Item value="sample-info">
@@ -184,34 +185,31 @@ export function SampleForm({
             <Accordion.Trigger>Sample Information</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="space-y-24">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
-                <FormField
-                  id="productionRunId"
-                  label="Production Run"
-                  error={errors.productionRunId?.message}
-                  required
-                >
-                  <Controller
-                    name="productionRunId"
-                    control={control}
-                    render={({ field }) => (
-                      <EntitySelect
-                        entityType="productionRun"
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Select a production run..."
-                        disabled={isSubmitting || !!preselectedProductionRunId}
-                        error={!!errors.productionRunId}
-                        autoSelectSingle
-                      />
-                    )}
-                  />
-                </FormField>
+            <div className="space-y-20">
+              <FormField
+                id="productionRunId"
+                label="Production Run"
+                error={errors.productionRunId?.message}
+                required
+              >
+                <Controller
+                  name="productionRunId"
+                  control={control}
+                  render={({ field }) => (
+                    <EntitySelect
+                      entityType="productionRun"
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select a production run..."
+                      disabled={isSubmitting || !!preselectedProductionRunId}
+                      error={!!errors.productionRunId}
+                      autoSelectSingle
+                    />
+                  )}
+                />
+              </FormField>
 
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="samplingTime"
                   label="Sampling Time"
@@ -246,7 +244,7 @@ export function SampleForm({
                 </FormField>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="labName"
                   label="Lab Name"
@@ -278,7 +276,7 @@ export function SampleForm({
                 </FormField>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="weightGrams"
                   label="Sample Weight (g)"
@@ -325,45 +323,47 @@ export function SampleForm({
             <Accordion.Trigger>Carbon Analysis</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-24">
-              <FormField
-                id="totalCarbonPercent"
-                label="Total Carbon (%)"
-                error={errors.totalCarbonPercent?.message}
-                required
-              >
-                <FormInput
+            <div className="space-y-20">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                <FormField
                   id="totalCarbonPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 75.5"
-                  disabled={isSubmitting}
-                  error={!!errors.totalCarbonPercent}
-                  {...register("totalCarbonPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
+                  label="Total Carbon (%)"
+                  error={errors.totalCarbonPercent?.message}
+                  required
+                >
+                  <FormInput
+                    id="totalCarbonPercent"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 75.5"
+                    disabled={isSubmitting}
+                    error={!!errors.totalCarbonPercent}
+                    {...register("totalCarbonPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
 
-              <FormField
-                id="organicCarbonPercent"
-                label="Organic Carbon (%)"
-                error={errors.organicCarbonPercent?.message}
-                helperText="C_org for stability calculations"
-                required
-              >
-                <FormInput
+                <FormField
                   id="organicCarbonPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 72.0"
-                  disabled={isSubmitting}
-                  error={!!errors.organicCarbonPercent}
-                  {...register("organicCarbonPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
+                  label="Organic Carbon (%)"
+                  error={errors.organicCarbonPercent?.message}
+                  helperText="C_org for stability calculations"
+                  required
+                >
+                  <FormInput
+                    id="organicCarbonPercent"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 72.0"
+                    disabled={isSubmitting}
+                    error={!!errors.organicCarbonPercent}
+                    {...register("organicCarbonPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+              </div>
 
               <FormField
                 id="inorganicCarbonPercent"
@@ -392,7 +392,7 @@ export function SampleForm({
             <Accordion.Trigger>Elemental Analysis</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-24">
+            <div className="grid grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="totalHydrogenPercent"
                 label="Hydrogen (%)"
@@ -474,42 +474,44 @@ export function SampleForm({
             <Accordion.Trigger>Proximate Analysis</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-24">
-              <FormField
-                id="ashContentPercent"
-                label="Ash Content (%)"
-                error={errors.ashContentPercent?.message}
-              >
-                <FormInput
+            <div className="space-y-20">
+              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                <FormField
                   id="ashContentPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 8.5"
-                  disabled={isSubmitting}
-                  error={!!errors.ashContentPercent}
-                  {...register("ashContentPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
+                  label="Ash Content (%)"
+                  error={errors.ashContentPercent?.message}
+                >
+                  <FormInput
+                    id="ashContentPercent"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 8.5"
+                    disabled={isSubmitting}
+                    error={!!errors.ashContentPercent}
+                    {...register("ashContentPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
 
-              <FormField
-                id="volatileMatterPercent"
-                label="Volatile Matter (%)"
-                error={errors.volatileMatterPercent?.message}
-              >
-                <FormInput
+                <FormField
                   id="volatileMatterPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 15.0"
-                  disabled={isSubmitting}
-                  error={!!errors.volatileMatterPercent}
-                  {...register("volatileMatterPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
+                  label="Volatile Matter (%)"
+                  error={errors.volatileMatterPercent?.message}
+                >
+                  <FormInput
+                    id="volatileMatterPercent"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 15.0"
+                    disabled={isSubmitting}
+                    error={!!errors.volatileMatterPercent}
+                    {...register("volatileMatterPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+              </div>
 
               <FormField
                 id="moistureContentPercent"
@@ -538,7 +540,7 @@ export function SampleForm({
             <Accordion.Trigger>Physical Properties</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-24">
+            <div className="grid grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="bulkDensityKgPerM3"
                 label="Bulk Density (kg/m³)"
@@ -622,7 +624,7 @@ export function SampleForm({
             <Accordion.Trigger>Stability Ratios</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-24">
+            <div className="space-y-20">
               <FormField
                 id="durabilityOption"
                 label="Durability Option"
@@ -637,41 +639,43 @@ export function SampleForm({
                 />
               </FormField>
 
-              <FormField
-                id="hToCOrgRatio"
-                label="H:C org Ratio"
-                error={errors.hToCOrgRatio?.message}
-                helperText="Auto-calculated from H% and C_org%"
-              >
-                <FormInput
+              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                <FormField
                   id="hToCOrgRatio"
-                  type="number"
-                  step="0.0001"
-                  placeholder="Auto-calculated"
-                  disabled
-                  readOnly
-                  value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
-                  error={!!errors.hToCOrgRatio}
-                />
-              </FormField>
+                  label="H:C org Ratio"
+                  error={errors.hToCOrgRatio?.message}
+                  helperText="Auto-calculated from H% and C_org%"
+                >
+                  <FormInput
+                    id="hToCOrgRatio"
+                    type="number"
+                    step="0.0001"
+                    placeholder="Auto-calculated"
+                    disabled
+                    readOnly
+                    value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
+                    error={!!errors.hToCOrgRatio}
+                  />
+                </FormField>
 
-              <FormField
-                id="oToCOrgRatio"
-                label="O:C org Ratio"
-                error={errors.oToCOrgRatio?.message}
-              >
-                <FormInput
+                <FormField
                   id="oToCOrgRatio"
-                  type="number"
-                  step="0.0001"
-                  placeholder="e.g., 0.15"
-                  disabled={isSubmitting}
-                  error={!!errors.oToCOrgRatio}
-                  {...register("oToCOrgRatio", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
+                  label="O:C org Ratio"
+                  error={errors.oToCOrgRatio?.message}
+                >
+                  <FormInput
+                    id="oToCOrgRatio"
+                    type="number"
+                    step="0.0001"
+                    placeholder="e.g., 0.15"
+                    disabled={isSubmitting}
+                    error={!!errors.oToCOrgRatio}
+                    {...register("oToCOrgRatio", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+              </div>
             </div>
           </Accordion.Panel>
         </Accordion.Item>
@@ -683,127 +687,120 @@ export function SampleForm({
               <Accordion.Trigger>1000-Year Durability Data</Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Panel>
-              <div className="space-y-24">
-                {/* R₀ Reflectance Section */}
-                <div>
-                  <h4 className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] mb-16">
-                    R₀ Reflectance
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-24">
-                    <FormField
+              <div className="space-y-20">
+                <SectionLabel>R₀ Reflectance</SectionLabel>
+                <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                  <FormField
+                    id="randomReflectanceR0Percent"
+                    label="Mean Random Reflectance R₀ (%)"
+                    error={errors.randomReflectanceR0Percent?.message}
+                  >
+                    <FormInput
                       id="randomReflectanceR0Percent"
-                      label="Mean Random Reflectance R₀ (%)"
-                      error={errors.randomReflectanceR0Percent?.message}
-                    >
-                      <FormInput
-                        id="randomReflectanceR0Percent"
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g., 2.5"
-                        disabled={isSubmitting}
-                        error={!!errors.randomReflectanceR0Percent}
-                        {...register("randomReflectanceR0Percent", {
-                          setValueAs: numericValue,
-                        })}
-                      />
-                    </FormField>
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g., 2.5"
+                      disabled={isSubmitting}
+                      error={!!errors.randomReflectanceR0Percent}
+                      {...register("randomReflectanceR0Percent", {
+                        setValueAs: numericValue,
+                      })}
+                    />
+                  </FormField>
 
-                    <FormField
+                  <FormField
+                    id="r0MeasurementCount"
+                    label="Measurement Count"
+                    error={errors.r0MeasurementCount?.message}
+                  >
+                    <FormInput
                       id="r0MeasurementCount"
-                      label="Measurement Count"
-                      error={errors.r0MeasurementCount?.message}
-                    >
-                      <FormInput
-                        id="r0MeasurementCount"
-                        type="number"
-                        step="1"
-                        min="0"
-                        placeholder="e.g., 100"
-                        disabled={isSubmitting}
-                        error={!!errors.r0MeasurementCount}
-                        {...register("r0MeasurementCount", {
-                          setValueAs: integerValue,
-                        })}
-                      />
-                    </FormField>
-
-                    <FormField
-                      id="r0AnalysisDate"
-                      label="R₀ Analysis Date"
-                      error={errors.r0AnalysisDate?.message}
-                    >
-                      <FormInput
-                        id="r0AnalysisDate"
-                        type="date"
-                        disabled={isSubmitting}
-                        error={!!errors.r0AnalysisDate}
-                        {...register("r0AnalysisDate", {
-                          setValueAs: (v) => (v ? new Date(v) : null),
-                        })}
-                      />
-                    </FormField>
-                  </div>
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="e.g., 100"
+                      disabled={isSubmitting}
+                      error={!!errors.r0MeasurementCount}
+                      {...register("r0MeasurementCount", {
+                        setValueAs: integerValue,
+                      })}
+                    />
+                  </FormField>
                 </div>
 
-                {/* TGA Non-Reactive Carbon Section */}
-                <div className="pt-24 border-t border-[var(--color-border-tertiary)]">
-                  <h4 className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] mb-16">
-                    TGA Non-Reactive Carbon
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-24">
-                    <FormField
+                <FormField
+                  id="r0AnalysisDate"
+                  label="R₀ Analysis Date"
+                  error={errors.r0AnalysisDate?.message}
+                >
+                  <FormInput
+                    id="r0AnalysisDate"
+                    type="date"
+                    disabled={isSubmitting}
+                    error={!!errors.r0AnalysisDate}
+                    {...register("r0AnalysisDate", {
+                      setValueAs: (v) => (v ? new Date(v) : null),
+                    })}
+                  />
+                </FormField>
+
+                <div className="pt-20 border-t border-[var(--color-border-tertiary)]">
+                  <SectionLabel>TGA Non-Reactive Carbon</SectionLabel>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                  <FormField
+                    id="reactiveCarbonPercent"
+                    label="Reactive Carbon (%)"
+                    error={errors.reactiveCarbonPercent?.message}
+                  >
+                    <FormInput
                       id="reactiveCarbonPercent"
-                      label="Reactive Carbon (%)"
-                      error={errors.reactiveCarbonPercent?.message}
-                    >
-                      <FormInput
-                        id="reactiveCarbonPercent"
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g., 15.0"
-                        disabled={isSubmitting}
-                        error={!!errors.reactiveCarbonPercent}
-                        {...register("reactiveCarbonPercent", {
-                          setValueAs: numericValue,
-                        })}
-                      />
-                    </FormField>
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g., 15.0"
+                      disabled={isSubmitting}
+                      error={!!errors.reactiveCarbonPercent}
+                      {...register("reactiveCarbonPercent", {
+                        setValueAs: numericValue,
+                      })}
+                    />
+                  </FormField>
 
-                    <FormField
+                  <FormField
+                    id="residualCarbonPercent"
+                    label="Residual (Non-Reactive) Carbon (%)"
+                    error={errors.residualCarbonPercent?.message}
+                  >
+                    <FormInput
                       id="residualCarbonPercent"
-                      label="Residual (Non-Reactive) Carbon (%)"
-                      error={errors.residualCarbonPercent?.message}
-                    >
-                      <FormInput
-                        id="residualCarbonPercent"
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g., 85.0"
-                        disabled={isSubmitting}
-                        error={!!errors.residualCarbonPercent}
-                        {...register("residualCarbonPercent", {
-                          setValueAs: numericValue,
-                        })}
-                      />
-                    </FormField>
-
-                    <FormField
-                      id="tgaAnalysisDate"
-                      label="TGA Analysis Date"
-                      error={errors.tgaAnalysisDate?.message}
-                    >
-                      <FormInput
-                        id="tgaAnalysisDate"
-                        type="date"
-                        disabled={isSubmitting}
-                        error={!!errors.tgaAnalysisDate}
-                        {...register("tgaAnalysisDate", {
-                          setValueAs: (v) => (v ? new Date(v) : null),
-                        })}
-                      />
-                    </FormField>
-                  </div>
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g., 85.0"
+                      disabled={isSubmitting}
+                      error={!!errors.residualCarbonPercent}
+                      {...register("residualCarbonPercent", {
+                        setValueAs: numericValue,
+                      })}
+                    />
+                  </FormField>
                 </div>
+
+                <FormField
+                  id="tgaAnalysisDate"
+                  label="TGA Analysis Date"
+                  error={errors.tgaAnalysisDate?.message}
+                >
+                  <FormInput
+                    id="tgaAnalysisDate"
+                    type="date"
+                    disabled={isSubmitting}
+                    error={!!errors.tgaAnalysisDate}
+                    {...register("tgaAnalysisDate", {
+                      setValueAs: (v) => (v ? new Date(v) : null),
+                    })}
+                  />
+                </FormField>
               </div>
             </Accordion.Panel>
           </Accordion.Item>
@@ -815,25 +812,25 @@ export function SampleForm({
             <Accordion.Trigger>Nutrient Claims</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="space-y-24">
-              <div className="flex items-center gap-16">
+            <div className="space-y-20">
+              <label
+                htmlFor="nutrientClaimEnabled"
+                className="flex items-center gap-12 cursor-pointer"
+              >
                 <input
                   type="checkbox"
                   id="nutrientClaimEnabled"
-                  className="w-4 h-4 rounded-4 border-[var(--color-border-primary)] text-[var(--clr-dark-purple)] focus:ring-[var(--color-interaction)]"
+                  className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
                   disabled={isSubmitting}
                   {...register("nutrientClaimEnabled")}
                 />
-                <label
-                  htmlFor="nutrientClaimEnabled"
-                  className="body-medium text-[var(--color-text-primary)]"
-                >
+                <span className="body-medium text-[var(--color-text-primary)]">
                   Enable nutrient claims
-                </label>
-              </div>
+                </span>
+              </label>
 
               {watchedNutrientClaimEnabled && (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-24 pt-24">
+                <div className="grid grid-cols-2 gap-x-16 gap-y-20 pt-8">
                   <FormField
                     id="phosphorusPercent"
                     label="Phosphorus (%)"
@@ -931,7 +928,7 @@ export function SampleForm({
       </Accordion.Root>
 
       {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-24 border-t border-[var(--color-border-secondary)]">
+      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
         {onCancel && (
           <Button
             type="button"
