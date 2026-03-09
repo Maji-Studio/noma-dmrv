@@ -68,11 +68,16 @@ function DryMassCard({
   const dryKg = calculateDryMass(appliedKg, moisturePercent);
   const hasMoisture = moisturePercent != null;
   const hasApplied = appliedKg != null && appliedKg > 0;
+  const moistureFraction = moisturePercent != null ? moisturePercent / 100 : null;
+  const moistureKg =
+    appliedKg != null && moistureFraction != null
+      ? appliedKg * moistureFraction
+      : null;
 
   if (!hasMoisture && !hasApplied) return null;
 
   return (
-    <div className="col-span-full mt-4">
+    <div className="col-span-full mt-8">
       {!hasMoisture ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
@@ -82,20 +87,69 @@ function DryMassCard({
       ) : !hasApplied ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
-            Enter biochar applied to see dry mass.
+            Enter wet mass applied to calculate dry mass.
           </span>
         </div>
       ) : (
-        <div className="flex items-baseline gap-12 py-12 px-16 border-l-2 border-[var(--color-text-brand)] bg-[var(--color-background-sunken)]">
-          <span className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] shrink-0">
-            Dry mass
-          </span>
-          <span className="font-mono text-[var(--text-lg)] font-semibold text-[var(--color-text-primary)]">
-            {formatKg(dryKg)}
-          </span>
-          <span className="body-small text-[var(--color-text-quaternary)] font-mono">
-            {formatKg(appliedKg)} &times; (1 &minus; {moisturePercent?.toFixed(1)}%)
-          </span>
+        <div className="bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
+          {/* Header */}
+          <div className="px-16 py-8 border-b border-[var(--color-border-tertiary)]">
+            <span className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+              Dry Mass Calculation
+            </span>
+          </div>
+
+          {/* Visual breakdown */}
+          <div className="px-16 py-12">
+            <div className="flex items-center gap-8">
+              {/* Wet mass */}
+              <div className="flex flex-col items-center gap-2 min-w-0">
+                <span className="font-mono text-[var(--text-base)] font-semibold text-[var(--color-text-primary)]">
+                  {formatKg(appliedKg)}
+                </span>
+                <span className="body-caption text-[var(--color-text-quaternary)]">
+                  wet mass
+                </span>
+              </div>
+
+              {/* Minus sign */}
+              <span className="font-mono text-[var(--text-base)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
+                &minus;
+              </span>
+
+              {/* Moisture removed */}
+              <div className="flex flex-col items-center gap-2 min-w-0">
+                <span className="font-mono text-[var(--text-base)] text-[var(--color-text-tertiary)]">
+                  {formatKg(moistureKg)}
+                </span>
+                <span className="body-caption text-[var(--color-text-quaternary)]">
+                  moisture ({moisturePercent?.toFixed(1)}%)
+                </span>
+              </div>
+
+              {/* Equals sign */}
+              <span className="font-mono text-[var(--text-base)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
+                =
+              </span>
+
+              {/* Dry mass result */}
+              <div className="flex flex-col items-center gap-2 min-w-0 px-12 py-4 bg-[var(--clr-purple-10)] border-l-2 border-[var(--clr-purple)]">
+                <span className="font-mono text-[var(--text-lg)] font-bold text-[var(--color-text-primary)]">
+                  {formatKg(dryKg)}
+                </span>
+                <span className="body-caption font-medium text-[var(--clr-purple)]">
+                  dry mass
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Source note */}
+          <div className="px-16 py-6 border-t border-[var(--color-border-tertiary)]">
+            <span className="body-caption text-[var(--color-text-quaternary)]">
+              Moisture % from delivery record
+            </span>
+          </div>
         </div>
       )}
     </div>
@@ -243,7 +297,7 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="biocharAppliedTons" label="Biochar Applied (kg)" error={errors.biocharAppliedTons?.message} required>
+          <FormField id="biocharAppliedTons" label="Biochar Applied, Wet (kg)" error={errors.biocharAppliedTons?.message} required helperText="As-received mass at delivery, before moisture adjustment">
             <FormInput
               id="biocharAppliedTons"
               type="number"

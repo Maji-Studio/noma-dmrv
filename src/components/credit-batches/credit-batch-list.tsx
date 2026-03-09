@@ -542,6 +542,13 @@ export function CreditBatchList({
             creditBatch={sideSheet.entity ?? undefined}
             applications={applications}
             productionRuns={productionRuns}
+            existingBatches={allItems.map((b) => ({
+              id: b.id,
+              code: b.code,
+              facilityId: b.facilityId,
+              startDate: typeof b.startDate === "string" ? b.startDate : b.startDate,
+              endDate: typeof b.endDate === "string" ? b.endDate : b.endDate,
+            }))}
             onSubmit={
               sideSheet.entity && sideSheet.mode === "edit"
                 ? handleUpdate
