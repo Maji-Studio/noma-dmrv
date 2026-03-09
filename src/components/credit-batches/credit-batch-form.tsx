@@ -17,7 +17,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormSelect, FormTextarea, SectionLabel } from "@/components/forms";
@@ -102,6 +102,94 @@ function DataRow({ label, value, accent }: { label: string; value: string; accen
   );
 }
 
+// ============================================
+// Auto-matched accordion section
+// ============================================
+
+function AutoMatchedSection({
+  title,
+  count,
+  totalCount,
+  hasDates,
+  emptyMessage,
+  noMatchMessage,
+  children,
+}: {
+  title: string;
+  count: number;
+  totalCount: number;
+  hasDates: boolean;
+  emptyMessage: string;
+  noMatchMessage: string;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const panelId = `auto-matched-${title.toLowerCase().replace(/\s+/g, "-")}-panel`;
+
+  if (totalCount === 0) {
+    return (
+      <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>{title}</SectionLabel>
+        <div className="p-16 bg-[var(--color-background-medium)] body-small text-[var(--color-text-secondary)]">
+          {emptyMessage}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
+      <div className="flex items-center justify-between">
+        <SectionLabel>{title}</SectionLabel>
+        {hasDates && count > 0 && (
+          <span className="inline-flex items-center px-8 py-2 body-caption font-medium bg-[var(--clr-purple-10)] text-[var(--clr-purple)]">
+            {count} matched
+          </span>
+        )}
+      </div>
+      <SectionHint>
+        Automatically matched based on the crediting period above
+      </SectionHint>
+
+      {!hasDates ? (
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+          <span className="body-small text-[var(--color-text-tertiary)]">
+            Set start and end dates to auto-match {title.toLowerCase()}.
+          </span>
+        </div>
+      ) : count === 0 ? (
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+          <span className="body-small text-[var(--color-text-tertiary)]">
+            {noMatchMessage}
+          </span>
+        </div>
+      ) : (
+        <div className="border border-[var(--color-border-tertiary)]">
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            aria-expanded={isOpen}
+            aria-controls={panelId}
+            className="w-full flex items-center justify-between px-16 py-10 bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] transition-colors"
+          >
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">
+              {count} {title.toLowerCase()} in date range
+            </span>
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              {isOpen ? "Collapse" : "Expand"}
+            </span>
+          </button>
+          {isOpen && (
+            <div id={panelId} role="region" className="grid grid-cols-1 gap-8 p-8 max-h-[320px] overflow-y-auto">
+              {children}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
     return null;
@@ -141,6 +229,14 @@ export interface ApplicationOption {
   co2eStoredTonnes: number | null;
 }
 
+export interface ExistingBatchPeriod {
+  id: string;
+  code: string;
+  facilityId: string;
+  startDate: string;
+  endDate: string;
+}
+
 interface CreditBatchFormProps {
   /** Existing credit batch data for editing (undefined for create mode) */
   creditBatch?: CreditBatch & { applicationIds?: string[]; productionRunIds?: string[] };
@@ -148,6 +244,8 @@ interface CreditBatchFormProps {
   applications?: ApplicationOption[];
   /** Available production runs for multi-select */
   productionRuns?: ProductionRunOption[];
+  /** Existing credit batch periods for overlap detection */
+  existingBatches?: ExistingBatchPeriod[];
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -162,6 +260,7 @@ export function CreditBatchForm({
   creditBatch,
   applications = [],
   productionRuns = [],
+  existingBatches = [],
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -176,7 +275,6 @@ export function CreditBatchForm({
     control,
     formState: { errors },
     setValue,
-    getValues,
   } = useForm({
     resolver: zodResolver(creditBatchFormSchema),
     defaultValues: {
@@ -237,61 +335,61 @@ export function CreditBatchForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durabilityOption]);
 
-  // Watch dates for auto-selection
+  // Watch dates for auto-matching
   const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
 
-  // Auto-select production runs and applications within date range
-  useEffect(() => {
-    if (!watchedStartDate || !watchedEndDate) return;
-    const start = parseWatchedDate(watchedStartDate);
-    const end = parseWatchedDate(watchedEndDate);
-    if (!start || !end || end < start) return;
+  const startDate = parseWatchedDate(watchedStartDate);
+  const endDate = parseWatchedDate(watchedEndDate);
+  const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 
-    const matchingRunIds = productionRuns
-      .filter((run) => {
+  // Derive matched items from date range (no manual selection)
+  // Compare by calendar date string to avoid timezone/time-of-day issues
+  const startDateStr = startDate?.toISOString().split("T")[0] ?? "";
+  const endDateStr = endDate?.toISOString().split("T")[0] ?? "";
+
+  const matchedRuns = hasBothDates
+    ? productionRuns.filter((run) => {
         if (!run.date) return false;
-        const d = new Date(run.date);
-        return d >= start && d <= end;
+        const d = new Date(run.date).toISOString().split("T")[0];
+        return d >= startDateStr && d <= endDateStr;
       })
-      .map((run) => run.id);
-    setValue("productionRunIds", matchingRunIds, { shouldValidate: true });
+    : [];
 
-    const matchingAppIds = applications
-      .filter((app) => {
+  const matchedApps = hasBothDates
+    ? applications.filter((app) => {
         if (!app.applicationDate) return false;
-        const d = new Date(app.applicationDate);
-        return d >= start && d <= end;
+        const d = new Date(app.applicationDate).toISOString().split("T")[0];
+        return d >= startDateStr && d <= endDateStr;
       })
-      .map((app) => app.id);
-    setValue("applicationIds", matchingAppIds, { shouldValidate: true });
-  }, [watchedStartDate, watchedEndDate, productionRuns, applications, setValue]);
+    : [];
 
-  // Watch selected production runs
-  const selectedProductionRunIds = useWatch({
-    control,
-    name: "productionRunIds",
-    defaultValue: [],
-  });
+  // Sync matched IDs into form state for submission
+  useEffect(() => {
+    setValue("productionRunIds", matchedRuns.map((r) => r.id), { shouldValidate: true });
+    setValue("applicationIds", matchedApps.map((a) => a.id), { shouldValidate: true });
+  }, [
+    // Use stringified IDs for stable deps instead of arrays
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    matchedRuns.map((r) => r.id).join(","),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    matchedApps.map((a) => a.id).join(","),
+    setValue,
+  ]);
 
-  // Watch selected applications
-  const selectedApplicationIds = useWatch({
-    control,
-    name: "applicationIds",
-    defaultValue: [],
-  });
+  // Overlap detection (client-side warning)
+  const overlappingBatch = hasBothDates
+    ? existingBatches.find((batch) => {
+        if (creditBatch && batch.id === creditBatch.id) return false;
+        if (batch.facilityId !== (creditBatch?.facilityId ?? contextFacilityId)) return false;
+        return batch.startDate <= endDate.toISOString().split("T")[0] &&
+               batch.endDate >= startDate.toISOString().split("T")[0];
+      })
+    : null;
 
   const defaultSubmitLabel = isEditMode
     ? "Update Credit Batch"
     : "Create Credit Batch";
-
-  const toggleArrayField = (fieldName: "productionRunIds" | "applicationIds", id: string) => {
-    const current = getValues(fieldName) || [];
-    const updated = current.includes(id)
-      ? current.filter((v) => v !== id)
-      : [...current, id];
-    setValue(fieldName, updated, { shouldValidate: true });
-  };
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as CreditBatchFormData);
@@ -333,6 +431,15 @@ export function CreditBatchForm({
           </FormField>
         </div>
 
+        {/* Overlap warning */}
+        {overlappingBatch && (
+          <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-signal-orange-strong)] bg-[var(--color-signal-orange-light)]">
+            <span className="body-small text-[var(--color-text-primary)]">
+              Date range overlaps with <strong>{overlappingBatch.code}</strong> ({overlappingBatch.startDate} – {overlappingBatch.endDate}). Credit batch timeframes cannot overlap for the same facility.
+            </span>
+          </div>
+        )}
+
         <FormField
           id="certifier"
           label="Certifier"
@@ -349,117 +456,61 @@ export function CreditBatchForm({
         </FormField>
       </div>
 
-      {/* ── Production Runs ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Production Runs</SectionLabel>
-        <SectionHint>
-          Select production runs included in this credit batch
-        </SectionHint>
+      {/* ── Matched Production Runs ── */}
+      <AutoMatchedSection
+        title="Production Runs"
+        count={matchedRuns.length}
+        totalCount={productionRuns.length}
+        hasDates={hasBothDates}
+        emptyMessage="No production runs available for this facility."
+        noMatchMessage="No production runs fall within this date range."
+      >
+        {matchedRuns.map((run) => (
+          <div
+            key={run.id}
+            className="flex items-center gap-12 px-12 py-8 bg-[var(--color-background-white)] border border-[var(--color-border-tertiary)]"
+          >
+            <span className="body-small font-medium shrink-0">{run.code}</span>
+            <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">{formatSafeDate(run.date)}</span>
+            <RunStatusBadge status={run.status} />
+            <div className="flex items-center gap-12 ml-auto shrink-0">
+              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">In {formatKg(run.feedstockMassDryKg)}</span>
+              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">Out {formatKg(run.biocharOutputKg)}</span>
+            </div>
+          </div>
+        ))}
+      </AutoMatchedSection>
 
-        {productionRuns.length === 0 ? (
-          <div className="p-24 bg-[var(--color-background-medium)] body-small text-[var(--color-text-secondary)]">
-            No production runs available. Create production runs first to link
-            them to credit batches.
+      {/* ── Matched Applications ── */}
+      <AutoMatchedSection
+        title="Applications"
+        count={matchedApps.length}
+        totalCount={applications.length}
+        hasDates={hasBothDates}
+        emptyMessage="No applications available for this facility."
+        noMatchMessage="No applications fall within this date range."
+      >
+        {matchedApps.map((app) => (
+          <div
+            key={app.id}
+            className="flex items-center gap-12 px-12 py-8 bg-[var(--color-background-white)] border border-[var(--color-border-tertiary)]"
+          >
+            <span className="body-small font-medium shrink-0">{app.code}</span>
+            <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">{formatSafeDate(app.applicationDate)}</span>
+            {app.fieldIdentifier && (
+              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate max-w-[120px]">
+                {app.fieldIdentifier}
+              </span>
+            )}
+            <div className="flex items-center gap-12 ml-auto shrink-0">
+              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">Applied {formatTons(app.biocharAppliedDryTons)}</span>
+              {app.co2eStoredTonnes != null && (
+                <span className="text-[10px] uppercase tracking-wider font-medium text-[var(--color-signal-green)]">CO₂e {formatTons(app.co2eStoredTonnes)}</span>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-h-[360px] overflow-y-auto p-8 border border-[var(--color-border-primary)]">
-            {productionRuns.map((run) => {
-              const isSelected = selectedProductionRunIds?.includes(run.id) ?? false;
-              return (
-                <label
-                  key={run.id}
-                  className={`flex flex-col gap-8 p-12 cursor-pointer transition-colors duration-200 border ${
-                    isSelected
-                      ? "bg-[var(--clr-dark-purple)] text-[var(--color-text-white-primary)] border-[var(--clr-dark-purple)]"
-                      : "bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] border-transparent"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleArrayField("productionRunIds", run.id)}
-                    disabled={isSubmitting}
-                    className="sr-only"
-                  />
-                  <div className="flex items-center justify-between gap-8">
-                    <span className="body-small font-medium">{run.code}</span>
-                    <RunStatusBadge status={run.status} />
-                  </div>
-                  <div className="text-[11px] opacity-70">{formatSafeDate(run.date)}</div>
-                  <div className="flex flex-col gap-2">
-                    <DataRow label="Input" value={formatKg(run.feedstockMassDryKg)} />
-                    <DataRow label="Output" value={formatKg(run.biocharOutputKg)} />
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        )}
-        {errors.productionRunIds && (
-          <p className="body-caption text-[var(--color-signal-red)]">
-            {errors.productionRunIds.message}
-          </p>
-        )}
-      </div>
-
-      {/* ── Applications ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Applications</SectionLabel>
-        <SectionHint>
-          Select applications to include in this credit batch
-        </SectionHint>
-
-        {applications.length === 0 ? (
-          <div className="p-24 bg-[var(--color-background-medium)] body-small text-[var(--color-text-secondary)]">
-            No applications available. Create applications first to link them to
-            credit batches.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-h-[360px] overflow-y-auto p-8 border border-[var(--color-border-primary)]">
-            {applications.map((app) => {
-              const isSelected = selectedApplicationIds?.includes(app.id) ?? false;
-              return (
-                <label
-                  key={app.id}
-                  className={`flex flex-col gap-8 p-12 cursor-pointer transition-colors duration-200 border ${
-                    isSelected
-                      ? "bg-[var(--clr-dark-purple)] text-[var(--color-text-white-primary)] border-[var(--clr-dark-purple)]"
-                      : "bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] border-transparent"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleArrayField("applicationIds", app.id)}
-                    disabled={isSubmitting}
-                    className="sr-only"
-                  />
-                  <div className="flex items-center justify-between gap-8">
-                    <span className="body-small font-medium">{app.code}</span>
-                    {app.fieldIdentifier && (
-                      <span className="text-[10px] uppercase tracking-wider opacity-60 truncate max-w-[120px]">
-                        {app.fieldIdentifier}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] opacity-70">{formatSafeDate(app.applicationDate)}</div>
-                  <div className="flex flex-col gap-2">
-                    <DataRow label="Applied" value={formatTons(app.biocharAppliedDryTons)} />
-                    {app.co2eStoredTonnes != null && (
-                      <DataRow label="CO₂e" value={formatTons(app.co2eStoredTonnes)} accent />
-                    )}
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        )}
-        {errors.applicationIds && (
-          <p className="body-caption text-[var(--color-signal-red)]">
-            {errors.applicationIds.message}
-          </p>
-        )}
-      </div>
+        ))}
+      </AutoMatchedSection>
 
       {/* ── Durability ── */}
       <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">

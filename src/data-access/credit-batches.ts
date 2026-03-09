@@ -388,3 +388,32 @@ export async function getCreditBatchesByFacilityId(
     .where(eq(creditBatches.facilityId, facilityId))
     .orderBy(desc(creditBatches.createdAt));
 }
+
+/**
+ * Check if a date range overlaps with existing credit batches for the same facility.
+ * Returns the overlapping batch if found, null otherwise.
+ */
+export async function checkCreditBatchDateOverlap(
+  userId: string,
+  facilityId: string,
+  startDate: Date,
+  endDate: Date,
+  excludeId?: string,
+): Promise<CreditBatch | null> {
+  requireAuth(userId);
+  const startStr = startDate.toISOString().split("T")[0];
+  const endStr = endDate.toISOString().split("T")[0];
+
+  const existing = await db
+    .select()
+    .from(creditBatches)
+    .where(eq(creditBatches.facilityId, facilityId));
+
+  const overlapping = existing.find((batch) => {
+    if (excludeId && batch.id === excludeId) return false;
+    // Overlap: startA <= endB AND endA >= startB
+    return batch.startDate <= endStr && batch.endDate >= startStr;
+  });
+
+  return overlapping ?? null;
+}
