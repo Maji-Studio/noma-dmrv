@@ -124,6 +124,7 @@ function AutoMatchedSection({
   children: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const panelId = `auto-matched-${title.toLowerCase().replace(/\s+/g, "-")}-panel`;
 
   if (totalCount === 0) {
     return (
@@ -167,6 +168,8 @@ function AutoMatchedSection({
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
+            aria-expanded={isOpen}
+            aria-controls={panelId}
             className="w-full flex items-center justify-between px-16 py-10 bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] transition-colors"
           >
             <span className="body-small font-medium text-[var(--color-text-secondary)]">
@@ -177,7 +180,7 @@ function AutoMatchedSection({
             </span>
           </button>
           {isOpen && (
-            <div className="grid grid-cols-1 gap-8 p-8 max-h-[320px] overflow-y-auto">
+            <div id={panelId} role="region" className="grid grid-cols-1 gap-8 p-8 max-h-[320px] overflow-y-auto">
               {children}
             </div>
           )}
@@ -341,19 +344,23 @@ export function CreditBatchForm({
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 
   // Derive matched items from date range (no manual selection)
+  // Compare by calendar date string to avoid timezone/time-of-day issues
+  const startDateStr = startDate?.toISOString().split("T")[0] ?? "";
+  const endDateStr = endDate?.toISOString().split("T")[0] ?? "";
+
   const matchedRuns = hasBothDates
     ? productionRuns.filter((run) => {
         if (!run.date) return false;
-        const d = new Date(run.date);
-        return d >= startDate && d <= endDate;
+        const d = new Date(run.date).toISOString().split("T")[0];
+        return d >= startDateStr && d <= endDateStr;
       })
     : [];
 
   const matchedApps = hasBothDates
     ? applications.filter((app) => {
         if (!app.applicationDate) return false;
-        const d = new Date(app.applicationDate);
-        return d >= startDate && d <= endDate;
+        const d = new Date(app.applicationDate).toISOString().split("T")[0];
+        return d >= startDateStr && d <= endDateStr;
       })
     : [];
 

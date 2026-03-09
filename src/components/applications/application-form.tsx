@@ -123,7 +123,7 @@ function DryMassCard({
                   {formatKg(moistureKg)}
                 </span>
                 <span className="body-caption text-[var(--color-text-quaternary)]">
-                  moisture ({moisturePercent?.toFixed(1)}%)
+                  moisture ({moisturePercent?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
                 </span>
               </div>
 
@@ -134,7 +134,7 @@ function DryMassCard({
 
               {/* Dry mass result */}
               <div className="flex flex-col items-center gap-2 min-w-0 px-12 py-4 bg-[var(--clr-purple-10)] border-l-2 border-[var(--clr-purple)]">
-                <span className="font-mono text-[var(--text-lg)] font-bold text-[var(--color-text-primary)]">
+                <span className="font-mono text-[var(--text-lg)] font-bold text-[var(--color-text-primary)]" aria-live="polite" aria-atomic="true">
                   {formatKg(dryKg)}
                 </span>
                 <span className="body-caption font-medium text-[var(--clr-purple)]">
