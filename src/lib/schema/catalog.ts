@@ -188,11 +188,23 @@ const TABLE_META: Record<string, TableMeta> = {
     summary: "Join table linking runs to consumed feedstocks.",
     useCases: ["Mass-balance tracing", "Input provenance by run"],
   },
+  production_samples: {
+    area: "Production",
+    modulePath: "src/db/schema/production.ts",
+    summary: "In-process field measurements taken during production runs.",
+    useCases: ["Run-level quality checks", "Moisture and temperature evidence"],
+  },
   formulations: {
     area: "Products",
     modulePath: "src/db/schema/products.ts",
     summary: "Recipe templates for finished products.",
     useCases: ["Blend standardization", "Formulation governance"],
+  },
+  formulation_ingredients: {
+    area: "Products",
+    modulePath: "src/db/schema/products.ts",
+    summary: "Individual ingredient entries within a formulation recipe.",
+    useCases: ["Blend composition tracking", "Ingredient ratio validation"],
   },
   biochar_products: {
     area: "Products",
@@ -247,6 +259,12 @@ const TABLE_META: Record<string, TableMeta> = {
     modulePath: "src/db/schema/credits.ts",
     summary: "Join table linking applications to credit batches.",
     useCases: ["Issuance traceability", "Inclusion/exclusion reviews"],
+  },
+  credit_batch_production_runs: {
+    area: "Credits",
+    modulePath: "src/db/schema/credits.ts",
+    summary: "Join table linking production runs to credit batches.",
+    useCases: ["Run-level credit attribution", "Batch composition traceability"],
   },
   emission_factors: {
     area: "Emissions",
