@@ -124,6 +124,7 @@ function createColumns(
             variant="default"
             className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
             onClick={() => onDelete(row.original.id)}
+            aria-label="Delete sample"
           >
             <Trash size={16} />
           </Button>
@@ -319,6 +320,7 @@ export function SampleList() {
               value={productionRunFilter}
               onChange={(e) => { setProductionRunFilter(e.target.value); setCurrentPage(1); }}
               className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
+              aria-label="Filter by production run"
             >
               <option value="">All Production Runs</option>
               {productionRunsData?.items?.map((run) => (
