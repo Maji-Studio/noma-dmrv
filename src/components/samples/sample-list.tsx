@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate } from "@phosphor-icons/react";
+import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate, PencilSimple, Trash } from "@phosphor-icons/react/dist/ssr";
 import {
   useCreateSample,
   useDeleteSample,
@@ -38,8 +38,14 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
   const label = formatDurabilityOption(durability);
   const is1000Year = durability === "1000_year";
   return (
-    <span className={`inline-flex items-center gap-4 px-8 py-2 text-[var(--text-xs)] font-medium ${is1000Year ? "text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/10" : "text-[var(--color-text-secondary)] bg-[var(--color-surface-light)]"}`}>
-      {is1000Year && <Certificate size={14} weight="fill" />}
+    <span
+      className={`inline-flex items-center gap-4 px-8 py-2 text-[11px] font-medium uppercase tracking-[0.06em] ${
+        is1000Year
+          ? "border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] text-[var(--clr-purple)]"
+          : "border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] text-[var(--color-text-secondary)]"
+      }`}
+    >
+      {is1000Year && <Certificate size={12} weight="fill" />}
       {label}
     </span>
   );
@@ -57,7 +63,11 @@ function createColumns(
     {
       accessorKey: "sampleCode",
       header: "Code",
-      cell: ({ row }) => <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.sampleCode}</span>,
+      cell: ({ row }) => (
+        <span className="font-medium text-[var(--clr-dark-purple)]">
+          {row.original.sampleCode}
+        </span>
+      ),
     },
     {
       accessorKey: "samplingTime",
@@ -68,7 +78,11 @@ function createColumns(
       id: "productionRun",
       header: "Production Run",
       accessorFn: (row) => row.productionRunCode ?? "",
-      cell: ({ row }) => <span className="text-[var(--clr-dark-purple)]">{row.original.productionRunCode ?? "\u2014"}</span>,
+      cell: ({ row }) => (
+        <span className="text-[var(--clr-dark-purple)]">
+          {row.original.productionRunCode ?? "\u2014"}
+        </span>
+      ),
     },
     {
       accessorKey: "totalCarbonPercent",
@@ -94,9 +108,26 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(row.original); }} className="h-32 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors">Edit</button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }} className="h-32 px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small transition-colors">Delete</button>
+        <div
+          className="flex items-center justify-end gap-8"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Button
+            size="small"
+            variant="default"
+            onClick={() => onEdit(row.original)}
+          >
+            <PencilSimple size={16} /> Edit
+          </Button>
+          <Button
+            size="small"
+            variant="default"
+            className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
+            onClick={() => onDelete(row.original.id)}
+            aria-label="Delete sample"
+          >
+            <Trash size={16} />
+          </Button>
         </div>
       ),
       enableSorting: false,
@@ -221,7 +252,10 @@ export function SampleList() {
     <div className="container-max py-32 flex flex-col gap-32">
       <div className="flex items-center justify-between gap-24">
         <h1 className="title-heading-2">Lab Samples</h1>
-        <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Sample</Button>
+        <Button variant="primary" onClick={openCreate}>
+          <Plus size={20} weight="bold" />
+          New Sample
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
@@ -251,24 +285,56 @@ export function SampleList() {
           <div className="flex flex-col items-center justify-center gap-24 py-48">
             <Flask size={48} className="text-[var(--color-text-tertiary)]" />
             <div className="text-center">
-              <h3 className="title-heading-3 mb-1">{hasActiveFilters ? "No samples found" : "No samples yet"}</h3>
-              <p className="body-small text-[var(--color-text-secondary)]">{hasActiveFilters ? "Try adjusting your search or filters." : "Create your first lab sample to start tracking biochar quality."}</p>
+              <h3 className="title-heading-3 mb-1">
+                {hasActiveFilters ? "No samples found" : "No samples yet"}
+              </h3>
+              <p className="body-small text-[var(--color-text-secondary)]">
+                {hasActiveFilters
+                  ? "Try adjusting your search or filters."
+                  : "Create your first lab sample to start tracking biochar quality."}
+              </p>
             </div>
-            {!hasActiveFilters && <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />Create Sample</Button>}
+            {!hasActiveFilters && (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={20} weight="bold" />
+                Create Sample
+              </Button>
+            )}
           </div>
         }
       >
         <DataTable.Toolbar>
           <div className="relative max-w-[320px] flex-1">
             <MagnifyingGlass size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
-            <input type="text" placeholder="Search samples..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]" aria-label="Search table" />
+            <input
+              type="text"
+              placeholder="Search samples..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+              aria-label="Search table"
+            />
           </div>
           <div className="flex items-center gap-8">
-            <select value={productionRunFilter} onChange={(e) => { setProductionRunFilter(e.target.value); setCurrentPage(1); }} className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer">
+            <select
+              value={productionRunFilter}
+              onChange={(e) => { setProductionRunFilter(e.target.value); setCurrentPage(1); }}
+              className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
+              aria-label="Filter by production run"
+            >
               <option value="">All Production Runs</option>
-              {productionRunsData?.items?.map((run) => <option key={run.id} value={run.id}>{[run.facilityName, new Date(run.date).toLocaleDateString()].filter(Boolean).join(" - ")}</option>)}
+              {productionRunsData?.items?.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {[run.facilityName, new Date(run.date).toLocaleDateString()].filter(Boolean).join(" - ")}
+                </option>
+              ))}
             </select>
-            {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <X size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
           </div>
         </DataTable.Toolbar>
         <DataTable.Pagination />
