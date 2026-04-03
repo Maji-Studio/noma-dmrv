@@ -124,8 +124,10 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: feedstockKeys.stats() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
+      });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
@@ -145,7 +147,10 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.detail(data.id) });
-      queryClient.invalidateQueries({ queryKey: feedstockKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
+      });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
@@ -163,8 +168,10 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: feedstockKeys.stats() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
+      });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },

@@ -5,7 +5,7 @@
  * Split deliveries (one truck → multiple bins) share a deliveryGroupId.
  */
 
-import { and, asc, count, desc, eq, ilike, inArray, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   feedstocks,
@@ -168,6 +168,8 @@ export async function getFeedstocks(
     feedstockTypeId,
     status,
     storageLocationId,
+    startDate,
+    endDate,
     page = 1,
     pageSize = 20,
     sortBy = "deliveryDate",
@@ -194,6 +196,8 @@ export async function getFeedstocks(
   if (feedstockTypeId) conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
   if (status) conditions.push(eq(feedstocks.status, status));
   if (storageLocationId) conditions.push(eq(feedstocks.storageLocationId, storageLocationId));
+  if (startDate) conditions.push(gte(feedstocks.deliveryDate, startDate));
+  if (endDate) conditions.push(lte(feedstocks.deliveryDate, endDate));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -268,7 +272,7 @@ export async function getFeedstockStats(
   return {
     totalFeedstocks: Number(stats.totalFeedstocks),
     totalDryMassKg: Number(stats.totalDryMassKg),
-    avgMoisturePercent: stats.avgMoisturePercent ? Number(stats.avgMoisturePercent) : null,
+    avgMoisturePercent: stats.avgMoisturePercent != null ? Number(stats.avgMoisturePercent) : null,
     completeFeedstocks: Number(stats.completeFeedstocks),
     missingDataFeedstocks: Number(stats.missingDataFeedstocks),
   };
@@ -295,6 +299,7 @@ export async function createFeedstock(
       id: storageLocations.id,
       type: storageLocations.type,
       feedstockTypeId: storageLocations.feedstockTypeId,
+      facilityId: storageLocations.facilityId,
     })
     .from(storageLocations)
     .where(inArray(storageLocations.id, binIds));
@@ -304,6 +309,9 @@ export async function createFeedstock(
     const bin = binMap.get(allocation.storageLocationId);
     if (!bin) {
       throw new Error(`Storage bin not found: ${allocation.storageLocationId}`);
+    }
+    if (bin.facilityId !== data.facilityId) {
+      throw new Error(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
     if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
       throw new Error(`Storage bin ${bin.id} is not a feedstock or ingredient bin`);

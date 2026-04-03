@@ -530,6 +530,19 @@ function formatStorageLocationSubtitle(
       }
       return parts.join(" · ");
     }
+    case "ingredient_bin": {
+      const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
+      if (!feedstockTypeName && remainingKg === 0) {
+        return "Ingredient Bin";
+      }
+
+      const parts: string[] = [];
+      if (feedstockTypeName) {
+        parts.push(feedstockTypeName);
+      }
+      parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+      return parts.join(" · ");
+    }
     default:
       return "Empty";
   }

@@ -158,12 +158,13 @@ export async function seedChainData(
       });
 
       // 10. Feedstock Delivery (needs facility + supplier)
+      const deliveryDate = new Date();
       await tx.insert(schema.feedstockDeliveries).values({
         id: feedstockDeliveryId,
         code: `E2E-FSD-${testRunId}`,
         facilityId: facilityId,
         supplierId: supplierId,
-        deliveryDate: new Date(),
+        deliveryDate,
         feedstockTypeId: feedstockTypeId,
       });
 
@@ -174,7 +175,7 @@ export async function seedChainData(
         facilityId: facilityId,
         feedstockDeliveryId: feedstockDeliveryId,
         // Delivery fields (absorbed from feedstock_deliveries)
-        deliveryDate: new Date(),
+        deliveryDate,
         supplierId: supplierId,
         // Material fields
         feedstockTypeId: feedstockTypeId,
