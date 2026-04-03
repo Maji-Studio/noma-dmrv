@@ -9,7 +9,7 @@ PostgreSQL database with Drizzle ORM for type-safe queries and project-scoped da
 Follow these rules when working with migrations:
 
 - ✅ **SAFE**: `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:studio`
-- ⚠️ **DESTRUCTIVE**: `pnpm db:push` — **NEVER run without reviewing generated SQL first**
+- ⚠️ **DESTRUCTIVE**: `pnpm db:push` — local development only, never for staging or production
 
 **Migration Rule**: Generate → Review SQL → Test staging → Apply to production
 
@@ -553,10 +553,47 @@ The cleanup script keeps the oldest entry for each (projectId, userId) pair.
 
 5. **Apply to production**
    ```bash
-   pnpm db:push
+   pnpm db:migrate
    ```
 
 **Rollback strategy**: Keep manual rollback SQL ready before applying destructive migrations.
+
+### Staging migration failure runbook
+
+If a staging migration fails, treat it as a deployment stop, not a Git revert.
+
+1. **Stop promotion**
+   - Do not continue to production until staging is healthy again.
+   - Do not auto-revert the PR just because the migration job failed.
+
+2. **Check the actual database state**
+   - Determine whether the migration applied nothing, applied partially, or completed with unexpected side effects.
+   - A code revert does not undo database changes that have already been applied.
+
+3. **Choose recovery intentionally**
+   - **No changes applied**: fix the migration and rerun it.
+   - **Safe additive changes applied**: prefer fix-forward with a follow-up migration or patch.
+   - **Partial/destructive changes applied**: use a prepared manual rollback or a documented recovery procedure.
+
+4. **Verify before unblocking**
+   - Re-run the migration path on staging.
+   - Run schema verification.
+   - Smoke test the affected application workflows.
+
+Preferred policy:
+
+- Fail the workflow fast.
+- Block production promotion.
+- Inspect staging database state first.
+- Recover with fix-forward or manual rollback, depending on what actually ran.
+
+Safer migration design:
+
+- Prefer multi-step, backward-compatible migrations.
+- Add new columns/tables first.
+- Backfill in a controlled step.
+- Switch application reads/writes.
+- Drop old columns later in a separate migration.
 
 ### Configuration
 
@@ -934,8 +971,8 @@ pnpm db:generate
 # Review SQL in /drizzle/
 cat drizzle/0001_new_feature.sql
 
-# Apply to database (after review!)
-pnpm db:push
+# Apply reviewed migration
+pnpm db:migrate
 ```
 
 ### 5. Test
@@ -952,7 +989,7 @@ pnpm db:push
 
 1. **Always use the data access layer** - Never import `db` directly in components or server functions
 2. **Never commit `.env.local`** - Contains database credentials
-3. **Review all generated SQL** - Before running `pnpm db:push`
+3. **Review all generated SQL** - Before running `pnpm db:migrate` in a shared environment
 4. **Always scope queries by project** - Include `projectId` in WHERE clauses
 5. **Validate project membership first** - Use `requireProjectMember()` before data access
 6. **Use type inference** - Let Drizzle generate types from schema
