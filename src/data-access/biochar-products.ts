@@ -364,6 +364,10 @@ export async function createBiocharProduct(
     throw new Error("Formulation not found");
   }
 
+  if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
+    throw new Error("Moisture content must be between 0 and 100");
+  }
+
   const [product] = await db
     .insert(biocharProducts)
     .values({
@@ -454,6 +458,10 @@ export async function updateBiocharProduct(
     if (!formulation) {
       throw new Error("Formulation not found");
     }
+  }
+
+  if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
+    throw new Error("Moisture content must be between 0 and 100");
   }
 
   const [updated] = await db

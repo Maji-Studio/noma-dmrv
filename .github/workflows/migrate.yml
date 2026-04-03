@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Auto-migration pipeline (on push to main) ───────────────────────
+  # ── Auto-migration pipeline (on push to main/staging) ───────────────
   migrate-staging:
     runs-on: ubuntu-latest
     environment: staging
@@ -119,6 +119,7 @@ jobs:
     environment: staging
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/staging' &&
       github.event.inputs.confirmation == 'RESET STAGING'
 
     steps:

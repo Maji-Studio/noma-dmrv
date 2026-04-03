@@ -69,7 +69,11 @@ export function StorageLocationForm({
     : "Create Storage Bin";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as StorageLocationFormData);
+    const normalized = { ...data } as StorageLocationFormData;
+    if (normalized.type !== "feedstock_bin" && normalized.type !== "ingredient_bin") {
+      normalized.feedstockTypeId = null;
+    }
+    return onSubmit(normalized);
   });
 
   return (

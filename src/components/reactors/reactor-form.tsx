@@ -188,15 +188,15 @@ export function ReactorForm({
 
           <FormField
             id="capacityKg"
-            label="Nominal Throughput (tph)"
+            label="Capacity (kg)"
             error={errors.capacityKg?.message}
-            helperText="Designed feedstock throughput per hour (tonnes)"
+            helperText="Maximum batch capacity in kilograms"
           >
             <FormInput
               id="capacityKg"
               type="number"
               step="any"
-              placeholder="e.g., 3"
+              placeholder="e.g., 500"
               disabled={isSubmitting}
               error={!!errors.capacityKg}
               {...register("capacityKg", {

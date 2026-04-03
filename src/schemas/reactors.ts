@@ -47,7 +47,7 @@ export const reactorFormSchema = z.object({
   samplingMethod: z.enum(samplingMethods).default("method_a"),
   capacityKg: z
     .number()
-    .positive("Capacity must be a positive number")
+    .positive("Nominal throughput must be a positive number")
     .optional()
     .nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),

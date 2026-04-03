@@ -633,6 +633,17 @@ export async function createStorageLocation(
     throw new Error("A storage location with this code already exists");
   }
 
+  if (data.feedstockTypeId) {
+    const [feedstockType] = await db
+      .select({ id: feedstockTypes.id })
+      .from(feedstockTypes)
+      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+
+    if (!feedstockType) {
+      throw new Error("Feedstock type not found");
+    }
+  }
+
   const [storageLocation] = await db
     .insert(storageLocations)
     .values({
@@ -706,6 +717,17 @@ export async function updateStorageLocation(
 
     if (!facility) {
       throw new Error("Facility not found");
+    }
+  }
+
+  if (data.feedstockTypeId) {
+    const [feedstockType] = await db
+      .select({ id: feedstockTypes.id })
+      .from(feedstockTypes)
+      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+
+    if (!feedstockType) {
+      throw new Error("Feedstock type not found");
     }
   }
 
