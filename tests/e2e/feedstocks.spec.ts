@@ -12,36 +12,47 @@ test.describe("Feedstock UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    // Navigate to feedstocks list
-    await page.goto("/feedstocks");
+    // Navigate to feedstocks list with facility context
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     // Open the create side sheet
     await page.click('button:has-text("New Feedstock")');
     await waitForSideSheet(page);
 
-    // Select seeded feedstock delivery (required)
+    // Fill delivery date (required)
+    await page.fill('input[name="deliveryDate"]', "2026-01-15");
+
+    // Select supplier (required)
     await selectEntity(
       page,
-      "Feedstock Delivery",
-      seededData.feedstockDelivery.id,
-      seededData.feedstockDelivery.code
+      "Supplier",
+      seededData.supplier.id,
+      seededData.supplier.name
     );
 
-    // Wait for facilityId auto-population from delivery
-    await page.waitForTimeout(1000);
-
-    // Fill required numeric fields (dry mass is auto-calculated)
-    await page.fill('input[name="massWetKg"]', "100");
-    await page.fill('input[name="moistureContentPercent"]', "25");
-
-    // Select storage location (optional)
+    // Select feedstock type (required)
     await selectEntity(
       page,
-      "Storage Location",
+      "Feedstock Type",
+      seededData.feedstockType.id,
+      seededData.feedstockType.name
+    );
+
+    // Fill required numeric fields (dry mass is auto-calculated)
+    await page.fill('input[name="totalWetMassKg"]', "100");
+    await page.fill('input[name="moisturePercent"]', "25");
+
+    // Select storage bin in allocation row
+    await selectEntity(
+      page,
+      "Storage Bin",
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name
     );
+
+    // Fill allocated wet mass
+    await page.fill('input[name="allocations.0.allocatedWetMassKg"]', "100");
 
     // Submit the form
     await page.locator('[role="dialog"]').locator('button:has-text("Create Feedstock")').click();

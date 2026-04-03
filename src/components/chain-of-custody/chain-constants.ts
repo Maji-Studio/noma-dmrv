@@ -7,7 +7,6 @@ import {
   Flask,
   Package,
   Leaf,
-  Grains,
   Factory,
   Cube,
   ShoppingCart,
@@ -48,10 +47,10 @@ export const CHAIN_NODE_DEFS: ChainNodeDef[] = [
   { id: "feedstockBin", label: "Feedstock Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
   { id: "biocharBin", label: "Biochar Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
   { id: "productBin", label: "Product Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
+  { id: "ingredientBin", label: "Ingredient Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
   // Chain-of-custody flow
   { id: "suppliers", label: "Suppliers", icon: UserCircle, accent: "var(--clr-purple)", href: "/suppliers" },
-  { id: "feedstockDeliveries", label: "Feedstock Deliveries", icon: Leaf, accent: "var(--clr-orange)", href: "/feedstock-deliveries" },
-  { id: "feedstocks", label: "Feedstocks", icon: Grains, accent: "var(--clr-orange)", href: "/feedstocks" },
+  { id: "feedstocks", label: "Feedstocks", icon: Leaf, accent: "var(--clr-orange)", href: "/feedstocks" },
   { id: "productionRuns", label: "Production Runs", icon: Factory, accent: "var(--clr-orange)", href: "/production-runs" },
   { id: "samples", label: "Samples", icon: Flask, accent: "var(--clr-orange)", href: null },
   { id: "biocharProducts", label: "Biochar Products", icon: Cube, accent: "var(--clr-orange)", href: "/biochar-products" },
@@ -72,9 +71,9 @@ export interface ChainEdgeDef {
 
 export const CHAIN_EDGE_DEFS: ChainEdgeDef[] = [
   // Feedstock intake
-  { source: "suppliers", target: "feedstockDeliveries" },
-  { source: "feedstockDeliveries", target: "feedstocks" },
+  { source: "suppliers", target: "feedstocks" },
   { source: "feedstocks", target: "feedstockBin" },
+  { source: "feedstocks", target: "ingredientBin" },
   // Production
   { source: "feedstockBin", target: "productionRuns" },
   { source: "reactors", target: "productionRuns" },
@@ -88,6 +87,8 @@ export const CHAIN_EDGE_DEFS: ChainEdgeDef[] = [
   { source: "orders", target: "deliveries" },
   { source: "deliveries", target: "applications" },
   { source: "applications", target: "creditBatches" },
+  // Ingredient flow
+  { source: "ingredientBin", target: "biocharProducts" },
 ];
 
 // ============================================

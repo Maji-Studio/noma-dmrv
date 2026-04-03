@@ -16,7 +16,6 @@ import {
   vehicles,
   feedstockTypes,
   feedstocks,
-  feedstockDeliveries,
   productionRuns,
   productionRunFeedstocks,
   biocharProducts,
@@ -73,8 +72,6 @@ export async function getEntities(
       return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
       return getFormulationsEntity({ search, limit });
-    case "feedstockDelivery":
-      return getFeedstockDeliveriesEntity({ search, limit });
     case "creditBatch":
       return getCreditBatchesEntity({ search, facilityId: filterBy?.facilityId, limit });
     default:
@@ -111,8 +108,6 @@ export async function getEntityById(
       return getProductionRunEntityById(id);
     case "formulation":
       return getFormulationEntityById(id);
-    case "feedstockDelivery":
-      return getFeedstockDeliveryEntityById(id);
     case "creditBatch":
       return getCreditBatchEntityById(id);
     default:
@@ -1091,107 +1086,6 @@ async function getFormulationEntityById(id: string): Promise<EntityOption | null
     code: result.code,
     name: result.name,
     subtitle: result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar` : undefined,
-  };
-}
-
-// ============================================
-// Feedstock Deliveries
-// ============================================
-
-async function getFeedstockDeliveriesEntity(params: {
-  search?: string;
-  limit: number;
-}): Promise<EntityOption[]> {
-  const { search, limit } = params;
-
-  const conditions: SQL[] = [];
-
-  if (search) {
-    const searchPattern = `%${search}%`;
-    conditions.push(
-      or(
-        ilike(feedstockDeliveries.code, searchPattern),
-        ilike(suppliers.name, searchPattern),
-        ilike(feedstockTypes.name, searchPattern)
-      )!
-    );
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const results = await db
-    .select({
-      id: feedstockDeliveries.id,
-      code: feedstockDeliveries.code,
-      deliveryDate: feedstockDeliveries.deliveryDate,
-      facilityId: feedstockDeliveries.facilityId,
-      supplierName: suppliers.name,
-      feedstockTypeName: feedstockTypes.name,
-      wetMassKg: feedstockDeliveries.wetMassKg,
-    })
-    .from(feedstockDeliveries)
-    .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
-    .leftJoin(feedstockTypes, eq(feedstockDeliveries.feedstockTypeId, feedstockTypes.id))
-    .where(whereClause)
-    .limit(limit);
-
-  return results.map((r) => {
-    const nameParts = [r.feedstockTypeName, r.supplierName].filter(Boolean);
-    const parts: string[] = [];
-    if (nameParts.length > 0) {
-      parts.push(nameParts.join(" from "));
-    } else {
-      parts.push(r.code);
-    }
-    if (r.wetMassKg !== null) {
-      parts.push(`${r.wetMassKg.toLocaleString()} kg`);
-    }
-    parts.push(new Date(r.deliveryDate).toLocaleDateString());
-    return {
-      id: r.id,
-      code: r.code,
-      name: parts.join(" · "),
-    };
-  });
-}
-
-async function getFeedstockDeliveryEntityById(
-  id: string
-): Promise<EntityOption | null> {
-  const [result] = await db
-    .select({
-      id: feedstockDeliveries.id,
-      code: feedstockDeliveries.code,
-      deliveryDate: feedstockDeliveries.deliveryDate,
-      facilityId: feedstockDeliveries.facilityId,
-      supplierName: suppliers.name,
-      feedstockTypeName: feedstockTypes.name,
-      wetMassKg: feedstockDeliveries.wetMassKg,
-    })
-    .from(feedstockDeliveries)
-    .leftJoin(suppliers, eq(feedstockDeliveries.supplierId, suppliers.id))
-    .leftJoin(feedstockTypes, eq(feedstockDeliveries.feedstockTypeId, feedstockTypes.id))
-    .where(eq(feedstockDeliveries.id, id))
-    .limit(1);
-
-  if (!result) return null;
-
-  const nameParts = [result.feedstockTypeName, result.supplierName].filter(Boolean);
-  const parts: string[] = [];
-  if (nameParts.length > 0) {
-    parts.push(nameParts.join(" from "));
-  } else {
-    parts.push(result.code);
-  }
-  if (result.wetMassKg !== null) {
-    parts.push(`${result.wetMassKg.toLocaleString()} kg`);
-  }
-  parts.push(new Date(result.deliveryDate).toLocaleDateString());
-
-  return {
-    id: result.id,
-    code: result.code,
-    name: parts.join(" · "),
   };
 }
 

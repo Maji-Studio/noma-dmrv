@@ -1,6 +1,6 @@
 /**
- * Feedstocks React Query Hooks
- * Client-side state management for feedstock operations
+ * Feedstock React Query Hooks
+ * Client-side state management for the unified delivery + bin allocation workflow.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,8 +10,8 @@ import type {
   UpdateFeedstockData,
 } from "@/schemas/feedstocks";
 import type {
-  PaginatedFeedstocks,
   FeedstockWithRelations,
+  CreateFeedstockResult,
 } from "@/data-access/feedstocks";
 import {
   getFeedstocksFn,
@@ -23,8 +23,8 @@ import {
   updateFeedstockFn,
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
-
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { storageLocationKeys } from "./use-storage-locations";
+import type { MutationCallbacks } from "./types";
 
 // ============================================
 // Query Keys
@@ -44,7 +44,7 @@ export const feedstockKeys = {
 };
 
 // ============================================
-// Feedstock Query Hooks
+// Query Hooks
 // ============================================
 
 export function useFeedstocks(filters?: Partial<FeedstockFilterData>) {
@@ -52,9 +52,7 @@ export function useFeedstocks(filters?: Partial<FeedstockFilterData>) {
     queryKey: feedstockKeys.list(filters),
     queryFn: async () => {
       const result = await getFeedstocksFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throw new Error(result.error);
       return result.data;
     },
     staleTime: 30000,
@@ -66,9 +64,7 @@ export function useFeedstock(feedstockId: string, enabled = true) {
     queryKey: feedstockKeys.detail(feedstockId),
     queryFn: async () => {
       const result = await getFeedstockByIdFn(feedstockId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throw new Error(result.error);
       return result.data;
     },
     enabled: enabled && !!feedstockId,
@@ -81,12 +77,10 @@ export function useFeedstockStats(facilityId?: string) {
     queryKey: feedstockKeys.stats(facilityId),
     queryFn: async () => {
       const result = await getFeedstockStatsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    staleTime: 60000,
+    staleTime: 30000,
   });
 }
 
@@ -95,250 +89,85 @@ export function useFeedstockOptions() {
     queryKey: feedstockKeys.options(),
     queryFn: async () => {
       const result = await getFeedstockOptionsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    staleTime: 60000,
+    staleTime: 300000, // 5 min
   });
 }
 
-export function useFeedstockCodeCheck(
-  code: string,
-  excludeFeedstockId?: string,
-  enabled = true
-) {
+export function useFeedstockCodeCheck(code: string, excludeId?: string) {
   return useQuery({
-    queryKey: feedstockKeys.codeCheck(code, excludeFeedstockId),
+    queryKey: feedstockKeys.codeCheck(code, excludeId),
     queryFn: async () => {
-      const result = await checkFeedstockCodeFn(code, excludeFeedstockId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
+      const result = await checkFeedstockCodeFn(code, excludeId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
     },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000,
+    enabled: code.length >= 3,
+    staleTime: 10000,
   });
 }
 
 // ============================================
-// Feedstock Mutation Hooks
+// Mutation Hooks
 // ============================================
 
-export function useCreateFeedstock(
-  callbacks?: MutationCallbacks<FeedstockWithRelations, CreateFeedstockData>
-) {
+export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstockResult, CreateFeedstockData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: CreateFeedstockData) => {
       const result = await createFeedstockFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onMutate: async (variables) => {
-      await callbacks?.onMutate?.(variables);
-    },
-    onSuccess: async (data, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.stats() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
-      queryClient.setQueryData(feedstockKeys.detail(data.id), data);
-      await callbacks?.onSuccess?.(data, variables);
+      queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
-    },
-    onSettled: async (data, error, variables) => {
-      await callbacks?.onSettled?.(data, error, variables);
-    },
+    onError: callbacks?.onError,
   });
 }
 
-export function useUpdateFeedstock(
-  callbacks?: MutationCallbacks<FeedstockWithRelations, UpdateFeedstockData>,
-  options?: OptimisticUpdateOptions
-) {
+export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRelations, UpdateFeedstockData>) {
   const queryClient = useQueryClient();
-  const { optimistic = true } = options ?? {};
 
   return useMutation({
     mutationFn: async (data: UpdateFeedstockData) => {
       const result = await updateFeedstockFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onMutate: async (variables) => {
-      if (!optimistic) {
-        await callbacks?.onMutate?.(variables);
-        return;
-      }
-
-      await queryClient.cancelQueries({
-        queryKey: feedstockKeys.detail(variables.feedstockId),
-      });
-      await queryClient.cancelQueries({
-        queryKey: feedstockKeys.lists(),
-      });
-
-      const previousFeedstock = queryClient.getQueryData<FeedstockWithRelations>(
-        feedstockKeys.detail(variables.feedstockId)
-      );
-      const previousLists = queryClient.getQueriesData<PaginatedFeedstocks>({
-        queryKey: feedstockKeys.lists(),
-      });
-
-      if (previousFeedstock) {
-        queryClient.setQueryData<FeedstockWithRelations>(
-          feedstockKeys.detail(variables.feedstockId),
-          (old) =>
-            old
-              ? { ...old, ...variables, updatedAt: new Date() }
-              : old
-        );
-      }
-
-      previousLists.forEach(([queryKey]) => {
-        queryClient.setQueryData<PaginatedFeedstocks>(queryKey, (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.map((item) =>
-              item.id === variables.feedstockId
-                ? ({ ...item, ...variables, updatedAt: new Date() } as FeedstockWithRelations)
-                : item
-            ),
-          };
-        });
-      });
-
-      await callbacks?.onMutate?.(variables);
-      return { previousFeedstock, previousLists };
-    },
-    onSuccess: async (data, variables) => {
-      queryClient.setQueryData(feedstockKeys.detail(data.id), data);
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: feedstockKeys.detail(data.id) });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.stats() });
-      queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
-      await callbacks?.onSuccess?.(data, variables);
+      queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, variables, context) => {
-      if (optimistic && context) {
-        const { previousFeedstock, previousLists } = context as {
-          previousFeedstock?: FeedstockWithRelations;
-          previousLists?: [readonly unknown[], PaginatedFeedstocks | undefined][];
-        };
-
-        if (previousFeedstock) {
-          queryClient.setQueryData(
-            feedstockKeys.detail(variables.feedstockId),
-            previousFeedstock
-          );
-        }
-
-        previousLists?.forEach(([queryKey, data]) => {
-          if (data) {
-            queryClient.setQueryData(queryKey, data);
-          }
-        });
-      }
-
-      await callbacks?.onError?.(error, variables);
-    },
-    onSettled: async (data, error, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: feedstockKeys.detail(variables.feedstockId),
-      });
-      await callbacks?.onSettled?.(data, error, variables);
-    },
+    onError: callbacks?.onError,
   });
 }
 
-export function useDeleteFeedstock(
-  callbacks?: MutationCallbacks<void, string>,
-  options?: OptimisticUpdateOptions
-) {
+export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) {
   const queryClient = useQueryClient();
-  const { optimistic = true } = options ?? {};
 
   return useMutation({
     mutationFn: async (feedstockId: string) => {
       const result = await deleteFeedstockFn({ feedstockId });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return;
+      if (!result.success) throw new Error(result.error);
     },
-    onMutate: async (feedstockId) => {
-      if (!optimistic) {
-        await callbacks?.onMutate?.(feedstockId);
-        return;
-      }
-
-      await queryClient.cancelQueries({
-        queryKey: feedstockKeys.lists(),
-      });
-
-      const previousFeedstock = queryClient.getQueryData<FeedstockWithRelations>(
-        feedstockKeys.detail(feedstockId)
-      );
-      const previousLists = queryClient.getQueriesData<PaginatedFeedstocks>({
-        queryKey: feedstockKeys.lists(),
-      });
-
-      previousLists.forEach(([queryKey]) => {
-        queryClient.setQueryData<PaginatedFeedstocks>(queryKey, (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.filter((item) => item.id !== feedstockId),
-            total: Math.max(0, old.total - 1),
-          };
-        });
-      });
-
-      await callbacks?.onMutate?.(feedstockId);
-      return { previousFeedstock, previousLists };
-    },
-    onSuccess: async (_, feedstockId) => {
-      queryClient.removeQueries({ queryKey: feedstockKeys.detail(feedstockId) });
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.stats() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
-      await callbacks?.onSuccess?.(undefined, feedstockId);
+      queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, feedstockId, context) => {
-      if (optimistic && context) {
-        const { previousFeedstock, previousLists } = context as {
-          previousFeedstock?: FeedstockWithRelations;
-          previousLists?: [readonly unknown[], PaginatedFeedstocks | undefined][];
-        };
-
-        if (previousFeedstock) {
-          queryClient.setQueryData(
-            feedstockKeys.detail(feedstockId),
-            previousFeedstock
-          );
-        }
-
-        previousLists?.forEach(([queryKey, data]) => {
-          if (data) {
-            queryClient.setQueryData(queryKey, data);
-          }
-        });
-      }
-
-      await callbacks?.onError?.(error, feedstockId);
-    },
-    onSettled: async (data, error, feedstockId) => {
-      queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
-      await callbacks?.onSettled?.(data, error, feedstockId);
-    },
+    onError: callbacks?.onError,
   });
 }

@@ -723,7 +723,7 @@ test.describe("Full E2E Workflow - UI Navigation", () => {
       "/storage-locations",
       "/suppliers",
       "/customers",
-      "/feedstock-deliveries",
+      "/feedstocks",
       "/production-runs",
       "/projects",
     ];

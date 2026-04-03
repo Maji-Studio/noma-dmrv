@@ -13,7 +13,6 @@ import {
   House,
   TreeStructure,
   Leaf,
-  Grains,
   Factory,
   Handshake,
   Users,
@@ -65,8 +64,7 @@ const navSections: NavSection[] = [
     title: "Production",
     accent: SECTION_ACCENTS.production,
     items: [
-      { href: "/feedstock-deliveries", label: "Feedstock Deliveries", icon: Leaf },
-      { href: "/feedstocks", label: "Feedstocks", icon: Grains },
+      { href: "/feedstocks", label: "Feedstocks", icon: Leaf },
       { href: "/production-runs", label: "Production Runs", icon: Factory },
       { href: "/formulations", label: "Formulations", icon: ListChecks },
       { href: "/biochar-products", label: "Biochar Products", icon: Cube },

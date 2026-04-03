@@ -33,7 +33,6 @@ export type EntityType =
   | "storage-location"
   | "supplier"
   | "customer"
-  | "feedstock-delivery"
   | "feedstock"
   | "production-run"
   | "sample"
@@ -70,11 +69,6 @@ const entityConfig: Record<
   },
   supplier: { icon: Users, path: "/suppliers", label: "Supplier" },
   customer: { icon: Users, path: "/customers", label: "Customer" },
-  "feedstock-delivery": {
-    icon: Truck,
-    path: "/feedstock-deliveries",
-    label: "Feedstock Delivery",
-  },
   feedstock: { icon: Recycle, path: "/feedstocks", label: "Feedstock" },
   "production-run": {
     icon: Factory,

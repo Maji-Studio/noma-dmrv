@@ -17,6 +17,7 @@ export const storageLocationTypes = [
   "feedstock_bin",
   "biochar_bin",
   "product_bin",
+  "ingredient_bin",
 ] as const;
 
 export type StorageLocationType = (typeof storageLocationTypes)[number];
@@ -168,6 +169,7 @@ export function formatStorageLocationType(type: StorageLocationType): string {
     feedstock_bin: "Feedstock Bin",
     biochar_bin: "Biochar Bin",
     product_bin: "Product Bin",
+    ingredient_bin: "Ingredient Bin",
   };
   return labels[type];
 }
