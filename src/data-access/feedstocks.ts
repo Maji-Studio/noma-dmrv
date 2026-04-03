@@ -196,7 +196,11 @@ export async function getFeedstocks(
   if (feedstockTypeId) conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
   if (status) conditions.push(eq(feedstocks.status, status));
   if (storageLocationId) conditions.push(eq(feedstocks.storageLocationId, storageLocationId));
-  if (startDate) conditions.push(gte(feedstocks.deliveryDate, startDate));
+  if (startDate) {
+    const startOfDay = new Date(startDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    conditions.push(gte(feedstocks.deliveryDate, startOfDay));
+  }
   if (endDate) {
     const endOfDay = new Date(endDate);
     endOfDay.setHours(23, 59, 59, 999);
