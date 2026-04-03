@@ -1,13 +1,13 @@
 "use server";
 
 /**
- * Feedstocks Server Actions
- * Server-side functions for feedstock CRUD operations
+ * Feedstock Server Actions
+ * Unified server-side functions for the combined delivery + bin allocation workflow.
  */
 
 import { z } from "zod";
 import { feedstocks as feedstocksTable } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import { generateNextCodes } from "@/data-access/code-generator";
 import {
   createFeedstock,
   deleteFeedstock,
@@ -20,9 +20,8 @@ import {
   type PaginatedFeedstocks,
   type FeedstockWithRelations,
   type FeedstockStats,
+  type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
-import { getFeedstockDeliveryById as getFeedstockDeliveryByIdData } from "@/data-access/feedstock-deliveries";
-import { getSupplierById as getSupplierByIdData } from "@/data-access/suppliers";
 import { getUser } from "@/lib/auth/server";
 import {
   createFeedstockSchema,
@@ -32,25 +31,8 @@ import {
 } from "@/schemas/feedstocks";
 import type { ActionResult } from "@/types/actions";
 
-async function resolveDeliveryDerivedFields(
-  userId: string,
-  feedstockDeliveryId: string
-): Promise<{ feedstockTypeId: string; sourceRegion: string | null }> {
-  const delivery = await getFeedstockDeliveryByIdData(userId, feedstockDeliveryId);
-  if (!delivery.feedstockTypeId) {
-    throw new Error(
-      "Selected delivery has no feedstock type. Add one on the delivery first."
-    );
-  }
-  const supplier = await getSupplierByIdData(userId, delivery.supplierId);
-  return {
-    feedstockTypeId: delivery.feedstockTypeId,
-    sourceRegion: supplier.sourceRegion ?? null,
-  };
-}
-
 // ============================================
-// Feedstock List/Query Operations
+// List/Query Operations
 // ============================================
 
 export async function getFeedstocksFn(
@@ -58,9 +40,7 @@ export async function getFeedstocksFn(
 ): Promise<ActionResult<PaginatedFeedstocks>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
     const validatedFilters = filters
       ? feedstockFilterSchema.parse(filters)
@@ -87,9 +67,7 @@ export async function getFeedstockByIdFn(
 ): Promise<ActionResult<FeedstockWithRelations>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
     const data = await getFeedstockByIdData(user.id, feedstockId);
     return { success: true, data };
@@ -106,12 +84,10 @@ export async function getFeedstockStatsFn(
 ): Promise<ActionResult<FeedstockStats>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const stats = await getFeedstockStatsData(user.id, facilityId);
-    return { success: true, data: stats };
+    const data = await getFeedstockStatsData(user.id, facilityId);
+    return { success: true, data };
   } catch (error) {
     return {
       success: false,
@@ -121,18 +97,14 @@ export async function getFeedstockStatsFn(
 }
 
 export async function getFeedstockOptionsFn(): Promise<
-  ActionResult<
-    Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>
-  >
+  ActionResult<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>>
 > {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const options = await getFeedstockOptionsData(user.id);
-    return { success: true, data: options };
+    const data = await getFeedstockOptionsData(user.id);
+    return { success: true, data };
   } catch (error) {
     return {
       success: false,
@@ -143,68 +115,41 @@ export async function getFeedstockOptionsFn(): Promise<
 
 export async function checkFeedstockCodeFn(
   code: string,
-  excludeFeedstockId?: string
-): Promise<ActionResult<{ available: boolean }>> {
+  excludeId?: string
+): Promise<ActionResult<boolean>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const available = await isFeedstockCodeAvailableData(
-      user.id,
-      code,
-      excludeFeedstockId
-    );
-    return { success: true, data: { available } };
+    const available = await isFeedstockCodeAvailableData(user.id, code, excludeId);
+    return { success: true, data: available };
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to check feedstock code",
+      error: error instanceof Error ? error.message : "Failed to check code",
     };
   }
 }
 
 // ============================================
-// Feedstock Create Operations
+// Create Operation
 // ============================================
 
 export async function createFeedstockFn(
-  data: z.infer<typeof createFeedstockSchema>
-): Promise<ActionResult<FeedstockWithRelations>> {
+  input: z.infer<typeof createFeedstockSchema>
+): Promise<ActionResult<CreateFeedstockResult>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const validated = createFeedstockSchema.parse(data);
-    const derived = await resolveDeliveryDerivedFields(
-      user.id,
-      validated.feedstockDeliveryId
-    );
+    const data = createFeedstockSchema.parse(input);
 
-    const feedstock = await withAutoCode(
-      "FS",
-      feedstocksTable,
-      feedstocksTable.code,
-      undefined,
-      (code) =>
-        createFeedstock(user.id, {
-          code,
-          facilityId: validated.facilityId,
-          feedstockDeliveryId: validated.feedstockDeliveryId,
-          feedstockTypeId: derived.feedstockTypeId,
-          massDryKg: typeof validated.massDryKg === "number" ? validated.massDryKg : 0,
-          massWetKg: validated.massWetKg ?? null,
-          moistureContentPercent: validated.moistureContentPercent ?? null,
-          storageLocationId: validated.storageLocationId || null,
-          feedstockSourceRegion: derived.sourceRegion,
-          notes: validated.notes || null,
-        })
-    );
+    // Generate sequential codes for each allocation in one batch
+    const codesFn = (count: number) =>
+      generateNextCodes("FI", feedstocksTable, feedstocksTable.code, count);
 
-    return { success: true, data: feedstock };
+    const result = await createFeedstock(user.id, data, codesFn);
+    return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -220,36 +165,20 @@ export async function createFeedstockFn(
 }
 
 // ============================================
-// Feedstock Update Operations
+// Update Operation
 // ============================================
 
 export async function updateFeedstockFn(
-  data: z.infer<typeof updateFeedstockSchema>
+  input: z.infer<typeof updateFeedstockSchema>
 ): Promise<ActionResult<FeedstockWithRelations>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const validated = updateFeedstockSchema.parse(data);
-    const derived = validated.feedstockDeliveryId
-      ? await resolveDeliveryDerivedFields(user.id, validated.feedstockDeliveryId)
-      : null;
+    const { feedstockId, ...updateData } = updateFeedstockSchema.parse(input);
+    const data = await updateFeedstock(user.id, feedstockId, updateData);
 
-    const feedstock = await updateFeedstock(user.id, validated.feedstockId, {
-      feedstockDeliveryId: validated.feedstockDeliveryId,
-      feedstockTypeId: derived?.feedstockTypeId ?? validated.feedstockTypeId,
-      facilityId: validated.facilityId,
-      massDryKg: validated.massDryKg,
-      massWetKg: validated.massWetKg,
-      moistureContentPercent: validated.moistureContentPercent,
-      storageLocationId: validated.storageLocationId,
-      feedstockSourceRegion: derived?.sourceRegion,
-      notes: validated.notes,
-    });
-
-    return { success: true, data: feedstock };
+    return { success: true, data };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -265,20 +194,18 @@ export async function updateFeedstockFn(
 }
 
 // ============================================
-// Feedstock Delete Operations
+// Delete Operation
 // ============================================
 
 export async function deleteFeedstockFn(
-  data: z.infer<typeof deleteFeedstockSchema>
+  input: z.infer<typeof deleteFeedstockSchema>
 ): Promise<ActionResult<void>> {
   try {
     const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const validated = deleteFeedstockSchema.parse(data);
-    await deleteFeedstock(user.id, validated.feedstockId);
+    const { feedstockId } = deleteFeedstockSchema.parse(input);
+    await deleteFeedstock(user.id, feedstockId);
 
     return { success: true, data: undefined };
   } catch (error) {

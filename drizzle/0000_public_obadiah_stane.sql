@@ -14,7 +14,7 @@ CREATE TYPE "public"."packaging_type" AS ENUM('loose', 'bagged');--> statement-b
 CREATE TYPE "public"."production_run_status" AS ENUM('draft', 'running', 'complete', 'void');--> statement-breakpoint
 CREATE TYPE "public"."sampling_method" AS ENUM('method_a', 'method_b');--> statement-breakpoint
 CREATE TYPE "public"."soil_temperature_source" AS ENUM('baseline', 'global_database');--> statement-breakpoint
-CREATE TYPE "public"."storage_location_type" AS ENUM('feedstock_bin', 'biochar_bin', 'product_bin');--> statement-breakpoint
+CREATE TYPE "public"."storage_location_type" AS ENUM('feedstock_bin', 'biochar_bin', 'product_bin', 'ingredient_bin');--> statement-breakpoint
 CREATE TYPE "public"."sync_status" AS ENUM('pending', 'succeeded', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."transport_entity_type" AS ENUM('feedstock', 'biochar', 'sample', 'delivery');--> statement-breakpoint
 CREATE TYPE "public"."transport_method" AS ENUM('road', 'rail', 'ship', 'pipeline', 'aircraft');--> statement-breakpoint
@@ -380,6 +380,7 @@ CREATE TABLE "storage_locations" (
 	"storage_method" text,
 	"storage_description" text,
 	"supplier_reference_id" text,
+	"feedstock_type_id" uuid,
 	"facility_id" uuid NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
@@ -428,7 +429,15 @@ CREATE TABLE "feedstocks" (
 	"code" text NOT NULL,
 	"facility_id" uuid NOT NULL,
 	"status" "feedstock_status" DEFAULT 'missing_data' NOT NULL,
-	"feedstock_delivery_id" uuid NOT NULL,
+	"feedstock_delivery_id" uuid,
+	"delivery_date" timestamp,
+	"supplier_id" uuid,
+	"driver_id" uuid,
+	"vehicle_id" uuid,
+	"gps_latitude" real,
+	"gps_longitude" real,
+	"delivery_group_id" uuid,
+	"override_justification" text,
 	"feedstock_type_id" uuid NOT NULL,
 	"mass_wet_kg" real,
 	"mass_dry_kg" real NOT NULL,
@@ -852,6 +861,9 @@ ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_vehicle_
 ALTER TABLE "feedstock_deliveries" ADD CONSTRAINT "feedstock_deliveries_feedstock_type_id_feedstock_types_id_fk" FOREIGN KEY ("feedstock_type_id") REFERENCES "public"."feedstock_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_facility_id_facilities_id_fk" FOREIGN KEY ("facility_id") REFERENCES "public"."facilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_feedstock_delivery_id_feedstock_deliveries_id_fk" FOREIGN KEY ("feedstock_delivery_id") REFERENCES "public"."feedstock_deliveries"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_supplier_id_suppliers_id_fk" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_driver_id_drivers_id_fk" FOREIGN KEY ("driver_id") REFERENCES "public"."drivers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_vehicle_id_vehicles_id_fk" FOREIGN KEY ("vehicle_id") REFERENCES "public"."vehicles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_feedstock_type_id_feedstock_types_id_fk" FOREIGN KEY ("feedstock_type_id") REFERENCES "public"."feedstock_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_storage_location_id_storage_locations_id_fk" FOREIGN KEY ("storage_location_id") REFERENCES "public"."storage_locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "customer_locations" ADD CONSTRAINT "customer_locations_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

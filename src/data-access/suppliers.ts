@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
-import { suppliers, feedstockDeliveries, type Supplier } from "@/db/schema";
+import { suppliers, feedstocks, type Supplier } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
 
 // ============================================
@@ -295,14 +295,14 @@ export async function deleteSupplier(
     throw new Error("Supplier not found");
   }
 
-  const [deliveryCount] = await db
+  const [feedstockCount] = await db
     .select({ count: count() })
-    .from(feedstockDeliveries)
-    .where(eq(feedstockDeliveries.supplierId, supplierId));
+    .from(feedstocks)
+    .where(eq(feedstocks.supplierId, supplierId));
 
-  if (Number(deliveryCount.count) > 0) {
+  if (Number(feedstockCount.count) > 0) {
     throw new Error(
-      "Cannot delete supplier with associated feedstock deliveries. Remove deliveries first."
+      "Cannot delete supplier with associated feedstock intakes. Remove intakes first."
     );
   }
 
