@@ -192,9 +192,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         feedstockTypeId: data.feedstockTypeId,
-        massWetKg: data.totalWetMassKg,
+        massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
-        massDryKg: deriveMassDryKg(data.totalWetMassKg, data.moisturePercent),
+        massDryKg: deriveMassDryKg(
+          data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
+          data.moisturePercent
+        ),
         storageLocationId: data.allocations[0]?.storageLocationId || null,
         overrideJustification: data.overrideJustification || null,
         notes: data.notes || null,

@@ -124,7 +124,7 @@ export function FeedstockForm({
   }, 0);
 
   const showOverageWarning =
-    typeof watchWetMass === "number" && watchWetMass > 0 && allocatedTotalWetKg > watchWetMass;
+    typeof watchWetMass === "number" && allocatedTotalWetKg > watchWetMass;
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 

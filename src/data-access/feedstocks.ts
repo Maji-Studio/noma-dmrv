@@ -197,7 +197,11 @@ export async function getFeedstocks(
   if (status) conditions.push(eq(feedstocks.status, status));
   if (storageLocationId) conditions.push(eq(feedstocks.storageLocationId, storageLocationId));
   if (startDate) conditions.push(gte(feedstocks.deliveryDate, startDate));
-  if (endDate) conditions.push(lte(feedstocks.deliveryDate, endDate));
+  if (endDate) {
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    conditions.push(lte(feedstocks.deliveryDate, endOfDay));
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -427,18 +431,32 @@ export async function updateFeedstock(
     throw new Error("Feedstock not found");
   }
 
-  // Validate bin type compatibility if changing storage location or feedstock type
+  // Validate storage bin compatibility if changing storage location or feedstock type
   if (data.storageLocationId || data.feedstockTypeId) {
     const binId = data.storageLocationId ?? existing.storageLocationId;
     const typeId = data.feedstockTypeId ?? existing.feedstockTypeId;
+    const facId = data.facilityId ?? existing.facilityId;
 
     if (binId) {
       const [bin] = await db
-        .select({ feedstockTypeId: storageLocations.feedstockTypeId })
+        .select({
+          type: storageLocations.type,
+          feedstockTypeId: storageLocations.feedstockTypeId,
+          facilityId: storageLocations.facilityId,
+        })
         .from(storageLocations)
         .where(eq(storageLocations.id, binId));
 
-      if (bin?.feedstockTypeId && bin.feedstockTypeId !== typeId) {
+      if (!bin) {
+        throw new Error(`Storage bin not found: ${binId}`);
+      }
+      if (bin.facilityId !== facId) {
+        throw new Error(`Storage bin ${binId} does not belong to the selected facility`);
+      }
+      if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
+        throw new Error(`Storage bin ${binId} is not a feedstock or ingredient bin`);
+      }
+      if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {
         throw new Error(
           "Storage bin already holds a different feedstock type. Each bin can only hold one type."
         );
