@@ -1,6 +1,6 @@
 /**
- * DryMassWarning component
- * Amber warning banner shown when allocated dry mass exceeds delivered dry mass.
+ * WetMassWarning component
+ * Amber warning banner shown when allocated wet mass exceeds delivered wet mass.
  * Includes optional justification text field.
  */
 "use client";
@@ -9,7 +9,7 @@ import { Warning } from "@phosphor-icons/react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField, FormTextarea } from "@/components/forms";
 
-interface DryMassWarningProps {
+interface WetMassWarningProps {
   allocatedKg: number;
   deliveredKg: number;
   /** register return for overrideJustification field */
@@ -18,15 +18,15 @@ interface DryMassWarningProps {
   disabled?: boolean;
 }
 
-export function DryMassWarning({
+export function WetMassWarning({
   allocatedKg,
   deliveredKg,
   justificationRegister,
   justificationError,
   disabled,
-}: DryMassWarningProps) {
+}: WetMassWarningProps) {
   const overageKg = allocatedKg - deliveredKg;
-  const overagePercent = deliveredKg > 0 ? ((overageKg / deliveredKg) * 100).toFixed(1) : "N/A";
+  const overagePercent = deliveredKg > 0 ? ((overageKg / deliveredKg) * 100).toFixed(1) : "0";
 
   return (
     <div className="border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber)]/5 p-16 space-y-12">

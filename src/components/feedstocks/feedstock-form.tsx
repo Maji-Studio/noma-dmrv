@@ -26,7 +26,7 @@ import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
-import { DryMassWarning } from "./dry-mass-warning";
+import { WetMassWarning } from "./wet-mass-warning";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
@@ -387,7 +387,7 @@ export function FeedstockForm({
 
           {/* Overage warning */}
           {showOverageWarning && (
-            <DryMassWarning
+            <WetMassWarning
               allocatedKg={allocatedTotalWetKg}
               deliveredKg={watchWetMass as number}
               justificationRegister={register("overrideJustification")}
