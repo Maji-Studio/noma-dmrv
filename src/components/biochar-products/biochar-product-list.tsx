@@ -99,6 +99,7 @@ function createColumns(
       cell: ({ row }) => {
         const { massKg, moistureContentPercent } = row.original;
         if (massKg == null || moistureContentPercent == null) return "\u2014";
+        if (massKg < 0 || moistureContentPercent < 0 || moistureContentPercent > 100) return "\u2014";
         return formatMass(deriveMassDryKg(massKg, moistureContentPercent));
       },
     },
@@ -330,7 +331,7 @@ export function BiocharProductList() {
               { label: "Formulation", value: sideSheet.entity.formulation?.name },
               { label: "Wet Mass", value: formatMass(sideSheet.entity.massKg) },
               { label: "Moisture", value: sideSheet.entity.moistureContentPercent != null ? `${sideSheet.entity.moistureContentPercent}%` : undefined },
-              { label: "Dry Mass", value: sideSheet.entity.massKg != null && sideSheet.entity.moistureContentPercent != null ? formatMass(deriveMassDryKg(sideSheet.entity.massKg, sideSheet.entity.moistureContentPercent)) : undefined },
+              { label: "Dry Mass", value: sideSheet.entity.massKg != null && sideSheet.entity.moistureContentPercent != null && sideSheet.entity.massKg >= 0 && sideSheet.entity.moistureContentPercent >= 0 && sideSheet.entity.moistureContentPercent <= 100 ? formatMass(deriveMassDryKg(sideSheet.entity.massKg, sideSheet.entity.moistureContentPercent)) : undefined },
             ],
           },
           {
