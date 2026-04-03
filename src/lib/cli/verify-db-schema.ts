@@ -6,6 +6,8 @@ import * as schema from '../../db/schema';
 
 config({ path: '.env.local' });
 
+const POSTGRES_MAX_IDENTIFIER_LENGTH = 63;
+
 type ExpectedColumn = {
   schemaName: string;
   tableName: string;
@@ -117,10 +119,12 @@ function getExpectedChecks(): Map<string, Map<string, ExpectedCheck>> {
     const tableChecks = new Map<string, ExpectedCheck>();
 
     for (const checkConstraint of table.checks) {
-      tableChecks.set(checkConstraint.name, {
+      const normalizedCheckName = normalizeConstraintName(checkConstraint.name);
+
+      tableChecks.set(normalizedCheckName, {
         schemaName,
         tableName: table.name,
-        checkName: checkConstraint.name,
+        checkName: normalizedCheckName,
       });
     }
 
@@ -128,6 +132,14 @@ function getExpectedChecks(): Map<string, Map<string, ExpectedCheck>> {
   }
 
   return checks;
+}
+
+function normalizeConstraintName(name: string): string {
+  return name.slice(0, POSTGRES_MAX_IDENTIFIER_LENGTH);
+}
+
+function isGeneratedNotNullCheck(name: string): boolean {
+  return /^\d+_\d+_\d+_not_null$/.test(name);
 }
 
 async function verifySchema(): Promise<void> {
@@ -201,6 +213,10 @@ async function verifySchema(): Promise<void> {
     const liveChecks = new Map<string, Set<string>>();
 
     for (const row of liveChecksResult.rows) {
+      if (isGeneratedNotNullCheck(row.constraint_name)) {
+        continue;
+      }
+
       const tableKey = `${row.table_schema}.${row.table_name}`;
       const checks = liveChecks.get(tableKey) ?? new Set<string>();
       checks.add(row.constraint_name);
