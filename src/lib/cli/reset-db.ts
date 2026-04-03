@@ -13,10 +13,13 @@ async function resetDatabase(): Promise<void> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
-    console.log('🗑️  Dropping all tables in public schema...');
+    console.log('🗑️  Dropping application and migration schemas...');
 
-    // Drop all objects in public schema (tables, sequences, functions, etc.)
+    // Drop application objects and Drizzle migration metadata so the database
+    // can be rebuilt cleanly from the first tracked migration.
+    await pool.query(`DROP SCHEMA IF EXISTS drizzle CASCADE`);
     await pool.query(`DROP SCHEMA public CASCADE`);
+
     await pool.query(`CREATE SCHEMA public`);
 
     // Restore default grants
