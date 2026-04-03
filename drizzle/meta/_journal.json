@@ -15,6 +15,13 @@
       "when": 1775230746407,
       "tag": "0001_far_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775243793839,
+      "tag": "0002_mixed_wallow",
+      "breakpoints": true
     }
   ]
 }
