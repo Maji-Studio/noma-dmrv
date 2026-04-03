@@ -25,6 +25,12 @@ type ExpectedEnum = {
   values: string[];
 };
 
+type ExpectedCheck = {
+  schemaName: string;
+  tableName: string;
+  checkName: string;
+};
+
 type LiveColumnRow = {
   table_schema: string;
   table_name: string;
@@ -36,6 +42,12 @@ type LiveEnumRow = {
   schema_name: string;
   enum_name: string;
   enum_label: string;
+};
+
+type LiveCheckRow = {
+  table_schema: string;
+  table_name: string;
+  constraint_name: string;
 };
 
 function getExpectedTables(): Map<string, ExpectedTable> {
@@ -91,6 +103,33 @@ function getExpectedEnums(): Map<string, ExpectedEnum> {
   return enums;
 }
 
+function getExpectedChecks(): Map<string, Map<string, ExpectedCheck>> {
+  const checks = new Map<string, Map<string, ExpectedCheck>>();
+
+  for (const entity of Object.values(schema)) {
+    if (!isTable(entity)) {
+      continue;
+    }
+
+    const table = getTableConfig(entity);
+    const schemaName = table.schema ?? 'public';
+    const tableKey = `${schemaName}.${table.name}`;
+    const tableChecks = new Map<string, ExpectedCheck>();
+
+    for (const checkConstraint of table.checks) {
+      tableChecks.set(checkConstraint.name, {
+        schemaName,
+        tableName: table.name,
+        checkName: checkConstraint.name,
+      });
+    }
+
+    checks.set(tableKey, tableChecks);
+  }
+
+  return checks;
+}
+
 async function verifySchema(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     console.error('ERROR: DATABASE_URL environment variable is not set');
@@ -99,6 +138,7 @@ async function verifySchema(): Promise<void> {
 
   const expectedTables = getExpectedTables();
   const expectedEnums = getExpectedEnums();
+  const expectedChecks = getExpectedChecks();
   const schemaNames = [...new Set([
     ...[...expectedTables.values()].map((table) => table.schemaName),
     ...[...expectedEnums.values()].map((enumType) => enumType.schemaName),
@@ -129,6 +169,17 @@ async function verifySchema(): Promise<void> {
       [schemaNames]
     );
 
+    const liveChecksResult = await pool.query<LiveCheckRow>(
+      `
+        select tc.table_schema, tc.table_name, tc.constraint_name
+        from information_schema.table_constraints tc
+        where tc.constraint_type = 'CHECK'
+          and tc.table_schema = any($1::text[])
+        order by tc.table_schema, tc.table_name, tc.constraint_name
+      `,
+      [schemaNames]
+    );
+
     const liveTables = new Map<string, Map<string, { isNullable: boolean }>>();
 
     for (const row of liveColumnsResult.rows) {
@@ -145,6 +196,15 @@ async function verifySchema(): Promise<void> {
       const values = liveEnums.get(enumKey) ?? [];
       values.push(row.enum_label);
       liveEnums.set(enumKey, values);
+    }
+
+    const liveChecks = new Map<string, Set<string>>();
+
+    for (const row of liveChecksResult.rows) {
+      const tableKey = `${row.table_schema}.${row.table_name}`;
+      const checks = liveChecks.get(tableKey) ?? new Set<string>();
+      checks.add(row.constraint_name);
+      liveChecks.set(tableKey, checks);
     }
 
     const errors: string[] = [];
@@ -196,6 +256,22 @@ async function verifySchema(): Promise<void> {
       }
     }
 
+    for (const [tableKey, expectedTableChecks] of expectedChecks) {
+      const liveTableChecks = liveChecks.get(tableKey) ?? new Set<string>();
+
+      for (const checkName of expectedTableChecks.keys()) {
+        if (!liveTableChecks.has(checkName)) {
+          errors.push(`Missing check constraint ${tableKey}.${checkName}`);
+        }
+      }
+
+      for (const checkName of liveTableChecks) {
+        if (!expectedTableChecks.has(checkName)) {
+          errors.push(`Unexpected check constraint ${tableKey}.${checkName} exists in database`);
+        }
+      }
+    }
+
     if (errors.length > 0) {
       console.error('Schema verification failed:');
       for (const error of errors) {
@@ -205,7 +281,7 @@ async function verifySchema(): Promise<void> {
     }
 
     console.log(
-      `Schema verification passed for ${expectedTables.size} tables and ${expectedEnums.size} enums`
+      `Schema verification passed for ${expectedTables.size} tables, ${expectedEnums.size} enums, and ${[...expectedChecks.values()].reduce((total, tableChecks) => total + tableChecks.size, 0)} check constraints`
     );
   } finally {
     await pool.end();
