@@ -277,7 +277,7 @@ export async function updateSupplier(
 
 /**
  * Delete a supplier
- * Will fail if supplier has associated feedstock deliveries
+ * Will fail if supplier has associated feedstocks
  */
 export async function deleteSupplier(
   userId: string,
