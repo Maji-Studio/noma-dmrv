@@ -10,7 +10,7 @@ import { emptyToNull, toNumberOrNull, latitudeSchema, longitudeSchema } from "./
 // Shared numeric field helpers
 // ============================================
 
-const requiredPositiveNumber = z.preprocess(
+const requiredNonNegativeNumber = z.preprocess(
   toNumberOrNull,
   z.number().min(0, "Must be 0 or greater")
 );
@@ -82,7 +82,7 @@ export const feedstockFormSchema = z.object({
     .string()
     .min(1, "Please select a feedstock type")
     .uuid("Please select a valid feedstock type"),
-  totalWetMassKg: requiredPositiveNumber,
+  totalWetMassKg: requiredNonNegativeNumber,
   moisturePercent: requiredMoisturePercent,
 
   // --- Bin Allocations ---

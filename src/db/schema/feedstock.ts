@@ -146,6 +146,14 @@ export const feedstocks = pgTable(
       'feedstocks_moisture_content_percent_range',
       sql`${table.moistureContentPercent} is null or (${table.moistureContentPercent} >= 0 and ${table.moistureContentPercent} <= 100)`
     ),
+    check(
+      'feedstocks_gps_latitude_range',
+      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
+    ),
+    check(
+      'feedstocks_gps_longitude_range',
+      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
+    ),
   ]
 );
 
