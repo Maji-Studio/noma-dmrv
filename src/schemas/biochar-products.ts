@@ -46,6 +46,7 @@ export const biocharProductFormSchema = z.object({
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
   massKg: z.number().min(0, "Mass must be a positive number").nullable().optional(),
+  moistureContentPercent: z.number().min(0, "Moisture must be 0-100%").max(100, "Moisture must be 0-100%").nullable().optional(),
   densityKgM3: z.number().min(0, "Density must be a positive number").nullable().optional(),
 });
 
@@ -85,6 +86,7 @@ export const updateBiocharProductSchema = z.object({
   linkedProductionRunId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   massKg: z.number().min(0).optional().nullable(),
+  moistureContentPercent: z.number().min(0).max(100).optional().nullable(),
   densityKgM3: z.number().min(0).optional().nullable(),
 });
 

@@ -3,9 +3,9 @@
 import { numericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import {
@@ -43,6 +43,7 @@ export function StorageLocationForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<StorageLocationFormData>({
     resolver: zodResolver(storageLocationFormSchema),
@@ -51,16 +52,21 @@ export function StorageLocationForm({
       type: storageLocation?.type ?? undefined,
       facilityId: storageLocation?.facilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
-      latitude: storageLocation?.latitude ?? undefined,
-      longitude: storageLocation?.longitude ?? undefined,
+      feedstockTypeId: storageLocation?.feedstockTypeId ?? "",
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
     },
   });
 
+  const watchedType = useWatch({ control, name: "type" });
+  const showFeedstockType = watchedType === "feedstock_bin" || watchedType === "ingredient_bin";
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formControl = control as any;
+
   const defaultSubmitLabel = isEditMode
-    ? "Update Storage Location"
-    : "Create Storage Location";
+    ? "Update Storage Bin"
+    : "Create Storage Bin";
 
   const handleFormSubmit = handleSubmit((data) => {
     return onSubmit(data as StorageLocationFormData);
@@ -80,11 +86,11 @@ export function StorageLocationForm({
           />
         </FormField>
 
-        <FormField id="name" label="Location Name" error={errors.name?.message} required>
+        <FormField id="name" label="Bin Name" error={errors.name?.message} required>
           <FormInput
             id="name"
             type="text"
-            placeholder="e.g., Feedstock Intake Bay 1"
+            placeholder="e.g., Bin 7"
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name")}
@@ -125,39 +131,19 @@ export function StorageLocationForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField
-          id="latitude"
-          label="Latitude"
-          error={errors.latitude?.message}
-        >
-          <FormInput
-            id="latitude"
-            type="number"
-            step="any"
-            placeholder="e.g., -3.3349"
+      {showFeedstockType && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormEntitySelect
+            control={formControl}
+            name="feedstockTypeId"
+            label="Feedstock Type"
+            entityType="feedstockType"
+            placeholder="Select feedstock type..."
             disabled={isSubmitting}
-            error={!!errors.latitude}
-            {...register("latitude", { setValueAs: numericValue })}
+            helperText="Restricts this bin to one feedstock type"
           />
-        </FormField>
-
-        <FormField
-          id="longitude"
-          label="Longitude"
-          error={errors.longitude?.message}
-        >
-          <FormInput
-            id="longitude"
-            type="number"
-            step="any"
-            placeholder="e.g., 37.3404"
-            disabled={isSubmitting}
-            error={!!errors.longitude}
-            {...register("longitude", { setValueAs: numericValue })}
-          />
-        </FormField>
-      </div>
+        </div>
+      )}
 
       <FormField
         id="storageDescription"

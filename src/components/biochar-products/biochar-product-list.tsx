@@ -22,6 +22,7 @@ import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 
 // ============================================
@@ -76,12 +77,30 @@ function createColumns(
     },
     {
       accessorKey: "massKg",
-      header: "Mass",
+      header: "Wet Mass",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {formatMass(row.original.massKg)}
         </span>
       ),
+    },
+    {
+      id: "moistureContentPercent",
+      header: "Moisture %",
+      accessorFn: (row) => row.moistureContentPercent,
+      cell: ({ row }) => {
+        const mc = row.original.moistureContentPercent;
+        return mc !== null && mc !== undefined ? `${mc}%` : "\u2014";
+      },
+    },
+    {
+      id: "dryMass",
+      header: "Dry Mass",
+      cell: ({ row }) => {
+        const { massKg, moistureContentPercent } = row.original;
+        if (massKg == null || moistureContentPercent == null) return "\u2014";
+        return formatMass(deriveMassDryKg(massKg, moistureContentPercent));
+      },
     },
     {
       id: "storageLocation",
@@ -309,7 +328,9 @@ export function BiocharProductList() {
               { label: "Code", value: sideSheet.entity.code },
               { label: "Production Date", value: formatDate(sideSheet.entity.productionDate) },
               { label: "Formulation", value: sideSheet.entity.formulation?.name },
-              { label: "Mass", value: formatMass(sideSheet.entity.massKg) },
+              { label: "Wet Mass", value: formatMass(sideSheet.entity.massKg) },
+              { label: "Moisture", value: sideSheet.entity.moistureContentPercent != null ? `${sideSheet.entity.moistureContentPercent}%` : undefined },
+              { label: "Dry Mass", value: sideSheet.entity.massKg != null && sideSheet.entity.moistureContentPercent != null ? formatMass(deriveMassDryKg(sideSheet.entity.massKg, sideSheet.entity.moistureContentPercent)) : undefined },
             ],
           },
           {

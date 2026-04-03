@@ -21,7 +21,6 @@ import {
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
-import { DriverQuickAddDialog } from "@/components/forms/entity-select/driver-quick-add-dialog";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
@@ -54,7 +53,6 @@ export function FeedstockForm({
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   // Quick-add dialogs
-  const driverDialog = useQuickAddDialog();
   const vehicleDialog = useQuickAddDialog();
   const feedstockTypeDialog = useQuickAddDialog();
 
@@ -70,7 +68,6 @@ export function FeedstockForm({
       facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
       deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
       supplierId: feedstock?.supplierId ?? "",
-      driverId: feedstock?.driverId ?? "",
       vehicleId: feedstock?.vehicleId ?? "",
       gpsLatitude: feedstock?.gpsLatitude ?? null,
       gpsLongitude: feedstock?.gpsLongitude ?? null,
@@ -190,18 +187,6 @@ export function FeedstockForm({
           </SectionLabel>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormEntitySelect
-              control={formControl}
-              name="driverId"
-              label="Driver"
-              entityType="driver"
-              placeholder="Select driver..."
-              disabled={isSubmitting}
-              allowCreate
-              createLabel="Add new driver"
-              onCreateNew={() => driverDialog.open()}
-            />
-
             <FormEntitySelect
               control={formControl}
               name="vehicleId"
@@ -436,15 +421,6 @@ export function FeedstockForm({
       </form>
 
       {/* Quick-add dialogs */}
-      <DriverQuickAddDialog
-        isOpen={driverDialog.isOpen}
-        onClose={driverDialog.close}
-        onSuccess={(driver) => {
-          setValue("driverId", driver.id, SET_VALUE_OPTS);
-          driverDialog.close();
-        }}
-      />
-
       <VehicleQuickAddDialog
         isOpen={vehicleDialog.isOpen}
         onClose={vehicleDialog.close}

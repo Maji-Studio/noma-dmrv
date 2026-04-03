@@ -72,7 +72,6 @@ export const feedstockFormSchema = z.object({
     .uuid("Please select a valid supplier"),
 
   // Optional transport
-  driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   gpsLatitude: optionalGpsLatitude,
   gpsLongitude: optionalGpsLongitude,
@@ -126,7 +125,6 @@ export const updateFeedstockSchema = z.object({
     }),
   ]).optional(),
   supplierId: z.string().uuid().optional(),
-  driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   gpsLatitude: optionalGpsLatitude,
   gpsLongitude: optionalGpsLongitude,

@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -164,6 +165,7 @@ export function BiocharProductForm({
       storageLocationId: product?.storageLocation?.id ?? "",
       status: product?.status ?? "testing",
       massKg: product?.massKg ?? null,
+      moistureContentPercent: product?.moistureContentPercent ?? null,
       densityKgM3: product?.densityKgM3 ?? null,
     },
   });
@@ -172,6 +174,7 @@ export function BiocharProductForm({
   const linkedProductionRunId = useWatch({ control, name: "linkedProductionRunId" });
   const storageLocationId = useWatch({ control, name: "storageLocationId" });
   const watchedMassKg = useWatch({ control, name: "massKg" });
+  const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
 
   // Fetch linked run preview for transfer flow
   const { data: linkedRunPreview } = useQuery({
@@ -227,6 +230,11 @@ export function BiocharProductForm({
 
   // Derive preview values
   const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
+  const moistureNum = typeof watchedMoisture === "number" ? watchedMoisture : null;
+  const dryMassKg =
+    massKgNum !== null && moistureNum !== null && moistureNum >= 0 && moistureNum <= 100
+      ? deriveMassDryKg(massKgNum, moistureNum)
+      : null;
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-24">
@@ -277,7 +285,7 @@ export function BiocharProductForm({
         <div className="grid grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="massKg"
-            label="Mass (kg)"
+            label="Wet Mass (kg)"
             error={errors.massKg?.message}
             helperText={
               linkedRunPreview?.biocharOutputKg !== null && linkedRunPreview?.biocharOutputKg !== undefined
@@ -297,6 +305,40 @@ export function BiocharProductForm({
             />
           </FormField>
 
+          <FormField
+            id="moistureContentPercent"
+            label="Moisture Content (%)"
+            error={errors.moistureContentPercent?.message}
+            helperText="Typically 1-2% for biochar"
+          >
+            <FormInput
+              id="moistureContentPercent"
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+              placeholder="e.g., 2"
+              disabled={isSubmitting}
+              error={!!errors.moistureContentPercent}
+              {...register("moistureContentPercent", { setValueAs: nullableNumericValue })}
+            />
+          </FormField>
+        </div>
+
+        {/* Dry mass preview */}
+        {dryMassKg !== null && (
+          <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+            <span className="body-medium font-medium text-[var(--color-text-primary)]">
+              {dryMassKg.toFixed(2)} kg
+            </span>
+            <span className="body-small text-[var(--color-text-quaternary)]">
+              = {Number(watchedMassKg ?? 0).toFixed(2)} &times; (1 &minus; {Number(watchedMoisture ?? 0).toFixed(2)}%)
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="densityKgM3"
             label="Density (kg/m3)"

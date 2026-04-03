@@ -187,7 +187,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
-        driverId: data.driverId || null,
         vehicleId: data.vehicleId || null,
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
