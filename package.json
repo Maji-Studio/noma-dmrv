@@ -24,7 +24,7 @@
     "db:seed:check": "tsx src/db/seed.ts",
     "db:seed:demo": "tsx src/db/seed-data.ts",
     "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
-    "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:push && pnpm db:ensure-admin",
+    "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin",
     "env:local": "op inject -i .env.tpl -o .env",
     "env:vercel": "pnpm env:prod && pnpm env:preview && pnpm env:dev",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",

@@ -109,26 +109,22 @@ pnpm dev
 ### Migration Failures
 
 **Symptoms**
-- `pnpm db:push` fails with constraint errors
+- `pnpm db:migrate` or `pnpm db:push` fails with constraint errors
 - Schema out of sync with database
 
 **Fixes**
 ```bash
-# For development - force push (DESTRUCTIVE)
-pnpm db:push
-
-# For production - generate migration and review SQL
+# For shared environments - generate migration and review SQL
 pnpm db:generate
 # Review migration file in drizzle/ folder
 pnpm db:migrate
 
-# Reset local database (DESTRUCTIVE)
-# Drop all tables manually or recreate database
-pnpm db:push
+# For local development only - reset and rebuild from tracked migrations
+pnpm db:reset
 ```
 
 **Prevention**
-- ❌ Never use `pnpm db:push` in production
+- ❌ Never use `pnpm db:push` in staging or production
 - ✅ Always use `pnpm db:generate` + review migrations
 - ✅ Test migrations on staging first
 
