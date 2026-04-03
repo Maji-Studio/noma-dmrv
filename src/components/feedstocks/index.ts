@@ -1,5 +1,5 @@
 /**
- * Feedstocks Components
+ * Feedstock Components
  * Barrel export for feedstock components
  */
 

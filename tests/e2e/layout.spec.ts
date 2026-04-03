@@ -26,7 +26,7 @@ test.describe("App Layout - Sidebar Navigation", () => {
       // Overview
       "/projects",
       // Production
-      "/feedstock-deliveries",
+      "/feedstocks",
       "/production-runs",
       // Infrastructure
       "/facilities",
@@ -84,7 +84,7 @@ test.describe("App Routes Structure", () => {
       { path: "/storage-locations", name: "Storage Locations" },
       { path: "/suppliers", name: "Suppliers" },
       { path: "/customers", name: "Customers" },
-      { path: "/feedstock-deliveries", name: "Feedstock Deliveries" },
+      { path: "/feedstocks", name: "Feedstocks" },
       { path: "/production-runs", name: "Production Runs" },
     ];
 

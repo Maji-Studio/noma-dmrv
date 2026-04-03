@@ -1,20 +1,25 @@
 /**
- * Feedstocks Data Access Layer
- * CRUD operations for feedstocks with auth guards, pagination, and filtering
+ * Feedstock Data Access Layer
+ * Unified CRUD for the combined delivery + bin allocation workflow.
+ * Each feedstock record contains both delivery info and bin allocation.
+ * Split deliveries (one truck → multiple bins) share a deliveryGroupId.
  */
 
-import { and, asc, count, desc, eq, ilike, or, sql, SQL, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   feedstocks,
-  feedstockDeliveries,
   feedstockTypes,
   facilities,
   storageLocations,
+  suppliers,
+  drivers,
+  vehicles,
   productionRunFeedstocks,
 } from "@/db/schema";
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import { requireAuth } from "./utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 
 // ============================================
 // Types
@@ -25,22 +30,34 @@ export interface FeedstockWithRelations {
   code: string;
   facilityId: string;
   status: "missing_data" | "complete";
-  feedstockDeliveryId: string;
+  // Delivery fields
+  deliveryDate: Date | null;
+  supplierId: string | null;
+  driverId: string | null;
+  vehicleId: string | null;
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
+  deliveryGroupId: string | null;
+  overrideJustification: string | null;
+  // Material fields
   feedstockTypeId: string;
   massDryKg: number;
   massWetKg: number | null;
   moistureContentPercent: number | null;
-  feedstockSourceRegion: string | null;
   storageLocationId: string | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
-  // Relations
+  // Joined relations
   facilityName: string | null;
-  feedstockDeliveryCode: string | null;
+  supplierName: string | null;
+  supplierCode: string | null;
+  driverName: string | null;
+  vehiclePlateNumber: string | null;
   feedstockTypeName: string | null;
   feedstockTypeCategory: string | null;
   storageLocationName: string | null;
+  storageLocationCode: string | null;
 }
 
 export interface PaginatedFeedstocks {
@@ -59,8 +76,34 @@ export interface FeedstockStats {
   missingDataFeedstocks: number;
 }
 
+export interface CreateFeedstockAllocation {
+  storageLocationId: string;
+  allocatedWetMassKg: number;
+}
+
+export interface CreateFeedstockInput {
+  facilityId: string;
+  deliveryDate: Date;
+  supplierId: string;
+  driverId?: string | null;
+  vehicleId?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+  feedstockTypeId: string;
+  totalWetMassKg: number;
+  moisturePercent: number;
+  allocations: CreateFeedstockAllocation[];
+  overrideJustification?: string | null;
+  notes?: string | null;
+}
+
+export interface CreateFeedstockResult {
+  feedstocks: FeedstockWithRelations[];
+  warning: string | null;
+}
+
 // ============================================
-// Feedstock Read Operations
+// Select fields
 // ============================================
 
 const feedstockSelectFields = {
@@ -68,21 +111,32 @@ const feedstockSelectFields = {
   code: feedstocks.code,
   facilityId: feedstocks.facilityId,
   status: feedstocks.status,
-  feedstockDeliveryId: feedstocks.feedstockDeliveryId,
+  deliveryDate: feedstocks.deliveryDate,
+  supplierId: feedstocks.supplierId,
+  driverId: feedstocks.driverId,
+  vehicleId: feedstocks.vehicleId,
+  gpsLatitude: feedstocks.gpsLatitude,
+  gpsLongitude: feedstocks.gpsLongitude,
+  deliveryGroupId: feedstocks.deliveryGroupId,
+  overrideJustification: feedstocks.overrideJustification,
   feedstockTypeId: feedstocks.feedstockTypeId,
   massDryKg: feedstocks.massDryKg,
   massWetKg: feedstocks.massWetKg,
   moistureContentPercent: feedstocks.moistureContentPercent,
-  feedstockSourceRegion: feedstocks.feedstockSourceRegion,
   storageLocationId: feedstocks.storageLocationId,
   notes: feedstocks.notes,
   createdAt: feedstocks.createdAt,
   updatedAt: feedstocks.updatedAt,
+  // Relations
   facilityName: facilities.name,
-  feedstockDeliveryCode: feedstockDeliveries.code,
+  supplierName: suppliers.name,
+  supplierCode: suppliers.code,
+  driverName: drivers.name,
+  vehiclePlateNumber: vehicles.name,
   feedstockTypeName: feedstockTypes.name,
   feedstockTypeCategory: feedstockTypes.category,
   storageLocationName: storageLocations.name,
+  storageLocationCode: storageLocations.code,
 } as const;
 
 function feedstockBaseQuery() {
@@ -90,10 +144,16 @@ function feedstockBaseQuery() {
     .select(feedstockSelectFields)
     .from(feedstocks)
     .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
-    .leftJoin(feedstockDeliveries, eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id))
+    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
+    .leftJoin(drivers, eq(feedstocks.driverId, drivers.id))
+    .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
     .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
     .leftJoin(storageLocations, eq(feedstocks.storageLocationId, storageLocations.id));
 }
+
+// ============================================
+// Read Operations
+// ============================================
 
 export async function getFeedstocks(
   userId: string,
@@ -104,12 +164,13 @@ export async function getFeedstocks(
   const {
     search,
     facilityId,
-    feedstockDeliveryId,
+    supplierId,
     feedstockTypeId,
     status,
+    storageLocationId,
     page = 1,
     pageSize = 20,
-    sortBy = "createdAt",
+    sortBy = "deliveryDate",
     sortOrder = "desc",
   } = filters ?? {};
 
@@ -120,45 +181,39 @@ export async function getFeedstocks(
     conditions.push(
       or(
         ilike(feedstocks.code, searchPattern),
-        ilike(feedstockDeliveries.code, searchPattern),
-        ilike(feedstockTypes.name, searchPattern)
+        ilike(suppliers.name, searchPattern),
+        ilike(suppliers.code, searchPattern),
+        ilike(feedstockTypes.name, searchPattern),
+        ilike(storageLocations.name, searchPattern)
       )!
     );
   }
 
-  if (facilityId) {
-    conditions.push(eq(feedstocks.facilityId, facilityId));
-  }
-
-  if (feedstockDeliveryId) {
-    conditions.push(eq(feedstocks.feedstockDeliveryId, feedstockDeliveryId));
-  }
-
-  if (feedstockTypeId) {
-    conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
-  }
-
-  if (status) {
-    conditions.push(eq(feedstocks.status, status));
-  }
+  if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
+  if (supplierId) conditions.push(eq(feedstocks.supplierId, supplierId));
+  if (feedstockTypeId) conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
+  if (status) conditions.push(eq(feedstocks.status, status));
+  if (storageLocationId) conditions.push(eq(feedstocks.storageLocationId, storageLocationId));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const sortColumn = {
     code: feedstocks.code,
+    deliveryDate: feedstocks.deliveryDate,
     massDryKg: feedstocks.massDryKg,
+    massWetKg: feedstocks.massWetKg,
     createdAt: feedstocks.createdAt,
     updatedAt: feedstocks.updatedAt,
-  }[sortBy] ?? feedstocks.createdAt;
+  }[sortBy] ?? feedstocks.deliveryDate;
 
   const orderFn = sortOrder === "asc" ? asc : desc;
 
-  // Count total
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(feedstocks)
-    .leftJoin(feedstockDeliveries, eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id))
+    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
     .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+    .leftJoin(storageLocations, eq(feedstocks.storageLocationId, storageLocations.id))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -180,15 +235,13 @@ export async function getFeedstockById(
 ): Promise<FeedstockWithRelations> {
   requireAuth(userId);
 
-  const [feedstock] = await feedstockBaseQuery().where(
-    eq(feedstocks.id, feedstockId)
-  );
+  const [item] = await feedstockBaseQuery().where(eq(feedstocks.id, feedstockId));
 
-  if (!feedstock) {
+  if (!item) {
     throw new Error("Feedstock not found");
   }
 
-  return feedstock;
+  return item;
 }
 
 export async function getFeedstockStats(
@@ -198,144 +251,160 @@ export async function getFeedstockStats(
   requireAuth(userId);
 
   const conditions: SQL[] = [];
-  if (facilityId) {
-    conditions.push(eq(feedstocks.facilityId, facilityId));
-  }
-
+  if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [stats] = await db
     .select({
       totalFeedstocks: count(),
-      totalDryMassKg: sum(feedstocks.massDryKg),
-      avgMoisturePercent: sql<number>`avg(${feedstocks.moistureContentPercent})`,
+      totalDryMassKg: sql<number>`coalesce(sum(${feedstocks.massDryKg}), 0)`,
+      avgMoisturePercent: sql<number | null>`avg(${feedstocks.moistureContentPercent})`,
+      completeFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
+      missingDataFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
     })
     .from(feedstocks)
     .where(whereClause);
 
-  const [completeCounts] = await db
-    .select({ count: count() })
-    .from(feedstocks)
-    .where(
-      whereClause
-        ? and(whereClause, eq(feedstocks.status, "complete"))
-        : eq(feedstocks.status, "complete")
-    );
-
-  const [missingDataCounts] = await db
-    .select({ count: count() })
-    .from(feedstocks)
-    .where(
-      whereClause
-        ? and(whereClause, eq(feedstocks.status, "missing_data"))
-        : eq(feedstocks.status, "missing_data")
-    );
-
   return {
     totalFeedstocks: Number(stats.totalFeedstocks),
-    totalDryMassKg: Number(stats.totalDryMassKg) || 0,
-    avgMoisturePercent: stats.avgMoisturePercent
-      ? Number(stats.avgMoisturePercent)
-      : null,
-    completeFeedstocks: Number(completeCounts.count),
-    missingDataFeedstocks: Number(missingDataCounts.count),
+    totalDryMassKg: Number(stats.totalDryMassKg),
+    avgMoisturePercent: stats.avgMoisturePercent ? Number(stats.avgMoisturePercent) : null,
+    completeFeedstocks: Number(stats.completeFeedstocks),
+    missingDataFeedstocks: Number(stats.missingDataFeedstocks),
   };
 }
 
-export async function getFeedstockOptions(
-  userId: string
-): Promise<
-  Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>
-> {
-  requireAuth(userId);
-
-  return db
-    .select({
-      id: feedstocks.id,
-      code: feedstocks.code,
-      massDryKg: feedstocks.massDryKg,
-      feedstockTypeName: feedstockTypes.name,
-    })
-    .from(feedstocks)
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .orderBy(desc(feedstocks.createdAt));
-}
-
 // ============================================
-// Feedstock Create Operations
+// Create Operations
 // ============================================
 
 export async function createFeedstock(
   userId: string,
-  data: {
-    code: string;
-    facilityId: string;
-    feedstockDeliveryId: string;
-    feedstockTypeId: string;
-    massDryKg: number;
-    massWetKg?: number | null;
-    moistureContentPercent?: number | null;
-    storageLocationId?: string | null;
-    feedstockSourceRegion?: string | null;
-    notes?: string | null;
-  }
-): Promise<FeedstockWithRelations> {
+  data: CreateFeedstockInput,
+  codesFn: (count: number) => Promise<string[]>
+): Promise<CreateFeedstockResult> {
   requireAuth(userId);
 
-  const [existing] = await db
-    .select({ id: feedstocks.id })
-    .from(feedstocks)
-    .where(eq(feedstocks.code, data.code));
+  const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
+  const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
-  if (existing) {
-    throw new Error("A feedstock with this code already exists");
-  }
+  // Batch-validate bin type compatibility for all allocations
+  const binIds = data.allocations.map((a) => a.storageLocationId);
+  const bins = await db
+    .select({
+      id: storageLocations.id,
+      type: storageLocations.type,
+      feedstockTypeId: storageLocations.feedstockTypeId,
+    })
+    .from(storageLocations)
+    .where(inArray(storageLocations.id, binIds));
 
-  const status = determineFeedstockStatus(data);
-
-  try {
-    const [feedstock] = await db
-      .insert(feedstocks)
-      .values({
-        code: data.code,
-        facilityId: data.facilityId,
-        status,
-        feedstockDeliveryId: data.feedstockDeliveryId,
-        feedstockTypeId: data.feedstockTypeId,
-        massDryKg: data.massDryKg,
-        massWetKg: data.massWetKg ?? null,
-        moistureContentPercent: data.moistureContentPercent ?? null,
-        storageLocationId: data.storageLocationId ?? null,
-        feedstockSourceRegion: data.feedstockSourceRegion || null,
-        notes: data.notes || null,
-      })
-      .returning();
-
-    return getFeedstockById(userId, feedstock.id);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("A feedstock with this code already exists");
+  const binMap = new Map(bins.map((b) => [b.id, b]));
+  for (const allocation of data.allocations) {
+    const bin = binMap.get(allocation.storageLocationId);
+    if (!bin) {
+      throw new Error(`Storage bin not found: ${allocation.storageLocationId}`);
     }
-    throw error;
+    if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
+      throw new Error(`Storage bin ${bin.id} is not a feedstock or ingredient bin`);
+    }
+    if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
+      throw new Error(
+        `Storage bin already holds a different feedstock type. Each bin can only hold one type.`
+      );
+    }
   }
+
+  const codes = await codesFn(data.allocations.length);
+
+  const createdFeedstocks = await db.transaction(async (tx) => {
+    const results: string[] = [];
+
+    for (let i = 0; i < data.allocations.length; i++) {
+      const allocation = data.allocations[i];
+      const allocatedDryMassKg = deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent);
+
+      const status = determineFeedstockStatus({
+        feedstockTypeId: data.feedstockTypeId,
+        massDryKg: allocatedDryMassKg,
+      });
+
+      const [feedstock] = await tx
+        .insert(feedstocks)
+        .values({
+          code: codes[i],
+          facilityId: data.facilityId,
+          status,
+          // Delivery fields
+          deliveryDate: data.deliveryDate,
+          supplierId: data.supplierId,
+          driverId: data.driverId ?? null,
+          vehicleId: data.vehicleId ?? null,
+          gpsLatitude: data.gpsLatitude ?? null,
+          gpsLongitude: data.gpsLongitude ?? null,
+          deliveryGroupId,
+          overrideJustification: data.overrideJustification || null,
+          // Material fields
+          feedstockTypeId: data.feedstockTypeId,
+          massDryKg: allocatedDryMassKg,
+          massWetKg: allocation.allocatedWetMassKg,
+          moistureContentPercent: data.moisturePercent,
+          storageLocationId: allocation.storageLocationId,
+          notes: data.notes || null,
+        })
+        .returning({ id: feedstocks.id });
+
+      results.push(feedstock.id);
+
+      // Lock feedstock type on bin (first-use lock)
+      await tx
+        .update(storageLocations)
+        .set({ feedstockTypeId: data.feedstockTypeId })
+        .where(
+          and(
+            eq(storageLocations.id, allocation.storageLocationId),
+            sql`${storageLocations.feedstockTypeId} is null`
+          )
+        );
+    }
+
+    return results;
+  });
+
+  // Fetch the created records with relations in one query
+  const items = await feedstockBaseQuery()
+    .where(inArray(feedstocks.id, createdFeedstocks));
+
+  // Generate warning if allocated wet mass > total delivery wet mass
+  let warning: string | null = null;
+  if (allocatedTotalWetKg > data.totalWetMassKg) {
+    warning = `Allocated wet mass (${allocatedTotalWetKg.toFixed(1)} kg) exceeds total delivery wet mass (${data.totalWetMassKg.toFixed(1)} kg).`;
+  }
+
+  return { feedstocks: items, warning };
 }
 
 // ============================================
-// Feedstock Update Operations
+// Update Operations
 // ============================================
 
 export async function updateFeedstock(
   userId: string,
   feedstockId: string,
   data: {
-    feedstockDeliveryId?: string;
-    feedstockTypeId?: string;
     facilityId?: string;
+    deliveryDate?: Date;
+    supplierId?: string;
+    driverId?: string | null;
+    vehicleId?: string | null;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
+    feedstockTypeId?: string;
     massDryKg?: number;
     massWetKg?: number | null;
     moistureContentPercent?: number | null;
     storageLocationId?: string | null;
-    feedstockSourceRegion?: string | null;
+    overrideJustification?: string | null;
     notes?: string | null;
   }
 ): Promise<FeedstockWithRelations> {
@@ -348,6 +417,25 @@ export async function updateFeedstock(
 
   if (!existing) {
     throw new Error("Feedstock not found");
+  }
+
+  // Validate bin type compatibility if changing storage location or feedstock type
+  if (data.storageLocationId || data.feedstockTypeId) {
+    const binId = data.storageLocationId ?? existing.storageLocationId;
+    const typeId = data.feedstockTypeId ?? existing.feedstockTypeId;
+
+    if (binId) {
+      const [bin] = await db
+        .select({ feedstockTypeId: storageLocations.feedstockTypeId })
+        .from(storageLocations)
+        .where(eq(storageLocations.id, binId));
+
+      if (bin?.feedstockTypeId && bin.feedstockTypeId !== typeId) {
+        throw new Error(
+          "Storage bin already holds a different feedstock type. Each bin can only hold one type."
+        );
+      }
+    }
   }
 
   const mergedData = { ...existing, ...data };
@@ -366,7 +454,7 @@ export async function updateFeedstock(
 }
 
 // ============================================
-// Feedstock Delete Operations
+// Delete Operations
 // ============================================
 
 export async function deleteFeedstock(
@@ -375,16 +463,7 @@ export async function deleteFeedstock(
 ): Promise<void> {
   requireAuth(userId);
 
-  const [existing] = await db
-    .select({ id: feedstocks.id })
-    .from(feedstocks)
-    .where(eq(feedstocks.id, feedstockId));
-
-  if (!existing) {
-    throw new Error("Feedstock not found");
-  }
-
-  // Check for associated production run feedstocks
+  // Block deletion if used in production runs
   const [usageCount] = await db
     .select({ count: count() })
     .from(productionRunFeedstocks)
@@ -406,14 +485,13 @@ export async function deleteFeedstock(
 export async function isFeedstockCodeAvailable(
   userId: string,
   code: string,
-  excludeFeedstockId?: string
+  excludeId?: string
 ): Promise<boolean> {
   requireAuth(userId);
 
   const conditions: SQL[] = [eq(feedstocks.code, code)];
-
-  if (excludeFeedstockId) {
-    conditions.push(sql`${feedstocks.id} != ${excludeFeedstockId}`);
+  if (excludeId) {
+    conditions.push(sql`${feedstocks.id} != ${excludeId}`);
   }
 
   const [existing] = await db
@@ -424,8 +502,28 @@ export async function isFeedstockCodeAvailable(
   return !existing;
 }
 
+/**
+ * Get feedstock options for dropdowns (e.g., production run feedstock selection)
+ */
+export async function getFeedstockOptions(
+  userId: string
+): Promise<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>> {
+  requireAuth(userId);
+
+  return db
+    .select({
+      id: feedstocks.id,
+      code: feedstocks.code,
+      massDryKg: feedstocks.massDryKg,
+      feedstockTypeName: feedstockTypes.name,
+    })
+    .from(feedstocks)
+    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+    .orderBy(desc(feedstocks.createdAt));
+}
+
 // ============================================
-// Helper Functions
+// Helpers
 // ============================================
 
 function determineFeedstockStatus(data: {

@@ -10,7 +10,6 @@ import {
   reactors,
   storageLocations,
   suppliers,
-  feedstockDeliveries,
   feedstocks,
   productionRuns,
   samples,
@@ -93,7 +92,7 @@ export async function getChainOfCustodyData(
     slFeedstockBinRows,
     slBiocharBinRows,
     slProductBinRows,
-    feedstockDeliveryRows,
+    slIngredientBinRows,
     feedstockRows,
     productionRunRows,
     sampleRows,
@@ -108,7 +107,7 @@ export async function getChainOfCustodyData(
     slFeedstockBinItems,
     slBiocharBinItems,
     slProductBinItems,
-    feedstockDeliveryItems,
+    slIngredientBinItems,
     feedstockItems,
     productionRunItems,
     sampleItems,
@@ -120,12 +119,12 @@ export async function getChainOfCustodyData(
   ] = await Promise.all([
     // --- Status count queries ---
 
-    // Suppliers — distinct suppliers linked via feedstock deliveries (no status)
+    // Suppliers — distinct suppliers linked via feedstocks (no status)
     db
       .selectDistinct({ id: suppliers.id })
       .from(suppliers)
-      .innerJoin(feedstockDeliveries, eq(feedstockDeliveries.supplierId, suppliers.id))
-      .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .innerJoin(feedstocks, eq(feedstocks.supplierId, suppliers.id))
+      .where(eq(feedstocks.facilityId, facilityId))
       .then((rows) => [{ status: null as string | null, count: rows.length }]),
 
     // Reactors — no status field
@@ -147,15 +146,12 @@ export async function getChainOfCustodyData(
       .select({ status: sql<string | null>`null`.as("status"), count: count() })
       .from(storageLocations)
       .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "product_bin"))),
-
-    // Feedstock Deliveries — has status
     db
-      .select({ status: feedstockDeliveries.status, count: count() })
-      .from(feedstockDeliveries)
-      .where(eq(feedstockDeliveries.facilityId, facilityId))
-      .groupBy(feedstockDeliveries.status),
+      .select({ status: sql<string | null>`null`.as("status"), count: count() })
+      .from(storageLocations)
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "ingredient_bin"))),
 
-    // Feedstocks — has status
+    // Feedstocks — unified (has status)
     db
       .select({ status: feedstocks.status, count: count() })
       .from(feedstocks)
@@ -216,8 +212,8 @@ export async function getChainOfCustodyData(
     db
       .selectDistinct({ code: suppliers.code, name: suppliers.name })
       .from(suppliers)
-      .innerJoin(feedstockDeliveries, eq(feedstockDeliveries.supplierId, suppliers.id))
-      .where(eq(feedstockDeliveries.facilityId, facilityId))
+      .innerJoin(feedstocks, eq(feedstocks.supplierId, suppliers.id))
+      .where(eq(feedstocks.facilityId, facilityId))
       .limit(ITEMS_LIMIT),
 
     db
@@ -245,12 +241,11 @@ export async function getChainOfCustodyData(
       .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "product_bin")))
       .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
-
     db
-      .select({ code: feedstockDeliveries.code })
-      .from(feedstockDeliveries)
-      .where(eq(feedstockDeliveries.facilityId, facilityId))
-      .orderBy(desc(feedstockDeliveries.createdAt))
+      .select({ code: storageLocations.code, name: storageLocations.name })
+      .from(storageLocations)
+      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "ingredient_bin")))
+      .orderBy(desc(storageLocations.createdAt))
       .limit(ITEMS_LIMIT),
 
     db
@@ -319,7 +314,7 @@ export async function getChainOfCustodyData(
     { entityType: "feedstockBin", ...aggregateStatusRows(slFeedstockBinRows), items: slFeedstockBinItems },
     { entityType: "biocharBin", ...aggregateStatusRows(slBiocharBinRows), items: slBiocharBinItems },
     { entityType: "productBin", ...aggregateStatusRows(slProductBinRows), items: slProductBinItems },
-    { entityType: "feedstockDeliveries", ...aggregateStatusRows(feedstockDeliveryRows), items: feedstockDeliveryItems },
+    { entityType: "ingredientBin", ...aggregateStatusRows(slIngredientBinRows), items: slIngredientBinItems },
     { entityType: "feedstocks", ...aggregateStatusRows(feedstockRows), items: feedstockItems },
     { entityType: "productionRuns", ...aggregateStatusRows(productionRunRows), items: productionRunItems },
     { entityType: "samples", ...aggregateStatusRows(sampleRows), items: sampleItems },

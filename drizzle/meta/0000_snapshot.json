@@ -1,5 +1,5 @@
 {
-  "id": "32b601b7-ab9b-483c-aa8d-f1ca77d4eac4",
+  "id": "3a49d08d-b6cc-4010-b57e-873f988c54b9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2439,6 +2439,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "feedstock_type_id": {
+          "name": "feedstock_type_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "facility_id": {
           "name": "facility_id",
           "type": "uuid",
@@ -2810,7 +2816,55 @@
           "name": "feedstock_delivery_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "delivery_date": {
+          "name": "delivery_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supplier_id": {
+          "name": "supplier_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "driver_id": {
+          "name": "driver_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vehicle_id": {
+          "name": "vehicle_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_latitude": {
+          "name": "gps_latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_longitude": {
+          "name": "gps_longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_group_id": {
+          "name": "delivery_group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "override_justification": {
+          "name": "override_justification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "feedstock_type_id": {
           "name": "feedstock_type_id",
@@ -2940,6 +2994,45 @@
           "tableTo": "feedstock_deliveries",
           "columnsFrom": [
             "feedstock_delivery_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "feedstocks_supplier_id_suppliers_id_fk": {
+          "name": "feedstocks_supplier_id_suppliers_id_fk",
+          "tableFrom": "feedstocks",
+          "tableTo": "suppliers",
+          "columnsFrom": [
+            "supplier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "feedstocks_driver_id_drivers_id_fk": {
+          "name": "feedstocks_driver_id_drivers_id_fk",
+          "tableFrom": "feedstocks",
+          "tableTo": "drivers",
+          "columnsFrom": [
+            "driver_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "feedstocks_vehicle_id_vehicles_id_fk": {
+          "name": "feedstocks_vehicle_id_vehicles_id_fk",
+          "tableFrom": "feedstocks",
+          "tableTo": "vehicles",
+          "columnsFrom": [
+            "vehicle_id"
           ],
           "columnsTo": [
             "id"
@@ -5783,7 +5876,8 @@
       "values": [
         "feedstock_bin",
         "biochar_bin",
-        "product_bin"
+        "product_bin",
+        "ingredient_bin"
       ]
     },
     "public.sync_status": {
