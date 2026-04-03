@@ -174,6 +174,7 @@ export async function createBiocharProductFn(
           linkedProductionRunId: validated.linkedProductionRunId || null,
           storageLocationId: validated.storageLocationId || null,
           massKg: validated.massKg ?? null,
+          moistureContentPercent: validated.moistureContentPercent ?? null,
           densityKgM3: validated.densityKgM3 ?? null,
         })
     );
@@ -221,6 +222,7 @@ export async function updateBiocharProductFn(
       linkedProductionRunId: validated.linkedProductionRunId === "" ? null : validated.linkedProductionRunId,
       storageLocationId: validated.storageLocationId === "" ? null : validated.storageLocationId,
       massKg: validated.massKg,
+      moistureContentPercent: validated.moistureContentPercent,
       densityKgM3: validated.densityKgM3,
     });
 

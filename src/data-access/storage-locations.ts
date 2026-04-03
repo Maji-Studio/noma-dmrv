@@ -605,8 +605,7 @@ export async function createStorageLocation(
     type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
     facilityId: string;
     capacityKg?: number | null;
-    latitude?: number | null;
-    longitude?: number | null;
+    feedstockTypeId?: string | null;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -642,8 +641,7 @@ export async function createStorageLocation(
       type: data.type,
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
-      latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null,
+      feedstockTypeId: data.feedstockTypeId ?? null,
       storageMethod: data.storageMethod ?? null,
       storageDescription: data.storageDescription ?? null,
       supplierReferenceId: data.supplierReferenceId ?? null,
@@ -669,8 +667,7 @@ export async function updateStorageLocation(
     type?: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
     facilityId?: string;
     capacityKg?: number | null;
-    latitude?: number | null;
-    longitude?: number | null;
+    feedstockTypeId?: string | null;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;

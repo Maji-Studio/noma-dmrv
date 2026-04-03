@@ -22,6 +22,13 @@
       "when": 1775243793839,
       "tag": "0002_mixed_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775253986512,
+      "tag": "0003_nosy_the_watchers",
+      "breakpoints": true
     }
   ]
 }
