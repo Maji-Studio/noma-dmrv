@@ -85,6 +85,7 @@ type BaseStorageLocationRow = {
   storageMethod: string | null;
   storageDescription: string | null;
   supplierReferenceId: string | null;
+  feedstockTypeId: string | null;
   facilityId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -475,6 +476,7 @@ export async function getStorageLocations(
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
       supplierReferenceId: storageLocations.supplierReferenceId,
+      feedstockTypeId: storageLocations.feedstockTypeId,
       facilityId: storageLocations.facilityId,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
@@ -542,6 +544,7 @@ export async function getStorageLocationWithFacility(
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
       supplierReferenceId: storageLocations.supplierReferenceId,
+      feedstockTypeId: storageLocations.feedstockTypeId,
       facilityId: storageLocations.facilityId,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
@@ -599,7 +602,7 @@ export async function createStorageLocation(
   data: {
     code: string;
     name: string;
-    type: "feedstock_bin" | "biochar_bin" | "product_bin";
+    type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
     facilityId: string;
     capacityKg?: number | null;
     latitude?: number | null;
@@ -663,7 +666,7 @@ export async function updateStorageLocation(
   data: {
     code?: string;
     name?: string;
-    type?: "feedstock_bin" | "biochar_bin" | "product_bin";
+    type?: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
     facilityId?: string;
     capacityKg?: number | null;
     latitude?: number | null;

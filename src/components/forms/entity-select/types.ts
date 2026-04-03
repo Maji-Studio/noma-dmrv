@@ -24,7 +24,6 @@ export type EntityType =
   | "feedstock"
   | "productionRun"
   | "formulation"
-  | "feedstockDelivery"
   | "creditBatch";
 
 export interface EntitySelectProps {

@@ -4,6 +4,7 @@ import { feedstockStatus } from './common';
 import { facilities, storageLocations } from './facilities';
 import { suppliers, drivers } from './parties';
 import { vehicles } from './logistics';
+import type { InferSelectModel } from 'drizzle-orm';
 
 // ============================================
 // Feedstock Deliveries - Incoming biomass shipments
@@ -80,17 +81,29 @@ export const feedstocks = pgTable(
   'feedstocks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "FS-2025-001"
+    code: text('code').notNull().unique(), // e.g., "FI-2025-001"
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
     status: feedstockStatus('status').default('missing_data').notNull(),
 
-    // --- Delivery Reference ---
-    // Transport details (driver, vehicle, fuel, distance, emissions) live on feedstockDeliveries
+    // --- Delivery Reference (nullable for migration; will be dropped in Phase 2) ---
     feedstockDeliveryId: uuid('feedstock_delivery_id')
-      .notNull()
       .references(() => feedstockDeliveries.id),
+
+    // --- Delivery Details (absorbed from feedstock_deliveries) ---
+    deliveryDate: timestamp('delivery_date'),
+    supplierId: uuid('supplier_id').references(() => suppliers.id),
+    driverId: uuid('driver_id').references(() => drivers.id),
+    vehicleId: uuid('vehicle_id').references(() => vehicles.id),
+    gpsLatitude: real('gps_latitude'),
+    gpsLongitude: real('gps_longitude'),
+
+    // --- Delivery Grouping (for split deliveries: one truck → multiple bins) ---
+    deliveryGroupId: uuid('delivery_group_id'),
+
+    // --- Override ---
+    overrideJustification: text('override_justification'),
 
     // --- Feedstock Details ---
     feedstockTypeId: uuid('feedstock_type_id')
@@ -132,6 +145,14 @@ export const feedstocks = pgTable(
     check(
       'feedstocks_moisture_content_percent_range',
       sql`${table.moistureContentPercent} is null or (${table.moistureContentPercent} >= 0 and ${table.moistureContentPercent} <= 100)`
+    ),
+    check(
+      'feedstocks_gps_latitude_range',
+      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
+    ),
+    check(
+      'feedstocks_gps_longitude_range',
+      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
   ]
 );
@@ -177,9 +198,23 @@ export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
     fields: [feedstocks.facilityId],
     references: [facilities.id],
   }),
+  // Legacy relation — will be removed in Phase 2
   feedstockDelivery: one(feedstockDeliveries, {
     fields: [feedstocks.feedstockDeliveryId],
     references: [feedstockDeliveries.id],
+  }),
+  // Delivery relations (absorbed from feedstock_deliveries)
+  supplier: one(suppliers, {
+    fields: [feedstocks.supplierId],
+    references: [suppliers.id],
+  }),
+  driver: one(drivers, {
+    fields: [feedstocks.driverId],
+    references: [drivers.id],
+  }),
+  vehicle: one(vehicles, {
+    fields: [feedstocks.vehicleId],
+    references: [vehicles.id],
   }),
   feedstockType: one(feedstockTypes, {
     fields: [feedstocks.feedstockTypeId],
@@ -190,3 +225,11 @@ export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
     references: [storageLocations.id],
   }),
 }));
+
+// ============================================
+// Type Inference
+// ============================================
+
+export type FeedstockDelivery = InferSelectModel<typeof feedstockDeliveries>;
+export type FeedstockType = InferSelectModel<typeof feedstockTypes>;
+export type Feedstock = InferSelectModel<typeof feedstocks>;

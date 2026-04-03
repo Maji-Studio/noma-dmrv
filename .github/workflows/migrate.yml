@@ -2,7 +2,7 @@ name: Database management
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths:
       - "src/db/schema/**"
       - "drizzle/**"
@@ -18,6 +18,15 @@ on:
           - push-schema
           - reset-and-push
         default: ensure-admin
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+          - both
+        default: staging
       confirmation:
         description: "Type CONFIRM for destructive actions (reset-and-push)"
         required: false
@@ -28,6 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ── Auto-migration pipeline (on push to main) ───────────────────────
   migrate-staging:
     runs-on: ubuntu-latest
     environment: staging
@@ -92,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     needs: verify-staging
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -122,12 +132,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-  ensure-admin:
+  # ── Manual actions ──────────────────────────────────────────────────
+  ensure-admin-staging:
     runs-on: ubuntu-latest
-    environment: production
+    environment: staging
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.action == 'ensure-admin'
+      github.event.inputs.action == 'ensure-admin' &&
+      (github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'both')
 
     steps:
       - name: Checkout code
@@ -154,13 +166,47 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
-  push-schema:
+  ensure-admin-production:
     runs-on: ubuntu-latest
     environment: production
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'ensure-admin' &&
+      (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'both')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure admin user
+        run: pnpm db:ensure-admin
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+  push-schema-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
       github.event.inputs.action == 'push-schema' &&
-      github.event.inputs.confirmation == 'CONFIRM'
+      github.event.inputs.confirmation == 'CONFIRM' &&
+      (github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'both')
 
     steps:
       - name: Checkout code
@@ -192,13 +238,88 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
-  reset-and-push:
+  push-schema-production:
+    runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'push-schema' &&
+      github.event.inputs.confirmation == 'CONFIRM' &&
+      (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'both')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push schema
+        run: pnpm db:push
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Ensure admin user
+        run: pnpm db:ensure-admin
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+  reset-and-push-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.action == 'reset-and-push' &&
+      github.event.inputs.confirmation == 'CONFIRM' &&
+      (github.event.inputs.environment == 'staging' || github.event.inputs.environment == 'both')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Reset database and push schema
+        run: pnpm db:reset
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          NODE_ENV: production
+
+  reset-and-push-production:
     runs-on: ubuntu-latest
     environment: production
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.action == 'reset-and-push' &&
-      github.event.inputs.confirmation == 'CONFIRM'
+      github.event.inputs.confirmation == 'CONFIRM' &&
+      (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'both')
 
     steps:
       - name: Checkout code

@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
-import { formatLocalDate } from "@/lib/date-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -159,8 +159,8 @@ export function BiocharProductForm({
     defaultValues: {
       facilityId: product?.facility?.id ?? contextFacilityId ?? "",
       formulationId: product?.formulation?.id ?? "",
-      productionDate: product?.productionDate ?? formatLocalDate(new Date()),
-      linkedProductionRunId: product?.linkedProductionRun?.id ?? "",
+      productionDate: toDateInputValue(product?.productionDate),
+      linkedProductionRunId: product?.linkedProductionRun?.id ?? product?.linkedProductionRunId ?? "",
       storageLocationId: product?.storageLocation?.id ?? "",
       status: product?.status ?? "testing",
       massKg: product?.massKg ?? null,
@@ -214,7 +214,7 @@ export function BiocharProductForm({
     if (currentMass === undefined || currentMass === null) {
       setValue("massKg", linkedRunPreview.biocharOutputKg, {
         shouldDirty: false,
-        shouldValidate: true,
+        shouldValidate: false,
       });
     }
   }, [dirtyFields.massKg, getValues, linkedRunPreview, product, setValue]);

@@ -6,26 +6,8 @@
 
 import { Package, Scales, Drop, CheckCircle, Warning } from "@phosphor-icons/react";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { formatMass } from "@/lib/format-utils";
 import { useFeedstockStats } from "@/hooks/use-feedstocks";
-
-// ============================================
-// Helper Functions
-// ============================================
-
-function formatMass(massKg: number): string {
-  if (massKg >= 1000000) {
-    return `${(massKg / 1000000).toFixed(1)}k t`;
-  }
-  if (massKg >= 1000) {
-    return `${(massKg / 1000).toFixed(1)} t`;
-  }
-  return `${massKg.toFixed(0)} kg`;
-}
-
-function formatMoisture(moisturePercent: number | null): string {
-  if (moisturePercent === null) return "—";
-  return `${moisturePercent.toFixed(1)}%`;
-}
 
 // ============================================
 // Component
@@ -45,7 +27,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         value={stats?.totalFeedstocks ?? 0}
         icon={<Package size={20} />}
         isLoading={isLoading}
-        description="All time feedstock batches"
+        description="All time feedstocks"
       />
 
       <StatCard
@@ -53,12 +35,12 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         value={formatMass(stats?.totalDryMassKg ?? 0)}
         icon={<Scales size={20} />}
         isLoading={isLoading}
-        description="Total dry mass recorded"
+        description="Total dry mass received"
       />
 
       <StatCard
         title="Avg. Moisture"
-        value={formatMoisture(stats?.avgMoisturePercent ?? null)}
+        value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "—"}
         icon={<Drop size={20} />}
         isLoading={isLoading}
         description="Average moisture content"
