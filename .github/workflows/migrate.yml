@@ -2,7 +2,7 @@ name: Database management
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths:
       - "src/db/schema/**"
       - "drizzle/**"
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     needs: verify-staging
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
