@@ -5,7 +5,7 @@
  * Split deliveries (one truck → multiple bins) share a deliveryGroupId.
  */
 
-import { and, asc, count, desc, eq, ilike, inArray, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   feedstocks,
@@ -168,6 +168,8 @@ export async function getFeedstocks(
     feedstockTypeId,
     status,
     storageLocationId,
+    startDate,
+    endDate,
     page = 1,
     pageSize = 20,
     sortBy = "deliveryDate",
@@ -194,6 +196,16 @@ export async function getFeedstocks(
   if (feedstockTypeId) conditions.push(eq(feedstocks.feedstockTypeId, feedstockTypeId));
   if (status) conditions.push(eq(feedstocks.status, status));
   if (storageLocationId) conditions.push(eq(feedstocks.storageLocationId, storageLocationId));
+  if (startDate) {
+    const startOfDay = new Date(startDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    conditions.push(gte(feedstocks.deliveryDate, startOfDay));
+  }
+  if (endDate) {
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    conditions.push(lte(feedstocks.deliveryDate, endOfDay));
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -268,7 +280,7 @@ export async function getFeedstockStats(
   return {
     totalFeedstocks: Number(stats.totalFeedstocks),
     totalDryMassKg: Number(stats.totalDryMassKg),
-    avgMoisturePercent: stats.avgMoisturePercent ? Number(stats.avgMoisturePercent) : null,
+    avgMoisturePercent: stats.avgMoisturePercent != null ? Number(stats.avgMoisturePercent) : null,
     completeFeedstocks: Number(stats.completeFeedstocks),
     missingDataFeedstocks: Number(stats.missingDataFeedstocks),
   };
@@ -295,6 +307,7 @@ export async function createFeedstock(
       id: storageLocations.id,
       type: storageLocations.type,
       feedstockTypeId: storageLocations.feedstockTypeId,
+      facilityId: storageLocations.facilityId,
     })
     .from(storageLocations)
     .where(inArray(storageLocations.id, binIds));
@@ -304,6 +317,9 @@ export async function createFeedstock(
     const bin = binMap.get(allocation.storageLocationId);
     if (!bin) {
       throw new Error(`Storage bin not found: ${allocation.storageLocationId}`);
+    }
+    if (bin.facilityId !== data.facilityId) {
+      throw new Error(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
     if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
       throw new Error(`Storage bin ${bin.id} is not a feedstock or ingredient bin`);
@@ -419,18 +435,32 @@ export async function updateFeedstock(
     throw new Error("Feedstock not found");
   }
 
-  // Validate bin type compatibility if changing storage location or feedstock type
+  // Validate storage bin compatibility if changing storage location or feedstock type
   if (data.storageLocationId || data.feedstockTypeId) {
     const binId = data.storageLocationId ?? existing.storageLocationId;
     const typeId = data.feedstockTypeId ?? existing.feedstockTypeId;
+    const facId = data.facilityId ?? existing.facilityId;
 
     if (binId) {
       const [bin] = await db
-        .select({ feedstockTypeId: storageLocations.feedstockTypeId })
+        .select({
+          type: storageLocations.type,
+          feedstockTypeId: storageLocations.feedstockTypeId,
+          facilityId: storageLocations.facilityId,
+        })
         .from(storageLocations)
         .where(eq(storageLocations.id, binId));
 
-      if (bin?.feedstockTypeId && bin.feedstockTypeId !== typeId) {
+      if (!bin) {
+        throw new Error(`Storage bin not found: ${binId}`);
+      }
+      if (bin.facilityId !== facId) {
+        throw new Error(`Storage bin ${binId} does not belong to the selected facility`);
+      }
+      if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
+        throw new Error(`Storage bin ${binId} is not a feedstock or ingredient bin`);
+      }
+      if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {
         throw new Error(
           "Storage bin already holds a different feedstock type. Each bin can only hold one type."
         );

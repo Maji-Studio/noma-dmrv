@@ -69,11 +69,6 @@ export const applications = pgTable(
   ],
 );
 
-export const testTable = pgTable("test_table", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-});
-
 // ============================================
 // Soil Temperature Measurements - Baseline data for 200-year durability
 // Isometric: SubRequirement G-QMBJ-0
