@@ -605,8 +605,7 @@ export async function createStorageLocation(
     type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
     facilityId: string;
     capacityKg?: number | null;
-    latitude?: number | null;
-    longitude?: number | null;
+    feedstockTypeId?: string | null;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -634,6 +633,17 @@ export async function createStorageLocation(
     throw new Error("A storage location with this code already exists");
   }
 
+  if (data.feedstockTypeId) {
+    const [feedstockType] = await db
+      .select({ id: feedstockTypes.id })
+      .from(feedstockTypes)
+      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+
+    if (!feedstockType) {
+      throw new Error("Feedstock type not found");
+    }
+  }
+
   const [storageLocation] = await db
     .insert(storageLocations)
     .values({
@@ -642,8 +652,7 @@ export async function createStorageLocation(
       type: data.type,
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
-      latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null,
+      feedstockTypeId: data.feedstockTypeId ?? null,
       storageMethod: data.storageMethod ?? null,
       storageDescription: data.storageDescription ?? null,
       supplierReferenceId: data.supplierReferenceId ?? null,
@@ -669,8 +678,7 @@ export async function updateStorageLocation(
     type?: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
     facilityId?: string;
     capacityKg?: number | null;
-    latitude?: number | null;
-    longitude?: number | null;
+    feedstockTypeId?: string | null;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -709,6 +717,17 @@ export async function updateStorageLocation(
 
     if (!facility) {
       throw new Error("Facility not found");
+    }
+  }
+
+  if (data.feedstockTypeId) {
+    const [feedstockType] = await db
+      .select({ id: feedstockTypes.id })
+      .from(feedstockTypes)
+      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+
+    if (!feedstockType) {
+      throw new Error("Feedstock type not found");
     }
   }
 

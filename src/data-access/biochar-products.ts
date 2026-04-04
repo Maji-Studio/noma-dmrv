@@ -147,6 +147,7 @@ export async function getBiocharProducts(
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
       composition: biocharProducts.composition,
       massKg: biocharProducts.massKg,
+      moistureContentPercent: biocharProducts.moistureContentPercent,
       densityKgM3: biocharProducts.densityKgM3,
       storageLocationId: biocharProducts.storageLocationId,
       createdAt: biocharProducts.createdAt,
@@ -184,6 +185,7 @@ export async function getBiocharProducts(
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
+    moistureContentPercent: row.moistureContentPercent,
     densityKgM3: row.densityKgM3,
     storageLocationId: row.storageLocationId,
     createdAt: row.createdAt,
@@ -242,6 +244,7 @@ export async function getBiocharProductById(
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
       composition: biocharProducts.composition,
       massKg: biocharProducts.massKg,
+      moistureContentPercent: biocharProducts.moistureContentPercent,
       densityKgM3: biocharProducts.densityKgM3,
       storageLocationId: biocharProducts.storageLocationId,
       createdAt: biocharProducts.createdAt,
@@ -275,6 +278,7 @@ export async function getBiocharProductById(
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
+    moistureContentPercent: row.moistureContentPercent,
     densityKgM3: row.densityKgM3,
     storageLocationId: row.storageLocationId,
     createdAt: row.createdAt,
@@ -323,6 +327,7 @@ export async function createBiocharProduct(
     linkedProductionRunId?: string | null;
     storageLocationId?: string | null;
     massKg?: number | null;
+    moistureContentPercent?: number | null;
     densityKgM3?: number | null;
     composition?: Record<string, unknown>;
   }
@@ -359,6 +364,10 @@ export async function createBiocharProduct(
     throw new Error("Formulation not found");
   }
 
+  if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
+    throw new Error("Moisture content must be between 0 and 100");
+  }
+
   const [product] = await db
     .insert(biocharProducts)
     .values({
@@ -370,6 +379,7 @@ export async function createBiocharProduct(
       linkedProductionRunId: data.linkedProductionRunId ?? null,
       storageLocationId: data.storageLocationId ?? null,
       massKg: data.massKg ?? null,
+      moistureContentPercent: data.moistureContentPercent ?? null,
       densityKgM3: data.densityKgM3 ?? null,
       composition: data.composition ?? {},
     })
@@ -397,6 +407,7 @@ export async function updateBiocharProduct(
     linkedProductionRunId?: string | null;
     storageLocationId?: string | null;
     massKg?: number | null;
+    moistureContentPercent?: number | null;
     densityKgM3?: number | null;
     composition?: Record<string, unknown>;
   }
@@ -447,6 +458,10 @@ export async function updateBiocharProduct(
     if (!formulation) {
       throw new Error("Formulation not found");
     }
+  }
+
+  if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
+    throw new Error("Moisture content must be between 0 and 100");
   }
 
   const [updated] = await db
