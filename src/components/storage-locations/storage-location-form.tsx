@@ -61,9 +61,6 @@ export function StorageLocationForm({
   const watchedType = useWatch({ control, name: "type" });
   const showFeedstockType = watchedType === "feedstock_bin" || watchedType === "ingredient_bin";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const formControl = control as any;
-
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
     : "Create Storage Bin";
@@ -138,7 +135,7 @@ export function StorageLocationForm({
       {showFeedstockType && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormEntitySelect
-            control={formControl}
+            control={control}
             name="feedstockTypeId"
             label="Feedstock Type"
             entityType="feedstockType"
