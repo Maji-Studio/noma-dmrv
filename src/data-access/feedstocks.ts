@@ -13,7 +13,6 @@ import {
   facilities,
   storageLocations,
   suppliers,
-  drivers,
   vehicles,
   productionRunFeedstocks,
 } from "@/db/schema";
@@ -33,7 +32,6 @@ export interface FeedstockWithRelations {
   // Delivery fields
   deliveryDate: Date | null;
   supplierId: string | null;
-  driverId: string | null;
   vehicleId: string | null;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
@@ -52,7 +50,6 @@ export interface FeedstockWithRelations {
   facilityName: string | null;
   supplierName: string | null;
   supplierCode: string | null;
-  driverName: string | null;
   vehiclePlateNumber: string | null;
   feedstockTypeName: string | null;
   feedstockTypeCategory: string | null;
@@ -85,7 +82,6 @@ export interface CreateFeedstockInput {
   facilityId: string;
   deliveryDate: Date;
   supplierId: string;
-  driverId?: string | null;
   vehicleId?: string | null;
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
@@ -113,7 +109,6 @@ const feedstockSelectFields = {
   status: feedstocks.status,
   deliveryDate: feedstocks.deliveryDate,
   supplierId: feedstocks.supplierId,
-  driverId: feedstocks.driverId,
   vehicleId: feedstocks.vehicleId,
   gpsLatitude: feedstocks.gpsLatitude,
   gpsLongitude: feedstocks.gpsLongitude,
@@ -131,7 +126,6 @@ const feedstockSelectFields = {
   facilityName: facilities.name,
   supplierName: suppliers.name,
   supplierCode: suppliers.code,
-  driverName: drivers.name,
   vehiclePlateNumber: vehicles.name,
   feedstockTypeName: feedstockTypes.name,
   feedstockTypeCategory: feedstockTypes.category,
@@ -145,7 +139,6 @@ function feedstockBaseQuery() {
     .from(feedstocks)
     .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
     .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
-    .leftJoin(drivers, eq(feedstocks.driverId, drivers.id))
     .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
     .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
     .leftJoin(storageLocations, eq(feedstocks.storageLocationId, storageLocations.id));
@@ -300,6 +293,19 @@ export async function createFeedstock(
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
+  // Look up feedstock type category for bin-type enforcement
+  const [feedstockType] = await db
+    .select({ category: feedstockTypes.category })
+    .from(feedstockTypes)
+    .where(eq(feedstockTypes.id, data.feedstockTypeId));
+
+  if (!feedstockType) {
+    throw new Error("Feedstock type not found");
+  }
+
+  const isIngredient = feedstockType.category === "ingredient";
+  const expectedBinType = isIngredient ? "ingredient_bin" : "feedstock_bin";
+
   // Batch-validate bin type compatibility for all allocations
   const binIds = data.allocations.map((a) => a.storageLocationId);
   const bins = await db
@@ -321,8 +327,11 @@ export async function createFeedstock(
     if (bin.facilityId !== data.facilityId) {
       throw new Error(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
-    if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
-      throw new Error(`Storage bin ${bin.id} is not a feedstock or ingredient bin`);
+    if (bin.type !== expectedBinType) {
+      const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
+      throw new Error(
+        `${isIngredient ? "Ingredient" : "Feedstock"} materials must be allocated to ${label}, not a ${bin.type.replace("_", " ")}.`
+      );
     }
     if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
       throw new Error(
@@ -354,7 +363,6 @@ export async function createFeedstock(
           // Delivery fields
           deliveryDate: data.deliveryDate,
           supplierId: data.supplierId,
-          driverId: data.driverId ?? null,
           vehicleId: data.vehicleId ?? null,
           gpsLatitude: data.gpsLatitude ?? null,
           gpsLongitude: data.gpsLongitude ?? null,
@@ -411,7 +419,6 @@ export async function updateFeedstock(
     facilityId?: string;
     deliveryDate?: Date;
     supplierId?: string;
-    driverId?: string | null;
     vehicleId?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
@@ -457,8 +464,21 @@ export async function updateFeedstock(
       if (bin.facilityId !== facId) {
         throw new Error(`Storage bin ${binId} does not belong to the selected facility`);
       }
-      if (bin.type !== "feedstock_bin" && bin.type !== "ingredient_bin") {
-        throw new Error(`Storage bin ${binId} is not a feedstock or ingredient bin`);
+
+      // Enforce ingredient-category → ingredient-bin routing
+      const [ft] = await db
+        .select({ category: feedstockTypes.category })
+        .from(feedstockTypes)
+        .where(eq(feedstockTypes.id, typeId));
+
+      const isIngredient = ft?.category === "ingredient";
+      const expectedBinType = isIngredient ? "ingredient_bin" : "feedstock_bin";
+
+      if (bin.type !== expectedBinType) {
+        const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
+        throw new Error(
+          `${isIngredient ? "Ingredient" : "Feedstock"} materials must be allocated to ${label}.`
+        );
       }
       if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {
         throw new Error(

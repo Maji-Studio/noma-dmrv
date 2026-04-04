@@ -30,6 +30,11 @@ import { WetMassWarning } from "./wet-mass-warning";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
+const GPS_HELPER_AUTO_FILLED = "Auto-filled from supplier";
+const GPS_HELPER_NO_COORDS = "Supplier has no GPS coordinates";
+const GPS_HELPER_LATITUDE = "-90 to 90";
+const GPS_HELPER_LONGITUDE = "-180 to 180";
+
 // ============================================
 // Component
 // ============================================
@@ -62,6 +67,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
@@ -110,12 +116,18 @@ export function FeedstockForm({
     }
   }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
 
-  // Auto-fill GPS from supplier
+  // Auto-fill GPS from supplier (only when current values are empty, preserving persisted values in edit mode)
   useEffect(() => {
     if (!selectedSupplier) return;
-    setValue("gpsLatitude", selectedSupplier.gpsLatitude ?? null, SET_VALUE_OPTS);
-    setValue("gpsLongitude", selectedSupplier.gpsLongitude ?? null, SET_VALUE_OPTS);
-  }, [selectedSupplier, setValue]);
+    const currentLat = getValues("gpsLatitude");
+    const currentLng = getValues("gpsLongitude");
+    if (currentLat == null || currentLat === "") {
+      setValue("gpsLatitude", selectedSupplier.gpsLatitude ?? null, SET_VALUE_OPTS);
+    }
+    if (currentLng == null || currentLng === "") {
+      setValue("gpsLongitude", selectedSupplier.gpsLongitude ?? null, SET_VALUE_OPTS);
+    }
+  }, [selectedSupplier, setValue, getValues]);
 
   // Calculated dry mass
   const deliveredDryMassKg =
@@ -219,7 +231,7 @@ export function FeedstockForm({
               id="gpsLatitude"
               label="GPS Latitude"
               error={errors.gpsLatitude?.message}
-              helperText={watchedSupplierId ? (supplierHasGps ? "Auto-filled from supplier" : "Supplier has no GPS coordinates") : "-90 to 90"}
+              helperText={watchedSupplierId ? (supplierHasGps ? GPS_HELPER_AUTO_FILLED : GPS_HELPER_NO_COORDS) : GPS_HELPER_LATITUDE}
             >
               <FormInput
                 id="gpsLatitude"
@@ -237,7 +249,7 @@ export function FeedstockForm({
               id="gpsLongitude"
               label="GPS Longitude"
               error={errors.gpsLongitude?.message}
-              helperText={watchedSupplierId ? (supplierHasGps ? "Auto-filled from supplier" : "Supplier has no GPS coordinates") : "-180 to 180"}
+              helperText={watchedSupplierId ? (supplierHasGps ? GPS_HELPER_AUTO_FILLED : GPS_HELPER_NO_COORDS) : GPS_HELPER_LONGITUDE}
             >
               <FormInput
                 id="gpsLongitude"

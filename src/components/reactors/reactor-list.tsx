@@ -299,10 +299,10 @@ export function ReactorList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Total Capacity"
-          value={`${totalThroughput.toLocaleString()} kg`}
+          title="Total Throughput"
+          value={`${totalThroughput.toLocaleString()} tph`}
           icon={<Flask size={24} weight="bold" />}
-          description="Combined capacity on this page"
+          description="Combined nominal throughput on this page"
           isLoading={isLoading}
         />
       </div>
