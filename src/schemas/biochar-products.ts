@@ -7,6 +7,13 @@ import { z } from "zod";
 import { emptyToNull } from "./helpers";
 
 // ============================================
+// Constants
+// ============================================
+
+export const MOISTURE_MIN = 0;
+export const MOISTURE_MAX = 100;
+
+// ============================================
 // Status Enum
 // ============================================
 
@@ -46,6 +53,7 @@ export const biocharProductFormSchema = z.object({
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
   massKg: z.number().min(0, "Mass must be a positive number").nullable().optional(),
+  moistureContentPercent: z.number().min(MOISTURE_MIN, "Moisture must be 0-100%").max(MOISTURE_MAX, "Moisture must be 0-100%").nullable().optional(),
   densityKgM3: z.number().min(0, "Density must be a positive number").nullable().optional(),
 });
 
@@ -85,6 +93,7 @@ export const updateBiocharProductSchema = z.object({
   linkedProductionRunId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   massKg: z.number().min(0).optional().nullable(),
+  moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional().nullable(),
   densityKgM3: z.number().min(0).optional().nullable(),
 });
 
