@@ -14,6 +14,7 @@ import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useSupplier } from "@/hooks/use-suppliers";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -96,6 +97,11 @@ export function FeedstockForm({
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedSupplierId = useWatch({ control, name: "supplierId" });
+
+  // Fetch supplier GPS data when a supplier is selected
+  const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
+  const supplierHasGps = selectedSupplier?.gpsLatitude != null && selectedSupplier?.gpsLongitude != null;
 
   // Auto-set facility from context
   useEffect(() => {
@@ -103,6 +109,13 @@ export function FeedstockForm({
       setValue("facilityId", contextFacilityId);
     }
   }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
+
+  // Auto-fill GPS from supplier
+  useEffect(() => {
+    if (!selectedSupplier) return;
+    setValue("gpsLatitude", selectedSupplier.gpsLatitude ?? null, SET_VALUE_OPTS);
+    setValue("gpsLongitude", selectedSupplier.gpsLongitude ?? null, SET_VALUE_OPTS);
+  }, [selectedSupplier, setValue]);
 
   // Calculated dry mass
   const deliveredDryMassKg =
@@ -206,7 +219,7 @@ export function FeedstockForm({
               id="gpsLatitude"
               label="GPS Latitude"
               error={errors.gpsLatitude?.message}
-              helperText="-90 to 90"
+              helperText={watchedSupplierId ? (supplierHasGps ? "Auto-filled from supplier" : "Supplier has no GPS coordinates") : "-90 to 90"}
             >
               <FormInput
                 id="gpsLatitude"
@@ -214,6 +227,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
+                readOnly={!!watchedSupplierId}
                 error={!!errors.gpsLatitude}
                 {...register("gpsLatitude", { setValueAs: numericValue })}
               />
@@ -223,7 +237,7 @@ export function FeedstockForm({
               id="gpsLongitude"
               label="GPS Longitude"
               error={errors.gpsLongitude?.message}
-              helperText="-180 to 180"
+              helperText={watchedSupplierId ? (supplierHasGps ? "Auto-filled from supplier" : "Supplier has no GPS coordinates") : "-180 to 180"}
             >
               <FormInput
                 id="gpsLongitude"
@@ -231,6 +245,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., 37.3404"
                 disabled={isSubmitting}
+                readOnly={!!watchedSupplierId}
                 error={!!errors.gpsLongitude}
                 {...register("gpsLongitude", { setValueAs: numericValue })}
               />

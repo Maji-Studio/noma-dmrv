@@ -81,6 +81,7 @@ const FEEDSTOCK_CATEGORIES = [
   { value: "industrial", label: "Industrial" },
   { value: "municipal", label: "Municipal" },
   { value: "invasive", label: "Invasive Species" },
+  { value: "ingredient", label: "Ingredient" },
 ];
 
 export function FeedstockTypeQuickAddDialog({
