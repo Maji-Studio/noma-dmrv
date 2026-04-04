@@ -1,0 +1,1 @@
+ALTER TABLE "biochar_products" ADD COLUMN "moisture_content_percent" real;

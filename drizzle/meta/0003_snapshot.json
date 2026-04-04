@@ -1,6 +1,6 @@
 {
-  "id": "3a49d08d-b6cc-4010-b57e-873f988c54b9",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "65c20618-2a30-4521-abc0-46049e3e8115",
+  "prevId": "0551890e-1477-4e5b-a439-1db25156322b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3090,6 +3090,14 @@
         "feedstocks_moisture_content_percent_range": {
           "name": "feedstocks_moisture_content_percent_range",
           "value": "\"feedstocks\".\"moisture_content_percent\" is null or (\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" <= 100)"
+        },
+        "feedstocks_gps_latitude_range": {
+          "name": "feedstocks_gps_latitude_range",
+          "value": "\"feedstocks\".\"gps_latitude\" is null or (\"feedstocks\".\"gps_latitude\" >= -90 and \"feedstocks\".\"gps_latitude\" <= 90)"
+        },
+        "feedstocks_gps_longitude_range": {
+          "name": "feedstocks_gps_longitude_range",
+          "value": "\"feedstocks\".\"gps_longitude\" is null or (\"feedstocks\".\"gps_longitude\" >= -180 and \"feedstocks\".\"gps_longitude\" <= 180)"
         }
       },
       "isRLSEnabled": false
@@ -4550,6 +4558,12 @@
         },
         "mass_kg": {
           "name": "mass_kg",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moisture_content_percent": {
+          "name": "moisture_content_percent",
           "type": "real",
           "primaryKey": false,
           "notNull": false

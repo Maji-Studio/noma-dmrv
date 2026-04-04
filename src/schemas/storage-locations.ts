@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, latitudeSchema, longitudeSchema } from "./helpers";
+import { emptyToNull } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -17,15 +17,10 @@ export const storageLocationTypes = [
   "feedstock_bin",
   "biochar_bin",
   "product_bin",
+  "ingredient_bin",
 ] as const;
 
 export type StorageLocationType = (typeof storageLocationTypes)[number];
-
-// ============================================
-// GPS Coordinate Validation
-// ============================================
-
-// GPS schemas imported from ./helpers
 
 // ============================================
 // Storage Location Form Schema (Client-side validation)
@@ -52,8 +47,7 @@ export const storageLocationFormSchema = z.object({
     .positive("Capacity must be a positive number")
     .optional()
     .nullable(),
-  latitude: latitudeSchema,
-  longitude: longitudeSchema,
+  feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
   storageMethod: z
     .string()
     .max(255, "Storage method must be less than 255 characters")
@@ -92,8 +86,7 @@ export const updateStorageLocationSchema = z.object({
   type: z.enum(storageLocationTypes).optional(),
   facilityId: z.string().uuid().optional(),
   capacityKg: z.number().positive().optional().nullable(),
-  latitude: latitudeSchema,
-  longitude: longitudeSchema,
+  feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
   supplierReferenceId: z.string().max(100).optional().nullable(),
@@ -168,27 +161,8 @@ export function formatStorageLocationType(type: StorageLocationType): string {
     feedstock_bin: "Feedstock Bin",
     biochar_bin: "Biochar Bin",
     product_bin: "Product Bin",
+    ingredient_bin: "Ingredient Bin",
   };
   return labels[type];
 }
 
-// ============================================
-// GPS Validation Refinement
-// ============================================
-
-/**
- * Extended storage location form schema with GPS validation
- * Both latitude and longitude must be provided together
- */
-export const storageLocationFormSchemaWithGpsValidation =
-  storageLocationFormSchema.refine(
-    (data) => {
-      const hasLat = data.latitude != null;
-      const hasLng = data.longitude != null;
-      return hasLat === hasLng;
-    },
-    {
-      message: "Both latitude and longitude must be provided together",
-      path: ["latitude"],
-    }
-  );

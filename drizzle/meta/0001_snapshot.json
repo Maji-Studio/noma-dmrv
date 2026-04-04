@@ -1,6 +1,6 @@
 {
-  "id": "3a49d08d-b6cc-4010-b57e-873f988c54b9",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "6c797953-6565-49f6-be5b-5e2eae989c70",
+  "prevId": "3a49d08d-b6cc-4010-b57e-873f988c54b9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -273,6 +273,32 @@
           "value": "\"soil_temperature_measurements\".\"gps_longitude\" is null or (\"soil_temperature_measurements\".\"gps_longitude\" >= -180 and \"soil_temperature_measurements\".\"gps_longitude\" <= 180)"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.test_table": {
+      "name": "test_table",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.account": {
@@ -3090,6 +3116,14 @@
         "feedstocks_moisture_content_percent_range": {
           "name": "feedstocks_moisture_content_percent_range",
           "value": "\"feedstocks\".\"moisture_content_percent\" is null or (\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" <= 100)"
+        },
+        "feedstocks_gps_latitude_range": {
+          "name": "feedstocks_gps_latitude_range",
+          "value": "\"feedstocks\".\"gps_latitude\" is null or (\"feedstocks\".\"gps_latitude\" >= -90 and \"feedstocks\".\"gps_latitude\" <= 90)"
+        },
+        "feedstocks_gps_longitude_range": {
+          "name": "feedstocks_gps_longitude_range",
+          "value": "\"feedstocks\".\"gps_longitude\" is null or (\"feedstocks\".\"gps_longitude\" >= -180 and \"feedstocks\".\"gps_longitude\" <= 180)"
         }
       },
       "isRLSEnabled": false

@@ -190,7 +190,7 @@ export function ReactorForm({
             id="capacityKg"
             label="Capacity (kg)"
             error={errors.capacityKg?.message}
-            helperText="Production capacity in kilograms"
+            helperText="Maximum batch capacity in kilograms"
           >
             <FormInput
               id="capacityKg"
