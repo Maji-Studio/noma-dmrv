@@ -1,28 +1,40 @@
 /**
  * FeedstockForm component
- * Multi-section form for creating/editing feedstocks
+ * Unified form combining delivery info + material + bin allocations.
+ * Supports split deliveries (one truck → multiple bins) and
+ * shows a dry mass warning when allocated > delivered.
  */
 "use client";
 
 import { useEffect } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { FormField, FormInput, FormTextarea, FormFileUpload, FormEntitySelect } from "@/components/forms";
+import { toDateInputValue } from "@/lib/date-utils";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
-import { getFeedstockDeliveryByIdFn } from "@/fn/feedstock-deliveries";
+import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
+import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
+import { useQuickAddDialog } from "@/components/forms/entity-select";
+import { BinAllocationRow } from "./bin-allocation-row";
+import { WetMassWarning } from "./wet-mass-warning";
+
+const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 // ============================================
 // Component
 // ============================================
 
 interface FeedstockFormProps {
+  /** Existing feedstock for editing (undefined = create mode) */
   feedstock?: FeedstockWithRelations;
   onSubmit: (data: FeedstockFormData) => Promise<void> | void;
   onCancel?: () => void;
@@ -38,33 +50,62 @@ export function FeedstockForm({
   submitLabel,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
+  const { facilityId: contextFacilityId } = useFacilityContext();
+
+  // Quick-add dialogs
+  const vehicleDialog = useQuickAddDialog();
+  const feedstockTypeDialog = useQuickAddDialog();
 
   const {
     register,
     handleSubmit,
     control,
     setValue,
-    getValues,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
     defaultValues: {
-      feedstockDeliveryId: feedstock?.feedstockDeliveryId ?? "",
-      facilityId: feedstock?.facilityId ?? "",
-      massWetKg: feedstock?.massWetKg ?? ("" as unknown as number),
-      moistureContentPercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
-      massDryKg: feedstock?.massDryKg ?? ("" as unknown as number),
-      storageLocationId: feedstock?.storageLocationId ?? "",
+      facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
+      deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
+      supplierId: feedstock?.supplierId ?? "",
+      vehicleId: feedstock?.vehicleId ?? "",
+      gpsLatitude: feedstock?.gpsLatitude ?? null,
+      gpsLongitude: feedstock?.gpsLongitude ?? null,
+      feedstockTypeId: feedstock?.feedstockTypeId ?? "",
+      totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
+      moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+      allocations: feedstock
+        ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
+        : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
+      overrideJustification: feedstock?.overrideJustification ?? "",
       notes: feedstock?.notes ?? "",
     },
   });
 
-  const deliveryId = useWatch({ control, name: "feedstockDeliveryId" });
-  const watchWetMass = useWatch({ control, name: "massWetKg" });
-  const watchMoisture = useWatch({ control, name: "moistureContentPercent" });
+  // Cast control for FormEntitySelect compatibility (z.preprocess makes input types `unknown`)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formControl = control as any;
 
-  // Auto-calculate dry mass from wet mass and moisture using shared utility
-  const calculatedDryMass =
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "allocations",
+  });
+
+  // Watch values for dry mass calculation
+  const watchWetMass = useWatch({ control, name: "totalWetMassKg" });
+  const watchMoisture = useWatch({ control, name: "moisturePercent" });
+  const watchAllocations = useWatch({ control, name: "allocations" });
+  const watchedFacilityId = useWatch({ control, name: "facilityId" });
+
+  // Auto-set facility from context
+  useEffect(() => {
+    if (!feedstock && contextFacilityId && !watchedFacilityId) {
+      setValue("facilityId", contextFacilityId);
+    }
+  }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
+
+  // Calculated dry mass
+  const deliveredDryMassKg =
     typeof watchWetMass === "number" &&
     typeof watchMoisture === "number" &&
     watchWetMass >= 0 &&
@@ -73,51 +114,14 @@ export function FeedstockForm({
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
-  // Sync calculated dry mass into the form (clear when inputs become invalid)
-  useEffect(() => {
-    if (calculatedDryMass !== null) {
-      setValue("massDryKg", calculatedDryMass);
-    } else {
-      setValue("massDryKg", undefined as unknown as number);
-    }
-  }, [calculatedDryMass, setValue]);
+  // Sum of allocated wet mass
+  const allocatedTotalWetKg = (watchAllocations ?? []).reduce((sum, a) => {
+    const val = typeof a.allocatedWetMassKg === "number" ? a.allocatedWetMassKg : 0;
+    return sum + val;
+  }, 0);
 
-  // Auto-populate facilityId when delivery changes
-  useEffect(() => {
-    if (!deliveryId) {
-      setValue("facilityId", "");
-      return;
-    }
-
-    let active = true;
-    getFeedstockDeliveryByIdFn(deliveryId)
-      .then((result) => {
-        if (!active) return;
-        if (result.success) {
-          setValue("facilityId", result.data.facilityId);
-          if (result.data.wetMassKg !== null) {
-            const currentWetMass = getValues("massWetKg");
-            const shouldPrefillWetMass =
-              currentWetMass === undefined ||
-              currentWetMass === null ||
-              currentWetMass === "";
-
-            if (shouldPrefillWetMass || !isEditMode) {
-              setValue("massWetKg", result.data.wetMassKg, {
-                shouldDirty: shouldPrefillWetMass ? false : true,
-                shouldValidate: true,
-              });
-            }
-          }
-        } else {
-          setValue("facilityId", "");
-        }
-      })
-      .catch(() => {
-        if (active) setValue("facilityId", "");
-      });
-    return () => { active = false; };
-  }, [deliveryId, getValues, isEditMode, setValue]);
+  const showOverageWarning =
+    typeof watchWetMass === "number" && allocatedTotalWetKg > watchWetMass;
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
@@ -128,166 +132,285 @@ export function FeedstockForm({
   return (
     <>
       <form onSubmit={handleFormSubmit} className="space-y-20">
-        {/* Reference Section */}
+        {/* Delivery Information */}
         <div className="space-y-20">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Reference
-          </h3>
+          <SectionLabel>
+            Delivery Information
+          </SectionLabel>
 
-          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+          {!contextFacilityId && !feedstock && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+              <FormEntitySelect
+                control={formControl}
+                name="facilityId"
+                label="Facility"
+                entityType="facility"
+                placeholder="Select facility..."
+                disabled={isSubmitting}
+                required
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormField
+              id="deliveryDate"
+              label="Delivery Date"
+              error={errors.deliveryDate?.message}
+              required
+            >
+              <FormInput
+                id="deliveryDate"
+                type="date"
+                disabled={isSubmitting}
+                error={!!errors.deliveryDate}
+                {...register("deliveryDate")}
+              />
+            </FormField>
+
             <FormEntitySelect
-              control={control}
-              name="feedstockDeliveryId"
-              label="Feedstock Delivery"
-              entityType="feedstockDelivery"
-              placeholder="Select delivery..."
+              control={formControl}
+              name="supplierId"
+              label="Supplier"
+              entityType="supplier"
+              placeholder="Select supplier..."
               disabled={isSubmitting}
               required
             />
           </div>
         </div>
 
-        {/* Mass & Moisture Section */}
+        {/* Transport Details */}
         <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Mass & Moisture
-          </h3>
+          <SectionLabel>
+            Transport Details
+          </SectionLabel>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormEntitySelect
+              control={formControl}
+              name="vehicleId"
+              label="Vehicle"
+              entityType="vehicle"
+              placeholder="Select vehicle..."
+              disabled={isSubmitting}
+              allowCreate
+              alwaysShowSearch
+              createLabel="Add new vehicle"
+              onCreateNew={() => vehicleDialog.open()}
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
-              id="massWetKg"
-              label="Wet Mass (kg)"
-              error={errors.massWetKg?.message}
-              helperText="As-received weight"
-              required
+              id="gpsLatitude"
+              label="GPS Latitude"
+              error={errors.gpsLatitude?.message}
+              helperText="-90 to 90"
             >
               <FormInput
-                id="massWetKg"
+                id="gpsLatitude"
                 type="number"
-                step="0.01"
-                min="0"
-                placeholder="e.g., 1800"
+                step="any"
+                placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
-                error={!!errors.massWetKg}
-                {...register("massWetKg", { setValueAs: numericValue })}
+                error={!!errors.gpsLatitude}
+                {...register("gpsLatitude", { setValueAs: numericValue })}
               />
             </FormField>
 
             <FormField
-              id="moistureContentPercent"
-              label="Moisture (%)"
-              error={errors.moistureContentPercent?.message}
-              helperText="0–100%"
+              id="gpsLongitude"
+              label="GPS Longitude"
+              error={errors.gpsLongitude?.message}
+              helperText="-180 to 180"
+            >
+              <FormInput
+                id="gpsLongitude"
+                type="number"
+                step="any"
+                placeholder="e.g., 37.3404"
+                disabled={isSubmitting}
+                error={!!errors.gpsLongitude}
+                {...register("gpsLongitude", { setValueAs: numericValue })}
+              />
+            </FormField>
+          </div>
+        </div>
+
+        {/* Material Details */}
+        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>
+            Material
+          </SectionLabel>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormEntitySelect
+              control={formControl}
+              name="feedstockTypeId"
+              label="Feedstock Type"
+              entityType="feedstockType"
+              placeholder="Select feedstock type..."
+              disabled={isSubmitting}
+              required
+              allowCreate
+              createLabel="Add new feedstock type"
+              onCreateNew={() => feedstockTypeDialog.open()}
+              hideSearch
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormField
+              id="totalWetMassKg"
+              label="Total Wet Mass (kg)"
+              error={errors.totalWetMassKg?.message}
+              helperText="As-received weight of the entire delivery"
               required
             >
               <FormInput
-                id="moistureContentPercent"
+                id="totalWetMassKg"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="e.g., 1500"
+                disabled={isSubmitting}
+                error={!!errors.totalWetMassKg}
+                {...register("totalWetMassKg", { setValueAs: numericValue })}
+              />
+            </FormField>
+
+            <FormField
+              id="moisturePercent"
+              label="Moisture Content (%)"
+              error={errors.moisturePercent?.message}
+              helperText="0-100%"
+              required
+            >
+              <FormInput
+                id="moisturePercent"
                 type="number"
                 step="0.1"
                 min="0"
                 max="100"
                 placeholder="e.g., 35"
                 disabled={isSubmitting}
-                error={!!errors.moistureContentPercent}
-                {...register("moistureContentPercent", { setValueAs: numericValue })}
+                error={!!errors.moisturePercent}
+                {...register("moisturePercent", { setValueAs: numericValue })}
               />
             </FormField>
           </div>
 
-          {/* Auto-calculated dry mass */}
-          <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+          {/* Dry mass preview */}
+          <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+            <span className="body-small text-[var(--color-text-tertiary)]">Delivered Dry Mass (kg)</span>
             <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              {calculatedDryMass !== null
-                ? `${calculatedDryMass.toFixed(2)} kg`
-                : "—"}
+              {deliveredDryMassKg !== null ? `${deliveredDryMassKg.toFixed(2)} kg` : "\u2014"}
             </span>
-            {calculatedDryMass !== null && (
+            {deliveredDryMassKg !== null && (
               <span className="body-small text-[var(--color-text-quaternary)]">
-                = {watchWetMass} × (1 − {watchMoisture}%)
+                = {Number(watchWetMass ?? 0).toFixed(2)} &times; (1 &minus; {Number(watchMoisture ?? 0).toFixed(2)}%)
               </span>
             )}
           </div>
-          {errors.massDryKg?.message && (
-            <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
+        </div>
+
+        {/* Bin Allocations */}
+        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+          <div className="flex items-center justify-between">
+            <SectionLabel>
+              Bin Allocations
+            </SectionLabel>
+            {!isEditMode && (
+              <Button
+                type="button"
+                variant="default"
+                size="small"
+                onClick={() => append({ storageLocationId: "", allocatedWetMassKg: "" as unknown as number })}
+                disabled={isSubmitting}
+              >
+                <Plus size={16} weight="bold" />
+                Add Bin
+              </Button>
+            )}
+          </div>
+
+          {errors.allocations?.message && (
+            <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
           )}
 
-          {/* Hidden field to submit calculated value */}
-          <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
-        </div>
+          <div className="space-y-12">
+            {fields.map((field, index) => (
+              <BinAllocationRow
+                key={field.id}
+                index={index}
+                control={formControl}
+                massRegister={register(`allocations.${index}.allocatedWetMassKg`, { setValueAs: numericValue })}
+                massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
+                storageError={errors.allocations?.[index]?.storageLocationId as FieldError | undefined}
+                canRemove={fields.length > 1}
+                onRemove={() => remove(index)}
+                disabled={isSubmitting}
+              />
+            ))}
+          </div>
 
-        {/* Storage Section */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Storage
-          </h3>
+          {/* Allocation summary */}
+          {fields.length > 1 && (
+            <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+              <span className="body-small text-[var(--color-text-tertiary)]">Total Allocated</span>
+              <span className="body-medium font-medium text-[var(--color-text-primary)]">
+                {allocatedTotalWetKg.toFixed(2)} kg
+              </span>
+              {typeof watchWetMass === "number" && (
+                <span className="body-small text-[var(--color-text-quaternary)]">
+                  of {watchWetMass.toFixed(2)} kg delivered
+                </span>
+              )}
+            </div>
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormEntitySelect
-              control={control}
-              name="storageLocationId"
-              label="Storage Location"
-              entityType="storageLocation"
-              placeholder="Select feedstock bin..."
+          {/* Overage warning */}
+          {showOverageWarning && (
+            <WetMassWarning
+              allocatedKg={allocatedTotalWetKg}
+              deliveredKg={watchWetMass as number}
+              justificationRegister={register("overrideJustification")}
+              justificationError={errors.overrideJustification?.message}
               disabled={isSubmitting}
-              filterBy={{ type: "feedstock_bin" }}
             />
-          </div>
+          )}
         </div>
 
-        {/* Documentation Section */}
+        {/* Documentation */}
         <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          <SectionLabel>
             Documentation
-          </h3>
+          </SectionLabel>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <div className="md:col-span-2">
-              <FormField
-                id="attachments"
-                label="Attachments"
-                helperText="Upload photos, delivery notes, weighbridge tickets, or lab reports"
-              >
-                <FormFileUpload
-                  id="attachments"
-                  accept="image/*,.pdf,.csv,.xlsx"
-                  disabled={isSubmitting}
-                />
-              </FormField>
-            </div>
-
-            <div className="md:col-span-2">
-              <FormField
+          <div className="grid grid-cols-1 gap-y-20">
+            <FormField
+              id="notes"
+              label="Notes"
+              error={errors.notes?.message}
+              helperText="Delivery notes, weighbridge tickets, or supplier references"
+            >
+              <FormTextarea
                 id="notes"
-                label="Notes"
-                error={errors.notes?.message}
-                helperText="Additional notes or documentation references"
-              >
-                <FormTextarea
-                  id="notes"
-                  placeholder="Enter supplier batch notes, traceability references, or receiving observations..."
-                  disabled={isSubmitting}
-                  error={!!errors.notes}
-                  rows={4}
-                  {...register("notes")}
-                />
-              </FormField>
-            </div>
+                placeholder="Enter delivery note IDs, weighbridge tickets, supplier batch references..."
+                disabled={isSubmitting}
+                error={!!errors.notes}
+                rows={3}
+                {...register("notes")}
+              />
+            </FormField>
           </div>
         </div>
-
-        {/* Hidden facilityId field */}
-        <input type="hidden" {...register("facilityId")} />
 
         {/* Form Actions */}
         <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
           {onCancel && (
-            <Button
-              type="button"
-              variant="default"
-              onClick={onCancel}
-              disabled={isSubmitting}
-            >
+            <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
               Cancel
             </Button>
           )}
@@ -296,6 +419,25 @@ export function FeedstockForm({
           </Button>
         </div>
       </form>
+
+      {/* Quick-add dialogs */}
+      <VehicleQuickAddDialog
+        isOpen={vehicleDialog.isOpen}
+        onClose={vehicleDialog.close}
+        onSuccess={(vehicle) => {
+          setValue("vehicleId", vehicle.id, SET_VALUE_OPTS);
+          vehicleDialog.close();
+        }}
+      />
+
+      <FeedstockTypeQuickAddDialog
+        isOpen={feedstockTypeDialog.isOpen}
+        onClose={feedstockTypeDialog.close}
+        onSuccess={(feedstockType) => {
+          setValue("feedstockTypeId", feedstockType.id, SET_VALUE_OPTS);
+          feedstockTypeDialog.close();
+        }}
+      />
     </>
   );
 }

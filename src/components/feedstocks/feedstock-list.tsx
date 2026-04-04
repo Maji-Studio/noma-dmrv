@@ -1,12 +1,12 @@
 /**
  * FeedstockList component
- * Main feedstock listing with CRUD operations
+ * Main feedstock listing with CRUD operations via EntitySideSheet.
  */
 "use client";
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Gauge, Plus, Package } from "@phosphor-icons/react";
+import { Calendar, Package, Plus } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -15,32 +15,17 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
-  useCreateFeedstock,
-  useDeleteFeedstock,
   useFeedstocks,
+  useCreateFeedstock,
   useUpdateFeedstock,
+  useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
 import type { FeedstockFormData } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
-
-// ============================================
-// Helper Functions
-// ============================================
-
-function formatMass(massKg: number | null): string {
-  if (massKg === null) return "—";
-  if (massKg >= 1000) {
-    return `${(massKg / 1000).toFixed(2)} t`;
-  }
-  return `${massKg.toFixed(1)} kg`;
-}
-
-function formatMoisture(moisturePercent: number | null): string {
-  if (moisturePercent === null) return "—";
-  return `${moisturePercent.toFixed(1)}%`;
-}
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 
 // ============================================
 // Column Definitions
@@ -48,23 +33,38 @@ function formatMoisture(moisturePercent: number | null): string {
 
 function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
-  onDelete: (feedstockId: string) => void
+  onDelete: (id: string) => void,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
       accessorKey: "code",
       header: "Code",
       cell: ({ row }) => (
-        <span className="font-medium text-[var(--clr-dark-purple)]">
-          {row.original.code}
-        </span>
+        <span className="font-medium text-[var(--clr-dark-purple)]">{row.original.code}</span>
       ),
     },
     {
-      accessorKey: "feedstockDeliveryCode",
-      header: "Delivery",
+      accessorKey: "deliveryDate",
+      header: "Delivery Date",
       cell: ({ row }) => (
-        <span>{row.original.feedstockDeliveryCode || "—"}</span>
+        <div className="flex items-center gap-2">
+          <Calendar size={16} className="text-[var(--color-text-tertiary)]" />
+          <span>{formatSafeDate(row.original.deliveryDate)}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "supplierName",
+      header: "Supplier",
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span>{row.original.supplierName || "\u2014"}</span>
+          {row.original.supplierCode && (
+            <span className="body-small text-[var(--color-text-tertiary)]">
+              {row.original.supplierCode}
+            </span>
+          )}
+        </div>
       ),
     },
     {
@@ -72,13 +72,20 @@ function createColumns(
       header: "Feedstock Type",
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <span>{row.original.feedstockTypeName || "—"}</span>
+          <span>{row.original.feedstockTypeName || "\u2014"}</span>
           {row.original.feedstockTypeCategory && (
-            <span className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] capitalize">
+            <span className="body-small text-[var(--color-text-tertiary)] capitalize">
               {row.original.feedstockTypeCategory}
             </span>
           )}
         </div>
+      ),
+    },
+    {
+      accessorKey: "massWetKg",
+      header: "Wet Mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMass(row.original.massWetKg)}</span>
       ),
     },
     {
@@ -89,22 +96,10 @@ function createColumns(
       ),
     },
     {
-      accessorKey: "moistureContentPercent",
-      header: "Moisture",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Gauge size={16} className="text-[var(--color-text-tertiary)]" />
-          <span className="font-mono">
-            {formatMoisture(row.original.moistureContentPercent)}
-          </span>
-        </div>
-      ),
-    },
-    {
       accessorKey: "storageLocationName",
-      header: "Storage",
+      header: "Storage Bin",
       cell: ({ row }) => (
-        <span>{row.original.storageLocationName || "—"}</span>
+        <span>{row.original.storageLocationCode ?? row.original.storageLocationName ?? "\u2014"}</span>
       ),
     },
     {
@@ -113,9 +108,7 @@ function createColumns(
       cell: ({ row }) => (
         <StatusBadge
           status={row.original.status === "complete" ? "complete" : "pending"}
-          label={
-            row.original.status === "complete" ? "Complete" : "Missing Data"
-          }
+          label={row.original.status === "complete" ? "Complete" : "Missing Data"}
         />
       ),
     },
@@ -126,20 +119,14 @@ function createColumns(
         <div className="flex items-center justify-end gap-16">
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
+            onClick={(e) => { e.stopPropagation(); onEdit(row.original); }}
             className="h-[32px] px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small"
           >
             Edit
           </button>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
+            onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }}
             className="h-[32px] px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small"
           >
             Delete
@@ -156,32 +143,38 @@ function createColumns(
 // ============================================
 
 export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
+  // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: FeedstockWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingFeedstockId, setDeletingFeedstockId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const { data: feedstocksData, isLoading } = useFeedstocks();
+  // Data
+  const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks();
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
   const toast = useToast();
 
+  // Handlers
   const handleCreate = async (data: FeedstockFormData) => {
     setCreateError(null);
     try {
-      await createFeedstock.mutateAsync(data);
+      const result = await createFeedstock.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Feedstock created successfully");
+      const count = result.feedstocks.length;
+      const msg = result.warning
+        ? `Feedstock created (${count} record${count > 1 ? "s" : ""}). Warning: ${result.warning}`
+        : `Feedstock created successfully (${count} record${count > 1 ? "s" : ""})`;
+      toast.success(msg);
     } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Failed to create feedstock"
-      );
+      setCreateError(error instanceof Error ? error.message : "Failed to create feedstock");
     }
   };
 
@@ -191,61 +184,61 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     try {
       await updateFeedstock.mutateAsync({
         feedstockId: sideSheet.entity.id,
-        ...data,
+        facilityId: data.facilityId,
+        deliveryDate: data.deliveryDate,
+        supplierId: data.supplierId,
+        vehicleId: data.vehicleId || null,
+        gpsLatitude: data.gpsLatitude,
+        gpsLongitude: data.gpsLongitude,
+        feedstockTypeId: data.feedstockTypeId,
+        massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
+        moistureContentPercent: data.moisturePercent,
+        massDryKg: deriveMassDryKg(
+          data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
+          data.moisturePercent
+        ),
+        storageLocationId: data.allocations[0]?.storageLocationId || null,
+        overrideJustification: data.overrideJustification || null,
+        notes: data.notes || null,
       });
       setSideSheet(null);
       toast.success("Feedstock updated successfully");
     } catch (error) {
-      setUpdateError(
-        error instanceof Error ? error.message : "Failed to update feedstock"
-      );
+      setUpdateError(error instanceof Error ? error.message : "Failed to update feedstock");
     }
   };
 
-  const handleDelete = (feedstockId: string) => {
-    setDeletingFeedstockId(feedstockId);
-  };
+  const handleDelete = (id: string) => setDeletingId(id);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingFeedstockId) return;
+    if (!deletingId) return;
     setDeleteError(null);
     try {
-      await deleteFeedstock.mutateAsync(deletingFeedstockId);
-      setDeletingFeedstockId(null);
+      await deleteFeedstock.mutateAsync(deletingId);
+      setDeletingId(null);
       toast.success("Feedstock deleted successfully");
     } catch (error) {
-      setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete feedstock"
-      );
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete feedstock");
     }
   };
 
-  const openCreate = () => {
-    setCreateError(null);
-    setUpdateError(null);
-    setSideSheet({ entity: null, mode: "create" });
-  };
-  const openView = (feedstock: FeedstockWithRelations) => {
-    setSideSheet({ entity: feedstock, mode: "view" });
-  };
-  const openEdit = (feedstock: FeedstockWithRelations) => {
-    setCreateError(null);
-    setUpdateError(null);
-    setSideSheet({ entity: feedstock, mode: "edit" });
-  };
-  const closeSideSheet = () => {
-    setSideSheet(null);
-    setCreateError(null);
-    setUpdateError(null);
-  };
+  const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openView = (feedstock: FeedstockWithRelations) => setSideSheet({ entity: feedstock, mode: "view" });
+  const openEdit = (feedstock: FeedstockWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: feedstock, mode: "edit" }); };
+  const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
   useOpenCreateIntent(openCreate);
 
-  const columns = useMemo(
-    () => createColumns(openEdit, handleDelete),
-    [openEdit, handleDelete]
-  );
+  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const feedstockItems = feedstocksData?.items ?? [];
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col gap-32">
+        <ServerError message={fetchError.message || "Failed to load feedstocks"} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-32">
@@ -254,7 +247,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         <div>
           <h1 className="title-heading-2">Feedstocks</h1>
           <p className="body-small text-[var(--color-text-secondary)] mt-1">
-            Track individual biomass batches linked to deliveries
+            Track incoming biomass deliveries and bin allocations
           </p>
         </div>
         <Button variant="primary" onClick={openCreate}>
@@ -282,7 +275,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             <div className="text-center">
               <h3 className="title-heading-3 mb-1">No feedstocks yet</h3>
               <p className="body-small text-[var(--color-text-secondary)]">
-                Create your first feedstock record to get started
+                Create your first feedstock to get started
               </p>
             </div>
             <Button variant="primary" onClick={openCreate}>
@@ -302,143 +295,90 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {/* Delete Error */}
       {deleteError && <ServerError message={deleteError} />}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation */}
       <DeleteConfirmDialog
-        isOpen={!!deletingFeedstockId}
+        isOpen={!!deletingId}
         title="Delete Feedstock"
         message="Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
-        onCancel={() => {
-          setDeletingFeedstockId(null);
-          setDeleteError(null);
-        }}
+        onCancel={() => { setDeletingId(null); setDeleteError(null); }}
         isPending={deleteFeedstock.isPending}
       />
 
+      {/* Side Sheet */}
       {sideSheet && (
         <EntitySideSheet
           open
           onOpenChange={(open) => !open && closeSideSheet()}
           mode={sideSheet.mode}
-          onModeChange={(mode) =>
-            setSideSheet((prev) => (prev ? { ...prev, mode } : null))
-          }
-          title={
-            sideSheet.mode === "create"
-              ? "Create Feedstock"
-              : sideSheet.entity?.code ?? ""
-          }
+          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+          title={sideSheet.mode === "create" ? "Create Feedstock" : sideSheet.entity?.code ?? ""}
           subtitle={
             sideSheet.mode === "create"
-              ? "Add a new biomass feedstock batch"
+              ? "Add a new biomass delivery with bin allocation"
               : sideSheet.entity
                 ? [
                     sideSheet.entity.feedstockTypeName,
                     formatMass(sideSheet.entity.massDryKg),
-                  ]
-                    .filter(Boolean)
-                    .join(" \u00B7 ") || "Feedstock"
+                    sideSheet.entity.storageLocationCode,
+                  ].filter(Boolean).join(" \u00B7 ") || "Feedstock"
                 : undefined
           }
           editLabel="Edit Feedstock"
-          sections={
-            sideSheet.entity
-              ? [
-                  {
-                    title: "Reference",
-                    fields: [
-                      { label: "Facility", value: sideSheet.entity.facilityName },
-                      { label: "Delivery", value: sideSheet.entity.feedstockDeliveryCode },
-                      { label: "Feedstock Type", value: sideSheet.entity.feedstockTypeName },
-                      {
-                        label: "Category",
-                        value: sideSheet.entity.feedstockTypeCategory ? (
-                          <span className="capitalize">
-                            {sideSheet.entity.feedstockTypeCategory}
-                          </span>
-                        ) : null,
-                      },
-                    ],
-                  },
-                  {
-                    title: "Mass & Moisture",
-                    fields: [
-                      { label: "Dry Mass", value: formatMass(sideSheet.entity.massDryKg) },
-                      {
-                        label: "Wet Mass",
-                        value: sideSheet.entity.massWetKg !== null
-                          ? formatMass(sideSheet.entity.massWetKg)
-                          : null,
-                      },
-                      {
-                        label: "Moisture",
-                        value: sideSheet.entity.moistureContentPercent !== null
-                          ? formatMoisture(sideSheet.entity.moistureContentPercent)
-                          : (
-                            <StatusBadge
-                              status="pending"
-                              label="Missing"
-                              size="small"
-                            />
-                          ),
-                      },
-                    ],
-                  },
-                  {
-                    title: "Storage",
-                    fields: [
-                      { label: "Storage Location", value: sideSheet.entity.storageLocationName },
-                      { label: "Source Region", value: sideSheet.entity.feedstockSourceRegion },
-                    ],
-                  },
-                  {
-                    title: "Status",
-                    fields: [
-                      {
-                        label: "Status",
-                        value: (
-                          <StatusBadge
-                            status={sideSheet.entity.status === "complete" ? "complete" : "pending"}
-                            label={sideSheet.entity.status === "complete" ? "Complete" : "Missing Data"}
-                          />
-                        ),
-                      },
-                    ],
-                  },
-                  ...(sideSheet.entity.notes
-                    ? [
-                        {
-                          title: "Notes",
-                          fields: [
-                            { label: "Notes", value: sideSheet.entity.notes },
-                          ],
-                        },
-                      ]
-                    : []),
-                ]
-              : undefined
-          }
+          sections={sideSheet.entity ? [
+            {
+              title: "Delivery Information",
+              fields: [
+                { label: "Facility", value: sideSheet.entity.facilityName },
+                { label: "Delivery Date", value: formatSafeDate(sideSheet.entity.deliveryDate) },
+                { label: "Supplier", value: sideSheet.entity.supplierName },
+                { label: "Supplier Code", value: sideSheet.entity.supplierCode },
+                { label: "Driver", value: sideSheet.entity.driverName },
+                { label: "Vehicle", value: sideSheet.entity.vehiclePlateNumber },
+              ],
+            },
+            {
+              title: "Material",
+              fields: [
+                { label: "Feedstock Type", value: sideSheet.entity.feedstockTypeName },
+                { label: "Category", value: sideSheet.entity.feedstockTypeCategory ? <span className="capitalize">{sideSheet.entity.feedstockTypeCategory}</span> : null },
+                {
+                  label: "Wet Mass",
+                  value: sideSheet.entity.massWetKg !== null
+                    ? formatMass(sideSheet.entity.massWetKg)
+                    : <StatusBadge status="pending" label="Missing" size="small" />,
+                },
+                { label: "Moisture", value: sideSheet.entity.moistureContentPercent !== null ? `${sideSheet.entity.moistureContentPercent}%` : null },
+                { label: "Dry Mass", value: formatMass(sideSheet.entity.massDryKg) },
+              ],
+            },
+            {
+              title: "Storage",
+              fields: [
+                { label: "Storage Bin", value: sideSheet.entity.storageLocationCode ?? sideSheet.entity.storageLocationName },
+                { label: "Status", value: <StatusBadge status={sideSheet.entity.status === "complete" ? "complete" : "pending"} label={sideSheet.entity.status === "complete" ? "Complete" : "Missing Data"} /> },
+              ],
+            },
+            ...(sideSheet.entity.overrideJustification ? [{
+              title: "Override",
+              fields: [{ label: "Justification", value: sideSheet.entity.overrideJustification }],
+            }] : []),
+            ...(sideSheet.entity.notes ? [{
+              title: "Notes",
+              fields: [{ label: "Notes", value: sideSheet.entity.notes }],
+            }] : []),
+          ] : undefined}
         >
           {(createError || updateError) && (
-            <div className="mb-24">
-              <ServerError message={createError || updateError || ""} />
-            </div>
+            <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>
           )}
           <FeedstockForm
             key={sideSheet.entity?.id ?? "create"}
             feedstock={sideSheet.entity ?? undefined}
-            onSubmit={
-              sideSheet.entity && sideSheet.mode === "edit"
-                ? handleUpdate
-                : handleCreate
-            }
+            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createFeedstock.isPending || updateFeedstock.isPending}
-            submitLabel={
-              sideSheet.entity && sideSheet.mode === "edit"
-                ? "Save Changes"
-                : "Create Feedstock"
-            }
+            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Feedstock"}
           />
         </EntitySideSheet>
       )}

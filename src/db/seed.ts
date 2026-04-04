@@ -319,7 +319,7 @@ async function seed() {
         {
           id: ids.itemIntake,
           projectId: ids.project,
-          title: 'Validate feedstock intake data',
+          title: 'Validate feedstock data',
           description: 'Ensure incoming biomass records are complete and traceable.',
           status: 'active',
         },
@@ -534,10 +534,18 @@ async function seed() {
 
       await tx.insert(schema.feedstocks).values({
         id: ids.feedstock,
-        code: 'FS-2026-001',
+        code: 'FI-2026-001',
         facilityId: ids.facility,
         status: 'complete',
         feedstockDeliveryId: ids.feedstockDelivery,
+        // Delivery fields (absorbed from feedstock_deliveries)
+        deliveryDate: timestamps.deliveryTime,
+        supplierId: ids.supplier,
+        driverId: ids.driver,
+        vehicleId: ids.vehicle,
+        gpsLatitude: -3.3335,
+        gpsLongitude: 37.3383,
+        // Material fields
         feedstockTypeId: ids.feedstockTypeWoodchips,
         massWetKg: 3200,
         massDryKg: 2624,
