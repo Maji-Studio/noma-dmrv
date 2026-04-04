@@ -522,7 +522,6 @@ async function seed() {
         status: 'complete',
         deliveryDate: timestamps.deliveryTime,
         supplierId: ids.supplier,
-        driverId: ids.driver,
         vehicleId: ids.vehicle,
         gpsLatitude: -3.3335,
         gpsLongitude: 37.3383,
@@ -541,7 +540,6 @@ async function seed() {
         // Delivery fields (absorbed from feedstock_deliveries)
         deliveryDate: timestamps.deliveryTime,
         supplierId: ids.supplier,
-        driverId: ids.driver,
         vehicleId: ids.vehicle,
         gpsLatitude: -3.3335,
         gpsLongitude: 37.3383,

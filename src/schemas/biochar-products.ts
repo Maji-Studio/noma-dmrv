@@ -55,6 +55,7 @@ export const biocharProductFormSchema = z.object({
   massKg: z.number().min(0, "Mass must be a positive number").nullable().optional(),
   moistureContentPercent: z.number().min(MOISTURE_MIN, "Moisture must be 0-100%").max(MOISTURE_MAX, "Moisture must be 0-100%").nullable().optional(),
   densityKgM3: z.number().min(0, "Density must be a positive number").nullable().optional(),
+  waterAddedKg: z.number().min(0, "Water added must be a positive number").nullable().optional(),
 });
 
 // ============================================
@@ -95,6 +96,7 @@ export const updateBiocharProductSchema = z.object({
   massKg: z.number().min(0).optional().nullable(),
   moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional().nullable(),
   densityKgM3: z.number().min(0).optional().nullable(),
+  waterAddedKg: z.number().min(0).optional().nullable(),
 });
 
 /**

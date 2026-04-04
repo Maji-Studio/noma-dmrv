@@ -333,7 +333,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 { label: "Delivery Date", value: formatSafeDate(sideSheet.entity.deliveryDate) },
                 { label: "Supplier", value: sideSheet.entity.supplierName },
                 { label: "Supplier Code", value: sideSheet.entity.supplierCode },
-                { label: "Driver", value: sideSheet.entity.driverName },
                 { label: "Vehicle", value: sideSheet.entity.vehiclePlateNumber },
               ],
             },

@@ -104,9 +104,20 @@ export const feedstockCategories = [
   "industrial",
   "municipal",
   "invasive",
+  "ingredient",
 ] as const;
 
 export type FeedstockCategory = (typeof feedstockCategories)[number];
+
+/** Labeled options for feedstock category dropdowns */
+export const FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
+  { value: "forestry", label: "Forestry" },
+  { value: "agricultural", label: "Agricultural" },
+  { value: "industrial", label: "Industrial" },
+  { value: "municipal", label: "Municipal" },
+  { value: "invasive", label: "Invasive Species" },
+  { value: "ingredient", label: "Ingredient" },
+];
 
 /**
  * Schema for quick-adding a feedstock type from entity select dropdown

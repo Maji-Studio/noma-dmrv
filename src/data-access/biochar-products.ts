@@ -149,6 +149,7 @@ export async function getBiocharProducts(
       massKg: biocharProducts.massKg,
       moistureContentPercent: biocharProducts.moistureContentPercent,
       densityKgM3: biocharProducts.densityKgM3,
+      waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
@@ -187,6 +188,7 @@ export async function getBiocharProducts(
     massKg: row.massKg,
     moistureContentPercent: row.moistureContentPercent,
     densityKgM3: row.densityKgM3,
+    waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -246,6 +248,7 @@ export async function getBiocharProductById(
       massKg: biocharProducts.massKg,
       moistureContentPercent: biocharProducts.moistureContentPercent,
       densityKgM3: biocharProducts.densityKgM3,
+      waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
@@ -280,6 +283,7 @@ export async function getBiocharProductById(
     massKg: row.massKg,
     moistureContentPercent: row.moistureContentPercent,
     densityKgM3: row.densityKgM3,
+    waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -329,6 +333,7 @@ export async function createBiocharProduct(
     massKg?: number | null;
     moistureContentPercent?: number | null;
     densityKgM3?: number | null;
+    waterAddedKg?: number | null;
     composition?: Record<string, unknown>;
   }
 ): Promise<BiocharProduct> {
@@ -381,6 +386,7 @@ export async function createBiocharProduct(
       massKg: data.massKg ?? null,
       moistureContentPercent: data.moistureContentPercent ?? null,
       densityKgM3: data.densityKgM3 ?? null,
+      waterAddedKg: data.waterAddedKg ?? null,
       composition: data.composition ?? {},
     })
     .returning();
@@ -409,6 +415,7 @@ export async function updateBiocharProduct(
     massKg?: number | null;
     moistureContentPercent?: number | null;
     densityKgM3?: number | null;
+    waterAddedKg?: number | null;
     composition?: Record<string, unknown>;
   }
 ): Promise<BiocharProduct> {

@@ -176,6 +176,7 @@ export async function createBiocharProductFn(
           massKg: validated.massKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
           densityKgM3: validated.densityKgM3 ?? null,
+          waterAddedKg: validated.waterAddedKg ?? null,
         })
     );
 
@@ -224,6 +225,7 @@ export async function updateBiocharProductFn(
       massKg: validated.massKg,
       moistureContentPercent: validated.moistureContentPercent,
       densityKgM3: validated.densityKgM3,
+      waterAddedKg: validated.waterAddedKg,
     });
 
     return { success: true, data: product };
