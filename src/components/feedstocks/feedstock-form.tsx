@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
@@ -14,6 +14,7 @@ import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useEntityById } from "@/hooks/use-entities";
 import { useSupplier } from "@/hooks/use-suppliers";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui";
@@ -104,6 +105,15 @@ export function FeedstockForm({
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
+  const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
+
+  // Determine bin type filter based on feedstock type category
+  const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
+  const binTypeFilter = !selectedFeedstockType
+    ? "feedstock_bin,ingredient_bin"
+    : selectedFeedstockType.subtitle === "ingredient"
+      ? "ingredient_bin"
+      : "feedstock_bin";
 
   // Fetch supplier GPS data when a supplier is selected
   const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
@@ -116,17 +126,31 @@ export function FeedstockForm({
     }
   }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
 
-  // Auto-fill GPS from supplier (only when current values are empty, preserving persisted values in edit mode)
+  // Track previous supplier's GPS so we can detect auto-filled values vs user-entered values
+  const prevSupplierGpsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+
+  // Auto-fill GPS from supplier: overwrite when empty or still matching previous supplier's auto-fill;
+  // preserve user-entered values that differ from the previous supplier's GPS.
   useEffect(() => {
     if (!selectedSupplier) return;
     const currentLat = getValues("gpsLatitude");
     const currentLng = getValues("gpsLongitude");
-    if (currentLat == null || currentLat === "") {
+    const prev = prevSupplierGpsRef.current;
+
+    const latIsAutoFilled = currentLat == null || currentLat === "" || currentLat === prev.lat;
+    const lngIsAutoFilled = currentLng == null || currentLng === "" || currentLng === prev.lng;
+
+    if (latIsAutoFilled) {
       setValue("gpsLatitude", selectedSupplier.gpsLatitude ?? null, SET_VALUE_OPTS);
     }
-    if (currentLng == null || currentLng === "") {
+    if (lngIsAutoFilled) {
       setValue("gpsLongitude", selectedSupplier.gpsLongitude ?? null, SET_VALUE_OPTS);
     }
+
+    prevSupplierGpsRef.current = {
+      lat: selectedSupplier.gpsLatitude ?? null,
+      lng: selectedSupplier.gpsLongitude ?? null,
+    };
   }, [selectedSupplier, setValue, getValues]);
 
   // Calculated dry mass
@@ -239,7 +263,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
-                readOnly={!!watchedSupplierId}
+                readOnly={!!watchedSupplierId && supplierHasGps}
                 error={!!errors.gpsLatitude}
                 {...register("gpsLatitude", { setValueAs: numericValue })}
               />
@@ -257,7 +281,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., 37.3404"
                 disabled={isSubmitting}
-                readOnly={!!watchedSupplierId}
+                readOnly={!!watchedSupplierId && supplierHasGps}
                 error={!!errors.gpsLongitude}
                 {...register("gpsLongitude", { setValueAs: numericValue })}
               />
@@ -378,6 +402,7 @@ export function FeedstockForm({
                 canRemove={fields.length > 1}
                 onRemove={() => remove(index)}
                 disabled={isSubmitting}
+                binTypeFilter={binTypeFilter}
               />
             ))}
           </div>

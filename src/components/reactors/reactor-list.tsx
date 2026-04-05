@@ -256,7 +256,7 @@ export function ReactorList() {
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
   const methodBEligibleCount = reactors.filter((r) => r.methodBEligibility?.isEligible).length;
-  const totalThroughput = reactors.reduce((sum, r) => sum + (r.capacityKg || 0), 0);
+  const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.capacityKg || 0), 0);
 
   if (fetchError) {
     return (
@@ -300,7 +300,7 @@ export function ReactorList() {
         />
         <StatCard
           title="Total Throughput"
-          value={`${totalThroughput.toLocaleString()} tph`}
+          value={`${totalThroughputTph.toLocaleString()} tph`}
           icon={<Flask size={24} weight="bold" />}
           description="Combined nominal throughput on this page"
           isLoading={isLoading}
