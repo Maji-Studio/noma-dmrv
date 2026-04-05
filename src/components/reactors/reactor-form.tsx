@@ -20,6 +20,8 @@ import {
   samplingMethods,
   formatReactorType,
   formatSamplingMethod,
+  kgToTph,
+  tphToKg,
   type ReactorFormData,
   type ReactorType,
   type SamplingMethod,
@@ -96,7 +98,7 @@ export function ReactorForm({
       facilityId: reactor?.facilityId || contextFacilityId || "",
       reactorType: defaultReactorType,
       samplingMethod: defaultSamplingMethod,
-      capacityKg: reactor?.capacityKg ?? undefined,
+      capacityKg: reactor?.capacityKg != null ? kgToTph(reactor.capacityKg) : undefined,
       specifications: undefined,
     },
   });
@@ -113,8 +115,11 @@ export function ReactorForm({
   const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
 
   const handleFormSubmit = handleSubmit((data) => {
-    // Cast to ReactorFormData since zodResolver validates the data
-    onSubmit(data as ReactorFormData);
+    const formData = data as ReactorFormData;
+    onSubmit({
+      ...formData,
+      capacityKg: formData.capacityKg != null ? tphToKg(formData.capacityKg) : formData.capacityKg,
+    });
   });
 
   return (

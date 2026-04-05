@@ -262,9 +262,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.ghgMaterialityAssessments)
               .where(inArray(schema.ghgMaterialityAssessments.creditBatchId, creditBatchIds));
-            await tx
-              .delete(schema.creditBatchProductionRuns)
-              .where(inArray(schema.creditBatchProductionRuns.creditBatchId, creditBatchIds));
           }
 
           if (applicationIds.length) {
