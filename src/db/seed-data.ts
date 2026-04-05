@@ -178,7 +178,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageFeedArusha,
-          code: 'SL-FEED-ARUSHA-01',
+          code: demoCodes.storageFeedArusha,
           name: 'Arusha Feedstock Storage',
           type: 'feedstock_bin',
           capacityKg: 25000,
@@ -189,7 +189,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageCharArusha,
-          code: 'SL-CHAR-ARUSHA-01',
+          code: demoCodes.storageCharArusha,
           name: 'Arusha Biochar Storage',
           type: 'biochar_bin',
           capacityKg: 18000,
@@ -200,7 +200,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageProdArusha,
-          code: 'SL-PROD-ARUSHA-01',
+          code: demoCodes.storageProdArusha,
           name: 'Arusha Product Dispatch',
           type: 'product_bin',
           capacityKg: 15000,

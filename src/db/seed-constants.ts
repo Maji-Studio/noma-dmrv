@@ -23,6 +23,9 @@ export const demoCodes = {
   storageFeedMoshi: 'SL-FEED-MOSHI-01',
   storageCharMoshi: 'SL-CHAR-MOSHI-01',
   storageProdMoshi: 'SL-PROD-MOSHI-01',
+  storageFeedArusha: 'SL-FEED-ARUSHA-01',
+  storageCharArusha: 'SL-CHAR-ARUSHA-01',
+  storageProdArusha: 'SL-PROD-ARUSHA-01',
 
   // Suppliers
   supplierKili: 'SUP-KILI-001',

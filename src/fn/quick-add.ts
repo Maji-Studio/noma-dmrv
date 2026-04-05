@@ -26,8 +26,8 @@ import {
   type StorageLocationQuickAddData,
 } from "@/schemas/quick-add";
 import type { EntityOption } from "@/components/forms/entity-select/types";
-import { getUser } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
+import { withAction } from "./with-action";
 
 // ============================================
 // Driver Quick Add
@@ -39,33 +39,13 @@ import type { ActionResult } from "@/types/actions";
 export async function createDriverFn(
   data: DriverQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    // Validate input
-    const parsed = driverQuickAddSchema.safeParse(data);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input",
-      };
-    }
-
-    const driver = await withAutoCode(
+  return withAction(async (userId) => {
+    const parsed = driverQuickAddSchema.parse(data);
+    return withAutoCode(
       "DRV", drivers, drivers.code, undefined,
-      (code) => createDriver({ ...parsed.data, code })
+      (code) => createDriver(userId, { ...parsed, code })
     );
-    return { success: true, data: driver };
-  } catch (error) {
-    console.error("Error creating driver:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to create driver",
-    };
-  }
+  }, { fallbackMessage: "Failed to create driver" });
 }
 
 // ============================================
@@ -75,29 +55,10 @@ export async function createDriverFn(
 export async function createOperatorFn(
   data: OperatorQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const parsed = operatorQuickAddSchema.safeParse(data);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input",
-      };
-    }
-
-    const operator = await createOperator(parsed.data);
-    return { success: true, data: operator };
-  } catch (error) {
-    console.error("Error creating operator:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to create operator",
-    };
-  }
+  return withAction(async (userId) => {
+    const parsed = operatorQuickAddSchema.parse(data);
+    return createOperator(userId, parsed);
+  }, { fallbackMessage: "Failed to create operator" });
 }
 
 // ============================================
@@ -110,33 +71,13 @@ export async function createOperatorFn(
 export async function createVehicleFn(
   data: VehicleQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    // Validate input
-    const parsed = vehicleQuickAddSchema.safeParse(data);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input",
-      };
-    }
-
-    const vehicle = await withAutoCode(
+  return withAction(async (userId) => {
+    const parsed = vehicleQuickAddSchema.parse(data);
+    return withAutoCode(
       "VEH", vehicles, vehicles.code, undefined,
-      (code) => createVehicle({ ...parsed.data, code })
+      (code) => createVehicle(userId, { ...parsed, code })
     );
-    return { success: true, data: vehicle };
-  } catch (error) {
-    console.error("Error creating vehicle:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to create vehicle",
-    };
-  }
+  }, { fallbackMessage: "Failed to create vehicle" });
 }
 
 // ============================================
@@ -149,34 +90,13 @@ export async function createVehicleFn(
 export async function createFeedstockTypeFn(
   data: FeedstockTypeQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    // Validate input
-    const parsed = feedstockTypeQuickAddSchema.safeParse(data);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input",
-      };
-    }
-
-    const feedstockType = await withAutoCode(
+  return withAction(async (userId) => {
+    const parsed = feedstockTypeQuickAddSchema.parse(data);
+    return withAutoCode(
       "FT", feedstockTypes, feedstockTypes.code, undefined,
-      (code) => createFeedstockType({ ...parsed.data, code })
+      (code) => createFeedstockType(userId, { ...parsed, code })
     );
-    return { success: true, data: feedstockType };
-  } catch (error) {
-    console.error("Error creating feedstock type:", error);
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create feedstock type",
-    };
-  }
+  }, { fallbackMessage: "Failed to create feedstock type" });
 }
 
 // ============================================
@@ -189,36 +109,20 @@ export async function createFeedstockTypeFn(
 export async function createStorageLocationFn(
   data: StorageLocationQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+  return withAction(async (userId) => {
+    const parsed = storageLocationQuickAddSchema.parse(data);
 
-    const parsed = storageLocationQuickAddSchema.safeParse(data);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input",
-      };
-    }
-
-    const prefix = parsed.data.type === "feedstock_bin" ? "FB"
-      : parsed.data.type === "ingredient_bin" ? "IB"
-      : parsed.data.type === "biochar_bin" ? "BB"
-      : "PB";
-
-    const location = await withAutoCode(
-      prefix, storageLocations, storageLocations.code, undefined,
-      (code) => createStorageLocation({ ...parsed.data, code })
-    );
-    return { success: true, data: location };
-  } catch (error) {
-    console.error("Error creating storage location:", error);
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create storage location",
+    const prefixMap: Record<string, string> = {
+      feedstock_bin: "FB",
+      ingredient_bin: "IB",
+      biochar_bin: "BB",
+      product_bin: "PB",
     };
-  }
+    const prefix = prefixMap[parsed.type] ?? "PB";
+
+    return withAutoCode(
+      prefix, storageLocations, storageLocations.code, undefined,
+      (code) => createStorageLocation(userId, { ...parsed, code })
+    );
+  }, { fallbackMessage: "Failed to create storage location" });
 }

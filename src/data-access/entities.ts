@@ -5,6 +5,7 @@
 
 import { ilike, or, eq, and, inArray, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
+import { requireAuth } from "./utils";
 import {
   facilities,
   reactors,
@@ -33,8 +34,10 @@ interface GetEntitiesParams {
 }
 
 export async function getEntities(
+  userId: string,
   params: GetEntitiesParams
 ): Promise<EntityOption[]> {
+  requireAuth(userId);
   const { entityType, search, filterBy, limit = 50 } = params;
 
   switch (entityType) {
@@ -81,9 +84,11 @@ export async function getEntities(
 }
 
 export async function getEntityById(
+  userId: string,
   entityType: EntityType,
   id: string
 ): Promise<EntityOption | null> {
+  requireAuth(userId);
   switch (entityType) {
     case "facility":
       return getFacilityById(id);
