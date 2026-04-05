@@ -368,9 +368,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             }] : []),
           ] : undefined}
         >
-          {(createError || updateError) && (
-            <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>
-          )}
           <FeedstockForm
             key={sideSheet.entity?.id ?? "create"}
             feedstock={sideSheet.entity ?? undefined}
@@ -378,6 +375,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             onCancel={closeSideSheet}
             isSubmitting={createFeedstock.isPending || updateFeedstock.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Feedstock"}
+            serverError={createError || updateError || undefined}
           />
         </EntitySideSheet>
       )}

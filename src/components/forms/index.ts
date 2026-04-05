@@ -3,6 +3,7 @@
  * Provides reusable form utilities for React Hook Form integration
  */
 
+export { FormActions } from "./form-actions";
 export { FormError } from "./form-error";
 export { ServerError } from "./server-error";
 export { FormField } from "./form-field";
