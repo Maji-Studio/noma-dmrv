@@ -462,6 +462,52 @@ import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
 seedEntityCache(queryClient, "driver", { id: newDriver.id, label: newDriver.name });
 ```
 
+### Cascading / Dependent Selects (`dependsOn`)
+
+When one `FormEntitySelect` depends on another field's value (e.g., storage bins filtered by feedstock type), use the `dependsOn` prop. It does two things:
+
+1. **Re-fetches options** — `filterBy` is already part of the React Query key, so changing it triggers a refetch automatically
+2. **Clears the stale selection** — `dependsOn` watches the parent value(s) and resets the field to `null` when any change (skips initial mount)
+
+```typescript
+const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
+const watchedFacilityId = useWatch({ control, name: "facilityId" });
+
+// Single dependency
+<FormEntitySelect
+  control={control}
+  name="storageLocationId"
+  label="Storage Bin"
+  entityType="storageLocation"
+  filterBy={{ type: "feedstock_bin", feedstockTypeId: watchedFeedstockTypeId || "" }}
+  dependsOn={watchedFeedstockTypeId}
+/>
+
+// Multiple dependencies — clears when either changes
+<FormEntitySelect
+  control={control}
+  name="storageLocationId"
+  label="Storage Bin"
+  entityType="storageLocation"
+  filterBy={{ type: "feedstock_bin", feedstockTypeId: ..., facilityId: ... }}
+  dependsOn={[watchedFeedstockTypeId, watchedFacilityId]}
+/>
+```
+
+**When to use `dependsOn`:**
+- Bin select depends on feedstock type and/or facility (feedstock form)
+- Reactor select depends on facility
+- Any parent → child dropdown relationship where the child options change
+
+**Underlying hook:** `useClearOnDependencyChange` from `@/hooks/use-clear-on-dependency-change`. It's a standalone hook — use it directly in custom form components that aren't `FormEntitySelect`:
+
+```typescript
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+
+// Inside any component with a field.onChange
+useClearOnDependencyChange([parentA, parentB], field.onChange);
+```
+
 ## Zod String-to-Number Transform Gotchas
 
 When using `z.union([z.number(), z.string().transform(...)])` for numeric fields, the string transform branch **bypasses** range validation on the number branch. Prefer `z.preprocess()` (above) instead. If you must use `z.union`, always validate inside the transform:

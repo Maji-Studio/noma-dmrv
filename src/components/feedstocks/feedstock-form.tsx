@@ -16,7 +16,8 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEntityById } from "@/hooks/use-entities";
 import { useSupplier } from "@/hooks/use-suppliers";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
+import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
   feedstockFormSchema,
@@ -25,6 +26,7 @@ import {
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
+import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/storage-location-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
 import { WetMassWarning } from "./wet-mass-warning";
@@ -47,6 +49,7 @@ interface FeedstockFormProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  serverError?: string;
 }
 
 export function FeedstockForm({
@@ -55,6 +58,7 @@ export function FeedstockForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  serverError,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -62,6 +66,7 @@ export function FeedstockForm({
   // Quick-add dialogs
   const vehicleDialog = useQuickAddDialog();
   const feedstockTypeDialog = useQuickAddDialog();
+  const storageLocationDialog = useQuickAddDialog();
 
   const {
     register,
@@ -106,18 +111,23 @@ export function FeedstockForm({
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
+  const watchedGpsLat = useWatch({ control, name: "gpsLatitude" });
+  const watchedGpsLng = useWatch({ control, name: "gpsLongitude" });
 
   // Determine bin type filter based on feedstock type category
   const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
-  const binTypeFilter = !selectedFeedstockType
-    ? "feedstock_bin,ingredient_bin"
-    : selectedFeedstockType.subtitle === "ingredient"
-      ? "ingredient_bin"
-      : "feedstock_bin";
+  const binTypeFilter = selectedFeedstockType?.subtitle === "ingredient"
+    ? "ingredient_bin"
+    : "feedstock_bin";
 
   // Fetch supplier GPS data when a supplier is selected
   const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
   const supplierHasGps = selectedSupplier?.gpsLatitude != null && selectedSupplier?.gpsLongitude != null;
+
+  // GPS fields are read-only when the current value matches the selected supplier's GPS
+  // (i.e. the auto-fill was applied and not manually overridden)
+  const latFromSupplier = supplierHasGps && watchedGpsLat === selectedSupplier?.gpsLatitude;
+  const lngFromSupplier = supplierHasGps && watchedGpsLng === selectedSupplier?.gpsLongitude;
 
   // Auto-set facility from context
   useEffect(() => {
@@ -147,10 +157,12 @@ export function FeedstockForm({
       setValue("gpsLongitude", selectedSupplier.gpsLongitude ?? null, SET_VALUE_OPTS);
     }
 
-    prevSupplierGpsRef.current = {
-      lat: selectedSupplier.gpsLatitude ?? null,
-      lng: selectedSupplier.gpsLongitude ?? null,
-    };
+    if (latIsAutoFilled || lngIsAutoFilled) {
+      prevSupplierGpsRef.current = {
+        lat: selectedSupplier.gpsLatitude ?? null,
+        lng: selectedSupplier.gpsLongitude ?? null,
+      };
+    }
   }, [selectedSupplier, setValue, getValues]);
 
   // Calculated dry mass
@@ -255,7 +267,7 @@ export function FeedstockForm({
               id="gpsLatitude"
               label="GPS Latitude"
               error={errors.gpsLatitude?.message}
-              helperText={watchedSupplierId ? (supplierHasGps ? GPS_HELPER_AUTO_FILLED : GPS_HELPER_NO_COORDS) : GPS_HELPER_LATITUDE}
+              helperText={latFromSupplier ? GPS_HELPER_AUTO_FILLED : watchedSupplierId && !supplierHasGps ? GPS_HELPER_NO_COORDS : GPS_HELPER_LATITUDE}
             >
               <FormInput
                 id="gpsLatitude"
@@ -263,7 +275,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
-                readOnly={!!watchedSupplierId && supplierHasGps}
+                readOnly={latFromSupplier}
                 error={!!errors.gpsLatitude}
                 {...register("gpsLatitude", { setValueAs: numericValue })}
               />
@@ -273,7 +285,7 @@ export function FeedstockForm({
               id="gpsLongitude"
               label="GPS Longitude"
               error={errors.gpsLongitude?.message}
-              helperText={watchedSupplierId ? (supplierHasGps ? GPS_HELPER_AUTO_FILLED : GPS_HELPER_NO_COORDS) : GPS_HELPER_LONGITUDE}
+              helperText={lngFromSupplier ? GPS_HELPER_AUTO_FILLED : watchedSupplierId && !supplierHasGps ? GPS_HELPER_NO_COORDS : GPS_HELPER_LONGITUDE}
             >
               <FormInput
                 id="gpsLongitude"
@@ -281,7 +293,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., 37.3404"
                 disabled={isSubmitting}
-                readOnly={!!watchedSupplierId && supplierHasGps}
+                readOnly={lngFromSupplier}
                 error={!!errors.gpsLongitude}
                 {...register("gpsLongitude", { setValueAs: numericValue })}
               />
@@ -366,74 +378,78 @@ export function FeedstockForm({
           </div>
         </div>
 
-        {/* Bin Allocations */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <div className="flex items-center justify-between">
-            <SectionLabel>
-              Bin Allocations
-            </SectionLabel>
-            {!isEditMode && (
-              <Button
-                type="button"
-                variant="default"
-                size="small"
-                onClick={() => append({ storageLocationId: "", allocatedWetMassKg: "" as unknown as number })}
-                disabled={isSubmitting}
-              >
-                <Plus size={16} weight="bold" />
-                Add Bin
-              </Button>
-            )}
-          </div>
-
-          {errors.allocations?.message && (
-            <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
-          )}
-
-          <div className="space-y-12">
-            {fields.map((field, index) => (
-              <BinAllocationRow
-                key={field.id}
-                index={index}
-                control={formControl}
-                massRegister={register(`allocations.${index}.allocatedWetMassKg`, { setValueAs: numericValue })}
-                massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
-                storageError={errors.allocations?.[index]?.storageLocationId as FieldError | undefined}
-                canRemove={fields.length > 1}
-                onRemove={() => remove(index)}
-                disabled={isSubmitting}
-                binTypeFilter={binTypeFilter}
-                facilityId={watchedFacilityId || undefined}
-              />
-            ))}
-          </div>
-
-          {/* Allocation summary */}
-          {fields.length > 1 && (
-            <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-              <span className="body-small text-[var(--color-text-tertiary)]">Total Allocated</span>
-              <span className="body-medium font-medium text-[var(--color-text-primary)]">
-                {allocatedTotalWetKg.toFixed(2)} kg
-              </span>
-              {typeof watchWetMass === "number" && (
-                <span className="body-small text-[var(--color-text-quaternary)]">
-                  of {watchWetMass.toFixed(2)} kg delivered
-                </span>
+        {/* Bin Allocations — only shown after feedstock type is selected and loaded */}
+        {watchedFeedstockTypeId && selectedFeedstockType ? (
+          <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+            <div className="flex items-center justify-between">
+              <SectionLabel>
+                Bin Allocations
+              </SectionLabel>
+              {!isEditMode && (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="small"
+                  onClick={() => append({ storageLocationId: "", allocatedWetMassKg: "" as unknown as number })}
+                  disabled={isSubmitting}
+                >
+                  <Plus size={16} weight="bold" />
+                  Add Bin
+                </Button>
               )}
             </div>
-          )}
 
-          {/* Overage warning */}
-          {showOverageWarning && (
-            <WetMassWarning
-              allocatedKg={allocatedTotalWetKg}
-              deliveredKg={watchWetMass as number}
-              justificationRegister={register("overrideJustification")}
-              justificationError={errors.overrideJustification?.message}
-              disabled={isSubmitting}
-            />
-          )}
-        </div>
+            {errors.allocations?.message && (
+              <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
+            )}
+
+            <div className="space-y-12">
+              {fields.map((field, index) => (
+                <BinAllocationRow
+                  key={field.id}
+                  index={index}
+                  control={formControl}
+                  massRegister={register(`allocations.${index}.allocatedWetMassKg`, { setValueAs: numericValue })}
+                  massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
+                  storageError={errors.allocations?.[index]?.storageLocationId as FieldError | undefined}
+                  canRemove={fields.length > 1}
+                  onRemove={() => remove(index)}
+                  disabled={isSubmitting}
+                  binTypeFilter={binTypeFilter}
+                  facilityId={watchedFacilityId || undefined}
+                  feedstockTypeId={watchedFeedstockTypeId || undefined}
+                  onCreateNew={storageLocationDialog.open}
+                />
+              ))}
+            </div>
+
+            {/* Allocation summary */}
+            {fields.length > 1 && (
+              <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+                <span className="body-small text-[var(--color-text-tertiary)]">Total Allocated</span>
+                <span className="body-medium font-medium text-[var(--color-text-primary)]">
+                  {allocatedTotalWetKg.toFixed(2)} kg
+                </span>
+                {typeof watchWetMass === "number" && (
+                  <span className="body-small text-[var(--color-text-quaternary)]">
+                    of {watchWetMass.toFixed(2)} kg delivered
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Overage warning */}
+            {showOverageWarning && (
+              <WetMassWarning
+                allocatedKg={allocatedTotalWetKg}
+                deliveredKg={watchWetMass as number}
+                justificationRegister={register("overrideJustification")}
+                justificationError={errors.overrideJustification?.message}
+                disabled={isSubmitting}
+              />
+            )}
+          </div>
+        ) : null}
 
         {/* Documentation */}
         <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
@@ -460,17 +476,15 @@ export function FeedstockForm({
           </div>
         </div>
 
-        {/* Form Actions */}
-        <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-          {onCancel && (
-            <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-          </Button>
-        </div>
+        {/* Server Error */}
+        {serverError && <ServerError message={serverError} />}
+
+        <FormActions
+          onCancel={onCancel}
+          isSubmitting={isSubmitting}
+          submitLabel={submitLabel}
+          defaultSubmitLabel={defaultSubmitLabel}
+        />
       </form>
 
       {/* Quick-add dialogs */}
@@ -491,6 +505,18 @@ export function FeedstockForm({
           feedstockTypeDialog.close();
         }}
       />
+
+      {watchedFacilityId && (
+        <StorageLocationQuickAddDialog
+          isOpen={storageLocationDialog.isOpen}
+          onClose={storageLocationDialog.close}
+          onSuccess={() => {
+            storageLocationDialog.close();
+          }}
+          defaultBinType={binTypeFilter}
+          facilityId={watchedFacilityId}
+        />
+      )}
     </>
   );
 }

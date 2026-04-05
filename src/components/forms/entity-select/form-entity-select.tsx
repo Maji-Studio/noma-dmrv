@@ -5,8 +5,9 @@
 "use client";
 
 import { useId } from "react";
-import { Controller, type Control, type FieldPath, type FieldValues } from "react-hook-form";
+import { useController, type Control, type FieldPath, type FieldValues } from "react-hook-form";
 import { FormField } from "../form-field";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { EntitySelect } from "./entity-select";
 import type { EntityType } from "./types";
 
@@ -44,6 +45,19 @@ interface FormEntitySelectProps<
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /**
+   * Dependency value(s) for cascading selects.
+   * When any value changes, the selected value is cleared automatically.
+   * Accepts a single value or an array for multi-dependency cascades.
+   *
+   * @example
+   * // Single dependency: bin clears when feedstock type changes
+   * <FormEntitySelect dependsOn={watchedFeedstockTypeId} ... />
+   *
+   * // Multiple dependencies: bin clears when feedstock type OR facility changes
+   * <FormEntitySelect dependsOn={[watchedFeedstockTypeId, watchedFacilityId]} ... />
+   */
+  dependsOn?: string | null | (string | null | undefined)[];
 }
 
 export function FormEntitySelect<
@@ -65,38 +79,36 @@ export function FormEntitySelect<
   autoSelectSingle,
   alwaysShowSearch = false,
   hideSearch = false,
+  dependsOn,
 }: FormEntitySelectProps<TFieldValues, TName>) {
   const id = useId();
+  const { field, fieldState } = useController({ control, name });
+
+  useClearOnDependencyChange(dependsOn, field.onChange);
 
   return (
-    <Controller
-      control={control}
-      name={name}
-      render={({ field, fieldState }) => (
-        <FormField
-          id={id}
-          label={label}
-          error={fieldState.error?.message}
-          helperText={helperText}
-          required={required}
-        >
-          <EntitySelect
-            entityType={entityType}
-            value={field.value}
-            onChange={field.onChange}
-            placeholder={placeholder}
-            disabled={disabled}
-            error={!!fieldState.error}
-            allowCreate={allowCreate}
-            createLabel={createLabel}
-            onCreateNew={onCreateNew}
-            filterBy={filterBy}
-            autoSelectSingle={autoSelectSingle ?? required}
-            alwaysShowSearch={alwaysShowSearch}
-            hideSearch={hideSearch}
-          />
-        </FormField>
-      )}
-    />
+    <FormField
+      id={id}
+      label={label}
+      error={fieldState.error?.message}
+      helperText={helperText}
+      required={required}
+    >
+      <EntitySelect
+        entityType={entityType}
+        value={field.value}
+        onChange={field.onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        error={!!fieldState.error}
+        allowCreate={allowCreate}
+        createLabel={createLabel}
+        onCreateNew={onCreateNew}
+        filterBy={filterBy}
+        autoSelectSingle={autoSelectSingle ?? required}
+        alwaysShowSearch={alwaysShowSearch}
+        hideSearch={hideSearch}
+      />
+    </FormField>
   );
 }
