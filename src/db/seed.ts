@@ -859,7 +859,7 @@ async function seed() {
         status: 'pending',
         startDate: '2026-01-13',
         endDate: '2026-01-19',
-        certifier: 'Isometric',
+        certifier: 'isometric',
         registry: 'Isometric Registry',
         weightTons: 0.62,
         value: 1180000,

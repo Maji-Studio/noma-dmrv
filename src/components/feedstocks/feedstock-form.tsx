@@ -403,6 +403,7 @@ export function FeedstockForm({
                 onRemove={() => remove(index)}
                 disabled={isSubmitting}
                 binTypeFilter={binTypeFilter}
+                facilityId={watchedFacilityId || undefined}
               />
             ))}
           </div>
