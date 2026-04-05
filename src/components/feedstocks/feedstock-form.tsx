@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
@@ -14,6 +14,8 @@ import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useEntityById } from "@/hooks/use-entities";
+import { useSupplier } from "@/hooks/use-suppliers";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
@@ -28,6 +30,11 @@ import { BinAllocationRow } from "./bin-allocation-row";
 import { WetMassWarning } from "./wet-mass-warning";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+
+const GPS_HELPER_AUTO_FILLED = "Auto-filled from supplier";
+const GPS_HELPER_NO_COORDS = "Supplier has no GPS coordinates";
+const GPS_HELPER_LATITUDE = "-90 to 90";
+const GPS_HELPER_LONGITUDE = "-180 to 180";
 
 // ============================================
 // Component
@@ -61,6 +68,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
@@ -96,6 +104,20 @@ export function FeedstockForm({
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedSupplierId = useWatch({ control, name: "supplierId" });
+  const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
+
+  // Determine bin type filter based on feedstock type category
+  const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
+  const binTypeFilter = !selectedFeedstockType
+    ? "feedstock_bin,ingredient_bin"
+    : selectedFeedstockType.subtitle === "ingredient"
+      ? "ingredient_bin"
+      : "feedstock_bin";
+
+  // Fetch supplier GPS data when a supplier is selected
+  const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
+  const supplierHasGps = selectedSupplier?.gpsLatitude != null && selectedSupplier?.gpsLongitude != null;
 
   // Auto-set facility from context
   useEffect(() => {
@@ -103,6 +125,33 @@ export function FeedstockForm({
       setValue("facilityId", contextFacilityId);
     }
   }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
+
+  // Track previous supplier's GPS so we can detect auto-filled values vs user-entered values
+  const prevSupplierGpsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+
+  // Auto-fill GPS from supplier: overwrite when empty or still matching previous supplier's auto-fill;
+  // preserve user-entered values that differ from the previous supplier's GPS.
+  useEffect(() => {
+    if (!selectedSupplier) return;
+    const currentLat = getValues("gpsLatitude");
+    const currentLng = getValues("gpsLongitude");
+    const prev = prevSupplierGpsRef.current;
+
+    const latIsAutoFilled = currentLat == null || currentLat === "" || currentLat === prev.lat;
+    const lngIsAutoFilled = currentLng == null || currentLng === "" || currentLng === prev.lng;
+
+    if (latIsAutoFilled) {
+      setValue("gpsLatitude", selectedSupplier.gpsLatitude ?? null, SET_VALUE_OPTS);
+    }
+    if (lngIsAutoFilled) {
+      setValue("gpsLongitude", selectedSupplier.gpsLongitude ?? null, SET_VALUE_OPTS);
+    }
+
+    prevSupplierGpsRef.current = {
+      lat: selectedSupplier.gpsLatitude ?? null,
+      lng: selectedSupplier.gpsLongitude ?? null,
+    };
+  }, [selectedSupplier, setValue, getValues]);
 
   // Calculated dry mass
   const deliveredDryMassKg =
@@ -206,7 +255,7 @@ export function FeedstockForm({
               id="gpsLatitude"
               label="GPS Latitude"
               error={errors.gpsLatitude?.message}
-              helperText="-90 to 90"
+              helperText={watchedSupplierId ? (supplierHasGps ? GPS_HELPER_AUTO_FILLED : GPS_HELPER_NO_COORDS) : GPS_HELPER_LATITUDE}
             >
               <FormInput
                 id="gpsLatitude"
@@ -214,6 +263,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
+                readOnly={!!watchedSupplierId && supplierHasGps}
                 error={!!errors.gpsLatitude}
                 {...register("gpsLatitude", { setValueAs: numericValue })}
               />
@@ -223,7 +273,7 @@ export function FeedstockForm({
               id="gpsLongitude"
               label="GPS Longitude"
               error={errors.gpsLongitude?.message}
-              helperText="-180 to 180"
+              helperText={watchedSupplierId ? (supplierHasGps ? GPS_HELPER_AUTO_FILLED : GPS_HELPER_NO_COORDS) : GPS_HELPER_LONGITUDE}
             >
               <FormInput
                 id="gpsLongitude"
@@ -231,6 +281,7 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., 37.3404"
                 disabled={isSubmitting}
+                readOnly={!!watchedSupplierId && supplierHasGps}
                 error={!!errors.gpsLongitude}
                 {...register("gpsLongitude", { setValueAs: numericValue })}
               />
@@ -351,6 +402,8 @@ export function FeedstockForm({
                 canRemove={fields.length > 1}
                 onRemove={() => remove(index)}
                 disabled={isSubmitting}
+                binTypeFilter={binTypeFilter}
+                facilityId={watchedFacilityId || undefined}
               />
             ))}
           </div>

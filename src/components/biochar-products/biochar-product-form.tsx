@@ -167,6 +167,7 @@ export function BiocharProductForm({
       massKg: product?.massKg ?? null,
       moistureContentPercent: product?.moistureContentPercent ?? null,
       densityKgM3: product?.densityKgM3 ?? null,
+      waterAddedKg: product?.waterAddedKg ?? null,
     },
   });
 
@@ -339,6 +340,24 @@ export function BiocharProductForm({
         )}
 
         <div className="grid grid-cols-2 gap-x-16 gap-y-16">
+          <FormField
+            id="waterAddedKg"
+            label="Water Added (kg)"
+            error={errors.waterAddedKg?.message}
+            helperText="Water added to reach target moisture"
+          >
+            <FormInput
+              id="waterAddedKg"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="e.g., 50"
+              disabled={isSubmitting}
+              error={!!errors.waterAddedKg}
+              {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
+            />
+          </FormField>
+
           <FormField
             id="densityKgM3"
             label="Density (kg/m3)"

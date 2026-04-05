@@ -357,6 +357,7 @@ export function StorageLocationList() {
               <option value="feedstock_bin">Feedstock Bin</option>
               <option value="biochar_bin">Biochar Bin</option>
               <option value="product_bin">Product Bin</option>
+              <option value="ingredient_bin">Ingredient Bin</option>
             </select>
           </div>
 
