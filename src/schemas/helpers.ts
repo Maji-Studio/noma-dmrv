@@ -69,6 +69,12 @@ export const optionalNumber = z.preprocess(
   z.number().finite().nullable().optional()
 );
 
+/** Optional non-negative numeric field: preprocess form string → number | null, then validate >= 0. */
+export const optionalPositiveNumber = z.preprocess(
+  toNumberOrNull,
+  z.number().finite().min(0, "Must be a non-negative number").nullable().optional()
+);
+
 /** Optional percent field: preprocess form string → number | null, then validate 0–100 range. */
 export const optionalPercent = z.preprocess(
   toNumberOrNull,

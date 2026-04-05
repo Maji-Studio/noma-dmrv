@@ -373,6 +373,10 @@ export async function createBiocharProduct(
     throw new Error("Moisture content must be between 0 and 100");
   }
 
+  if (data.waterAddedKg != null && (!Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0)) {
+    throw new Error("waterAddedKg must be a non-negative finite number");
+  }
+
   const [product] = await db
     .insert(biocharProducts)
     .values({
@@ -469,6 +473,10 @@ export async function updateBiocharProduct(
 
   if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
     throw new Error("Moisture content must be between 0 and 100");
+  }
+
+  if (data.waterAddedKg != null && (!Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0)) {
+    throw new Error("waterAddedKg must be a non-negative finite number");
   }
 
   const [updated] = await db

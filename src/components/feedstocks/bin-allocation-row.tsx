@@ -20,6 +20,8 @@ interface BinAllocationRowProps {
   canRemove: boolean;
   onRemove: () => void;
   disabled?: boolean;
+  /** Storage location type filter based on feedstock type category */
+  binTypeFilter?: string;
 }
 
 export function BinAllocationRow({
@@ -31,6 +33,7 @@ export function BinAllocationRow({
   canRemove,
   onRemove,
   disabled,
+  binTypeFilter = "feedstock_bin,ingredient_bin",
 }: BinAllocationRowProps) {
   return (
     <div className="flex items-start gap-12">
@@ -43,7 +46,7 @@ export function BinAllocationRow({
           placeholder="Select bin..."
           disabled={disabled}
           required
-          filterBy={{ type: "feedstock_bin,ingredient_bin" }}
+          filterBy={{ type: binTypeFilter }}
         />
 
         <FormField

@@ -448,6 +448,19 @@ export async function updateFeedstock(
     const typeId = data.feedstockTypeId ?? existing.feedstockTypeId;
     const facId = data.facilityId ?? existing.facilityId;
 
+    // Look up feedstock type category (needed for bin-type enforcement)
+    const [ft] = await db
+      .select({ category: feedstockTypes.category })
+      .from(feedstockTypes)
+      .where(eq(feedstockTypes.id, typeId));
+
+    if (!ft) {
+      throw new Error("Feedstock type not found");
+    }
+
+    const isIngredient = ft.category === "ingredient";
+    const expectedBinType = isIngredient ? "ingredient_bin" : "feedstock_bin";
+
     if (binId) {
       const [bin] = await db
         .select({
@@ -464,15 +477,6 @@ export async function updateFeedstock(
       if (bin.facilityId !== facId) {
         throw new Error(`Storage bin ${binId} does not belong to the selected facility`);
       }
-
-      // Enforce ingredient-category → ingredient-bin routing
-      const [ft] = await db
-        .select({ category: feedstockTypes.category })
-        .from(feedstockTypes)
-        .where(eq(feedstockTypes.id, typeId));
-
-      const isIngredient = ft?.category === "ingredient";
-      const expectedBinType = isIngredient ? "ingredient_bin" : "feedstock_bin";
 
       if (bin.type !== expectedBinType) {
         const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
