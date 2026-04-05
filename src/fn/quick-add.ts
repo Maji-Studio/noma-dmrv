@@ -9,18 +9,21 @@ import {
   createOperator,
   createVehicle,
   createFeedstockType,
+  createStorageLocation,
 } from "@/data-access/quick-add";
-import { drivers, vehicles, feedstockTypes } from "@/db/schema";
+import { drivers, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
   driverQuickAddSchema,
   operatorQuickAddSchema,
   vehicleQuickAddSchema,
   feedstockTypeQuickAddSchema,
+  storageLocationQuickAddSchema,
   type DriverQuickAddData,
   type OperatorQuickAddData,
   type VehicleQuickAddData,
   type FeedstockTypeQuickAddData,
+  type StorageLocationQuickAddData,
 } from "@/schemas/quick-add";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import { getUser } from "@/lib/auth/server";
@@ -172,6 +175,50 @@ export async function createFeedstockTypeFn(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to create feedstock type",
+    };
+  }
+}
+
+// ============================================
+// Storage Location Quick Add
+// ============================================
+
+/**
+ * Create a new storage location from quick-add dialog
+ */
+export async function createStorageLocationFn(
+  data: StorageLocationQuickAddData
+): Promise<ActionResult<EntityOption>> {
+  try {
+    const user = await getUser();
+    if (!user || !user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const parsed = storageLocationQuickAddSchema.safeParse(data);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input",
+      };
+    }
+
+    const prefix = parsed.data.type === "feedstock_bin" ? "FB"
+      : parsed.data.type === "ingredient_bin" ? "IB"
+      : parsed.data.type === "biochar_bin" ? "BB"
+      : "PB";
+
+    const location = await withAutoCode(
+      prefix, storageLocations, storageLocations.code, undefined,
+      (code) => createStorageLocation({ ...parsed.data, code })
+    );
+    return { success: true, data: location };
+  } catch (error) {
+    console.error("Error creating storage location:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to create storage location",
     };
   }
 }

@@ -24,6 +24,10 @@ interface BinAllocationRowProps {
   binTypeFilter?: string;
   /** Facility ID to scope storage bin options */
   facilityId?: string;
+  /** Feedstock type ID to filter out incompatible bins */
+  feedstockTypeId?: string;
+  /** Callback to open quick-add dialog for creating a new bin */
+  onCreateNew?: () => void;
 }
 
 export function BinAllocationRow({
@@ -37,6 +41,8 @@ export function BinAllocationRow({
   disabled,
   binTypeFilter = "feedstock_bin,ingredient_bin",
   facilityId,
+  feedstockTypeId,
+  onCreateNew,
 }: BinAllocationRowProps) {
   return (
     <div className="flex items-start gap-12">
@@ -49,10 +55,15 @@ export function BinAllocationRow({
           placeholder="Select bin..."
           disabled={disabled}
           required
+          autoSelectSingle={false}
           filterBy={{
             type: binTypeFilter,
             ...(facilityId ? { facilityId } : {}),
+            ...(feedstockTypeId ? { feedstockTypeId } : {}),
           }}
+          dependsOn={[feedstockTypeId, facilityId]}
+          createLabel="Add New Bin"
+          onCreateNew={onCreateNew}
         />
 
         <FormField

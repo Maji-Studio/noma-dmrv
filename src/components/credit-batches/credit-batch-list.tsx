@@ -25,7 +25,6 @@ import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import {
   CreditBatchForm,
-  type ProductionRunOption,
   type ApplicationOption,
 } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
@@ -70,12 +69,10 @@ function CreditStatusBadge({ status }: { status: CreditBatchStatus }) {
 
 interface CreditBatchListProps {
   applications?: ApplicationOption[];
-  productionRuns?: ProductionRunOption[];
 }
 
 export function CreditBatchList({
   applications = [],
-  productionRuns = [],
 }: CreditBatchListProps) {
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
@@ -541,7 +538,6 @@ export function CreditBatchList({
             key={sideSheet.entity?.id ?? "create"}
             creditBatch={sideSheet.entity ?? undefined}
             applications={applications}
-            productionRuns={productionRuns}
             existingBatches={allItems.map((b) => ({
               id: b.id,
               code: b.code,

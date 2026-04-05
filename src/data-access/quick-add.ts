@@ -6,8 +6,9 @@
 
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { drivers, operators, vehicles, feedstockTypes } from "@/db/schema";
+import { drivers, operators, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { StorageLocationType } from "@/schemas/storage-locations";
 
 // ============================================
 // Driver Quick Add
@@ -221,6 +222,51 @@ export async function createFeedstockType(
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
       throw new Error("A feedstock type with this code or name already exists");
+    }
+    throw error;
+  }
+}
+
+// ============================================
+// Storage Location Quick Add
+// ============================================
+
+export interface CreateStorageLocationData {
+  code: string;
+  name: string;
+  type: StorageLocationType;
+  facilityId: string;
+  capacityKg?: number | null;
+}
+
+/**
+ * Create a new storage location with minimal required fields
+ * Returns EntityOption for immediate use in select dropdowns
+ */
+export async function createStorageLocation(
+  data: CreateStorageLocationData
+): Promise<EntityOption> {
+  try {
+    const [location] = await db
+      .insert(storageLocations)
+      .values({
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+      })
+      .returning();
+
+    return {
+      id: location.id,
+      code: location.code,
+      name: location.name,
+      subtitle: location.type.replace(/_/g, " "),
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new Error("A storage location with this code already exists");
     }
     throw error;
   }

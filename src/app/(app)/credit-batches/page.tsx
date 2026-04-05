@@ -6,40 +6,28 @@
 import { CreditBatchList } from "@/components/credit-batches";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
-import { productionRuns } from "@/db/schema/production";
-import { desc } from "drizzle-orm";
+import { deliveries } from "@/db/schema/logistics";
+import { desc, eq } from "drizzle-orm";
 
 export default async function CreditBatchesPage() {
-  // Fetch applications and production runs with rich data for the multi-selects
-  const [applicationOptions, productionRunOptions] = await Promise.all([
-    db
-      .select({
-        id: applications.id,
-        code: applications.code,
-        applicationDate: applications.applicationDate,
-        biocharAppliedDryTons: applications.biocharAppliedDryTons,
-        fieldIdentifier: applications.fieldIdentifier,
-        co2eStoredTonnes: applications.co2eStoredTonnes,
-      })
-      .from(applications)
-      .orderBy(desc(applications.applicationDate)),
-    db
-      .select({
-        id: productionRuns.id,
-        code: productionRuns.code,
-        date: productionRuns.date,
-        feedstockMassDryKg: productionRuns.feedstockMassDryKg,
-        biocharOutputKg: productionRuns.biocharOutputKg,
-        status: productionRuns.status,
-      })
-      .from(productionRuns)
-      .orderBy(desc(productionRuns.date)),
-  ]);
+  // Fetch applications with facility info for the auto-match selector
+  const applicationOptions = await db
+    .select({
+      id: applications.id,
+      code: applications.code,
+      applicationDate: applications.applicationDate,
+      biocharAppliedDryTons: applications.biocharAppliedDryTons,
+      fieldIdentifier: applications.fieldIdentifier,
+      co2eStoredTonnes: applications.co2eStoredTonnes,
+      facilityId: deliveries.facilityId,
+    })
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .orderBy(desc(applications.applicationDate));
 
   return (
     <CreditBatchList
       applications={applicationOptions}
-      productionRuns={productionRunOptions}
     />
   );
 }

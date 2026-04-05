@@ -133,9 +133,6 @@ export function CreditBatchCard({
           {(creditBatch.applicationCount ?? 0) > 0 && (
             <span>{creditBatch.applicationCount} applications</span>
           )}
-          {creditBatch.productionRunIds.length > 0 && (
-            <span>{creditBatch.productionRunIds.length} runs</span>
-          )}
         </div>
       </div>
 

@@ -279,14 +279,16 @@ Description.displayName = "SlideOverPanel.Description";
 interface SlideOverPanelBodyProps {
   children: React.ReactNode;
   className?: string;
+  /** Remove bottom padding so sticky/flush footers inside have no gap */
+  noPaddingBottom?: boolean;
 }
 
-function Body({ children, className }: SlideOverPanelBodyProps) {
+function Body({ children, className, noPaddingBottom }: SlideOverPanelBodyProps) {
   return (
     <div
       className={cn(
         "flex-1 overflow-y-auto",
-        "p-24",
+        noPaddingBottom ? "p-24 pb-0" : "p-24",
         className
       )}
     >

@@ -96,7 +96,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
 
     // Select sampling method (default is method_a, keep it)
     await page.selectOption('select[name="samplingMethod"]', "method_a");
-    await page.fill('input[name="capacityKg"]', "500");
+    await page.fill('input[name="capacityTph"]', "500");
 
     // Submit the form
     await page.getByRole("button", { name: /Create Reactor/i }).click();

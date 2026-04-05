@@ -59,6 +59,7 @@ export async function getEntities(
         search,
         facilityId: filterBy?.facilityId,
         type: types,
+        feedstockTypeId: filterBy?.feedstockTypeId,
         limit,
       });
     }
@@ -624,9 +625,10 @@ async function getStorageLocations(params: {
   search?: string;
   facilityId?: string;
   type?: StorageLocationType | StorageLocationType[];
+  feedstockTypeId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, type, limit } = params;
+  const { search, facilityId, type, feedstockTypeId, limit } = params;
 
   const conditions: SQL[] = [];
 
@@ -640,6 +642,16 @@ async function getStorageLocations(params: {
     } else {
       conditions.push(eq(storageLocations.type, type));
     }
+  }
+
+  // Only show bins that are empty or already hold the same feedstock type
+  if (feedstockTypeId) {
+    conditions.push(
+      or(
+        sql`${storageLocations.feedstockTypeId} IS NULL`,
+        eq(storageLocations.feedstockTypeId, feedstockTypeId)
+      )!
+    );
   }
 
   if (search) {
