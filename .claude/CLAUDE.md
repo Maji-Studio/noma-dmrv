@@ -317,6 +317,19 @@ Quick-add dialogs let users create prerequisite entities inline (e.g., add a dri
 - After creation, call `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to populate the EntitySelect dropdown immediately
 - `useOpenCreateIntent()` hook (`@/hooks/use-open-create-intent`) detects `?create=true` URL param to auto-open create dialogs via deep-linking
 
+### Cascading / Dependent Selects
+
+When one `FormEntitySelect` depends on another field (e.g., bins filtered by feedstock type), use `dependsOn` to auto-clear the selection when parent value(s) change. Accepts a single value or array:
+
+```typescript
+<FormEntitySelect
+  filterBy={{ feedstockTypeId: ..., facilityId: ... }}
+  dependsOn={[watchedFeedstockTypeId, watchedFacilityId]}
+/>
+```
+
+The underlying `useClearOnDependencyChange` hook (`@/hooks/use-clear-on-dependency-change`) is standalone — usable in any component, not just EntitySelect. See `docs/forms.md` → "Cascading / Dependent Selects".
+
 ### React Query Integration
 
 - **Query Keys**: `["resource", projectId, ...specifics]`
