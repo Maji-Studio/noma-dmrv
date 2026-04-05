@@ -262,9 +262,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.ghgMaterialityAssessments)
               .where(inArray(schema.ghgMaterialityAssessments.creditBatchId, creditBatchIds));
-            await tx
-              .delete(schema.creditBatchProductionRuns)
-              .where(inArray(schema.creditBatchProductionRuns.creditBatchId, creditBatchIds));
           }
 
           if (applicationIds.length) {
@@ -423,7 +420,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="identifier"]', `Chain Reactor ${runId}`);
       await page.selectOption('select[name="reactorType"]', "fixed-bed");
       await page.selectOption('select[name="samplingMethod"]', "method_a");
-      await page.fill('input[name="capacityKg"]', "500");
+      await page.fill('input[name="capacityTph"]', "500");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Reactor")').click();
       await waitForSideSheetClose(page);

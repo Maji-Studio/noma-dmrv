@@ -1,68 +1,42 @@
 /**
  * Quick Add Validation Schemas
- * Zod schemas for inline quick-add dialog forms
- * These schemas are for rapid entity creation with minimal required fields
+ *
+ * Server action input schemas for inline quick-add entity creation.
+ * Form-level validation now uses canonical schemas from each entity's schema file.
+ * This file defines the server action wire format (which may differ from the form shape).
  */
 
 import { z } from "zod";
+import {
+  storageLocationTypes,
+  type StorageLocationType,
+  formatStorageLocationType,
+} from "./storage-locations";
 
 // ============================================
 // Driver Quick Add Schema
 // ============================================
 
-/**
- * Schema for quick-adding a driver from entity select dropdown
- * Only requires code and name for rapid creation
- */
-export const driverQuickAddSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Driver name is required")
-    .max(255, "Driver name must be less than 255 characters"),
-  licenseNumber: z
-    .string()
-    .max(50, "License number must be less than 50 characters")
-    .optional()
-    .nullable()
-    .or(z.literal("")),
-  contactPhone: z
-    .string()
-    .max(30, "Phone number must be less than 30 characters")
-    .optional()
-    .nullable()
-    .or(z.literal("")),
-});
+export {
+  driverFormSchema as driverQuickAddSchema,
+  type DriverFormData as DriverQuickAddData,
+} from "./drivers";
 
 // ============================================
 // Operator Quick Add Schema
 // ============================================
 
-export const operatorQuickAddSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Operator name is required")
-    .max(255, "Operator name must be less than 255 characters"),
-  credentials: z
-    .string()
-    .max(255, "Credentials must be less than 255 characters")
-    .optional()
-    .nullable()
-    .or(z.literal("")),
-  contactPhone: z
-    .string()
-    .max(30, "Phone number must be less than 30 characters")
-    .optional()
-    .nullable()
-    .or(z.literal("")),
-});
+export {
+  operatorFormSchema as operatorQuickAddSchema,
+  type OperatorFormData as OperatorQuickAddData,
+} from "./operators";
 
 // ============================================
 // Vehicle Quick Add Schema
+// Server action expects fuelConsumptionLPerKm (L/km),
+// while the form uses L/100km — dialog handler converts.
 // ============================================
 
-/**
- * Schema for quick-adding a vehicle from entity select dropdown
- */
 export const vehicleQuickAddSchema = z.object({
   name: z
     .string()
@@ -82,7 +56,7 @@ export const vehicleQuickAddSchema = z.object({
     .max(50, "Fuel type must be less than 50 characters"),
   fuelConsumptionLPerKm: z
     .number()
-    .positive("Fuel consumption must be positive")
+    .nonnegative("Fuel consumption must be zero or positive")
     .max(10, "Fuel consumption seems too high"),
   modelYear: z
     .number()
@@ -91,67 +65,46 @@ export const vehicleQuickAddSchema = z.object({
     .max(new Date().getFullYear() + 1, "Model year cannot be in the future"),
 });
 
+export type VehicleQuickAddData = z.infer<typeof vehicleQuickAddSchema>;
+
 // ============================================
 // Feedstock Type Quick Add Schema
 // ============================================
 
-/**
- * Valid feedstock categories based on schema
- */
-export const feedstockCategories = [
-  "forestry",
-  "agricultural",
-  "industrial",
-  "municipal",
-  "invasive",
-  "ingredient",
-] as const;
+export {
+  feedstockTypeFormSchema as feedstockTypeQuickAddSchema,
+  feedstockCategories,
+  type FeedstockCategory,
+  FEEDSTOCK_CATEGORY_OPTIONS,
+  type FeedstockTypeFormData as FeedstockTypeQuickAddData,
+} from "./feedstock-types";
 
-export type FeedstockCategory = (typeof feedstockCategories)[number];
+// ============================================
+// Storage Location Quick Add Schema
+// Server action expects a flat subset of StorageLocationFormData.
+// ============================================
 
-/** Labeled options for feedstock category dropdowns */
-export const FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
-  { value: "forestry", label: "Forestry" },
-  { value: "agricultural", label: "Agricultural" },
-  { value: "industrial", label: "Industrial" },
-  { value: "municipal", label: "Municipal" },
-  { value: "invasive", label: "Invasive Species" },
-  { value: "ingredient", label: "Ingredient" },
-];
-
-/**
- * Schema for quick-adding a feedstock type from entity select dropdown
- */
-export const feedstockTypeQuickAddSchema = z.object({
+export const storageLocationQuickAddSchema = z.object({
   name: z
     .string()
-    .min(1, "Feedstock type name is required")
+    .min(1, "Bin name is required")
     .max(255, "Name must be less than 255 characters"),
-  category: z
+  type: z.enum(storageLocationTypes, { message: "Bin type is required" }),
+  facilityId: z
     .string()
-    .min(1, "Category is required"),
-  description: z
-    .string()
-    .max(1000, "Description must be less than 1000 characters")
+    .uuid("Invalid facility ID"),
+  capacityKg: z
+    .number()
+    .positive("Capacity must be positive")
     .optional()
-    .nullable()
-    .or(z.literal("")),
-  registryUrl: z
-    .string()
-    .max(500, "URL must be less than 500 characters")
-    .optional()
-    .nullable()
-    .transform((val) => {
-      if (!val || val.trim() === "") return null;
-      return val;
-    }),
+    .nullable(),
 });
 
-// ============================================
-// Type Inference
-// ============================================
+export type StorageLocationQuickAddData = z.infer<typeof storageLocationQuickAddSchema>;
 
-export type DriverQuickAddData = z.infer<typeof driverQuickAddSchema>;
-export type OperatorQuickAddData = z.infer<typeof operatorQuickAddSchema>;
-export type VehicleQuickAddData = z.infer<typeof vehicleQuickAddSchema>;
-export type FeedstockTypeQuickAddData = z.infer<typeof feedstockTypeQuickAddSchema>;
+export { storageLocationTypes, type StorageLocationType as StorageLocationTypeOption };
+
+export const STORAGE_LOCATION_TYPE_OPTIONS = storageLocationTypes.map((type) => ({
+  value: type,
+  label: formatStorageLocationType(type),
+}));

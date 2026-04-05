@@ -56,12 +56,7 @@ export const creditBatchFormSchema = z
     endDate: z.coerce.date({ message: "End date is required" }),
     certifier: z.enum(certifierProviders).default("isometric"),
 
-    // === Section 2: Production Runs (M:M) ===
-    productionRunIds: z
-      .array(z.string().uuid())
-      .default([]),
-
-    // === Section 3: Applications (M:M) ===
+    // === Section 2: Applications (M:M) ===
     applicationIds: z
       .array(z.string().uuid())
       .min(0, "Select at least one application")
@@ -218,7 +213,6 @@ export const updateCreditBatchSchema = z.object({
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   certifier: z.enum(certifierProviders).optional(),
-  productionRunIds: z.array(z.string().uuid()).optional(),
   applicationIds: z.array(z.string().uuid()).optional(),
   durabilityOption: z.enum(durabilityOptions).optional(),
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),

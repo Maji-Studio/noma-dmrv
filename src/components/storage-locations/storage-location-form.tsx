@@ -7,12 +7,13 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
-import { Button } from "@/components/ui";
+import { FormActions } from "@/components/forms/form-actions";
 import {
   storageLocationFormSchema,
   storageLocationTypes,
   formatStorageLocationType,
   type StorageLocationFormData,
+  type StorageLocationType,
 } from "@/schemas/storage-locations";
 import type { StorageLocation } from "@/db/schema/facilities";
 
@@ -30,6 +31,8 @@ interface StorageLocationFormProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  /** Pre-selected storage type (used by quick-add dialog) */
+  defaultType?: StorageLocationType;
 }
 
 export function StorageLocationForm({
@@ -38,6 +41,7 @@ export function StorageLocationForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  defaultType,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -51,7 +55,7 @@ export function StorageLocationForm({
     resolver: zodResolver(storageLocationFormSchema),
     defaultValues: {
       name: storageLocation?.name ?? "",
-      type: storageLocation?.type ?? undefined,
+      type: storageLocation?.type ?? defaultType ?? undefined,
       facilityId: storageLocation?.facilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? "",
@@ -162,17 +166,12 @@ export function StorageLocationForm({
         />
       </FormField>
 
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

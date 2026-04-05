@@ -1,67 +1,16 @@
 /**
  * Feedstock Type Quick Add Dialog
- * Inline dialog for quickly adding new feedstock types from EntitySelect dropdown
+ * Inline dialog for quickly adding new feedstock types from EntitySelect dropdown.
+ * Embeds the full FeedstockTypeForm inside QuickAddDialogShell.
  */
 "use client";
 
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useDialog } from "@/hooks/use-dialog";
-import { cn } from "@/lib/utils";
 import { createFeedstockTypeFn } from "@/fn/quick-add";
-import { FEEDSTOCK_CATEGORY_OPTIONS } from "@/schemas/quick-add";
-import { seedEntityCache } from "./cache-utils";
+import { FeedstockTypeForm } from "@/components/feedstock-types/feedstock-type-form";
+import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
+import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
+import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
-
-// Icon components
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M15 5L5 15M5 5l10 10"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("animate-spin", className)}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="2"
-      />
-      <path
-        d="M8 2a6 6 0 0 1 6 6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 interface FeedstockTypeQuickAddDialogProps {
   isOpen: boolean;
@@ -69,214 +18,39 @@ interface FeedstockTypeQuickAddDialogProps {
   onSuccess: (entity: EntityOption) => void;
 }
 
-interface FeedstockTypeForm {
-  name: string;
-  category: string;
-  description: string;
-  registryUrl: string;
-}
-
-
 export function FeedstockTypeQuickAddDialog({
   isOpen,
   onClose,
   onSuccess,
 }: FeedstockTypeQuickAddDialogProps) {
-  const queryClient = useQueryClient();
-  const [formData, setFormData] = useState<FeedstockTypeForm>({
-    name: "",
-    category: "",
-    description: "",
-    registryUrl: "",
+  const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FeedstockTypeFormData>({
+    entityType: "feedstockType",
+    serverFn: (data) =>
+      createFeedstockTypeFn({
+        name: data.name.trim(),
+        category: data.category,
+        description: data.description?.trim() || null,
+        registryUrl: data.registryUrl?.trim() || null,
+      }),
+    onSuccess,
+    onClose,
   });
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const dialogRef = useDialog(isOpen, onClose, () => {
-    setFormData({ name: "", category: "", description: "", registryUrl: "" });
-    setError(null);
-    setIsSubmitting(false);
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
-    if (!formData.name.trim()) {
-      setError("Name is required");
-      setIsSubmitting(false);
-      return;
-    }
-    if (!formData.category) {
-      setError("Category is required");
-      setIsSubmitting(false);
-      return;
-    }
-
-    try {
-      const result = await createFeedstockTypeFn({
-        name: formData.name.trim(),
-        category: formData.category,
-        description: formData.description.trim() || null,
-        registryUrl: formData.registryUrl.trim() || null,
-      });
-
-      if (!result.success) {
-        setError(result.error);
-        setIsSubmitting(false);
-        return;
-      }
-
-      seedEntityCache(queryClient, "feedstockType", result.data);
-
-      onSuccess(result.data);
-      onClose();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create feedstock type"
-      );
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full m-auto"
-      aria-labelledby="feedstock-type-quick-add-dialog-title"
-      data-testid="feedstock-type-quick-add-dialog"
+    <QuickAddDialogShell
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add New Feedstock Type"
+      error={error}
+      testId="feedstock-type-quick-add-dialog"
     >
-      <div className="flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
-          <h2
-            id="feedstock-type-quick-add-dialog-title"
-            className="title-heading-3"
-          >
-            Add New Feedstock Type
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-4 rounded-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
-            aria-label="Close dialog"
-          >
-            <XIcon className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-24 p-24">
-          <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-            Feedstock types will be sourced from the Isometric registry in the future. Add the agricultural or forestry residue used in Dark Earth Carbon operations for now.
-          </p>
-
-          {error && (
-            <div className="px-12 py-8 bg-[var(--color-signal-red-light)] text-[var(--color-signal-red)] text-[var(--text-s)] rounded-none">
-              {error}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-16">
-            <label htmlFor="feedstock-category" className="label-medium">
-              Category{" "}
-              <span className="text-[var(--color-signal-red)]">*</span>
-            </label>
-            <select
-              id="feedstock-category"
-              value={formData.category}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, category: e.target.value }))
-              }
-              className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              data-testid="feedstock-category-select"
-            >
-              <option value="">Select category...</option>
-              {FEEDSTOCK_CATEGORY_OPTIONS.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-16">
-            <label htmlFor="feedstock-name" className="label-medium">
-              Name <span className="text-[var(--color-signal-red)]">*</span>
-            </label>
-            <input
-              id="feedstock-name"
-              type="text"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, name: e.target.value }))
-              }
-              placeholder="e.g., Coffee husks"
-              className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              autoFocus
-              data-testid="feedstock-name-input"
-            />
-          </div>
-
-          <div className="flex flex-col gap-16">
-            <label htmlFor="feedstock-description" className="label-medium">
-              Description
-            </label>
-            <textarea
-              id="feedstock-description"
-              value={formData.description}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, description: e.target.value }))
-              }
-              placeholder="Optional description of the residue stream, sourcing context, or preparation"
-              rows={3}
-              className="flex w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-16 py-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] resize-none"
-              data-testid="feedstock-description-input"
-            />
-          </div>
-
-          <div className="flex flex-col gap-16">
-            <label htmlFor="feedstock-registry-url" className="label-medium">
-              Registry URL
-            </label>
-            <input
-              id="feedstock-registry-url"
-              type="url"
-              value={formData.registryUrl}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, registryUrl: e.target.value }))
-              }
-              placeholder="https://isometric.registry.example/feedstock/..."
-              className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              data-testid="feedstock-registry-url-input"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-16 justify-end pt-16">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
-              data-testid="feedstock-submit-button"
-            >
-              {isSubmitting && <SpinnerIcon className="w-4 h-4" />}
-              {isSubmitting ? "Creating..." : "Create Feedstock Type"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </dialog>
+      <FeedstockTypeForm
+        onSubmit={handleSubmit}
+        onCancel={onClose}
+        isSubmitting={isSubmitting}
+        submitLabel="Create Feedstock Type"
+        hint="Feedstock types will be sourced from the Isometric registry in the future. Add the agricultural or forestry residue used in Dark Earth Carbon operations for now."
+      />
+    </QuickAddDialogShell>
   );
 }

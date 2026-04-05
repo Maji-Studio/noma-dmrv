@@ -6,11 +6,11 @@ When assessing a candidate for deepening, classify its dependencies:
 
 ### 1. In-process
 
-Pure computation, in-memory state, no I/O. Always deepenable — just merge the modules and test directly.
+Pure computation, in-memory state, no I/O. Always can be deepened — just merge the modules and test directly.
 
 ### 2. Local-substitutable
 
-Dependencies that have local test stand-ins (e.g., PGLite for Postgres, in-memory filesystem). Deepenable if the test substitute exists. The deepened module is tested with the local stand-in running in the test suite.
+Dependencies that have local test stand-ins (e.g., PGLite for Postgres, in-memory filesystem). Can be deepened if the test substitute exists. The deepened module is tested with the local stand-in running in the test suite.
 
 ### 3. Remote but owned (Ports & Adapters)
 

@@ -1,0 +1,1 @@
+DROP TABLE "credit_batch_production_runs";

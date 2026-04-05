@@ -4,16 +4,15 @@
  *
  * Form sections:
  * 1. Overview — startDate, endDate, certifier
- * 2. Production Runs — Multi-select cards
- * 3. Applications — Multi-select (M:M via credit_batch_applications)
- * 4. Durability — Toggle 200-year vs 1000-year with conditional fields
- * 5. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool % (read-only)
- * 6. Verification — registry, weight, value, currency (read-only)
+ * 2. Applications — Auto-matched by date range + facility (M:M via credit_batch_applications)
+ * 3. Durability — Toggle 200-year vs 1000-year with conditional fields
+ * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool % (read-only)
+ * 5. Verification — registry, weight, value, currency (read-only)
  */
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
-import { toDateInputValue } from "@/lib/date-utils";
+import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -62,44 +61,12 @@ function ReadOnlyBadge() {
 }
 
 // ============================================
-// Format helpers for selector cards
+// Format helpers
 // ============================================
-
-function formatKg(value: number | null): string {
-  if (value == null) return "—";
-  return `${value.toFixed(1)} kg`;
-}
 
 function formatTons(value: number | null): string {
   if (value == null) return "—";
   return `${value.toFixed(2)} t`;
-}
-
-const STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  draft: { label: "Draft", bg: "bg-[var(--color-surface-medium)]", text: "text-[var(--color-text-secondary)]" },
-  running: { label: "Running", bg: "bg-[var(--color-warning-light)]", text: "text-[var(--color-warning)]" },
-  complete: { label: "Complete", bg: "bg-[var(--color-success-light)]", text: "text-[var(--color-success)]" },
-  void: { label: "Void", bg: "bg-[var(--color-error-light)]", text: "text-[var(--color-error)]" },
-};
-
-function RunStatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
-  return (
-    <span className={`inline-block px-6 py-1 text-[10px] font-medium uppercase tracking-wider ${style.bg} ${style.text}`}>
-      {style.label}
-    </span>
-  );
-}
-
-function DataRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-8">
-      <span className="text-[10px] uppercase tracking-wider opacity-60">{label}</span>
-      <span className={`body-caption font-mono tabular-nums ${accent ? "text-[var(--color-signal-green)] font-medium" : ""}`}>
-        {value}
-      </span>
-    </div>
-  );
 }
 
 // ============================================
@@ -211,15 +178,6 @@ function parseWatchedDate(value: unknown): Date | null {
 // Rich data types for selectors
 // ============================================
 
-export interface ProductionRunOption {
-  id: string;
-  code: string;
-  date: string | null;
-  feedstockMassDryKg: number | null;
-  biocharOutputKg: number | null;
-  status: string;
-}
-
 export interface ApplicationOption {
   id: string;
   code: string;
@@ -227,6 +185,7 @@ export interface ApplicationOption {
   biocharAppliedDryTons: number | null;
   fieldIdentifier: string | null;
   co2eStoredTonnes: number | null;
+  facilityId: string;
 }
 
 export interface ExistingBatchPeriod {
@@ -239,11 +198,9 @@ export interface ExistingBatchPeriod {
 
 interface CreditBatchFormProps {
   /** Existing credit batch data for editing (undefined for create mode) */
-  creditBatch?: CreditBatch & { applicationIds?: string[]; productionRunIds?: string[] };
+  creditBatch?: CreditBatch & { applicationIds?: string[] };
   /** Available applications for multi-select */
   applications?: ApplicationOption[];
-  /** Available production runs for multi-select */
-  productionRuns?: ProductionRunOption[];
   /** Existing credit batch periods for overlap detection */
   existingBatches?: ExistingBatchPeriod[];
   /** Form submission handler */
@@ -259,7 +216,6 @@ interface CreditBatchFormProps {
 export function CreditBatchForm({
   creditBatch,
   applications = [],
-  productionRuns = [],
   existingBatches = [],
   onSubmit,
   onCancel,
@@ -282,7 +238,6 @@ export function CreditBatchForm({
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
       certifier: "isometric",
-      productionRunIds: creditBatch?.productionRunIds ?? [],
       applicationIds: creditBatch?.applicationIds ?? [],
       durabilityOption:
         (creditBatch?.durabilityOption as DurabilityOption) ??
@@ -335,55 +290,49 @@ export function CreditBatchForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durabilityOption]);
 
-  // Watch dates for auto-matching
+  // Watch dates and facilityId for auto-matching
   const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
+  const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
 
   const startDate = parseWatchedDate(watchedStartDate);
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 
-  // Derive matched items from date range (no manual selection)
-  // Compare by calendar date string to avoid timezone/time-of-day issues
-  const startDateStr = startDate?.toISOString().split("T")[0] ?? "";
-  const endDateStr = endDate?.toISOString().split("T")[0] ?? "";
+  // Derive matched items from date range + facility (no manual selection)
+  const startDateStr = startDate ? formatUtcDate(startDate) : "";
+  const endDateStr = endDate ? formatUtcDate(endDate) : "";
 
-  const matchedRuns = hasBothDates
-    ? productionRuns.filter((run) => {
-        if (!run.date) return false;
-        const d = new Date(run.date).toISOString().split("T")[0];
-        return d >= startDateStr && d <= endDateStr;
-      })
-    : [];
+  // Filter applications by effective facility before date matching
+  const facilityApps = applications.filter(
+    (app) => app.facilityId === effectiveFacilityId
+  );
 
   const matchedApps = hasBothDates
-    ? applications.filter((app) => {
+    ? facilityApps.filter((app) => {
         if (!app.applicationDate) return false;
-        const d = new Date(app.applicationDate).toISOString().split("T")[0];
+        const d = formatUtcDate(new Date(app.applicationDate));
         return d >= startDateStr && d <= endDateStr;
       })
     : [];
 
   // Sync matched IDs into form state for submission
   useEffect(() => {
-    setValue("productionRunIds", matchedRuns.map((r) => r.id), { shouldValidate: true });
     setValue("applicationIds", matchedApps.map((a) => a.id), { shouldValidate: true });
   }, [
     // Use stringified IDs for stable deps instead of arrays
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    matchedRuns.map((r) => r.id).join(","),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     matchedApps.map((a) => a.id).join(","),
     setValue,
   ]);
 
-  // Overlap detection (client-side warning)
+  // Overlap detection (client-side warning) — uses watched facilityId
   const overlappingBatch = hasBothDates
     ? existingBatches.find((batch) => {
         if (creditBatch && batch.id === creditBatch.id) return false;
-        if (batch.facilityId !== (creditBatch?.facilityId ?? contextFacilityId)) return false;
-        return batch.startDate <= endDate.toISOString().split("T")[0] &&
-               batch.endDate >= startDate.toISOString().split("T")[0];
+        if (batch.facilityId !== effectiveFacilityId) return false;
+        return batch.startDate <= endDateStr && batch.endDate >= startDateStr;
       })
     : null;
 
@@ -456,36 +405,11 @@ export function CreditBatchForm({
         </FormField>
       </div>
 
-      {/* ── Matched Production Runs ── */}
-      <AutoMatchedSection
-        title="Production Runs"
-        count={matchedRuns.length}
-        totalCount={productionRuns.length}
-        hasDates={hasBothDates}
-        emptyMessage="No production runs available for this facility."
-        noMatchMessage="No production runs fall within this date range."
-      >
-        {matchedRuns.map((run) => (
-          <div
-            key={run.id}
-            className="flex items-center gap-12 px-12 py-8 bg-[var(--color-background-white)] border border-[var(--color-border-tertiary)]"
-          >
-            <span className="body-small font-medium shrink-0">{run.code}</span>
-            <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">{formatSafeDate(run.date)}</span>
-            <RunStatusBadge status={run.status} />
-            <div className="flex items-center gap-12 ml-auto shrink-0">
-              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">In {formatKg(run.feedstockMassDryKg)}</span>
-              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">Out {formatKg(run.biocharOutputKg)}</span>
-            </div>
-          </div>
-        ))}
-      </AutoMatchedSection>
-
       {/* ── Matched Applications ── */}
       <AutoMatchedSection
         title="Applications"
         count={matchedApps.length}
-        totalCount={applications.length}
+        totalCount={facilityApps.length}
         hasDates={hasBothDates}
         emptyMessage="No applications available for this facility."
         noMatchMessage="No applications fall within this date range."

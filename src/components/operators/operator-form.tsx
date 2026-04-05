@@ -1,0 +1,97 @@
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { FormField, FormInput } from "@/components/forms";
+import { FormActions } from "@/components/forms/form-actions";
+import {
+  operatorFormSchema,
+  type OperatorFormData,
+} from "@/schemas/operators";
+import type { Operator } from "@/db/schema/parties";
+
+interface OperatorFormProps {
+  operator?: Operator;
+  onSubmit: (data: OperatorFormData) => Promise<void> | void;
+  onCancel?: () => void;
+  isSubmitting?: boolean;
+  submitLabel?: string;
+}
+
+export function OperatorForm({
+  operator,
+  onSubmit,
+  onCancel,
+  isSubmitting = false,
+  submitLabel,
+}: OperatorFormProps) {
+  const isEditMode = !!operator;
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<OperatorFormData>({
+    resolver: zodResolver(operatorFormSchema),
+    defaultValues: {
+      name: operator?.name ?? "",
+      credentials: operator?.credentials ?? "",
+      contactPhone: operator?.contactPhone ?? "",
+    },
+  });
+
+  return (
+    <form onSubmit={handleSubmit((data) => onSubmit(data))} className="space-y-20">
+      <FormField id="name" label="Name" error={errors.name?.message} required>
+        <FormInput
+          id="name"
+          type="text"
+          placeholder="e.g., Jane Doe"
+          disabled={isSubmitting}
+          error={!!errors.name}
+          autoFocus
+          {...register("name")}
+        />
+      </FormField>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <FormField
+          id="credentials"
+          label="Credentials"
+          error={errors.credentials?.message}
+        >
+          <FormInput
+            id="credentials"
+            type="text"
+            placeholder="Optional role or certification"
+            disabled={isSubmitting}
+            error={!!errors.credentials}
+            {...register("credentials")}
+          />
+        </FormField>
+
+        <FormField
+          id="contactPhone"
+          label="Contact Phone"
+          error={errors.contactPhone?.message}
+        >
+          <FormInput
+            id="contactPhone"
+            type="tel"
+            placeholder="e.g., +255 754 000 000"
+            disabled={isSubmitting}
+            error={!!errors.contactPhone}
+            {...register("contactPhone")}
+          />
+        </FormField>
+      </div>
+
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={isEditMode ? "Update Operator" : "Create Operator"}
+      />
+    </form>
+  );
+}
