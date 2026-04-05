@@ -187,4 +187,6 @@ export const demoTimestamps = {
   application5Date: new Date('2026-02-01T10:00:00.000Z'),
   creditBatch1Start: new Date('2026-01-13T00:00:00.000Z'),
   creditBatch1End: new Date('2026-01-31T23:59:59.000Z'),
+  creditBatch2Start: new Date('2026-02-01T00:00:00.000Z'),
+  creditBatch2End: new Date('2026-02-28T23:59:59.000Z'),
 } as const;
