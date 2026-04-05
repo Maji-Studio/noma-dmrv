@@ -275,7 +275,6 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., -3.3349"
                 disabled={isSubmitting}
-                readOnly={latFromSupplier}
                 error={!!errors.gpsLatitude}
                 {...register("gpsLatitude", { setValueAs: numericValue })}
               />
@@ -293,7 +292,6 @@ export function FeedstockForm({
                 step="any"
                 placeholder="e.g., 37.3404"
                 disabled={isSubmitting}
-                readOnly={lngFromSupplier}
                 error={!!errors.gpsLongitude}
                 {...register("gpsLongitude", { setValueAs: numericValue })}
               />

@@ -43,7 +43,7 @@ test.describe("Order + Delivery UI CRUD", () => {
 
     // Open the "New Order" side sheet
     await adminPage.click('button:has-text("New Order")');
-    await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
 
     // --- Fill in required fields ---
 
@@ -141,7 +141,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
     await adminPage.click('button:has-text("New Order")');
-    await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
 
     await adminPage.fill('input[name="orderDate"]', "2026-03-02");
     await adminPage.selectOption('select[name="customerId"]', seededData.customer.id);

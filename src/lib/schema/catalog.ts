@@ -260,12 +260,6 @@ const TABLE_META: Record<string, TableMeta> = {
     summary: "Join table linking applications to credit batches.",
     useCases: ["Issuance traceability", "Inclusion/exclusion reviews"],
   },
-  credit_batch_production_runs: {
-    area: "Credits",
-    modulePath: "src/db/schema/credits.ts",
-    summary: "Join table linking production runs to credit batches.",
-    useCases: ["Run-level credit attribution", "Batch composition traceability"],
-  },
   emission_factors: {
     area: "Emissions",
     modulePath: "src/db/schema/emissions.ts",

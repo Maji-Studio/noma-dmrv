@@ -38,9 +38,7 @@ export const feedstockTypeFormSchema = z.object({
     .string()
     .min(1, "Feedstock type name is required")
     .max(255, "Name must be less than 255 characters"),
-  category: z
-    .string()
-    .min(1, "Category is required"),
+  category: z.enum(feedstockCategories, { message: "Category is required" }),
   description: z
     .string()
     .max(1000, "Description must be less than 1000 characters")
@@ -64,7 +62,7 @@ export const createFeedstockTypeSchema = feedstockTypeFormSchema;
 export const updateFeedstockTypeSchema = z.object({
   feedstockTypeId: z.string().uuid("Invalid feedstock type ID"),
   name: z.string().min(1).max(255).optional(),
-  category: z.string().min(1).optional(),
+  category: z.enum(feedstockCategories).optional(),
   description: z.string().max(1000).optional().nullable(),
   registryUrl: z.string().max(500).optional().nullable(),
 });
