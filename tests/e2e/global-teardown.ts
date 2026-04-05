@@ -147,7 +147,31 @@ export default async function globalTeardown() {
       `);
 
       // ─── Credit batches ───
-      await client.query(`DELETE FROM credit_batches WHERE code LIKE 'E2E-%'`);
+      // Delete by code prefix AND by facility reference (UI-created batches have auto-generated codes)
+      await client.query(`
+        DELETE FROM credit_batch_applications
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches
+          WHERE facility_id IN (
+            SELECT id FROM facilities
+            WHERE code LIKE 'E2E-%'
+               OR name LIKE 'UI %'
+               OR name LIKE 'Chain %'
+               OR name LIKE 'Duplicate Test %'
+          )
+        )
+      `);
+      await client.query(`
+        DELETE FROM credit_batches
+        WHERE code LIKE 'E2E-%'
+           OR facility_id IN (
+                SELECT id FROM facilities
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
+              )
+      `);
 
       // ─── Applications ───
       await client.query(`DELETE FROM applications WHERE code LIKE 'E2E-%'`);
