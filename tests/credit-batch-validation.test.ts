@@ -42,27 +42,30 @@ let appInFacilityA: { id: string };
 let appInFacilityB: { id: string };
 
 beforeAll(async () => {
+  // Per-run suffix to avoid uniqueness collisions across parallel runs
+  const runId = Date.now().toString(36);
+
   // Create shared prerequisites
   const [customer] = await db
     .insert(customers)
-    .values({ name: "Test Customer VAL", code: "CU-VAL-001" })
+    .values({ name: "Test Customer VAL", code: `CU-VAL-${runId}` })
     .returning({ id: customers.id });
   createdIds.customers.push(customer.id);
 
   const [formulation] = await db
     .insert(formulations)
-    .values({ name: "Raw Biochar VAL", code: "FM-VAL-001" })
+    .values({ name: "Raw Biochar VAL", code: `FM-VAL-${runId}` })
     .returning({ id: formulations.id });
   createdIds.formulations.push(formulation.id);
 
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ name: "Test Facility A", code: "TFA-VAL-001" })
+    .values({ name: "Test Facility A", code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ name: "Test Facility B", code: "TFB-VAL-001" })
+    .values({ name: "Test Facility B", code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;
@@ -71,11 +74,11 @@ beforeAll(async () => {
   // Create biochar products (needs formulation)
   const [productA] = await db
     .insert(biocharProducts)
-    .values({ code: "BP-VAL-A1", facilityId: facilityA.id, formulationId: formulation.id })
+    .values({ code: `BP-VAL-A-${runId}`, facilityId: facilityA.id, formulationId: formulation.id })
     .returning({ id: biocharProducts.id });
   const [productB] = await db
     .insert(biocharProducts)
-    .values({ code: "BP-VAL-B1", facilityId: facilityB.id, formulationId: formulation.id })
+    .values({ code: `BP-VAL-B-${runId}`, facilityId: facilityB.id, formulationId: formulation.id })
     .returning({ id: biocharProducts.id });
   createdIds.biocharProducts.push(productA.id, productB.id);
 
@@ -83,7 +86,7 @@ beforeAll(async () => {
   const [orderA] = await db
     .insert(orders)
     .values({
-      code: "OR-VAL-A1",
+      code: `OR-VAL-A-${runId}`,
       facilityId: facilityA.id,
       biocharProductId: productA.id,
       customerId: customer.id,
@@ -95,7 +98,7 @@ beforeAll(async () => {
   const [orderB] = await db
     .insert(orders)
     .values({
-      code: "OR-VAL-B1",
+      code: `OR-VAL-B-${runId}`,
       facilityId: facilityB.id,
       biocharProductId: productB.id,
       customerId: customer.id,
@@ -110,7 +113,7 @@ beforeAll(async () => {
   const [deliveryA] = await db
     .insert(deliveries)
     .values({
-      code: "DL-VAL-A1",
+      code: `DL-VAL-A-${runId}`,
       facilityId: facilityA.id,
       orderId: orderA.id,
       deliveryDate: new Date("2025-06-10"),
@@ -119,7 +122,7 @@ beforeAll(async () => {
   const [deliveryB] = await db
     .insert(deliveries)
     .values({
-      code: "DL-VAL-B1",
+      code: `DL-VAL-B-${runId}`,
       facilityId: facilityB.id,
       orderId: orderB.id,
       deliveryDate: new Date("2025-06-10"),
@@ -131,8 +134,9 @@ beforeAll(async () => {
   const [aA] = await db
     .insert(applications)
     .values({
-      code: "AP-VAL-A1",
+      code: `AP-VAL-A-${runId}`,
       deliveryId: deliveryA.id,
+      applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: 5,
       biocharAppliedDryTons: 4.5,
     })
@@ -140,8 +144,9 @@ beforeAll(async () => {
   const [aB] = await db
     .insert(applications)
     .values({
-      code: "AP-VAL-B1",
+      code: `AP-VAL-B-${runId}`,
       deliveryId: deliveryB.id,
+      applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: 5,
       biocharAppliedDryTons: 4.5,
     })

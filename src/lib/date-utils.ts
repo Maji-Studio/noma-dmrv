@@ -52,6 +52,14 @@ export function formatLocalDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Format a Date as "YYYY-MM-DD" in UTC. Use for matching against backend-stored UTC date strings. */
+export function formatUtcDate(date: Date): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** Format a Date as "YYYY-MM-DDTHH:MM" in local timezone. */
 export function formatLocalDateTime(date: Date): string {
   const y = date.getFullYear();

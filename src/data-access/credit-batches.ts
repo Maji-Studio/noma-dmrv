@@ -32,7 +32,9 @@ export interface CreditBatchWithRelations extends CreditBatch {
 async function validateApplicationIds(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   applicationIds: string[],
-  facilityId: string
+  facilityId: string,
+  startDate?: string | Date,
+  endDate?: string | Date,
 ): Promise<void> {
   if (applicationIds.length === 0) return;
 
@@ -42,11 +44,12 @@ async function validateApplicationIds(
     throw new Error("Duplicate application IDs are not allowed");
   }
 
-  // Fetch applications with their delivery's facilityId
+  // Fetch applications with their delivery's facilityId and application date
   const rows = await tx
     .select({
       id: applications.id,
       deliveryFacilityId: deliveries.facilityId,
+      applicationDate: applications.applicationDate,
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
@@ -63,6 +66,24 @@ async function validateApplicationIds(
     throw new Error(
       `Application(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
     );
+  }
+
+  // Validate application dates fall within the credit batch date window
+  if (startDate != null && endDate != null) {
+    const startStr = typeof startDate === "string" ? startDate : startDate.toISOString().split("T")[0];
+    const endStr = typeof endDate === "string" ? endDate : endDate.toISOString().split("T")[0];
+
+    const outsideWindow = rows.filter((r) => {
+      if (!r.applicationDate) return true;
+      const appDateStr = r.applicationDate.toISOString().split("T")[0];
+      return appDateStr < startStr || appDateStr > endStr;
+    });
+
+    if (outsideWindow.length > 0) {
+      throw new Error(
+        `Application(s) fall outside the credit batch date window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
+      );
+    }
   }
 }
 
@@ -209,7 +230,7 @@ export async function createCreditBatch(
 
     // Validate and insert application links
     if (applicationIds && applicationIds.length > 0) {
-      await validateApplicationIds(tx, applicationIds, batchData.facilityId);
+      await validateApplicationIds(tx, applicationIds, batchData.facilityId, batchData.startDate, batchData.endDate);
       await tx.insert(creditBatchApplications).values(
         applicationIds.map((applicationId) => ({
           creditBatchId: batch.id,
@@ -299,7 +320,11 @@ export async function updateCreditBatch(
   await db.transaction(async (tx) => {
     // Fetch existing batch inside transaction to avoid TOCTOU race
     const [existingBatch] = await tx
-      .select({ facilityId: creditBatches.facilityId })
+      .select({
+        facilityId: creditBatches.facilityId,
+        startDate: creditBatches.startDate,
+        endDate: creditBatches.endDate,
+      })
       .from(creditBatches)
       .where(eq(creditBatches.id, id));
 
@@ -312,6 +337,14 @@ export async function updateCreditBatch(
       updateFields.facilityId !== undefined &&
       updateFields.facilityId !== existingBatch.facilityId;
 
+    // Resolve the effective date window after update
+    const effectiveStartDate = updateFields.startDate
+      ? updateFields.startDate.toISOString().split("T")[0]
+      : existingBatch.startDate;
+    const effectiveEndDate = updateFields.endDate
+      ? updateFields.endDate.toISOString().split("T")[0]
+      : existingBatch.endDate;
+
     await tx
       .update(creditBatches)
       .set(updateData)
@@ -320,7 +353,7 @@ export async function updateCreditBatch(
     if (applicationIds !== undefined) {
       // Explicit application update: validate new set against target facility
       if (applicationIds.length > 0) {
-        await validateApplicationIds(tx, applicationIds, targetFacilityId);
+        await validateApplicationIds(tx, applicationIds, targetFacilityId, effectiveStartDate, effectiveEndDate);
       }
 
       await tx
@@ -335,15 +368,15 @@ export async function updateCreditBatch(
           }))
         );
       }
-    } else if (facilityChanged) {
-      // Facility changed but applicationIds omitted: validate existing links against new facility
+    } else if (facilityChanged || updateFields.startDate !== undefined || updateFields.endDate !== undefined) {
+      // Facility or dates changed but applicationIds omitted: revalidate existing links
       const existingLinks = await tx
         .select({ applicationId: creditBatchApplications.applicationId })
         .from(creditBatchApplications)
         .where(eq(creditBatchApplications.creditBatchId, id));
       const existingAppIds = existingLinks.map((l) => l.applicationId);
       if (existingAppIds.length > 0) {
-        await validateApplicationIds(tx, existingAppIds, targetFacilityId);
+        await validateApplicationIds(tx, existingAppIds, targetFacilityId, effectiveStartDate, effectiveEndDate);
       }
     }
   });
