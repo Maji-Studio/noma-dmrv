@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
+import { emptyToNull, optionalPositiveNumber, optionalPercent } from "./helpers";
 
 // ============================================
 // Constants
@@ -52,9 +52,10 @@ export const biocharProductFormSchema = z.object({
   storageLocationId: emptyToNull.or(z.string().uuid("Invalid storage location")).nullable().optional(),
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
-  massKg: z.number().min(0, "Mass must be a positive number").nullable().optional(),
-  moistureContentPercent: z.number().min(MOISTURE_MIN, "Moisture must be 0-100%").max(MOISTURE_MAX, "Moisture must be 0-100%").nullable().optional(),
-  densityKgM3: z.number().min(0, "Density must be a positive number").nullable().optional(),
+  massKg: optionalPositiveNumber,
+  moistureContentPercent: optionalPercent,
+  densityKgM3: optionalPositiveNumber,
+  waterAddedKg: optionalPositiveNumber,
 });
 
 // ============================================
@@ -95,6 +96,7 @@ export const updateBiocharProductSchema = z.object({
   massKg: z.number().min(0).optional().nullable(),
   moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional().nullable(),
   densityKgM3: z.number().min(0).optional().nullable(),
+  waterAddedKg: z.number().min(0).optional().nullable(),
 });
 
 /**
