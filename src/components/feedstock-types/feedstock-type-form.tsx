@@ -40,7 +40,7 @@ export function FeedstockTypeForm({
     resolver: zodResolver(feedstockTypeFormSchema),
     defaultValues: {
       name: feedstockType?.name ?? "",
-      category: feedstockType?.category ?? "",
+      category: (feedstockType?.category as FeedstockTypeFormData["category"]) ?? undefined,
       description: feedstockType?.description ?? "",
       registryUrl: feedstockType?.registryUrl ?? "",
     },

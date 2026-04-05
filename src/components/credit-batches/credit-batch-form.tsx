@@ -12,7 +12,7 @@
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
-import { formatLocalDate, toDateInputValue } from "@/lib/date-utils";
+import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -301,8 +301,8 @@ export function CreditBatchForm({
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 
   // Derive matched items from date range + facility (no manual selection)
-  const startDateStr = startDate ? formatLocalDate(startDate) : "";
-  const endDateStr = endDate ? formatLocalDate(endDate) : "";
+  const startDateStr = startDate ? formatUtcDate(startDate) : "";
+  const endDateStr = endDate ? formatUtcDate(endDate) : "";
 
   // Filter applications by effective facility before date matching
   const facilityApps = applications.filter(
@@ -312,7 +312,7 @@ export function CreditBatchForm({
   const matchedApps = hasBothDates
     ? facilityApps.filter((app) => {
         if (!app.applicationDate) return false;
-        const d = formatLocalDate(new Date(app.applicationDate));
+        const d = formatUtcDate(new Date(app.applicationDate));
         return d >= startDateStr && d <= endDateStr;
       })
     : [];

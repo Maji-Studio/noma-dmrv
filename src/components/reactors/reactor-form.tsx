@@ -23,6 +23,7 @@ import {
   kgToTph,
   tphToKg,
   type ReactorFormData,
+  type CreateReactorData,
   type ReactorType,
   type SamplingMethod,
 } from "@/schemas/reactors";
@@ -59,8 +60,8 @@ function isSamplingMethod(value: string | null | undefined): value is SamplingMe
 interface ReactorFormProps {
   /** Existing reactor data for editing (undefined for create mode) */
   reactor?: Reactor;
-  /** Form submission handler */
-  onSubmit: (data: ReactorFormData) => Promise<void> | void;
+  /** Form submission handler — receives data with capacityKg (converted from tph) */
+  onSubmit: (data: CreateReactorData) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -98,7 +99,7 @@ export function ReactorForm({
       facilityId: reactor?.facilityId || contextFacilityId || "",
       reactorType: defaultReactorType,
       samplingMethod: defaultSamplingMethod,
-      capacityKg: reactor?.capacityKg != null ? kgToTph(reactor.capacityKg) : undefined,
+      capacityTph: reactor?.capacityKg != null ? kgToTph(reactor.capacityKg) : undefined,
       specifications: undefined,
     },
   });
@@ -115,10 +116,10 @@ export function ReactorForm({
   const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
 
   const handleFormSubmit = handleSubmit((data) => {
-    const formData = data as ReactorFormData;
+    const { capacityTph, ...rest } = data as ReactorFormData;
     onSubmit({
-      ...formData,
-      capacityKg: formData.capacityKg != null ? tphToKg(formData.capacityKg) : formData.capacityKg,
+      ...rest,
+      capacityKg: capacityTph != null ? tphToKg(capacityTph) : undefined,
     });
   });
 
@@ -192,19 +193,19 @@ export function ReactorForm({
           </FormField>
 
           <FormField
-            id="capacityKg"
+            id="capacityTph"
             label="Nominal Throughput (tph)"
-            error={errors.capacityKg?.message}
+            error={errors.capacityTph?.message}
             helperText="Designed feedstock throughput per hour"
           >
             <FormInput
-              id="capacityKg"
+              id="capacityTph"
               type="number"
               step="any"
               placeholder="e.g., 3"
               disabled={isSubmitting}
-              error={!!errors.capacityKg}
-              {...register("capacityKg", {
+              error={!!errors.capacityTph}
+              {...register("capacityTph", {
                 setValueAs: numericValue,
               })}
             />
