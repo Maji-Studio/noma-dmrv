@@ -22,6 +22,8 @@ const storageTypeOptions: readonly { value: string; label: string }[] =
     label: formatStorageLocationType(type),
   }));
 
+const FEEDSTOCK_BIN_TYPES: readonly string[] = ["feedstock_bin", "ingredient_bin"];
+
 interface StorageLocationFormProps {
   storageLocation?: StorageLocation;
   onSubmit: (data: StorageLocationFormData) => Promise<void> | void;
@@ -59,7 +61,7 @@ export function StorageLocationForm({
   });
 
   const watchedType = useWatch({ control, name: "type" });
-  const showFeedstockType = watchedType === "feedstock_bin" || watchedType === "ingredient_bin";
+  const showFeedstockType = !!watchedType && FEEDSTOCK_BIN_TYPES.includes(watchedType);
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
@@ -67,7 +69,7 @@ export function StorageLocationForm({
 
   const handleFormSubmit = handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;
-    if (normalized.type !== "feedstock_bin" && normalized.type !== "ingredient_bin") {
+    if (!normalized.type || !FEEDSTOCK_BIN_TYPES.includes(normalized.type)) {
       normalized.feedstockTypeId = null;
     }
     return onSubmit(normalized);

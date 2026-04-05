@@ -2,7 +2,7 @@ import { relations, sql } from 'drizzle-orm';
 import { check, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
 import { feedstockStatus } from './common';
 import { facilities, storageLocations } from './facilities';
-import { suppliers, drivers } from './parties';
+import { suppliers } from './parties';
 import { vehicles } from './logistics';
 import type { InferSelectModel } from 'drizzle-orm';
 
@@ -26,7 +26,6 @@ export const feedstockDeliveries = pgTable(
     supplierId: uuid('supplier_id')
       .notNull()
       .references(() => suppliers.id),
-    driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
     gpsLatitude: real('gps_latitude'),
     gpsLongitude: real('gps_longitude'),
@@ -94,7 +93,6 @@ export const feedstocks = pgTable(
     // --- Delivery Details (absorbed from feedstock_deliveries) ---
     deliveryDate: timestamp('delivery_date'),
     supplierId: uuid('supplier_id').references(() => suppliers.id),
-    driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
     gpsLatitude: real('gps_latitude'),
     gpsLongitude: real('gps_longitude'),
@@ -172,10 +170,6 @@ export const feedstockDeliveriesRelations = relations(
       fields: [feedstockDeliveries.supplierId],
       references: [suppliers.id],
     }),
-    driver: one(drivers, {
-      fields: [feedstockDeliveries.driverId],
-      references: [drivers.id],
-    }),
     vehicle: one(vehicles, {
       fields: [feedstockDeliveries.vehicleId],
       references: [vehicles.id],
@@ -207,10 +201,6 @@ export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
   supplier: one(suppliers, {
     fields: [feedstocks.supplierId],
     references: [suppliers.id],
-  }),
-  driver: one(drivers, {
-    fields: [feedstocks.driverId],
-    references: [drivers.id],
   }),
   vehicle: one(vehicles, {
     fields: [feedstocks.vehicleId],

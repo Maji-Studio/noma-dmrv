@@ -332,6 +332,8 @@ export function BiocharProductList() {
               { label: "Wet Mass", value: formatMass(sideSheet.entity.massKg) },
               { label: "Moisture", value: sideSheet.entity.moistureContentPercent != null ? `${sideSheet.entity.moistureContentPercent}%` : undefined },
               { label: "Dry Mass", value: sideSheet.entity.massKg != null && sideSheet.entity.moistureContentPercent != null && sideSheet.entity.massKg >= 0 && sideSheet.entity.moistureContentPercent >= 0 && sideSheet.entity.moistureContentPercent <= 100 ? formatMass(deriveMassDryKg(sideSheet.entity.massKg, sideSheet.entity.moistureContentPercent)) : undefined },
+              { label: "Water Added", value: sideSheet.entity.waterAddedKg != null ? formatMass(sideSheet.entity.waterAddedKg) : undefined },
+              { label: "Density", value: sideSheet.entity.densityKgM3 != null ? `${sideSheet.entity.densityKgM3} kg/m³` : undefined },
             ],
           },
           {

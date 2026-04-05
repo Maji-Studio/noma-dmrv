@@ -102,6 +102,7 @@ export const biocharProducts = pgTable('biochar_products', {
   massKg: real('mass_kg'),
   moistureContentPercent: real('moisture_content_percent'),
   densityKgM3: real('density_kg_m3'),
+  waterAddedKg: real('water_added_kg'),
 
   // --- Location ---
   storageLocationId: uuid('storage_location_id').references(
