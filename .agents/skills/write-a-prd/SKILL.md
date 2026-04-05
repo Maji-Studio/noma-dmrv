@@ -3,7 +3,13 @@ name: write-a-prd
 description: Create a PRD through user interview, codebase exploration, and module design, then submit as a GitHub issue. Use when user wants to write a PRD, create a product requirements document, or plan a new feature.
 ---
 
-This skill will be invoked when the user wants to create a PRD. You may skip steps if you don't consider them necessary.
+This skill will be invoked when the user wants to create a PRD. You may skip steps when specific preconditions are met:
+
+- **Skip step 2** (codebase exploration) if the user has already provided a repo link and architectural overview, or if the PRD is for a greenfield project with no existing code.
+- **Skip step 3** (detailed interview) only for trivial changes such as UI copy updates, single config changes, or one-field schema additions where the scope is self-evident.
+- **Skip step 4** (module design) if the feature requires no new modules and only modifies existing interfaces in straightforward ways.
+
+When in doubt, do not skip — the interview and exploration steps catch misunderstandings early.
 
 1. Ask the user for a long, detailed description of the problem they want to solve and any potential ideas for solutions.
 
@@ -31,7 +37,7 @@ The solution to the problem, from the user's perspective.
 
 ## User Stories
 
-A LONG, numbered list of user stories. Each user story should be in the format of:
+A comprehensive, numbered list of user stories proportional to the feature's scope. Each user story should be in the format of:
 
 1. As an <actor>, I want a <feature>, so that <benefit>
 
@@ -39,7 +45,7 @@ A LONG, numbered list of user stories. Each user story should be in the format o
 1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
 </user-story-example>
 
-This list of user stories should be extremely extensive and cover all aspects of the feature.
+This list should be thorough and cover all aspects of the feature, proportional to its scope. A small config change may need 3-5 stories; a major workflow may need 20+.
 
 ## Implementation Decisions
 
