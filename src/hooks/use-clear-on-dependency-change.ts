@@ -38,7 +38,7 @@ export function useClearOnDependencyChange(
     }
     if (prevRef.current !== serialized) {
       prevRef.current = serialized;
-      onChange(null);
+      onChange("");
     }
   }, [enabled, serialized, onChange]);
 }

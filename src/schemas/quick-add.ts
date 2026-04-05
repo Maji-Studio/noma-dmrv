@@ -56,7 +56,7 @@ export const vehicleQuickAddSchema = z.object({
     .max(50, "Fuel type must be less than 50 characters"),
   fuelConsumptionLPerKm: z
     .number()
-    .positive("Fuel consumption must be positive")
+    .nonnegative("Fuel consumption must be zero or positive")
     .max(10, "Fuel consumption seems too high"),
   modelYear: z
     .number()

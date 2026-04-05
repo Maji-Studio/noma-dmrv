@@ -224,14 +224,6 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .where(eq(schema.creditBatches.facilityId, data.facility.id));
       if (facilityBatches.length > 0) {
         await tx
-          .delete(schema.creditBatchProductionRuns)
-          .where(
-            inArray(
-              schema.creditBatchProductionRuns.creditBatchId,
-              facilityBatches.map((b) => b.id)
-            )
-          );
-        await tx
           .delete(schema.creditBatchApplications)
           .where(
             inArray(

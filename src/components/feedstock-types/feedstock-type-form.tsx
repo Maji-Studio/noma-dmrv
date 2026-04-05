@@ -8,6 +8,7 @@ import { FormActions } from "@/components/forms/form-actions";
 import {
   feedstockTypeFormSchema,
   FEEDSTOCK_CATEGORY_OPTIONS,
+  feedstockCategories,
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
 import type { FeedstockType } from "@/db/schema/feedstock";
@@ -40,7 +41,9 @@ export function FeedstockTypeForm({
     resolver: zodResolver(feedstockTypeFormSchema),
     defaultValues: {
       name: feedstockType?.name ?? "",
-      category: feedstockType?.category ?? "",
+      category: feedstockType?.category && (feedstockCategories as readonly string[]).includes(feedstockType.category)
+        ? (feedstockType.category as FeedstockTypeFormData["category"])
+        : undefined,
       description: feedstockType?.description ?? "",
       registryUrl: feedstockType?.registryUrl ?? "",
     },

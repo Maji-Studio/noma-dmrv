@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Lightning, Flask, Plus, CheckCircle, Warning } from "@phosphor-icons/react";
@@ -27,7 +27,8 @@ import {
 import {
   formatReactorType,
   formatSamplingMethod,
-  type ReactorFormData,
+  kgToTph,
+  type CreateReactorData,
   type SamplingMethod,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
@@ -211,7 +212,7 @@ export function ReactorList() {
   useOpenCreateIntent(openCreate);
 
   // Handlers
-  const handleCreate = async (data: ReactorFormData) => {
+  const handleCreate = async (data: CreateReactorData) => {
     setCreateError(null);
     try {
       await createReactor.mutateAsync(data);
@@ -222,7 +223,7 @@ export function ReactorList() {
     }
   };
 
-  const handleUpdate = async (data: ReactorFormData) => {
+  const handleUpdate = async (data: CreateReactorData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -251,12 +252,12 @@ export function ReactorList() {
   };
 
   // Memoize columns
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
   const methodBEligibleCount = reactors.filter((r) => r.methodBEligibility?.isEligible).length;
-  const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.capacityKg || 0), 0);
+  const totalThroughputTph = reactors.reduce((sum, r) => sum + kgToTph(r.capacityKg || 0), 0);
 
   if (fetchError) {
     return (

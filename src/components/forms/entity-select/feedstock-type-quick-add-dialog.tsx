@@ -30,7 +30,7 @@ export function FeedstockTypeQuickAddDialog({
         name: data.name.trim(),
         category: data.category,
         description: data.description?.trim() || null,
-        registryUrl: data.registryUrl ?? null,
+        registryUrl: data.registryUrl?.trim() || null,
       }),
     onSuccess,
     onClose,

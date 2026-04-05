@@ -32,7 +32,7 @@ interface StorageLocationFormProps {
   isSubmitting?: boolean;
   submitLabel?: string;
   /** Pre-selected storage type (used by quick-add dialog) */
-  defaultType?: string;
+  defaultType?: StorageLocationType;
 }
 
 export function StorageLocationForm({
@@ -55,7 +55,7 @@ export function StorageLocationForm({
     resolver: zodResolver(storageLocationFormSchema),
     defaultValues: {
       name: storageLocation?.name ?? "",
-      type: storageLocation?.type ?? (defaultType as StorageLocationType) ?? undefined,
+      type: storageLocation?.type ?? defaultType ?? undefined,
       facilityId: storageLocation?.facilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? "",

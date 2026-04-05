@@ -13,7 +13,6 @@ import { relations, sql } from 'drizzle-orm';
 import { creditBatchStatus, durabilityOption } from './common';
 import { facilities } from './facilities';
 import { applications } from './application';
-import { productionRuns } from './production';
 
 // ============================================
 // Credit Batches - Carbon credit batches for registry
@@ -142,26 +141,6 @@ export const creditBatchApplications = pgTable(
 );
 
 // ============================================
-// Credit Batch Production Runs - Junction table (M:M)
-// Links credit batches to multiple production runs
-// ============================================
-
-export const creditBatchProductionRuns = pgTable(
-  'credit_batch_production_runs',
-  {
-    id: uuid('id').notNull().defaultRandom(),
-    creditBatchId: uuid('credit_batch_id')
-      .notNull()
-      .references(() => creditBatches.id),
-    productionRunId: uuid('production_run_id')
-      .notNull()
-      .references(() => productionRuns.id),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.creditBatchId, table.productionRunId] })]
-);
-
-// ============================================
 // Relations
 // ============================================
 
@@ -173,7 +152,6 @@ export const creditBatchesRelations = relations(
       references: [facilities.id],
     }),
     creditBatchApplications: many(creditBatchApplications),
-    creditBatchProductionRuns: many(creditBatchProductionRuns),
   })
 );
 
@@ -191,20 +169,6 @@ export const creditBatchApplicationsRelations = relations(
   })
 );
 
-export const creditBatchProductionRunsRelations = relations(
-  creditBatchProductionRuns,
-  ({ one }) => ({
-    creditBatch: one(creditBatches, {
-      fields: [creditBatchProductionRuns.creditBatchId],
-      references: [creditBatches.id],
-    }),
-    productionRun: one(productionRuns, {
-      fields: [creditBatchProductionRuns.productionRunId],
-      references: [productionRuns.id],
-    }),
-  })
-);
-
 // ============================================
 // Type Exports
 // ============================================
@@ -213,5 +177,3 @@ export type CreditBatch = typeof creditBatches.$inferSelect;
 export type NewCreditBatch = typeof creditBatches.$inferInsert;
 export type CreditBatchApplication = typeof creditBatchApplications.$inferSelect;
 export type NewCreditBatchApplication = typeof creditBatchApplications.$inferInsert;
-export type CreditBatchProductionRun = typeof creditBatchProductionRuns.$inferSelect;
-export type NewCreditBatchProductionRun = typeof creditBatchProductionRuns.$inferInsert;
