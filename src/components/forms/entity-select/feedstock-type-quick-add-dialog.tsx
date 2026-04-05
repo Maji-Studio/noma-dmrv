@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useDialog } from "@/hooks/use-dialog";
 import { cn } from "@/lib/utils";
 import { createFeedstockTypeFn } from "@/fn/quick-add";
+import { FEEDSTOCK_CATEGORY_OPTIONS } from "@/schemas/quick-add";
 import { seedEntityCache } from "./cache-utils";
 import type { EntityOption } from "./types";
 
@@ -75,13 +76,6 @@ interface FeedstockTypeForm {
   registryUrl: string;
 }
 
-const FEEDSTOCK_CATEGORIES = [
-  { value: "forestry", label: "Forestry" },
-  { value: "agricultural", label: "Agricultural" },
-  { value: "industrial", label: "Industrial" },
-  { value: "municipal", label: "Municipal" },
-  { value: "invasive", label: "Invasive Species" },
-];
 
 export function FeedstockTypeQuickAddDialog({
   isOpen,
@@ -201,7 +195,7 @@ export function FeedstockTypeQuickAddDialog({
               data-testid="feedstock-category-select"
             >
               <option value="">Select category...</option>
-              {FEEDSTOCK_CATEGORIES.map((cat) => (
+              {FEEDSTOCK_CATEGORY_OPTIONS.map((cat) => (
                 <option key={cat.value} value={cat.value}>
                   {cat.label}
                 </option>
