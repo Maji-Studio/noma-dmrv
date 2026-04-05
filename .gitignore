@@ -50,3 +50,6 @@ test-results
 .tmp_pdf
 
 .automaker
+
+# claude code
+.claude/settings.local.json
