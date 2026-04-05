@@ -64,6 +64,7 @@ const ids = {
   storageProdMoshi: demoId(1202),
   storageFeedArusha: demoId(1203),
   storageCharArusha: demoId(1204),
+  storageProdArusha: demoId(1205),
 
   // Suppliers
   supplierKili: demoId(1300),
@@ -125,21 +126,28 @@ const ids = {
   biocharProduct1: demoId(1950),
   biocharProduct2: demoId(1951),
   biocharProduct3: demoId(1952),
+  biocharProduct4: demoId(1953),
 
   // Orders
   order1: demoId(2000),
   order2: demoId(2001),
   order3: demoId(2002),
+  order4: demoId(2003),
+  order5: demoId(2004),
 
   // Deliveries (outbound)
   delivery1: demoId(2050),
   delivery2: demoId(2051),
   delivery3: demoId(2052),
+  delivery4: demoId(2053),
+  delivery5: demoId(2054),
 
   // Applications
   application1: demoId(2100),
   application2: demoId(2101),
   application3: demoId(2102),
+  application4: demoId(2103),
+  application5: demoId(2104),
 
   // Credit Batches
   creditBatch1: demoId(2200),
@@ -178,10 +186,18 @@ const demoTimestamps = {
   delivery2Date: new Date('2026-01-24T09:30:00.000Z'),
   delivery3Date: new Date('2026-01-25T10:00:00.000Z'),
 
+  // Arusha orders and deliveries (overlapping timeline)
+  order4Date: new Date('2026-01-22T14:00:00.000Z'),
+  order5Date: new Date('2026-01-23T09:30:00.000Z'),
+  delivery4Date: new Date('2026-01-26T07:30:00.000Z'),
+  delivery5Date: new Date('2026-01-27T08:00:00.000Z'),
+
   // Week 4: Applications and credits
   application1Date: new Date('2026-01-27T11:00:00.000Z'),
   application2Date: new Date('2026-01-28T10:30:00.000Z'),
   application3Date: new Date('2026-01-29T09:00:00.000Z'),
+  application4Date: new Date('2026-01-30T07:00:00.000Z'),
+  application5Date: new Date('2026-02-01T10:00:00.000Z'),
   creditBatch1Start: new Date('2026-01-13T00:00:00.000Z'),
   creditBatch1End: new Date('2026-01-31T23:59:59.000Z'),
 } as const;
@@ -365,6 +381,18 @@ async function seedDemoData() {
           latitude: -3.3864,
           longitude: 36.6835,
           storageMethod: 'tarped_pile',
+          facilityId: ids.facilityArusha,
+        },
+        {
+          id: ids.storageProdArusha,
+          code: 'SL-PROD-ARUSHA-01',
+          name: 'Arusha Product Dispatch',
+          type: 'product_bin',
+          capacityKg: 15000,
+          latitude: -3.3866,
+          longitude: 36.6837,
+          storageMethod: 'covered_bin',
+          storageDescription: 'Covered dispatch area with weigh station',
           facilityId: ids.facilityArusha,
         },
       ]);
@@ -928,6 +956,17 @@ async function seedDemoData() {
           densityKgM3: 490,
           storageLocationId: ids.storageProdMoshi,
         },
+        {
+          id: ids.biocharProduct4,
+          code: 'BP-2026-104',
+          facilityId: ids.facilityArusha,
+          productionDate: new Date('2026-01-19T08:30:00.000Z'),
+          status: 'ready',
+          formulationId: ids.formulationStandard,
+          massKg: 1650,
+          densityKgM3: 510,
+          storageLocationId: ids.storageProdArusha,
+        },
       ]);
 
       // ============================================================
@@ -971,6 +1010,29 @@ async function seedDemoData() {
           quantityKg: 1800,
           packaging: 'bagged',
           value: 1350000,
+        },
+        {
+          id: ids.order4,
+          code: 'OR-2026-104',
+          facilityId: ids.facilityArusha,
+          orderDate: demoTimestamps.order4Date,
+          customerId: ids.customerVegetable,
+          biocharProductId: ids.biocharProduct4,
+          quantityKg: 900,
+          packaging: 'loose',
+          value: 675000,
+        },
+        {
+          id: ids.order5,
+          code: 'OR-2026-105',
+          facilityId: ids.facilityArusha,
+          orderDate: demoTimestamps.order5Date,
+          customerId: ids.customerCoffee,
+          customerLocationId: ids.locationCoffeeNorth,
+          biocharProductId: ids.biocharProduct4,
+          quantityKg: 750,
+          packaging: 'bagged',
+          value: 562500,
         },
       ]);
 
@@ -1021,6 +1083,37 @@ async function seedDemoData() {
           moistureContentPercent: 6.0,
           deliveredWetMassKg: 1800,
           massDryKg: 1692,
+          driverId: ids.driverJackson,
+          vehicleId: ids.vehicleTruck1,
+        },
+        {
+          id: ids.delivery4,
+          code: 'DL-2026-104',
+          facilityId: ids.facilityArusha,
+          deliveryDate: demoTimestamps.delivery4Date,
+          status: 'delivered',
+          orderId: ids.order4,
+          biocharProductId: ids.biocharProduct4,
+          storageLocationId: ids.storageProdArusha,
+          moistureContentPercent: 5.2,
+          deliveredWetMassKg: 900,
+          massDryKg: 853,
+          driverId: ids.driverAmina,
+          vehicleId: ids.vehicleTruck2,
+        },
+        {
+          id: ids.delivery5,
+          code: 'DL-2026-105',
+          facilityId: ids.facilityArusha,
+          deliveryDate: demoTimestamps.delivery5Date,
+          status: 'delivered',
+          orderId: ids.order5,
+          customerLocationId: ids.locationCoffeeNorth,
+          biocharProductId: ids.biocharProduct4,
+          storageLocationId: ids.storageProdArusha,
+          moistureContentPercent: 4.5,
+          deliveredWetMassKg: 750,
+          massDryKg: 716,
           driverId: ids.driverJackson,
           vehicleId: ids.vehicleTruck1,
         },
@@ -1086,6 +1179,42 @@ async function seedDemoData() {
           soilTemperatureSource: 'baseline',
           soilTemperatureC: 25.2,
         },
+        {
+          id: ids.application4,
+          code: 'AP-2026-104',
+          applicationDate: demoTimestamps.application4Date,
+          status: 'delivered',
+          deliveryId: ids.delivery4,
+          biocharAppliedTons: 2.15,
+          biocharAppliedDryTons: 2.02,
+          gpsLatitude: -3.372,
+          gpsLongitude: 36.694,
+          fieldSizeHa: 1.5,
+          cropType: 'Vegetables',
+          applicationMethodType: 'manual',
+          fieldIdentifier: 'ARUSHA-FARM-V3',
+          co2eStoredTonnes: 3.6,
+          soilTemperatureSource: 'global_database',
+          soilTemperatureC: 23.1,
+        },
+        {
+          id: ids.application5,
+          code: 'AP-2026-105',
+          applicationDate: demoTimestamps.application5Date,
+          status: 'applied',
+          deliveryId: ids.delivery5,
+          biocharAppliedTons: 1.58,
+          biocharAppliedDryTons: 1.48,
+          gpsLatitude: -3.395,
+          gpsLongitude: 36.712,
+          fieldSizeHa: 2.0,
+          cropType: 'Maize',
+          applicationMethodType: 'mechanical',
+          fieldIdentifier: 'ARUSHA-FARM-M7',
+          co2eStoredTonnes: 2.6,
+          soilTemperatureSource: 'baseline',
+          soilTemperatureC: 22.4,
+        },
       ]);
 
       console.log('Creating credit batches...');
@@ -1149,7 +1278,7 @@ async function seedDemoData() {
     console.log('Summary of created entities:');
     console.log('  - 3 Facilities (Moshi, Arusha, Mwanza)');
     console.log('  - 3 Reactors');
-    console.log('  - 5 Storage Locations');
+    console.log('  - 6 Storage Locations');
     console.log('  - 3 Suppliers');
     console.log('  - 3 Customers with 3 Locations');
     console.log('  - 2 Drivers, 2 Operators, 2 Vehicles');
@@ -1157,9 +1286,9 @@ async function seedDemoData() {
     console.log('  - 3 Feedstock Deliveries -> 3 Feedstocks');
     console.log('  - 3 Production Runs -> 3 Samples');
     console.log('  - 3 Formulations');
-    console.log('  - 3 Biochar Products');
-    console.log('  - 3 Orders -> 3 Deliveries');
-    console.log('  - 3 Applications');
+    console.log('  - 4 Biochar Products');
+    console.log('  - 5 Orders -> 5 Deliveries');
+    console.log('  - 5 Applications (3 Moshi, 2 Arusha)');
     console.log('  - 2 Credit Batches (1 with 3 linked applications)');
     console.log('');
   } catch (error) {

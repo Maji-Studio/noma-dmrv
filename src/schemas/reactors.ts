@@ -47,7 +47,7 @@ export const reactorFormSchema = z.object({
   samplingMethod: z.enum(samplingMethods).default("method_a"),
   capacityKg: z
     .number()
-    .positive("Capacity must be a positive number")
+    .positive("Throughput must be a positive number")
     .optional()
     .nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),
@@ -175,3 +175,5 @@ export function formatSamplingMethod(method: SamplingMethod): string {
   };
   return labels[method];
 }
+
+export { tonnesToKg as tphToKg, kgToTonnes as kgToTph } from "@/lib/calculations/unit-conversions";
