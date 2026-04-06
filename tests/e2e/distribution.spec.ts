@@ -40,6 +40,9 @@ test.describe("Order + Delivery UI CRUD", () => {
     // Navigate to the orders list
     await adminPage.goto(ordersUrl);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
+    await expect(adminPage.getByText("Total Orders")).toBeVisible({
+      timeout: 15000,
+    });
 
     // Open the "New Order" side sheet
     await adminPage.click('button:has-text("New Order")');
