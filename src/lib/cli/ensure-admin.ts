@@ -1,7 +1,7 @@
 /**
  * Ensures the admin user exists with a valid credential account.
  * Creates the user if missing, or updates the password hash if it already exists.
- * Does NOT seed any entity data — use `pnpm db:seed` if you want demo/sample records.
+ * Does NOT seed any entity data — use `pnpm db:seed` for that.
  */
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -30,11 +30,7 @@ async function ensureAdmin() {
     process.exit(1);
   }
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: isLocal ? undefined : { rejectUnauthorized: false },
-  });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle(pool, { schema });
 
   try {
@@ -48,12 +44,7 @@ async function ensureAdmin() {
       .limit(1);
 
     if (existing) {
-      // Update password hash and ensure emailVerified
-      await db
-        .update(schema.users)
-        .set({ emailVerified: true })
-        .where(eq(schema.users.id, existing.id));
-
+      // Update password hash
       const [account] = await db
         .select({ id: schema.accounts.id })
         .from(schema.accounts)
