@@ -5,11 +5,13 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Supplier } from "@/db/schema";
+import type { Supplier, SupplierLocation } from "@/db/schema";
 import type {
   SupplierFilterData,
   CreateSupplierData,
   UpdateSupplierData,
+  CreateSupplierLocationData,
+  UpdateSupplierLocationData,
 } from "@/schemas/suppliers";
 import type {
   PaginatedSuppliers,
@@ -24,6 +26,10 @@ import {
   createSupplierFn,
   updateSupplierFn,
   deleteSupplierFn,
+  getSupplierLocationsBySupplierFn,
+  createSupplierLocationFn,
+  updateSupplierLocationFn,
+  deleteSupplierLocationFn,
 } from "@/fn/suppliers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
@@ -40,6 +46,7 @@ export const supplierKeys = {
   details: () => [...supplierKeys.all, "detail"] as const,
   detail: (id: string) => [...supplierKeys.details(), id] as const,
   locations: () => [...supplierKeys.all, "locations"] as const,
+  supplierLocations: (supplierId: string) => [...supplierKeys.all, "supplierLocations", supplierId] as const,
   options: () => [...supplierKeys.all, "options"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...supplierKeys.all, "codeCheck", code, excludeId] as const,
@@ -505,4 +512,76 @@ export function useSupplierCacheInvalidation() {
     getCachedSupplier: (supplierId: string) =>
       queryClient.getQueryData<Supplier>(supplierKeys.detail(supplierId)),
   };
+}
+
+// ============================================
+// Supplier Location Hooks
+// ============================================
+
+export function useSupplierLocationsBySupplier(supplierId: string, enabled = true) {
+  return useQuery({
+    queryKey: supplierKeys.supplierLocations(supplierId),
+    queryFn: async () => {
+      const result = await getSupplierLocationsBySupplierFn(supplierId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: !!supplierId && enabled,
+  });
+}
+
+export function useCreateSupplierLocation(callbacks?: MutationCallbacks<SupplierLocation, CreateSupplierLocationData>) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateSupplierLocationData) => {
+      const result = await createSupplierLocationFn(data);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
+      callbacks?.onSuccess?.(data, variables);
+    },
+    onError: (error, variables) => {
+      callbacks?.onError?.(error instanceof Error ? error : new Error("Failed to create location"), variables);
+    },
+  });
+}
+
+export function useUpdateSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<SupplierLocation, UpdateSupplierLocationData>) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: UpdateSupplierLocationData) => {
+      const result = await updateSupplierLocationFn(data);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
+      callbacks?.onSuccess?.(data, variables);
+    },
+    onError: (error, variables) => {
+      callbacks?.onError?.(error instanceof Error ? error : new Error("Failed to update location"), variables);
+    },
+  });
+}
+
+export function useDeleteSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<void, string>) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (locationId: string) => {
+      const result = await deleteSupplierLocationFn({ locationId });
+      if (!result.success) throw new Error(result.error);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
+      callbacks?.onSuccess?.(undefined, variables);
+    },
+    onError: (error, variables) => {
+      callbacks?.onError?.(error instanceof Error ? error : new Error("Failed to delete location"), variables);
+    },
+  });
 }
