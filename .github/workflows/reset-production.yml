@@ -44,7 +44,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Reset production database from tracked migrations
-        run: pnpm db:reset
+        run: |
+          pnpm db:reset
+          pnpm db:verify-schema
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}

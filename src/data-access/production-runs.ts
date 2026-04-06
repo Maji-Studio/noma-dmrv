@@ -19,8 +19,8 @@ import {
   feedstocks,
   feedstockTypes,
 } from "@/db/schema";
+import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
-import { computeClampedDryMass, deriveMassDryKg } from "./production-run-mass-helpers";
 
 // ============================================
 // Types
