@@ -483,7 +483,7 @@ Run: `pnpm test:e2e` (requires dev server running)
 
 ## CI/CD Workflows
 
-- **Migration workflow** (`.github/workflows/migrate.yml`) — Auto-triggers on schema changes to `main`; supports `workflow_dispatch` with actions: `ensure-admin` (idempotent), `push-schema` (safe), `reset-and-push` (destructive, requires `CONFIRM` input)
+- **Database management** (`.github/workflows/migrate.yml`) — Auto-migrates on schema changes pushed to `main`/`staging`; supports manual `reset-seed-staging` and `reset-production` actions via `workflow_dispatch`
 - **Claude PR Assistant** (`.github/workflows/claude.yml`) — AI-assisted PR review
-- **Claude Code Review** (`.github/workflows/claude-code-review.yml`) — Automated code review
+- **E2E Tests** (`.github/workflows/e2e.yml`) — Playwright end-to-end tests
 - **CodeRabbit** (`.coderabbit.yaml`) — Auto-reviews on `main` and `staging` branches
