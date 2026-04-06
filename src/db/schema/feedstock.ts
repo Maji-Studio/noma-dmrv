@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
 import { feedstockStatus } from './common';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
@@ -27,8 +27,8 @@ export const feedstockDeliveries = pgTable(
       .notNull()
       .references(() => suppliers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-    gpsLatitude: real('gps_latitude'),
-    gpsLongitude: real('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude'),
+    gpsLongitude: doublePrecision('gps_longitude'),
 
     // --- Feedstock Details ---
     feedstockTypeId: uuid('feedstock_type_id').references(
@@ -94,8 +94,8 @@ export const feedstocks = pgTable(
     deliveryDate: timestamp('delivery_date'),
     supplierId: uuid('supplier_id').references(() => suppliers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-    gpsLatitude: real('gps_latitude'),
-    gpsLongitude: real('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude'),
+    gpsLongitude: doublePrecision('gps_longitude'),
 
     // --- Delivery Grouping (for split deliveries: one truck → multiple bins) ---
     deliveryGroupId: uuid('delivery_group_id'),

@@ -19,10 +19,8 @@ import type { Facility } from "@/db/schema/facilities";
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
 
-type FacilityWithOptionalFields = Facility & { timezone?: string };
-
 interface FacilityFormProps {
-  facility?: FacilityWithOptionalFields;
+  facility?: Facility;
   onSubmit: (data: FacilityFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;

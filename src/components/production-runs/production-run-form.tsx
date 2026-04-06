@@ -231,6 +231,7 @@ export function ProductionRunForm({
       preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? undefined,
       electricityKwh: productionRun?.electricityKwh ?? undefined,
       biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
+      biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
       biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
       plcDataFileUrl: productionRun?.plcDataFileUrl ?? "",
     },
@@ -244,6 +245,7 @@ export function ProductionRunForm({
   const watchedSourceBinId = useWatch({ control, name: "feedstockStorageLocationId" });
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
+  const watchedBiocharMoisture = useWatch({ control, name: "biocharMoisturePercent" });
 
   // Entity lookups for flow preview labels
   const { data: selectedReactor } = useEntityById("reactor", watchedReactorId || undefined);
@@ -261,6 +263,15 @@ export function ProductionRunForm({
     watchMoisture >= 0 &&
     watchMoisture <= 100
       ? deriveMassDryKg(watchWetMass, watchMoisture)
+      : null;
+
+  const previewBiocharDryMass =
+    typeof watchedBiocharKg === "number" &&
+    typeof watchedBiocharMoisture === "number" &&
+    watchedBiocharKg >= 0 &&
+    watchedBiocharMoisture >= 0 &&
+    watchedBiocharMoisture <= 100
+      ? deriveMassDryKg(watchedBiocharKg, watchedBiocharMoisture)
       : null;
 
   // Track previous facility to detect real changes
@@ -513,7 +524,7 @@ export function ProductionRunForm({
               )}
             />
           </FormField>
-          <FormField id="biocharOutputKg" label="Biochar Output (kg)" error={errors.biocharOutputKg?.message}>
+          <FormField id="biocharOutputKg" label="Biochar Wet Mass (kg)" error={errors.biocharOutputKg?.message}>
             <FormInput
               id="biocharOutputKg"
               type="number"
@@ -526,7 +537,25 @@ export function ProductionRunForm({
               })}
             />
           </FormField>
+          <FormField id="biocharMoisturePercent" label="Biochar Moisture (%)" error={errors.biocharMoisturePercent?.message}>
+            <FormInput
+              id="biocharMoisturePercent"
+              type="number"
+              step="0.1"
+              placeholder="e.g. 1.5"
+              disabled={isSubmitting}
+              error={!!errors.biocharMoisturePercent}
+              {...register("biocharMoisturePercent", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
         </div>
+        {previewBiocharDryMass != null && (
+          <p className="body-small text-[var(--color-text-secondary)]">
+            Biochar dry mass: {previewBiocharDryMass.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg
+          </p>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-16 gap-y-16">
           <FormField id="dieselOperationLiters" label="Diesel Ops (L)" error={errors.dieselOperationLiters?.message}>
