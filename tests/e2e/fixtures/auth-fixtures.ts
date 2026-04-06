@@ -10,7 +10,12 @@
  *
  * Includes helper functions for seeding test data and cleanup.
  */
-import { test as base, expect, type Page, type BrowserContext } from "@playwright/test";
+import {
+  test as base,
+  expect,
+  type Page,
+  type BrowserContext,
+} from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, inArray } from "drizzle-orm";
@@ -55,6 +60,26 @@ export interface AuthFixtures {
 }
 
 export type { SeededChainData };
+
+interface WorkerAuthData {
+  users: Record<UserRole, TestUser>;
+  projectId: string;
+  authStates: Record<UserRole, AuthStorageState>;
+}
+
+interface AuthStorageState {
+  cookies: Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "Lax" | "Strict" | "None";
+    expires: number;
+  }>;
+  origins: [];
+}
 
 // Generate unique test IDs to avoid collisions
 const testRunId = crypto.randomUUID().slice(0, 8);
@@ -183,7 +208,7 @@ export async function seedTestUsers(
 /**
  * Clean up test data from the database
  */
-export async function cleanupTestData(
+async function cleanupAuthUsersAndProject(
   users: Record<UserRole, TestUser>,
   projectId: string
 ): Promise<void> {
@@ -230,6 +255,105 @@ export async function cleanupTestData(
   } finally {
     await pool.end();
   }
+}
+
+export const cleanupTestData = cleanupAuthUsersAndProject;
+
+function buildAuthStorageState(
+  cookies: AuthStorageState["cookies"]
+): AuthStorageState {
+  return {
+    cookies,
+    origins: [],
+  };
+}
+
+async function createSignedAuthStorageState(
+  user: TestUser,
+  baseURL: string
+): Promise<AuthStorageState> {
+  const signInUrl = `${baseURL}/api/auth/sign-in/email`;
+  const url = new URL(baseURL);
+  let response: Response | null = null;
+  let lastError: unknown;
+
+  // The dev server can accept page requests before the auth route is ready.
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    try {
+      response = await fetch(signInUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: baseURL },
+        body: JSON.stringify({ email: user.email, password: user.password }),
+        redirect: "manual",
+      });
+      if (response.ok || (response.status !== 404 && response.status < 500)) {
+        break;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt === 10) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+  }
+
+  if (!response) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`API sign-in failed for ${user.email}`);
+  }
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`API sign-in failed for ${user.email}: ${response.status} ${body}`);
+  }
+
+  const cookies = response.headers
+    .getSetCookie()
+    .map((header) => {
+      const [nameValue, ...attrs] = header.split(";");
+      const [name, ...valueParts] = nameValue!.split("=");
+      const value = valueParts.join("=");
+      const attrMap: Record<string, string> = {};
+
+      for (const attr of attrs) {
+        const [key, val] = attr.trim().split("=");
+        attrMap[key!.toLowerCase()] = val || "";
+      }
+
+      const maxAge = Number(attrMap["max-age"]);
+      const expires = Number.isFinite(maxAge)
+        ? Math.floor(Date.now() / 1000) + maxAge
+        : -1;
+
+      return {
+        name: name!.trim(),
+        value,
+        domain: attrMap.domain || url.hostname,
+        path: attrMap.path || "/",
+        httpOnly: "httponly" in attrMap,
+        secure: "secure" in attrMap,
+        sameSite: ((attrMap.samesite?.charAt(0).toUpperCase() ?? "") +
+          (attrMap.samesite?.slice(1).toLowerCase() ?? "")) as
+          | "Lax"
+          | "Strict"
+          | "None",
+        expires,
+      };
+    })
+    .filter((cookie) => cookie.name && cookie.value);
+
+  const normalizedCookies = cookies.map((cookie) => ({
+    ...cookie,
+    domain: cookie.domain || url.hostname,
+    sameSite: cookie.sameSite || "Lax",
+    secure: cookie.secure || url.protocol === "https:",
+  }));
+
+  return buildAuthStorageState(normalizedCookies);
 }
 
 /**
@@ -327,105 +451,39 @@ export async function setAuthCookies(
   ]);
 }
 
-/**
- * Create an authenticated browser context via HTTP API sign-in (fast, no UI interaction)
- */
-async function createDirectAuthContext(
-  browser: { newContext: () => Promise<BrowserContext> },
-  user: TestUser,
-  baseURL: string
-): Promise<BrowserContext> {
-  const signInUrl = `${baseURL}/api/auth/sign-in/email`;
-  let response: Response | null = null;
-  let lastError: unknown;
-
-  // The dev server can accept the first page load before the auth route is ready.
-  for (let attempt = 1; attempt <= 10; attempt += 1) {
-    try {
-      response = await fetch(signInUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Origin": baseURL },
-        body: JSON.stringify({ email: user.email, password: user.password }),
-        redirect: "manual",
-      });
-      if (response.ok || (response.status !== 404 && response.status < 500)) {
-        break;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-
-    if (attempt === 10) {
-      break;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-  }
-
-  if (!response) {
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(`API sign-in failed for ${user.email}`);
-  }
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`API sign-in failed for ${user.email}: ${response.status} ${body}`);
-  }
-
-  // Extract Set-Cookie headers
-  const setCookieHeaders = response.headers.getSetCookie();
-  const url = new URL(baseURL);
-  const cookies = setCookieHeaders
-    .map((header) => {
-      const [nameValue, ...attrs] = header.split(";");
-      const [name, ...valueParts] = nameValue!.split("=");
-      const value = valueParts.join("=");
-      const attrMap: Record<string, string> = {};
-      for (const attr of attrs) {
-        const [key, val] = attr.trim().split("=");
-        attrMap[key!.toLowerCase()] = val || "";
-      }
-      return {
-        name: name!.trim(),
-        value,
-        domain: url.hostname,
-        path: attrMap["path"] || "/",
-        httpOnly: "httponly" in attrMap,
-        secure: "secure" in attrMap,
-        sameSite: (attrMap["samesite"] as "Lax" | "Strict" | "None") || "Lax",
-      };
-    })
-    .filter((c) => c.name && c.value);
-
-  const context = await browser.newContext();
-  if (cookies.length > 0) {
-    await context.addCookies(cookies);
-  }
-  return context;
-}
-
 // Extended test fixture with auth helpers
-export const test = base.extend<AuthFixtures>({
-  testUsers: async ({}, use) => {
-    const { users } = await seedTestUsers(defaultTestUsers);
-    await use(users);
-    // Cleanup happens in cleanupTestData fixture
+export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }>({
+  workerAuthData: [
+    async ({}, use) => {
+      const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
+      const { users, projectId } = await seedTestUsers(defaultTestUsers);
+      const authStates: Record<UserRole, AuthStorageState> = {
+        admin: await createSignedAuthStorageState(users.admin, baseURL),
+        operator: await createSignedAuthStorageState(users.operator, baseURL),
+        lab_technician: await createSignedAuthStorageState(
+          users.lab_technician,
+          baseURL
+        ),
+        viewer: await createSignedAuthStorageState(users.viewer, baseURL),
+      };
+
+      await use({
+        users,
+        projectId,
+        authStates,
+      });
+
+      await cleanupAuthUsersAndProject(users, projectId);
+    },
+    { scope: "worker" },
+  ],
+
+  testUsers: async ({ workerAuthData }, use) => {
+    await use(workerAuthData.users);
   },
 
-  testProjectId: async ({ testUsers }, use) => {
-    // The project was created with the users
-    const { db, pool } = createDbConnection();
-    try {
-      const [project] = await db
-        .select({ id: schema.projects.id })
-        .from(schema.projects)
-        .where(eq(schema.projects.ownerId, testUsers.admin.id))
-        .limit(1);
-      await use(project?.id || "");
-    } finally {
-      await pool.end();
-    }
+  testProjectId: async ({ workerAuthData }, use) => {
+    await use(workerAuthData.projectId);
   },
 
   seededData: async ({}, use) => {
@@ -433,8 +491,11 @@ export const test = base.extend<AuthFixtures>({
     // parallel tests in the same worker that share the module-level testRunId
     const seedId = crypto.randomUUID().slice(0, 8);
     const data = await seedChainData(seedId);
-    await use(data);
-    // Cleanup happens in cleanupTestData fixture
+    try {
+      await use(data);
+    } finally {
+      await cleanupChainData(data);
+    }
   },
 
   seedTestData: async ({ testUsers, testProjectId, seededData }, use) => {
@@ -446,51 +507,42 @@ export const test = base.extend<AuthFixtures>({
     await use(seedFn);
   },
 
-  cleanupTestData: async ({ testUsers, testProjectId, seededData }, use) => {
-    // Provide cleanup function
-    const cleanupFn = async () => {
-      await cleanupTestData(testUsers, testProjectId);
-      await cleanupChainData(seededData);
-    };
-
-    // Use the fixture
+  cleanupTestData: async ({}, use) => {
+    const cleanupFn = async () => {};
     await use(cleanupFn);
-
-    // Auto-cleanup after tests
-    try {
-      await cleanupFn();
-    } catch (error) {
-      console.warn("Cleanup warning:", error);
-    }
   },
 
-  adminContext: async ({ browser, testUsers }, use) => {
-    const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createDirectAuthContext(browser, testUsers.admin, baseURL);
+  adminContext: async ({ browser, workerAuthData }, use) => {
+    const context = await browser.newContext({
+      storageState: workerAuthData.authStates.admin,
+    });
 
     await use(context);
     await context.close();
   },
 
-  operatorContext: async ({ browser, testUsers }, use) => {
-    const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createDirectAuthContext(browser, testUsers.operator, baseURL);
+  operatorContext: async ({ browser, workerAuthData }, use) => {
+    const context = await browser.newContext({
+      storageState: workerAuthData.authStates.operator,
+    });
 
     await use(context);
     await context.close();
   },
 
-  labTechnicianContext: async ({ browser, testUsers }, use) => {
-    const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createDirectAuthContext(browser, testUsers.lab_technician, baseURL);
+  labTechnicianContext: async ({ browser, workerAuthData }, use) => {
+    const context = await browser.newContext({
+      storageState: workerAuthData.authStates.lab_technician,
+    });
 
     await use(context);
     await context.close();
   },
 
-  viewerContext: async ({ browser, testUsers }, use) => {
-    const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-    const context = await createDirectAuthContext(browser, testUsers.viewer, baseURL);
+  viewerContext: async ({ browser, workerAuthData }, use) => {
+    const context = await browser.newContext({
+      storageState: workerAuthData.authStates.viewer,
+    });
 
     await use(context);
     await context.close();

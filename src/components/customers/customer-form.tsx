@@ -31,6 +31,18 @@ export interface PendingLocation {
   gpsLongitude: number | null;
 }
 
+function formatPendingLocationSummary({
+  city,
+  stateRegion,
+  country,
+}: Pick<PendingLocation, "city" | "stateRegion" | "country">): string | null {
+  const parts = [city, stateRegion, country]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 // ============================================
 // Component
 // ============================================
@@ -268,33 +280,42 @@ function CreateModeLocationsSection({
         </p>
       ) : (
         <div className="flex flex-col gap-8">
-          {locations.map((loc, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
-            >
-              <div className="flex items-center gap-10 min-w-0">
-                <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
-                <div className="min-w-0">
-                  <p className="body-small font-medium truncate">{loc.name}</p>
-                  <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                    {loc.address}
-                    {loc.gpsLatitude !== null && loc.gpsLongitude !== null
-                      ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
-                      : ""}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(index)}
-                className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
-                aria-label={`Remove ${loc.name}`}
+          {locations.map((loc, index) => {
+            const locationSummary = formatPendingLocationSummary(loc);
+
+            return (
+              <div
+                key={index}
+                className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
               >
-                <Trash size={16} />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-10 min-w-0">
+                  <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
+                  <div className="min-w-0">
+                    <p className="body-small font-medium truncate">{loc.name}</p>
+                    {locationSummary ? (
+                      <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
+                        {locationSummary}
+                      </p>
+                    ) : null}
+                    <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
+                      {loc.address}
+                      {loc.gpsLatitude !== null && loc.gpsLongitude !== null
+                        ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+                  aria-label={`Remove ${loc.name}`}
+                >
+                  <Trash size={16} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 

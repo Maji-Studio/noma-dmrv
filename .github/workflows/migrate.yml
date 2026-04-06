@@ -15,9 +15,8 @@ on:
         type: choice
         options:
           - reset-seed-staging
-          - reset-production
       confirmation:
-        description: "Type RESET AND SEED STAGING or RESET PRODUCTION to confirm"
+        description: "Type RESET AND SEED STAGING to confirm"
         required: true
         type: string
 
@@ -158,48 +157,3 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-
-      - name: Verify staging schema matches Drizzle definitions
-        run: pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
-  # ── Manual reset: production (pre-launch only) ─────────────────────────
-  reset-production:
-    runs-on: ubuntu-latest
-    environment: production
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.inputs.action == 'reset-production' &&
-      github.event.inputs.confirmation == 'RESET PRODUCTION'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Reset production database from tracked migrations
-        run: pnpm db:reset
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-
-      - name: Verify production schema matches Drizzle definitions
-        run: pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
