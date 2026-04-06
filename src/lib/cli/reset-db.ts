@@ -10,27 +10,55 @@ async function resetDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
+  // Parse connection string
+  let dbUrl: URL;
+  let dbName: string;
+  try {
+    dbUrl = new URL(process.env.DATABASE_URL);
+    dbName = dbUrl.pathname.slice(1);
+  } catch {
+    console.error('✗ Invalid DATABASE_URL format');
+    process.exit(1);
+  }
+
+  if (!dbName) {
+    console.error('✗ DATABASE_URL must include a database name');
+    process.exit(1);
+  }
+
+  // Debug: log connection target (no credentials)
+  console.log(`Connection target: host=${dbUrl.hostname} port=${dbUrl.port || '5432'} user=${dbUrl.username} db=${dbName}`);
+
+  // Connect to postgres database (not the app database)
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: isLocal ? undefined : { rejectUnauthorized: false },
+    host: dbUrl.hostname,
+    port: parseInt(dbUrl.port || '5432'),
+    database: 'postgres', // Connect to default postgres database
+    user: dbUrl.username,
+    password: dbUrl.password || undefined,
   });
 
   try {
-    console.log('🗑️  Dropping application and migration schemas...');
+    console.log('🗑️  Dropping database...');
 
-    // Drop application objects and Drizzle migration metadata so the database
-    // can be rebuilt cleanly from the first tracked migration.
-    await pool.query(`DROP SCHEMA IF EXISTS drizzle CASCADE`);
-    await pool.query(`DROP SCHEMA public CASCADE`);
+    // Terminate all connections to the target database
+    await pool.query(`
+      SELECT pg_terminate_backend(pg_stat_activity.pid)
+      FROM pg_stat_activity
+      WHERE pg_stat_activity.datname = $1
+        AND pid <> pg_backend_pid();
+    `, [dbName]);
 
-    await pool.query(`CREATE SCHEMA public`);
+    // Escape identifier to prevent SQL injection and handle special characters
+    const escapedDbName = `"${dbName.replace(/"/g, '""')}"`;
 
-    // Restore default grants
-    await pool.query(`GRANT ALL ON SCHEMA public TO current_user`);
-    await pool.query(`GRANT ALL ON SCHEMA public TO public`);
+    // Drop the database
+    await pool.query(`DROP DATABASE IF EXISTS ${escapedDbName}`);
+    console.log(`  ✓ Dropped database: ${dbName}`);
 
-    console.log('  ✓ Schema reset complete\n');
+    // Recreate the database
+    await pool.query(`CREATE DATABASE ${escapedDbName}`);
+    console.log(`  ✓ Created database: ${dbName}\n`);
 
     await pool.end();
     process.exit(0);
