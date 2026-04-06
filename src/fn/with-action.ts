@@ -38,9 +38,12 @@ export async function withAction<T>(
         error: `${zodErrorPrefix}: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
+    if (process.env.NODE_ENV === "development" && error instanceof Error) {
+      console.error("[withAction]", error.message);
+    }
     return {
       success: false,
-      error: error instanceof Error ? error.message : fallbackMessage,
+      error: fallbackMessage,
     };
   }
 }
