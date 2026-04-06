@@ -49,6 +49,9 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       await createLocation.mutateAsync({
         customerId,
         name: data.name,
+        country: data.country,
+        stateRegion: data.stateRegion || null,
+        city: data.city || null,
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address || "",
@@ -69,6 +72,9 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       await updateLocation.mutateAsync({
         locationId: editingLocation.id,
         name: data.name,
+        country: data.country,
+        stateRegion: data.stateRegion || null,
+        city: data.city || null,
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address,
@@ -236,13 +242,16 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     Name
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Latitude
+                    Country
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Longitude
+                    State / Region
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Location
+                    City
+                  </th>
+                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                    GPS
                   </th>
                   <th className="px-16 py-12 text-right text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
                     Actions
@@ -255,19 +264,20 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     key={location.id}
                     className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-surface-light)]"
                   >
-                    <td className="px-16 py-12 body-medium">{location.name}</td>
-                    <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
-                      {location.gpsLatitude !== null
-                        ? location.gpsLatitude.toFixed(6)
-                        : "—"}
-                    </td>
-                    <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
-                      {location.gpsLongitude !== null
-                        ? location.gpsLongitude.toFixed(6)
-                        : "—"}
+                    <td className="px-16 py-12 body-medium">{location.name ?? "Unnamed location"}</td>
+                    <td className="px-16 py-12 body-medium">
+                      {location.country || "—"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || "—"}
+                      {location.stateRegion || "—"}
+                    </td>
+                    <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
+                      {location.city || "—"}
+                    </td>
+                    <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
+                      {location.gpsLatitude !== null && location.gpsLongitude !== null
+                        ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
+                        : "—"}
                     </td>
                     <td className="px-16 py-12 text-right">
                       <div className="flex items-center justify-end gap-16">

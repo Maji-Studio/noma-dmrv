@@ -28,6 +28,53 @@ export interface PaginatedSuppliers {
 
 import { requireAuth } from "./utils";
 
+async function ensureSupplierOwnership(
+  userId: string,
+  supplierId: string
+): Promise<{ id: string }> {
+  requireAuth(userId);
+
+  const [supplier] = await db
+    .select({ id: suppliers.id, userId: suppliers.userId })
+    .from(suppliers)
+    .where(eq(suppliers.id, supplierId));
+
+  if (!supplier) {
+    throw new Error("Supplier not found");
+  }
+  if (supplier.userId !== userId) {
+    throw new Error("Unauthorized");
+  }
+
+  return { id: supplier.id };
+}
+
+async function ensureSupplierLocationOwnership(
+  userId: string,
+  locationId: string
+): Promise<{ id: string; supplierId: string }> {
+  requireAuth(userId);
+
+  const [location] = await db
+    .select({
+      id: supplierLocations.id,
+      supplierId: supplierLocations.supplierId,
+      ownerUserId: suppliers.userId,
+    })
+    .from(supplierLocations)
+    .innerJoin(suppliers, eq(supplierLocations.supplierId, suppliers.id))
+    .where(eq(supplierLocations.id, locationId));
+
+  if (!location) {
+    throw new Error("Supplier location not found");
+  }
+  if (location.ownerUserId !== userId) {
+    throw new Error("Unauthorized");
+  }
+
+  return { id: location.id, supplierId: location.supplierId };
+}
+
 // ============================================
 // Supplier Read Operations
 // ============================================
@@ -97,6 +144,7 @@ export async function getSuppliers(
   const supplierList = await db
     .select({
       id: suppliers.id,
+      userId: suppliers.userId,
       code: suppliers.code,
       name: suppliers.name,
       location: suppliers.location,
@@ -190,6 +238,7 @@ export async function createSupplier(
     const [supplier] = await db
       .insert(suppliers)
       .values({
+        userId,
         code: data.code,
         name: data.name,
         location: data.location ?? null,
@@ -306,6 +355,9 @@ export async function deleteSupplier(
     );
   }
 
+  // Delete supplier locations first (FK constraint)
+  await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplierId));
+
   await db.delete(suppliers).where(eq(suppliers.id, supplierId));
 }
 
@@ -381,6 +433,7 @@ export async function getSupplierLocationsBySupplier(
   supplierId: string
 ): Promise<SupplierLocation[]> {
   requireAuth(userId);
+  await ensureSupplierOwnership(userId, supplierId);
 
   return db
     .select()
@@ -394,6 +447,7 @@ export async function getSupplierLocationById(
   locationId: string
 ): Promise<SupplierLocation> {
   requireAuth(userId);
+  await ensureSupplierLocationOwnership(userId, locationId);
 
   const [location] = await db
     .select()
@@ -421,6 +475,7 @@ export async function createSupplierLocation(
   }
 ): Promise<SupplierLocation> {
   requireAuth(userId);
+  await ensureSupplierOwnership(userId, data.supplierId);
 
   const [location] = await db
     .insert(supplierLocations)
@@ -453,6 +508,7 @@ export async function updateSupplierLocation(
   }
 ): Promise<SupplierLocation> {
   requireAuth(userId);
+  await ensureSupplierLocationOwnership(userId, locationId);
 
   const [updated] = await db
     .update(supplierLocations)
@@ -475,6 +531,7 @@ export async function deleteSupplierLocation(
   locationId: string
 ): Promise<void> {
   requireAuth(userId);
+  await ensureSupplierLocationOwnership(userId, locationId);
 
   const deleted = await db.delete(supplierLocations).where(eq(supplierLocations.id, locationId)).returning({ id: supplierLocations.id });
 

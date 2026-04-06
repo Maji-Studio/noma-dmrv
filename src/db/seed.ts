@@ -356,7 +356,7 @@ async function seed() {
         facilityId: ids.facility,
         reactorType: 'auger',
         samplingMethod: 'method_a',
-        capacityKg: 500,
+        nominalThroughputTph: 0.5,
         specifications: {
           description: 'Continuous auger pyrolysis reactor with condensate capture.',
           manufacturer: 'NOMA Engineering',
@@ -372,8 +372,6 @@ async function seed() {
           name: 'Feedstock Bin 01',
           type: 'feedstock_bin',
           capacityKg: 15000,
-          latitude: -3.3338,
-          longitude: 37.3385,
           storageMethod: 'covered_bin',
           storageDescription: 'Covered bin with runoff protection',
           supplierReferenceId: 'ISO-STOR-FEED-01',
@@ -385,8 +383,6 @@ async function seed() {
           name: 'Biochar Pile 01',
           type: 'biochar_bin',
           capacityKg: 8000,
-          latitude: -3.3339,
-          longitude: 37.3387,
           storageMethod: 'tarped_pile',
           storageDescription: 'Raised pile on impermeable liner',
           supplierReferenceId: 'ISO-STOR-CHAR-01',
@@ -398,8 +394,6 @@ async function seed() {
           name: 'Product Staging Pile',
           type: 'product_bin',
           capacityKg: 5000,
-          latitude: -3.3341,
-          longitude: 37.3389,
           storageMethod: 'bagged_palletized',
           storageDescription: 'Bagged product on pallets under shelter',
           supplierReferenceId: 'ISO-STOR-PROD-01',
@@ -409,6 +403,7 @@ async function seed() {
 
       await tx.insert(schema.suppliers).values({
         id: ids.supplier,
+        userId: adminUserId,
         code: 'SUP-001',
         name: 'Kilimanjaro Forestry Cooperative',
         location: 'Hai, Tanzania',

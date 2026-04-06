@@ -133,7 +133,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       facilityId: ids.facility,
       reactorType: "fixed-bed",
       samplingMethod: "method_a",
-      capacityKg: 1000,
+      nominalThroughputTph: 1.0,
     });
 
     // 3. Create Storage Location for feedstock (linked to facility)

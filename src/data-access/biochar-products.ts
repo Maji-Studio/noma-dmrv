@@ -369,6 +369,36 @@ export async function createBiocharProduct(
     throw new Error("Formulation not found");
   }
 
+  // Verify linked production run exists and belongs to same facility
+  if (data.linkedProductionRunId) {
+    const [run] = await db
+      .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
+      .from(productionRuns)
+      .where(eq(productionRuns.id, data.linkedProductionRunId));
+
+    if (!run) {
+      throw new Error("Linked production run not found");
+    }
+    if (run.facilityId !== data.facilityId) {
+      throw new Error("Linked production run belongs to a different facility");
+    }
+  }
+
+  // Verify storage location exists and belongs to same facility
+  if (data.storageLocationId) {
+    const [storage] = await db
+      .select({ id: storageLocations.id, facilityId: storageLocations.facilityId })
+      .from(storageLocations)
+      .where(eq(storageLocations.id, data.storageLocationId));
+
+    if (!storage) {
+      throw new Error("Storage location not found");
+    }
+    if (storage.facilityId !== data.facilityId) {
+      throw new Error("Storage location belongs to a different facility");
+    }
+  }
+
   if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
     throw new Error("Moisture content must be between 0 and 100");
   }
@@ -468,6 +498,39 @@ export async function updateBiocharProduct(
 
     if (!formulation) {
       throw new Error("Formulation not found");
+    }
+  }
+
+  // The effective facility is the new one if being changed, otherwise the existing one
+  const effectiveFacilityId = data.facilityId ?? existing.facilityId;
+
+  // Verify linked production run exists and belongs to same facility
+  if (data.linkedProductionRunId !== undefined && data.linkedProductionRunId !== null) {
+    const [run] = await db
+      .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
+      .from(productionRuns)
+      .where(eq(productionRuns.id, data.linkedProductionRunId));
+
+    if (!run) {
+      throw new Error("Linked production run not found");
+    }
+    if (run.facilityId !== effectiveFacilityId) {
+      throw new Error("Linked production run belongs to a different facility");
+    }
+  }
+
+  // Verify storage location exists and belongs to same facility
+  if (data.storageLocationId !== undefined && data.storageLocationId !== null) {
+    const [storage] = await db
+      .select({ id: storageLocations.id, facilityId: storageLocations.facilityId })
+      .from(storageLocations)
+      .where(eq(storageLocations.id, data.storageLocationId));
+
+    if (!storage) {
+      throw new Error("Storage location not found");
+    }
+    if (storage.facilityId !== effectiveFacilityId) {
+      throw new Error("Storage location belongs to a different facility");
     }
   }
 

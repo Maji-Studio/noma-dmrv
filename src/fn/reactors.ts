@@ -219,7 +219,7 @@ export async function createReactorFn(
           facilityId: validated.facilityId,
           reactorType: validated.reactorType,
           samplingMethod: validated.samplingMethod,
-          capacityKg: validated.capacityKg ?? null,
+          nominalThroughputTph: validated.nominalThroughputTph ?? null,
           specifications: validated.specifications ?? null,
         })
     );
@@ -264,7 +264,7 @@ export async function updateReactorFn(
       facilityId: validated.facilityId,
       reactorType: validated.reactorType,
       samplingMethod: validated.samplingMethod,
-      capacityKg: validated.capacityKg,
+      nominalThroughputTph: validated.nominalThroughputTph,
       specifications: validated.specifications,
     });
 

@@ -611,10 +611,10 @@ export async function createProductionRun(
       ? deriveMassDryKg(data.feedstockWetMassKg, data.feedstockMoisturePercent)
       : null;
 
-  // Compute biochar dry mass from wet output + moisture
+  // Compute biochar dry mass from wet output + moisture, clamped to wet mass
   const biocharDryMass =
     data.biocharOutputKg != null && data.biocharMoisturePercent != null
-      ? deriveMassDryKg(data.biocharOutputKg, data.biocharMoisturePercent)
+      ? Math.min(deriveMassDryKg(data.biocharOutputKg, data.biocharMoisturePercent), data.biocharOutputKg)
       : null;
 
   // Create production run + M:M allocation in a transaction
@@ -797,7 +797,7 @@ export async function updateProductionRun(
     const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
     updateData.biocharDryMassKg =
       effectiveBiocharWet != null && effectiveBiocharMoisture != null
-        ? deriveMassDryKg(effectiveBiocharWet, effectiveBiocharMoisture)
+        ? Math.min(deriveMassDryKg(effectiveBiocharWet, effectiveBiocharMoisture), effectiveBiocharWet)
         : null;
   }
 
