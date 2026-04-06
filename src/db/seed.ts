@@ -4,6 +4,7 @@ import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from './schema';
 import { hashPassword } from '../lib/auth/hash-password';
+import { getPgPoolConfig } from '../lib/pg-pool-config';
 
 config({ path: '.env.local' });
 
@@ -180,9 +181,7 @@ async function seed() {
     process.exit(1);
   }
 
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+  const pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
 
   const db = drizzle(pool, { schema });
 
@@ -843,7 +842,7 @@ async function seed() {
         status: 'pending',
         startDate: '2026-01-13',
         endDate: '2026-01-19',
-        certifier: 'Isometric',
+        certifier: 'isometric',
         registry: 'Isometric Registry',
         weightTons: 0.62,
         value: 1180000,
