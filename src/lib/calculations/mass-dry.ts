@@ -38,6 +38,12 @@ export function computeClampedDryMass(
   moisturePercent: number | null | undefined
 ): number | null {
   if (wetMassKg == null || moisturePercent == null) return null;
+  if (!Number.isFinite(wetMassKg) || !Number.isFinite(moisturePercent)) {
+    return null;
+  }
+  if (wetMassKg < 0 || moisturePercent < 0 || moisturePercent > 100) {
+    return null;
+  }
   return Math.min(deriveMassDryKg(wetMassKg, moisturePercent), wetMassKg);
 }
 

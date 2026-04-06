@@ -65,6 +65,7 @@ interface WorkerAuthData {
   users: Record<UserRole, TestUser>;
   projectId: string;
   authStates: Record<UserRole, AuthStorageState>;
+  cleanupTestData: () => Promise<void>;
 }
 
 interface AuthStorageState {
@@ -83,6 +84,7 @@ interface AuthStorageState {
 
 // Generate unique test IDs to avoid collisions
 const testRunId = crypto.randomUUID().slice(0, 8);
+const SESSION_COOKIE_NAME = "better-auth.session_token";
 
 // Default test users configuration
 const defaultTestUsers: Record<UserRole, Omit<TestUser, "id">> = {
@@ -257,7 +259,12 @@ async function cleanupAuthUsersAndProject(
   }
 }
 
-export const cleanupTestData = cleanupAuthUsersAndProject;
+export async function cleanupTestData(
+  users: Record<UserRole, TestUser>,
+  projectId: string
+): Promise<void> {
+  await cleanupAuthUsersAndProject(users, projectId);
+}
 
 function buildAuthStorageState(
   cookies: AuthStorageState["cookies"]
@@ -353,6 +360,18 @@ async function createSignedAuthStorageState(
     sameSite: cookie.sameSite || "Lax",
     secure: cookie.secure || url.protocol === "https:",
   }));
+
+  const hasSessionCookie = normalizedCookies.some(
+    (cookie) => cookie.name === SESSION_COOKIE_NAME
+  );
+
+  if (!hasSessionCookie) {
+    const cookieNames = normalizedCookies.map((cookie) => cookie.name).join(", ") || "<none>";
+    throw new Error(
+      `API sign-in did not return a session cookie for ${userIdForError}: ` +
+        `${response.status} ${response.url} cookies=${cookieNames}`
+    );
+  }
 
   return buildAuthStorageState(normalizedCookies);
 }
@@ -457,24 +476,42 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
   workerAuthData: [
     async ({}, use) => {
       const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
-      const { users, projectId } = await seedTestUsers(defaultTestUsers);
-      const authStates: Record<UserRole, AuthStorageState> = {
-        admin: await createSignedAuthStorageState(users.admin, baseURL),
-        operator: await createSignedAuthStorageState(users.operator, baseURL),
-        lab_technician: await createSignedAuthStorageState(
-          users.lab_technician,
-          baseURL
-        ),
-        viewer: await createSignedAuthStorageState(users.viewer, baseURL),
+      let users: Record<UserRole, TestUser> | null = null;
+      let projectId: string | null = null;
+      let cleanedUp = false;
+
+      const cleanupBoundTestData = async () => {
+        if (cleanedUp || !users || !projectId) {
+          return;
+        }
+        cleanedUp = true;
+        await cleanupTestData(users, projectId);
       };
 
-      await use({
-        users,
-        projectId,
-        authStates,
-      });
+      try {
+        const seeded = await seedTestUsers(defaultTestUsers);
+        users = seeded.users;
+        projectId = seeded.projectId;
 
-      await cleanupAuthUsersAndProject(users, projectId);
+        const authStates: Record<UserRole, AuthStorageState> = {
+          admin: await createSignedAuthStorageState(users.admin, baseURL),
+          operator: await createSignedAuthStorageState(users.operator, baseURL),
+          lab_technician: await createSignedAuthStorageState(
+            users.lab_technician,
+            baseURL
+          ),
+          viewer: await createSignedAuthStorageState(users.viewer, baseURL),
+        };
+
+        await use({
+          users,
+          projectId,
+          authStates,
+          cleanupTestData: cleanupBoundTestData,
+        });
+      } finally {
+        await cleanupBoundTestData();
+      }
     },
     { scope: "worker" },
   ],
@@ -508,9 +545,8 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     await use(seedFn);
   },
 
-  cleanupTestData: async ({}, use) => {
-    const cleanupFn = async () => {};
-    await use(cleanupFn);
+  cleanupTestData: async ({ workerAuthData }, use) => {
+    await use(workerAuthData.cleanupTestData);
   },
 
   adminContext: async ({ browser, workerAuthData }, use) => {

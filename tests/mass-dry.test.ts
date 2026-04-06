@@ -14,6 +14,9 @@ describe("Dry mass derivation", () => {
     expect(computeClampedDryMass(1000, 10)).toBe(900);
     expect(computeClampedDryMass(0, 0)).toBe(0);
     expect(computeClampedDryMass(null, 10)).toBeNull();
+    expect(computeClampedDryMass(-1, 10)).toBeNull();
+    expect(computeClampedDryMass(100, 101)).toBeNull();
+    expect(computeClampedDryMass(Number.NaN, 10)).toBeNull();
   });
 
   it("prioritizes measured dry mass over derived dry mass", () => {
