@@ -514,6 +514,7 @@ export function FeedstockForm({
           onClose={storageLocationDialog.close}
           onSuccess={(entity) => {
             setValue(`allocations.${storageLocationRowIndex}.storageLocationId`, entity.id, SET_VALUE_OPTS);
+            storageLocationDialog.close();
           }}
           defaultBinType={binTypeFilter}
           facilityId={watchedFacilityId}
