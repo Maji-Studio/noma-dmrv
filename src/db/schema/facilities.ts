@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
 import { storageLocationType, durabilityOption, samplingMethod } from './common';
 
 // ============================================
@@ -13,8 +13,9 @@ export const facilities = pgTable(
     code: text('code').notNull().unique(),
     name: text('name').notNull(),
     location: text('location'),
-    gpsLatitude: real('gps_latitude'),
-    gpsLongitude: real('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude'),
+    gpsLongitude: doublePrecision('gps_longitude'),
+    timezone: text('timezone'),
     country: text('country').notNull().default('UNKNOWN'),
     address: text('address'),
     contactEmail: text('contact_email'),
@@ -70,8 +71,8 @@ export const storageLocations = pgTable(
     name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
     type: storageLocationType('type').notNull(),
     capacityKg: real('capacity_kg'),
-    latitude: real('latitude'),
-    longitude: real('longitude'),
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
     supplierReferenceId: text('supplier_reference_id'),

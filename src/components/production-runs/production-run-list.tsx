@@ -100,20 +100,20 @@ function createColumns(
     {
       id: "facility",
       header: "Facility",
-      accessorFn: (row) => row.facilityCode ?? "",
+      accessorFn: (row) => row.facilityName ?? "",
       cell: ({ row }) => (
         <Link
           href={`/facilities/${row.original.facilityId}`}
           className="text-[var(--clr-dark-purple)] hover:underline"
         >
-          {row.original.facilityCode}
+          {row.original.facilityName}
         </Link>
       ),
     },
     {
       id: "reactor",
       header: "Reactor",
-      accessorFn: (row) => row.reactorCode ?? "",
+      accessorFn: (row) => row.reactorIdentifier ?? "",
     },
     {
       accessorKey: "status",
@@ -127,7 +127,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharOutputKg",
-      header: "Biochar (kg)",
+      header: "Biochar Wet (kg)",
       cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
     },
     {
@@ -400,7 +400,7 @@ export function ProductionRunList() {
               title: "Location",
               fields: [
                 { label: "Facility", value: sideSheet.entity.facilityName },
-                { label: "Reactor", value: sideSheet.entity.reactorCode },
+                { label: "Reactor", value: sideSheet.entity.reactorIdentifier },
               ],
             },
             {
@@ -415,7 +415,9 @@ export function ProductionRunList() {
               title: "Output",
               fields: [
                 { label: "Total Feedstock Mass", value: sideSheet.entity.totalFeedstockMassKg != null ? `${sideSheet.entity.totalFeedstockMassKg.toLocaleString()} kg` : null },
-                { label: "Biochar Output", value: sideSheet.entity.biocharOutputKg != null ? `${sideSheet.entity.biocharOutputKg.toLocaleString()} kg` : null },
+                { label: "Biochar Wet Mass", value: sideSheet.entity.biocharOutputKg != null ? `${sideSheet.entity.biocharOutputKg.toLocaleString()} kg` : null },
+                { label: "Biochar Moisture", value: sideSheet.entity.biocharMoisturePercent != null ? `${sideSheet.entity.biocharMoisturePercent}%` : null },
+                { label: "Biochar Dry Mass", value: sideSheet.entity.biocharDryMassKg != null ? `${sideSheet.entity.biocharDryMassKg.toLocaleString()} kg` : null },
               ],
             },
             {

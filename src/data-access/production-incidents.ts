@@ -23,6 +23,7 @@ export interface ProductionIncidentWithRelations {
   updatedAt: Date;
   operatorName: string | null;
   reactorCode: string | null;
+  reactorIdentifier: string | null;
 }
 
 const incidentSelect = {
@@ -40,6 +41,7 @@ const incidentSelect = {
   updatedAt: incidentReports.updatedAt,
   operatorName: operators.name,
   reactorCode: reactors.code,
+  reactorIdentifier: reactors.identifier,
 } as const;
 
 export async function getProductionIncidents(

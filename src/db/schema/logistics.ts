@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   check,
+  doublePrecision,
   integer,
   pgTable,
   real,
@@ -158,11 +159,11 @@ export const transportLegs = pgTable(
     entityId: uuid('entity_id').notNull(),
 
     // --- Route Details ---
-    originGpsLatitude: real('origin_gps_latitude'),
-    originGpsLongitude: real('origin_gps_longitude'),
+    originGpsLatitude: doublePrecision('origin_gps_latitude'),
+    originGpsLongitude: doublePrecision('origin_gps_longitude'),
     originName: text('origin_name'),
-    destinationGpsLatitude: real('destination_gps_latitude'),
-    destinationGpsLongitude: real('destination_gps_longitude'),
+    destinationGpsLatitude: doublePrecision('destination_gps_latitude'),
+    destinationGpsLongitude: doublePrecision('destination_gps_longitude'),
     destinationName: text('destination_name'),
     distanceKm: real('distance_km').notNull(),
 

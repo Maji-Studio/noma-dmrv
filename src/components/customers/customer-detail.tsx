@@ -28,7 +28,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
   const [isAddingLocation, setIsAddingLocation] = useState(false);
   const [editingLocation, setEditingLocation] = useState<{
     id: string;
-    name: string;
+    name: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;

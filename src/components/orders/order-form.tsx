@@ -95,9 +95,9 @@ export function OrderForm({
     label: c.name,
   }));
 
-  const locationOptions = customerLocations.map((l: { id: string; name: string }) => ({
+  const locationOptions = customerLocations.map((l: { id: string; name: string | null }) => ({
     value: l.id,
-    label: l.name,
+    label: l.name ?? "Unnamed location",
   }));
 
   const productOptions = products.map((p) => ({

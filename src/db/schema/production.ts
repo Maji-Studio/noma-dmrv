@@ -50,7 +50,9 @@ export const productionRuns = pgTable(
     electricityKwh: real('electricity_kwh'),
 
     // --- Biochar Output ---
-    biocharOutputKg: real('biochar_output_kg'),
+    biocharOutputKg: real('biochar_output_kg'), // Wet mass (recorded value)
+    biocharMoisturePercent: real('biochar_moisture_percent'), // Typically 1-2%, default 0 if unknown
+    biocharDryMassKg: real('biochar_dry_mass_kg'), // Derived: wetMass * (1 - moisture/100)
     biocharStorageLocationId: uuid('biochar_storage_location_id').references(
       () => storageLocations.id
     ),
@@ -84,6 +86,18 @@ export const productionRuns = pgTable(
     check(
       'production_runs_feedstock_dry_lte_wet',
       sql`${table.feedstockWetMassKg} is null or ${table.feedstockMassDryKg} is null or ${table.feedstockMassDryKg} <= ${table.feedstockWetMassKg}`
+    ),
+    check(
+      'production_runs_biochar_moisture_percent_range',
+      sql`${table.biocharMoisturePercent} is null or (${table.biocharMoisturePercent} >= 0 and ${table.biocharMoisturePercent} <= 100)`
+    ),
+    check(
+      'production_runs_biochar_dry_mass_non_negative',
+      sql`${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} >= 0`
+    ),
+    check(
+      'production_runs_biochar_dry_lte_wet',
+      sql`${table.biocharOutputKg} is null or ${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} <= ${table.biocharOutputKg}`
     ),
   ]
 );

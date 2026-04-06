@@ -104,6 +104,7 @@ export const productionRunFormSchema = z.object({
 
   // Biochar Output
   biocharOutputKg: z.preprocess(toNumberOrNull, z.number().positive("Biochar output must be positive").nullable()).optional(),
+  biocharMoisturePercent: z.preprocess(toNumberOrNull, z.number().min(0, "Moisture must be 0–100").max(100, "Moisture must be 0–100").nullable()).optional(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
@@ -183,6 +184,7 @@ export const updateProductionRunSchema = z.object({
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
   biocharOutputKg: z.number().positive().optional().nullable(),
+  biocharMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   plcDataFileUrl: z.string().max(2000).optional().nullable(),
