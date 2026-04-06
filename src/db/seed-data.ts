@@ -5,7 +5,7 @@
  * This includes multiple facilities, suppliers, customers, and a complete
  * traceability chain showing the full biochar carbon credit workflow.
  *
- * Usage: pnpm tsx src/db/seed-data.ts
+ * Usage: pnpm db:seed
  */
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -101,7 +101,7 @@ async function seedDemoData() {
           facilityId: ids.facilityMoshi,
           reactorType: 'auger',
           samplingMethod: 'method_a',
-          capacityKg: 750,
+          nominalThroughputTph: 0.75,
           specifications: {
             manufacturer: 'NOMA Engineering',
             model: 'AugerMax-750',
@@ -115,7 +115,7 @@ async function seedDemoData() {
           facilityId: ids.facilityMoshi,
           reactorType: 'fixed-bed',
           samplingMethod: 'method_b',
-          capacityKg: 500,
+          nominalThroughputTph: 0.5,
           specifications: {
             manufacturer: 'NOMA Engineering',
             model: 'BatchPro-500',
@@ -129,7 +129,7 @@ async function seedDemoData() {
           facilityId: ids.facilityArusha,
           reactorType: 'auger',
           samplingMethod: 'method_a',
-          capacityKg: 1000,
+          nominalThroughputTph: 1.0,
           specifications: {
             manufacturer: 'NOMA Engineering',
             model: 'AugerMax-1000',
@@ -146,8 +146,6 @@ async function seedDemoData() {
           name: 'Moshi Feedstock Bay A',
           type: 'feedstock_bin',
           capacityKg: 20000,
-          latitude: -3.3338,
-          longitude: 37.3385,
           storageMethod: 'covered_bin',
           storageDescription: 'Climate-controlled covered storage with moisture monitoring',
           facilityId: ids.facilityMoshi,
@@ -158,8 +156,6 @@ async function seedDemoData() {
           name: 'Moshi Biochar Storage',
           type: 'biochar_bin',
           capacityKg: 15000,
-          latitude: -3.3339,
-          longitude: 37.3387,
           storageMethod: 'tarped_pile',
           storageDescription: 'Covered pile on impermeable liner with drainage',
           facilityId: ids.facilityMoshi,
@@ -170,8 +166,6 @@ async function seedDemoData() {
           name: 'Moshi Product Warehouse',
           type: 'product_bin',
           capacityKg: 10000,
-          latitude: -3.3340,
-          longitude: 37.3389,
           storageMethod: 'bagged_palletized',
           storageDescription: 'Sheltered warehouse with bagged products on pallets',
           facilityId: ids.facilityMoshi,
@@ -182,8 +176,6 @@ async function seedDemoData() {
           name: 'Arusha Feedstock Storage',
           type: 'feedstock_bin',
           capacityKg: 25000,
-          latitude: -3.3862,
-          longitude: 36.6833,
           storageMethod: 'covered_bin',
           facilityId: ids.facilityArusha,
         },
@@ -193,8 +185,6 @@ async function seedDemoData() {
           name: 'Arusha Biochar Storage',
           type: 'biochar_bin',
           capacityKg: 18000,
-          latitude: -3.3864,
-          longitude: 36.6835,
           storageMethod: 'tarped_pile',
           facilityId: ids.facilityArusha,
         },
@@ -204,8 +194,6 @@ async function seedDemoData() {
           name: 'Arusha Product Dispatch',
           type: 'product_bin',
           capacityKg: 15000,
-          latitude: -3.3866,
-          longitude: 36.6837,
           storageMethod: 'covered_bin',
           storageDescription: 'Covered dispatch area with weigh station',
           facilityId: ids.facilityArusha,
@@ -216,10 +204,13 @@ async function seedDemoData() {
       // PARTIES: Suppliers, Customers, Drivers, Operators
       // ============================================================
 
+      const [seedOwner] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1);
+
       console.log('Creating suppliers...');
       await tx.insert(schema.suppliers).values([
         {
           id: ids.supplierKili,
+          userId: seedOwner?.id ?? null,
           code: demoCodes.supplierKili,
           name: 'Kilimanjaro Forestry Cooperative',
           location: 'Hai District, Kilimanjaro',
@@ -233,6 +224,7 @@ async function seedDemoData() {
         },
         {
           id: ids.supplierMeru,
+          userId: seedOwner?.id ?? null,
           code: demoCodes.supplierMeru,
           name: 'Mount Meru Agricultural Residues',
           location: 'Arumeru District',
@@ -246,6 +238,7 @@ async function seedDemoData() {
         },
         {
           id: ids.supplierVictoria,
+          userId: seedOwner?.id ?? null,
           code: demoCodes.supplierVictoria,
           name: 'Lake Victoria Rice Mills',
           location: 'Mwanza Region',

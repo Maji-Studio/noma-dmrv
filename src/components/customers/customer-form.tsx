@@ -23,9 +23,24 @@ import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-di
 
 export interface PendingLocation {
   name: string;
+  country: string;
+  stateRegion?: string | null;
+  city?: string | null;
   address: string;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
+}
+
+function formatPendingLocationSummary({
+  city,
+  stateRegion,
+  country,
+}: Pick<PendingLocation, "city" | "stateRegion" | "country">): string | null {
+  const parts = [city, stateRegion, country]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
 // ============================================
@@ -265,33 +280,42 @@ function CreateModeLocationsSection({
         </p>
       ) : (
         <div className="flex flex-col gap-8">
-          {locations.map((loc, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
-            >
-              <div className="flex items-center gap-10 min-w-0">
-                <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
-                <div className="min-w-0">
-                  <p className="body-small font-medium truncate">{loc.name}</p>
-                  <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
-                    {loc.address}
-                    {loc.gpsLatitude !== null && loc.gpsLongitude !== null
-                      ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
-                      : ""}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(index)}
-                className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
-                aria-label={`Remove ${loc.name}`}
+          {locations.map((loc, index) => {
+            const locationSummary = formatPendingLocationSummary(loc);
+
+            return (
+              <div
+                key={index}
+                className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
               >
-                <Trash size={16} />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-10 min-w-0">
+                  <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
+                  <div className="min-w-0">
+                    <p className="body-small font-medium truncate">{loc.name}</p>
+                    {locationSummary ? (
+                      <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
+                        {locationSummary}
+                      </p>
+                    ) : null}
+                    <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
+                      {loc.address}
+                      {loc.gpsLatitude !== null && loc.gpsLongitude !== null
+                        ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(index)}
+                  className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+                  aria-label={`Remove ${loc.name}`}
+                >
+                  <Trash size={16} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -318,6 +342,9 @@ const INPUT_CLASS =
 function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation) => void; onCancel: () => void }) {
   const [formData, setFormData] = useState({
     name: "",
+    country: "",
+    stateRegion: "",
+    city: "",
     address: "",
     gpsLatitude: "",
     gpsLongitude: "",
@@ -329,6 +356,10 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 
     if (!formData.name.trim()) {
       setFormError("Location name is required");
+      return;
+    }
+    if (!formData.country.trim()) {
+      setFormError("Country is required");
       return;
     }
     if (!formData.address.trim()) {
@@ -350,6 +381,9 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 
     onAdd({
       name: formData.name.trim(),
+      country: formData.country.trim(),
+      stateRegion: formData.stateRegion.trim() || null,
+      city: formData.city.trim() || null,
       address: formData.address.trim(),
       gpsLatitude: lat,
       gpsLongitude: lng,
@@ -391,8 +425,51 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       </div>
 
       <div className="flex flex-col gap-6">
+        <label htmlFor="pending-loc-country" className="label-medium">
+          Country <span className="text-[var(--color-signal-red)]">*</span>
+        </label>
+        <input
+          id="pending-loc-country"
+          type="text"
+          value={formData.country}
+          onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))}
+          placeholder="e.g., Tanzania"
+          className={INPUT_CLASS}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-16">
+        <div className="flex flex-col gap-6">
+          <label htmlFor="pending-loc-state" className="label-medium">
+            State / Region
+          </label>
+          <input
+            id="pending-loc-state"
+            type="text"
+            value={formData.stateRegion}
+            onChange={(e) => setFormData((prev) => ({ ...prev, stateRegion: e.target.value }))}
+            placeholder="e.g., Kilimanjaro"
+            className={INPUT_CLASS}
+          />
+        </div>
+        <div className="flex flex-col gap-6">
+          <label htmlFor="pending-loc-city" className="label-medium">
+            City
+          </label>
+          <input
+            id="pending-loc-city"
+            type="text"
+            value={formData.city}
+            onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+            placeholder="e.g., Moshi"
+            className={INPUT_CLASS}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-6">
         <label htmlFor="pending-loc-address" className="label-medium">
-          Location <span className="text-[var(--color-signal-red)]">*</span>
+          Address <span className="text-[var(--color-signal-red)]">*</span>
         </label>
         <input
           id="pending-loc-address"

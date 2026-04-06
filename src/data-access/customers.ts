@@ -33,6 +33,9 @@ export interface CustomerDetail extends Customer {
   locations: Array<{
     id: string;
     name: string | null;
+    country: string;
+    stateRegion: string | null;
+    city: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
@@ -220,6 +223,9 @@ export async function getCustomerWithRelations(
     .select({
       id: customerLocations.id,
       name: customerLocations.name,
+      country: customerLocations.country,
+      stateRegion: customerLocations.stateRegion,
+      city: customerLocations.city,
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
@@ -228,7 +234,7 @@ export async function getCustomerWithRelations(
     })
     .from(customerLocations)
     .where(eq(customerLocations.customerId, customerId))
-    .orderBy(asc(customerLocations.name));
+    .orderBy(sql`${customerLocations.name} asc nulls last`);
 
   return {
     ...customer,
@@ -246,6 +252,9 @@ export async function getCustomerLocations(
   Array<{
     id: string;
     name: string | null;
+    country: string;
+    stateRegion: string | null;
+    city: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
@@ -269,6 +278,9 @@ export async function getCustomerLocations(
     .select({
       id: customerLocations.id,
       name: customerLocations.name,
+      country: customerLocations.country,
+      stateRegion: customerLocations.stateRegion,
+      city: customerLocations.city,
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
@@ -277,7 +289,7 @@ export async function getCustomerLocations(
     })
     .from(customerLocations)
     .where(eq(customerLocations.customerId, customerId))
-    .orderBy(asc(customerLocations.name));
+    .orderBy(sql`${customerLocations.name} asc nulls last`);
 }
 
 // ============================================
@@ -452,6 +464,9 @@ export async function createCustomerLocation(
   data: {
     customerId: string;
     name: string;
+    country?: string;
+    stateRegion?: string | null;
+    city?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
@@ -474,6 +489,9 @@ export async function createCustomerLocation(
     .values({
       customerId: data.customerId,
       name: data.name,
+      country: data.country ?? 'UNKNOWN',
+      stateRegion: data.stateRegion ?? null,
+      city: data.city ?? null,
       gpsLatitude: data.gpsLatitude ?? null,
       gpsLongitude: data.gpsLongitude ?? null,
       address: data.address ?? null,
@@ -491,6 +509,9 @@ export async function updateCustomerLocation(
   locationId: string,
   data: {
     name?: string;
+    country?: string;
+    stateRegion?: string | null;
+    city?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
@@ -510,6 +531,9 @@ export async function updateCustomerLocation(
 
   const updateData: {
     name?: string;
+    country?: string;
+    stateRegion?: string | null;
+    city?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
@@ -519,6 +543,9 @@ export async function updateCustomerLocation(
   };
 
   if (data.name !== undefined) updateData.name = data.name;
+  if (data.country !== undefined) updateData.country = data.country;
+  if (data.stateRegion !== undefined) updateData.stateRegion = data.stateRegion;
+  if (data.city !== undefined) updateData.city = data.city;
   if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
   if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
   if (data.address !== undefined) updateData.address = data.address;
