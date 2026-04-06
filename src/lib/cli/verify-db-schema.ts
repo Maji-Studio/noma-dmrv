@@ -3,6 +3,7 @@ import { isTable } from 'drizzle-orm';
 import { getTableConfig, isPgEnum } from 'drizzle-orm/pg-core';
 import { Pool } from 'pg';
 import * as schema from '../../db/schema';
+import { getPgPoolConfig } from '../pg-pool-config';
 
 config({ path: '.env.local' });
 
@@ -156,11 +157,7 @@ async function verifySchema(): Promise<void> {
     ...[...expectedEnums.values()].map((enumType) => enumType.schemaName),
   ])];
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: isLocal ? undefined : { rejectUnauthorized: false },
-  });
+  const pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
 
   try {
     const liveColumnsResult = await pool.query<LiveColumnRow>(

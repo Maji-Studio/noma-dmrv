@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { config } from 'dotenv';
+import { describeDatabaseTarget, getPgPoolConfig } from '../pg-pool-config';
 
 // Load environment variables from .env.local
 config({ path: '.env.local' });
@@ -10,23 +11,14 @@ async function resetDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  // Debug: log connection target (no credentials)
   try {
-    const url = new URL(process.env.DATABASE_URL);
-    console.log(`Connection target: host=${url.hostname} port=${url.port || '5432'} user=${url.username} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`);
+    console.log(`Connection target: ${describeDatabaseTarget(process.env.DATABASE_URL)}`);
   } catch {
     console.error('✗ Invalid DATABASE_URL format');
     process.exit(1);
   }
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
-  // Strip sslmode from URL — pg 8.18 overwrites explicit ssl options with parsed sslmode,
-  // and sslmode=require now means verify-full which rejects Supabase's cert.
-  const connectionString = process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]+/, '');
-  const pool = new Pool({
-    connectionString,
-    ssl: isLocal ? false : { rejectUnauthorized: false },
-  });
+  const pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
 
   try {
     // Test connection first
