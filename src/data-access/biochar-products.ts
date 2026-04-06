@@ -505,11 +505,16 @@ export async function updateBiocharProduct(
   const effectiveFacilityId = data.facilityId ?? existing.facilityId;
 
   // Verify linked production run exists and belongs to same facility
-  if (data.linkedProductionRunId !== undefined && data.linkedProductionRunId !== null) {
+  // Re-validate existing links when facilityId changes
+  const facilityChanged = data.facilityId !== undefined && data.facilityId !== existing.facilityId;
+  const effectiveLinkedRunId = data.linkedProductionRunId ?? existing.linkedProductionRunId;
+  const effectiveStorageId = data.storageLocationId ?? existing.storageLocationId;
+
+  if (effectiveLinkedRunId != null && (data.linkedProductionRunId !== undefined || facilityChanged)) {
     const [run] = await db
       .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
       .from(productionRuns)
-      .where(eq(productionRuns.id, data.linkedProductionRunId));
+      .where(eq(productionRuns.id, effectiveLinkedRunId));
 
     if (!run) {
       throw new Error("Linked production run not found");
@@ -520,11 +525,11 @@ export async function updateBiocharProduct(
   }
 
   // Verify storage location exists and belongs to same facility
-  if (data.storageLocationId !== undefined && data.storageLocationId !== null) {
+  if (effectiveStorageId != null && (data.storageLocationId !== undefined || facilityChanged)) {
     const [storage] = await db
       .select({ id: storageLocations.id, facilityId: storageLocations.facilityId })
       .from(storageLocations)
-      .where(eq(storageLocations.id, data.storageLocationId));
+      .where(eq(storageLocations.id, effectiveStorageId));
 
     if (!storage) {
       throw new Error("Storage location not found");

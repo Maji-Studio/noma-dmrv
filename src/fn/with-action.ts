@@ -39,7 +39,7 @@ export async function withAction<T>(
       };
     }
     if (process.env.NODE_ENV === "development" && error instanceof Error) {
-      console.error("[withAction]", error.message);
+      console.error("[withAction]", error.name, error.constructor.name);
     }
     return {
       success: false,

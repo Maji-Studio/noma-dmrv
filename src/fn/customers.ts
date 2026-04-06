@@ -428,8 +428,8 @@ export async function updateCustomerLocationFn(
     const location = await updateCustomerLocation(user.id, validated.locationId, {
       name: validated.name,
       country: validated.country,
-      stateRegion: validated.stateRegion,
-      city: validated.city,
+      stateRegion: validated.stateRegion || null,
+      city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,

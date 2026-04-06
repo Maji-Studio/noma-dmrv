@@ -4,10 +4,10 @@
  */
 
 import { z } from "zod";
-import { latitudeSchema, longitudeSchema, toNumberOrNull } from "./helpers";
+import { latitudeSchema, longitudeSchema } from "./helpers";
 
-const optionalGpsLatitude = z.preprocess(toNumberOrNull, latitudeSchema);
-const optionalGpsLongitude = z.preprocess(toNumberOrNull, longitudeSchema);
+const optionalGpsLatitude = latitudeSchema.nullable().optional();
+const optionalGpsLongitude = longitudeSchema.nullable().optional();
 
 // ============================================
 // Supplier Form Schema (Client-side validation)

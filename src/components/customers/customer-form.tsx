@@ -23,6 +23,9 @@ import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-di
 
 export interface PendingLocation {
   name: string;
+  country: string;
+  stateRegion?: string | null;
+  city?: string | null;
   address: string;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
@@ -318,6 +321,9 @@ const INPUT_CLASS =
 function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation) => void; onCancel: () => void }) {
   const [formData, setFormData] = useState({
     name: "",
+    country: "",
+    stateRegion: "",
+    city: "",
     address: "",
     gpsLatitude: "",
     gpsLongitude: "",
@@ -329,6 +335,10 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 
     if (!formData.name.trim()) {
       setFormError("Location name is required");
+      return;
+    }
+    if (!formData.country.trim()) {
+      setFormError("Country is required");
       return;
     }
     if (!formData.address.trim()) {
@@ -350,6 +360,9 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 
     onAdd({
       name: formData.name.trim(),
+      country: formData.country.trim(),
+      stateRegion: formData.stateRegion.trim() || null,
+      city: formData.city.trim() || null,
       address: formData.address.trim(),
       gpsLatitude: lat,
       gpsLongitude: lng,
@@ -391,8 +404,51 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       </div>
 
       <div className="flex flex-col gap-6">
+        <label htmlFor="pending-loc-country" className="label-medium">
+          Country <span className="text-[var(--color-signal-red)]">*</span>
+        </label>
+        <input
+          id="pending-loc-country"
+          type="text"
+          value={formData.country}
+          onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))}
+          placeholder="e.g., Tanzania"
+          className={INPUT_CLASS}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-16">
+        <div className="flex flex-col gap-6">
+          <label htmlFor="pending-loc-state" className="label-medium">
+            State / Region
+          </label>
+          <input
+            id="pending-loc-state"
+            type="text"
+            value={formData.stateRegion}
+            onChange={(e) => setFormData((prev) => ({ ...prev, stateRegion: e.target.value }))}
+            placeholder="e.g., Kilimanjaro"
+            className={INPUT_CLASS}
+          />
+        </div>
+        <div className="flex flex-col gap-6">
+          <label htmlFor="pending-loc-city" className="label-medium">
+            City
+          </label>
+          <input
+            id="pending-loc-city"
+            type="text"
+            value={formData.city}
+            onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+            placeholder="e.g., Moshi"
+            className={INPUT_CLASS}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-6">
         <label htmlFor="pending-loc-address" className="label-medium">
-          Location <span className="text-[var(--color-signal-red)]">*</span>
+          Address <span className="text-[var(--color-signal-red)]">*</span>
         </label>
         <input
           id="pending-loc-address"
