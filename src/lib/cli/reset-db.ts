@@ -19,8 +19,11 @@ async function resetDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  // Use connectionString so pg parses sslmode and all params correctly
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+  });
 
   try {
     // Test connection first
