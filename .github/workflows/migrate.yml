@@ -157,7 +157,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Reset and seed staging database
-        run: pnpm db:reset && pnpm db:seed
+        run: pnpm db:reset && pnpm db:seed && pnpm db:verify-schema
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}

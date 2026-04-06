@@ -36,6 +36,9 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Navigate to facilities list
     await page.goto("/facilities");
     await expect(page).toHaveURL(/\/facilities/);
+    await expect(page.getByText("Active Facilities")).toBeVisible({
+      timeout: 15000,
+    });
 
     // Open the create side sheet
     await page.getByRole("button", { name: /New Facility/i }).click();
