@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout code
@@ -54,16 +56,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Log staging database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
       - name: Run database migrations
         run: pnpm db:migrate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   verify-staging:
     runs-on: ubuntu-latest
     environment: staging
     needs: migrate-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout code
@@ -86,16 +92,20 @@ jobs:
       - name: Typecheck application
         run: pnpm typecheck
 
+      - name: Log staging database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
       - name: Verify staging schema matches Drizzle definitions
         run: pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   # ── Production pipeline (push to main only) ────────────────────────────
   migrate-production:
     runs-on: ubuntu-latest
     environment: production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout code
@@ -118,15 +128,15 @@ jobs:
       - name: Typecheck application
         run: pnpm typecheck
 
+      - name: Log production database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
       - name: Run database migrations
         run: pnpm db:migrate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Verify production schema matches Drizzle definitions
         run: pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   # ── Manual reset + seed: staging ───────────────────────────────────────
   reset-seed-staging:
@@ -137,6 +147,10 @@ jobs:
       github.ref == 'refs/heads/staging' &&
       github.event.inputs.action == 'reset-seed-staging' &&
       github.event.inputs.confirmation == 'RESET AND SEED STAGING'
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
     steps:
       - name: Checkout code
@@ -156,12 +170,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Log staging database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
       - name: Reset and seed staging database
         run: pnpm db:reset && pnpm db:seed && pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
   # ── Manual reset: production ────────────────────────────────────────────
   reset-production:
@@ -173,6 +187,10 @@ jobs:
       github.event.inputs.action == 'reset-production' &&
       github.event.inputs.authorized == 'true' &&
       github.event.inputs.confirmation == 'RESET PRODUCTION'
+    env:
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
     steps:
       - name: Checkout code
@@ -192,11 +210,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Log production database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
       - name: Reset production database from tracked migrations
         run: |
           pnpm db:reset
           pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}

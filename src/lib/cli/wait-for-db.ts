@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { config } from 'dotenv';
+import { getPgPoolConfig } from '../pg-pool-config';
 
 const MAX_RETRIES = 30;
 const RETRY_INTERVAL = 1000; // 1 second
@@ -13,22 +14,13 @@ async function waitForDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  // Use discrete config fields to avoid password parsing issues with reserved characters in connection URLs
-  let url: URL;
+  let pool: Pool;
   try {
-    url = new URL(process.env.DATABASE_URL);
+    pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
   } catch {
     console.error('✗ DATABASE_URL is not a valid URL');
     process.exit(1);
   }
-
-  const pool = new Pool({
-    host: url.hostname,
-    port: parseInt(url.port || '5432'),
-    database: url.pathname.slice(1),
-    user: url.username,
-    password: url.password || undefined,
-  });
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
