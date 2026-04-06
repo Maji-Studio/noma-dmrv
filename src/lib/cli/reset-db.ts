@@ -10,55 +10,33 @@ async function resetDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  // Parse connection string
-  let dbUrl: URL;
-  let dbName: string;
+  // Debug: log connection target (no credentials)
   try {
-    dbUrl = new URL(process.env.DATABASE_URL);
-    dbName = dbUrl.pathname.slice(1);
+    const url = new URL(process.env.DATABASE_URL);
+    console.log(`Connection target: host=${url.hostname} port=${url.port || '5432'} user=${url.username} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`);
   } catch {
     console.error('✗ Invalid DATABASE_URL format');
     process.exit(1);
   }
 
-  if (!dbName) {
-    console.error('✗ DATABASE_URL must include a database name');
-    process.exit(1);
-  }
-
-  // Debug: log connection target (no credentials)
-  console.log(`Connection target: host=${dbUrl.hostname} port=${dbUrl.port || '5432'} user=${dbUrl.username} db=${dbName}`);
-
-  // Connect to postgres database (not the app database)
-  const pool = new Pool({
-    host: dbUrl.hostname,
-    port: parseInt(dbUrl.port || '5432'),
-    database: 'postgres', // Connect to default postgres database
-    user: dbUrl.username,
-    password: dbUrl.password || undefined,
-  });
+  // Use connectionString so pg parses sslmode and all params correctly
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
-    console.log('🗑️  Dropping database...');
+    // Test connection first
+    await pool.query('SELECT 1');
+    console.log('  ✓ Connected to database');
 
-    // Terminate all connections to the target database
-    await pool.query(`
-      SELECT pg_terminate_backend(pg_stat_activity.pid)
-      FROM pg_stat_activity
-      WHERE pg_stat_activity.datname = $1
-        AND pid <> pg_backend_pid();
-    `, [dbName]);
+    console.log('🗑️  Dropping application and migration schemas...');
 
-    // Escape identifier to prevent SQL injection and handle special characters
-    const escapedDbName = `"${dbName.replace(/"/g, '""')}"`;
+    // Drop schemas (Supabase doesn't allow DROP DATABASE)
+    await pool.query('DROP SCHEMA IF EXISTS drizzle CASCADE');
+    await pool.query('DROP SCHEMA public CASCADE');
+    await pool.query('CREATE SCHEMA public');
+    await pool.query('GRANT ALL ON SCHEMA public TO current_user');
+    await pool.query('GRANT ALL ON SCHEMA public TO public');
 
-    // Drop the database
-    await pool.query(`DROP DATABASE IF EXISTS ${escapedDbName}`);
-    console.log(`  ✓ Dropped database: ${dbName}`);
-
-    // Recreate the database
-    await pool.query(`CREATE DATABASE ${escapedDbName}`);
-    console.log(`  ✓ Created database: ${dbName}\n`);
+    console.log('  ✓ Schema reset complete\n');
 
     await pool.end();
     process.exit(0);
