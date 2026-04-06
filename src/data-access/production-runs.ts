@@ -6,6 +6,15 @@
 
 import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count, sum } from "drizzle-orm";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+
+/** Compute dry mass clamped to wet mass (dry can never exceed wet). */
+function computeClampedDryMass(
+  wetMassKg: number | null | undefined,
+  moisturePercent: number | null | undefined
+): number | null {
+  if (wetMassKg == null || moisturePercent == null) return null;
+  return Math.min(deriveMassDryKg(wetMassKg, moisturePercent), wetMassKg);
+}
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
@@ -612,10 +621,7 @@ export async function createProductionRun(
       : null;
 
   // Compute biochar dry mass from wet output + moisture, clamped to wet mass
-  const biocharDryMass =
-    data.biocharOutputKg != null && data.biocharMoisturePercent != null
-      ? Math.min(deriveMassDryKg(data.biocharOutputKg, data.biocharMoisturePercent), data.biocharOutputKg)
-      : null;
+  const biocharDryMass = computeClampedDryMass(data.biocharOutputKg, data.biocharMoisturePercent);
 
   // Create production run + M:M allocation in a transaction
   const run = await db.transaction(async (tx) => {
@@ -795,10 +801,7 @@ export async function updateProductionRun(
   if (data.biocharOutputKg !== undefined || data.biocharMoisturePercent !== undefined) {
     const effectiveBiocharWet = data.biocharOutputKg !== undefined ? data.biocharOutputKg : existing.biocharOutputKg;
     const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
-    updateData.biocharDryMassKg =
-      effectiveBiocharWet != null && effectiveBiocharMoisture != null
-        ? Math.min(deriveMassDryKg(effectiveBiocharWet, effectiveBiocharMoisture), effectiveBiocharWet)
-        : null;
+    updateData.biocharDryMassKg = computeClampedDryMass(effectiveBiocharWet, effectiveBiocharMoisture);
   }
 
   if (data.biocharStorageLocationId !== undefined) updateData.biocharStorageLocationId = data.biocharStorageLocationId;

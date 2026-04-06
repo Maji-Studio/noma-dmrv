@@ -33,6 +33,9 @@ export interface CustomerDetail extends Customer {
   locations: Array<{
     id: string;
     name: string | null;
+    country: string;
+    stateRegion: string | null;
+    city: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
@@ -220,6 +223,9 @@ export async function getCustomerWithRelations(
     .select({
       id: customerLocations.id,
       name: customerLocations.name,
+      country: customerLocations.country,
+      stateRegion: customerLocations.stateRegion,
+      city: customerLocations.city,
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
@@ -228,7 +234,7 @@ export async function getCustomerWithRelations(
     })
     .from(customerLocations)
     .where(eq(customerLocations.customerId, customerId))
-    .orderBy(asc(customerLocations.name).nullsLast());
+    .orderBy(sql`${customerLocations.name} asc nulls last`);
 
   return {
     ...customer,
@@ -246,6 +252,9 @@ export async function getCustomerLocations(
   Array<{
     id: string;
     name: string | null;
+    country: string;
+    stateRegion: string | null;
+    city: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
@@ -269,6 +278,9 @@ export async function getCustomerLocations(
     .select({
       id: customerLocations.id,
       name: customerLocations.name,
+      country: customerLocations.country,
+      stateRegion: customerLocations.stateRegion,
+      city: customerLocations.city,
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
@@ -277,7 +289,7 @@ export async function getCustomerLocations(
     })
     .from(customerLocations)
     .where(eq(customerLocations.customerId, customerId))
-    .orderBy(asc(customerLocations.name).nullsLast());
+    .orderBy(sql`${customerLocations.name} asc nulls last`);
 }
 
 // ============================================

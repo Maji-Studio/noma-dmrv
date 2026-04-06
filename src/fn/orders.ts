@@ -50,9 +50,12 @@ export async function getOrdersFn(
 /**
  * Get a single order by ID
  */
+const ORDER_CODE_MIN_LENGTH = 1;
+const ORDER_CODE_MAX_LENGTH = 50;
+
 const orderIdSchema = z.string().uuid("Invalid order ID");
 const facilityIdSchema = z.string().uuid("Invalid facility ID");
-const orderCodeSchema = z.string().min(1, "Order code is required").max(50);
+const orderCodeSchema = z.string().min(ORDER_CODE_MIN_LENGTH, "Order code is required").max(ORDER_CODE_MAX_LENGTH);
 
 export async function getOrderByIdFn(
   orderId: string

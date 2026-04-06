@@ -98,8 +98,8 @@ export async function getSuppliers(
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — always scoped to the current user
+  const conditions: SQL[] = [eq(suppliers.userId, userId)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -117,7 +117,7 @@ export async function getSuppliers(
     conditions.push(ilike(suppliers.location, location));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -186,7 +186,7 @@ export async function getSupplierById(
   userId: string,
   supplierId: string
 ): Promise<Supplier> {
-  requireAuth(userId);
+  await ensureSupplierOwnership(userId, supplierId);
 
   const [supplier] = await db
     .select()
@@ -284,7 +284,7 @@ export async function updateSupplier(
     sourceRegion?: string | null;
   }
 ): Promise<Supplier> {
-  requireAuth(userId);
+  await ensureSupplierOwnership(userId, supplierId);
 
   // Verify supplier exists
   const [existing] = await db
@@ -332,7 +332,7 @@ export async function deleteSupplier(
   userId: string,
   supplierId: string
 ): Promise<void> {
-  requireAuth(userId);
+  await ensureSupplierOwnership(userId, supplierId);
 
   // Verify supplier exists
   const [existing] = await db

@@ -4,7 +4,7 @@ Compatibility instructions for coding agents working in `noma-dmrv`.
 
 ## Source Of Truth
 
-`/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/.claude/CLAUDE.md` is the authoritative instruction file for this repository.
+`./.claude/CLAUDE.md` is the authoritative instruction file for this repository.
 
 Read `./.claude/CLAUDE.md` before making changes. If this file and `CLAUDE.md` ever differ, `CLAUDE.md` wins.
 
