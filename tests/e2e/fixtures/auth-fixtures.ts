@@ -336,6 +336,16 @@ async function createSignedAuthStorageState(
       const expires = Number.isFinite(maxAge)
         ? Math.floor(Date.now() / 1000) + maxAge
         : -1;
+      const rawSameSite = attrMap.samesite?.toLowerCase();
+      let sameSite: "Lax" | "Strict" | "None" | undefined;
+
+      if (rawSameSite === "lax") {
+        sameSite = "Lax";
+      } else if (rawSameSite === "strict") {
+        sameSite = "Strict";
+      } else if (rawSameSite === "none") {
+        sameSite = "None";
+      }
 
       return {
         name: name!.trim(),
@@ -344,11 +354,7 @@ async function createSignedAuthStorageState(
         path: attrMap.path || "/",
         httpOnly: "httponly" in attrMap,
         secure: "secure" in attrMap,
-        sameSite: ((attrMap.samesite?.charAt(0).toUpperCase() ?? "") +
-          (attrMap.samesite?.slice(1).toLowerCase() ?? "")) as
-          | "Lax"
-          | "Strict"
-          | "None",
+        sameSite,
         expires,
       };
     })
