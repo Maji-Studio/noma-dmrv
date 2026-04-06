@@ -32,6 +32,9 @@ export function CustomerLocationQuickAddDialog({
 }: CustomerLocationQuickAddDialogProps) {
   const [formData, setFormData] = useState({
     name: "",
+    country: "",
+    stateRegion: "",
+    city: "",
     address: "",
     gpsLatitude: "",
     gpsLongitude: "",
@@ -40,7 +43,7 @@ export function CustomerLocationQuickAddDialog({
   const createLocation = useCreateCustomerLocation();
 
   const resetForm = useCallback(() => {
-    setFormData({ name: "", address: "", gpsLatitude: "", gpsLongitude: "" });
+    setFormData({ name: "", country: "", stateRegion: "", city: "", address: "", gpsLatitude: "", gpsLongitude: "" });
     setError(null);
   }, []);
 
@@ -54,8 +57,8 @@ export function CustomerLocationQuickAddDialog({
       return;
     }
 
-    if (!formData.address.trim()) {
-      setError("Location is required");
+    if (!formData.country.trim()) {
+      setError("Country is required");
       return;
     }
 
@@ -82,7 +85,10 @@ export function CustomerLocationQuickAddDialog({
       await createLocation.mutateAsync({
         customerId,
         name: formData.name.trim(),
-        address: formData.address.trim(),
+        country: formData.country.trim(),
+        stateRegion: formData.stateRegion.trim() || null,
+        city: formData.city.trim() || null,
+        address: formData.address.trim() || "",
         gpsLatitude: lat,
         gpsLongitude: lng,
       });
@@ -152,10 +158,63 @@ export function CustomerLocationQuickAddDialog({
             />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-24">
+            <div className="flex flex-col gap-16">
+              <label htmlFor="location-country" className="label-medium">
+                Country{" "}
+                <span className="text-[var(--color-signal-red)]">*</span>
+              </label>
+              <input
+                id="location-country"
+                type="text"
+                value={formData.country}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, country: e.target.value }))
+                }
+                placeholder="e.g., Tanzania"
+                className={inputClass}
+                data-testid="location-country-input"
+              />
+            </div>
+
+            <div className="flex flex-col gap-16">
+              <label htmlFor="location-state-region" className="label-medium">
+                State / Region
+              </label>
+              <input
+                id="location-state-region"
+                type="text"
+                value={formData.stateRegion}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, stateRegion: e.target.value }))
+                }
+                placeholder="e.g., Kilimanjaro"
+                className={inputClass}
+                data-testid="location-state-region-input"
+              />
+            </div>
+
+            <div className="flex flex-col gap-16">
+              <label htmlFor="location-city" className="label-medium">
+                City
+              </label>
+              <input
+                id="location-city"
+                type="text"
+                value={formData.city}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, city: e.target.value }))
+                }
+                placeholder="e.g., Moshi"
+                className={inputClass}
+                data-testid="location-city-input"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col gap-16">
             <label htmlFor="location-address" className="label-medium">
-              Location{" "}
-              <span className="text-[var(--color-signal-red)]">*</span>
+              Address / Description
             </label>
             <input
               id="location-address"

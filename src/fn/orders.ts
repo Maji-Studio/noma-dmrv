@@ -50,11 +50,19 @@ export async function getOrdersFn(
 /**
  * Get a single order by ID
  */
+const ORDER_CODE_MIN_LENGTH = 1;
+const ORDER_CODE_MAX_LENGTH = 50;
+
+const orderIdSchema = z.string().uuid("Invalid order ID");
+const facilityIdSchema = z.string().uuid("Invalid facility ID");
+const orderCodeSchema = z.string().min(ORDER_CODE_MIN_LENGTH, "Order code is required").max(ORDER_CODE_MAX_LENGTH);
+
 export async function getOrderByIdFn(
   orderId: string
 ): Promise<ActionResult<Order>> {
   return withAction(async (userId) => {
-    return getOrderByIdData(userId, orderId);
+    const validatedId = orderIdSchema.parse(orderId);
+    return getOrderByIdData(userId, validatedId);
   }, { fallbackMessage: "Failed to load order" });
 }
 
@@ -65,7 +73,8 @@ export async function getOrderWithRelationsFn(
   orderId: string
 ): Promise<ActionResult<OrderDetail>> {
   return withAction(async (userId) => {
-    return getOrderWithRelationsData(userId, orderId);
+    const validatedId = orderIdSchema.parse(orderId);
+    return getOrderWithRelationsData(userId, validatedId);
   }, { fallbackMessage: "Failed to load order details" });
 }
 
@@ -87,7 +96,10 @@ export async function getOrdersForSelectFn(
   >
 > {
   return withAction(async (userId) => {
-    return getOrdersForSelectData(userId, facilityId);
+    const validatedFacilityId = facilityId
+      ? facilityIdSchema.parse(facilityId)
+      : undefined;
+    return getOrdersForSelectData(userId, validatedFacilityId);
   }, { fallbackMessage: "Failed to load orders for select" });
 }
 
@@ -99,7 +111,11 @@ export async function checkOrderCodeFn(
   excludeOrderId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   return withAction(async (userId) => {
-    const available = await isOrderCodeAvailableData(userId, code, excludeOrderId);
+    const validatedCode = orderCodeSchema.parse(code);
+    const validatedExcludeId = excludeOrderId
+      ? orderIdSchema.parse(excludeOrderId)
+      : undefined;
+    const available = await isOrderCodeAvailableData(userId, validatedCode, validatedExcludeId);
     return { available };
   }, { fallbackMessage: "Failed to check order code" });
 }

@@ -9,9 +9,15 @@ on:
       - "drizzle.config.ts"
   workflow_dispatch:
     inputs:
+      action:
+        description: "Action to perform"
+        required: true
+        type: choice
+        options:
+          - reset-seed-staging
       confirmation:
-        description: "Type RESET STAGING to allow a full staging database reset"
-        required: false
+        description: "Type RESET AND SEED STAGING to confirm"
+        required: true
         type: string
 
 concurrency:
@@ -19,11 +25,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Auto-migration pipeline (on push to main/staging) ───────────────
+  # ── Staging pipeline (push to staging only) ────────────────────────────
   migrate-staging:
     runs-on: ubuntu-latest
     environment: staging
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
 
     steps:
       - name: Checkout code
@@ -52,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     needs: migrate-staging
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
 
     steps:
       - name: Checkout code
@@ -80,10 +86,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+  # ── Production pipeline (push to main only) ────────────────────────────
   migrate-production:
     runs-on: ubuntu-latest
     environment: production
-    needs: verify-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
@@ -104,6 +110,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck application
+        run: pnpm typecheck
+
       - name: Run database migrations
         run: pnpm db:migrate
         env:
@@ -114,13 +123,15 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-  reset-staging:
+  # ── Manual reset + seed: staging ───────────────────────────────────────
+  reset-seed-staging:
     runs-on: ubuntu-latest
     environment: staging
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/staging' &&
-      github.event.inputs.confirmation == 'RESET STAGING'
+      github.event.inputs.action == 'reset-seed-staging' &&
+      github.event.inputs.confirmation == 'RESET AND SEED STAGING'
 
     steps:
       - name: Checkout code
@@ -140,14 +151,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Reset staging database from tracked migrations
-        run: pnpm db:reset
+      - name: Reset and seed staging database
+        run: pnpm db:reset && pnpm db:seed
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-
-      - name: Verify staging schema matches Drizzle definitions
-        run: pnpm db:verify-schema
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}

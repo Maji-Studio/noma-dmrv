@@ -140,6 +140,9 @@ test.describe("Order + Delivery UI CRUD", () => {
     await adminPage.goto(ordersUrl);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
+    // Wait for React to hydrate and data to load — stat cards appear after
+    // the client component mounts and React Query fetches order data.
+    await expect(adminPage.getByText("Total Orders")).toBeVisible({ timeout: 15000 });
     await adminPage.click('button:has-text("New Order")');
     await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
 

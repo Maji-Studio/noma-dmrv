@@ -6,6 +6,13 @@
 import { z } from "zod";
 
 // ============================================
+// Shared Location Part Schemas
+// ============================================
+
+const LOCATION_PART_MAX = 100;
+const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable().or(z.literal(""));
+
+// ============================================
 // GPS Coordinate Validation
 // ============================================
 
@@ -85,6 +92,9 @@ export const customerLocationFormSchema = z.object({
     .string()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
+  country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
+  stateRegion: locationPartSchema,
+  city: locationPartSchema,
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
@@ -139,6 +149,9 @@ export const createCustomerLocationSchema = z.object({
     .string()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
+  country: z.string().min(1, "Country is required").max(LOCATION_PART_MAX),
+  stateRegion: locationPartSchema,
+  city: locationPartSchema,
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
@@ -150,6 +163,9 @@ export const createCustomerLocationSchema = z.object({
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Invalid location ID"),
   name: z.string().min(1).max(255).optional(),
+  country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
+  stateRegion: locationPartSchema,
+  city: locationPartSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationTextSchema.optional(),

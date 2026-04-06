@@ -6,6 +6,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Supplier, SupplierLocation } from "@/db/schema";
+
+const SUPPLIERS_STALE_TIME_MS = 60_000;
 import type {
   SupplierFilterData,
   CreateSupplierData,
@@ -104,7 +106,7 @@ export function useSupplierLocations() {
       }
       return result.data;
     },
-    staleTime: 60000, // 1 minute - locations don't change often
+    staleTime: SUPPLIERS_STALE_TIME_MS, // 1 minute - locations don't change often
   });
 }
 
@@ -121,7 +123,7 @@ export function useSupplierOptions() {
       }
       return result.data;
     },
-    staleTime: 60000, // 1 minute
+    staleTime: SUPPLIERS_STALE_TIME_MS, // 1 minute
   });
 }
 
@@ -527,6 +529,7 @@ export function useSupplierLocationsBySupplier(supplierId: string, enabled = tru
       return result.data;
     },
     enabled: !!supplierId && enabled,
+    staleTime: SUPPLIERS_STALE_TIME_MS,
   });
 }
 

@@ -51,6 +51,9 @@ export function CustomerLocationForm({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues: {
       name: location?.name ?? "",
+      country: location?.country ?? "",
+      stateRegion: location?.stateRegion ?? "",
+      city: location?.city ?? "",
       gpsLatitude: location?.gpsLatitude ?? undefined,
       gpsLongitude: location?.gpsLongitude ?? undefined,
       address: location?.address ?? "",
@@ -87,15 +90,62 @@ export function CustomerLocationForm({
           />
         </FormField>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+          <FormField
+            id="country"
+            label="Country"
+            error={errors.country?.message}
+            required
+          >
+            <FormInput
+              id="country"
+              type="text"
+              placeholder="e.g., Tanzania"
+              disabled={isSubmitting}
+              error={!!errors.country}
+              {...register("country")}
+            />
+          </FormField>
+
+          <FormField
+            id="stateRegion"
+            label="State / Region"
+            error={errors.stateRegion?.message}
+          >
+            <FormInput
+              id="stateRegion"
+              type="text"
+              placeholder="e.g., Kilimanjaro"
+              disabled={isSubmitting}
+              error={!!errors.stateRegion}
+              {...register("stateRegion")}
+            />
+          </FormField>
+
+          <FormField
+            id="city"
+            label="City"
+            error={errors.city?.message}
+          >
+            <FormInput
+              id="city"
+              type="text"
+              placeholder="e.g., Moshi"
+              disabled={isSubmitting}
+              error={!!errors.city}
+              {...register("city")}
+            />
+          </FormField>
+        </div>
+
         <FormField
           id="address"
-          label="Location"
+          label="Address / Description"
           error={errors.address?.message}
-          required
         >
           <FormTextarea
             id="address"
-            placeholder="Physical address or site description for this field location"
+            placeholder="Additional address details or site description"
             disabled={isSubmitting}
             error={!!errors.address}
             {...register("address")}

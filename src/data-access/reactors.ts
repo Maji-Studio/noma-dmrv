@@ -121,7 +121,7 @@ export async function getReactors(
       facilityId: reactors.facilityId,
       reactorType: reactors.reactorType,
       samplingMethod: reactors.samplingMethod,
-      capacityKg: reactors.capacityKg,
+      nominalThroughputTph: reactors.nominalThroughputTph,
       specifications: reactors.specifications,
       createdAt: reactors.createdAt,
       updatedAt: reactors.updatedAt,
@@ -150,7 +150,7 @@ export async function getReactors(
         facilityId: reactor.facilityId,
         reactorType: reactor.reactorType,
         samplingMethod: reactor.samplingMethod,
-        capacityKg: reactor.capacityKg,
+        nominalThroughputTph: reactor.nominalThroughputTph,
         specifications: reactor.specifications,
         createdAt: reactor.createdAt,
         updatedAt: reactor.updatedAt,
@@ -188,7 +188,7 @@ export async function getReactorById(
       facilityId: reactors.facilityId,
       reactorType: reactors.reactorType,
       samplingMethod: reactors.samplingMethod,
-      capacityKg: reactors.capacityKg,
+      nominalThroughputTph: reactors.nominalThroughputTph,
       specifications: reactors.specifications,
       createdAt: reactors.createdAt,
       updatedAt: reactors.updatedAt,
@@ -215,7 +215,7 @@ export async function getReactorById(
     facilityId: reactor.facilityId,
     reactorType: reactor.reactorType,
     samplingMethod: reactor.samplingMethod,
-    capacityKg: reactor.capacityKg,
+    nominalThroughputTph: reactor.nominalThroughputTph,
     specifications: reactor.specifications,
     createdAt: reactor.createdAt,
     updatedAt: reactor.updatedAt,
@@ -267,7 +267,7 @@ export async function createReactor(
     facilityId: string;
     reactorType: string;
     samplingMethod?: "method_a" | "method_b";
-    capacityKg?: number | null;
+    nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
 ): Promise<Reactor> {
@@ -301,7 +301,7 @@ export async function createReactor(
       facilityId: data.facilityId,
       reactorType: data.reactorType,
       samplingMethod: data.samplingMethod ?? "method_a",
-      capacityKg: data.capacityKg ?? null,
+      nominalThroughputTph: data.nominalThroughputTph ?? null,
       specifications: data.specifications ?? null,
     })
     .returning();
@@ -325,7 +325,7 @@ export async function updateReactor(
     facilityId?: string;
     reactorType?: string;
     samplingMethod?: "method_a" | "method_b";
-    capacityKg?: number | null;
+    nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
 ): Promise<Reactor> {

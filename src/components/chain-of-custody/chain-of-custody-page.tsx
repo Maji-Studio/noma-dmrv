@@ -15,7 +15,7 @@ import {
   type NodeTypes,
   type Node,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import "@xyflow/react/dist/base.css";
 import { TreeStructure } from "@phosphor-icons/react/dist/ssr";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useChainOfCustody } from "@/hooks/use-chain-of-custody";
