@@ -1,0 +1,21 @@
+ALTER TABLE "applications" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "applications" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "soil_temperature_measurements" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "soil_temperature_measurements" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "facilities" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "facilities" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "storage_locations" ALTER COLUMN "latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "storage_locations" ALTER COLUMN "longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "feedstock_deliveries" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "feedstock_deliveries" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "feedstocks" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "feedstocks" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "customer_locations" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "customer_locations" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "suppliers" ALTER COLUMN "gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "suppliers" ALTER COLUMN "gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "transport_legs" ALTER COLUMN "origin_gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "transport_legs" ALTER COLUMN "origin_gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "transport_legs" ALTER COLUMN "destination_gps_latitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "transport_legs" ALTER COLUMN "destination_gps_longitude" SET DATA TYPE double precision;--> statement-breakpoint
+ALTER TABLE "facilities" ADD COLUMN "timezone" text;

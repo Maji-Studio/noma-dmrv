@@ -32,7 +32,7 @@ export interface PaginatedCustomers {
 export interface CustomerDetail extends Customer {
   locations: Array<{
     id: string;
-    name: string;
+    name: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
@@ -245,7 +245,7 @@ export async function getCustomerLocations(
 ): Promise<
   Array<{
     id: string;
-    name: string;
+    name: string | null;
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;

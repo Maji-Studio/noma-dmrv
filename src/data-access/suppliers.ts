@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
-import { suppliers, feedstocks, type Supplier } from "@/db/schema";
+import { suppliers, supplierLocations, feedstocks, type Supplier, type SupplierLocation } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
 
 // ============================================
@@ -370,4 +370,115 @@ export async function getSupplierOptions(
     })
     .from(suppliers)
     .orderBy(asc(suppliers.name));
+}
+
+// ============================================
+// Supplier Location Operations
+// ============================================
+
+export async function getSupplierLocationsBySupplier(
+  userId: string,
+  supplierId: string
+): Promise<SupplierLocation[]> {
+  requireAuth(userId);
+
+  return db
+    .select()
+    .from(supplierLocations)
+    .where(eq(supplierLocations.supplierId, supplierId))
+    .orderBy(asc(supplierLocations.country));
+}
+
+export async function getSupplierLocationById(
+  userId: string,
+  locationId: string
+): Promise<SupplierLocation> {
+  requireAuth(userId);
+
+  const [location] = await db
+    .select()
+    .from(supplierLocations)
+    .where(eq(supplierLocations.id, locationId));
+
+  if (!location) {
+    throw new Error("Supplier location not found");
+  }
+
+  return location;
+}
+
+export async function createSupplierLocation(
+  userId: string,
+  data: {
+    supplierId: string;
+    name?: string | null;
+    country: string;
+    stateRegion?: string | null;
+    city?: string | null;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
+    address?: string | null;
+  }
+): Promise<SupplierLocation> {
+  requireAuth(userId);
+
+  const [location] = await db
+    .insert(supplierLocations)
+    .values({
+      supplierId: data.supplierId,
+      name: data.name ?? null,
+      country: data.country,
+      stateRegion: data.stateRegion ?? null,
+      city: data.city ?? null,
+      gpsLatitude: data.gpsLatitude ?? null,
+      gpsLongitude: data.gpsLongitude ?? null,
+      address: data.address ?? null,
+    })
+    .returning();
+
+  return location;
+}
+
+export async function updateSupplierLocation(
+  userId: string,
+  locationId: string,
+  data: {
+    name?: string | null;
+    country?: string;
+    stateRegion?: string | null;
+    city?: string | null;
+    gpsLatitude?: number | null;
+    gpsLongitude?: number | null;
+    address?: string | null;
+  }
+): Promise<SupplierLocation> {
+  requireAuth(userId);
+
+  const [updated] = await db
+    .update(supplierLocations)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(eq(supplierLocations.id, locationId))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Supplier location not found");
+  }
+
+  return updated;
+}
+
+export async function deleteSupplierLocation(
+  userId: string,
+  locationId: string
+): Promise<void> {
+  requireAuth(userId);
+
+  const deleted = await db.delete(supplierLocations).where(eq(supplierLocations.id, locationId)).returning({ id: supplierLocations.id });
+
+  if (deleted.length === 0) {
+    throw new Error("Supplier location not found");
+  }
 }

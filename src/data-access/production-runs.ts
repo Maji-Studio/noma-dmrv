@@ -51,6 +51,8 @@ export interface ProductionRunWithRelations {
   preprocessingFuelLiters: number | null;
   electricityKwh: number | null;
   biocharOutputKg: number | null;
+  biocharMoisturePercent: number | null;
+  biocharDryMassKg: number | null;
   biocharStorageLocationId: string | null;
   feedstockStorageLocationId: string | null;
   feedstockWetMassKg: number | null;
@@ -209,6 +211,8 @@ export async function getProductionRuns(
       preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
       electricityKwh: productionRuns.electricityKwh,
       biocharOutputKg: productionRuns.biocharOutputKg,
+      biocharMoisturePercent: productionRuns.biocharMoisturePercent,
+      biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
@@ -333,6 +337,8 @@ export async function getProductionRunById(
       preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
       electricityKwh: productionRuns.electricityKwh,
       biocharOutputKg: productionRuns.biocharOutputKg,
+      biocharMoisturePercent: productionRuns.biocharMoisturePercent,
+      biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
@@ -557,6 +563,7 @@ export async function createProductionRun(
     preprocessingFuelLiters?: number | null;
     electricityKwh?: number | null;
     biocharOutputKg?: number | null;
+    biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
     plcDataFileUrl?: string | null;
@@ -604,6 +611,12 @@ export async function createProductionRun(
       ? deriveMassDryKg(data.feedstockWetMassKg, data.feedstockMoisturePercent)
       : null;
 
+  // Compute biochar dry mass from wet output + moisture
+  const biocharDryMass =
+    data.biocharOutputKg != null && data.biocharMoisturePercent != null
+      ? deriveMassDryKg(data.biocharOutputKg, data.biocharMoisturePercent)
+      : null;
+
   // Create production run + M:M allocation in a transaction
   const run = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -627,6 +640,8 @@ export async function createProductionRun(
         preprocessingFuelLiters: data.preprocessingFuelLiters ?? null,
         electricityKwh: data.electricityKwh ?? null,
         biocharOutputKg: data.biocharOutputKg ?? null,
+        biocharMoisturePercent: data.biocharMoisturePercent ?? null,
+        biocharDryMassKg: biocharDryMass,
         biocharStorageLocationId: data.biocharStorageLocationId ?? null,
         feedstockStorageLocationId: data.feedstockStorageLocationId ?? null,
         plcDataFileUrl: data.plcDataFileUrl ?? null,
@@ -691,6 +706,7 @@ export async function updateProductionRun(
     preprocessingFuelLiters?: number | null;
     electricityKwh?: number | null;
     biocharOutputKg?: number | null;
+    biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
     plcDataFileUrl?: string | null;
@@ -773,6 +789,18 @@ export async function updateProductionRun(
   if (data.preprocessingFuelLiters !== undefined) updateData.preprocessingFuelLiters = data.preprocessingFuelLiters;
   if (data.electricityKwh !== undefined) updateData.electricityKwh = data.electricityKwh;
   if (data.biocharOutputKg !== undefined) updateData.biocharOutputKg = data.biocharOutputKg;
+  if (data.biocharMoisturePercent !== undefined) updateData.biocharMoisturePercent = data.biocharMoisturePercent;
+
+  // Recompute biochar dry mass when either output or moisture changes
+  if (data.biocharOutputKg !== undefined || data.biocharMoisturePercent !== undefined) {
+    const effectiveBiocharWet = data.biocharOutputKg !== undefined ? data.biocharOutputKg : existing.biocharOutputKg;
+    const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
+    updateData.biocharDryMassKg =
+      effectiveBiocharWet != null && effectiveBiocharMoisture != null
+        ? deriveMassDryKg(effectiveBiocharWet, effectiveBiocharMoisture)
+        : null;
+  }
+
   if (data.biocharStorageLocationId !== undefined) updateData.biocharStorageLocationId = data.biocharStorageLocationId;
   if (data.feedstockStorageLocationId !== undefined) updateData.feedstockStorageLocationId = data.feedstockStorageLocationId;
   if (data.plcDataFileUrl !== undefined) updateData.plcDataFileUrl = data.plcDataFileUrl;

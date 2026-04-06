@@ -150,7 +150,7 @@ export function ProductionIncidentTable({
                   <td className="py-8 pr-12">
                     {incident.severity ? formatProductionIncidentSeverity(incident.severity) : "\u2014"}
                   </td>
-                  <td className="py-8 pr-12">{incident.reactorCode ?? "\u2014"}</td>
+                  <td className="py-8 pr-12">{incident.reactorIdentifier ?? "\u2014"}</td>
                   <td className="py-8 pr-12">{incident.operatorName ?? "\u2014"}</td>
                   <td className="py-8 pr-12 max-w-[360px] whitespace-normal">
                     {incident.description}

@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // ============================================
 // Suppliers - Biomass/feedstock suppliers
@@ -12,8 +12,8 @@ export const suppliers = pgTable(
     code: text('code').notNull().unique(),
     name: text('name').notNull(),
     location: text('location'),
-    gpsLatitude: real('gps_latitude'),
-    gpsLongitude: real('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude'),
+    gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
     contactName: text('contact_name'),
     contactEmail: text('contact_email'),
@@ -61,9 +61,12 @@ export const customerLocations = pgTable(
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id),
-    name: text('name').notNull(),
-    gpsLatitude: real('gps_latitude'),
-    gpsLongitude: real('gps_longitude'),
+    name: text('name'),
+    country: text('country').notNull().default('UNKNOWN'),
+    stateRegion: text('state_region'),
+    city: text('city'),
+    gpsLatitude: doublePrecision('gps_latitude'),
+    gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -75,6 +78,39 @@ export const customerLocations = pgTable(
     ),
     check(
       'customer_locations_gps_longitude_range',
+      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
+    ),
+  ]
+);
+
+// ============================================
+// Supplier Locations - Multi-location sources per supplier
+// ============================================
+
+export const supplierLocations = pgTable(
+  'supplier_locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    name: text('name'),
+    country: text('country').notNull().default('UNKNOWN'),
+    stateRegion: text('state_region'),
+    city: text('city'),
+    gpsLatitude: doublePrecision('gps_latitude'),
+    gpsLongitude: doublePrecision('gps_longitude'),
+    address: text('address'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'supplier_locations_gps_latitude_range',
+      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
+    ),
+    check(
+      'supplier_locations_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
   ]
@@ -107,6 +143,20 @@ export const operators = pgTable('operators', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+export const suppliersRelations = relations(suppliers, ({ many }) => ({
+  locations: many(supplierLocations),
+}));
+
+export const supplierLocationsRelations = relations(
+  supplierLocations,
+  ({ one }) => ({
+    supplier: one(suppliers, {
+      fields: [supplierLocations.supplierId],
+      references: [suppliers.id],
+    }),
+  })
+);
+
 export const customersRelations = relations(customers, ({ many }) => ({
   locations: many(customerLocations),
 }));
@@ -131,6 +181,8 @@ export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type CustomerLocation = typeof customerLocations.$inferSelect;
 export type NewCustomerLocation = typeof customerLocations.$inferInsert;
+export type SupplierLocation = typeof supplierLocations.$inferSelect;
+export type NewSupplierLocation = typeof supplierLocations.$inferInsert;
 export type Driver = typeof drivers.$inferSelect;
 export type NewDriver = typeof drivers.$inferInsert;
 export type Operator = typeof operators.$inferSelect;
