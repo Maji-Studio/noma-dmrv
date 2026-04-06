@@ -64,6 +64,13 @@
       "when": 1775468872924,
       "tag": "0008_cultured_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775491200000,
+      "tag": "0009_keen_mole_man",
+      "breakpoints": true
     }
   ]
 }

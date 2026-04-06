@@ -527,6 +527,7 @@ export function useSupplierLocationsBySupplier(supplierId: string, enabled = tru
       return result.data;
     },
     enabled: !!supplierId && enabled,
+    staleTime: 60000,
   });
 }
 

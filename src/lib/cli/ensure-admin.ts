@@ -1,7 +1,7 @@
 /**
  * Ensures the admin user exists with a valid credential account.
  * Creates the user if missing, or updates the password hash if it already exists.
- * Does NOT seed any entity data — use `pnpm db:seed` for that.
+ * Does NOT seed any entity data — use `pnpm db:seed` if you want demo/sample records.
  */
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';

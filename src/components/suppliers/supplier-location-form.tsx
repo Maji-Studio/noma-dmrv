@@ -1,7 +1,7 @@
 /**
- * CustomerLocationForm component
- * Reusable customer location form with React Hook Form integration
- * Used in both create and edit views for customer locations
+ * SupplierLocationForm component
+ * Reusable supplier location form with structured address fields
+ * Used in both create and edit views for supplier locations
  */
 "use client";
 
@@ -12,20 +12,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
-  customerLocationFormSchema,
-  type CustomerLocationFormData,
-} from "@/schemas/customers";
-import type { CustomerLocation } from "@/db/schema/parties";
+  supplierLocationFormSchema,
+  type SupplierLocationFormData,
+} from "@/schemas/suppliers";
+import type { SupplierLocation } from "@/db/schema/parties";
 
 // ============================================
 // Component
 // ============================================
 
-interface CustomerLocationFormProps {
+interface SupplierLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: CustomerLocation;
+  location?: SupplierLocation;
   /** Form submission handler */
-  onSubmit: (data: CustomerLocationFormData) => Promise<void> | void;
+  onSubmit: (data: SupplierLocationFormData) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -34,21 +34,21 @@ interface CustomerLocationFormProps {
   submitLabel?: string;
 }
 
-export function CustomerLocationForm({
+export function SupplierLocationForm({
   location,
   onSubmit,
   onCancel,
   isSubmitting = false,
   submitLabel,
-}: CustomerLocationFormProps) {
+}: SupplierLocationFormProps) {
   const isEditMode = !!location;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<CustomerLocationFormData>({
-    resolver: zodResolver(customerLocationFormSchema),
+  } = useForm<SupplierLocationFormData>({
+    resolver: zodResolver(supplierLocationFormSchema),
     defaultValues: {
       name: location?.name ?? "",
       country: location?.country ?? "",
@@ -78,12 +78,12 @@ export function CustomerLocationForm({
           id="name"
           label="Location Name"
           error={errors.name?.message}
-          required
+          helperText="e.g., Main Estate, Collection Point B"
         >
           <FormInput
             id="name"
             type="text"
-            placeholder="e.g., Coffee Block A"
+            placeholder="e.g., Main Estate"
             disabled={isSubmitting}
             error={!!errors.name}
             {...register("name")}

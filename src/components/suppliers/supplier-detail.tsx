@@ -1,60 +1,50 @@
 /**
- * CustomerDetail component
- * Customer detail view with nested locations management
+ * SupplierDetail component
+ * Supplier detail view with nested locations management
  * Includes inline create/edit forms for locations and delete confirmation
  */
 "use client";
 
 import Link from "next/link";
 import { useState } from "react";
-import type { CustomerLocation } from "@/db/schema";
+import type { SupplierLocation } from "@/db/schema";
 import {
-  useCustomerWithRelations,
-  useCreateCustomerLocation,
-  useUpdateCustomerLocation,
-  useDeleteCustomerLocation,
-} from "@/hooks/use-customers";
+  useSupplier,
+  useSupplierLocationsBySupplier,
+  useCreateSupplierLocation,
+  useUpdateSupplierLocation,
+  useDeleteSupplierLocation,
+} from "@/hooks/use-suppliers";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { CustomerLocationForm } from "./customer-location-form";
-import type { CustomerLocationFormData } from "@/schemas/customers";
+import { SupplierLocationForm } from "./supplier-location-form";
+import type { SupplierLocationFormData } from "@/schemas/suppliers";
 
-interface CustomerDetailProps {
-  customerId: string;
+interface SupplierDetailProps {
+  supplierId: string;
 }
 
-export function CustomerDetail({ customerId }: CustomerDetailProps) {
+export function SupplierDetail({ supplierId }: SupplierDetailProps) {
   const [isAddingLocation, setIsAddingLocation] = useState(false);
-  const [editingLocation, setEditingLocation] = useState<{
-    id: string;
-    name: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
-    address: string | null;
-  } | null>(null);
+  const [editingLocation, setEditingLocation] = useState<SupplierLocation | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const { data: customer, isLoading, error } = useCustomerWithRelations(customerId);
-  const createLocation = useCreateCustomerLocation();
-  const updateLocation = useUpdateCustomerLocation();
-  const deleteLocation = useDeleteCustomerLocation(customerId);
+  const { data: supplier, isLoading: supplierLoading, error: supplierError } = useSupplier(supplierId);
+  const { data: locations = [], isLoading: locationsLoading } = useSupplierLocationsBySupplier(supplierId);
+  const createLocation = useCreateSupplierLocation();
+  const updateLocation = useUpdateSupplierLocation(supplierId);
+  const deleteLocation = useDeleteSupplierLocation(supplierId);
 
-  const handleCreateLocation = async (data: CustomerLocationFormData) => {
+  const handleCreateLocation = async (data: SupplierLocationFormData) => {
     setCreateError(null);
     try {
       await createLocation.mutateAsync({
-        customerId,
-        name: data.name,
-        country: data.country,
-        stateRegion: data.stateRegion || null,
-        city: data.city || null,
-        gpsLatitude: data.gpsLatitude,
-        gpsLongitude: data.gpsLongitude,
-        address: data.address || "",
+        supplierId,
+        ...data,
       });
       setIsAddingLocation(false);
     } catch (error) {
@@ -64,20 +54,14 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
     }
   };
 
-  const handleUpdateLocation = async (data: CustomerLocationFormData) => {
+  const handleUpdateLocation = async (data: SupplierLocationFormData) => {
     if (!editingLocation) return;
 
     setUpdateError(null);
     try {
       await updateLocation.mutateAsync({
         locationId: editingLocation.id,
-        name: data.name,
-        country: data.country,
-        stateRegion: data.stateRegion || null,
-        city: data.city || null,
-        gpsLatitude: data.gpsLatitude,
-        gpsLongitude: data.gpsLongitude,
-        address: data.address,
+        ...data,
       });
       setEditingLocation(null);
     } catch (error) {
@@ -100,15 +84,17 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
     }
   };
 
+  const isLoading = supplierLoading || locationsLoading;
+
   if (isLoading) {
-    return <div className="body-large">Loading customer details...</div>;
+    return <div className="body-large">Loading supplier details...</div>;
   }
 
-  if (error || !customer) {
+  if (supplierError || !supplier) {
     return (
       <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {error instanceof Error ? error.message : "Failed to load customer"}
+          {supplierError instanceof Error ? supplierError.message : "Failed to load supplier"}
         </p>
       </div>
     );
@@ -119,22 +105,22 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       {/* Breadcrumb */}
       <div className="flex items-center gap-16 text-[var(--text-s)]">
         <Link
-          href="/customers"
+          href="/suppliers"
           className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
         >
-          Customers
+          Suppliers
         </Link>
         <span className="text-[var(--color-text-tertiary)]">/</span>
-        <span className="text-[var(--color-text-primary)]">{customer.code}</span>
+        <span className="text-[var(--color-text-primary)]">{supplier.code}</span>
       </div>
 
-      {/* Customer Header */}
+      {/* Supplier Header */}
       <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
         <div className="flex items-start justify-between gap-24">
           <div>
-            <h1 className="title-heading-2">{customer.name}</h1>
+            <h1 className="title-heading-2">{supplier.name}</h1>
             <p className="body-medium text-[var(--color-text-secondary)] mt-16">
-              {customer.code}
+              {supplier.code}
             </p>
           </div>
         </div>
@@ -142,32 +128,22 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-32 mt-32 pt-32 border-t border-[var(--color-border-secondary)]">
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Crop Type
-            </dt>
-            <dd className="body-medium mt-16">{customer.cropType || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact Email
             </dt>
-            <dd className="body-medium mt-16">{customer.contactEmail || "—"}</dd>
+            <dd className="body-medium mt-16">{supplier.contactEmail || "—"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact Phone
             </dt>
-            <dd className="body-medium mt-16">{customer.contactPhone || "—"}</dd>
+            <dd className="body-medium mt-16">{supplier.contactPhone || "—"}</dd>
           </div>
-          {customer.address && (
-            <div className="md:col-span-3">
-              <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                Address
-              </dt>
-              <dd className="body-medium mt-16 whitespace-pre-line">
-                {customer.address}
-              </dd>
-            </div>
-          )}
+          <div>
+            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+              Location
+            </dt>
+            <dd className="body-medium mt-16">{supplier.location || "—"}</dd>
+          </div>
         </div>
       </div>
 
@@ -175,7 +151,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       <div className="flex flex-col gap-24">
         <div className="flex items-center justify-between">
           <h2 className="title-heading-3">
-            Locations ({customer.locations.length})
+            Locations ({locations.length})
           </h2>
           {!isAddingLocation && !editingLocation && (
             <Button
@@ -193,7 +169,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
           <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Add New Location</h3>
             {createError && <ServerError message={createError} />}
-            <CustomerLocationForm
+            <SupplierLocationForm
               onSubmit={handleCreateLocation}
               onCancel={() => {
                 setIsAddingLocation(false);
@@ -210,8 +186,8 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
           <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Edit Location</h3>
             {updateError && <ServerError message={updateError} />}
-            <CustomerLocationForm
-              location={editingLocation as CustomerLocation}
+            <SupplierLocationForm
+              location={editingLocation}
               onSubmit={handleUpdateLocation}
               onCancel={() => {
                 setEditingLocation(null);
@@ -224,12 +200,12 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         )}
 
         {/* Locations List */}
-        {customer.locations.length === 0 ? (
+        {locations.length === 0 ? (
           <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
             <div className="flex flex-col gap-16">
               <h3 className="title-heading-4">No locations yet</h3>
               <p className="body-medium text-[var(--color-text-secondary)]">
-                Add locations to track where this customer receives deliveries.
+                Add locations to track where this supplier operates or collects feedstock.
               </p>
             </div>
           </div>
@@ -259,14 +235,16 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                 </tr>
               </thead>
               <tbody>
-                {customer.locations.map((location) => (
+                {locations.map((location) => (
                   <tr
                     key={location.id}
                     className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-surface-light)]"
                   >
-                    <td className="px-16 py-12 body-medium">{location.name ?? "Unnamed location"}</td>
                     <td className="px-16 py-12 body-medium">
-                      {location.country || "—"}
+                      {location.name || "—"}
+                    </td>
+                    <td className="px-16 py-12 body-medium">
+                      {location.country}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
                       {location.stateRegion || "—"}

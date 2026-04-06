@@ -85,6 +85,9 @@ export const customerLocationFormSchema = z.object({
     .string()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
+  country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
+  stateRegion: z.string().max(100, "State/Region must be less than 100 characters").optional().or(z.literal("")),
+  city: z.string().max(100, "City must be less than 100 characters").optional().or(z.literal("")),
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
@@ -139,6 +142,9 @@ export const createCustomerLocationSchema = z.object({
     .string()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
+  country: z.string().min(1, "Country is required").max(100),
+  stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
+  city: z.string().max(100).optional().nullable().or(z.literal("")),
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
@@ -150,6 +156,9 @@ export const createCustomerLocationSchema = z.object({
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Invalid location ID"),
   name: z.string().min(1).max(255).optional(),
+  country: z.string().min(1).max(100).optional(),
+  stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
+  city: z.string().max(100).optional().nullable().or(z.literal("")),
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationTextSchema.optional(),

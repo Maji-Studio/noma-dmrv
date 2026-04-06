@@ -319,6 +319,11 @@ export async function getSupplierLocationsBySupplierFn(
       return { success: false, error: "Unauthorized" };
     }
 
+    const parsed = z.string().uuid("Invalid supplier ID").safeParse(supplierId);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0].message };
+    }
+
     const locations = await getSupplierLocationsBySupplierData(user.id, supplierId);
     return { success: true, data: locations };
   } catch (error) {

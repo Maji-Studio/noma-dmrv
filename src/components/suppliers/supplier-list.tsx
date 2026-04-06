@@ -5,6 +5,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Users, Plus } from "@phosphor-icons/react";
 import type { Supplier } from "@/db/schema";
@@ -39,9 +40,12 @@ function createColumns(
       accessorKey: "code",
       header: "Code",
       cell: ({ row }) => (
-        <span className="font-medium text-[var(--clr-dark-purple)]">
+        <Link
+          href={`/suppliers/${row.original.id}`}
+          className="font-medium text-[var(--clr-dark-purple)] hover:underline"
+        >
           {row.original.code}
-        </span>
+        </Link>
       ),
     },
     {
@@ -72,6 +76,13 @@ function createColumns(
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-8">
+          <Link
+            href={`/suppliers/${row.original.id}`}
+            className="h-32 px-12 inline-flex items-center border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View
+          </Link>
           <button
             type="button"
             onClick={(e) => {
