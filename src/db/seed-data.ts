@@ -5,17 +5,186 @@
  * This includes multiple facilities, suppliers, customers, and a complete
  * traceability chain showing the full biochar carbon credit workflow.
  *
- * Usage: pnpm db:seed
+ * Usage: pnpm tsx src/db/seed-data.ts
  */
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from './schema';
-import { demoCodes, ids, demoTimestamps } from './seed-constants';
-import { seedLogistics } from './seed-logistics';
 
 config({ path: '.env.local' });
+
+// Helper to generate deterministic UUIDs for demo data
+const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
+
+// Demo data codes
+const demoCodes = {
+  // Facilities
+  facilityMoshi: 'FAC-MOSHI-001',
+  facilityArusha: 'FAC-ARUSHA-001',
+  facilityMwanza: 'FAC-MWANZA-001',
+
+  // Reactors
+  reactorMoshi1: 'R-MOSHI-001',
+  reactorMoshi2: 'R-MOSHI-002',
+  reactorArusha1: 'R-ARUSHA-001',
+
+  // Storage
+  storageFeedMoshi: 'SL-FEED-MOSHI-01',
+  storageCharMoshi: 'SL-CHAR-MOSHI-01',
+  storageProdMoshi: 'SL-PROD-MOSHI-01',
+
+  // Suppliers
+  supplierKili: 'SUP-KILI-001',
+  supplierMeru: 'SUP-MERU-001',
+  supplierVictoria: 'SUP-VICTORIA-001',
+
+  // Customers
+  customerCoffee: 'CUS-COFFEE-001',
+  customerTea: 'CUS-TEA-001',
+  customerVegetable: 'CUS-VEG-001',
+} as const;
+
+// Demo entity IDs
+const ids = {
+  // Facilities
+  facilityMoshi: demoId(1000),
+  facilityArusha: demoId(1001),
+  facilityMwanza: demoId(1002),
+
+  // Reactors
+  reactorMoshi1: demoId(1100),
+  reactorMoshi2: demoId(1101),
+  reactorArusha1: demoId(1102),
+
+  // Storage Locations
+  storageFeedMoshi: demoId(1200),
+  storageCharMoshi: demoId(1201),
+  storageProdMoshi: demoId(1202),
+  storageFeedArusha: demoId(1203),
+  storageCharArusha: demoId(1204),
+
+  // Suppliers
+  supplierKili: demoId(1300),
+  supplierMeru: demoId(1301),
+  supplierVictoria: demoId(1302),
+
+  // Customers
+  customerCoffee: demoId(1400),
+  customerTea: demoId(1401),
+  customerVegetable: demoId(1402),
+
+  // Customer Locations
+  locationCoffeeNorth: demoId(1450),
+  locationCoffeeSouth: demoId(1451),
+  locationTeaEast: demoId(1452),
+
+  // Drivers & Operators
+  driverJackson: demoId(1500),
+  driverAmina: demoId(1501),
+  operatorNeema: demoId(1502),
+  operatorJuma: demoId(1503),
+
+  // Vehicles
+  vehicleTruck1: demoId(1550),
+  vehicleTruck2: demoId(1551),
+
+  // Feedstock Types
+  feedstockWoodchips: demoId(1600),
+  feedstockCoffeeHusk: demoId(1601),
+  feedstockRiceHusk: demoId(1602),
+  feedstockCoconut: demoId(1603),
+
+  // Feedstock Deliveries
+  deliveryFeed1: demoId(1700),
+  deliveryFeed2: demoId(1701),
+  deliveryFeed3: demoId(1702),
+
+  // Feedstocks
+  feedstock1: demoId(1750),
+  feedstock2: demoId(1751),
+  feedstock3: demoId(1752),
+
+  // Production Runs
+  productionRun1: demoId(1800),
+  productionRun2: demoId(1801),
+  productionRun3: demoId(1802),
+
+  // Samples
+  sample1: demoId(1850),
+  sample2: demoId(1851),
+  sample3: demoId(1852),
+
+  // Formulations
+  formulationStandard: demoId(1900),
+  formulationPremium: demoId(1901),
+  formulationOrganic: demoId(1902),
+
+  // Biochar Products
+  biocharProduct1: demoId(1950),
+  biocharProduct2: demoId(1951),
+  biocharProduct3: demoId(1952),
+
+  // Orders
+  order1: demoId(2000),
+  order2: demoId(2001),
+  order3: demoId(2002),
+
+  // Deliveries (outbound)
+  delivery1: demoId(2050),
+  delivery2: demoId(2051),
+  delivery3: demoId(2052),
+
+  // Applications
+  application1: demoId(2100),
+  application2: demoId(2101),
+  application3: demoId(2102),
+
+  // Credit Batches
+  creditBatch1: demoId(2200),
+  creditBatch2: demoId(2201),
+
+  // Junction table IDs
+  prodFeedLink1: demoId(2300),
+  prodFeedLink2: demoId(2301),
+  prodFeedLink3: demoId(2302),
+  creditApp1: demoId(2350),
+  creditApp2: demoId(2351),
+  creditApp3: demoId(2352),
+} as const;
+
+// Demo timestamps (realistic timeline)
+const demoTimestamps = {
+  // Week 1: Setup and first deliveries
+  facilitySetup: new Date('2026-01-05T08:00:00.000Z'),
+  firstDelivery: new Date('2026-01-08T09:30:00.000Z'),
+  secondDelivery: new Date('2026-01-10T10:15:00.000Z'),
+  thirdDelivery: new Date('2026-01-12T08:45:00.000Z'),
+
+  // Week 2: Production runs
+  run1Start: new Date('2026-01-13T06:00:00.000Z'),
+  run1End: new Date('2026-01-13T14:00:00.000Z'),
+  run2Start: new Date('2026-01-15T06:00:00.000Z'),
+  run2End: new Date('2026-01-15T13:30:00.000Z'),
+  run3Start: new Date('2026-01-17T07:00:00.000Z'),
+  run3End: new Date('2026-01-17T15:00:00.000Z'),
+
+  // Week 3: Orders and deliveries
+  order1Date: new Date('2026-01-20T09:00:00.000Z'),
+  order2Date: new Date('2026-01-21T10:30:00.000Z'),
+  order3Date: new Date('2026-01-22T11:00:00.000Z'),
+  delivery1Date: new Date('2026-01-23T08:00:00.000Z'),
+  delivery2Date: new Date('2026-01-24T09:30:00.000Z'),
+  delivery3Date: new Date('2026-01-25T10:00:00.000Z'),
+
+  // Week 4: Applications and credits
+  application1Date: new Date('2026-01-27T11:00:00.000Z'),
+  application2Date: new Date('2026-01-28T10:30:00.000Z'),
+  application3Date: new Date('2026-01-29T09:00:00.000Z'),
+  creditBatch1Start: new Date('2026-01-13T00:00:00.000Z'),
+  creditBatch1End: new Date('2026-01-31T23:59:59.000Z'),
+} as const;
 
 async function seedDemoData() {
   if (!process.env.DATABASE_URL) {
@@ -23,10 +192,8 @@ async function seedDemoData() {
     process.exit(1);
   }
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: isLocal ? undefined : { rejectUnauthorized: false },
   });
 
   const db = drizzle(pool, { schema });
@@ -103,7 +270,7 @@ async function seedDemoData() {
           facilityId: ids.facilityMoshi,
           reactorType: 'auger',
           samplingMethod: 'method_a',
-          nominalThroughputTph: 0.75,
+          capacityKg: 750,
           specifications: {
             manufacturer: 'NOMA Engineering',
             model: 'AugerMax-750',
@@ -117,7 +284,7 @@ async function seedDemoData() {
           facilityId: ids.facilityMoshi,
           reactorType: 'fixed-bed',
           samplingMethod: 'method_b',
-          nominalThroughputTph: 0.5,
+          capacityKg: 500,
           specifications: {
             manufacturer: 'NOMA Engineering',
             model: 'BatchPro-500',
@@ -131,7 +298,7 @@ async function seedDemoData() {
           facilityId: ids.facilityArusha,
           reactorType: 'auger',
           samplingMethod: 'method_a',
-          nominalThroughputTph: 1.0,
+          capacityKg: 1000,
           specifications: {
             manufacturer: 'NOMA Engineering',
             model: 'AugerMax-1000',
@@ -148,6 +315,8 @@ async function seedDemoData() {
           name: 'Moshi Feedstock Bay A',
           type: 'feedstock_bin',
           capacityKg: 20000,
+          latitude: -3.3338,
+          longitude: 37.3385,
           storageMethod: 'covered_bin',
           storageDescription: 'Climate-controlled covered storage with moisture monitoring',
           facilityId: ids.facilityMoshi,
@@ -158,6 +327,8 @@ async function seedDemoData() {
           name: 'Moshi Biochar Storage',
           type: 'biochar_bin',
           capacityKg: 15000,
+          latitude: -3.3339,
+          longitude: 37.3387,
           storageMethod: 'tarped_pile',
           storageDescription: 'Covered pile on impermeable liner with drainage',
           facilityId: ids.facilityMoshi,
@@ -168,36 +339,32 @@ async function seedDemoData() {
           name: 'Moshi Product Warehouse',
           type: 'product_bin',
           capacityKg: 10000,
+          latitude: -3.3340,
+          longitude: 37.3389,
           storageMethod: 'bagged_palletized',
           storageDescription: 'Sheltered warehouse with bagged products on pallets',
           facilityId: ids.facilityMoshi,
         },
         {
           id: ids.storageFeedArusha,
-          code: demoCodes.storageFeedArusha,
+          code: 'SL-FEED-ARUSHA-01',
           name: 'Arusha Feedstock Storage',
           type: 'feedstock_bin',
           capacityKg: 25000,
+          latitude: -3.3862,
+          longitude: 36.6833,
           storageMethod: 'covered_bin',
           facilityId: ids.facilityArusha,
         },
         {
           id: ids.storageCharArusha,
-          code: demoCodes.storageCharArusha,
+          code: 'SL-CHAR-ARUSHA-01',
           name: 'Arusha Biochar Storage',
           type: 'biochar_bin',
           capacityKg: 18000,
+          latitude: -3.3864,
+          longitude: 36.6835,
           storageMethod: 'tarped_pile',
-          facilityId: ids.facilityArusha,
-        },
-        {
-          id: ids.storageProdArusha,
-          code: demoCodes.storageProdArusha,
-          name: 'Arusha Product Dispatch',
-          type: 'product_bin',
-          capacityKg: 15000,
-          storageMethod: 'covered_bin',
-          storageDescription: 'Covered dispatch area with weigh station',
           facilityId: ids.facilityArusha,
         },
       ]);
@@ -206,13 +373,10 @@ async function seedDemoData() {
       // PARTIES: Suppliers, Customers, Drivers, Operators
       // ============================================================
 
-      const [seedOwner] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1);
-
       console.log('Creating suppliers...');
       await tx.insert(schema.suppliers).values([
         {
           id: ids.supplierKili,
-          userId: seedOwner?.id ?? null,
           code: demoCodes.supplierKili,
           name: 'Kilimanjaro Forestry Cooperative',
           location: 'Hai District, Kilimanjaro',
@@ -222,11 +386,11 @@ async function seedDemoData() {
           contactName: 'Asha Mallya',
           contactEmail: 'asha@kili-forestry.coop',
           contactPhone: '+255700200001',
-          sourceRegion: 'Kilimanjaro',
+          annualRevenueUsd: 85000,
+          chainOfCustodyRef: 'COC-KILI-2026-001',
         },
         {
           id: ids.supplierMeru,
-          userId: seedOwner?.id ?? null,
           code: demoCodes.supplierMeru,
           name: 'Mount Meru Agricultural Residues',
           location: 'Arumeru District',
@@ -236,11 +400,11 @@ async function seedDemoData() {
           contactName: 'John Kimaro',
           contactEmail: 'john@meru-agri.co.tz',
           contactPhone: '+255700200002',
-          sourceRegion: 'Arumeru',
+          annualRevenueUsd: 62000,
+          chainOfCustodyRef: 'COC-MERU-2026-001',
         },
         {
           id: ids.supplierVictoria,
-          userId: seedOwner?.id ?? null,
           code: demoCodes.supplierVictoria,
           name: 'Lake Victoria Rice Mills',
           location: 'Mwanza Region',
@@ -250,7 +414,8 @@ async function seedDemoData() {
           contactName: 'Grace Mushi',
           contactEmail: 'grace@victoria-rice.tz',
           contactPhone: '+255700200003',
-          sourceRegion: 'Mwanza',
+          annualRevenueUsd: 120000,
+          chainOfCustodyRef: 'COC-VICTORIA-2026-001',
         },
       ]);
 
@@ -414,11 +579,12 @@ async function seedDemoData() {
           status: 'complete',
           deliveryDate: demoTimestamps.firstDelivery,
           supplierId: ids.supplierKili,
+          driverId: ids.driverJackson,
           vehicleId: ids.vehicleTruck1,
           gpsLatitude: -3.3335,
           gpsLongitude: 37.3383,
           feedstockTypeId: ids.feedstockWoodchips,
-          wetMassKg: 4500,
+          weightKg: 4500,
           moisturePercent: 16,
           notes: 'High quality hardwood chips from sustainable forestry',
         },
@@ -429,11 +595,12 @@ async function seedDemoData() {
           status: 'complete',
           deliveryDate: demoTimestamps.secondDelivery,
           supplierId: ids.supplierMeru,
+          driverId: ids.driverAmina,
           vehicleId: ids.vehicleTruck2,
           gpsLatitude: -3.3335,
           gpsLongitude: 37.3383,
           feedstockTypeId: ids.feedstockCoffeeHusk,
-          wetMassKg: 3200,
+          weightKg: 3200,
           moisturePercent: 12,
           notes: 'Fresh coffee husk from local processing mill',
         },
@@ -444,11 +611,12 @@ async function seedDemoData() {
           status: 'complete',
           deliveryDate: demoTimestamps.thirdDelivery,
           supplierId: ids.supplierKili,
+          driverId: ids.driverJackson,
           vehicleId: ids.vehicleTruck1,
           gpsLatitude: -3.3335,
           gpsLongitude: 37.3383,
           feedstockTypeId: ids.feedstockWoodchips,
-          wetMassKg: 5000,
+          weightKg: 5000,
           moisturePercent: 18,
           notes: 'Mixed hardwood batch with eucalyptus',
         },
@@ -766,24 +934,219 @@ async function seedDemoData() {
           densityKgM3: 490,
           storageLocationId: ids.storageProdMoshi,
         },
+      ]);
+
+      // ============================================================
+      // LOGISTICS: Orders, Deliveries
+      // ============================================================
+
+      console.log('Creating orders...');
+      await tx.insert(schema.orders).values([
         {
-          id: ids.biocharProduct4,
-          code: 'BP-2026-104',
-          facilityId: ids.facilityArusha,
-          productionDate: new Date('2026-01-19T08:30:00.000Z'),
-          status: 'ready',
-          formulationId: ids.formulationStandard,
-          massKg: 1650,
-          densityKgM3: 510,
-          storageLocationId: ids.storageProdArusha,
+          id: ids.order1,
+          code: 'OR-2026-101',
+          facilityId: ids.facilityMoshi,
+          orderDate: demoTimestamps.order1Date,
+          customerId: ids.customerCoffee,
+          customerLocationId: ids.locationCoffeeNorth,
+          biocharProductId: ids.biocharProduct1,
+          quantityKg: 2000,
+          packaging: 'bagged',
+          value: 1500000,
+        },
+        {
+          id: ids.order2,
+          code: 'OR-2026-102',
+          facilityId: ids.facilityMoshi,
+          orderDate: demoTimestamps.order2Date,
+          customerId: ids.customerTea,
+          customerLocationId: ids.locationTeaEast,
+          biocharProductId: ids.biocharProduct2,
+          quantityKg: 1500,
+          packaging: 'bagged',
+          value: 1200000,
+        },
+        {
+          id: ids.order3,
+          code: 'OR-2026-103',
+          facilityId: ids.facilityMoshi,
+          orderDate: demoTimestamps.order3Date,
+          customerId: ids.customerCoffee,
+          customerLocationId: ids.locationCoffeeSouth,
+          biocharProductId: ids.biocharProduct3,
+          quantityKg: 1800,
+          packaging: 'bagged',
+          value: 1350000,
+        },
+      ]);
+
+      console.log('Creating deliveries...');
+      await tx.insert(schema.deliveries).values([
+        {
+          id: ids.delivery1,
+          code: 'DL-2026-101',
+          facilityId: ids.facilityMoshi,
+          deliveryDate: demoTimestamps.delivery1Date,
+          status: 'delivered',
+          orderId: ids.order1,
+          customerLocationId: ids.locationCoffeeNorth,
+          biocharProductId: ids.biocharProduct1,
+          storageLocationId: ids.storageProdMoshi,
+          moistureContentPercent: 5.5,
+          deliveredWetMassKg: 2000,
+          massDryKg: 1890,
+          driverId: ids.driverJackson,
+          vehicleId: ids.vehicleTruck1,
+        },
+        {
+          id: ids.delivery2,
+          code: 'DL-2026-102',
+          facilityId: ids.facilityMoshi,
+          deliveryDate: demoTimestamps.delivery2Date,
+          status: 'delivered',
+          orderId: ids.order2,
+          customerLocationId: ids.locationTeaEast,
+          biocharProductId: ids.biocharProduct2,
+          storageLocationId: ids.storageProdMoshi,
+          moistureContentPercent: 4.8,
+          deliveredWetMassKg: 1500,
+          massDryKg: 1428,
+          driverId: ids.driverAmina,
+          vehicleId: ids.vehicleTruck2,
+        },
+        {
+          id: ids.delivery3,
+          code: 'DL-2026-103',
+          facilityId: ids.facilityMoshi,
+          deliveryDate: demoTimestamps.delivery3Date,
+          status: 'delivered',
+          orderId: ids.order3,
+          customerLocationId: ids.locationCoffeeSouth,
+          biocharProductId: ids.biocharProduct3,
+          storageLocationId: ids.storageProdMoshi,
+          moistureContentPercent: 6.0,
+          deliveredWetMassKg: 1800,
+          massDryKg: 1692,
+          driverId: ids.driverJackson,
+          vehicleId: ids.vehicleTruck1,
         },
       ]);
 
       // ============================================================
-      // LOGISTICS, APPLICATIONS & CREDITS
+      // APPLICATIONS & CREDITS
       // ============================================================
 
-      await seedLogistics(tx);
+      console.log('Creating applications...');
+      await tx.insert(schema.applications).values([
+        {
+          id: ids.application1,
+          code: 'AP-2026-101',
+          applicationDate: demoTimestamps.application1Date,
+          status: 'applied',
+          deliveryId: ids.delivery1,
+          biocharAppliedTons: 1.89,
+          biocharAppliedDryTons: 1.79,
+          gpsLatitude: -3.245,
+          gpsLongitude: 37.425,
+          fieldSizeHa: 1.2,
+          cropType: 'Coffee',
+          applicationMethodType: 'mechanical',
+          fieldIdentifier: 'KILEMA-N-12',
+          co2eStoredTonnes: 3.2,
+          soilTemperatureSource: 'baseline',
+          soilTemperatureC: 24.5,
+        },
+        {
+          id: ids.application2,
+          code: 'AP-2026-102',
+          applicationDate: demoTimestamps.application2Date,
+          status: 'applied',
+          deliveryId: ids.delivery2,
+          biocharAppliedTons: 1.43,
+          biocharAppliedDryTons: 1.36,
+          gpsLatitude: -4.789,
+          gpsLongitude: 38.312,
+          fieldSizeHa: 0.8,
+          cropType: 'Tea',
+          applicationMethodType: 'mechanical',
+          fieldIdentifier: 'USAMBARA-E-1',
+          co2eStoredTonnes: 2.4,
+          soilTemperatureSource: 'baseline',
+          soilTemperatureC: 22.8,
+        },
+        {
+          id: ids.application3,
+          code: 'AP-2026-103',
+          applicationDate: demoTimestamps.application3Date,
+          status: 'applied',
+          deliveryId: ids.delivery3,
+          biocharAppliedTons: 1.69,
+          biocharAppliedDryTons: 1.59,
+          gpsLatitude: -3.289,
+          gpsLongitude: 37.198,
+          fieldSizeHa: 1.0,
+          cropType: 'Coffee',
+          applicationMethodType: 'manual',
+          fieldIdentifier: 'MACHAME-S-8',
+          co2eStoredTonnes: 2.8,
+          soilTemperatureSource: 'baseline',
+          soilTemperatureC: 25.2,
+        },
+      ]);
+
+      console.log('Creating credit batches...');
+      await tx.insert(schema.creditBatches).values([
+        {
+          id: ids.creditBatch1,
+          code: 'CB-2026-101',
+          facilityId: ids.facilityMoshi,
+          status: 'pending',
+          startDate: '2026-01-13',
+          endDate: '2026-01-31',
+          certifier: 'Isometric',
+          registry: 'Isometric Registry',
+          weightTons: 5.01,
+          bufferPoolPercent: 10,
+          durabilityOption: '200_year',
+          hToCorgRatio: 0.27,
+          fDurableCalculated: 0.85,
+          totalCo2eStoredTons: 8.4,
+          totalCo2eEmissionsTons: 0.42,
+          totalCo2eCounterfactualTons: 0.15,
+        },
+        {
+          id: ids.creditBatch2,
+          code: 'CB-2026-102',
+          facilityId: ids.facilityMoshi,
+          status: 'draft',
+          startDate: '2026-02-01',
+          endDate: '2026-02-28',
+          certifier: 'Isometric',
+          registry: 'Isometric Registry',
+          durabilityOption: '1000_year',
+          meanRandomReflectancePercent: 2.8,
+          meanNonReactiveCarbonPercent: 68,
+        },
+      ]);
+
+      console.log('Creating credit batch application links...');
+      await tx.insert(schema.creditBatchApplications).values([
+        {
+          id: ids.creditApp1,
+          creditBatchId: ids.creditBatch1,
+          applicationId: ids.application1,
+        },
+        {
+          id: ids.creditApp2,
+          creditBatchId: ids.creditBatch1,
+          applicationId: ids.application2,
+        },
+        {
+          id: ids.creditApp3,
+          creditBatchId: ids.creditBatch1,
+          applicationId: ids.application3,
+        },
+      ]);
     });
 
     console.log('');
@@ -792,7 +1155,7 @@ async function seedDemoData() {
     console.log('Summary of created entities:');
     console.log('  - 3 Facilities (Moshi, Arusha, Mwanza)');
     console.log('  - 3 Reactors');
-    console.log('  - 6 Storage Locations');
+    console.log('  - 5 Storage Locations');
     console.log('  - 3 Suppliers');
     console.log('  - 3 Customers with 3 Locations');
     console.log('  - 2 Drivers, 2 Operators, 2 Vehicles');
@@ -800,9 +1163,9 @@ async function seedDemoData() {
     console.log('  - 3 Feedstock Deliveries -> 3 Feedstocks');
     console.log('  - 3 Production Runs -> 3 Samples');
     console.log('  - 3 Formulations');
-    console.log('  - 4 Biochar Products');
-    console.log('  - 5 Orders -> 5 Deliveries');
-    console.log('  - 5 Applications (3 Moshi, 2 Arusha)');
+    console.log('  - 3 Biochar Products');
+    console.log('  - 3 Orders -> 3 Deliveries');
+    console.log('  - 3 Applications');
     console.log('  - 2 Credit Batches (1 with 3 linked applications)');
     console.log('');
   } catch (error) {

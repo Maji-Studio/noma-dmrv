@@ -180,10 +180,8 @@ async function seed() {
     process.exit(1);
   }
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: isLocal ? undefined : { rejectUnauthorized: false },
   });
 
   const db = drizzle(pool, { schema });
@@ -321,7 +319,7 @@ async function seed() {
         {
           id: ids.itemIntake,
           projectId: ids.project,
-          title: 'Validate feedstock data',
+          title: 'Validate feedstock intake data',
           description: 'Ensure incoming biomass records are complete and traceable.',
           status: 'active',
         },
@@ -358,7 +356,7 @@ async function seed() {
         facilityId: ids.facility,
         reactorType: 'auger',
         samplingMethod: 'method_a',
-        nominalThroughputTph: 0.5,
+        capacityKg: 500,
         specifications: {
           description: 'Continuous auger pyrolysis reactor with condensate capture.',
           manufacturer: 'NOMA Engineering',
@@ -374,6 +372,8 @@ async function seed() {
           name: 'Feedstock Bin 01',
           type: 'feedstock_bin',
           capacityKg: 15000,
+          latitude: -3.3338,
+          longitude: 37.3385,
           storageMethod: 'covered_bin',
           storageDescription: 'Covered bin with runoff protection',
           supplierReferenceId: 'ISO-STOR-FEED-01',
@@ -385,6 +385,8 @@ async function seed() {
           name: 'Biochar Pile 01',
           type: 'biochar_bin',
           capacityKg: 8000,
+          latitude: -3.3339,
+          longitude: 37.3387,
           storageMethod: 'tarped_pile',
           storageDescription: 'Raised pile on impermeable liner',
           supplierReferenceId: 'ISO-STOR-CHAR-01',
@@ -396,6 +398,8 @@ async function seed() {
           name: 'Product Staging Pile',
           type: 'product_bin',
           capacityKg: 5000,
+          latitude: -3.3341,
+          longitude: 37.3389,
           storageMethod: 'bagged_palletized',
           storageDescription: 'Bagged product on pallets under shelter',
           supplierReferenceId: 'ISO-STOR-PROD-01',
@@ -405,7 +409,6 @@ async function seed() {
 
       await tx.insert(schema.suppliers).values({
         id: ids.supplier,
-        userId: adminUserId,
         code: 'SUP-001',
         name: 'Kilimanjaro Forestry Cooperative',
         location: 'Hai, Tanzania',
@@ -415,7 +418,8 @@ async function seed() {
         contactName: 'Asha Mallya',
         contactEmail: 'ashara@kili-forest.coop',
         contactPhone: '+255700000010',
-        sourceRegion: 'Kilimanjaro',
+        annualRevenueUsd: 48000,
+        chainOfCustodyRef: 'COC-KILI-2026',
       });
 
       await tx.insert(schema.customers).values({
@@ -519,28 +523,22 @@ async function seed() {
         status: 'complete',
         deliveryDate: timestamps.deliveryTime,
         supplierId: ids.supplier,
+        driverId: ids.driver,
         vehicleId: ids.vehicle,
         gpsLatitude: -3.3335,
         gpsLongitude: 37.3383,
         feedstockTypeId: ids.feedstockTypeWoodchips,
-        wetMassKg: 3200,
+        weightKg: 3200,
         moisturePercent: 18,
         notes: 'Load inspected at gate and weighed on calibrated scale.',
       });
 
       await tx.insert(schema.feedstocks).values({
         id: ids.feedstock,
-        code: 'FI-2026-001',
+        code: 'FS-2026-001',
         facilityId: ids.facility,
         status: 'complete',
         feedstockDeliveryId: ids.feedstockDelivery,
-        // Delivery fields (absorbed from feedstock_deliveries)
-        deliveryDate: timestamps.deliveryTime,
-        supplierId: ids.supplier,
-        vehicleId: ids.vehicle,
-        gpsLatitude: -3.3335,
-        gpsLongitude: 37.3383,
-        // Material fields
         feedstockTypeId: ids.feedstockTypeWoodchips,
         massWetKg: 3200,
         massDryKg: 2624,
@@ -743,8 +741,6 @@ async function seed() {
         moistureContentPercent: 6.0,
         deliveredWetMassKg: 2200,
         massDryKg: 2068,
-        truckMassOnArrivalKg: 8400,
-        truckMassOnDepartureKg: 6200,
         driverId: ids.driver,
         vehicleId: ids.vehicle,
       });
@@ -817,6 +813,8 @@ async function seed() {
         fieldIdentifier: 'NORTH-12',
         gisBoundaryReference: 'gis://fields/north-12',
         co2eStoredTonnes: 1.1,
+        truckMassOnArrivalKg: 8400,
+        truckMassOnDepartureKg: 6200,
         soilTemperatureSource: 'baseline',
         soilTemperatureC: 24.9,
       });
@@ -856,7 +854,7 @@ async function seed() {
         status: 'pending',
         startDate: '2026-01-13',
         endDate: '2026-01-19',
-        certifier: 'isometric',
+        certifier: 'Isometric',
         registry: 'Isometric Registry',
         weightTons: 0.62,
         value: 1180000,

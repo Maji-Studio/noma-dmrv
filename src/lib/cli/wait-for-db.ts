@@ -13,18 +13,22 @@ async function waitForDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  let pool: Pool;
-
+  // Use discrete config fields to avoid password parsing issues with reserved characters in connection URLs
+  let url: URL;
   try {
-    const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: isLocal ? undefined : { rejectUnauthorized: false },
-    });
+    url = new URL(process.env.DATABASE_URL);
   } catch {
     console.error('✗ DATABASE_URL is not a valid URL');
     process.exit(1);
   }
+
+  const pool = new Pool({
+    host: url.hostname,
+    port: parseInt(url.port || '5432'),
+    database: url.pathname.slice(1),
+    user: url.username,
+    password: url.password || undefined,
+  });
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
