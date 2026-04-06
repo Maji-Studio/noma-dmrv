@@ -12,6 +12,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from './schema';
+import { getPgPoolConfig } from '../lib/pg-pool-config';
 
 config({ path: '.env.local' });
 
@@ -192,9 +193,7 @@ async function seedDemoData() {
     process.exit(1);
   }
 
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+  const pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
 
   const db = drizzle(pool, { schema });
 
@@ -1084,7 +1083,7 @@ async function seedDemoData() {
           status: 'pending',
           startDate: '2026-01-13',
           endDate: '2026-01-31',
-          certifier: 'Isometric',
+          certifier: 'isometric',
           registry: 'Isometric Registry',
           weightTons: 5.01,
           bufferPoolPercent: 10,
@@ -1102,7 +1101,7 @@ async function seedDemoData() {
           status: 'draft',
           startDate: '2026-02-01',
           endDate: '2026-02-28',
-          certifier: 'Isometric',
+          certifier: 'isometric',
           registry: 'Isometric Registry',
           durabilityOption: '1000_year',
           meanRandomReflectancePercent: 2.8,

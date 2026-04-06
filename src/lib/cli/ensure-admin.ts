@@ -9,6 +9,7 @@ import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from '../../db/schema';
 import { hashPassword } from '../auth/hash-password';
+import { getPgPoolConfig } from '../pg-pool-config';
 
 config({ path: '.env.local' });
 
@@ -30,12 +31,7 @@ async function ensureAdmin() {
     process.exit(1);
   }
 
-  const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
-  const connectionString = process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]+/, '');
-  const pool = new Pool({
-    connectionString,
-    ssl: isLocal ? false : { rejectUnauthorized: false },
-  });
+  const pool = new Pool(getPgPoolConfig(process.env.DATABASE_URL));
   const db = drizzle(pool, { schema });
 
   try {
