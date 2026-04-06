@@ -157,8 +157,8 @@ These serve as reference implementations - customize or remove as needed.
 - `pnpm db:generate` - Generate new migrations from schema changes
 - `pnpm db:push` - Push schema changes directly to database
 - `pnpm db:studio` - Open Drizzle Studio for database exploration
-- `pnpm db:seed` - Manually seed test data
-- `pnpm db:reset` - Drop and recreate database with fresh seed data
+- `pnpm db:seed` - Add demo/sample data for local dev, staging, or QA
+- `pnpm db:reset` - Drop and recreate database, run migrations, and ensure the admin user exists
 
 ## Authentication
 

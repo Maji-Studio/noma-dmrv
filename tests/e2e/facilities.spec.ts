@@ -36,6 +36,9 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Navigate to facilities list
     await page.goto("/facilities");
     await expect(page).toHaveURL(/\/facilities/);
+    await expect(page.getByText("Active Facilities")).toBeVisible({
+      timeout: 15000,
+    });
 
     // Open the create side sheet
     await page.getByRole("button", { name: /New Facility/i }).click();
@@ -61,8 +64,10 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await searchBox.fill(facilityName);
     await page.waitForTimeout(500); // debounce
 
-    // Verify the new facility appears in the filtered list
-    await expect(page.getByText(facilityName)).toBeVisible({ timeout: 10000 });
+    // Verify the new facility appears in the filtered card results.
+    await expect(
+      page.getByRole("heading", { name: facilityName, exact: true })
+    ).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;
   });

@@ -53,7 +53,7 @@ export const reactors = pgTable('reactors', {
   // Isometric Protocol: Reactor design requirements (Section 9.2)
   reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
   samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
-  capacityKg: real('capacity_kg'),
+  nominalThroughputTph: real('nominal_throughput_tph'),
   specifications: jsonb('specifications'), // { description, manufacturer, ... }
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -71,8 +71,6 @@ export const storageLocations = pgTable(
     name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
     type: storageLocationType('type').notNull(),
     capacityKg: real('capacity_kg'),
-    latitude: doublePrecision('latitude'),
-    longitude: doublePrecision('longitude'),
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
     supplierReferenceId: text('supplier_reference_id'),
@@ -85,16 +83,6 @@ export const storageLocations = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => [
-    check(
-      'storage_locations_latitude_range',
-      sql`${table.latitude} is null or (${table.latitude} >= -90 and ${table.latitude} <= 90)`
-    ),
-    check(
-      'storage_locations_longitude_range',
-      sql`${table.longitude} is null or (${table.longitude} >= -180 and ${table.longitude} <= 180)`
-    ),
-  ]
 );
 
 // ============================================

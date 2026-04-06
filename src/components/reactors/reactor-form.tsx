@@ -20,8 +20,6 @@ import {
   samplingMethods,
   formatReactorType,
   formatSamplingMethod,
-  kgToTph,
-  tphToKg,
   type ReactorFormData,
   type CreateReactorData,
   type ReactorType,
@@ -60,7 +58,7 @@ function isSamplingMethod(value: string | null | undefined): value is SamplingMe
 interface ReactorFormProps {
   /** Existing reactor data for editing (undefined for create mode) */
   reactor?: Reactor;
-  /** Form submission handler — receives data with capacityKg (converted from tph) */
+  /** Form submission handler — receives data with nominalThroughputTph */
   onSubmit: (data: CreateReactorData) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
@@ -99,7 +97,7 @@ export function ReactorForm({
       facilityId: reactor?.facilityId || contextFacilityId || "",
       reactorType: defaultReactorType,
       samplingMethod: defaultSamplingMethod,
-      capacityTph: reactor?.capacityKg != null ? kgToTph(reactor.capacityKg) : undefined,
+      capacityTph: reactor?.nominalThroughputTph ?? undefined,
       specifications: undefined,
     },
   });
@@ -119,7 +117,7 @@ export function ReactorForm({
     const { capacityTph, ...rest } = data as ReactorFormData;
     onSubmit({
       ...rest,
-      capacityKg: capacityTph != null ? tphToKg(capacityTph) : undefined,
+      nominalThroughputTph: capacityTph ?? undefined,
     });
   });
 

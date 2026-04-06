@@ -27,7 +27,6 @@ import {
 import {
   formatReactorType,
   formatSamplingMethod,
-  kgToTph,
   type CreateReactorData,
   type SamplingMethod,
 } from "@/schemas/reactors";
@@ -256,7 +255,7 @@ export function ReactorList() {
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
   const methodBEligibleCount = reactors.filter((r) => r.methodBEligibility?.isEligible).length;
-  const totalThroughputTph = reactors.reduce((sum, r) => sum + kgToTph(r.capacityKg || 0), 0);
+  const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
 
   if (fetchError) {
     return (

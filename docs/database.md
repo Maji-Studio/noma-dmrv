@@ -61,25 +61,31 @@ pnpm docker:clean
 # View database in browser
 pnpm db:studio
 
-# Manually seed data
+# Add demo/sample data
 pnpm db:seed
 ```
 
 ### Seed Data
 
-On first run, the database is automatically seeded with:
-- **Admin user**: Uses `ADMIN_EMAIL` env var (default: `admin@example.com`)
-- **Regular user**: `user@example.com`
-- **Sample project**: "Sample Project" (owned by admin)
-- **2 test items**: Example items in the sample project
+`pnpm db:reset` bootstraps the database schema and ensures the admin user exists.
 
-**Setting passwords**: Better Auth manages passwords separately. To use the seeded accounts:
+`pnpm db:seed` adds the richer demo dataset used for local development, staging, and QA:
+- Multiple facilities
+- Suppliers and customers
+- Storage locations, reactors, and logistics entities
+- Example traceability-chain records
+
+**Setting passwords**: Better Auth manages passwords separately. To use the admin account created by reset:
 1. Visit http://localhost:3100
 2. Click "Forgot Password"
-3. Enter the seeded email address
+3. Enter the admin email address
 4. Set your password via the email link
 
-**Idempotency**: The seed script checks if data exists and only seeds empty databases. Running `pnpm dev` multiple times won't create duplicates.
+**Recommended flow**:
+1. `pnpm db:reset`
+2. `pnpm db:seed`
+
+**Idempotency**: The demo seed script checks for existing demo data and skips duplicate insertion.
 
 ### Configuration
 

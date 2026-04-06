@@ -317,14 +317,16 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       // Now delete seeded entities in reverse dependency order
 
       // Feedstocks
+      // Delete all facility-scoped feedstocks because UI tests can create
+      // additional rows that still point at the seeded storage locations.
       await tx
         .delete(schema.feedstocks)
-        .where(eq(schema.feedstocks.id, data.feedstock.id));
+        .where(eq(schema.feedstocks.facilityId, data.facility.id));
 
       // Feedstock deliveries
       await tx
         .delete(schema.feedstockDeliveries)
-        .where(eq(schema.feedstockDeliveries.id, data.feedstockDelivery.id));
+        .where(eq(schema.feedstockDeliveries.facilityId, data.facility.id));
 
       // Biochar products
       await tx

@@ -1,5 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { users } from './auth';
 
 // ============================================
 // Suppliers - Biomass/feedstock suppliers
@@ -9,6 +10,7 @@ export const suppliers = pgTable(
   'suppliers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
     code: text('code').notNull().unique(),
     name: text('name').notNull(),
     location: text('location'),
@@ -105,6 +107,7 @@ export const supplierLocations = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('supplier_locations_supplier_id_idx').on(table.supplierId),
     check(
       'supplier_locations_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
