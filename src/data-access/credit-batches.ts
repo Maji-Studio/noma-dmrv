@@ -345,6 +345,10 @@ export async function updateCreditBatch(
       ? updateFields.endDate.toISOString().split("T")[0]
       : existingBatch.endDate;
 
+    if (effectiveEndDate < effectiveStartDate) {
+      throw new Error("End date must be after start date");
+    }
+
     await tx
       .update(creditBatches)
       .set(updateData)
