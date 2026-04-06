@@ -5,16 +5,6 @@
  */
 
 import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count, sum } from "drizzle-orm";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-
-/** Compute dry mass clamped to wet mass (dry can never exceed wet). */
-function computeClampedDryMass(
-  wetMassKg: number | null | undefined,
-  moisturePercent: number | null | undefined
-): number | null {
-  if (wetMassKg == null || moisturePercent == null) return null;
-  return Math.min(deriveMassDryKg(wetMassKg, moisturePercent), wetMassKg);
-}
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
@@ -30,6 +20,7 @@ import {
   feedstockTypes,
 } from "@/db/schema";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
+import { computeClampedDryMass, deriveMassDryKg } from "./production-run-mass-helpers";
 
 // ============================================
 // Types
