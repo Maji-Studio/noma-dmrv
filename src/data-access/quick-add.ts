@@ -9,6 +9,7 @@ import { db } from "@/db";
 import { drivers, operators, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import { requireAuth } from "./utils";
 
 // ============================================
 // Driver Quick Add
@@ -25,7 +26,9 @@ export interface CreateDriverData {
  * Create a new driver with minimal required fields
  * Returns EntityOption for immediate use in select dropdowns
  */
-export async function createDriver(data: CreateDriverData): Promise<EntityOption> {
+export async function createDriver(userId: string, data: CreateDriverData): Promise<EntityOption> {
+  requireAuth(userId);
+
   // Check for duplicate code
   const [existing] = await db
     .select({ id: drivers.id })
@@ -72,8 +75,11 @@ export interface CreateOperatorData {
 }
 
 export async function createOperator(
+  userId: string,
   data: CreateOperatorData
 ): Promise<EntityOption> {
+  requireAuth(userId);
+
   try {
     const [operator] = await db
       .insert(operators)
@@ -91,6 +97,9 @@ export async function createOperator(
       subtitle: operator.credentials ?? undefined,
     };
   } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new Error("An operator with this name already exists");
+    }
     throw error;
   }
 }
@@ -113,7 +122,9 @@ export interface CreateVehicleData {
  * Create a new vehicle with required fields
  * Returns EntityOption for immediate use in select dropdowns
  */
-export async function createVehicle(data: CreateVehicleData): Promise<EntityOption> {
+export async function createVehicle(userId: string, data: CreateVehicleData): Promise<EntityOption> {
+  requireAuth(userId);
+
   // Check for duplicate code
   const [existingCode] = await db
     .select({ id: vehicles.id })
@@ -179,8 +190,11 @@ export interface CreateFeedstockTypeData {
  * Returns EntityOption for immediate use in select dropdowns
  */
 export async function createFeedstockType(
+  userId: string,
   data: CreateFeedstockTypeData
 ): Promise<EntityOption> {
+  requireAuth(userId);
+
   // Check for duplicate code
   const [existingCode] = await db
     .select({ id: feedstockTypes.id })
@@ -244,8 +258,21 @@ export interface CreateStorageLocationData {
  * Returns EntityOption for immediate use in select dropdowns
  */
 export async function createStorageLocation(
+  userId: string,
   data: CreateStorageLocationData
 ): Promise<EntityOption> {
+  requireAuth(userId);
+
+  // Check for duplicate code
+  const [existingCode] = await db
+    .select({ id: storageLocations.id })
+    .from(storageLocations)
+    .where(eq(storageLocations.code, data.code));
+
+  if (existingCode) {
+    throw new Error("A storage location with this code already exists");
+  }
+
   try {
     const [location] = await db
       .insert(storageLocations)
