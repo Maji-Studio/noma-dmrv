@@ -4,30 +4,10 @@
  */
 
 import { z } from "zod";
+import { latitudeSchema, longitudeSchema, toNumberOrNull } from "./helpers";
 
-// ============================================
-// GPS Coordinate Validation (Optional for suppliers)
-// ============================================
-
-/**
- * GPS latitude validation (-90 to 90) - Optional for suppliers
- */
-const optionalLatitudeSchema = z
-  .number()
-  .min(-90, "Latitude must be between -90 and 90")
-  .max(90, "Latitude must be between -90 and 90")
-  .optional()
-  .nullable();
-
-/**
- * GPS longitude validation (-180 to 180) - Optional for suppliers
- */
-const optionalLongitudeSchema = z
-  .number()
-  .min(-180, "Longitude must be between -180 and 180")
-  .max(180, "Longitude must be between -180 and 180")
-  .optional()
-  .nullable();
+const optionalGpsLatitude = z.preprocess(toNumberOrNull, latitudeSchema);
+const optionalGpsLongitude = z.preprocess(toNumberOrNull, longitudeSchema);
 
 // ============================================
 // Supplier Form Schema (Client-side validation)
@@ -50,24 +30,8 @@ export const supplierFormSchema = z.object({
     .max(255, "Location must be less than 255 characters")
     .optional()
     .or(z.literal("")),
-  gpsLatitude: z.union([
-    z.number().min(-90).max(90),
-    z.string().transform((val) => {
-      if (val === "") return null;
-      const n = parseFloat(val);
-      return isNaN(n) ? null : n;
-    }),
-    z.null(),
-  ]).optional().nullable(),
-  gpsLongitude: z.union([
-    z.number().min(-180).max(180),
-    z.string().transform((val) => {
-      if (val === "") return null;
-      const n = parseFloat(val);
-      return isNaN(n) ? null : n;
-    }),
-    z.null(),
-  ]).optional().nullable(),
+  gpsLatitude: optionalGpsLatitude,
+  gpsLongitude: optionalGpsLongitude,
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")
@@ -124,8 +88,8 @@ export const updateSupplierSchema = z.object({
     .optional(),
   name: z.string().min(1).max(255).optional(),
   location: z.string().max(255).optional().nullable().or(z.literal("")),
-  gpsLatitude: optionalLatitudeSchema,
-  gpsLongitude: optionalLongitudeSchema,
+  gpsLatitude: latitudeSchema,
+  gpsLongitude: longitudeSchema,
   address: z.string().max(500).optional().nullable().or(z.literal("")),
   contactName: z.string().max(255).optional().nullable().or(z.literal("")),
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
@@ -180,6 +144,51 @@ export const supplierSelectSchema = z.object({
 });
 
 // ============================================
+// Supplier Location Schemas
+// ============================================
+
+/**
+ * Schema for supplier location form (client-side validation)
+ */
+export const supplierLocationFormSchema = z.object({
+  name: z.string().max(255, "Name must be less than 255 characters").optional().or(z.literal("")),
+  country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
+  stateRegion: z.string().max(100, "State/Region must be less than 100 characters").optional().or(z.literal("")),
+  city: z.string().max(100, "City must be less than 100 characters").optional().or(z.literal("")),
+  gpsLatitude: optionalGpsLatitude,
+  gpsLongitude: optionalGpsLongitude,
+  address: z.string().max(500, "Address must be less than 500 characters").optional().or(z.literal("")),
+});
+
+/**
+ * Schema for creating a supplier location (server action)
+ */
+export const createSupplierLocationSchema = supplierLocationFormSchema.extend({
+  supplierId: z.string().uuid("Invalid supplier ID"),
+});
+
+/**
+ * Schema for updating a supplier location (server action)
+ */
+export const updateSupplierLocationSchema = z.object({
+  locationId: z.string().uuid("Invalid location ID"),
+  name: z.string().max(255).optional().nullable().or(z.literal("")),
+  country: z.string().min(1).max(100).optional(),
+  stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
+  city: z.string().max(100).optional().nullable().or(z.literal("")),
+  gpsLatitude: latitudeSchema,
+  gpsLongitude: longitudeSchema,
+  address: z.string().max(500).optional().nullable().or(z.literal("")),
+});
+
+/**
+ * Schema for deleting a supplier location
+ */
+export const deleteSupplierLocationSchema = z.object({
+  locationId: z.string().uuid("Invalid location ID"),
+});
+
+// ============================================
 // Type Inference
 // ============================================
 
@@ -189,3 +198,7 @@ export type UpdateSupplierData = z.infer<typeof updateSupplierSchema>;
 export type DeleteSupplierData = z.infer<typeof deleteSupplierSchema>;
 export type SupplierFilterData = z.infer<typeof supplierFilterSchema>;
 export type SupplierSelectData = z.infer<typeof supplierSelectSchema>;
+export type SupplierLocationFormData = z.infer<typeof supplierLocationFormSchema>;
+export type CreateSupplierLocationData = z.infer<typeof createSupplierLocationSchema>;
+export type UpdateSupplierLocationData = z.infer<typeof updateSupplierLocationSchema>;
+export type DeleteSupplierLocationData = z.infer<typeof deleteSupplierLocationSchema>;

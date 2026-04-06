@@ -183,6 +183,9 @@ This template starts with a clean schema for multi-project applications.
 - `0003`: Simplified delivery status enum from `scheduled`/`processing`/`delivered` to `upcoming`/`delivered`; migrated existing rows
 - `0004` (staging): Schema refinements — moved truck weighing fields from `applications` to `deliveries`; added `credit_batch_production_runs` M:M junction table; renamed `feedstock_deliveries.weight_kg` → `wet_mass_kg` and added `storage_location_id` FK; split `production_runs.feedstock_mass_used_kg` into `feedstock_wet_mass_kg` / `feedstock_moisture_percent` / `feedstock_mass_dry_kg`; made `customer_locations` GPS nullable; removed `suppliers.annual_revenue_usd` and `chain_of_custody_ref`
 - `0005`: Dropped `credit_batch_production_runs` junction table — credit batches now trace to production runs indirectly via the application → delivery → product → run FK chain
+- `0006`: Upgraded all GPS columns from `real` (4-byte) to `double precision` (8-byte) across all tables; added `timezone` column to `facilities`
+- `0007`: Added `biochar_moisture_percent` and `biochar_dry_mass_kg` to `production_runs` with check constraints
+- `0008`: Created `supplier_locations` table; added `country`, `state_region`, `city` to `customer_locations`; made `customer_locations.name` nullable
 
 **Migration approach:** Incremental migrations tracked in `/drizzle/` directory.
 

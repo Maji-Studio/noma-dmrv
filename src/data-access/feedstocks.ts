@@ -263,7 +263,7 @@ export async function getFeedstockStats(
     .select({
       totalFeedstocks: count(),
       totalDryMassKg: sql<number>`coalesce(sum(${feedstocks.massDryKg}), 0)`,
-      avgMoisturePercent: sql<number | null>`avg(${feedstocks.moistureContentPercent})`,
+      avgMoisturePercent: sql<number | null>`case when sum(${feedstocks.massWetKg}) > 0 then sum(${feedstocks.moistureContentPercent} * ${feedstocks.massWetKg}) / sum(${feedstocks.massWetKg}) else null end`,
       completeFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
       missingDataFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
     })

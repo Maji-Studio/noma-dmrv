@@ -1,0 +1,5 @@
+ALTER TABLE "production_runs" ADD COLUMN "biochar_moisture_percent" real;--> statement-breakpoint
+ALTER TABLE "production_runs" ADD COLUMN "biochar_dry_mass_kg" real;--> statement-breakpoint
+ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_biochar_moisture_percent_range" CHECK ("production_runs"."biochar_moisture_percent" is null or ("production_runs"."biochar_moisture_percent" >= 0 and "production_runs"."biochar_moisture_percent" <= 100));--> statement-breakpoint
+ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_biochar_dry_mass_non_negative" CHECK ("production_runs"."biochar_dry_mass_kg" is null or "production_runs"."biochar_dry_mass_kg" >= 0);--> statement-breakpoint
+ALTER TABLE "production_runs" ADD CONSTRAINT "production_runs_biochar_dry_lte_wet" CHECK ("production_runs"."biochar_output_kg" is null or "production_runs"."biochar_dry_mass_kg" is null or "production_runs"."biochar_dry_mass_kg" <= "production_runs"."biochar_output_kg");
