@@ -20,8 +20,11 @@ async function resetDatabase(): Promise<void> {
   }
 
   const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
+  // Strip sslmode from URL — pg 8.18 overwrites explicit ssl options with parsed sslmode,
+  // and sslmode=require now means verify-full which rejects Supabase's cert.
+  const connectionString = process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]+/, '');
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     ssl: isLocal ? false : { rejectUnauthorized: false },
   });
 
