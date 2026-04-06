@@ -1,4 +1,4 @@
-import { check, pgTable, text, timestamp, uuid, real, date } from "drizzle-orm/pg-core";
+import { check, doublePrecision, pgTable, text, timestamp, uuid, real, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { applicationStatus, applicationMethod, soilTemperatureSource } from "./common";
 import { deliveries } from "./logistics";
@@ -32,8 +32,8 @@ export const applications = pgTable(
     //   - average_application_rate = biochar_applied_tons / field_size_ha
 
     // GPS coordinates (Isometric requirement for soil storage)
-    gpsLatitude: real("gps_latitude"),
-    gpsLongitude: real("gps_longitude"),
+    gpsLatitude: doublePrecision("gps_latitude"),
+    gpsLongitude: doublePrecision("gps_longitude"),
 
     // Field details
     fieldSizeHa: real("field_size_ha"),
@@ -91,8 +91,8 @@ export const soilTemperatureMeasurements = pgTable(
     measurementDepthCm: real("measurement_depth_cm"),
 
     // Location within field
-    gpsLatitude: real("gps_latitude"),
-    gpsLongitude: real("gps_longitude"),
+    gpsLatitude: doublePrecision("gps_latitude"),
+    gpsLongitude: doublePrecision("gps_longitude"),
 
     notes: text("notes"),
 

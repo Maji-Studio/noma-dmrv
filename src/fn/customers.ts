@@ -130,7 +130,7 @@ export async function getCustomerLocationsFn(
   ActionResult<
     Array<{
       id: string;
-      name: string;
+      name: string | null;
       gpsLatitude: number | null;
       gpsLongitude: number | null;
       address: string | null;

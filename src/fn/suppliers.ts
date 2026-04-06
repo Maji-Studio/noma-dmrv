@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { type Supplier, suppliers } from "@/db/schema";
+import { type Supplier, type SupplierLocation, suppliers } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
   createSupplier,
@@ -17,6 +17,10 @@ import {
   isSupplierCodeAvailable as isSupplierCodeAvailableData,
   getSupplierOptions as getSupplierOptionsData,
   updateSupplier,
+  getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
+  createSupplierLocation,
+  updateSupplierLocation,
+  deleteSupplierLocation,
   type PaginatedSuppliers,
 } from "@/data-access/suppliers";
 import { getUser } from "@/lib/auth/server";
@@ -25,6 +29,9 @@ import {
   deleteSupplierSchema,
   updateSupplierSchema,
   supplierFilterSchema,
+  createSupplierLocationSchema,
+  updateSupplierLocationSchema,
+  deleteSupplierLocationSchema,
 } from "@/schemas/suppliers";
 import type { ActionResult } from "@/types/actions";
 
@@ -295,6 +302,129 @@ export async function deleteSupplierFn(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to delete supplier",
+    };
+  }
+}
+
+// ============================================
+// Supplier Location Operations
+// ============================================
+
+export async function getSupplierLocationsBySupplierFn(
+  supplierId: string
+): Promise<ActionResult<SupplierLocation[]>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const locations = await getSupplierLocationsBySupplierData(user.id, supplierId);
+    return { success: true, data: locations };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to load supplier locations",
+    };
+  }
+}
+
+export async function createSupplierLocationFn(
+  data: z.infer<typeof createSupplierLocationSchema>
+): Promise<ActionResult<SupplierLocation>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = createSupplierLocationSchema.parse(data);
+
+    const location = await createSupplierLocation(user.id, {
+      supplierId: validated.supplierId,
+      name: validated.name || null,
+      country: validated.country,
+      stateRegion: validated.stateRegion || null,
+      city: validated.city || null,
+      gpsLatitude: validated.gpsLatitude ?? null,
+      gpsLongitude: validated.gpsLongitude ?? null,
+      address: validated.address || null,
+    });
+
+    return { success: true, data: location };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create supplier location",
+    };
+  }
+}
+
+export async function updateSupplierLocationFn(
+  data: z.infer<typeof updateSupplierLocationSchema>
+): Promise<ActionResult<SupplierLocation>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = updateSupplierLocationSchema.parse(data);
+
+    const location = await updateSupplierLocation(user.id, validated.locationId, {
+      name: validated.name,
+      country: validated.country,
+      stateRegion: validated.stateRegion,
+      city: validated.city,
+      gpsLatitude: validated.gpsLatitude,
+      gpsLongitude: validated.gpsLongitude,
+      address: validated.address,
+    });
+
+    return { success: true, data: location };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update supplier location",
+    };
+  }
+}
+
+export async function deleteSupplierLocationFn(
+  data: z.infer<typeof deleteSupplierLocationSchema>
+): Promise<ActionResult<void>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = deleteSupplierLocationSchema.parse(data);
+    await deleteSupplierLocation(user.id, validated.locationId);
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete supplier location",
     };
   }
 }
