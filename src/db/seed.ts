@@ -180,9 +180,7 @@ async function seed() {
     process.exit(1);
   }
 
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   const db = drizzle(pool, { schema });
 
