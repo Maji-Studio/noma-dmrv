@@ -80,21 +80,28 @@ export async function createOperator(
 ): Promise<EntityOption> {
   requireAuth(userId);
 
-  const [operator] = await db
-    .insert(operators)
-    .values({
-      name: data.name,
-      credentials: data.credentials ?? null,
-      contactPhone: data.contactPhone ?? null,
-    })
-    .returning();
+  try {
+    const [operator] = await db
+      .insert(operators)
+      .values({
+        name: data.name,
+        credentials: data.credentials ?? null,
+        contactPhone: data.contactPhone ?? null,
+      })
+      .returning();
 
-  return {
-    id: operator.id,
-    code: operator.name,
-    name: operator.name,
-    subtitle: operator.credentials ?? undefined,
-  };
+    return {
+      id: operator.id,
+      code: operator.name,
+      name: operator.name,
+      subtitle: operator.credentials ?? undefined,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new Error("An operator with this name already exists");
+    }
+    throw error;
+  }
 }
 
 // ============================================
