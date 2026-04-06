@@ -251,7 +251,6 @@ export function ReactorList() {
     }
   };
 
-  // Memoize columns
   const columns = createColumns(openEdit, handleDelete);
 
   const reactors = reactorsData?.items ?? [];
