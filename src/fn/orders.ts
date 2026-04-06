@@ -20,7 +20,6 @@ import {
   type PaginatedOrders,
   type OrderDetail,
 } from "@/data-access/orders";
-import { getUser } from "@/lib/auth/server";
 import {
   createOrderSchema,
   deleteOrderSchema,
@@ -28,6 +27,7 @@ import {
   orderFilterSchema,
 } from "@/schemas/orders";
 import type { ActionResult } from "@/types/actions";
+import { withAction } from "./with-action";
 
 // ============================================
 // List/Query Operations
@@ -39,30 +39,12 @@ import type { ActionResult } from "@/types/actions";
 export async function getOrdersFn(
   filters?: Partial<z.infer<typeof orderFilterSchema>>
 ): Promise<ActionResult<PaginatedOrders>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
+  return withAction(async (userId) => {
     const validatedFilters = filters
       ? orderFilterSchema.parse(filters)
       : undefined;
-    const orders = await getOrdersData(user.id, validatedFilters);
-
-    return { success: true, data: orders };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Invalid filter parameters: ${error.issues.map((e) => e.message).join(", ")}`,
-      };
-    }
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to load orders",
-    };
-  }
+    return getOrdersData(userId, validatedFilters);
+  }, { zodErrorPrefix: "Invalid filter parameters", fallbackMessage: "Failed to load orders" });
 }
 
 /**
@@ -71,20 +53,9 @@ export async function getOrdersFn(
 export async function getOrderByIdFn(
   orderId: string
 ): Promise<ActionResult<Order>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const order = await getOrderByIdData(user.id, orderId);
-    return { success: true, data: order };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to load order",
-    };
-  }
+  return withAction(async (userId) => {
+    return getOrderByIdData(userId, orderId);
+  }, { fallbackMessage: "Failed to load order" });
 }
 
 /**
@@ -93,21 +64,9 @@ export async function getOrderByIdFn(
 export async function getOrderWithRelationsFn(
   orderId: string
 ): Promise<ActionResult<OrderDetail>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const order = await getOrderWithRelationsData(user.id, orderId);
-    return { success: true, data: order };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load order details",
-    };
-  }
+  return withAction(async (userId) => {
+    return getOrderWithRelationsData(userId, orderId);
+  }, { fallbackMessage: "Failed to load order details" });
 }
 
 /**
@@ -127,21 +86,9 @@ export async function getOrdersForSelectFn(
     }>
   >
 > {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const orders = await getOrdersForSelectData(user.id, facilityId);
-    return { success: true, data: orders };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load orders for select",
-    };
-  }
+  return withAction(async (userId) => {
+    return getOrdersForSelectData(userId, facilityId);
+  }, { fallbackMessage: "Failed to load orders for select" });
 }
 
 /**
@@ -151,21 +98,10 @@ export async function checkOrderCodeFn(
   code: string,
   excludeOrderId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const available = await isOrderCodeAvailableData(user.id, code, excludeOrderId);
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to check order code",
-    };
-  }
+  return withAction(async (userId) => {
+    const available = await isOrderCodeAvailableData(userId, code, excludeOrderId);
+    return { available };
+  }, { fallbackMessage: "Failed to check order code" });
 }
 
 // ============================================
@@ -178,21 +114,16 @@ export async function checkOrderCodeFn(
 export async function createOrderFn(
   data: z.infer<typeof createOrderSchema>
 ): Promise<ActionResult<Order>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
+  return withAction(async (userId) => {
     const validated = createOrderSchema.parse(data);
 
-    const order = await withAutoCode(
+    return withAutoCode(
       "OR",
       orders,
       orders.code,
       undefined,
       (code) =>
-        createOrder(user.id, {
+        createOrder(userId, {
           code,
           facilityId: validated.facilityId,
           customerId: validated.customerId,
@@ -205,20 +136,7 @@ export async function createOrderFn(
           currency: validated.currency,
         })
     );
-
-    return { success: true, data: order };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
-      };
-    }
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to create order",
-    };
-  }
+  }, { fallbackMessage: "Failed to create order" });
 }
 
 // ============================================
@@ -231,15 +149,10 @@ export async function createOrderFn(
 export async function updateOrderFn(
   data: z.infer<typeof updateOrderSchema>
 ): Promise<ActionResult<Order>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
+  return withAction(async (userId) => {
     const validated = updateOrderSchema.parse(data);
 
-    const order = await updateOrder(user.id, validated.orderId, {
+    return updateOrder(userId, validated.orderId, {
       code: validated.code,
       facilityId: validated.facilityId,
       customerId: validated.customerId,
@@ -251,20 +164,7 @@ export async function updateOrderFn(
       value: validated.value,
       currency: validated.currency,
     });
-
-    return { success: true, data: order };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
-      };
-    }
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to update order",
-    };
-  }
+  }, { fallbackMessage: "Failed to update order" });
 }
 
 // ============================================
@@ -277,26 +177,8 @@ export async function updateOrderFn(
 export async function deleteOrderFn(
   data: z.infer<typeof deleteOrderSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
+  return withAction(async (userId) => {
     const validated = deleteOrderSchema.parse(data);
-    await deleteOrder(user.id, validated.orderId);
-
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
-      };
-    }
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to delete order",
-    };
-  }
+    await deleteOrder(userId, validated.orderId);
+  }, { fallbackMessage: "Failed to delete order" });
 }

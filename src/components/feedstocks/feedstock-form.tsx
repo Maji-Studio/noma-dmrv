@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
@@ -67,6 +67,7 @@ export function FeedstockForm({
   const vehicleDialog = useQuickAddDialog();
   const feedstockTypeDialog = useQuickAddDialog();
   const storageLocationDialog = useQuickAddDialog();
+  const [storageLocationRowIndex, setStorageLocationRowIndex] = useState<number>(0);
 
   const {
     register,
@@ -416,7 +417,10 @@ export function FeedstockForm({
                   binTypeFilter={binTypeFilter}
                   facilityId={watchedFacilityId || undefined}
                   feedstockTypeId={watchedFeedstockTypeId || undefined}
-                  onCreateNew={storageLocationDialog.open}
+                  onCreateNew={() => {
+                    setStorageLocationRowIndex(index);
+                    storageLocationDialog.open();
+                  }}
                 />
               ))}
             </div>
@@ -508,8 +512,8 @@ export function FeedstockForm({
         <StorageLocationQuickAddDialog
           isOpen={storageLocationDialog.isOpen}
           onClose={storageLocationDialog.close}
-          onSuccess={() => {
-            storageLocationDialog.close();
+          onSuccess={(entity) => {
+            setValue(`allocations.${storageLocationRowIndex}.storageLocationId`, entity.id, SET_VALUE_OPTS);
           }}
           defaultBinType={binTypeFilter}
           facilityId={watchedFacilityId}
