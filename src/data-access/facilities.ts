@@ -432,7 +432,7 @@ export async function getFacilityReactors(
     code: string;
     identifier: string;
     reactorType: string;
-    capacityKg: number | null;
+    nominalThroughputTph: number | null;
     samplingMethod: string;
     createdAt: Date;
     updatedAt: Date;
@@ -456,7 +456,7 @@ export async function getFacilityReactors(
       code: reactors.code,
       identifier: reactors.identifier,
       reactorType: reactors.reactorType,
-      capacityKg: reactors.capacityKg,
+      nominalThroughputTph: reactors.nominalThroughputTph,
       samplingMethod: reactors.samplingMethod,
       createdAt: reactors.createdAt,
       updatedAt: reactors.updatedAt,
@@ -479,8 +479,6 @@ export async function getFacilityStorageLocations(
     name: string;
     type: string;
     capacityKg: number | null;
-    latitude: number | null;
-    longitude: number | null;
     storageMethod: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -505,8 +503,6 @@ export async function getFacilityStorageLocations(
       name: storageLocations.name,
       type: storageLocations.type,
       capacityKg: storageLocations.capacityKg,
-      latitude: storageLocations.latitude,
-      longitude: storageLocations.longitude,
       storageMethod: storageLocations.storageMethod,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,

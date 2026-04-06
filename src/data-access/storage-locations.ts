@@ -80,8 +80,6 @@ type BaseStorageLocationRow = {
   name: string;
   type: StorageLocation["type"];
   capacityKg: number | null;
-  latitude: number | null;
-  longitude: number | null;
   storageMethod: string | null;
   storageDescription: string | null;
   supplierReferenceId: string | null;
@@ -471,8 +469,6 @@ export async function getStorageLocations(
       name: storageLocations.name,
       type: storageLocations.type,
       capacityKg: storageLocations.capacityKg,
-      latitude: storageLocations.latitude,
-      longitude: storageLocations.longitude,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
       supplierReferenceId: storageLocations.supplierReferenceId,
@@ -539,8 +535,6 @@ export async function getStorageLocationWithFacility(
       name: storageLocations.name,
       type: storageLocations.type,
       capacityKg: storageLocations.capacityKg,
-      latitude: storageLocations.latitude,
-      longitude: storageLocations.longitude,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
       supplierReferenceId: storageLocations.supplierReferenceId,

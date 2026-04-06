@@ -128,7 +128,7 @@ export async function getFacilityReactorsFn(
       code: string;
       identifier: string;
       reactorType: string;
-      capacityKg: number | null;
+      nominalThroughputTph: number | null;
       samplingMethod: string;
       createdAt: Date;
       updatedAt: Date;
@@ -165,8 +165,6 @@ export async function getFacilityStorageLocationsFn(
       name: string;
       type: string;
       capacityKg: number | null;
-      latitude: number | null;
-      longitude: number | null;
       storageMethod: string | null;
       createdAt: Date;
       updatedAt: Date;

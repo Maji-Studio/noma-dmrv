@@ -59,14 +59,14 @@ export const reactorFormSchema = z.object({
 
 /**
  * Schema for creating a reactor (server action)
- * Uses capacityKg (DB column) — form converts tph → kg before submission
+ * nominalThroughputTph stores tonnes-per-hour directly
  */
 export const createReactorSchema = z.object({
   identifier: z.string().min(1).max(255),
   facilityId: z.string().min(1).uuid(),
   reactorType: z.enum(reactorTypes),
   samplingMethod: z.enum(samplingMethods).default("method_a"),
-  capacityKg: z.number().positive().optional().nullable(),
+  nominalThroughputTph: z.number().positive().optional().nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
@@ -86,7 +86,7 @@ export const updateReactorSchema = z.object({
   facilityId: z.string().uuid().optional(),
   reactorType: z.enum(reactorTypes).optional(),
   samplingMethod: z.enum(samplingMethods).optional(),
-  capacityKg: z.number().positive().optional().nullable(),
+  nominalThroughputTph: z.number().positive().optional().nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
@@ -183,4 +183,3 @@ export function formatSamplingMethod(method: SamplingMethod): string {
   return labels[method];
 }
 
-export { tphToKgPerHour as tphToKg, kgPerHourToTph as kgToTph } from "@/lib/calculations/unit-conversions";

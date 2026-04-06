@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, toNumberOrNull, toIntOrNull } from "./helpers";
+import { emptyToNull, toNumberOrNull, toIntOrNull, optionalPercent } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -90,7 +90,7 @@ export const productionRunFormSchema = z.object({
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
   feedstockWetMassKg: z.preprocess(toNumberOrNull, z.number().positive("Wet mass must be a positive number").nullable()).optional(),
-  feedstockMoisturePercent: z.preprocess(toNumberOrNull, z.number().min(0, "Moisture must be 0–100").max(100, "Moisture must be 0–100").nullable()).optional(),
+  feedstockMoisturePercent: optionalPercent,
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
@@ -104,7 +104,7 @@ export const productionRunFormSchema = z.object({
 
   // Biochar Output
   biocharOutputKg: z.preprocess(toNumberOrNull, z.number().positive("Biochar output must be positive").nullable()).optional(),
-  biocharMoisturePercent: z.preprocess(toNumberOrNull, z.number().min(0, "Moisture must be 0–100").max(100, "Moisture must be 0–100").nullable()).optional(),
+  biocharMoisturePercent: optionalPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 

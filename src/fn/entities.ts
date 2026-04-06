@@ -10,11 +10,15 @@ import type { EntityOption, EntityType } from "@/components/forms/entity-select/
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
-const VALID_ENTITY_TYPES = new Set<string>([
+const ENTITY_TYPES = [
   "facility", "reactor", "supplier", "customer", "driver", "operator",
   "storageLocation", "vehicle", "feedstockType", "feedstock",
   "productionRun", "formulation", "creditBatch",
-]);
+] as const;
+
+const VALID_ENTITY_TYPES = new Set<string>(ENTITY_TYPES);
+
+const MAX_SEARCH_LIMIT = 200;
 
 const entityTypeSchema = z.string().refine(
   (v): v is EntityType => VALID_ENTITY_TYPES.has(v),
@@ -25,7 +29,7 @@ const searchEntitiesSchema = z.object({
   entityType: entityTypeSchema,
   search: z.string().optional(),
   filterBy: z.record(z.string(), z.string()).optional(),
-  limit: z.number().int().positive().max(200).optional(),
+  limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
 });
 
 /**
