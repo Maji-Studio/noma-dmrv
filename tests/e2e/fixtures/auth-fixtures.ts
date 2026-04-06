@@ -273,6 +273,7 @@ async function createSignedAuthStorageState(
   baseURL: string
 ): Promise<AuthStorageState> {
   const signInUrl = `${baseURL}/api/auth/sign-in/email`;
+  const userIdForError = user.id ?? "unknown-user-id";
   const url = new URL(baseURL);
   let response: Response | null = null;
   let lastError: unknown;
@@ -303,12 +304,12 @@ async function createSignedAuthStorageState(
   if (!response) {
     throw lastError instanceof Error
       ? lastError
-      : new Error(`API sign-in failed for ${user.email}`);
+      : new Error(`API sign-in failed for ${userIdForError}`);
   }
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`API sign-in failed for ${user.email}: ${response.status} ${body}`);
+    throw new Error(`API sign-in failed for ${userIdForError}: ${response.status} ${body}`);
   }
 
   const cookies = response.headers

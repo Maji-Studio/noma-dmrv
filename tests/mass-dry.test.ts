@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeClampedDryMass,
   deriveMassDryKg,
   resolveDeliveryDryMass,
 } from "@/lib/calculations/mass-dry";
@@ -7,6 +8,12 @@ import {
 describe("Dry mass derivation", () => {
   it("derives dry mass deterministically from wet mass and moisture percent", () => {
     expect(deriveMassDryKg(1000, 10)).toBe(900);
+  });
+
+  it("clamps derived dry mass to the wet mass input", () => {
+    expect(computeClampedDryMass(1000, 10)).toBe(900);
+    expect(computeClampedDryMass(0, 0)).toBe(0);
+    expect(computeClampedDryMass(null, 10)).toBeNull();
   });
 
   it("prioritizes measured dry mass over derived dry mass", () => {
