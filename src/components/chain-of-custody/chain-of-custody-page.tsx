@@ -132,7 +132,7 @@ export function ChainOfCustodyPage() {
             </div>
           ) : (
             <>
-              {chainData?.warnings.length > 0 ? (
+              {chainData?.warnings && chainData.warnings.length > 0 ? (
                 <div className="absolute top-16 left-16 z-10 max-w-[480px] border border-[var(--color-signal-orange)] bg-[var(--color-background-white)] p-12 shadow-sm">
                   <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-signal-orange)]">
                     Missing Links
