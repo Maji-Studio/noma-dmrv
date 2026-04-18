@@ -1,9 +1,15 @@
-import { desc, eq, count } from "drizzle-orm";
+import { desc, eq, count, sum, ne, and } from "drizzle-orm";
 import { db } from "@/db";
-import { applications, type Application } from "@/db/schema/application";
+import {
+  applications,
+  soilTemperatureMeasurements,
+  type Application,
+} from "@/db/schema/application";
+import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
 import { deliveries } from "@/db/schema/logistics";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
 
 import { requireAuth } from "./utils";
@@ -13,6 +19,9 @@ import { requireAuth } from "./utils";
 // ============================================
 
 const DEFAULT_PAGE_SIZE = 100;
+const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<number | null> {
   const [delivery] = await db
@@ -27,6 +36,107 @@ async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<nu
   }
 
   return delivery.moistureContentPercent;
+}
+
+async function getDeliveryCapacityAndApplied(
+  deliveryId: string,
+  excludeApplicationId?: string,
+): Promise<{ capacityKg: number | null; alreadyAppliedTons: number }> {
+  const [delivery] = await db
+    .select({ deliveredWetMassKg: deliveries.deliveredWetMassKg })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!delivery) throw new Error("Delivery not found");
+
+  const conditions = excludeApplicationId
+    ? and(eq(applications.deliveryId, deliveryId), ne(applications.id, excludeApplicationId))
+    : eq(applications.deliveryId, deliveryId);
+
+  const [{ total }] = await db
+    .select({ total: sum(applications.biocharAppliedTons) })
+    .from(applications)
+    .where(conditions);
+
+  return {
+    capacityKg: delivery.deliveredWetMassKg,
+    alreadyAppliedTons: Number(total ?? 0),
+  };
+}
+
+async function getLinkedCreditBatches(
+  tx: DbTransaction,
+  applicationId: string,
+): Promise<
+  Array<{
+    creditBatchId: string;
+    code: string;
+    status: string;
+  }>
+> {
+  const rows = await tx
+    .select({
+      creditBatchId: creditBatches.id,
+      code: creditBatches.code,
+      status: creditBatches.status,
+    })
+    .from(creditBatchApplications)
+    .innerJoin(
+      creditBatches,
+      eq(creditBatchApplications.creditBatchId, creditBatches.id),
+    )
+    .where(eq(creditBatchApplications.applicationId, applicationId));
+
+  return rows.map((row) => ({
+    creditBatchId: row.creditBatchId,
+    code: row.code,
+    status: row.status,
+  }));
+}
+
+async function refreshCreditBatchSummaries(
+  tx: DbTransaction,
+  creditBatchId: string,
+): Promise<void> {
+  const linkedApplications = await tx
+    .select({
+      biocharAppliedTons: applications.biocharAppliedTons,
+      co2eStoredTonnes: applications.co2eStoredTonnes,
+    })
+    .from(creditBatchApplications)
+    .innerJoin(
+      applications,
+      eq(creditBatchApplications.applicationId, applications.id),
+    )
+    .where(eq(creditBatchApplications.creditBatchId, creditBatchId));
+
+  const weightTons = linkedApplications.reduce(
+    (total, application) => total + application.biocharAppliedTons,
+    0,
+  );
+  const hasUnknownStoredTotal = linkedApplications.some(
+    (application) => application.co2eStoredTonnes == null,
+  );
+  const totalCo2eStoredTons = hasUnknownStoredTotal
+    ? null
+    : linkedApplications.reduce(
+        (total, application) =>
+          total + Number(application.co2eStoredTonnes ?? 0),
+        0,
+      );
+
+  await tx
+    .update(creditBatches)
+    .set({
+      weightTons,
+      totalCo2eStoredTons,
+      // These batch-level values are no longer trustworthy once membership changes.
+      totalCo2eEmissionsTons: null,
+      totalCo2eCounterfactualTons: null,
+      fDurableCalculated: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(creditBatches.id, creditBatchId));
 }
 
 async function resolveApplicationDryMassTons(input: {
@@ -139,6 +249,11 @@ export async function createApplication(
   data: CreateApplicationData & { code: string }
 ): Promise<Application> {
   requireAuth(userId);
+
+  const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId);
+  const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
+  if (!check.ok) throw new Error(check.errorMessage);
+
   const biocharAppliedDryTons = await resolveApplicationDryMassTons({
     deliveryId: data.deliveryId,
     biocharAppliedTons: data.biocharAppliedTons,
@@ -149,6 +264,7 @@ export async function createApplication(
     .insert(applications)
     .values({
       code: data.code,
+      status: "applied",
       applicationDate: data.applicationDate,
       deliveryId: data.deliveryId,
       biocharAppliedTons: data.biocharAppliedTons,
@@ -188,8 +304,19 @@ export async function updateApplication(
   };
 
   const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
-  const effectiveAppliedTons =
-    data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
+  const effectiveAppliedTons = data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
+
+  // Validate inventory — exclude the current application from the already-applied sum
+  if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
+    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id);
+    const check = checkDeliveryCapacity({
+      capacityKg,
+      alreadyAppliedTons,
+      requestedTons: effectiveAppliedTons,
+    });
+    if (!check.ok) throw new Error(check.errorMessage);
+  }
+
   const shouldRecalculateDryMass =
     data.deliveryId !== undefined ||
     data.biocharAppliedTons !== undefined ||
@@ -221,7 +348,6 @@ export async function updateApplication(
   if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
   if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
   if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
-  if (data.status !== undefined) updateData.status = data.status;
 
   const [application] = await db
     .update(applications)
@@ -237,7 +363,45 @@ export async function updateApplication(
  */
 export async function deleteApplication(userId: string, id: string): Promise<void> {
   requireAuth(userId);
-  await db.delete(applications).where(eq(applications.id, id));
+
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: applications.id })
+      .from(applications)
+      .where(eq(applications.id, id));
+
+    if (!existing) {
+      throw new Error("Application not found");
+    }
+
+    const linkedCreditBatches = await getLinkedCreditBatches(tx, id);
+    const blockingBatches = linkedCreditBatches.filter((batch) =>
+      IMMUTABLE_CREDIT_BATCH_STATUSES.has(batch.status),
+    );
+
+    if (blockingBatches.length > 0) {
+      const blockingCodes = blockingBatches.map((batch) => batch.code).join(", ");
+      throw new Error(
+        `Cannot delete application linked to verified or issued credit batches: ${blockingCodes}`,
+      );
+    }
+
+    await tx
+      .delete(creditBatchApplications)
+      .where(eq(creditBatchApplications.applicationId, id));
+
+    for (const creditBatchId of new Set(
+      linkedCreditBatches.map((batch) => batch.creditBatchId),
+    )) {
+      await refreshCreditBatchSummaries(tx, creditBatchId);
+    }
+
+    await tx
+      .delete(soilTemperatureMeasurements)
+      .where(eq(soilTemperatureMeasurements.applicationId, id));
+
+    await tx.delete(applications).where(eq(applications.id, id));
+  });
 }
 
 /**
