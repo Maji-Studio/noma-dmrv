@@ -151,6 +151,7 @@ export async function getBiocharProducts(
       densityKgM3: biocharProducts.densityKgM3,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
+      expiresAt: biocharProducts.expiresAt,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
       // Facility relation
@@ -190,6 +191,7 @@ export async function getBiocharProducts(
     densityKgM3: row.densityKgM3,
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
+    expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     facility: {
@@ -250,6 +252,7 @@ export async function getBiocharProductById(
       densityKgM3: biocharProducts.densityKgM3,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
+      expiresAt: biocharProducts.expiresAt,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
       facilityCode: facilities.code,
@@ -285,6 +288,7 @@ export async function getBiocharProductById(
     densityKgM3: row.densityKgM3,
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
+    expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     facility: {
