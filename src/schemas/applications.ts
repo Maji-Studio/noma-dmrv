@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emptyToNull, latitudeSchema, longitudeSchema } from "./helpers";
+import { latitudeSchema, longitudeSchema } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -128,7 +128,6 @@ export const updateApplicationSchema = z.object({
   gisBoundaryReference: z.string().max(255).optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-  status: z.enum(applicationStatuses).optional(),
 });
 
 /**

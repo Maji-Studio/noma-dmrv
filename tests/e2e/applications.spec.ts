@@ -66,7 +66,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     if (firstOrderValue) {
       await orderSelect.selectOption(firstOrderValue);
     }
-    await page.fill('input[name="deliveredWetMassKg"]', "95");
+    await page.fill('input[name="deliveredWetMassKg"]', "10000");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
     await waitForSideSheetClose(page);

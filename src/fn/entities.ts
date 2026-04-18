@@ -13,7 +13,7 @@ import { withAction } from "./with-action";
 const ENTITY_TYPES = [
   "facility", "reactor", "supplier", "customer", "driver", "operator",
   "storageLocation", "vehicle", "feedstockType", "feedstock",
-  "productionRun", "formulation", "creditBatch",
+  "productionRun", "application", "formulation", "creditBatch",
 ] as const;
 
 const VALID_ENTITY_TYPES = new Set<string>(ENTITY_TYPES);

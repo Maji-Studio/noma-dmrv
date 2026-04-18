@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui";
 import type { Application } from "@/db/schema/application";
 import {
-  formatApplicationStatus,
   formatApplicationMethod,
 } from "@/schemas/applications";
 import { formatSafeDate } from "@/lib/format-utils";
@@ -27,11 +26,6 @@ export function ApplicationCard({
   onEdit,
   onDelete,
 }: ApplicationCardProps) {
-  const statusClass =
-    application.status === "applied"
-      ? "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]"
-      : "bg-[var(--clr-orange-10)] text-[var(--clr-orange)]";
-
   return (
     <article
       className={`flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors${onView ? " hover:border-[var(--color-border-primary)] cursor-pointer" : ""}`}
@@ -46,16 +40,11 @@ export function ApplicationCard({
       } : undefined}
     >
       <div className="flex flex-1 flex-col gap-16 p-20">
-        {/* Header: code badge + status */}
-        <div className="flex items-center justify-between gap-12">
+        {/* Header: code badge */}
+        <div className="flex items-center gap-12">
           <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-pink)]">
             <Plant size={12} weight="bold" />
             {application.code}
-          </span>
-          <span
-            className={`px-8 py-4 text-[var(--text-xs)] font-medium ${statusClass}`}
-          >
-            {formatApplicationStatus(application.status)}
           </span>
         </div>
 
