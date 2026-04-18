@@ -264,7 +264,7 @@ If we added: filtering UI, bulk operations, multiple dialogs, filter state manag
 
 Some features don't follow the standard list/form pattern:
 
-- **`src/components/chain-of-custody/`** — React Flow DAG visualization. Uses `chain-constants.ts` for static node/edge definitions, `use-chain-graph.ts` for layout computation, `chain-node.tsx` for custom node rendering.
+- **`src/components/chain-of-custody/`** — Application-first lineage graph (React Flow). Uses `chain-constants.ts` for node style definitions, `use-chain-graph.ts` for dagre layout computation from lineage data, `chain-node.tsx` for custom node rendering.
 
 ## Summary
 
