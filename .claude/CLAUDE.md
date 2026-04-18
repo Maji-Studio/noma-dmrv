@@ -245,6 +245,51 @@ const {
 - Keyboard navigation: All interactive elements accessible
 - ARIA labels: Present where visual context insufficient
 
+## Git Conventions
+
+### Branch Naming
+
+Format: `<type>/<short-description>` using kebab-case.
+
+| Type | When to use | Example |
+|------|-------------|---------|
+| `feat/` | New feature or significant enhancement | `feat/application-inventory-lineage` |
+| `fix/` | Bug fix | `fix/delivery-capacity-overflow` |
+| `chore/` | Maintenance, dependencies, CI, tooling | `chore/update-drizzle-orm` |
+| `refactor/` | Code restructuring without behavior change | `refactor/split-chain-constants` |
+| `docs/` | Documentation-only changes | `docs/add-forms-guide` |
+| `test/` | Test-only additions or fixes | `test/e2e-applications-coverage` |
+
+### Commit Messages
+
+Use imperative mood. Start with a **lowercase verb** that describes the change category:
+
+```
+<type>: <concise description of what changed and why>
+```
+
+| Prefix | Use for | Example |
+|--------|---------|---------|
+| `feat:` | New functionality | `feat: add delivery inventory validation on application create/update` |
+| `fix:` | Bug fix | `fix: prevent deletion of applications linked to verified credit batches` |
+| `refactor:` | Restructure without behavior change | `refactor: replace facility-level DAG with per-application lineage graph` |
+| `chore:` | Tooling, deps, CI, config | `chore: upgrade playwright to v1.50` |
+| `docs:` | Documentation only | `docs: update chain-of-custody architecture section` |
+| `test:` | Test additions/fixes only | `test: add unit tests for delivery capacity checks` |
+
+For multi-line commits, add a blank line then a body explaining **why**, not what:
+
+```
+feat: add delivery inventory validation on application create/update
+
+Prevents over-applying biochar from a single delivery by checking
+remaining capacity against the delivery's wet mass.
+```
+
+### PR Titles
+
+Same format as commit messages: `<type>: <short description>` (under 70 characters). Use the description/body for details, not the title.
+
 ## Reference Features
 
 ### Biochar Entities (primary pattern)
