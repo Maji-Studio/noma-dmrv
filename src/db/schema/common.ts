@@ -132,6 +132,49 @@ export const emissionsCalculationMethod = pgEnum('emissions_calculation_method',
   'distance_based', // Uses distance + weight + emission factors
 ]);
 
+// ============================================
+// Isometric Compliance Enums
+// ============================================
+
+// Reversal risk assessment factors (Isometric Appendix I)
+export const landTenureType = pgEnum('land_tenure_type', [
+  'owned',
+  'long_term_lease',
+  'short_term_lease',
+]);
+
+export const soilErosionRisk = pgEnum('soil_erosion_risk', ['low', 'medium', 'high']);
+
+export const climateVolatilityRisk = pgEnum('climate_volatility_risk', [
+  'stable',
+  'moderate',
+  'variable',
+]);
+
+export const naturalDisasterRisk = pgEnum('natural_disaster_risk', ['low', 'medium', 'high']);
+
+export const operatorTrackRecord = pgEnum('operator_track_record', [
+  'new',
+  'established',
+  'experienced',
+]);
+
+// Electricity sourcing category (Energy Use Accounting Module §5.3, EC1–EC5)
+export const electricitySourceCategory = pgEnum('electricity_source_category', [
+  'ec1_grid_average',
+  'ec2_ppa',
+  'ec3_eac',
+  'ec4_cod',
+  'ec5_direct_connection',
+]);
+
+// Feedstock eligibility status (Biomass Feedstock Accounting Module — >25% ineligible cap)
+export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status', [
+  'eligible',
+  'ineligible',
+  'conditional',
+]);
+
 export const certifierProvider = pgEnum('certifier_provider', [
   'isometric',
   'puro_earth',
