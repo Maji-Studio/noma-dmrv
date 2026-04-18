@@ -1,109 +1,49 @@
-# Chain of Custody Visualization
+# Chain of Custody
 
-Interactive DAG (Directed Acyclic Graph) that shows the complete biochar traceability chain for a selected facility.
+The chain-of-custody page is now application-first.
 
-## Overview
-
-The chain-of-custody page renders a React Flow graph with 14 entity nodes and edges representing the full production-to-credit pipeline. Storage Locations are split into three bin types (Feedstock Bin, Biochar Bin, Product Bin), giving 14 nodes total:
-
-Suppliers, Reactors, Feedstock Bin, Biochar Bin, Product Bin, Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches.
+Users select a single application and the page renders the upstream rollback path to the originating feedstock batches:
 
 ```text
-Facility → Reactors, Feedstock Bin, Biochar Bin, Product Bin,
-           Feedstock Deliveries, Production Runs, Biochar Products,
-           Credit Batches
-Feedstock Deliveries → Feedstocks
-Feedstocks → Production Runs
-Reactors → Production Runs
-Production Runs → Samples, Biochar Products
-Biochar Products → Orders
-Orders → Deliveries
-Deliveries → Applications
-Applications → Credit Batches
+Feedstock(s) + Reactor -> Production Run -> Biochar Product -> Order -> Delivery -> Application
 ```
+
+If a link is missing, the page still renders the available lineage and shows a warning card explaining where the rollback stops.
+
+## What The Page Does
+
+- Lets the user search for an application directly from the page header.
+- Resolves the facility from the selected application instead of requiring a facility-first graph.
+- Renders one React Flow lineage graph for that application.
+- Supports multiple feedstocks branching into the same production run.
+- Keeps node links back to the relevant entity index pages.
 
 ## Architecture
 
-Follows the standard layered pattern:
-
 | Layer | File | Purpose |
 |-------|------|---------|
-| Data Access | `src/data-access/chain-of-custody.ts` | Queries entity counts grouped by status for a facility |
-| Server Action | `src/fn/chain-of-custody.ts` | Validates input, calls data-access |
-| React Query Hook | `src/hooks/use-chain-of-custody.ts` | Client-side caching (30s stale time) |
-| Components | `src/components/chain-of-custody/` | React Flow visualization |
+| Data Access | `src/data-access/chain-of-custody.ts` | Resolves upstream lineage for one application |
+| Server Action | `src/fn/chain-of-custody.ts` | Validates the application id and returns lineage data |
+| React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches lineage responses by application id |
+| Selector Search | `src/data-access/entities.ts` | Adds `application` support to the shared `EntitySelect` |
+| Components | `src/components/chain-of-custody/` | Application selector, lineage nodes, graph layout |
 | Route | `src/app/(app)/chain-of-custody/page.tsx` | Page entry point |
 
-## Components
+## Graph Behavior
 
-### `ChainOfCustodyPage`
-Main page component with header (title + facility dropdown) and React Flow canvas. Auto-selects the first facility on load.
+- `Feedstock` nodes show feedstock type, supplier, inbound delivery, and consumed mass.
+- `Production Run` shows run date plus feedstock and biochar dry mass.
+- `Biochar Product`, `Order`, `Delivery`, and `Application` show record-level details rather than aggregate counts.
+- `Reactor` is shown as a sibling upstream input into the production run.
 
-### `ChainNode`
-Custom React Flow node — 240x110px brutalist card with:
-- Left accent bar (colored by entity group)
-- Icon + uppercase monospace label
-- Total count
-- Status distribution bar (4px segmented bar)
-- Status legend (top 3 statuses)
-
-Empty nodes (total=0) render with dashed borders at 40% opacity. Clickable nodes navigate to entity list pages.
-
-### `useChainGraph`
-Transforms `ChainOfCustodyData` into React Flow nodes + edges using dagre for automatic LR (left-to-right) layout.
-
-### `chain-constants.ts`
-Static configuration:
-- Node definitions (14 entities with icons, accent colors, routes)
-- Edge definitions (15 connections)
-- Status color mapping
-- Layout constants (node size, dagre spacing)
-
-## Visual Design
-
-### Node Color Groups
-
-| Group | Entities | Accent |
-|-------|----------|--------|
-| Infrastructure | Facilities, Reactors, Feedstock Bin, Biochar Bin, Product Bin | `--clr-purple` |
-| Production | Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products | `--clr-orange` |
-| Distribution | Orders, Deliveries, Applications | `--clr-rose` |
-| Credits | Credit Batches | `--clr-pink` |
-
-### Edge Styling
-- Purple stroke (`--clr-purple`) with arrow markers
-- Smoothstep routing with offset to avoid overlapping node boxes
-- Animated pulse when source entity has in-progress items
-
-### Layout
-- Dagre automatic hierarchical layout (LR direction)
-- Node spacing: 60px vertical, 140px between ranks
-- Fit-to-view with 15% padding
-- Dotted grid background, zoom controls, minimap
-
-## E2E Testing
+## Testing
 
 Test file: `tests/e2e/chain-of-custody.spec.ts`
 
-Tests cover:
-- Page loads with header and populated facility dropdown
-- Selecting a facility renders all 14 entity nodes
-- Edges are rendered between nodes (15 connections)
-- Seeded data shows correct non-zero counts on nodes
-- Clickable nodes navigate to entity list pages
-- Edges render with purple color theme
-- Minimap and zoom controls are visible
+Coverage includes:
 
-### Running Tests
-```bash
-# Requires dev server running on port 3100
-pnpm dev
-
-# Run chain-of-custody tests
-pnpm exec playwright test tests/e2e/chain-of-custody.spec.ts
-```
-
-### Fixtures Used
-- `adminPage` — Pre-authenticated admin browser context
-- `seededData` — Pre-populated facility, reactor, feedstocks, etc.
-- `cleanupTestData` — Auto-cleanup after tests
+- Empty state before an application is selected
+- Selecting an application through the shared entity selector
+- Opening the page directly with an `application` query parameter
+- Rendering the rollback graph through feedstock and reactor nodes
+- Verifying node link targets

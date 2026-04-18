@@ -7,20 +7,21 @@ import { getChainOfCustodyFn } from "@/fn/chain-of-custody";
 
 export const chainOfCustodyKeys = {
   all: ["chain-of-custody"] as const,
-  detail: (facilityId: string) => [...chainOfCustodyKeys.all, facilityId] as const,
+  detail: (applicationId: string) =>
+    [...chainOfCustodyKeys.all, applicationId] as const,
 };
 
-export function useChainOfCustody(facilityId: string | null) {
+export function useChainOfCustody(applicationId: string | null) {
   return useQuery({
-    queryKey: chainOfCustodyKeys.detail(facilityId ?? ""),
+    queryKey: chainOfCustodyKeys.detail(applicationId ?? ""),
     queryFn: async () => {
-      const result = await getChainOfCustodyFn(facilityId!);
+      const result = await getChainOfCustodyFn(applicationId!);
       if (!result.success) {
         throw new Error(result.error);
       }
       return result.data;
     },
-    enabled: !!facilityId,
+    enabled: !!applicationId,
     staleTime: 30000,
   });
 }
