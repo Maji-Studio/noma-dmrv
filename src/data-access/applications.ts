@@ -85,7 +85,8 @@ async function getLinkedCreditBatches(
       creditBatches,
       eq(creditBatchApplications.creditBatchId, creditBatches.id),
     )
-    .where(eq(creditBatchApplications.applicationId, applicationId));
+    .where(eq(creditBatchApplications.applicationId, applicationId))
+    .for("update");
 
   return rows.map((row) => ({
     creditBatchId: row.creditBatchId,

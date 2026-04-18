@@ -157,12 +157,7 @@ function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
   {
     const detailLines: string[] = [];
     addLine(detailLines, formatDateOrNull(data.application.applicationDate));
-    addLine(
-      detailLines,
-      data.application.fieldIdentifier
-        ? `Field ${data.application.fieldIdentifier}`
-        : undefined,
-    );
+    addLine(detailLines, data.application.fieldIdentifier ?? undefined);
     addLine(detailLines, formatDryTons(data.application.biocharAppliedDryTons));
 
     nodes.push({

@@ -207,7 +207,7 @@ async function createCreditBatchRecord(
 
 describe("deleteApplication", () => {
   it("refreshes draft or pending credit batch summaries after removing a linked application", async () => {
-    const runId = `${Date.now().toString(36)}-pending`;
+    const runId = `${crypto.randomUUID()}-pending`;
     const fixture = await createDeleteFixture(runId);
 
     try {
@@ -284,7 +284,7 @@ describe("deleteApplication", () => {
   });
 
   it("blocks deletion when the application is linked to an issued credit batch", async () => {
-    const runId = `${Date.now().toString(36)}-issued`;
+    const runId = `${crypto.randomUUID()}-issued`;
     const fixture = await createDeleteFixture(runId);
 
     try {
