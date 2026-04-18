@@ -5,10 +5,11 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { env } from "@/config/env";
+import { getPgPoolConfig } from "@/lib/pg-pool-config";
 import * as schema from "./schema";
 
 const pool = new Pool({
-  connectionString: env.DATABASE_URL,
+  ...getPgPoolConfig(env.DATABASE_URL),
   max: env.DB_POOL_MAX ?? 1,
   idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS ?? 10_000,
   connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,

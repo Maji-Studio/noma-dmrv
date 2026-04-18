@@ -158,14 +158,15 @@ Enforcement is intentionally layered:
 
 ## Chain of Custody Visualization
 
-Interactive React Flow DAG showing material flow through the system, scoped per facility.
+Application-first lineage graph that traces the upstream rollback path from a selected application back to its originating feedstock batches.
 
-- **Route**: `/chain-of-custody`
+- **Route**: `/chain-of-custody?application=<id>`
 - **Components**: `src/components/chain-of-custody/` (constants, node, page, hook)
-- **Data**: `src/data-access/chain-of-custody.ts` batch-fetches counts per entity to avoid N+1
-- **Layout**: dagre auto-layout (LR direction), 14 nodes, 15 edges
-- **Nodes**: Color-coded by group (Infrastructure=purple, Production=orange, Distribution=rose, Credits=pink)
-- **Storage locations**: Split into 3 node types (Feedstock Bin, Biochar Bin, Product Bin) from single table using `storageLocationType` enum
+- **Data**: `src/data-access/chain-of-custody.ts` resolves the upstream lineage for one application
+- **Layout**: dagre auto-layout (LR direction), 7 node types
+- **Node types**: Feedstock (orange), Reactor (purple), Production Run (orange), Biochar Product (orange), Order (rose), Delivery (rose), Application (rose)
+- **Selection**: Users search for an application via the shared `EntitySelect`; facility is resolved from the selected application
+- **Lineage**: Supports multiple feedstocks branching into the same production run; shows a warning card when upstream links are missing
 
 ## Facility Context
 

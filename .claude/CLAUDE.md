@@ -245,6 +245,51 @@ const {
 - Keyboard navigation: All interactive elements accessible
 - ARIA labels: Present where visual context insufficient
 
+## Git Conventions
+
+### Branch Naming
+
+Format: `<type>/<short-description>` using kebab-case.
+
+| Type | When to use | Example |
+|------|-------------|---------|
+| `feat/` | New feature or significant enhancement | `feat/application-inventory-lineage` |
+| `fix/` | Bug fix | `fix/delivery-capacity-overflow` |
+| `chore/` | Maintenance, dependencies, CI, tooling | `chore/update-drizzle-orm` |
+| `refactor/` | Code restructuring without behavior change | `refactor/split-chain-constants` |
+| `docs/` | Documentation-only changes | `docs/add-forms-guide` |
+| `test/` | Test-only additions or fixes | `test/e2e-applications-coverage` |
+
+### Commit Messages
+
+Use imperative mood. Start with a **lowercase verb** that describes the change category:
+
+```
+<type>: <concise description of what changed and why>
+```
+
+| Prefix | Use for | Example |
+|--------|---------|---------|
+| `feat:` | New functionality | `feat: add delivery inventory validation on application create/update` |
+| `fix:` | Bug fix | `fix: prevent deletion of applications linked to verified credit batches` |
+| `refactor:` | Restructure without behavior change | `refactor: replace facility-level DAG with per-application lineage graph` |
+| `chore:` | Tooling, deps, CI, config | `chore: upgrade playwright to v1.50` |
+| `docs:` | Documentation only | `docs: update chain-of-custody architecture section` |
+| `test:` | Test additions/fixes only | `test: add unit tests for delivery capacity checks` |
+
+For multi-line commits, add a blank line then a body explaining **why**, not what:
+
+```
+feat: add delivery inventory validation on application create/update
+
+Prevents over-applying biochar from a single delivery by checking
+remaining capacity against the delivery's wet mass.
+```
+
+### PR Titles
+
+Same format as commit messages: `<type>: <short description>` (under 70 characters). Use the description/body for details, not the title.
+
 ## Reference Features
 
 ### Biochar Entities (primary pattern)
@@ -384,12 +429,13 @@ See `TEMPLATE_USAGE.md` for detailed examples.
 
 ## Chain of Custody Visualization
 
-Interactive React Flow DAG showing the complete biochar traceability chain for a facility:
+Application-first lineage graph that traces the upstream rollback path from a selected application back to feedstock batches:
 
-- **14 nodes**: Suppliers, Reactors, 3 Storage Location bins (Feedstock/Biochar/Product), Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches
-- **Color groups**: Infrastructure (purple), Production (orange), Distribution (rose), Credits (pink)
-- **Layout**: Dagre automatic DAG layout, minimap, zoom controls
-- **Data**: Nodes show entity counts grouped by status; animated edges when source has in-progress items
+- **7 node types**: Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application
+- **Color groups**: Production (orange), Infrastructure (purple), Distribution (rose)
+- **Selection**: Users search for an application via `EntitySelect`; facility is resolved from the selected application
+- **Layout**: Dagre automatic DAG layout (LR), minimap, zoom controls
+- **Data**: Each node shows record-level details (dates, masses, codes) rather than aggregate counts
 - **Architecture**: Standard layered pattern — `data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`
 - **Docs**: `docs/chain-of-custody.md`
 
@@ -462,7 +508,7 @@ All local summaries are non-authoritative interpretations (last refreshed: 2026-
 - **Forms** - `docs/forms.md` (React Hook Form integration guide)
 - **Security** - `docs/security.md` (security best practices and guidelines)
 - **Mail Setup** - `docs/mail-setup.md` (email configuration with Resend)
-- **Chain of Custody** - `docs/chain-of-custody.md` (React Flow DAG visualization architecture)
+- **Chain of Custody** - `docs/chain-of-custody.md` (application-first lineage graph architecture)
 - **Schema Overview** - `docs/schema-overview.md` (all 60+ tables with descriptions and source links)
 - **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
 - **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
@@ -483,7 +529,7 @@ Run: `pnpm test:e2e` (requires dev server running)
 
 ## CI/CD Workflows
 
-- **Migration workflow** (`.github/workflows/migrate.yml`) — Auto-triggers on schema changes to `main`; supports `workflow_dispatch` with actions: `ensure-admin` (idempotent), `push-schema` (safe), `reset-and-push` (destructive, requires `CONFIRM` input)
+- **Database management** (`.github/workflows/migrate.yml`) — Auto-migrates on schema changes pushed to `main`/`staging`; supports manual `reset-seed-staging` and `reset-production` actions via `workflow_dispatch`
 - **Claude PR Assistant** (`.github/workflows/claude.yml`) — AI-assisted PR review
-- **Claude Code Review** (`.github/workflows/claude-code-review.yml`) — Automated code review
+- **E2E Tests** (`.github/workflows/e2e.yml`) — Playwright end-to-end tests
 - **CodeRabbit** (`.coderabbit.yaml`) — Auto-reviews on `main` and `staging` branches
