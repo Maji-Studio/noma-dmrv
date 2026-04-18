@@ -384,12 +384,13 @@ See `TEMPLATE_USAGE.md` for detailed examples.
 
 ## Chain of Custody Visualization
 
-Interactive React Flow DAG showing the complete biochar traceability chain for a facility:
+Application-first lineage graph that traces the upstream rollback path from a selected application back to feedstock batches:
 
-- **14 nodes**: Suppliers, Reactors, 3 Storage Location bins (Feedstock/Biochar/Product), Feedstock Deliveries, Feedstocks, Production Runs, Samples, Biochar Products, Orders, Deliveries, Applications, Credit Batches
-- **Color groups**: Infrastructure (purple), Production (orange), Distribution (rose), Credits (pink)
-- **Layout**: Dagre automatic DAG layout, minimap, zoom controls
-- **Data**: Nodes show entity counts grouped by status; animated edges when source has in-progress items
+- **7 node types**: Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application
+- **Color groups**: Production (orange), Infrastructure (purple), Distribution (rose)
+- **Selection**: Users search for an application via `EntitySelect`; facility is resolved from the selected application
+- **Layout**: Dagre automatic DAG layout (LR), minimap, zoom controls
+- **Data**: Each node shows record-level details (dates, masses, codes) rather than aggregate counts
 - **Architecture**: Standard layered pattern — `data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`
 - **Docs**: `docs/chain-of-custody.md`
 
@@ -462,7 +463,7 @@ All local summaries are non-authoritative interpretations (last refreshed: 2026-
 - **Forms** - `docs/forms.md` (React Hook Form integration guide)
 - **Security** - `docs/security.md` (security best practices and guidelines)
 - **Mail Setup** - `docs/mail-setup.md` (email configuration with Resend)
-- **Chain of Custody** - `docs/chain-of-custody.md` (React Flow DAG visualization architecture)
+- **Chain of Custody** - `docs/chain-of-custody.md` (application-first lineage graph architecture)
 - **Schema Overview** - `docs/schema-overview.md` (all 60+ tables with descriptions and source links)
 - **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
 - **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
