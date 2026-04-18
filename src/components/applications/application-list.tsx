@@ -11,7 +11,6 @@ import { format } from "date-fns";
 import { MapPin, Plus, Leaf, Thermometer } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
@@ -31,9 +30,7 @@ import {
 } from "@/hooks/use-applications";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
-  formatApplicationStatus,
   formatApplicationMethod,
-  type ApplicationStatus,
   type ApplicationMethod,
 } from "@/schemas/applications";
 
@@ -107,16 +104,6 @@ function createColumns(
             ? `${row.original.co2eStoredTonnes.toFixed(2)} t`
             : "—"}
         </span>
-      ),
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => (
-        <StatusBadge
-          status={row.original.status === "applied" ? "complete" : "pending"}
-          label={formatApplicationStatus(row.original.status as ApplicationStatus)}
-        />
       ),
     },
     {
@@ -369,15 +356,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 {
                   label: "Application Date",
                   value: format(new Date(sideSheet.entity.applicationDate), "MMM d, yyyy"),
-                },
-                {
-                  label: "Status",
-                  value: (
-                    <StatusBadge
-                      status={sideSheet.entity.status === "applied" ? "complete" : "pending"}
-                      label={formatApplicationStatus(sideSheet.entity.status as ApplicationStatus)}
-                    />
-                  ),
                 },
               ],
             },
