@@ -1,5 +1,6 @@
 import { check, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { lossEntityType, lossTypeCode } from './common';
 
 // ============================================
 // Loss Records - Mass lost at any point in the chain
@@ -13,11 +14,10 @@ export const lossRecords = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     code: text('code').notNull().unique(), // e.g., "LR-2025-001"
 
-    // Polymorphic reference — mirrors chain-of-custody pattern
-    entityType: text('entity_type').notNull(), // 'production_run' | 'delivery' | 'application' | 'storage'
+    entityType: lossEntityType('entity_type').notNull(),
     entityId: uuid('entity_id').notNull(),
 
-    lossTypeCode: text('loss_type_code').notNull(), // 'residue' | 'spillage' | 'runoff' | 'volatilization' | 'transport_loss' | 'other'
+    lossTypeCode: lossTypeCode('loss_type_code').notNull(),
     massKgLost: real('mass_kg_lost').notNull(),
     discoveredAt: timestamp('discovered_at').notNull(),
     cause: text('cause'),

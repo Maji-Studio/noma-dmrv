@@ -46,6 +46,10 @@ export const biocharStorageInventory = pgTable(
       'biochar_storage_inventory_qty_stored_positive',
       sql`${table.quantityKgStored} > 0`
     ),
+    check(
+      'biochar_storage_inventory_no_self_transfer',
+      sql`${table.sourceInventoryId} IS NULL OR ${table.sourceInventoryId} <> ${table.id}`
+    ),
   ]
 );
 

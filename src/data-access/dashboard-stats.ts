@@ -133,7 +133,7 @@ async function getActiveProductionRunsStats(
 }
 
 /**
- * Get pending applications (status = 'delivered' - waiting to be applied)
+ * Get pending applications (status = 'applied' - biochar applied but not yet verified)
  */
 async function getPendingApplicationsStats(
   facilityId?: string,
@@ -153,8 +153,8 @@ async function getPendingApplicationsStats(
       .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
       .where(
         facilityWhere
-          ? and(eq(applications.status, "delivered"), facilityWhere)
-          : eq(applications.status, "delivered")
+          ? and(eq(applications.status, "applied"), facilityWhere)
+          : eq(applications.status, "applied")
       ),
     db
       .select({ count: count() })
@@ -163,13 +163,13 @@ async function getPendingApplicationsStats(
       .where(
         facilityWhere
           ? and(
-              eq(applications.status, "delivered"),
+              eq(applications.status, "applied"),
               facilityWhere,
               gte(applications.createdAt, previousStart),
               lt(applications.createdAt, previousEnd)
             )
           : and(
-              eq(applications.status, "delivered"),
+              eq(applications.status, "applied"),
               gte(applications.createdAt, previousStart),
               lt(applications.createdAt, previousEnd)
             )

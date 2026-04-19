@@ -175,6 +175,22 @@ export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status',
   'conditional',
 ]);
 
+export const lossEntityType = pgEnum('loss_entity_type', [
+  'production_run',
+  'delivery',
+  'application',
+  'storage',
+]);
+
+export const lossTypeCode = pgEnum('loss_type_code', [
+  'residue',
+  'spillage',
+  'runoff',
+  'volatilization',
+  'transport_loss',
+  'other',
+]);
+
 export const certifierProvider = pgEnum('certifier_provider', [
   'isometric',
   'puro_earth',
