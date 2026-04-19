@@ -81,6 +81,7 @@ export interface DeliveryStats {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Read Operations
@@ -268,7 +269,7 @@ export async function getDeliveryById(
     .where(eq(deliveries.id, deliveryId));
 
   if (!delivery) {
-    throw new Error("Delivery not found");
+    throw new SafeError("Delivery not found");
   }
 
   return delivery;
@@ -307,7 +308,7 @@ export async function getDeliveryWithRelations(
     .where(eq(deliveries.id, deliveryId));
 
   if (!deliveryRow) {
-    throw new Error("Delivery not found");
+    throw new SafeError("Delivery not found");
   }
 
   return {
@@ -489,7 +490,7 @@ export async function createDelivery(
     data.deliveredWetMassKg != null &&
     data.massDryKg > data.deliveredWetMassKg
   ) {
-    throw new Error("Dry mass must be less than or equal to wet mass");
+    throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
   // Check for duplicate code
@@ -499,7 +500,7 @@ export async function createDelivery(
     .where(eq(deliveries.code, data.code));
 
   if (existing) {
-    throw new Error("A delivery with this code already exists");
+    throw new SafeError("A delivery with this code already exists");
   }
 
   // Verify order exists
@@ -509,7 +510,7 @@ export async function createDelivery(
     .where(eq(orders.id, data.orderId));
 
   if (!order) {
-    throw new Error("Order not found");
+    throw new SafeError("Order not found");
   }
 
   const [delivery] = await db
@@ -574,7 +575,7 @@ export async function updateDelivery(
     .where(eq(deliveries.id, deliveryId));
 
   if (!existing) {
-    throw new Error("Delivery not found");
+    throw new SafeError("Delivery not found");
   }
 
   // Validate massDryKg <= deliveredWetMassKg with merged data
@@ -590,7 +591,7 @@ export async function updateDelivery(
     finalWetMass != null &&
     finalDryMass > finalWetMass
   ) {
-    throw new Error("Dry mass must be less than or equal to wet mass");
+    throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
   // If code is being changed, check for duplicates
@@ -601,7 +602,7 @@ export async function updateDelivery(
       .where(eq(deliveries.code, data.code));
 
     if (duplicate) {
-      throw new Error("A delivery with this code already exists");
+      throw new SafeError("A delivery with this code already exists");
     }
   }
 
@@ -643,7 +644,7 @@ export async function deleteDelivery(
     .where(eq(deliveries.id, deliveryId));
 
   if (!existing) {
-    throw new Error("Delivery not found");
+    throw new SafeError("Delivery not found");
   }
 
   await db.delete(deliveries).where(eq(deliveries.id, deliveryId));

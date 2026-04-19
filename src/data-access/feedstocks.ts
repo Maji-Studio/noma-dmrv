@@ -19,6 +19,7 @@ import {
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import { requireAuth } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Types
@@ -243,7 +244,7 @@ export async function getFeedstockById(
   const [item] = await feedstockBaseQuery().where(eq(feedstocks.id, feedstockId));
 
   if (!item) {
-    throw new Error("Feedstock not found");
+    throw new SafeError("Feedstock not found");
   }
 
   return item;
@@ -300,7 +301,7 @@ export async function createFeedstock(
     .where(eq(feedstockTypes.id, data.feedstockTypeId));
 
   if (!feedstockType) {
-    throw new Error("Feedstock type not found");
+    throw new SafeError("Feedstock type not found");
   }
 
   const isIngredient = feedstockType.category === "ingredient";
@@ -322,19 +323,19 @@ export async function createFeedstock(
   for (const allocation of data.allocations) {
     const bin = binMap.get(allocation.storageLocationId);
     if (!bin) {
-      throw new Error(`Storage bin not found: ${allocation.storageLocationId}`);
+      throw new SafeError(`Storage bin not found: ${allocation.storageLocationId}`);
     }
     if (bin.facilityId !== data.facilityId) {
-      throw new Error(`Storage bin ${bin.id} does not belong to the selected facility`);
+      throw new SafeError(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
     if (bin.type !== expectedBinType) {
       const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
-      throw new Error(
+      throw new SafeError(
         `${isIngredient ? "Ingredient" : "Feedstock"} materials must be allocated to ${label}, not a ${bin.type.replace("_", " ")}.`
       );
     }
     if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
-      throw new Error(
+      throw new SafeError(
         `Storage bin already holds a different feedstock type. Each bin can only hold one type.`
       );
     }
@@ -439,7 +440,7 @@ export async function updateFeedstock(
     .where(eq(feedstocks.id, feedstockId));
 
   if (!existing) {
-    throw new Error("Feedstock not found");
+    throw new SafeError("Feedstock not found");
   }
 
   // Validate storage bin compatibility if changing storage location or feedstock type
@@ -455,7 +456,7 @@ export async function updateFeedstock(
       .where(eq(feedstockTypes.id, typeId));
 
     if (!ft) {
-      throw new Error("Feedstock type not found");
+      throw new SafeError("Feedstock type not found");
     }
 
     const isIngredient = ft.category === "ingredient";
@@ -472,20 +473,20 @@ export async function updateFeedstock(
         .where(eq(storageLocations.id, binId));
 
       if (!bin) {
-        throw new Error(`Storage bin not found: ${binId}`);
+        throw new SafeError(`Storage bin not found: ${binId}`);
       }
       if (bin.facilityId !== facId) {
-        throw new Error(`Storage bin ${binId} does not belong to the selected facility`);
+        throw new SafeError(`Storage bin ${binId} does not belong to the selected facility`);
       }
 
       if (bin.type !== expectedBinType) {
         const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
-        throw new Error(
+        throw new SafeError(
           `${isIngredient ? "Ingredient" : "Feedstock"} materials must be allocated to ${label}.`
         );
       }
       if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {
-        throw new Error(
+        throw new SafeError(
           "Storage bin already holds a different feedstock type. Each bin can only hold one type."
         );
       }
@@ -524,7 +525,7 @@ export async function deleteFeedstock(
     .where(eq(productionRunFeedstocks.feedstockId, feedstockId));
 
   if (Number(usageCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete feedstock that is used in production runs. Remove production run associations first."
     );
   }

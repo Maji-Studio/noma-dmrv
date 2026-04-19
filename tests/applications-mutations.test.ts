@@ -21,74 +21,76 @@ interface ApplicationMutationFixture {
 }
 
 async function createMutationFixture(runId: string): Promise<ApplicationMutationFixture> {
-  const [customer] = await db
-    .insert(customers)
-    .values({ name: `Application Mutation Customer ${runId}`, code: `CU-AM-${runId}` })
-    .returning({ id: customers.id });
+  return db.transaction(async (tx) => {
+    const [customer] = await tx
+      .insert(customers)
+      .values({ name: `Application Mutation Customer ${runId}`, code: `CU-AM-${runId}` })
+      .returning({ id: customers.id });
 
-  const [formulation] = await db
-    .insert(formulations)
-    .values({ name: `Application Mutation Formulation ${runId}`, code: `FM-AM-${runId}` })
-    .returning({ id: formulations.id });
+    const [formulation] = await tx
+      .insert(formulations)
+      .values({ name: `Application Mutation Formulation ${runId}`, code: `FM-AM-${runId}` })
+      .returning({ id: formulations.id });
 
-  const [facility] = await db
-    .insert(facilities)
-    .values({ name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
-    .returning({ id: facilities.id });
+    const [facility] = await tx
+      .insert(facilities)
+      .values({ name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
+      .returning({ id: facilities.id });
 
-  const [product] = await db
-    .insert(biocharProducts)
-    .values({
-      code: `BP-AM-${runId}`,
+    const [product] = await tx
+      .insert(biocharProducts)
+      .values({
+        code: `BP-AM-${runId}`,
+        facilityId: facility.id,
+        formulationId: formulation.id,
+      })
+      .returning({ id: biocharProducts.id });
+
+    const [order] = await tx
+      .insert(orders)
+      .values({
+        code: `OR-AM-${runId}`,
+        facilityId: facility.id,
+        biocharProductId: product.id,
+        customerId: customer.id,
+        orderDate: new Date("2025-07-01"),
+        quantityKg: 10_000,
+        packaging: "bagged",
+      })
+      .returning({ id: orders.id });
+
+    const insertedDeliveries = await tx
+      .insert(deliveries)
+      .values([
+        {
+          code: `DL-AM-${runId}-A`,
+          facilityId: facility.id,
+          orderId: order.id,
+          deliveryDate: new Date("2025-07-05"),
+          deliveredWetMassKg: 5_000,
+          moistureContentPercent: 20,
+        },
+        {
+          code: `DL-AM-${runId}-B`,
+          facilityId: facility.id,
+          orderId: order.id,
+          deliveryDate: new Date("2025-07-06"),
+          deliveredWetMassKg: 3_000,
+          moistureContentPercent: 10,
+        },
+      ])
+      .returning({ id: deliveries.id });
+
+    return {
       facilityId: facility.id,
-      formulationId: formulation.id,
-    })
-    .returning({ id: biocharProducts.id });
-
-  const [order] = await db
-    .insert(orders)
-    .values({
-      code: `OR-AM-${runId}`,
-      facilityId: facility.id,
-      biocharProductId: product.id,
       customerId: customer.id,
-      orderDate: new Date("2025-07-01"),
-      quantityKg: 10_000,
-      packaging: "bagged",
-    })
-    .returning({ id: orders.id });
-
-  const insertedDeliveries = await db
-    .insert(deliveries)
-    .values([
-      {
-        code: `DL-AM-${runId}-A`,
-        facilityId: facility.id,
-        orderId: order.id,
-        deliveryDate: new Date("2025-07-05"),
-        deliveredWetMassKg: 5_000,
-        moistureContentPercent: 20,
-      },
-      {
-        code: `DL-AM-${runId}-B`,
-        facilityId: facility.id,
-        orderId: order.id,
-        deliveryDate: new Date("2025-07-06"),
-        deliveredWetMassKg: 3_000,
-        moistureContentPercent: 10,
-      },
-    ])
-    .returning({ id: deliveries.id });
-
-  return {
-    facilityId: facility.id,
-    customerId: customer.id,
-    formulationId: formulation.id,
-    productId: product.id,
-    orderId: order.id,
-    deliveryIds: insertedDeliveries.map((delivery) => delivery.id),
-    applicationIds: [],
-  };
+      formulationId: formulation.id,
+      productId: product.id,
+      orderId: order.id,
+      deliveryIds: insertedDeliveries.map((delivery) => delivery.id),
+      applicationIds: [],
+    };
+  });
 }
 
 async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Promise<void> {

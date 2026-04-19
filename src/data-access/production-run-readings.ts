@@ -7,6 +7,7 @@ import { and, desc, eq, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRunReadings, productionRuns } from "@/db/schema";
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Types
@@ -92,7 +93,7 @@ export async function getProductionRunReadingById(
     .where(eq(productionRunReadings.id, id));
 
   if (!reading) {
-    throw new Error("Reading not found");
+    throw new SafeError("Reading not found");
   }
 
   return reading;
@@ -120,7 +121,7 @@ export async function createProductionRunReading(
     .where(eq(productionRuns.id, data.productionRunId));
 
   if (!run) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   const [reading] = await db
@@ -159,7 +160,7 @@ export async function updateProductionRunReading(
     .where(eq(productionRunReadings.id, id));
 
   if (!existing) {
-    throw new Error("Reading not found");
+    throw new SafeError("Reading not found");
   }
 
   const updateData: Record<string, unknown> = {};
@@ -195,7 +196,7 @@ export async function deleteProductionRunReading(
     .where(eq(productionRunReadings.id, id));
 
   if (!existing) {
-    throw new Error("Reading not found");
+    throw new SafeError("Reading not found");
   }
 
   await db

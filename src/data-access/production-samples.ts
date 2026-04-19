@@ -7,6 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productionSamples, operators } from "@/db/schema";
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Types
@@ -91,7 +92,7 @@ export async function getProductionSampleById(
     .where(eq(productionSamples.id, id));
 
   if (rows.length === 0) {
-    throw new Error("Production sample not found");
+    throw new SafeError("Production sample not found");
   }
 
   return rows[0];
@@ -199,6 +200,6 @@ export async function deleteProductionSample(
     .returning({ id: productionSamples.id });
 
   if (deleted.length === 0) {
-    throw new Error("Production sample not found");
+    throw new SafeError("Production sample not found");
   }
 }

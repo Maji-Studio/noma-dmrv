@@ -13,6 +13,7 @@ import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Application Data Access Layer
@@ -33,7 +34,7 @@ async function getDeliveryMoistureContentPercent(
     .where(eq(deliveries.id, deliveryId));
 
   if (!delivery) {
-    throw new Error("Delivery not found");
+    throw new SafeError("Delivery not found");
   }
 
   return delivery.moistureContentPercent;
@@ -53,7 +54,7 @@ async function getDeliveryCapacityAndApplied(
     ? deliveryQuery
     : deliveryQuery.for("update"));
 
-  if (!delivery) throw new Error("Delivery not found");
+  if (!delivery) throw new SafeError("Delivery not found");
 
   const conditions = excludeApplicationId
     ? and(eq(applications.deliveryId, deliveryId), ne(applications.id, excludeApplicationId))
@@ -170,7 +171,7 @@ async function resolveApplicationDryMassTons(
     return input.fallbackDryTons;
   }
 
-  throw new Error("Dry mass is required when delivery has no moisture content");
+  throw new SafeError("Dry mass is required when delivery has no moisture content");
 }
 
 /**
@@ -259,7 +260,7 @@ export async function createApplication(
   return db.transaction(async (tx) => {
     const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
     const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
-    if (!check.ok) throw new Error(check.errorMessage);
+    if (!check.ok) throw new SafeError(check.errorMessage!);
 
     const biocharAppliedDryTons = await resolveApplicationDryMassTons({
       deliveryId: data.deliveryId,
@@ -310,7 +311,7 @@ export async function updateApplication(
       .for("update");
 
     if (!existingApplication) {
-      throw new Error("Application not found");
+      throw new SafeError("Application not found");
     }
 
     const updateData: Record<string, unknown> = {
@@ -327,7 +328,7 @@ export async function updateApplication(
         alreadyAppliedTons,
         requestedTons: effectiveAppliedTons,
       });
-      if (!check.ok) throw new Error(check.errorMessage);
+      if (!check.ok) throw new SafeError(check.errorMessage!);
     }
 
     const shouldRecalculateDryMass =
@@ -384,7 +385,7 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
       .where(eq(applications.id, id));
 
     if (!existing) {
-      throw new Error("Application not found");
+      throw new SafeError("Application not found");
     }
 
     const linkedCreditBatches = await getLinkedCreditBatches(tx, id);
@@ -394,7 +395,7 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
 
     if (blockingBatches.length > 0) {
       const blockingCodes = blockingBatches.map((batch) => batch.code).join(", ");
-      throw new Error(
+      throw new SafeError(
         `Cannot delete application linked to verified or issued credit batches: ${blockingCodes}`,
       );
     }
