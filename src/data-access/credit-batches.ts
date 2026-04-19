@@ -1,5 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
   creditBatchApplications,
@@ -30,7 +30,7 @@ export interface CreditBatchWithRelations extends CreditBatch {
  * Applications link to facility via: application.deliveryId → delivery.facilityId
  */
 async function validateApplicationIds(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: DbTransaction,
   applicationIds: string[],
   facilityId: string,
   startDate?: string | Date,
