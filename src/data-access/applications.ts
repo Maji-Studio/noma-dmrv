@@ -1,5 +1,5 @@
 import { desc, eq, count, sum, ne, and } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   applications,
   soilTemperatureMeasurements,
@@ -21,10 +21,11 @@ import { requireAuth } from "./utils";
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<number | null> {
-  const [delivery] = await db
+async function getDeliveryMoistureContentPercent(
+  deliveryId: string,
+  txOrDb: DbTransaction | typeof db = db,
+): Promise<number | null> {
+  const [delivery] = await txOrDb
     .select({
       moistureContentPercent: deliveries.moistureContentPercent,
     })
@@ -41,11 +42,16 @@ async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<nu
 async function getDeliveryCapacityAndApplied(
   deliveryId: string,
   excludeApplicationId?: string,
+  txOrDb: DbTransaction | typeof db = db,
 ): Promise<{ capacityKg: number | null; alreadyAppliedTons: number }> {
-  const [delivery] = await db
+  const deliveryQuery = txOrDb
     .select({ deliveredWetMassKg: deliveries.deliveredWetMassKg })
     .from(deliveries)
     .where(eq(deliveries.id, deliveryId));
+
+  const [delivery] = await (txOrDb === db
+    ? deliveryQuery
+    : deliveryQuery.for("update"));
 
   if (!delivery) throw new Error("Delivery not found");
 
@@ -53,7 +59,7 @@ async function getDeliveryCapacityAndApplied(
     ? and(eq(applications.deliveryId, deliveryId), ne(applications.id, excludeApplicationId))
     : eq(applications.deliveryId, deliveryId);
 
-  const [{ total }] = await db
+  const [{ total }] = await txOrDb
     .select({ total: sum(applications.biocharAppliedTons) })
     .from(applications)
     .where(conditions);
@@ -136,17 +142,20 @@ async function refreshCreditBatchSummaries(
     .where(eq(creditBatches.id, creditBatchId));
 }
 
-async function resolveApplicationDryMassTons(input: {
-  deliveryId: string;
-  biocharAppliedTons: number;
-  biocharAppliedDryTons?: number | null;
-  fallbackDryTons?: number | null;
-}): Promise<number> {
+async function resolveApplicationDryMassTons(
+  input: {
+    deliveryId: string;
+    biocharAppliedTons: number;
+    biocharAppliedDryTons?: number | null;
+    fallbackDryTons?: number | null;
+  },
+  txOrDb: DbTransaction | typeof db = db,
+): Promise<number> {
   if (input.biocharAppliedDryTons != null) {
     return input.biocharAppliedDryTons;
   }
 
-  const moistureContentPercent = await getDeliveryMoistureContentPercent(input.deliveryId);
+  const moistureContentPercent = await getDeliveryMoistureContentPercent(input.deliveryId, txOrDb);
 
   if (moistureContentPercent != null) {
     return kgToTonnes(
@@ -247,38 +256,40 @@ export async function createApplication(
 ): Promise<Application> {
   requireAuth(userId);
 
-  const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId);
-  const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
-  if (!check.ok) throw new Error(check.errorMessage);
+  return db.transaction(async (tx) => {
+    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
+    const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
+    if (!check.ok) throw new Error(check.errorMessage);
 
-  const biocharAppliedDryTons = await resolveApplicationDryMassTons({
-    deliveryId: data.deliveryId,
-    biocharAppliedTons: data.biocharAppliedTons,
-    biocharAppliedDryTons: data.biocharAppliedDryTons,
-  });
-
-  const [application] = await db
-    .insert(applications)
-    .values({
-      code: data.code,
-      status: "applied",
-      applicationDate: data.applicationDate,
+    const biocharAppliedDryTons = await resolveApplicationDryMassTons({
       deliveryId: data.deliveryId,
       biocharAppliedTons: data.biocharAppliedTons,
-      biocharAppliedDryTons,
-      fieldSizeHa: data.fieldSizeHa ?? null,
-      fieldIdentifier: data.fieldIdentifier || null,
-      cropType: data.cropType || null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      applicationMethodType: data.applicationMethodType ?? null,
-      gisBoundaryReference: data.gisBoundaryReference || null,
-      soilTemperatureSource: data.soilTemperatureSource ?? null,
-      soilTemperatureC: data.soilTemperatureC ?? null,
-    })
-    .returning();
+      biocharAppliedDryTons: data.biocharAppliedDryTons,
+    }, tx);
 
-  return application;
+    const [application] = await tx
+      .insert(applications)
+      .values({
+        code: data.code,
+        status: "applied",
+        applicationDate: data.applicationDate,
+        deliveryId: data.deliveryId,
+        biocharAppliedTons: data.biocharAppliedTons,
+        biocharAppliedDryTons,
+        fieldSizeHa: data.fieldSizeHa ?? null,
+        fieldIdentifier: data.fieldIdentifier || null,
+        cropType: data.cropType || null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        applicationMethodType: data.applicationMethodType ?? null,
+        gisBoundaryReference: data.gisBoundaryReference || null,
+        soilTemperatureSource: data.soilTemperatureSource ?? null,
+        soilTemperatureC: data.soilTemperatureC ?? null,
+      })
+      .returning();
+
+    return application;
+  });
 }
 
 /**
@@ -290,69 +301,74 @@ export async function updateApplication(
   data: Omit<UpdateApplicationData, "applicationId">
 ): Promise<Application> {
   requireAuth(userId);
-  const existingApplication = await getApplicationById(userId, id);
 
-  if (!existingApplication) {
-    throw new Error("Application not found");
-  }
+  return db.transaction(async (tx) => {
+    const [existingApplication] = await tx
+      .select()
+      .from(applications)
+      .where(eq(applications.id, id))
+      .for("update");
 
-  const updateData: Record<string, unknown> = {
-    updatedAt: new Date(),
-  };
+    if (!existingApplication) {
+      throw new Error("Application not found");
+    }
 
-  const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
-  const effectiveAppliedTons = data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
 
-  // Validate inventory — exclude the current application from the already-applied sum
-  if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
-    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id);
-    const check = checkDeliveryCapacity({
-      capacityKg,
-      alreadyAppliedTons,
-      requestedTons: effectiveAppliedTons,
-    });
-    if (!check.ok) throw new Error(check.errorMessage);
-  }
+    const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
+    const effectiveAppliedTons = data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
 
-  const shouldRecalculateDryMass =
-    data.deliveryId !== undefined ||
-    data.biocharAppliedTons !== undefined ||
-    data.biocharAppliedDryTons !== undefined;
+    if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
+      const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id, tx);
+      const check = checkDeliveryCapacity({
+        capacityKg,
+        alreadyAppliedTons,
+        requestedTons: effectiveAppliedTons,
+      });
+      if (!check.ok) throw new Error(check.errorMessage);
+    }
 
-  if (shouldRecalculateDryMass) {
-    updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons({
-      deliveryId: effectiveDeliveryId,
-      biocharAppliedTons: effectiveAppliedTons,
-      biocharAppliedDryTons: data.biocharAppliedDryTons,
-      fallbackDryTons:
-        data.deliveryId === undefined && data.biocharAppliedTons === undefined
-          ? existingApplication.biocharAppliedDryTons
-          : null,
-    });
-  }
+    const shouldRecalculateDryMass =
+      data.deliveryId !== undefined ||
+      data.biocharAppliedTons !== undefined ||
+      data.biocharAppliedDryTons !== undefined;
 
-  // Only include fields that are explicitly provided
-  if (data.code !== undefined) updateData.code = data.code;
-  if (data.applicationDate !== undefined) updateData.applicationDate = data.applicationDate;
-  if (data.deliveryId !== undefined) updateData.deliveryId = data.deliveryId;
-  if (data.biocharAppliedTons !== undefined) updateData.biocharAppliedTons = data.biocharAppliedTons;
-  if (data.fieldSizeHa !== undefined) updateData.fieldSizeHa = data.fieldSizeHa;
-  if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = data.fieldIdentifier || null;
-  if (data.cropType !== undefined) updateData.cropType = data.cropType || null;
-  if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
-  if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
-  if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
-  if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
-  if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
-  if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
+    if (shouldRecalculateDryMass) {
+      updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons({
+        deliveryId: effectiveDeliveryId,
+        biocharAppliedTons: effectiveAppliedTons,
+        biocharAppliedDryTons: data.biocharAppliedDryTons,
+        fallbackDryTons:
+          data.deliveryId === undefined && data.biocharAppliedTons === undefined
+            ? existingApplication.biocharAppliedDryTons
+            : null,
+      }, tx);
+    }
 
-  const [application] = await db
-    .update(applications)
-    .set(updateData)
-    .where(eq(applications.id, id))
-    .returning();
+    if (data.code !== undefined) updateData.code = data.code;
+    if (data.applicationDate !== undefined) updateData.applicationDate = data.applicationDate;
+    if (data.deliveryId !== undefined) updateData.deliveryId = data.deliveryId;
+    if (data.biocharAppliedTons !== undefined) updateData.biocharAppliedTons = data.biocharAppliedTons;
+    if (data.fieldSizeHa !== undefined) updateData.fieldSizeHa = data.fieldSizeHa;
+    if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = data.fieldIdentifier || null;
+    if (data.cropType !== undefined) updateData.cropType = data.cropType || null;
+    if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
+    if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
+    if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
+    if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
+    if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
+    if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
 
-  return application;
+    const [application] = await tx
+      .update(applications)
+      .set(updateData)
+      .where(eq(applications.id, id))
+      .returning();
+
+    return application;
+  });
 }
 
 /**

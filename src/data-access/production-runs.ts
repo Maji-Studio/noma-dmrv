@@ -6,7 +6,7 @@
 
 import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count, sum } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   productionRuns,
   productionRunFeedstocks,
@@ -520,7 +520,7 @@ async function allocateFeedstockMass(
  * Validate that a storage location exists, belongs to the facility, and is the expected type.
  */
 async function validateStorageLocation(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: DbTransaction,
   locationId: string,
   facilityId: string,
   expectedType: "feedstock_bin" | "biochar_bin",

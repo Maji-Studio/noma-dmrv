@@ -116,6 +116,11 @@ export const creditBatches = pgTable(
     totalCo2eCounterfactualTons: real('total_co2e_counterfactual_tons'), // Baseline emissions
     // netCo2eRemovalTons: derivable from stored - emissions - counterfactual
 
+    // --- Feedstock Eligibility Summary (Isometric: >25% ineligible-biomass cap, P0-01) ---
+    // Computed by app logic when building/updating a batch from linked feedstock batches
+    totalFeedstockMassKg: real('total_feedstock_mass_kg'),
+    ineligibleFeedstockMassKg: real('ineligible_feedstock_mass_kg'),
+
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission
     siteManagementNotes: text('site_management_notes'), // Irrigation, tillage, fertilizer summary
@@ -163,6 +168,20 @@ export const creditBatches = pgTable(
     check(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} = 'isometric'`
+    ),
+    check(
+      'credit_batches_total_feedstock_mass_non_negative',
+      sql`${table.totalFeedstockMassKg} is null or ${table.totalFeedstockMassKg} >= 0`
+    ),
+    check(
+      'credit_batches_ineligible_feedstock_mass_non_negative',
+      sql`${table.ineligibleFeedstockMassKg} is null or ${table.ineligibleFeedstockMassKg} >= 0`
+    ),
+    check(
+      'credit_batches_ineligible_feedstock_check',
+      sql`${table.ineligibleFeedstockMassKg} is null
+        or ${table.totalFeedstockMassKg} is null
+        or ${table.ineligibleFeedstockMassKg} <= ${table.totalFeedstockMassKg}`
     ),
   ]
 );
