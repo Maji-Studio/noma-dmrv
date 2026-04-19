@@ -27,6 +27,7 @@ export interface PaginatedSuppliers {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 async function ensureSupplierOwnership(
   userId: string,
@@ -40,10 +41,10 @@ async function ensureSupplierOwnership(
     .where(eq(suppliers.id, supplierId));
 
   if (!supplier) {
-    throw new Error("Supplier not found");
+    throw new SafeError("Supplier not found");
   }
   if (supplier.userId !== userId) {
-    throw new Error("Unauthorized");
+    throw new SafeError("Unauthorized");
   }
 
   return { id: supplier.id };
@@ -66,10 +67,10 @@ async function ensureSupplierLocationOwnership(
     .where(eq(supplierLocations.id, locationId));
 
   if (!location) {
-    throw new Error("Supplier location not found");
+    throw new SafeError("Supplier location not found");
   }
   if (location.ownerUserId !== userId) {
-    throw new Error("Unauthorized");
+    throw new SafeError("Unauthorized");
   }
 
   return { id: location.id, supplierId: location.supplierId };
@@ -194,7 +195,7 @@ export async function getSupplierById(
     .where(eq(suppliers.id, supplierId));
 
   if (!supplier) {
-    throw new Error("Supplier not found");
+    throw new SafeError("Supplier not found");
   }
 
   return supplier;
@@ -231,7 +232,7 @@ export async function createSupplier(
     .where(eq(suppliers.code, data.code));
 
   if (existing) {
-    throw new Error("A supplier with this code already exists");
+    throw new SafeError("A supplier with this code already exists");
   }
 
   try {
@@ -255,7 +256,7 @@ export async function createSupplier(
     return supplier;
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("A supplier with this code already exists");
+      throw new SafeError("A supplier with this code already exists");
     }
     throw error;
   }
@@ -293,7 +294,7 @@ export async function updateSupplier(
     .where(eq(suppliers.id, supplierId));
 
   if (!existing) {
-    throw new Error("Supplier not found");
+    throw new SafeError("Supplier not found");
   }
 
   // If code is being changed, check for duplicates
@@ -304,7 +305,7 @@ export async function updateSupplier(
       .where(eq(suppliers.code, data.code));
 
     if (duplicate) {
-      throw new Error("A supplier with this code already exists");
+      throw new SafeError("A supplier with this code already exists");
     }
   }
 
@@ -341,7 +342,7 @@ export async function deleteSupplier(
     .where(eq(suppliers.id, supplierId));
 
   if (!existing) {
-    throw new Error("Supplier not found");
+    throw new SafeError("Supplier not found");
   }
 
   const [feedstockCount] = await db
@@ -350,7 +351,7 @@ export async function deleteSupplier(
     .where(eq(feedstocks.supplierId, supplierId));
 
   if (Number(feedstockCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete supplier with associated feedstock intakes. Remove intakes first."
     );
   }
@@ -455,7 +456,7 @@ export async function getSupplierLocationById(
     .where(eq(supplierLocations.id, locationId));
 
   if (!location) {
-    throw new Error("Supplier location not found");
+    throw new SafeError("Supplier location not found");
   }
 
   return location;
@@ -520,7 +521,7 @@ export async function updateSupplierLocation(
     .returning();
 
   if (!updated) {
-    throw new Error("Supplier location not found");
+    throw new SafeError("Supplier location not found");
   }
 
   return updated;
@@ -536,6 +537,6 @@ export async function deleteSupplierLocation(
   const deleted = await db.delete(supplierLocations).where(eq(supplierLocations.id, locationId)).returning({ id: supplierLocations.id });
 
   if (deleted.length === 0) {
-    throw new Error("Supplier location not found");
+    throw new SafeError("Supplier location not found");
   }
 }

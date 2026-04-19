@@ -108,6 +108,7 @@ export interface ProductionRunReadingRecord {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Production Run Read Operations
@@ -361,7 +362,7 @@ export async function getProductionRunById(
     .where(eq(productionRuns.id, productionRunId));
 
   if (!run) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   const [runFeedstocks, biocharStorageLocation, feedstockStorageLocation] =
@@ -466,7 +467,7 @@ export async function getProductionRunReadings(
     .where(eq(productionRuns.id, productionRunId));
 
   if (!run) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   return db
@@ -499,13 +500,13 @@ async function allocateFeedstockMass(
     .where(eq(feedstocks.storageLocationId, storageLocationId));
 
   if (batchesInBin.length === 0) {
-    throw new Error("Selected feedstock bin has no feedstock batches");
+    throw new SafeError("Selected feedstock bin has no feedstock batches");
   }
 
   const totalDryMass = batchesInBin.reduce((s, b) => s + (b.massDryKg ?? 0), 0);
 
   if (totalDryMass === 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot allocate feedstock: batches in this bin have no recorded dry mass. Please update feedstock batch weights first."
     );
   }
@@ -531,9 +532,9 @@ async function validateStorageLocation(
     .from(storageLocations)
     .where(eq(storageLocations.id, locationId));
 
-  if (!loc) throw new Error(`${label} storage location not found`);
-  if (loc.facilityId !== facilityId) throw new Error(`${label} bin does not belong to the selected facility`);
-  if (loc.type !== expectedType) throw new Error(`Selected storage location is not a ${expectedType.replace("_", " ")}`);
+  if (!loc) throw new SafeError(`${label} storage location not found`);
+  if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
+  if (loc.type !== expectedType) throw new SafeError(`Selected storage location is not a ${expectedType.replace("_", " ")}`);
 }
 
 // ============================================
@@ -578,7 +579,7 @@ export async function createProductionRun(
     .where(eq(productionRuns.code, data.code));
 
   if (existing) {
-    throw new Error("A production run with this code already exists");
+    throw new SafeError("A production run with this code already exists");
   }
 
   // Verify facility exists
@@ -588,7 +589,7 @@ export async function createProductionRun(
     .where(eq(facilities.id, data.facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   // Verify reactor exists and belongs to facility
@@ -598,11 +599,11 @@ export async function createProductionRun(
     .where(eq(reactors.id, data.reactorId));
 
   if (!reactor) {
-    throw new Error("Reactor not found");
+    throw new SafeError("Reactor not found");
   }
 
   if (reactor.facilityId !== data.facilityId) {
-    throw new Error("Reactor does not belong to the selected facility");
+    throw new SafeError("Reactor does not belong to the selected facility");
   }
 
   // Compute dry mass from wet mass + moisture
@@ -718,7 +719,7 @@ export async function updateProductionRun(
     .where(eq(productionRuns.id, productionRunId));
 
   if (!existing) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   // If code is being changed, check for duplicates
@@ -729,7 +730,7 @@ export async function updateProductionRun(
       .where(eq(productionRuns.code, data.code));
 
     if (duplicate) {
-      throw new Error("A production run with this code already exists");
+      throw new SafeError("A production run with this code already exists");
     }
   }
 
@@ -745,11 +746,11 @@ export async function updateProductionRun(
       .where(eq(reactors.id, effectiveReactorId));
 
     if (!reactor) {
-      throw new Error("Reactor not found");
+      throw new SafeError("Reactor not found");
     }
 
     if (reactor.facilityId !== targetFacilityId) {
-      throw new Error("Reactor does not belong to the selected facility");
+      throw new SafeError("Reactor does not belong to the selected facility");
     }
   }
 
@@ -879,7 +880,7 @@ export async function deleteProductionRun(
     .where(eq(productionRuns.id, productionRunId));
 
   if (!existing) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   // Delete feedstock relationships first
@@ -929,7 +930,7 @@ export async function addProductionRunReading(
     .where(eq(productionRuns.id, data.productionRunId));
 
   if (!run) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   const [reading] = await db

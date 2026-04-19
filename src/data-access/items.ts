@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { items, type Item } from "@/db/schema";
 import { requireProjectMember } from "./projects";
+import { SafeError } from "@/lib/errors";
 
 /**
  * Get all items for a project
@@ -56,7 +57,7 @@ export async function updateItem(
   const [item] = await db.select().from(items).where(eq(items.id, itemId));
 
   if (!item) {
-    throw new Error("Item not found");
+    throw new SafeError("Item not found");
   }
 
   await requireProjectMember(item.projectId, userId);
@@ -82,7 +83,7 @@ export async function archiveItem(
   const [item] = await db.select().from(items).where(eq(items.id, itemId));
 
   if (!item) {
-    throw new Error("Item not found");
+    throw new SafeError("Item not found");
   }
 
   await requireProjectMember(item.projectId, userId);

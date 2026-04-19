@@ -10,6 +10,7 @@ import { drivers, operators, vehicles, feedstockTypes, storageLocations } from "
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Driver Quick Add
@@ -36,7 +37,7 @@ export async function createDriver(userId: string, data: CreateDriverData): Prom
     .where(eq(drivers.code, data.code));
 
   if (existing) {
-    throw new Error("A driver with this code already exists");
+    throw new SafeError("A driver with this code already exists");
   }
 
   try {
@@ -58,7 +59,7 @@ export async function createDriver(userId: string, data: CreateDriverData): Prom
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("A driver with this code already exists");
+      throw new SafeError("A driver with this code already exists");
     }
     throw error;
   }
@@ -98,7 +99,7 @@ export async function createOperator(
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("An operator with this name already exists");
+      throw new SafeError("An operator with this name already exists");
     }
     throw error;
   }
@@ -132,7 +133,7 @@ export async function createVehicle(userId: string, data: CreateVehicleData): Pr
     .where(eq(vehicles.code, data.code));
 
   if (existingCode) {
-    throw new Error("A vehicle with this code already exists");
+    throw new SafeError("A vehicle with this code already exists");
   }
 
   // Check for duplicate name (unique constraint)
@@ -142,7 +143,7 @@ export async function createVehicle(userId: string, data: CreateVehicleData): Pr
     .where(eq(vehicles.name, data.name));
 
   if (existingName) {
-    throw new Error("A vehicle with this name already exists");
+    throw new SafeError("A vehicle with this name already exists");
   }
 
   try {
@@ -167,7 +168,7 @@ export async function createVehicle(userId: string, data: CreateVehicleData): Pr
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("A vehicle with this code or name already exists");
+      throw new SafeError("A vehicle with this code or name already exists");
     }
     throw error;
   }
@@ -202,7 +203,7 @@ export async function createFeedstockType(
     .where(eq(feedstockTypes.code, data.code));
 
   if (existingCode) {
-    throw new Error("A feedstock type with this code already exists");
+    throw new SafeError("A feedstock type with this code already exists");
   }
 
   // Check for duplicate name (unique constraint)
@@ -212,7 +213,7 @@ export async function createFeedstockType(
     .where(eq(feedstockTypes.name, data.name));
 
   if (existingName) {
-    throw new Error("A feedstock type with this name already exists");
+    throw new SafeError("A feedstock type with this name already exists");
   }
 
   try {
@@ -235,7 +236,7 @@ export async function createFeedstockType(
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("A feedstock type with this code or name already exists");
+      throw new SafeError("A feedstock type with this code or name already exists");
     }
     throw error;
   }
@@ -270,7 +271,7 @@ export async function createStorageLocation(
     .where(eq(storageLocations.code, data.code));
 
   if (existingCode) {
-    throw new Error("A storage location with this code already exists");
+    throw new SafeError("A storage location with this code already exists");
   }
 
   try {
@@ -293,7 +294,7 @@ export async function createStorageLocation(
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("A storage location with this code already exists");
+      throw new SafeError("A storage location with this code already exists");
     }
     throw error;
   }

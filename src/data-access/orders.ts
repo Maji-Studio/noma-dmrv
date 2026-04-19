@@ -70,6 +70,7 @@ export interface OrderDetail extends Order {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Read Operations
@@ -224,7 +225,7 @@ export async function getOrderById(
     .where(eq(orders.id, orderId));
 
   if (!order) {
-    throw new Error("Order not found");
+    throw new SafeError("Order not found");
   }
 
   return order;
@@ -270,7 +271,7 @@ export async function getOrderWithRelations(
     .where(eq(orders.id, orderId));
 
   if (!orderRow) {
-    throw new Error("Order not found");
+    throw new SafeError("Order not found");
   }
 
   // Get associated deliveries
@@ -394,7 +395,7 @@ export async function createOrder(
     .where(eq(orders.code, data.code));
 
   if (existing) {
-    throw new Error("An order with this code already exists");
+    throw new SafeError("An order with this code already exists");
   }
 
   try {
@@ -417,7 +418,7 @@ export async function createOrder(
     return order;
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new Error("An order with this code already exists");
+      throw new SafeError("An order with this code already exists");
     }
     throw error;
   }
@@ -455,7 +456,7 @@ export async function updateOrder(
     .where(eq(orders.id, orderId));
 
   if (!existing) {
-    throw new Error("Order not found");
+    throw new SafeError("Order not found");
   }
 
   // If code is being changed, check for duplicates
@@ -466,7 +467,7 @@ export async function updateOrder(
       .where(eq(orders.code, data.code));
 
     if (duplicate) {
-      throw new Error("An order with this code already exists");
+      throw new SafeError("An order with this code already exists");
     }
   }
 
@@ -503,7 +504,7 @@ export async function deleteOrder(
     .where(eq(orders.id, orderId));
 
   if (!existing) {
-    throw new Error("Order not found");
+    throw new SafeError("Order not found");
   }
 
   // Check for associated deliveries
@@ -513,7 +514,7 @@ export async function deleteOrder(
     .where(eq(deliveries.orderId, orderId));
 
   if (Number(deliveryCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete order with associated deliveries. Remove deliveries first."
     );
   }

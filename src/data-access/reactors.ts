@@ -37,6 +37,7 @@ export interface PaginatedReactors {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Read Operations
@@ -200,7 +201,7 @@ export async function getReactorById(
     .where(eq(reactors.id, reactorId));
 
   if (!reactor) {
-    throw new Error("Reactor not found");
+    throw new SafeError("Reactor not found");
   }
 
   const methodBEligibility = await getMethodBEligibilityByReactor({
@@ -242,7 +243,7 @@ export async function getReactorsByFacility(
     .where(eq(facilities.id, facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   return db
@@ -280,7 +281,7 @@ export async function createReactor(
     .where(eq(reactors.code, data.code));
 
   if (existing) {
-    throw new Error("A reactor with this code already exists");
+    throw new SafeError("A reactor with this code already exists");
   }
 
   // Verify facility exists
@@ -290,7 +291,7 @@ export async function createReactor(
     .where(eq(facilities.id, data.facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   const [reactor] = await db
@@ -338,7 +339,7 @@ export async function updateReactor(
     .where(eq(reactors.id, reactorId));
 
   if (!existing) {
-    throw new Error("Reactor not found");
+    throw new SafeError("Reactor not found");
   }
 
   // If code is being changed, check for duplicates
@@ -349,7 +350,7 @@ export async function updateReactor(
       .where(eq(reactors.code, data.code));
 
     if (duplicate) {
-      throw new Error("A reactor with this code already exists");
+      throw new SafeError("A reactor with this code already exists");
     }
   }
 
@@ -361,7 +362,7 @@ export async function updateReactor(
       .where(eq(facilities.id, data.facilityId));
 
     if (!facility) {
-      throw new Error("Facility not found");
+      throw new SafeError("Facility not found");
     }
   }
 
@@ -398,7 +399,7 @@ export async function deleteReactor(
     .where(eq(reactors.id, reactorId));
 
   if (!existing) {
-    throw new Error("Reactor not found");
+    throw new SafeError("Reactor not found");
   }
 
   // Note: Foreign key constraints will prevent deletion if there are
@@ -466,7 +467,7 @@ export async function getReactorMethodBEligibility(
     .where(eq(reactors.id, reactorId));
 
   if (!reactor) {
-    throw new Error("Reactor not found");
+    throw new SafeError("Reactor not found");
   }
 
   return getMethodBEligibilityByReactor({

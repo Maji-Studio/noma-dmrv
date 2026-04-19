@@ -19,6 +19,7 @@ import {
   suppliers,
 } from "@/db/schema";
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 export interface ChainFacility {
   id: string;
@@ -143,7 +144,7 @@ export async function getChainOfCustodyData(
     .limit(1);
 
   if (!applicationRow) {
-    throw new Error("Application not found");
+    throw new SafeError("Application not found");
   }
 
   const warnings: string[] = [];

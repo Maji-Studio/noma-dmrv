@@ -14,6 +14,7 @@ import type {
 } from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Credit Batch Data Access Layer
@@ -41,7 +42,7 @@ async function validateApplicationIds(
   // Reject duplicates
   const unique = new Set(applicationIds);
   if (unique.size !== applicationIds.length) {
-    throw new Error("Duplicate application IDs are not allowed");
+    throw new SafeError("Duplicate application IDs are not allowed");
   }
 
   // Fetch applications with their delivery's facilityId and application date
@@ -58,12 +59,12 @@ async function validateApplicationIds(
   if (rows.length !== applicationIds.length) {
     const found = new Set(rows.map((r) => r.id));
     const missing = applicationIds.filter((id) => !found.has(id));
-    throw new Error(`Application(s) not found: ${missing.join(", ")}`);
+    throw new SafeError(`Application(s) not found: ${missing.join(", ")}`);
   }
 
   const crossFacility = rows.filter((r) => r.deliveryFacilityId !== facilityId);
   if (crossFacility.length > 0) {
-    throw new Error(
+    throw new SafeError(
       `Application(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
     );
   }
@@ -80,7 +81,7 @@ async function validateApplicationIds(
     });
 
     if (outsideWindow.length > 0) {
-      throw new Error(
+      throw new SafeError(
         `Application(s) fall outside the credit batch date window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
       );
     }
@@ -329,7 +330,7 @@ export async function updateCreditBatch(
       .where(eq(creditBatches.id, id));
 
     if (!existingBatch) {
-      throw new Error("Credit batch not found");
+      throw new SafeError("Credit batch not found");
     }
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
@@ -346,7 +347,7 @@ export async function updateCreditBatch(
       : existingBatch.endDate;
 
     if (effectiveEndDate < effectiveStartDate) {
-      throw new Error("End date must be after start date");
+      throw new SafeError("End date must be after start date");
     }
 
     await tx
@@ -388,7 +389,7 @@ export async function updateCreditBatch(
   // Fetch full details
   const result = await getCreditBatchById(userId, id);
   if (!result) {
-    throw new Error("Failed to fetch updated credit batch");
+    throw new SafeError("Failed to fetch updated credit batch");
   }
   return result;
 }
