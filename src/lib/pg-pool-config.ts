@@ -1,6 +1,6 @@
 import type { PoolConfig } from 'pg';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function parseDatabaseUrl(databaseUrl: string): URL {
   try {

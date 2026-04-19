@@ -88,11 +88,7 @@ async function getLinkedCreditBatches(
     .where(eq(creditBatchApplications.applicationId, applicationId))
     .for("update");
 
-  return rows.map((row) => ({
-    creditBatchId: row.creditBatchId,
-    code: row.code,
-    status: row.status,
-  }));
+  return rows;
 }
 
 async function refreshCreditBatchSummaries(
@@ -112,7 +108,7 @@ async function refreshCreditBatchSummaries(
     .where(eq(creditBatchApplications.creditBatchId, creditBatchId));
 
   const weightTons = linkedApplications.reduce(
-    (total, application) => total + application.biocharAppliedTons,
+    (total, application) => total + Number(application.biocharAppliedTons),
     0,
   );
   const hasUnknownStoredTotal = linkedApplications.some(

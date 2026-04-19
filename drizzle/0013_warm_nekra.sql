@@ -1,0 +1,5 @@
+CREATE TYPE "public"."loss_entity_type" AS ENUM('production_run', 'delivery', 'application', 'storage');--> statement-breakpoint
+CREATE TYPE "public"."loss_type_code" AS ENUM('residue', 'spillage', 'runoff', 'volatilization', 'transport_loss', 'other');--> statement-breakpoint
+ALTER TABLE "loss_records" ALTER COLUMN "entity_type" SET DATA TYPE "public"."loss_entity_type" USING "entity_type"::"public"."loss_entity_type";--> statement-breakpoint
+ALTER TABLE "loss_records" ALTER COLUMN "loss_type_code" SET DATA TYPE "public"."loss_type_code" USING "loss_type_code"::"public"."loss_type_code";--> statement-breakpoint
+ALTER TABLE "biochar_storage_inventory" ADD CONSTRAINT "biochar_storage_inventory_no_self_transfer" CHECK ("biochar_storage_inventory"."source_inventory_id" IS NULL OR "biochar_storage_inventory"."source_inventory_id" <> "biochar_storage_inventory"."id");
