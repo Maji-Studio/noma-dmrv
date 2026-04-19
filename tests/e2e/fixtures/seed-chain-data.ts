@@ -136,6 +136,9 @@ export async function seedChainData(
       });
 
       // 8. Biochar Product (needs facility + formulation)
+      const productionDate = new Date();
+      const expiresAt = new Date(productionDate);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       await tx.insert(schema.biocharProducts).values({
         id: biocharProductId,
         code: `E2E-BP-${testRunId}`,
@@ -143,6 +146,8 @@ export async function seedChainData(
         formulationId: formulationId,
         status: "ready",
         massKg: 500,
+        productionDate,
+        expiresAt,
       });
 
       // 9. Vehicle
@@ -236,6 +241,11 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
           .where(eq(schema.creditBatches.facilityId, data.facility.id));
       }
 
+      // Delete reversal risk assessments linked to the facility
+      await tx
+        .delete(schema.reversalRiskAssessments)
+        .where(eq(schema.reversalRiskAssessments.facilityId, data.facility.id));
+
       // Find and delete applications linked to facility-scoped deliveries
       const facilityDeliveries = await tx
         .select({ id: schema.deliveries.id })
@@ -264,6 +274,32 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
           .delete(schema.orders)
           .where(eq(schema.orders.facilityId, data.facility.id));
       }
+
+      // Delete storage inventory records before biochar products (FK dependency)
+      const facilityBiocharProducts = await tx
+        .select({ id: schema.biocharProducts.id })
+        .from(schema.biocharProducts)
+        .where(eq(schema.biocharProducts.facilityId, data.facility.id));
+      if (facilityBiocharProducts.length > 0) {
+        await tx
+          .delete(schema.biocharStorageInventory)
+          .where(
+            inArray(
+              schema.biocharStorageInventory.biocharProductId,
+              facilityBiocharProducts.map((p) => p.id)
+            )
+          );
+      }
+
+      // Delete biochar products before production runs because products can
+      // retain linkedProductionRunId references to UI-created runs.
+      await tx
+        .update(schema.biocharProducts)
+        .set({ linkedProductionRunId: null })
+        .where(eq(schema.biocharProducts.facilityId, data.facility.id));
+      await tx
+        .delete(schema.biocharProducts)
+        .where(eq(schema.biocharProducts.facilityId, data.facility.id));
 
       // Clean up UI-created production run feedstocks and production runs
       const facilityReactors = await tx
@@ -327,11 +363,6 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.feedstockDeliveries)
         .where(eq(schema.feedstockDeliveries.facilityId, data.facility.id));
-
-      // Biochar products
-      await tx
-        .delete(schema.biocharProducts)
-        .where(eq(schema.biocharProducts.id, data.biocharProduct.id));
 
       // Vehicles
       await tx

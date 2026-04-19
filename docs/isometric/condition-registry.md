@@ -22,6 +22,7 @@ Requiredness levels:
 | `documents.metadata_present` | `documents` | document row exists | `metadata` object (non-null) | DB default + schema validation |
 | `documents.photo_video_capture_time` | `documents` | `document_type in (photo, video)` | `captured_at` | DB check + schema validation |
 | `deliveries.dry_mass_relation` | `deliveries` | `mass_dry_kg` provided | `mass_dry_kg >= 0` and `mass_dry_kg <= delivered_wet_mass_kg` when wet mass exists | DB check + schema validation |
+| `stockpile.exception_ref_required` | `stockpile_events` | `ended_at > started_at + interval '12 months'` | `exception_ref` must be non-null | DB check |
 
 ## Ownership Terminology
 

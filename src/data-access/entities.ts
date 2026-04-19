@@ -19,6 +19,8 @@ import {
   feedstocks,
   productionRuns,
   productionRunFeedstocks,
+  applications,
+  deliveries,
   biocharProducts,
   formulations,
   creditBatches,
@@ -74,6 +76,8 @@ export async function getEntities(
       return getFeedstocks({ search, facilityId: filterBy?.facilityId, limit });
     case "productionRun":
       return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, limit });
+    case "application":
+      return getApplicationsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
       return getFormulationsEntity({ search, limit });
     case "creditBatch":
@@ -112,6 +116,8 @@ export async function getEntityById(
       return getFeedstockById(id);
     case "productionRun":
       return getProductionRunEntityById(id);
+    case "application":
+      return getApplicationEntityById(id);
     case "formulation":
       return getFormulationEntityById(id);
     case "creditBatch":
@@ -1055,6 +1061,108 @@ async function getProductionRunEntityById(id: string): Promise<EntityOption | nu
       result.biocharOutputKg !== null ? `${Math.round(result.biocharOutputKg).toLocaleString()} kg biochar` : undefined,
       result.biocharStorageName ? `→ ${result.biocharStorageName}` : undefined,
     ].filter(Boolean).join(" · "),
+  };
+}
+
+// ============================================
+// Applications
+// ============================================
+
+async function getApplicationsEntity(params: {
+  search?: string;
+  facilityId?: string;
+  limit: number;
+}): Promise<EntityOption[]> {
+  const { search, facilityId, limit } = params;
+
+  const conditions: SQL[] = [];
+
+  if (facilityId) {
+    conditions.push(eq(deliveries.facilityId, facilityId));
+  }
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push(
+      or(
+        ilike(applications.code, searchPattern),
+        ilike(applications.fieldIdentifier, searchPattern),
+        ilike(deliveries.code, searchPattern),
+        ilike(facilities.name, searchPattern)
+      )!
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const results = await db
+    .select({
+      id: applications.id,
+      code: applications.code,
+      applicationDate: applications.applicationDate,
+      status: applications.status,
+      fieldIdentifier: applications.fieldIdentifier,
+      deliveryCode: deliveries.code,
+      facilityName: facilities.name,
+    })
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .innerJoin(facilities, eq(deliveries.facilityId, facilities.id))
+    .where(whereClause)
+    .limit(limit);
+
+  return results.map((result) => ({
+    id: result.id,
+    code: result.code,
+    name: result.code,
+    subtitle: [
+      result.facilityName,
+      result.deliveryCode ? `Delivery ${result.deliveryCode}` : undefined,
+      result.fieldIdentifier ?? undefined,
+      result.applicationDate
+        ? new Date(result.applicationDate).toLocaleDateString()
+        : undefined,
+      result.status,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  }));
+}
+
+async function getApplicationEntityById(id: string): Promise<EntityOption | null> {
+  const [result] = await db
+    .select({
+      id: applications.id,
+      code: applications.code,
+      applicationDate: applications.applicationDate,
+      status: applications.status,
+      fieldIdentifier: applications.fieldIdentifier,
+      deliveryCode: deliveries.code,
+      facilityName: facilities.name,
+    })
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .innerJoin(facilities, eq(deliveries.facilityId, facilities.id))
+    .where(eq(applications.id, id))
+    .limit(1);
+
+  if (!result) return null;
+
+  return {
+    id: result.id,
+    code: result.code,
+    name: result.code,
+    subtitle: [
+      result.facilityName,
+      result.deliveryCode ? `Delivery ${result.deliveryCode}` : undefined,
+      result.fieldIdentifier ?? undefined,
+      result.applicationDate
+        ? new Date(result.applicationDate).toLocaleDateString()
+        : undefined,
+      result.status,
+    ]
+      .filter(Boolean)
+      .join(" · "),
   };
 }
 

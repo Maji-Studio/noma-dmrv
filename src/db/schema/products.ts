@@ -109,6 +109,10 @@ export const biocharProducts = pgTable('biochar_products', {
     () => storageLocations.id
   ),
 
+  // --- Isometric: 12-month stockpiling validity (Soil Storage Module §7.3) ---
+  // Set to productionDate + 12 months. Checked at delivery creation to block expired product.
+  expiresAt: timestamp('expires_at'),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

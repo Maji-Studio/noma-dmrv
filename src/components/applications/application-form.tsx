@@ -226,7 +226,22 @@ export function ApplicationForm({
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
   const appliedKgValid = appliedKgNum != null && !isNaN(appliedKgNum) && appliedKgNum > 0 ? appliedKgNum : null;
 
+  // Remaining capacity for the selected delivery
+  const deliveryCapacityKg = selectedDelivery?.deliveredWetMassKg ?? null;
+  const alreadyApplied = selectedDelivery?.alreadyAppliedWetKg ?? 0;
+  const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
+  const currentApplicationKg = isSameDelivery ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
+  const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
+
   const handleFormSubmit = handleSubmit(async (data) => {
+    if (availableKg !== null && data.biocharAppliedTons > availableKg) {
+      setError("biocharAppliedTons", {
+        type: "manual",
+        message: `Cannot exceed available: ${formatKg(availableKg)} remaining from this delivery`,
+      });
+      return;
+    }
+
     const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
 
     // Auto-calculate dry tons from moisture, or fall back to manual entry
@@ -297,7 +312,17 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="biocharAppliedTons" label="Biochar Applied, Wet (kg)" error={errors.biocharAppliedTons?.message} required helperText="As-received mass at delivery, before moisture adjustment">
+          <FormField
+            id="biocharAppliedTons"
+            label="Biochar Applied, Wet (kg)"
+            error={errors.biocharAppliedTons?.message}
+            required
+            helperText={
+              availableKg !== null
+                ? `${formatKg(availableKg)} available from this delivery`
+                : "As-received mass at delivery, before moisture adjustment"
+            }
+          >
             <FormInput
               id="biocharAppliedTons"
               type="number"

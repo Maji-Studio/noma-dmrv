@@ -41,7 +41,7 @@ Stored biochar must have time-bounded storage and periodic controls (condition/r
 ### Minimal data model
 - New table: `stockpile_events`
   - `facility_id`
-  - `material_type` (biochar, product, etc.)
+  - `material_type` (biochar, feedstock)
   - `material_id`
   - `started_at`
   - `ended_at`
@@ -49,7 +49,7 @@ Stored biochar must have time-bounded storage and periodic controls (condition/r
   - `risk_level` (`low`, `medium`, `high`)
   - `mitigation_notes`
   - `exception_ref`
-  - `document_id` (optional, to `documents`)
+  - `document_ref` (optional, nullable text — free-form reference to evidence document)
 
 ### Derive, do not store
 - `duration_days = ended_at - started_at` (or `now - started_at` if open)
@@ -75,11 +75,12 @@ If low-carbon electricity is claimed, auditable procurement evidence is needed (
   - `eac_registry`
   - `eac_retirement_id`
   - `retired_at`
-  - `document_id`
-  - `ec1_pass`, `ec2_pass`, `ec3_pass`, `ec4_pass`, `ec5_pass`
+  - `document_ref` (nullable text — free-form reference to evidence document)
+  - `notes`
 
 ### Derive, do not store
-- `ec_overall_pass = ec1_pass and ec2_pass and ec3_pass and ec4_pass and ec5_pass`
+- EC1-EC5 individual pass/fail outcomes — computed by app logic from the stored evidence fields (contract type, COD date, matching type, retirement ID, etc.)
+- `ec_overall_pass` — derived from individual EC assessments
 
 ### Why this is simple and sufficient
 This keeps legal/evidence artifacts structured without implementing full contract/accounting subsystems.

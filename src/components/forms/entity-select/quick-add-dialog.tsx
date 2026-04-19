@@ -22,6 +22,7 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   feedstockType: "Feedstock Type",
   feedstock: "Feedstock",
   productionRun: "Production Run",
+  application: "Application",
   formulation: "Formulation",
   creditBatch: "Credit Batch",
 };

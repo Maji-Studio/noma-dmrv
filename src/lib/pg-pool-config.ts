@@ -1,6 +1,6 @@
 import type { PoolConfig } from 'pg';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 function parseDatabaseUrl(databaseUrl: string): URL {
   try {
@@ -24,8 +24,14 @@ export function getPgPoolConfig(databaseUrl: string): PoolConfig {
   // override explicit ssl options. Strip it so the pool config stays in control.
   url.searchParams.delete('sslmode');
 
+  const allowUnverifiedSsl = process.env.PG_ALLOW_UNVERIFIED_SSL === 'true';
+
   return {
     connectionString: url.toString(),
-    ssl: isLocal ? false : { rejectUnauthorized: false },
+    ssl: isLocal
+      ? false
+      : allowUnverifiedSsl
+        ? { rejectUnauthorized: false }
+        : true,
   };
 }

@@ -27,6 +27,8 @@ export const certifierProjects = pgTable(
     externalProjectId: text('external_project_id').notNull(),
     protocolSlug: text('protocol_slug').notNull().default('biochar'),
     protocolVersion: text('protocol_version'),
+    // HMAC secret for verifying incoming Isometric webhook signatures
+    webhookSecret: text('webhook_secret'),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { getUser } from "@/lib/auth/server";
+import { SafeError } from "@/lib/errors";
 import type { ActionResult } from "@/types/actions";
 
 interface WithActionOptions {
@@ -43,7 +44,10 @@ export async function withAction<T>(
     }
     return {
       success: false,
-      error: fallbackMessage,
+      error:
+        error instanceof SafeError || process.env.NODE_ENV === "development"
+          ? (error instanceof Error ? error.message : fallbackMessage)
+          : fallbackMessage,
     };
   }
 }
