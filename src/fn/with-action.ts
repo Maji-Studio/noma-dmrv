@@ -43,7 +43,7 @@ export async function withAction<T>(
     }
     return {
       success: false,
-      error: fallbackMessage,
+      error: error instanceof Error ? error.message : fallbackMessage,
     };
   }
 }
