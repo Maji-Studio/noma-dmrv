@@ -23,6 +23,7 @@ export type EntityType =
   | "feedstockType"
   | "feedstock"
   | "productionRun"
+  | "application"
   | "formulation"
   | "creditBatch";
 

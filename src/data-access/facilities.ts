@@ -14,6 +14,8 @@ import {
   productionRunFeedstocks,
   biocharProducts,
   formulations,
+  stockpileEvents,
+  powerProcurementEvidence,
   type Facility,
 } from "@/db/schema";
 import type { FacilityFilterData } from "@/schemas/facilities";
@@ -71,6 +73,7 @@ export interface FacilityDetail extends Facility {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Read Operations
@@ -363,7 +366,7 @@ export async function getFacilityById(
     .where(eq(facilities.id, facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   return facility;
@@ -386,7 +389,7 @@ export async function getFacilityWithRelations(
     .where(eq(facilities.id, facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   // Get associated reactors
@@ -447,7 +450,7 @@ export async function getFacilityReactors(
     .where(eq(facilities.id, facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   return db
@@ -493,7 +496,7 @@ export async function getFacilityStorageLocations(
     .where(eq(facilities.id, facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   return db
@@ -544,7 +547,7 @@ export async function createFacility(
     .where(eq(facilities.code, data.code));
 
   if (existing) {
-    throw new Error("A facility with this code already exists");
+    throw new SafeError("A facility with this code already exists");
   }
 
   const [facility] = await db
@@ -600,7 +603,7 @@ export async function updateFacility(
     .where(eq(facilities.id, facilityId));
 
   if (!existing) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   // If code is being changed, check for duplicates
@@ -611,7 +614,7 @@ export async function updateFacility(
       .where(eq(facilities.code, data.code));
 
     if (duplicate) {
-      throw new Error("A facility with this code already exists");
+      throw new SafeError("A facility with this code already exists");
     }
   }
 
@@ -648,30 +651,35 @@ export async function deleteFacility(
     .where(eq(facilities.id, facilityId));
 
   if (!existing) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
-  // Check for associated reactors
-  const [reactorCount] = await db
-    .select({ count: count() })
-    .from(reactors)
-    .where(eq(reactors.facilityId, facilityId));
+  const [[reactorCount], [storageCount], [stockpileCount], [powerCount]] =
+    await Promise.all([
+      db.select({ count: count() }).from(reactors).where(eq(reactors.facilityId, facilityId)),
+      db.select({ count: count() }).from(storageLocations).where(eq(storageLocations.facilityId, facilityId)),
+      db.select({ count: count() }).from(stockpileEvents).where(eq(stockpileEvents.facilityId, facilityId)),
+      db.select({ count: count() }).from(powerProcurementEvidence).where(eq(powerProcurementEvidence.facilityId, facilityId)),
+    ]);
 
   if (Number(reactorCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete facility with associated reactors. Remove reactors first."
     );
   }
-
-  // Check for associated storage locations
-  const [storageCount] = await db
-    .select({ count: count() })
-    .from(storageLocations)
-    .where(eq(storageLocations.facilityId, facilityId));
-
   if (Number(storageCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete facility with associated storage locations. Remove storage locations first."
+    );
+  }
+  if (Number(stockpileCount.count) > 0) {
+    throw new SafeError(
+      "Cannot delete facility with associated stockpile events. Remove stockpile events first."
+    );
+  }
+  if (Number(powerCount.count) > 0) {
+    throw new SafeError(
+      "Cannot delete facility with associated power procurement evidence. Remove power procurement evidence first."
     );
   }
 

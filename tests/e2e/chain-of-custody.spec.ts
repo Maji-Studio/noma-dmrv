@@ -1,185 +1,232 @@
-/**
- * Chain of Custody E2E Tests
- *
- * Covers:
- * - Page loads and displays the header with title and sidebar-scoped facility context
- * - Selecting a facility renders the React Flow DAG visualization
- * - All 14 entity nodes are rendered in the graph
- * - Edges (connections) are rendered between nodes
- * - Nodes with seeded data show non-zero counts
- * - Clickable nodes navigate to their entity list pages
- * - Edge colors are purple
- */
-import { test, expect } from "./fixtures";
+import * as crypto from "crypto";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { Page } from "@playwright/test";
+import { Pool } from "pg";
+import * as schema from "../../src/db/schema";
+import { test, expect, type SeededChainData } from "./fixtures";
 
-// ============================================
-// Chain of Custody Visualization
-// ============================================
+function createDbConnection() {
+  const databaseUrl =
+    process.env.DATABASE_URL ||
+    "postgresql://postgres:postgres@localhost:5432/app_template_test";
+  const pool = new Pool({ connectionString: databaseUrl });
+  return { db: drizzle(pool, { schema }), pool };
+}
+
+async function seedApplicationLineage(seededData: SeededChainData) {
+  const { db, pool } = createDbConnection();
+  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+
+  const ids = {
+    productionRun: crypto.randomUUID(),
+    productionRunFeedstock: crypto.randomUUID(),
+    order: crypto.randomUUID(),
+    delivery: crypto.randomUUID(),
+    application: crypto.randomUUID(),
+  };
+
+  const codes = {
+    productionRun: `E2E-PR-${suffix}`,
+    order: `E2E-OR-${suffix}`,
+    delivery: `E2E-DL-${suffix}`,
+    application: `E2E-AP-${suffix}`,
+  };
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.productionRuns).values({
+        id: ids.productionRun,
+        code: codes.productionRun,
+        facilityId: seededData.facility.id,
+        date: "2026-02-10",
+        status: "complete",
+        startTime: new Date("2026-02-10T07:00:00.000Z"),
+        endTime: new Date("2026-02-10T13:00:00.000Z"),
+        reactorId: seededData.reactor.id,
+        feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
+        biocharStorageLocationId: seededData.biocharStorageLocation.id,
+        feedstockMassDryKg: 100,
+        biocharDryMassKg: 42,
+        biocharOutputKg: 43,
+      });
+
+      await tx.insert(schema.productionRunFeedstocks).values({
+        id: ids.productionRunFeedstock,
+        productionRunId: ids.productionRun,
+        feedstockId: seededData.feedstock.id,
+        massUsedKg: 100,
+      });
+
+      await tx
+        .update(schema.biocharProducts)
+        .set({
+          linkedProductionRunId: ids.productionRun,
+          storageLocationId: seededData.biocharStorageLocation.id,
+          massKg: 250,
+        })
+        .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
+
+      await tx.insert(schema.orders).values({
+        id: ids.order,
+        code: codes.order,
+        facilityId: seededData.facility.id,
+        orderDate: new Date("2026-02-12T08:00:00.000Z"),
+        customerId: seededData.customer.id,
+        customerLocationId: seededData.customerLocation.id,
+        biocharProductId: seededData.biocharProduct.id,
+        quantityKg: 220,
+        packaging: "loose",
+      });
+
+      await tx.insert(schema.deliveries).values({
+        id: ids.delivery,
+        code: codes.delivery,
+        facilityId: seededData.facility.id,
+        orderId: ids.order,
+        biocharProductId: seededData.biocharProduct.id,
+        deliveryDate: new Date("2026-02-14T09:00:00.000Z"),
+        status: "delivered",
+        massDryKg: 215,
+        deliveredWetMassKg: 230,
+        moistureContentPercent: 6.5,
+      });
+
+      await tx.insert(schema.applications).values({
+        id: ids.application,
+        code: codes.application,
+        deliveryId: ids.delivery,
+        applicationDate: new Date("2026-02-16T10:30:00.000Z"),
+        biocharAppliedTons: 0.21,
+        biocharAppliedDryTons: 0.2,
+        fieldIdentifier: `Field ${suffix}`,
+        status: "applied",
+      });
+    });
+
+    return {
+      application: { id: ids.application, code: codes.application },
+      delivery: { id: ids.delivery, code: codes.delivery },
+      order: { id: ids.order, code: codes.order },
+      productionRun: { id: ids.productionRun, code: codes.productionRun },
+    };
+  } finally {
+    await pool.end();
+  }
+}
+
+async function selectApplication(
+  page: Page,
+  applicationId: string,
+  applicationCode: string
+) {
+  await page.getByTestId("entity-select-trigger").click();
+  await expect(page.getByTestId("entity-select-listbox")).toBeVisible();
+  await page.getByTestId("entity-select-search").fill(applicationCode);
+  await page.getByTestId(`entity-option-${applicationId}`).click();
+}
 
 test.describe("Chain of Custody Visualization", () => {
-  test("page loads with header and uses sidebar facility context", async ({
+  test("page loads with application-first empty state", async ({
+    adminPage,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    await adminPage.goto("/chain-of-custody");
+
+    await expect(
+      adminPage.getByRole("heading", { name: /Chain of Custody/i })
+    ).toBeVisible();
+    await expect(
+      adminPage.getByText(/Select an application above to view its rollback to feedstock/i)
+    ).toBeVisible();
+    await expect(adminPage.getByTestId("entity-select-trigger")).toBeVisible();
+  });
+
+  test("selecting an application renders its rollback graph", async ({
     adminPage,
     seededData,
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    const page = adminPage;
+    const lineage = await seedApplicationLineage(seededData);
 
-    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
-    await expect(page).toHaveURL(/\/chain-of-custody/);
+    await adminPage.goto("/chain-of-custody");
+    await selectApplication(adminPage, lineage.application.id, lineage.application.code);
 
-    // Header title is visible
-    await expect(page.getByRole("heading", { name: /Chain of Custody/i })).toBeVisible();
-
-    // Header reflects the facility already selected in the sidebar context
-    await expect(page.getByText(`${seededData.facility.code} - ${seededData.facility.name}`)).toBeVisible({
+    await expect(adminPage).toHaveURL(
+      new RegExp(`/chain-of-custody\\?.*application=${lineage.application.id}`)
+    );
+    await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
     });
 
-    // The page should not render its own facility selector anymore
-    await expect(page.locator("header select")).toHaveCount(0);
-  });
-
-  test("selecting a facility renders the DAG visualization with nodes and edges", async ({
-    adminPage,
-    seededData,
-    cleanupTestData,
-  }) => {
-    void cleanupTestData;
-    const page = adminPage;
-
-    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
-
-    // Wait for React Flow canvas to render
-    const viewport = page.locator(".react-flow__viewport");
-    await expect(viewport).toBeVisible({ timeout: 15000 });
-
-    // All 14 entity nodes should be rendered
-    const expectedLabels = [
-      "Reactors",
-      "Feedstock Bin",
-      "Biochar Bin",
-      "Product Bin",
-      "Ingredient Bin",
-      "Suppliers",
-      "Feedstocks",
-      "Production Runs",
-      "Samples",
-      "Biochar Products",
-      "Orders",
-      "Deliveries",
-      "Applications",
-      "Credit Batches",
+    const expectedCodes = [
+      seededData.feedstock.code,
+      seededData.reactor.code,
+      lineage.productionRun.code,
+      seededData.biocharProduct.code,
+      lineage.order.code,
+      lineage.delivery.code,
+      lineage.application.code,
     ];
 
-    const nodes = page.locator(".react-flow__node");
-    await expect(nodes).toHaveCount(expectedLabels.length, { timeout: 10000 });
-
-    for (const label of expectedLabels) {
+    for (const code of expectedCodes) {
       await expect(
-        nodes.filter({ hasText: label }).first()
+        adminPage.locator(".react-flow__node").filter({ hasText: code }).first()
       ).toBeVisible({ timeout: 10000 });
     }
 
-    // Edges should be rendered (smoothstep paths)
-    const edges = page.locator(".react-flow__edge");
+    const edges = adminPage.locator(".react-flow__edge");
     const edgeCount = await edges.count();
-    expect(edgeCount).toBeGreaterThanOrEqual(10); // 15 defined edges
+    expect(edgeCount).toBeGreaterThanOrEqual(6);
   });
 
-  test("nodes display correct counts for seeded data", async ({
+  test("application query param opens the lineage directly", async ({
     adminPage,
     seededData,
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    const page = adminPage;
+    const lineage = await seedApplicationLineage(seededData);
 
-    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
+    await adminPage.goto(`/chain-of-custody?application=${lineage.application.id}`);
 
-    // Wait for React Flow to render
-    await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
-
-    // The seeded data includes: 1 reactor, 2 storage locations,
-    // 1 feedstock delivery, 1 feedstock, 1 biochar product
-    // Verify that the Reactors node shows a count of at least 1
-    const reactorsNode = page.locator('[data-testid="rf__node-reactors"]');
-    await expect(reactorsNode).toBeVisible({ timeout: 10000 });
-    // Use the heading element for the count (title-heading-3 class)
-    await expect(reactorsNode.locator(".title-heading-3")).toHaveText("1");
-
-    // Feedstocks node should also show at least 1
-    const feedstocksNode = page.locator('[data-testid="rf__node-feedstocks"]');
-    await expect(feedstocksNode).toBeVisible({ timeout: 10000 });
-    await expect(feedstocksNode.locator(".title-heading-3")).toHaveText("1");
+    await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(
+      adminPage.getByText(`${seededData.facility.code} - ${seededData.facility.name}`)
+    ).toBeVisible({ timeout: 10000 });
+    await expect(
+      adminPage.locator(".react-flow__node").filter({ hasText: lineage.application.code }).first()
+    ).toBeVisible();
+    await expect(
+      adminPage.locator(".react-flow__node").filter({ hasText: seededData.feedstock.code }).first()
+    ).toBeVisible();
   });
 
-  test("clickable nodes navigate to entity list pages", async ({
+  test("lineage nodes expose the linked entity page", async ({
     adminPage,
     seededData,
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    const page = adminPage;
+    const lineage = await seedApplicationLineage(seededData);
 
-    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
+    await adminPage.goto(`/chain-of-custody?application=${lineage.application.id}`);
+    await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
+      timeout: 15000,
+    });
 
-    // Wait for React Flow to render
-    await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
-
-    // Click the Reactors node — should navigate to /reactors
-    const reactorsNode = page.locator('[data-testid="rf__node-reactors"]');
-    await expect(reactorsNode).toBeVisible({ timeout: 10000 });
-
-    // React Flow's pane overlay intercepts pointer events — dispatch click via JS
-    await reactorsNode.locator("div.group").first().dispatchEvent("click");
-
-    await expect(page).toHaveURL(/\/reactors/, { timeout: 15000 });
-  });
-
-  test("edges are rendered with purple color", async ({
-    adminPage,
-    seededData,
-    cleanupTestData,
-  }) => {
-    void cleanupTestData;
-    const page = adminPage;
-
-    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
-
-    await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
-
-    // Check that at least one edge path exists with the purple stroke style
-    // SVG paths with no fill can be reported as "hidden" by Playwright,
-    // so we check for attachment and attributes instead of visibility
-    const edgePath = page.locator(".react-flow__edge path").first();
-    await expect(edgePath).toBeAttached({ timeout: 10000 });
-
-    // The stroke should reference the purple CSS variable via marker-end or style
-    const markerEnd = await edgePath.getAttribute("marker-end");
-    const stroke = await edgePath.getAttribute("style");
-    const hasPurple =
-      (markerEnd && markerEnd.includes("clr-purple")) ||
-      (stroke && stroke.includes("clr-purple"));
-    expect(hasPurple).toBeTruthy();
-  });
-
-  test("minimap and controls are visible", async ({
-    adminPage,
-    seededData,
-    cleanupTestData,
-  }) => {
-    void cleanupTestData;
-    const page = adminPage;
-
-    await page.goto(`/chain-of-custody?facility=${seededData.facility.id}`);
-
-    await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
-
-    // Controls panel is visible
-    await expect(page.locator(".react-flow__controls")).toBeVisible();
-
-    // MiniMap is visible
-    await expect(page.locator(".react-flow__minimap")).toBeVisible();
+    const reactorNode = adminPage.locator(
+      '[data-testid="rf__node-reactor:' + seededData.reactor.id + '"]'
+    );
+    await expect(reactorNode).toBeVisible({ timeout: 10000 });
+    await expect(reactorNode.locator("a").first()).toHaveAttribute(
+      "href",
+      "/reactors"
+    );
   });
 });

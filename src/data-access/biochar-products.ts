@@ -56,6 +56,7 @@ export interface PaginatedBiocharProducts {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Biochar Product Read Operations
@@ -151,6 +152,7 @@ export async function getBiocharProducts(
       densityKgM3: biocharProducts.densityKgM3,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
+      expiresAt: biocharProducts.expiresAt,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
       // Facility relation
@@ -190,6 +192,7 @@ export async function getBiocharProducts(
     densityKgM3: row.densityKgM3,
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
+    expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     facility: {
@@ -250,6 +253,7 @@ export async function getBiocharProductById(
       densityKgM3: biocharProducts.densityKgM3,
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
+      expiresAt: biocharProducts.expiresAt,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
       facilityCode: facilities.code,
@@ -268,7 +272,7 @@ export async function getBiocharProductById(
     .where(eq(biocharProducts.id, productId));
 
   if (!row) {
-    throw new Error("Biochar product not found");
+    throw new SafeError("Biochar product not found");
   }
 
   return {
@@ -285,6 +289,7 @@ export async function getBiocharProductById(
     densityKgM3: row.densityKgM3,
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
+    expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     facility: {
@@ -346,7 +351,7 @@ export async function createBiocharProduct(
     .where(eq(biocharProducts.code, data.code));
 
   if (existing) {
-    throw new Error("A biochar product with this code already exists");
+    throw new SafeError("A biochar product with this code already exists");
   }
 
   // Verify facility exists
@@ -356,7 +361,7 @@ export async function createBiocharProduct(
     .where(eq(facilities.id, data.facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   // Verify formulation exists
@@ -366,7 +371,7 @@ export async function createBiocharProduct(
     .where(eq(formulations.id, data.formulationId));
 
   if (!formulation) {
-    throw new Error("Formulation not found");
+    throw new SafeError("Formulation not found");
   }
 
   // Verify linked production run exists and belongs to same facility
@@ -377,10 +382,10 @@ export async function createBiocharProduct(
       .where(eq(productionRuns.id, data.linkedProductionRunId));
 
     if (!run) {
-      throw new Error("Linked production run not found");
+      throw new SafeError("Linked production run not found");
     }
     if (run.facilityId !== data.facilityId) {
-      throw new Error("Linked production run belongs to a different facility");
+      throw new SafeError("Linked production run belongs to a different facility");
     }
   }
 
@@ -392,19 +397,19 @@ export async function createBiocharProduct(
       .where(eq(storageLocations.id, data.storageLocationId));
 
     if (!storage) {
-      throw new Error("Storage location not found");
+      throw new SafeError("Storage location not found");
     }
     if (storage.facilityId !== data.facilityId) {
-      throw new Error("Storage location belongs to a different facility");
+      throw new SafeError("Storage location belongs to a different facility");
     }
   }
 
   if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
-    throw new Error("Moisture content must be between 0 and 100");
+    throw new SafeError("Moisture content must be between 0 and 100");
   }
 
   if (data.waterAddedKg != null && (!Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0)) {
-    throw new Error("waterAddedKg must be a non-negative finite number");
+    throw new SafeError("waterAddedKg must be a non-negative finite number");
   }
 
   const [product] = await db
@@ -462,7 +467,7 @@ export async function updateBiocharProduct(
     .where(eq(biocharProducts.id, productId));
 
   if (!existing) {
-    throw new Error("Biochar product not found");
+    throw new SafeError("Biochar product not found");
   }
 
   // If code is being changed, check for duplicates
@@ -473,7 +478,7 @@ export async function updateBiocharProduct(
       .where(eq(biocharProducts.code, data.code));
 
     if (duplicate) {
-      throw new Error("A biochar product with this code already exists");
+      throw new SafeError("A biochar product with this code already exists");
     }
   }
 
@@ -485,7 +490,7 @@ export async function updateBiocharProduct(
       .where(eq(facilities.id, data.facilityId));
 
     if (!facility) {
-      throw new Error("Facility not found");
+      throw new SafeError("Facility not found");
     }
   }
 
@@ -497,7 +502,7 @@ export async function updateBiocharProduct(
       .where(eq(formulations.id, data.formulationId));
 
     if (!formulation) {
-      throw new Error("Formulation not found");
+      throw new SafeError("Formulation not found");
     }
   }
 
@@ -517,10 +522,10 @@ export async function updateBiocharProduct(
       .where(eq(productionRuns.id, effectiveLinkedRunId));
 
     if (!run) {
-      throw new Error("Linked production run not found");
+      throw new SafeError("Linked production run not found");
     }
     if (run.facilityId !== effectiveFacilityId) {
-      throw new Error("Linked production run belongs to a different facility");
+      throw new SafeError("Linked production run belongs to a different facility");
     }
   }
 
@@ -532,19 +537,19 @@ export async function updateBiocharProduct(
       .where(eq(storageLocations.id, effectiveStorageId));
 
     if (!storage) {
-      throw new Error("Storage location not found");
+      throw new SafeError("Storage location not found");
     }
     if (storage.facilityId !== effectiveFacilityId) {
-      throw new Error("Storage location belongs to a different facility");
+      throw new SafeError("Storage location belongs to a different facility");
     }
   }
 
   if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
-    throw new Error("Moisture content must be between 0 and 100");
+    throw new SafeError("Moisture content must be between 0 and 100");
   }
 
   if (data.waterAddedKg != null && (!Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0)) {
-    throw new Error("waterAddedKg must be a non-negative finite number");
+    throw new SafeError("waterAddedKg must be a non-negative finite number");
   }
 
   const [updated] = await db
@@ -579,29 +584,21 @@ export async function deleteBiocharProduct(
     .where(eq(biocharProducts.id, productId));
 
   if (!existing) {
-    throw new Error("Biochar product not found");
+    throw new SafeError("Biochar product not found");
   }
 
-  // Check for associated orders
-  const [orderCount] = await db
-    .select({ count: count() })
-    .from(orders)
-    .where(eq(orders.biocharProductId, productId));
+  const [[orderCount], [deliveryCount]] = await Promise.all([
+    db.select({ count: count() }).from(orders).where(eq(orders.biocharProductId, productId)),
+    db.select({ count: count() }).from(deliveries).where(eq(deliveries.biocharProductId, productId)),
+  ]);
 
   if (Number(orderCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete biochar product with associated orders. Remove orders first."
     );
   }
-
-  // Check for associated deliveries
-  const [deliveryCount] = await db
-    .select({ count: count() })
-    .from(deliveries)
-    .where(eq(deliveries.biocharProductId, productId));
-
   if (Number(deliveryCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete biochar product with associated deliveries. Remove deliveries first."
     );
   }

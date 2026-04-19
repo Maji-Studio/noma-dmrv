@@ -148,6 +148,7 @@ const ENTITY_TYPE_LABELS = {
   feedstockType: "feedstock type",
   feedstock: "feedstock",
   productionRun: "production run",
+  application: "application",
   formulation: "formulation",
   creditBatch: "credit batch",
 } as const;
@@ -160,6 +161,7 @@ const ENTITY_CREATE_ROUTES = {
   storageLocation: "/storage-locations",
   feedstock: "/feedstocks",
   productionRun: "/production-runs",
+  application: "/applications",
   formulation: "/formulations",
   creditBatch: "/credit-batches",
 } as const;

@@ -10,9 +10,50 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { creditBatchStatus, durabilityOption } from './common';
+import {
+  climateVolatilityRisk,
+  creditBatchStatus,
+  durabilityOption,
+  landTenureType,
+  naturalDisasterRisk,
+  operatorTrackRecord,
+  soilErosionRisk,
+} from './common';
 import { facilities } from './facilities';
 import { applications } from './application';
+
+// ============================================
+// Reversal Risk Assessments - Justification for buffer pool %
+// Isometric Protocol: Appendix I — Reversal Risk Assessment
+// Connected to facility (risk is per project area). Credit batches reference the applicable assessment.
+// ============================================
+
+export const reversalRiskAssessments = pgTable(
+  'reversal_risk_assessments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(), // e.g., "RRA-2025-001"
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    landTenureType: landTenureType('land_tenure_type').notNull(),
+    soilErosionRisk: soilErosionRisk('soil_erosion_risk').notNull(),
+    climateVolatilityRisk: climateVolatilityRisk('climate_volatility_risk').notNull(),
+    naturalDisasterRisk: naturalDisasterRisk('natural_disaster_risk').notNull(),
+    operatorTrackRecord: operatorTrackRecord('operator_track_record').notNull(),
+    calculatedBufferPercent: real('calculated_buffer_percent').notNull(),
+    locationNotes: text('location_notes'), // regional context (geography, land use, etc.)
+    notes: text('notes'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'reversal_risk_buffer_percent_range',
+      sql`${table.calculatedBufferPercent} >= 0 and ${table.calculatedBufferPercent} <= 20`
+    ),
+  ]
+);
 
 // ============================================
 // Credit Batches - Carbon credit batches for registry
@@ -75,6 +116,11 @@ export const creditBatches = pgTable(
     totalCo2eCounterfactualTons: real('total_co2e_counterfactual_tons'), // Baseline emissions
     // netCo2eRemovalTons: derivable from stored - emissions - counterfactual
 
+    // --- Feedstock Eligibility Summary (Isometric: >25% ineligible-biomass cap, P0-01) ---
+    // Computed by app logic when building/updating a batch from linked feedstock batches
+    totalFeedstockMassKg: real('total_feedstock_mass_kg'),
+    ineligibleFeedstockMassKg: real('ineligible_feedstock_mass_kg'),
+
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission
     siteManagementNotes: text('site_management_notes'), // Irrigation, tillage, fertilizer summary
@@ -88,6 +134,12 @@ export const creditBatches = pgTable(
     co2Ppm: real('co2_ppm'),
     n2oCompositionPercent: real('n2o_composition_percent'),
     n2oPpm: real('n2o_ppm'),
+
+    // --- Reversal Risk (Isometric: Appendix I) ---
+    // References the risk assessment that justifies the bufferPoolPercent value
+    reversalRiskAssessmentId: uuid('reversal_risk_assessment_id').references(
+      () => reversalRiskAssessments.id
+    ),
 
     // --- Third-Party Sale Verification (Isometric: SubRequirement G-SZZR-0) ---
     // Required when biochar is sold to third parties before application
@@ -117,6 +169,20 @@ export const creditBatches = pgTable(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} = 'isometric'`
     ),
+    check(
+      'credit_batches_total_feedstock_mass_non_negative',
+      sql`${table.totalFeedstockMassKg} is null or ${table.totalFeedstockMassKg} >= 0`
+    ),
+    check(
+      'credit_batches_ineligible_feedstock_mass_non_negative',
+      sql`${table.ineligibleFeedstockMassKg} is null or ${table.ineligibleFeedstockMassKg} >= 0`
+    ),
+    check(
+      'credit_batches_ineligible_feedstock_check',
+      sql`${table.ineligibleFeedstockMassKg} is null
+        or ${table.totalFeedstockMassKg} is null
+        or ${table.ineligibleFeedstockMassKg} <= ${table.totalFeedstockMassKg}`
+    ),
   ]
 );
 
@@ -144,12 +210,27 @@ export const creditBatchApplications = pgTable(
 // Relations
 // ============================================
 
+export const reversalRiskAssessmentsRelations = relations(
+  reversalRiskAssessments,
+  ({ one, many }) => ({
+    facility: one(facilities, {
+      fields: [reversalRiskAssessments.facilityId],
+      references: [facilities.id],
+    }),
+    creditBatches: many(creditBatches),
+  })
+);
+
 export const creditBatchesRelations = relations(
   creditBatches,
   ({ one, many }) => ({
     facility: one(facilities, {
       fields: [creditBatches.facilityId],
       references: [facilities.id],
+    }),
+    reversalRiskAssessment: one(reversalRiskAssessments, {
+      fields: [creditBatches.reversalRiskAssessmentId],
+      references: [reversalRiskAssessments.id],
     }),
     creditBatchApplications: many(creditBatchApplications),
   })
@@ -173,6 +254,8 @@ export const creditBatchApplicationsRelations = relations(
 // Type Exports
 // ============================================
 
+export type ReversalRiskAssessment = typeof reversalRiskAssessments.$inferSelect;
+export type NewReversalRiskAssessment = typeof reversalRiskAssessments.$inferInsert;
 export type CreditBatch = typeof creditBatches.$inferSelect;
 export type NewCreditBatch = typeof creditBatches.$inferInsert;
 export type CreditBatchApplication = typeof creditBatchApplications.$inferSelect;

@@ -10,7 +10,7 @@ import {
   jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { incidentSeverity, productionRunStatus } from './common';
+import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
 import { feedstocks } from './feedstock';
@@ -48,6 +48,9 @@ export const productionRuns = pgTable(
     dieselGensetLiters: real('diesel_genset_liters'),
     preprocessingFuelLiters: real('preprocessing_fuel_liters'),
     electricityKwh: real('electricity_kwh'),
+    // Isometric Energy Module §5.3 — EC1–EC5 electricity sourcing category
+    electricitySourceCategory: electricitySourceCategory('electricity_source_category'),
+    lowCarbonPercentage: real('low_carbon_percentage'), // % from renewables/low-carbon grid (0–100)
 
     // --- Biochar Output ---
     biocharOutputKg: real('biochar_output_kg'), // Wet mass (recorded value)
@@ -98,6 +101,10 @@ export const productionRuns = pgTable(
     check(
       'production_runs_biochar_dry_lte_wet',
       sql`${table.biocharOutputKg} is null or ${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} <= ${table.biocharOutputKg}`
+    ),
+    check(
+      'production_runs_low_carbon_percentage_range',
+      sql`${table.lowCarbonPercentage} is null or (${table.lowCarbonPercentage} >= 0 and ${table.lowCarbonPercentage} <= 100)`
     ),
   ]
 );

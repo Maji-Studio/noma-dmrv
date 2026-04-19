@@ -57,6 +57,7 @@ export interface CustomerLocationDetail extends CustomerLocation {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Customer Read Operations
@@ -192,7 +193,7 @@ export async function getCustomerById(
     .where(eq(customers.id, customerId));
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new SafeError("Customer not found");
   }
 
   return customer;
@@ -215,7 +216,7 @@ export async function getCustomerWithRelations(
     .where(eq(customers.id, customerId));
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new SafeError("Customer not found");
   }
 
   // Get associated locations
@@ -271,7 +272,7 @@ export async function getCustomerLocations(
     .where(eq(customers.id, customerId));
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new SafeError("Customer not found");
   }
 
   return db
@@ -319,7 +320,7 @@ export async function createCustomer(
     .where(eq(customers.code, data.code));
 
   if (existing) {
-    throw new Error("A customer with this code already exists");
+    throw new SafeError("A customer with this code already exists");
   }
 
   const [customer] = await db
@@ -365,7 +366,7 @@ export async function updateCustomer(
     .where(eq(customers.id, customerId));
 
   if (!existing) {
-    throw new Error("Customer not found");
+    throw new SafeError("Customer not found");
   }
 
   // If code is being changed, check for duplicates
@@ -376,7 +377,7 @@ export async function updateCustomer(
       .where(eq(customers.code, data.code));
 
     if (duplicate) {
-      throw new Error("A customer with this code already exists");
+      throw new SafeError("A customer with this code already exists");
     }
   }
 
@@ -413,7 +414,7 @@ export async function deleteCustomer(
     .where(eq(customers.id, customerId));
 
   if (!existing) {
-    throw new Error("Customer not found");
+    throw new SafeError("Customer not found");
   }
 
   // Check for associated locations
@@ -423,7 +424,7 @@ export async function deleteCustomer(
     .where(eq(customerLocations.customerId, customerId));
 
   if (Number(locationCount.count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete customer with associated locations. Remove locations first."
     );
   }
@@ -450,7 +451,7 @@ export async function getCustomerLocationById(
     .where(eq(customerLocations.id, locationId));
 
   if (!location) {
-    throw new Error("Customer location not found");
+    throw new SafeError("Customer location not found");
   }
 
   return location;
@@ -481,7 +482,7 @@ export async function createCustomerLocation(
     .where(eq(customers.id, data.customerId));
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new SafeError("Customer not found");
   }
 
   const [location] = await db
@@ -526,7 +527,7 @@ export async function updateCustomerLocation(
     .where(eq(customerLocations.id, locationId));
 
   if (!existing) {
-    throw new Error("Customer location not found");
+    throw new SafeError("Customer location not found");
   }
 
   const updateData: {
@@ -575,7 +576,7 @@ export async function deleteCustomerLocation(
     .where(eq(customerLocations.id, locationId));
 
   if (!existing) {
-    throw new Error("Customer location not found");
+    throw new SafeError("Customer location not found");
   }
 
   await db.delete(customerLocations).where(eq(customerLocations.id, locationId));

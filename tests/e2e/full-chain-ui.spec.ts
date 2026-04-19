@@ -579,8 +579,8 @@ test.describe("Full Chain UI Smoke Test", () => {
         await deliverySelect.selectOption(deliveryValue);
       }
 
-      await page.fill('input[name="biocharAppliedTons"]', "5000");
-      await page.fill('input[name="biocharAppliedDryTons"]', "4500");
+      await page.fill('input[name="biocharAppliedTons"]', "50");
+      await page.fill('input[name="biocharAppliedDryTons"]', "45");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 

@@ -73,6 +73,7 @@ export interface PaginatedStorageLocations {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 type BaseStorageLocationRow = {
   id: string;
@@ -513,7 +514,7 @@ export async function getStorageLocationById(
     .where(eq(storageLocations.id, storageLocationId));
 
   if (!storageLocation) {
-    throw new Error("Storage location not found");
+    throw new SafeError("Storage location not found");
   }
 
   return storageLocation;
@@ -550,7 +551,7 @@ export async function getStorageLocationWithFacility(
     .where(eq(storageLocations.id, storageLocationId));
 
   if (!result) {
-    throw new Error("Storage location not found");
+    throw new SafeError("Storage location not found");
   }
 
   const [enriched] = await enrichStorageLocationRows([result]);
@@ -574,7 +575,7 @@ export async function getStorageLocationsByFacility(
     .where(eq(facilities.id, facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   return db
@@ -614,7 +615,7 @@ export async function createStorageLocation(
     .where(eq(facilities.id, data.facilityId));
 
   if (!facility) {
-    throw new Error("Facility not found");
+    throw new SafeError("Facility not found");
   }
 
   // Check for duplicate code
@@ -624,7 +625,7 @@ export async function createStorageLocation(
     .where(eq(storageLocations.code, data.code));
 
   if (existing) {
-    throw new Error("A storage location with this code already exists");
+    throw new SafeError("A storage location with this code already exists");
   }
 
   if (data.feedstockTypeId) {
@@ -634,7 +635,7 @@ export async function createStorageLocation(
       .where(eq(feedstockTypes.id, data.feedstockTypeId));
 
     if (!feedstockType) {
-      throw new Error("Feedstock type not found");
+      throw new SafeError("Feedstock type not found");
     }
   }
 
@@ -687,7 +688,7 @@ export async function updateStorageLocation(
     .where(eq(storageLocations.id, storageLocationId));
 
   if (!existing) {
-    throw new Error("Storage location not found");
+    throw new SafeError("Storage location not found");
   }
 
   // If code is being changed, check for duplicates
@@ -698,7 +699,7 @@ export async function updateStorageLocation(
       .where(eq(storageLocations.code, data.code));
 
     if (duplicate) {
-      throw new Error("A storage location with this code already exists");
+      throw new SafeError("A storage location with this code already exists");
     }
   }
 
@@ -710,7 +711,7 @@ export async function updateStorageLocation(
       .where(eq(facilities.id, data.facilityId));
 
     if (!facility) {
-      throw new Error("Facility not found");
+      throw new SafeError("Facility not found");
     }
   }
 
@@ -721,7 +722,7 @@ export async function updateStorageLocation(
       .where(eq(feedstockTypes.id, data.feedstockTypeId));
 
     if (!feedstockType) {
-      throw new Error("Feedstock type not found");
+      throw new SafeError("Feedstock type not found");
     }
   }
 
@@ -758,7 +759,7 @@ export async function deleteStorageLocation(
     .where(eq(storageLocations.id, storageLocationId));
 
   if (!existing) {
-    throw new Error("Storage location not found");
+    throw new SafeError("Storage location not found");
   }
 
   // TODO: Add checks for related records if needed (e.g., feedstock batches)

@@ -1,136 +1,91 @@
-/**
- * Chain of Custody — static DAG configuration
- * Node definitions, edge definitions, status color mapping, and layout constants.
- */
 import type { ElementType } from "react";
 import {
-  Flask,
-  Package,
-  Leaf,
-  Factory,
   Cube,
+  Factory,
+  Flask,
+  Leaf,
+  MapPin,
   ShoppingCart,
   Truck,
-  MapPin,
-  Certificate,
-  UserCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
-// ============================================
-// Layout
-// ============================================
-
-export const NODE_WIDTH = 240;
-export const NODE_HEIGHT = 160;
+export const NODE_WIDTH = 260;
+export const NODE_HEIGHT = 168;
 
 export const DAGRE_CONFIG = {
   rankdir: "LR" as const,
-  nodesep: 60,
-  ranksep: 140,
+  nodesep: 48,
+  ranksep: 120,
 };
 
-// ============================================
-// Node definitions
-// ============================================
+export type LineageNodeKind =
+  | "application"
+  | "delivery"
+  | "order"
+  | "biocharProduct"
+  | "productionRun"
+  | "reactor"
+  | "feedstock";
 
-export interface ChainNodeDef {
-  id: string;
+export interface LineageNodeStyle {
   label: string;
   icon: ElementType;
   accent: string;
-  href: string | null;
 }
 
-export const CHAIN_NODE_DEFS: ChainNodeDef[] = [
-  { id: "reactors", label: "Reactors", icon: Flask, accent: "var(--clr-purple)", href: "/reactors" },
-  // Storage locations split by type
-  { id: "feedstockBin", label: "Feedstock Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
-  { id: "biocharBin", label: "Biochar Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
-  { id: "productBin", label: "Product Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
-  { id: "ingredientBin", label: "Ingredient Bin", icon: Package, accent: "var(--clr-purple)", href: "/storage-locations" },
-  // Chain-of-custody flow
-  { id: "suppliers", label: "Suppliers", icon: UserCircle, accent: "var(--clr-purple)", href: "/suppliers" },
-  { id: "feedstocks", label: "Feedstocks", icon: Leaf, accent: "var(--clr-orange)", href: "/feedstocks" },
-  { id: "productionRuns", label: "Production Runs", icon: Factory, accent: "var(--clr-orange)", href: "/production-runs" },
-  { id: "samples", label: "Samples", icon: Flask, accent: "var(--clr-orange)", href: null },
-  { id: "biocharProducts", label: "Biochar Products", icon: Cube, accent: "var(--clr-orange)", href: "/biochar-products" },
-  { id: "orders", label: "Orders", icon: ShoppingCart, accent: "var(--clr-rose)", href: "/orders" },
-  { id: "deliveries", label: "Deliveries", icon: Truck, accent: "var(--clr-rose)", href: "/deliveries" },
-  { id: "applications", label: "Applications", icon: MapPin, accent: "var(--clr-rose)", href: "/applications" },
-  { id: "creditBatches", label: "Credit Batches", icon: Certificate, accent: "var(--clr-pink)", href: "/credit-batches" },
-];
-
-// ============================================
-// Edge definitions (source → target)
-// ============================================
-
-export interface ChainEdgeDef {
-  source: string;
-  target: string;
-}
-
-export const CHAIN_EDGE_DEFS: ChainEdgeDef[] = [
-  // Feedstock intake
-  { source: "suppliers", target: "feedstocks" },
-  { source: "feedstocks", target: "feedstockBin" },
-  { source: "feedstocks", target: "ingredientBin" },
-  // Production
-  { source: "feedstockBin", target: "productionRuns" },
-  { source: "reactors", target: "productionRuns" },
-  { source: "productionRuns", target: "samples" },
-  // Post-production storage
-  { source: "productionRuns", target: "biocharBin" },
-  { source: "biocharBin", target: "biocharProducts" },
-  // Product storage & distribution
-  { source: "biocharProducts", target: "productBin" },
-  { source: "productBin", target: "orders" },
-  { source: "orders", target: "deliveries" },
-  { source: "deliveries", target: "applications" },
-  { source: "applications", target: "creditBatches" },
-  // Ingredient flow
-  { source: "ingredientBin", target: "biocharProducts" },
-];
-
-// ============================================
-// Status → color mapping
-// ============================================
-
-/**
- * Maps status strings to CSS color tokens for the status bar segments.
- * Mirrors the categories from StatusBadge.
- */
-export const STATUS_COLORS: Record<string, string> = {
-  // Success / terminal
-  complete: "var(--color-status-success)",
-  ready: "var(--color-status-success)",
-  delivered: "var(--color-status-success)",
-  applied: "var(--color-status-success)",
-  verified: "var(--color-status-success)",
-  issued: "var(--color-status-success)",
-  processed: "var(--color-status-success)",
-  sold: "var(--color-status-success)",
-
-  // In-progress
-  running: "var(--clr-purple)",
-  processing: "var(--clr-purple)",
-  ordered: "var(--clr-purple)",
-
-  // Pending / warning
-  pending: "var(--color-signal-orange)",
-  scheduled: "var(--color-signal-orange)",
-  testing: "var(--color-signal-orange)",
-
-  // Not started
-  draft: "var(--color-text-tertiary)",
-  missing_data: "var(--color-text-tertiary)",
-
-  // Problem
-  void: "var(--clr-red)",
-  rejected: "var(--clr-red)",
+export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
+  application: {
+    label: "Application",
+    icon: MapPin,
+    accent: "var(--clr-rose)",
+  },
+  delivery: {
+    label: "Delivery",
+    icon: Truck,
+    accent: "var(--clr-rose)",
+  },
+  order: {
+    label: "Order",
+    icon: ShoppingCart,
+    accent: "var(--clr-rose)",
+  },
+  biocharProduct: {
+    label: "Biochar Product",
+    icon: Cube,
+    accent: "var(--clr-orange)",
+  },
+  productionRun: {
+    label: "Production Run",
+    icon: Factory,
+    accent: "var(--clr-orange)",
+  },
+  reactor: {
+    label: "Reactor",
+    icon: Flask,
+    accent: "var(--clr-purple)",
+  },
+  feedstock: {
+    label: "Feedstock",
+    icon: Leaf,
+    accent: "var(--clr-orange)",
+  },
 };
 
-/** Fallback for unknown statuses */
-export const STATUS_COLOR_FALLBACK = "var(--color-text-tertiary)";
+export const STATUS_COLORS: Record<string, string> = {
+  applied: "var(--color-status-success)",
+  delivered: "var(--color-status-success)",
+  complete: "var(--color-status-success)",
+  ready: "var(--color-status-success)",
+  processed: "var(--color-status-success)",
+  running: "var(--clr-purple)",
+  upcoming: "var(--clr-purple)",
+  ordered: "var(--clr-purple)",
+  pending: "var(--color-signal-orange)",
+  scheduled: "var(--color-signal-orange)",
+  draft: "var(--color-text-tertiary)",
+  missing_data: "var(--color-text-tertiary)",
+  rejected: "var(--color-signal-red)",
+  void: "var(--color-signal-red)",
+};
 
-/** Statuses considered "in progress" — used to animate edges */
-export const IN_PROGRESS_STATUSES = new Set(["running", "upcoming"]);
+export const STATUS_COLOR_FALLBACK = "var(--color-text-tertiary)";

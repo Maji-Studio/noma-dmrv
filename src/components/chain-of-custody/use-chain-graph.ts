@@ -1,103 +1,266 @@
-/**
- * useChainGraph — Transforms chain-of-custody data into React Flow nodes + edges.
- * Uses dagre for automatic directed-graph layout.
- */
-import { useMemo } from "react";
 import dagre from "@dagrejs/dagre";
-import { MarkerType, type Node, type Edge } from "@xyflow/react";
+import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import { formatSafeDate } from "@/lib/format-utils";
 import type { ChainNodeData } from "./chain-node";
 import {
-  CHAIN_NODE_DEFS,
-  CHAIN_EDGE_DEFS,
   DAGRE_CONFIG,
-  NODE_WIDTH,
+  LINEAGE_NODE_STYLES,
   NODE_HEIGHT,
-  IN_PROGRESS_STATUSES,
+  NODE_WIDTH,
+  type LineageNodeKind,
 } from "./chain-constants";
 
-function hasInProgressItems(byStatus: Record<string, number>): boolean {
-  return Object.entries(byStatus).some(
-    ([status, count]) => count > 0 && IN_PROGRESS_STATUSES.has(status)
+interface LineageGraphNode {
+  id: string;
+  kind: LineageNodeKind;
+  code: string;
+  href: string | null;
+  status?: string | null;
+  detailLines: string[];
+}
+
+const EDGE_STYLE = {
+  type: "smoothstep" as const,
+  markerEnd: { type: MarkerType.ArrowClosed, color: "var(--clr-purple)" },
+  style: { stroke: "var(--clr-purple)", strokeWidth: 1.5 },
+};
+
+function formatKg(value: number | null | undefined): string | null {
+  if (value == null) return null;
+  return `${Math.round(value).toLocaleString()} kg`;
+}
+
+function formatDryTons(value: number | null | undefined): string | null {
+  if (value == null) return null;
+  return `${value.toFixed(2)} t dry`;
+}
+
+function formatDateOrNull(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const formatted = formatSafeDate(value, "MMM d, yyyy");
+  return formatted === "—" ? null : formatted;
+}
+
+function addLine(lines: string[], value: string | null | undefined) {
+  if (value) {
+    lines.push(value);
+  }
+}
+
+function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
+  const nodes: LineageGraphNode[] = [];
+
+  if (data.reactor) {
+    nodes.push({
+      id: `reactor:${data.reactor.id}`,
+      kind: "reactor",
+      code: data.reactor.code,
+      href: data.reactor.href,
+      detailLines: [
+        data.reactor.identifier,
+        data.reactor.reactorType ?? "Type not set",
+      ],
+    });
+  }
+
+  const sortedFeedstocks = [...data.feedstocks].sort((left, right) =>
+    left.code.localeCompare(right.code)
   );
+  for (const feedstock of sortedFeedstocks) {
+    const detailLines: string[] = [];
+    addLine(detailLines, feedstock.feedstockTypeName ?? undefined);
+    addLine(
+      detailLines,
+      feedstock.supplierName ? `Supplier ${feedstock.supplierName}` : undefined
+    );
+    addLine(
+      detailLines,
+      feedstock.feedstockDeliveryCode
+        ? `Inbound ${feedstock.feedstockDeliveryCode}`
+        : undefined
+    );
+    addLine(detailLines, formatKg(feedstock.massUsedKg));
+    addLine(detailLines, formatKg(feedstock.massDryKg));
+    addLine(detailLines, formatDateOrNull(feedstock.deliveryDate));
+
+    nodes.push({
+      id: `feedstock:${feedstock.id}`,
+      kind: "feedstock",
+      code: feedstock.code,
+      href: feedstock.href,
+      status: feedstock.status,
+      detailLines,
+    });
+  }
+
+  if (data.productionRun) {
+    const detailLines: string[] = [];
+    addLine(detailLines, formatDateOrNull(data.productionRun.date));
+    addLine(detailLines, formatKg(data.productionRun.feedstockMassDryKg));
+    addLine(detailLines, formatKg(data.productionRun.biocharDryMassKg));
+
+    nodes.push({
+      id: `production-run:${data.productionRun.id}`,
+      kind: "productionRun",
+      code: data.productionRun.code,
+      href: data.productionRun.href,
+      status: data.productionRun.status,
+      detailLines,
+    });
+  }
+
+  if (data.biocharProduct) {
+    const detailLines: string[] = [];
+    addLine(detailLines, formatDateOrNull(data.biocharProduct.productionDate));
+    addLine(detailLines, formatKg(data.biocharProduct.massKg));
+
+    nodes.push({
+      id: `biochar-product:${data.biocharProduct.id}`,
+      kind: "biocharProduct",
+      code: data.biocharProduct.code,
+      href: data.biocharProduct.href,
+      status: data.biocharProduct.status,
+      detailLines,
+    });
+  }
+
+  if (data.order) {
+    const detailLines: string[] = [];
+    addLine(detailLines, formatDateOrNull(data.order.orderDate));
+    addLine(detailLines, formatKg(data.order.quantityKg));
+
+    nodes.push({
+      id: `order:${data.order.id}`,
+      kind: "order",
+      code: data.order.code,
+      href: data.order.href,
+      detailLines,
+    });
+  }
+
+  {
+    const detailLines: string[] = [];
+    addLine(detailLines, formatDateOrNull(data.delivery.deliveryDate));
+    addLine(detailLines, formatKg(data.delivery.massDryKg));
+
+    nodes.push({
+      id: `delivery:${data.delivery.id}`,
+      kind: "delivery",
+      code: data.delivery.code,
+      href: data.delivery.href,
+      status: data.delivery.status,
+      detailLines,
+    });
+  }
+
+  {
+    const detailLines: string[] = [];
+    addLine(detailLines, formatDateOrNull(data.application.applicationDate));
+    addLine(detailLines, data.application.fieldIdentifier ?? undefined);
+    addLine(detailLines, formatDryTons(data.application.biocharAppliedDryTons));
+
+    nodes.push({
+      id: `application:${data.application.id}`,
+      kind: "application",
+      code: data.application.code,
+      href: data.application.href,
+      status: data.application.status,
+      detailLines,
+    });
+  }
+
+  return nodes;
+}
+
+function edge(source: string, target: string): Edge {
+  return {
+    id: `${source}->${target}`,
+    source,
+    target,
+    ...EDGE_STYLE,
+  };
+}
+
+function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
+  const edges: Edge[] = [];
+
+  if (data.productionRun) {
+    for (const feedstock of data.feedstocks) {
+      edges.push(edge(`feedstock:${feedstock.id}`, `production-run:${data.productionRun.id}`));
+    }
+
+    if (data.reactor) {
+      edges.push(edge(`reactor:${data.reactor.id}`, `production-run:${data.productionRun.id}`));
+    }
+  }
+
+  if (data.productionRun && data.biocharProduct) {
+    edges.push(edge(`production-run:${data.productionRun.id}`, `biochar-product:${data.biocharProduct.id}`));
+  }
+
+  if (data.biocharProduct && data.order) {
+    edges.push(edge(`biochar-product:${data.biocharProduct.id}`, `order:${data.order.id}`));
+  }
+
+  if (data.order) {
+    edges.push(edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`));
+  } else if (data.biocharProduct) {
+    edges.push(edge(`biochar-product:${data.biocharProduct.id}`, `delivery:${data.delivery.id}`));
+  }
+
+  edges.push(edge(`delivery:${data.delivery.id}`, `application:${data.application.id}`));
+
+  return edges;
 }
 
 function buildGraph(data: ChainOfCustodyData): { nodes: Node[]; edges: Edge[] } {
-  const summaryMap = new Map(
-    data.entitySummaries.map((s) => [s.entityType, s])
-  );
-
-  // Configure dagre graph
+  const lineageNodes = buildLineageNodes(data);
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph(DAGRE_CONFIG);
 
-  // Add nodes
-  for (const def of CHAIN_NODE_DEFS) {
-    g.setNode(def.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  for (const node of lineageNodes) {
+    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
   }
 
-  // Add edges
-  for (const e of CHAIN_EDGE_DEFS) {
-    g.setEdge(e.source, e.target);
+  const edges = buildLineageEdges(data);
+  for (const edge of edges) {
+    g.setEdge(edge.source, edge.target);
   }
 
   dagre.layout(g);
 
-  // Build React Flow nodes from dagre positions
-  const rfNodes: Node[] = CHAIN_NODE_DEFS.map((def) => {
-    const pos = g.node(def.id);
-    const summary = summaryMap.get(def.id);
-    const total = summary?.total ?? 0;
-    const byStatus = summary?.byStatus ?? {};
-    const items = summary?.items ?? [];
+  const nodes: Node[] = lineageNodes.map((node) => {
+    const position = g.node(node.id);
+    const style = LINEAGE_NODE_STYLES[node.kind];
 
     return {
-      id: def.id,
+      id: node.id,
       type: "chainNode",
       position: {
-        x: pos.x - NODE_WIDTH / 2,
-        y: pos.y - NODE_HEIGHT / 2,
+        x: position.x - NODE_WIDTH / 2,
+        y: position.y - NODE_HEIGHT / 2,
       },
       data: {
-        label: def.label,
-        icon: def.icon,
-        accent: def.accent,
-        href: def.href,
-        total,
-        byStatus,
-        items,
+        label: style.label,
+        code: node.code,
+        icon: style.icon,
+        accent: style.accent,
+        href: node.href,
+        status: node.status,
+        detailLines: node.detailLines,
       } satisfies ChainNodeData,
     };
   });
 
-  // Build React Flow edges
-  const rfEdges: Edge[] = CHAIN_EDGE_DEFS.map((e) => {
-    const sourceSummary = summaryMap.get(e.source);
-    const animated = sourceSummary
-      ? hasInProgressItems(sourceSummary.byStatus)
-      : false;
-
-    return {
-      id: `${e.source}->${e.target}`,
-      source: e.source,
-      target: e.target,
-      type: "smoothstep",
-      animated,
-      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--clr-purple)" },
-      style: {
-        stroke: "var(--clr-purple)",
-        strokeWidth: 1.5,
-      },
-    };
-  });
-
-  return { nodes: rfNodes, edges: rfEdges };
+  return { nodes, edges };
 }
 
 export function useChainGraph(data: ChainOfCustodyData | undefined) {
-  return useMemo(() => {
-    if (!data) return { nodes: [], edges: [] };
-    return buildGraph(data);
-  }, [data]);
+  if (!data) {
+    return { nodes: [], edges: [] };
+  }
+
+  return buildGraph(data);
 }

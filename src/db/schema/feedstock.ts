@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, doublePrecision, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
-import { feedstockStatus } from './common';
+import { feedstockEligibilityStatus, feedstockStatus } from './common';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
 import { vehicles } from './logistics';
@@ -124,6 +124,9 @@ export const feedstocks = pgTable(
     marketLeakageTons: real('market_leakage_tons'),
     baselineScenario: text('baseline_scenario').notNull().default('unknown'),
     baselineDescription: text('baseline_description').notNull().default(''),
+
+    // --- Isometric: Biomass eligibility (Feedstock Accounting Module — >25% ineligible cap) ---
+    eligibilityStatus: feedstockEligibilityStatus('eligibility_status'),
 
     // --- Documentation ---
     notes: text('notes'),

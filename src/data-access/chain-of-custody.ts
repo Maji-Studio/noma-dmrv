@@ -1,329 +1,330 @@
 /**
- * Chain of Custody data access
- * Queries entity counts grouped by status for a given facility,
- * plus recent item codes/names for display in the DAG nodes.
+ * Chain of custody data access
+ * Resolves the upstream lineage for a single application back to its feedstocks.
  */
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  facilities,
-  reactors,
-  storageLocations,
-  suppliers,
-  feedstocks,
-  productionRuns,
-  samples,
-  biocharProducts,
-  orders,
-  deliveries,
   applications,
-  creditBatches,
+  biocharProducts,
+  deliveries,
+  facilities,
+  feedstockDeliveries,
+  feedstockTypes,
+  feedstocks,
+  orders,
+  productionRunFeedstocks,
+  productionRuns,
+  reactors,
+  suppliers,
 } from "@/db/schema";
-import { requireAuth } from "@/lib/auth/server";
+import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
-// ============================================
-// Types
-// ============================================
-
-const ITEMS_LIMIT = 5;
-
-export interface EntityItem {
+export interface ChainFacility {
+  id: string;
   code: string;
-  name?: string;
+  name: string;
 }
 
-export interface EntitySummary {
-  entityType: string;
-  total: number;
-  byStatus: Record<string, number>;
-  items: EntityItem[];
+export interface ChainApplicationLineage {
+  id: string;
+  code: string;
+  status: string | null;
+  applicationDate: Date;
+  fieldIdentifier: string | null;
+  biocharAppliedDryTons: number | null;
+  href: string;
+}
+
+export interface ChainDeliveryLineage {
+  id: string;
+  code: string;
+  status: string | null;
+  deliveryDate: Date;
+  massDryKg: number | null;
+  href: string;
+}
+
+export interface ChainOrderLineage {
+  id: string;
+  code: string;
+  orderDate: Date;
+  quantityKg: number | null;
+  href: string;
+}
+
+export interface ChainBiocharProductLineage {
+  id: string;
+  code: string;
+  status: string | null;
+  productionDate: Date;
+  massKg: number | null;
+  linkedProductionRunId: string | null;
+  href: string;
+}
+
+export interface ChainProductionRunLineage {
+  id: string;
+  code: string;
+  status: string | null;
+  date: Date | string;
+  biocharDryMassKg: number | null;
+  feedstockMassDryKg: number | null;
+  href: string;
+}
+
+export interface ChainReactorLineage {
+  id: string;
+  code: string;
+  identifier: string;
+  reactorType: string | null;
+  href: string;
+}
+
+export interface ChainFeedstockLineage {
+  id: string;
+  code: string;
+  status: string | null;
+  deliveryDate: Date | null;
+  massDryKg: number | null;
+  massUsedKg: number | null;
+  supplierName: string | null;
+  feedstockTypeName: string | null;
+  feedstockDeliveryCode: string | null;
+  href: string;
 }
 
 export interface ChainOfCustodyData {
-  facility: { id: string; code: string; name: string };
-  entitySummaries: EntitySummary[];
+  facility: ChainFacility;
+  application: ChainApplicationLineage;
+  delivery: ChainDeliveryLineage;
+  order: ChainOrderLineage | null;
+  biocharProduct: ChainBiocharProductLineage | null;
+  productionRun: ChainProductionRunLineage | null;
+  reactor: ChainReactorLineage | null;
+  feedstocks: ChainFeedstockLineage[];
+  warnings: string[];
 }
-
-// ============================================
-// Helpers
-// ============================================
-
-type StatusRow = { status: string | null; count: number };
-
-function aggregateStatusRows(rows: StatusRow[]): { total: number; byStatus: Record<string, number> } {
-  let total = 0;
-  const byStatus: Record<string, number> = {};
-  for (const row of rows) {
-    total += row.count;
-    if (row.status) {
-      byStatus[row.status] = row.count;
-    }
-  }
-  return { total, byStatus };
-}
-
-// ============================================
-// Main query
-// ============================================
 
 export async function getChainOfCustodyData(
-  facilityId: string
+  userId: string,
+  applicationId: string
 ): Promise<ChainOfCustodyData> {
-  // Auth note: This is a single-tenant, admin-invite-only app with no per-facility ACL.
-  // All authenticated users are authorized to view any facility's data.
-  // If multi-tenant facility access is added, this needs facility-level permission checks.
-  await requireAuth();
+  requireAuth(userId);
 
-  // Verify facility exists
-  const [facility] = await db
-    .select({ id: facilities.id, code: facilities.code, name: facilities.name })
-    .from(facilities)
-    .where(eq(facilities.id, facilityId))
+  const [applicationRow] = await db
+    .select({
+      applicationId: applications.id,
+      applicationCode: applications.code,
+      applicationStatus: applications.status,
+      applicationDate: applications.applicationDate,
+      fieldIdentifier: applications.fieldIdentifier,
+      biocharAppliedDryTons: applications.biocharAppliedDryTons,
+      deliveryId: deliveries.id,
+      deliveryCode: deliveries.code,
+      deliveryStatus: deliveries.status,
+      deliveryDate: deliveries.deliveryDate,
+      deliveryMassDryKg: deliveries.massDryKg,
+      deliveryBiocharProductId: deliveries.biocharProductId,
+      orderId: orders.id,
+      orderCode: orders.code,
+      orderDate: orders.orderDate,
+      orderQuantityKg: orders.quantityKg,
+      orderBiocharProductId: orders.biocharProductId,
+      facilityId: facilities.id,
+      facilityCode: facilities.code,
+      facilityName: facilities.name,
+    })
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .innerJoin(facilities, eq(deliveries.facilityId, facilities.id))
+    .where(eq(applications.id, applicationId))
     .limit(1);
 
-  if (!facility) {
-    throw new Error("Facility not found");
+  if (!applicationRow) {
+    throw new SafeError("Application not found");
   }
 
-  // Run all count queries + item queries in parallel
-  const [
-    supplierRows,
-    reactorRows,
-    slFeedstockBinRows,
-    slBiocharBinRows,
-    slProductBinRows,
-    slIngredientBinRows,
-    feedstockRows,
-    productionRunRows,
-    sampleRows,
-    biocharProductRows,
-    orderRows,
-    deliveryRows,
-    applicationRows,
-    creditBatchRows,
-    // Item queries
-    supplierItems,
-    reactorItems,
-    slFeedstockBinItems,
-    slBiocharBinItems,
-    slProductBinItems,
-    slIngredientBinItems,
-    feedstockItems,
-    productionRunItems,
-    sampleItems,
-    biocharProductItems,
-    orderItems,
-    deliveryItems,
-    applicationItems,
-    creditBatchItems,
-  ] = await Promise.all([
-    // --- Status count queries ---
+  const warnings: string[] = [];
+  const biocharProductId =
+    applicationRow.deliveryBiocharProductId ?? applicationRow.orderBiocharProductId;
 
-    // Suppliers — distinct suppliers linked via feedstocks (no status)
-    db
-      .selectDistinct({ id: suppliers.id })
-      .from(suppliers)
-      .innerJoin(feedstocks, eq(feedstocks.supplierId, suppliers.id))
-      .where(eq(feedstocks.facilityId, facilityId))
-      .then((rows) => [{ status: null as string | null, count: rows.length }]),
+  const biocharProduct = biocharProductId
+    ? await getBiocharProductLineage(biocharProductId)
+    : null;
 
-    // Reactors — no status field
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(reactors)
-      .where(eq(reactors.facilityId, facilityId)),
+  if (!biocharProductId) {
+    warnings.push(
+      "This application is not linked to a biochar product through its delivery or order."
+    );
+  }
 
-    // Storage Locations — split by type (no status field)
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "feedstock_bin"))),
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "biochar_bin"))),
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "product_bin"))),
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "ingredient_bin"))),
+  const productionRun = biocharProduct?.linkedProductionRunId
+    ? await getProductionRunLineage(biocharProduct.linkedProductionRunId)
+    : null;
 
-    // Feedstocks — unified (has status)
-    db
-      .select({ status: feedstocks.status, count: count() })
-      .from(feedstocks)
-      .where(eq(feedstocks.facilityId, facilityId))
-      .groupBy(feedstocks.status),
+  if (biocharProduct && !biocharProduct.linkedProductionRunId) {
+    warnings.push(
+      "The linked biochar product does not point to a production run yet, so feedstock rollback stops at product level."
+    );
+  }
 
-    // Production Runs — has status
-    db
-      .select({ status: productionRuns.status, count: count() })
-      .from(productionRuns)
-      .where(eq(productionRuns.facilityId, facilityId))
-      .groupBy(productionRuns.status),
+  const [reactor, feedstocksForRun] = productionRun
+    ? await Promise.all([
+        getReactorLineageForRun(productionRun.id),
+        getFeedstocksForRun(productionRun.id),
+      ])
+    : [null, []];
 
-    // Samples — no status, join via productionRuns
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(samples)
-      .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-      .where(eq(productionRuns.facilityId, facilityId)),
+  if (productionRun && feedstocksForRun.length === 0) {
+    warnings.push(
+      "The linked production run does not have any recorded feedstock allocations."
+    );
+  }
 
-    // Biochar Products — has status
-    db
-      .select({ status: biocharProducts.status, count: count() })
-      .from(biocharProducts)
-      .where(eq(biocharProducts.facilityId, facilityId))
-      .groupBy(biocharProducts.status),
+  return {
+    facility: {
+      id: applicationRow.facilityId,
+      code: applicationRow.facilityCode,
+      name: applicationRow.facilityName,
+    },
+    application: {
+      id: applicationRow.applicationId,
+      code: applicationRow.applicationCode,
+      status: applicationRow.applicationStatus,
+      applicationDate: applicationRow.applicationDate,
+      fieldIdentifier: applicationRow.fieldIdentifier,
+      biocharAppliedDryTons: applicationRow.biocharAppliedDryTons,
+      href: "/applications",
+    },
+    delivery: {
+      id: applicationRow.deliveryId,
+      code: applicationRow.deliveryCode,
+      status: applicationRow.deliveryStatus,
+      deliveryDate: applicationRow.deliveryDate,
+      massDryKg: applicationRow.deliveryMassDryKg,
+      href: "/deliveries",
+    },
+    order: applicationRow.orderId
+      ? {
+          id: applicationRow.orderId,
+          code: applicationRow.orderCode!,
+          orderDate: applicationRow.orderDate!,
+          quantityKg: applicationRow.orderQuantityKg,
+          href: "/orders",
+        }
+      : null,
+    biocharProduct,
+    productionRun,
+    reactor,
+    feedstocks: feedstocksForRun,
+    warnings,
+  };
+}
 
-    // Orders — no status
-    db
-      .select({ status: sql<string | null>`null`.as("status"), count: count() })
-      .from(orders)
-      .where(eq(orders.facilityId, facilityId)),
+async function getBiocharProductLineage(
+  biocharProductId: string
+): Promise<ChainBiocharProductLineage | null> {
+  const [product] = await db
+    .select({
+      id: biocharProducts.id,
+      code: biocharProducts.code,
+      status: biocharProducts.status,
+      productionDate: biocharProducts.productionDate,
+      massKg: biocharProducts.massKg,
+      linkedProductionRunId: biocharProducts.linkedProductionRunId,
+    })
+    .from(biocharProducts)
+    .where(eq(biocharProducts.id, biocharProductId))
+    .limit(1);
 
-    // Deliveries — has status
-    db
-      .select({ status: deliveries.status, count: count() })
-      .from(deliveries)
-      .where(eq(deliveries.facilityId, facilityId))
-      .groupBy(deliveries.status),
+  if (!product) {
+    return null;
+  }
 
-    // Applications — has status, join via deliveries
-    db
-      .select({ status: applications.status, count: count() })
-      .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(eq(deliveries.facilityId, facilityId))
-      .groupBy(applications.status),
+  return {
+    ...product,
+    href: "/biochar-products",
+  };
+}
 
-    // Credit Batches — has status
-    db
-      .select({ status: creditBatches.status, count: count() })
-      .from(creditBatches)
-      .where(eq(creditBatches.facilityId, facilityId))
-      .groupBy(creditBatches.status),
+async function getProductionRunLineage(
+  productionRunId: string
+): Promise<ChainProductionRunLineage | null> {
+  const [productionRun] = await db
+    .select({
+      id: productionRuns.id,
+      code: productionRuns.code,
+      status: productionRuns.status,
+      date: productionRuns.date,
+      biocharDryMassKg: productionRuns.biocharDryMassKg,
+      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+    })
+    .from(productionRuns)
+    .where(eq(productionRuns.id, productionRunId))
+    .limit(1);
 
-    // --- Item queries (code + optional name, limited) ---
+  if (!productionRun) {
+    return null;
+  }
 
-    db
-      .selectDistinct({ code: suppliers.code, name: suppliers.name })
-      .from(suppliers)
-      .innerJoin(feedstocks, eq(feedstocks.supplierId, suppliers.id))
-      .where(eq(feedstocks.facilityId, facilityId))
-      .limit(ITEMS_LIMIT),
+  return {
+    ...productionRun,
+    href: "/production-runs",
+  };
+}
 
-    db
-      .select({ code: reactors.code })
-      .from(reactors)
-      .where(eq(reactors.facilityId, facilityId))
-      .orderBy(desc(reactors.createdAt))
-      .limit(ITEMS_LIMIT),
+async function getReactorLineageForRun(
+  productionRunId: string
+): Promise<ChainReactorLineage | null> {
+  const [reactor] = await db
+    .select({
+      id: reactors.id,
+      code: reactors.code,
+      identifier: reactors.identifier,
+      reactorType: reactors.reactorType,
+    })
+    .from(productionRuns)
+    .innerJoin(reactors, eq(productionRuns.reactorId, reactors.id))
+    .where(eq(productionRuns.id, productionRunId))
+    .limit(1);
 
-    db
-      .select({ code: storageLocations.code, name: storageLocations.name })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "feedstock_bin")))
-      .orderBy(desc(storageLocations.createdAt))
-      .limit(ITEMS_LIMIT),
-    db
-      .select({ code: storageLocations.code, name: storageLocations.name })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "biochar_bin")))
-      .orderBy(desc(storageLocations.createdAt))
-      .limit(ITEMS_LIMIT),
-    db
-      .select({ code: storageLocations.code, name: storageLocations.name })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "product_bin")))
-      .orderBy(desc(storageLocations.createdAt))
-      .limit(ITEMS_LIMIT),
-    db
-      .select({ code: storageLocations.code, name: storageLocations.name })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.type, "ingredient_bin")))
-      .orderBy(desc(storageLocations.createdAt))
-      .limit(ITEMS_LIMIT),
+  if (!reactor) {
+    return null;
+  }
 
-    db
-      .select({ code: feedstocks.code })
-      .from(feedstocks)
-      .where(eq(feedstocks.facilityId, facilityId))
-      .orderBy(desc(feedstocks.createdAt))
-      .limit(ITEMS_LIMIT),
+  return {
+    ...reactor,
+    href: "/reactors",
+  };
+}
 
-    db
-      .select({ code: productionRuns.code })
-      .from(productionRuns)
-      .where(eq(productionRuns.facilityId, facilityId))
-      .orderBy(desc(productionRuns.createdAt))
-      .limit(ITEMS_LIMIT),
+async function getFeedstocksForRun(
+  productionRunId: string
+): Promise<ChainFeedstockLineage[]> {
+  const rows = await db
+    .select({
+      id: feedstocks.id,
+      code: feedstocks.code,
+      status: feedstocks.status,
+      deliveryDate: feedstocks.deliveryDate,
+      massDryKg: feedstocks.massDryKg,
+      massUsedKg: productionRunFeedstocks.massUsedKg,
+      supplierName: suppliers.name,
+      feedstockTypeName: feedstockTypes.name,
+      feedstockDeliveryCode: feedstockDeliveries.code,
+    })
+    .from(productionRunFeedstocks)
+    .innerJoin(feedstocks, eq(productionRunFeedstocks.feedstockId, feedstocks.id))
+    .leftJoin(feedstockDeliveries, eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id))
+    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
+    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+    .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
 
-    db
-      .select({ code: samples.sampleCode })
-      .from(samples)
-      .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-      .where(eq(productionRuns.facilityId, facilityId))
-      .orderBy(desc(samples.createdAt))
-      .limit(ITEMS_LIMIT)
-      .then((rows) => rows.map((r) => ({ code: r.code }))),
-
-    db
-      .select({ code: biocharProducts.code })
-      .from(biocharProducts)
-      .where(eq(biocharProducts.facilityId, facilityId))
-      .orderBy(desc(biocharProducts.createdAt))
-      .limit(ITEMS_LIMIT),
-
-    db
-      .select({ code: orders.code })
-      .from(orders)
-      .where(eq(orders.facilityId, facilityId))
-      .orderBy(desc(orders.createdAt))
-      .limit(ITEMS_LIMIT),
-
-    db
-      .select({ code: deliveries.code })
-      .from(deliveries)
-      .where(eq(deliveries.facilityId, facilityId))
-      .orderBy(desc(deliveries.createdAt))
-      .limit(ITEMS_LIMIT),
-
-    db
-      .select({ code: applications.code })
-      .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(eq(deliveries.facilityId, facilityId))
-      .orderBy(desc(applications.createdAt))
-      .limit(ITEMS_LIMIT),
-
-    db
-      .select({ code: creditBatches.code })
-      .from(creditBatches)
-      .where(eq(creditBatches.facilityId, facilityId))
-      .orderBy(desc(creditBatches.createdAt))
-      .limit(ITEMS_LIMIT),
-  ]);
-
-  const entitySummaries: EntitySummary[] = [
-    { entityType: "suppliers", ...aggregateStatusRows(supplierRows), items: supplierItems },
-    { entityType: "reactors", ...aggregateStatusRows(reactorRows), items: reactorItems },
-    { entityType: "feedstockBin", ...aggregateStatusRows(slFeedstockBinRows), items: slFeedstockBinItems },
-    { entityType: "biocharBin", ...aggregateStatusRows(slBiocharBinRows), items: slBiocharBinItems },
-    { entityType: "productBin", ...aggregateStatusRows(slProductBinRows), items: slProductBinItems },
-    { entityType: "ingredientBin", ...aggregateStatusRows(slIngredientBinRows), items: slIngredientBinItems },
-    { entityType: "feedstocks", ...aggregateStatusRows(feedstockRows), items: feedstockItems },
-    { entityType: "productionRuns", ...aggregateStatusRows(productionRunRows), items: productionRunItems },
-    { entityType: "samples", ...aggregateStatusRows(sampleRows), items: sampleItems },
-    { entityType: "biocharProducts", ...aggregateStatusRows(biocharProductRows), items: biocharProductItems },
-    { entityType: "orders", ...aggregateStatusRows(orderRows), items: orderItems },
-    { entityType: "deliveries", ...aggregateStatusRows(deliveryRows), items: deliveryItems },
-    { entityType: "applications", ...aggregateStatusRows(applicationRows), items: applicationItems },
-    { entityType: "creditBatches", ...aggregateStatusRows(creditBatchRows), items: creditBatchItems },
-  ];
-
-  return { facility, entitySummaries };
+  return rows.map((row) => ({
+    ...row,
+    href: "/feedstocks",
+  }));
 }

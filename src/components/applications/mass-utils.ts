@@ -11,6 +11,8 @@ export interface ApplicationDeliveryOption {
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
   moistureContentPercent: number | null;
+  /** Total kg already applied from this delivery across all applications */
+  alreadyAppliedWetKg: number;
 }
 
 /**

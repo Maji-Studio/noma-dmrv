@@ -105,6 +105,7 @@ export interface SampleStats {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Sample Read Operations
@@ -315,7 +316,7 @@ export async function getSampleById(
     .where(eq(samples.id, sampleId));
 
   if (!sample) {
-    throw new Error("Sample not found");
+    throw new SafeError("Sample not found");
   }
 
   return {
@@ -439,7 +440,7 @@ export async function createSample(
     .where(eq(samples.sampleCode, data.sampleCode));
 
   if (existing) {
-    throw new Error("A sample with this code already exists");
+    throw new SafeError("A sample with this code already exists");
   }
 
   // Verify production run exists
@@ -449,7 +450,7 @@ export async function createSample(
     .where(eq(productionRuns.id, data.productionRunId));
 
   if (!productionRun) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   // Create sample
@@ -560,7 +561,7 @@ export async function updateSample(
     .where(eq(samples.id, sampleId));
 
   if (!existing) {
-    throw new Error("Sample not found");
+    throw new SafeError("Sample not found");
   }
 
   // If code is being changed, check for duplicates
@@ -571,7 +572,7 @@ export async function updateSample(
       .where(eq(samples.sampleCode, data.sampleCode));
 
     if (duplicate) {
-      throw new Error("A sample with this code already exists");
+      throw new SafeError("A sample with this code already exists");
     }
   }
 
@@ -653,7 +654,7 @@ export async function deleteSample(
     .where(eq(samples.id, sampleId));
 
   if (!existing) {
-    throw new Error("Sample not found");
+    throw new SafeError("Sample not found");
   }
 
   await db.delete(samples).where(eq(samples.id, sampleId));

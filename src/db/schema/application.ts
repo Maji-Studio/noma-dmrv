@@ -15,7 +15,7 @@ export const applications = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     code: text("code").notNull().unique(), // e.g., "AP-2025-043"
     applicationDate: timestamp("application_date").defaultNow().notNull(),
-    status: applicationStatus("status").default("delivered").notNull(),
+    status: applicationStatus("status").default("applied").notNull(),
 
     // --- Linked Records ---
     // Facility is derivable via delivery.facility_id (chain of custody)
