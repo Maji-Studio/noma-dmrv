@@ -15,6 +15,7 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
@@ -143,6 +144,8 @@ function createColumns(
 // ============================================
 
 export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
+  const { facilityId: contextFacilityId } = useFacilityContext();
+
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: FeedstockWithRelations | null;
@@ -156,7 +159,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Data
-  const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks();
+  const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks(
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    { enabled: !!contextFacilityId },
+  );
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
   const deleteFeedstock = useDeleteFeedstock();

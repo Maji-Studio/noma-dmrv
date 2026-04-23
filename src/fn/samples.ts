@@ -93,7 +93,8 @@ export async function getSampleByIdFn(
  * Get sample statistics
  */
 export async function getSampleStatsFn(
-  productionRunId?: string
+  productionRunId?: string,
+  facilityId?: string,
 ): Promise<ActionResult<SampleStats>> {
   try {
     const user = await getUser();
@@ -101,7 +102,17 @@ export async function getSampleStatsFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const stats = await getSampleStatsData(user.id, productionRunId);
+    const validatedProductionRunId = productionRunId
+      ? z.string().uuid().parse(productionRunId)
+      : undefined;
+    const validatedFacilityId = facilityId
+      ? z.string().uuid().parse(facilityId)
+      : undefined;
+    const stats = await getSampleStatsData(
+      user.id,
+      validatedProductionRunId,
+      validatedFacilityId,
+    );
     return { success: true, data: stats };
   } catch (error) {
     return {

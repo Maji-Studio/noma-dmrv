@@ -50,7 +50,10 @@ export const orderKeys = {
 /**
  * Hook to fetch paginated list of orders with filtering
  */
-export function useOrders(filters?: Partial<OrderFilterData>) {
+export function useOrders(
+  filters?: Partial<OrderFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: orderKeys.list(filters),
     queryFn: async () => {
@@ -61,6 +64,7 @@ export function useOrders(filters?: Partial<OrderFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 
@@ -103,7 +107,10 @@ export function useOrderWithRelations(orderId: string, enabled = true) {
 /**
  * Hook to fetch orders for dropdown selection
  */
-export function useOrdersForSelect(facilityId?: string) {
+export function useOrdersForSelect(
+  facilityId?: string,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: orderKeys.select(facilityId),
     queryFn: async () => {
@@ -114,6 +121,7 @@ export function useOrdersForSelect(facilityId?: string) {
       return result.data;
     },
     staleTime: 30000,
+    enabled: options?.enabled,
   });
 }
 

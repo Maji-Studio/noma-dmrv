@@ -6,6 +6,7 @@
 import { ilike, or, eq, and, inArray, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { requireAuth } from "./utils";
+import { formatStorageLocationType } from "@/schemas/storage-locations";
 import {
   facilities,
   reactors,
@@ -512,12 +513,13 @@ function formatStorageLocationSubtitle(
 ): string {
   switch (type) {
     case "feedstock_bin": {
+      const typeLabel = formatStorageLocationType(type);
       const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
       if (!feedstockTypeName && remainingKg === 0) {
-        return "Empty";
+        return `${typeLabel} · Empty`;
       }
 
-      const parts: string[] = [];
+      const parts: string[] = [typeLabel];
       if (feedstockTypeName) {
         parts.push(feedstockTypeName);
       }
@@ -525,30 +527,33 @@ function formatStorageLocationSubtitle(
       return parts.join(" · ");
     }
     case "biochar_bin": {
+      const typeLabel = formatStorageLocationType(type);
       const availableBiocharKg = Math.max(0, totalProducedKg - totalAllocatedKg);
       if (availableBiocharKg === 0) {
-        return "Empty";
+        return `${typeLabel} · Empty`;
       }
-      return `${Math.round(availableBiocharKg).toLocaleString()} kg biochar available`;
+      return `${typeLabel} · ${Math.round(availableBiocharKg).toLocaleString()} kg biochar available`;
     }
     case "product_bin": {
+      const typeLabel = formatStorageLocationType(type);
       if (totalProductKg === 0) {
-        return "Empty";
+        return `${typeLabel} · Empty`;
       }
 
-      const parts = [`${Math.round(totalProductKg).toLocaleString()} kg products`];
+      const parts = [typeLabel, `${Math.round(totalProductKg).toLocaleString()} kg products`];
       if (biocharEquivalentKg > 0) {
         parts.push(`${Math.round(biocharEquivalentKg).toLocaleString()} kg biochar eq`);
       }
       return parts.join(" · ");
     }
     case "ingredient_bin": {
+      const typeLabel = formatStorageLocationType(type);
       const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
       if (!feedstockTypeName && remainingKg === 0) {
-        return "Ingredient Bin";
+        return `${typeLabel} · Empty`;
       }
 
-      const parts: string[] = [];
+      const parts: string[] = [typeLabel];
       if (feedstockTypeName) {
         parts.push(feedstockTypeName);
       }

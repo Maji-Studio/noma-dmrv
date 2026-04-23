@@ -1,4 +1,4 @@
-import { desc, eq, count, sum, ne, and } from "drizzle-orm";
+import { desc, eq, count, sum, ne, and, SQL, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
@@ -6,9 +6,10 @@ import {
   type Application,
 } from "@/db/schema/application";
 import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
-import { deliveries } from "@/db/schema/logistics";
+import { deliveries, orders } from "@/db/schema/logistics";
+import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { tonnesToKg, kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
 
@@ -21,6 +22,19 @@ import { SafeError } from "@/lib/errors";
 
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
+
+export interface ApplicationDeliveryOptionData {
+  id: string;
+  code: string;
+  deliveryDate: Date;
+  orderCode: string | null;
+  formulationName: string | null;
+  massDryKg: number | null;
+  deliveredWetMassKg: number | null;
+  orderQuantityKg: number | null;
+  moistureContentPercent: number | null;
+  alreadyAppliedWetKg: number;
+}
 
 async function getDeliveryMoistureContentPercent(
   deliveryId: string,
@@ -179,23 +193,54 @@ async function resolveApplicationDryMassTons(
  */
 export async function getApplications(
   userId: string,
-  options?: { page?: number; pageSize?: number }
+  options?: { page?: number; pageSize?: number; facilityId?: string }
 ): Promise<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }> {
   requireAuth(userId);
 
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
+  const conditions: SQL[] = [];
+
+  if (options?.facilityId) {
+    conditions.push(eq(deliveries.facilityId, options.facilityId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
-    .from(applications);
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .where(whereClause);
 
   const total = Number(totalCount);
 
   const items = await db
-    .select()
+    .select({
+      id: applications.id,
+      code: applications.code,
+      status: applications.status,
+      applicationDate: applications.applicationDate,
+      deliveryId: applications.deliveryId,
+      biocharAppliedTons: applications.biocharAppliedTons,
+      biocharAppliedDryTons: applications.biocharAppliedDryTons,
+      fieldSizeHa: applications.fieldSizeHa,
+      fieldIdentifier: applications.fieldIdentifier,
+      cropType: applications.cropType,
+      gpsLatitude: applications.gpsLatitude,
+      gpsLongitude: applications.gpsLongitude,
+      applicationMethodType: applications.applicationMethodType,
+      gisBoundaryReference: applications.gisBoundaryReference,
+      soilTemperatureSource: applications.soilTemperatureSource,
+      soilTemperatureC: applications.soilTemperatureC,
+      co2eStoredTonnes: applications.co2eStoredTonnes,
+      createdAt: applications.createdAt,
+      updatedAt: applications.updatedAt,
+    })
     .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .where(whereClause)
     .orderBy(desc(applications.applicationDate))
     .limit(pageSize)
     .offset(offset);
@@ -207,6 +252,59 @@ export async function getApplications(
     pageSize,
     totalPages: Math.ceil(total / pageSize),
   };
+}
+
+export async function getApplicationDeliveryOptions(
+  userId: string,
+  facilityId?: string,
+): Promise<ApplicationDeliveryOptionData[]> {
+  requireAuth(userId);
+
+  const conditions: SQL[] = [];
+  if (facilityId) {
+    conditions.push(eq(deliveries.facilityId, facilityId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [rawDeliveries, appliedRows] = await Promise.all([
+    db
+      .select({
+        id: deliveries.id,
+        code: deliveries.code,
+        deliveryDate: deliveries.deliveryDate,
+        orderCode: orders.code,
+        formulationName: formulations.name,
+        massDryKg: deliveries.massDryKg,
+        deliveredWetMassKg: deliveries.deliveredWetMassKg,
+        orderQuantityKg: orders.quantityKg,
+        moistureContentPercent: deliveries.moistureContentPercent,
+      })
+      .from(deliveries)
+      .leftJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
+      .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+      .where(whereClause)
+      .orderBy(desc(deliveries.deliveryDate)),
+    db
+      .select({
+        deliveryId: applications.deliveryId,
+        totalAppliedKg: sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+      })
+      .from(applications)
+      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+      .where(whereClause)
+      .groupBy(applications.deliveryId),
+  ]);
+
+  const appliedByDeliveryId = new Map(
+    appliedRows.map((row) => [row.deliveryId, Number(row.totalAppliedKg)])
+  );
+
+  return rawDeliveries.map((delivery) => ({
+    ...delivery,
+    alreadyAppliedWetKg: appliedByDeliveryId.get(delivery.id) ?? 0,
+  }));
 }
 
 /**

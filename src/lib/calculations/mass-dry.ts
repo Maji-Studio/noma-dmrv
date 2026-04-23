@@ -32,6 +32,20 @@ export function deriveMassDryKg(
   return roundKg(deliveredWetMassKg * (1 - moisturePercent / 100));
 }
 
+export function deriveMassDryKgWithAddedWater(
+  wetMassKg: number,
+  moisturePercent: number,
+  addedWaterKg: number | null | undefined
+): number {
+  const waterAddedKg = addedWaterKg ?? 0;
+
+  if (waterAddedKg < 0) {
+    throw new RangeError('addedWaterKg must be >= 0');
+  }
+
+  return deriveMassDryKg(wetMassKg + waterAddedKg, moisturePercent);
+}
+
 /** Compute dry mass clamped to wet mass (dry can never exceed wet). */
 export function computeClampedDryMass(
   wetMassKg: number | null | undefined,
