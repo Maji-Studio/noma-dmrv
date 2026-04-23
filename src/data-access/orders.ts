@@ -398,6 +398,19 @@ export async function createOrder(
     throw new SafeError("An order with this code already exists");
   }
 
+  const [product] = await db
+    .select({ facilityId: biocharProducts.facilityId })
+    .from(biocharProducts)
+    .where(eq(biocharProducts.id, data.biocharProductId));
+
+  if (!product) {
+    throw new SafeError("Biochar product not found");
+  }
+
+  if (product.facilityId !== data.facilityId) {
+    throw new SafeError("Biochar product belongs to a different facility");
+  }
+
   try {
     const [order] = await db
       .insert(orders)
@@ -468,6 +481,27 @@ export async function updateOrder(
 
     if (duplicate) {
       throw new SafeError("An order with this code already exists");
+    }
+  }
+
+  const effectiveFacilityId = data.facilityId ?? existing.facilityId;
+  const effectiveProductId = data.biocharProductId ?? existing.biocharProductId;
+
+  if (
+    (data.facilityId !== undefined || data.biocharProductId !== undefined) &&
+    effectiveProductId
+  ) {
+    const [product] = await db
+      .select({ facilityId: biocharProducts.facilityId })
+      .from(biocharProducts)
+      .where(eq(biocharProducts.id, effectiveProductId));
+
+    if (!product) {
+      throw new SafeError("Biochar product not found");
+    }
+
+    if (product.facilityId !== effectiveFacilityId) {
+      throw new SafeError("Biochar product belongs to a different facility");
     }
   }
 

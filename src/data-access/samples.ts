@@ -124,6 +124,7 @@ export async function getSamples(
   const {
     search,
     productionRunId,
+    facilityId,
     // durabilityOption not yet supported in DB filtering
     startDate,
     endDate,
@@ -143,6 +144,10 @@ export async function getSamples(
 
   if (productionRunId) {
     conditions.push(eq(samples.productionRunId, productionRunId));
+  }
+
+  if (facilityId) {
+    conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
   // Note: durabilityOption is not in the DB schema, we'd need to add it or infer
@@ -173,6 +178,7 @@ export async function getSamples(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(samples)
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -340,13 +346,17 @@ export async function getSampleById(
  */
 export async function getSampleStats(
   userId: string,
-  productionRunId?: string
+  productionRunId?: string,
+  facilityId?: string,
 ): Promise<SampleStats> {
   requireAuth(userId);
 
   const conditions: SQL[] = [];
   if (productionRunId) {
     conditions.push(eq(samples.productionRunId, productionRunId));
+  }
+  if (facilityId) {
+    conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -358,12 +368,14 @@ export async function getSampleStats(
       avgOrganicCarbonPercent: avg(samples.organicCarbonPercent),
     })
     .from(samples)
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(whereClause);
 
   // Count 1000-year samples (those with R₀ reflectance data)
   const [samples1000Year] = await db
     .select({ count: count() })
     .from(samples)
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(
       whereClause
         ? and(whereClause, sql`${samples.randomReflectanceR0Percent} IS NOT NULL`)

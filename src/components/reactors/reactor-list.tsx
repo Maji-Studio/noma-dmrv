@@ -17,6 +17,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -165,6 +166,8 @@ function createColumns(
 // ============================================
 
 export function ReactorList() {
+  const { facilityId: contextFacilityId } = useFacilityContext();
+
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: ReactorWithRelations | null;
@@ -180,10 +183,17 @@ export function ReactorList() {
   // Server-side search: debounce the search input before querying
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebounce(searchInput, 250);
-  const filters = debouncedSearch ? { search: debouncedSearch, pageSize: 100 } : { pageSize: 100 };
+  const filters = {
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
+    pageSize: 100,
+  };
 
   // Data fetching — pass search filter so the server does the filtering
-  const { data: reactorsData, isLoading, error: fetchError } = useReactors(filters);
+  const { data: reactorsData, isLoading, error: fetchError } = useReactors(
+    filters,
+    { enabled: !!contextFacilityId },
+  );
   const createReactor = useCreateReactor();
   const updateReactor = useUpdateReactor();
   const deleteReactor = useDeleteReactor();

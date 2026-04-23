@@ -78,7 +78,10 @@ export function OrderForm({
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });
-  const { data: productsData } = useBiocharProducts({ pageSize: 100 });
+  const { data: productsData } = useBiocharProducts(
+    contextFacilityId ? { pageSize: 100, facilityId: contextFacilityId } : { pageSize: 100 },
+    { enabled: !!contextFacilityId },
+  );
   const { data: customerLocationsData } = useCustomerLocations(
     selectedCustomerId ?? "",
     !!selectedCustomerId

@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Cube, Plus, Scales } from "@phosphor-icons/react";
 import {
@@ -20,9 +20,10 @@ import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 
 // ============================================
@@ -40,6 +41,16 @@ function formatDate(date: Date | string): string {
 function formatMass(massKg: number | null): string {
   if (massKg === null || massKg === undefined) return "\u2014";
   return `${massKg.toLocaleString()} kg`;
+}
+
+function deriveBiocharProductDryMass(product: BiocharProductWithRelations): number | null {
+  const { massKg, moistureContentPercent, waterAddedKg } = product;
+
+  if (massKg == null || moistureContentPercent == null) return null;
+  if (massKg < 0 || moistureContentPercent < 0 || moistureContentPercent > 100) return null;
+  if (waterAddedKg != null && waterAddedKg < 0) return null;
+
+  return deriveMassDryKgWithAddedWater(massKg, moistureContentPercent, waterAddedKg);
 }
 
 // ============================================
@@ -97,10 +108,7 @@ function createColumns(
       id: "dryMass",
       header: "Dry Mass",
       cell: ({ row }) => {
-        const { massKg, moistureContentPercent } = row.original;
-        if (massKg == null || moistureContentPercent == null) return "\u2014";
-        if (massKg < 0 || moistureContentPercent < 0 || moistureContentPercent > 100) return "\u2014";
-        return formatMass(deriveMassDryKg(massKg, moistureContentPercent));
+        return formatMass(deriveBiocharProductDryMass(row.original));
       },
     },
     {
@@ -155,12 +163,16 @@ type SideSheetState =
 // ============================================
 
 export function BiocharProductList() {
+  const { facilityId: contextFacilityId } = useFacilityContext();
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const { data: productsData, isLoading, error: fetchError } = useBiocharProducts();
+  const { data: productsData, isLoading, error: fetchError } = useBiocharProducts(
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    { enabled: !!contextFacilityId },
+  );
   const createProduct = useCreateBiocharProduct();
   const updateProduct = useUpdateBiocharProduct();
   const deleteProduct = useDeleteBiocharProduct();
@@ -228,7 +240,7 @@ export function BiocharProductList() {
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -331,8 +343,8 @@ export function BiocharProductList() {
               { label: "Formulation", value: sideSheet.entity.formulation?.name },
               { label: "Wet Mass", value: formatMass(sideSheet.entity.massKg) },
               { label: "Moisture", value: sideSheet.entity.moistureContentPercent != null ? `${sideSheet.entity.moistureContentPercent}%` : undefined },
-              { label: "Dry Mass", value: sideSheet.entity.massKg != null && sideSheet.entity.moistureContentPercent != null && sideSheet.entity.massKg >= 0 && sideSheet.entity.moistureContentPercent >= 0 && sideSheet.entity.moistureContentPercent <= 100 ? formatMass(deriveMassDryKg(sideSheet.entity.massKg, sideSheet.entity.moistureContentPercent)) : undefined },
               { label: "Water Added", value: sideSheet.entity.waterAddedKg != null ? formatMass(sideSheet.entity.waterAddedKg) : undefined },
+              { label: "Dry Mass", value: formatMass(deriveBiocharProductDryMass(sideSheet.entity)) },
               { label: "Density", value: sideSheet.entity.densityKgM3 != null ? `${sideSheet.entity.densityKgM3} kg/m³` : undefined },
             ],
           },

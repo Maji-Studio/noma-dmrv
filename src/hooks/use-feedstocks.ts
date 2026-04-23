@@ -47,7 +47,10 @@ export const feedstockKeys = {
 // Query Hooks
 // ============================================
 
-export function useFeedstocks(filters?: Partial<FeedstockFilterData>) {
+export function useFeedstocks(
+  filters?: Partial<FeedstockFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: feedstockKeys.list(filters),
     queryFn: async () => {
@@ -56,6 +59,7 @@ export function useFeedstocks(filters?: Partial<FeedstockFilterData>) {
       return result.data;
     },
     staleTime: 30000,
+    enabled: options?.enabled,
   });
 }
 
@@ -72,7 +76,10 @@ export function useFeedstock(feedstockId: string, enabled = true) {
   });
 }
 
-export function useFeedstockStats(facilityId?: string) {
+export function useFeedstockStats(
+  facilityId?: string,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: feedstockKeys.stats(facilityId),
     queryFn: async () => {
@@ -81,6 +88,7 @@ export function useFeedstockStats(facilityId?: string) {
       return result.data;
     },
     staleTime: 30000,
+    enabled: options?.enabled,
   });
 }
 

@@ -17,6 +17,7 @@
 
 import { numericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
@@ -69,6 +70,7 @@ export function SampleForm({
   submitLabel,
 }: SampleFormProps) {
   const isEditMode = !!sample;
+  const { facilityId: contextFacilityId } = useFacilityContext();
 
   const {
     register,
@@ -203,6 +205,7 @@ export function SampleForm({
                       placeholder="Select a production run..."
                       disabled={isSubmitting || !!preselectedProductionRunId}
                       error={!!errors.productionRunId}
+                      filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
                       autoSelectSingle
                     />
                   )}
