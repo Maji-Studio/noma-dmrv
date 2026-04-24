@@ -50,7 +50,10 @@ export const reactorKeys = {
 /**
  * Hook to fetch paginated list of reactors with filtering
  */
-export function useReactors(filters?: Partial<ReactorFilterData>) {
+export function useReactors(
+  filters?: Partial<ReactorFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: reactorKeys.list(filters),
     queryFn: async () => {
@@ -61,6 +64,7 @@ export function useReactors(filters?: Partial<ReactorFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 

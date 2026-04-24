@@ -21,6 +21,12 @@ import { requireAuth } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
 
+const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin", "ingredient_bin"] as const;
+
+function isFeedstockIntakeBinType(type: string): boolean {
+  return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
+}
+
 // ============================================
 // Types
 // ============================================
@@ -294,18 +300,15 @@ export async function createFeedstock(
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
-  // Look up feedstock type category for bin-type enforcement
+  // Confirm the feedstock type exists before locking compatible bins to it.
   const [feedstockType] = await db
-    .select({ category: feedstockTypes.category })
+    .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
     .where(eq(feedstockTypes.id, data.feedstockTypeId));
 
   if (!feedstockType) {
     throw new SafeError("Feedstock type not found");
   }
-
-  const isIngredient = feedstockType.category === "ingredient";
-  const expectedBinType = isIngredient ? "ingredient_bin" : "feedstock_bin";
 
   // Batch-validate bin type compatibility for all allocations
   const binIds = data.allocations.map((a) => a.storageLocationId);
@@ -328,10 +331,9 @@ export async function createFeedstock(
     if (bin.facilityId !== data.facilityId) {
       throw new SafeError(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
-    if (bin.type !== expectedBinType) {
-      const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
+    if (!isFeedstockIntakeBinType(bin.type)) {
       throw new SafeError(
-        `${isIngredient ? "Ingredient" : "Feedstock"} materials must be allocated to ${label}, not a ${bin.type.replace("_", " ")}.`
+        `Feedstock materials must be allocated to a feedstock or ingredient bin, not a ${bin.type.replace("_", " ")}.`
       );
     }
     if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
@@ -449,18 +451,15 @@ export async function updateFeedstock(
     const typeId = data.feedstockTypeId ?? existing.feedstockTypeId;
     const facId = data.facilityId ?? existing.facilityId;
 
-    // Look up feedstock type category (needed for bin-type enforcement)
+    // Confirm the feedstock type exists before validating compatible bins.
     const [ft] = await db
-      .select({ category: feedstockTypes.category })
+      .select({ id: feedstockTypes.id })
       .from(feedstockTypes)
       .where(eq(feedstockTypes.id, typeId));
 
     if (!ft) {
       throw new SafeError("Feedstock type not found");
     }
-
-    const isIngredient = ft.category === "ingredient";
-    const expectedBinType = isIngredient ? "ingredient_bin" : "feedstock_bin";
 
     if (binId) {
       const [bin] = await db
@@ -479,10 +478,9 @@ export async function updateFeedstock(
         throw new SafeError(`Storage bin ${binId} does not belong to the selected facility`);
       }
 
-      if (bin.type !== expectedBinType) {
-        const label = isIngredient ? "an ingredient bin" : "a feedstock bin";
+      if (!isFeedstockIntakeBinType(bin.type)) {
         throw new SafeError(
-          `${isIngredient ? "Ingredient" : "Feedstock"} materials must be allocated to ${label}.`
+          "Feedstock materials must be allocated to a feedstock or ingredient bin."
         );
       }
       if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {

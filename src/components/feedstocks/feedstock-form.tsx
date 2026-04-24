@@ -33,6 +33,7 @@ import { WetMassWarning } from "./wet-mass-warning";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
+const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = "feedstock_bin,ingredient_bin";
 const GPS_HELPER_AUTO_FILLED = "Auto-filled from supplier";
 const GPS_HELPER_NO_COORDS = "Supplier has no GPS coordinates";
 const GPS_HELPER_LATITUDE = "-90 to 90";
@@ -115,9 +116,9 @@ export function FeedstockForm({
   const watchedGpsLat = useWatch({ control, name: "gpsLatitude" });
   const watchedGpsLng = useWatch({ control, name: "gpsLongitude" });
 
-  // Determine bin type filter based on feedstock type category
+  // Default new bins by feedstock category, while allowing intake into either compatible bin type.
   const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
-  const binTypeFilter = selectedFeedstockType?.subtitle === "ingredient"
+  const defaultStorageBinType = selectedFeedstockType?.subtitle === "ingredient"
     ? "ingredient_bin"
     : "feedstock_bin";
 
@@ -410,11 +411,10 @@ export function FeedstockForm({
                   control={formControl}
                   massRegister={register(`allocations.${index}.allocatedWetMassKg`, { setValueAs: numericValue })}
                   massError={errors.allocations?.[index]?.allocatedWetMassKg as FieldError | undefined}
-                  storageError={errors.allocations?.[index]?.storageLocationId as FieldError | undefined}
                   canRemove={fields.length > 1}
                   onRemove={() => remove(index)}
                   disabled={isSubmitting}
-                  binTypeFilter={binTypeFilter}
+                  binTypeFilter={FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER}
                   facilityId={watchedFacilityId || undefined}
                   feedstockTypeId={watchedFeedstockTypeId || undefined}
                   onCreateNew={() => {
@@ -516,7 +516,7 @@ export function FeedstockForm({
             setValue(`allocations.${storageLocationRowIndex}.storageLocationId`, entity.id, SET_VALUE_OPTS);
             storageLocationDialog.close();
           }}
-          defaultBinType={binTypeFilter}
+          defaultBinType={defaultStorageBinType}
           facilityId={watchedFacilityId}
         />
       )}

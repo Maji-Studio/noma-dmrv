@@ -15,7 +15,6 @@ interface BinAllocationRowProps {
   control: Control<any>;
   massRegister: UseFormRegisterReturn;
   massError?: FieldError;
-  storageError?: FieldError;
   /** Whether to show delete button (hidden for single allocation) */
   canRemove: boolean;
   onRemove: () => void;
@@ -35,7 +34,6 @@ export function BinAllocationRow({
   control,
   massRegister,
   massError,
-  storageError,
   canRemove,
   onRemove,
   disabled,

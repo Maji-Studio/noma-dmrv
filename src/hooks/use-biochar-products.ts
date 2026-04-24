@@ -50,7 +50,10 @@ export const biocharProductKeys = {
 /**
  * Hook to fetch paginated list of biochar products with filtering
  */
-export function useBiocharProducts(filters?: Partial<BiocharProductFilterData>) {
+export function useBiocharProducts(
+  filters?: Partial<BiocharProductFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: biocharProductKeys.list(filters),
     queryFn: async () => {
@@ -61,6 +64,7 @@ export function useBiocharProducts(filters?: Partial<BiocharProductFilterData>) 
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 

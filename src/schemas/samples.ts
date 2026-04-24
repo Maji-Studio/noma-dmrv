@@ -280,6 +280,9 @@ export const sampleFilterSchema = z.object({
   // Filter by production run
   productionRunId: z.string().uuid().optional(),
 
+  // Filter by facility through the linked production run
+  facilityId: z.string().uuid().optional(),
+
   // Filter by durability option
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
 
