@@ -40,9 +40,12 @@ test.describe("Order + Delivery UI CRUD", () => {
     // Navigate to the orders list
     await adminPage.goto(ordersUrl);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
-    await expect(adminPage.getByText("Total Orders")).toBeVisible({
-      timeout: 15000,
-    });
+
+    // Wait for full hydration — the sidebar facility selector only shows the
+    // facility name once the FacilityProvider has loaded and resolved.
+    await expect(
+      adminPage.locator("aside").getByText(seededData.facility.name, { exact: false })
+    ).toBeVisible({ timeout: 15000 });
 
     // Open the "New Order" side sheet
     await adminPage.click('button:has-text("New Order")');
@@ -143,9 +146,12 @@ test.describe("Order + Delivery UI CRUD", () => {
     await adminPage.goto(ordersUrl);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
-    // Wait for React to hydrate and data to load — stat cards appear after
-    // the client component mounts and React Query fetches order data.
-    await expect(adminPage.getByText("Total Orders")).toBeVisible({ timeout: 15000 });
+    // Wait for full hydration — the sidebar facility selector only shows the
+    // facility name once the FacilityProvider has loaded and resolved.
+    await expect(
+      adminPage.locator("aside").getByText(seededData.facility.name, { exact: false })
+    ).toBeVisible({ timeout: 15000 });
+
     await adminPage.click('button:has-text("New Order")');
     await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
 
