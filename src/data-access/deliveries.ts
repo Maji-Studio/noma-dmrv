@@ -631,7 +631,7 @@ export async function updateDelivery(
 
   if (data.facilityId !== undefined || data.orderId !== undefined) {
     const [order] = await db
-      .select({ facilityId: orders.facilityId, biocharProductId: orders.biocharProductId })
+      .select({ facilityId: orders.facilityId })
       .from(orders)
       .where(eq(orders.id, effectiveOrderId));
 
