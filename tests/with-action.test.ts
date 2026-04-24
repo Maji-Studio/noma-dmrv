@@ -98,6 +98,7 @@ describe("withAction", () => {
   });
 
   it("suppresses plain Error.message in non-dev mode", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.mocked(getUser).mockResolvedValue(mockUser);
 
     const result = await withAction(async () => {
@@ -108,6 +109,8 @@ describe("withAction", () => {
       success: false,
       error: "An unexpected error occurred",
     });
+
+    vi.unstubAllEnvs();
   });
 
   it("uses default fallbackMessage for non-Error throws", async () => {
