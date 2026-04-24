@@ -573,7 +573,7 @@ export async function updateBiocharProduct(
     throw new SafeError("Water added must be a non-negative finite number");
   }
 
-  if (data.linkedProductionRunId !== undefined || facilityChanged) {
+  if ((data.linkedProductionRunId !== undefined || facilityChanged) && effectiveLinkedRunId) {
     const [run] = await db
       .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
       .from(productionRuns)
