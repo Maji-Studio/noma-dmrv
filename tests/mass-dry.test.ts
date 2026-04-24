@@ -16,6 +16,10 @@ describe("Dry mass derivation", () => {
     expect(deriveMassDryKgWithAddedWater(500, 10, null)).toBe(450);
   });
 
+  it("rejects negative addedWaterKg", () => {
+    expect(() => deriveMassDryKgWithAddedWater(500, 10, -1)).toThrow(RangeError);
+  });
+
   it("clamps derived dry mass to the wet mass input", () => {
     expect(computeClampedDryMass(1000, 10)).toBe(900);
     expect(computeClampedDryMass(0, 0)).toBe(0);

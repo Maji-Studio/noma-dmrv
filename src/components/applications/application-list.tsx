@@ -309,15 +309,21 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           <div className="flex flex-col items-center justify-center gap-24 py-48">
             <MapPin size={48} className="text-[var(--color-text-tertiary)]" />
             <div className="text-center">
-              <h3 className="title-heading-3 mb-1">No applications yet</h3>
+              <h3 className="title-heading-3 mb-1">
+                {contextFacilityId ? "No applications yet" : "Select a facility"}
+              </h3>
               <p className="body-small text-[var(--color-text-secondary)]">
-                Create your first field application to get started
+                {contextFacilityId
+                  ? "Create your first field application to get started"
+                  : "Choose a facility from the sidebar to view applications"}
               </p>
             </div>
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={18} weight="bold" />
-              New Application
-            </Button>
+            {contextFacilityId && (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={18} weight="bold" />
+                New Application
+              </Button>
+            )}
           </div>
         }
       >

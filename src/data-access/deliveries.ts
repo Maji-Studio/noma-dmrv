@@ -540,7 +540,7 @@ export async function createDelivery(
       orderId: data.orderId,
       facilityId: data.facilityId,
       deliveryDate: data.deliveryDate,
-      biocharProductId: data.biocharProductId ?? null,
+      biocharProductId: effectiveBiocharProductId ?? null,
       driverId: data.driverId ?? null,
       vehicleId: data.vehicleId ?? null,
       status: data.status ?? "upcoming",

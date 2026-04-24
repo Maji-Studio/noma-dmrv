@@ -331,15 +331,21 @@ export function ReactorList() {
           <div className="flex flex-col items-center justify-center gap-24 py-48">
             <Lightning size={48} className="text-[var(--color-text-tertiary)]" />
             <div className="text-center">
-              <h3 className="title-heading-3 mb-1">No reactors yet</h3>
+              <h3 className="title-heading-3 mb-1">
+                {contextFacilityId ? "No reactors yet" : "Select a facility"}
+              </h3>
               <p className="body-small text-[var(--color-text-secondary)]">
-                Create your first reactor to get started
+                {contextFacilityId
+                  ? "Create your first reactor to get started"
+                  : "Choose a facility from the sidebar to view reactors"}
               </p>
             </div>
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={18} weight="bold" />
-              New Reactor
-            </Button>
+            {contextFacilityId && (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={18} weight="bold" />
+                New Reactor
+              </Button>
+            )}
           </div>
         }
       >
