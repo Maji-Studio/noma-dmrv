@@ -248,14 +248,12 @@ export function AppSidebar() {
             />
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="body-caption font-medium text-white truncate">
+            <span className="body-caption font-medium text-white truncate" suppressHydrationWarning>
               {session?.user?.name ?? "User"}
             </span>
-            {session?.user?.email && (
-              <span className="text-[10px] text-[var(--color-white-25)] truncate">
-                {session.user.email}
-              </span>
-            )}
+            <span className="text-[10px] text-[var(--color-white-25)] truncate" suppressHydrationWarning>
+              {session?.user?.email ?? " "}
+            </span>
           </div>
           <button
             type="button"
