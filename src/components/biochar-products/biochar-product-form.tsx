@@ -30,16 +30,18 @@ import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
 function TransferFlowPreview({
   sourceBinCode,
   availableKg,
-  massKg,
+  sourceMassKg,
+  destinationMassKg,
   destinationBinLabel,
 }: {
   sourceBinCode: string | null;
   availableKg: number | null;
-  massKg: number | null;
+  sourceMassKg: number | null;
+  destinationMassKg: number | null;
   destinationBinLabel: string | null;
 }) {
   const hasSource = sourceBinCode && availableKg !== null;
-  const hasMass = massKg !== null && massKg > 0;
+  const hasMass = sourceMassKg !== null && sourceMassKg > 0;
   const hasDestination = !!destinationBinLabel;
 
   if (!hasSource && !hasMass && !hasDestination) return null;
@@ -67,7 +69,7 @@ function TransferFlowPreview({
             </span>
             {hasMass && (
               <span className="body-caption font-medium text-[var(--clr-orange)] mt-1">
-                &minus;{massKg.toLocaleString()} kg
+                &minus;{sourceMassKg.toLocaleString()} kg
               </span>
             )}
           </>
@@ -85,7 +87,7 @@ function TransferFlowPreview({
         </svg>
         {hasMass ? (
           <span className="body-caption font-medium text-[var(--color-text-primary)] mt-2">
-            {massKg.toLocaleString()} kg
+            {sourceMassKg.toLocaleString()} kg
           </span>
         ) : (
           <span className="body-caption text-[var(--color-text-quaternary)] mt-2">
@@ -110,9 +112,9 @@ function TransferFlowPreview({
             <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
               {destinationBinLabel}
             </span>
-            {hasMass && (
+            {destinationMassKg !== null && destinationMassKg > 0 && (
               <span className="body-caption font-medium text-green-600 mt-1">
-                +{massKg.toLocaleString()} kg
+                +{destinationMassKg.toLocaleString()} kg
               </span>
             )}
           </>
@@ -259,7 +261,8 @@ export function BiocharProductForm({
         <TransferFlowPreview
           sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
           availableKg={linkedRunPreview?.biocharOutputKg ?? null}
-          massKg={massKgNum}
+          sourceMassKg={massKgNum}
+          destinationMassKg={effectiveWetMassKg}
           destinationBinLabel={
             selectedStorageLocation?.name
               ?? ((storageLocationId == null || storageLocationId === "")

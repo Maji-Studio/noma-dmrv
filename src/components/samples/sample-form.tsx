@@ -202,10 +202,10 @@ export function SampleForm({
                       entityType="productionRun"
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder="Select a production run..."
-                      disabled={isSubmitting || !!preselectedProductionRunId}
+                      placeholder={contextFacilityId ? "Select a production run..." : "Select a facility first"}
+                      disabled={isSubmitting || !!preselectedProductionRunId || !contextFacilityId}
                       error={!!errors.productionRunId}
-                      filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+                      filterBy={contextFacilityId ? { facilityId: contextFacilityId } : { facilityId: "__none__" }}
                       autoSelectSingle
                     />
                   )}

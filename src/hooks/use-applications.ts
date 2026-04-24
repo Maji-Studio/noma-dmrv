@@ -91,7 +91,7 @@ export function useCreateApplication() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: [applicationKeys.all[0], "deliveryOptions"],
+        queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
     },
   });
@@ -108,7 +108,7 @@ export function useUpdateApplication() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: [applicationKeys.all[0], "deliveryOptions"],
+        queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
       if (result.success && result.data) {
         queryClient.invalidateQueries({
@@ -131,7 +131,7 @@ export function useDeleteApplication() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
-        queryKey: [applicationKeys.all[0], "deliveryOptions"],
+        queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
     },
   });
