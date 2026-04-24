@@ -374,42 +374,58 @@ export async function createBiocharProduct(
     throw new SafeError("Formulation not found");
   }
 
-  // Verify linked production run exists and belongs to same facility
-  if (data.linkedProductionRunId) {
-    const [run] = await db
-      .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
-      .from(productionRuns)
-      .where(eq(productionRuns.id, data.linkedProductionRunId));
-
-    if (!run) {
-      throw new SafeError("Linked production run not found");
-    }
-    if (run.facilityId !== data.facilityId) {
-      throw new SafeError("Linked production run belongs to a different facility");
-    }
+  if (!data.linkedProductionRunId) {
+    throw new SafeError("Production run is required");
   }
 
-  // Verify storage location exists and belongs to same facility
-  if (data.storageLocationId) {
-    const [storage] = await db
-      .select({ id: storageLocations.id, facilityId: storageLocations.facilityId })
-      .from(storageLocations)
-      .where(eq(storageLocations.id, data.storageLocationId));
-
-    if (!storage) {
-      throw new SafeError("Storage location not found");
-    }
-    if (storage.facilityId !== data.facilityId) {
-      throw new SafeError("Storage location belongs to a different facility");
-    }
+  if (!data.storageLocationId) {
+    throw new SafeError("Product bin is required");
   }
 
-  if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
+  if (data.massKg == null || !Number.isFinite(data.massKg) || data.massKg < 0) {
+    throw new SafeError("Wet mass must be a non-negative finite number");
+  }
+
+  if (
+    data.moistureContentPercent == null ||
+    !Number.isFinite(data.moistureContentPercent) ||
+    data.moistureContentPercent < 0 ||
+    data.moistureContentPercent > 100
+  ) {
     throw new SafeError("Moisture content must be between 0 and 100");
   }
 
-  if (data.waterAddedKg != null && (!Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0)) {
-    throw new SafeError("waterAddedKg must be a non-negative finite number");
+  if (data.waterAddedKg == null || !Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0) {
+    throw new SafeError("Water added must be a non-negative finite number");
+  }
+
+  // Verify linked production run exists and belongs to same facility
+  const [run] = await db
+    .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
+    .from(productionRuns)
+    .where(eq(productionRuns.id, data.linkedProductionRunId));
+
+  if (!run) {
+    throw new SafeError("Linked production run not found");
+  }
+  if (run.facilityId !== data.facilityId) {
+    throw new SafeError("Linked production run belongs to a different facility");
+  }
+
+  // Verify storage location exists, belongs to same facility, and is a product bin
+  const [storage] = await db
+    .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+    .from(storageLocations)
+    .where(eq(storageLocations.id, data.storageLocationId));
+
+  if (!storage) {
+    throw new SafeError("Storage location not found");
+  }
+  if (storage.facilityId !== data.facilityId) {
+    throw new SafeError("Storage location belongs to a different facility");
+  }
+  if (storage.type !== "product_bin") {
+    throw new SafeError("Storage location must be a product bin");
   }
 
   const [product] = await db
@@ -512,10 +528,52 @@ export async function updateBiocharProduct(
   // Verify linked production run exists and belongs to same facility
   // Re-validate existing links when facilityId changes
   const facilityChanged = data.facilityId !== undefined && data.facilityId !== existing.facilityId;
-  const effectiveLinkedRunId = data.linkedProductionRunId ?? existing.linkedProductionRunId;
-  const effectiveStorageId = data.storageLocationId ?? existing.storageLocationId;
+  const effectiveLinkedRunId = data.linkedProductionRunId !== undefined
+    ? data.linkedProductionRunId
+    : existing.linkedProductionRunId;
+  const effectiveStorageId = data.storageLocationId !== undefined
+    ? data.storageLocationId
+    : existing.storageLocationId;
+  const effectiveMassKg = data.massKg !== undefined ? data.massKg : existing.massKg;
+  const effectiveMoistureContentPercent = data.moistureContentPercent !== undefined
+    ? data.moistureContentPercent
+    : existing.moistureContentPercent;
+  const effectiveWaterAddedKg = data.waterAddedKg !== undefined
+    ? data.waterAddedKg
+    : existing.waterAddedKg;
 
-  if (effectiveLinkedRunId != null && (data.linkedProductionRunId !== undefined || facilityChanged)) {
+  if (data.linkedProductionRunId !== undefined && !effectiveLinkedRunId) {
+    throw new SafeError("Production run is required");
+  }
+
+  if (data.storageLocationId !== undefined && !effectiveStorageId) {
+    throw new SafeError("Product bin is required");
+  }
+
+  if (
+    effectiveMassKg != null &&
+    (!Number.isFinite(effectiveMassKg) || effectiveMassKg < 0)
+  ) {
+    throw new SafeError("Wet mass must be a non-negative finite number");
+  }
+
+  if (
+    effectiveMoistureContentPercent != null &&
+    (!Number.isFinite(effectiveMoistureContentPercent) ||
+      effectiveMoistureContentPercent < 0 ||
+      effectiveMoistureContentPercent > 100)
+  ) {
+    throw new SafeError("Moisture content must be between 0 and 100");
+  }
+
+  if (
+    effectiveWaterAddedKg != null &&
+    (!Number.isFinite(effectiveWaterAddedKg) || effectiveWaterAddedKg < 0)
+  ) {
+    throw new SafeError("Water added must be a non-negative finite number");
+  }
+
+  if ((data.linkedProductionRunId !== undefined || facilityChanged) && effectiveLinkedRunId) {
     const [run] = await db
       .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
       .from(productionRuns)
@@ -529,10 +587,10 @@ export async function updateBiocharProduct(
     }
   }
 
-  // Verify storage location exists and belongs to same facility
-  if (effectiveStorageId != null && (data.storageLocationId !== undefined || facilityChanged)) {
+  // Verify storage location exists, belongs to same facility, and is a product bin
+  if (effectiveStorageId && (data.storageLocationId !== undefined || facilityChanged)) {
     const [storage] = await db
-      .select({ id: storageLocations.id, facilityId: storageLocations.facilityId })
+      .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
       .from(storageLocations)
       .where(eq(storageLocations.id, effectiveStorageId));
 
@@ -542,14 +600,9 @@ export async function updateBiocharProduct(
     if (storage.facilityId !== effectiveFacilityId) {
       throw new SafeError("Storage location belongs to a different facility");
     }
-  }
-
-  if (data.moistureContentPercent != null && (data.moistureContentPercent < 0 || data.moistureContentPercent > 100)) {
-    throw new SafeError("Moisture content must be between 0 and 100");
-  }
-
-  if (data.waterAddedKg != null && (!Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0)) {
-    throw new SafeError("waterAddedKg must be a non-negative finite number");
+    if (storage.type !== "product_bin") {
+      throw new SafeError("Storage location must be a product bin");
+    }
   }
 
   const [updated] = await db

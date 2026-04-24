@@ -11,6 +11,7 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 
 import { withAction } from "@/fn/with-action";
+import { SafeError } from "@/lib/errors";
 import { getUser } from "@/lib/auth/server";
 
 const mockUser = {
@@ -83,16 +84,29 @@ describe("withAction", () => {
     });
   });
 
-  it("forwards Error.message", async () => {
+  it("forwards SafeError.message verbatim", async () => {
     vi.mocked(getUser).mockResolvedValue(mockUser);
 
     const result = await withAction(async () => {
-      throw new Error("Order not found");
+      throw new SafeError("Order not found");
     });
 
     expect(result).toEqual({
       success: false,
       error: "Order not found",
+    });
+  });
+
+  it("suppresses plain Error.message in non-dev mode", async () => {
+    vi.mocked(getUser).mockResolvedValue(mockUser);
+
+    const result = await withAction(async () => {
+      throw new Error("DB connection refused");
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "An unexpected error occurred",
     });
   });
 

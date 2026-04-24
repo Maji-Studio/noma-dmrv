@@ -8,6 +8,7 @@ import { getUser } from "@/lib/auth/server";
 import {
   getApplications as getApplicationsData,
   getApplicationById,
+  getApplicationDeliveryOptions as getApplicationDeliveryOptionsData,
   createApplication as createApplicationData,
   updateApplication as updateApplicationData,
   deleteApplication as deleteApplicationData,
@@ -19,11 +20,17 @@ import {
   deleteApplicationSchema,
 } from "@/schemas/applications";
 
+const getApplicationsOptionsSchema = z.object({
+  page: z.number().int().min(1).optional(),
+  pageSize: z.number().int().min(1).max(100).optional(),
+  facilityId: z.string().uuid().optional(),
+}).optional();
+
 /**
  * Get applications with pagination
  */
 export async function getApplicationsFn(
-  options?: { page?: number; pageSize?: number }
+  options?: { page?: number; pageSize?: number; facilityId?: string }
 ): Promise<ActionResult<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
     const user = await getUser();
@@ -31,13 +38,36 @@ export async function getApplicationsFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const result = await getApplicationsData(user.id, options);
+    const validatedOptions = getApplicationsOptionsSchema.parse(options);
+    const result = await getApplicationsData(user.id, validatedOptions);
     return { success: true, data: result };
   } catch (error) {
     console.error("Failed to get applications:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to get applications",
+    };
+  }
+}
+
+export async function getApplicationDeliveryOptionsFn(
+  facilityId?: string
+): Promise<ActionResult<Awaited<ReturnType<typeof getApplicationDeliveryOptionsData>>>> {
+  try {
+    const user = await getUser();
+    if (!user || !user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validatedFacilityId = facilityId
+      ? z.string().uuid().parse(facilityId)
+      : undefined;
+    const deliveries = await getApplicationDeliveryOptionsData(user.id, validatedFacilityId);
+    return { success: true, data: deliveries };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to load application deliveries",
     };
   }
 }

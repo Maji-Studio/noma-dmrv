@@ -18,6 +18,7 @@ import { Button } from "@/components/ui";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
 // ============================================
 // Constants for select options
@@ -63,9 +64,12 @@ interface DeliveryFormProps {
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel }: DeliveryFormProps) {
   const isEditMode = !!delivery;
+  const { facilityId: contextFacilityId } = useFacilityContext();
 
   // Fetch orders for dropdown
-  const { data: ordersData } = useOrdersForSelect();
+  const { data: ordersData } = useOrdersForSelect(contextFacilityId ?? undefined, {
+    enabled: !!contextFacilityId,
+  });
   const orders = ordersData ?? [];
   const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
 
