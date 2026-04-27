@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { emptyToNull } from "./helpers";
 import { optionalPositiveNumber, toNumberOrNull } from "./helpers";
 
 // ============================================
@@ -32,6 +33,29 @@ const requiredPercent = z.preprocess(
 
 export const biocharProductStatusValues = ["draft", "testing", "ready", "sold"] as const;
 export type BiocharProductStatus = typeof biocharProductStatusValues[number];
+
+// ============================================
+// Ingredient Bin Schema (shared between form and update)
+// ============================================
+
+const ingredientBinBaseSchema = z.object({
+  formulationIngredientId: z.string().uuid(),
+  ingredientName: z.string(),
+  ingredientType: z.string(),
+  ratio: z.number().min(0).max(1).optional().nullable(),
+  massKg: z.number().min(0).optional().nullable(),
+});
+
+const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
+  storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
+  massKg: z.preprocess(toNumberOrNull, z.number().min(0).optional().nullable()),
+});
+
+const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
+  storageLocationId: z.string().uuid().optional().nullable(),
+});
+
+export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 
 // ============================================
 // Biochar Product Form Schema (Client-side validation)
@@ -75,6 +99,9 @@ export const biocharProductFormSchema = z.object({
   moistureContentPercent: requiredPercent,
   densityKgM3: optionalPositiveNumber,
   waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
+
+  // Ingredient bin mappings (formulation ingredient → physical bin)
+  ingredientBins: z.array(ingredientBinFormSchema).optional(),
 });
 
 // ============================================
@@ -116,6 +143,7 @@ export const updateBiocharProductSchema = z.object({
   moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
   waterAddedKg: z.number().min(0).optional(),
+  ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
 });
 
 /**
