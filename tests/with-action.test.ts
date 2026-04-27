@@ -98,16 +98,21 @@ describe("withAction", () => {
   });
 
   it("suppresses plain Error.message in non-dev mode", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.mocked(getUser).mockResolvedValue(mockUser);
 
-    const result = await withAction(async () => {
-      throw new Error("DB connection refused");
-    });
+    try {
+      const result = await withAction(async () => {
+        throw new Error("DB connection refused");
+      });
 
-    expect(result).toEqual({
-      success: false,
-      error: "An unexpected error occurred",
-    });
+      expect(result).toEqual({
+        success: false,
+        error: "An unexpected error occurred",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("uses default fallbackMessage for non-Error throws", async () => {

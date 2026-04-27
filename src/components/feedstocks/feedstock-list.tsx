@@ -104,13 +104,14 @@ function createColumns(
       ),
     },
     {
-      accessorKey: "status",
-      header: "Status",
+      accessorKey: "moistureContentPercent",
+      header: "Moisture",
       cell: ({ row }) => (
-        <StatusBadge
-          status={row.original.status === "complete" ? "complete" : "pending"}
-          label={row.original.status === "complete" ? "Complete" : "Missing Data"}
-        />
+        <span className="font-mono">
+          {row.original.moistureContentPercent !== null
+            ? `${row.original.moistureContentPercent}%`
+            : "—"}
+        </span>
       ),
     },
     {
@@ -361,7 +362,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               title: "Storage",
               fields: [
                 { label: "Storage Bin", value: sideSheet.entity.storageLocationCode ?? sideSheet.entity.storageLocationName },
-                { label: "Status", value: <StatusBadge status={sideSheet.entity.status === "complete" ? "complete" : "pending"} label={sideSheet.entity.status === "complete" ? "Complete" : "Missing Data"} /> },
               ],
             },
             ...(sideSheet.entity.overrideJustification ? [{
