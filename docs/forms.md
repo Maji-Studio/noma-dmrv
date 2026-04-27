@@ -476,7 +476,7 @@ This is cleaner than the `z.union([z.number(), z.string().transform(...), z.null
 
 ### Required vs Optional Numeric Coercion
 
-Use `toNumberOrNull` for **optional** fields (empty → `null`) and `toNumberOrUndefined` for **required** fields (empty → `undefined`, which triggers Zod's `required_error`):
+Use `toNumberOrNull` for **optional** fields (empty → `null`) and `toNumberOrUndefined` for **required** fields (empty → `undefined`). In Zod 4, supply a custom message via the unified `error` parameter (a callback that checks `issue.input`):
 
 ```typescript
 import { toNumberOrNull, toNumberOrUndefined } from "@/schemas/helpers";
@@ -484,8 +484,11 @@ import { toNumberOrNull, toNumberOrUndefined } from "@/schemas/helpers";
 // Optional field: empty → null (passes through optional/nullable validators)
 optionalMass: z.preprocess(toNumberOrNull, z.number().min(0).nullable().optional()),
 
-// Required field: empty → undefined (triggers required_error message)
-requiredLat: z.preprocess(toNumberOrUndefined, z.number({ required_error: "Latitude is required" }).min(-90).max(90)),
+// Required field: empty → undefined (Zod 4 error callback distinguishes undefined from invalid)
+requiredLat: z.preprocess(
+  toNumberOrUndefined,
+  z.number({ error: (iss) => iss.input === undefined ? "Latitude is required" : "Invalid number" }).min(-90).max(90),
+),
 ```
 
 Never write inline preprocess lambdas — always use the helpers from `@/schemas/helpers`.

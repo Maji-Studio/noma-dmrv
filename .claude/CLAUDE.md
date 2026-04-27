@@ -232,7 +232,7 @@ const {
 - Use `FormError` for field-level errors (handled by FormField)
 - Client-side validation happens before server calls
 - For numeric inputs use helpers from `@/schemas/helpers`: `toNumberOrNull`, `toNumberOrUndefined`, `optionalNumber`, `optionalPercent`, `toIntOrNull`
-- Use `toNumberOrUndefined` (→ `undefined`) for **required** fields (triggers Zod `required_error`); use `toNumberOrNull` (→ `null`) for **optional** fields
+- Use `toNumberOrUndefined` (→ `undefined`) for **required** fields — supply a custom message via Zod 4's unified `error` parameter (e.g., `z.number({ error: (iss) => iss.input === undefined ? "Field is required" : "Invalid number" })`); use `toNumberOrNull` (→ `null`) for **optional** fields
 - Never use `valueAsNumber: true` — it converts `""` to `NaN` which breaks Zod validation
 - For optional UUID fields (EntitySelect), use `emptyToNull` from `@/schemas/helpers` first in the union: `emptyToNull.or(z.string().uuid())`
 - For optional GPS fields, use `latitudeSchema`/`longitudeSchema` from `@/schemas/helpers`; for required GPS fields, use `requiredLatitudeSchema`/`requiredLongitudeSchema` with `toNumberOrUndefined`
