@@ -43,14 +43,18 @@ const statusOptions: readonly { value: string; label: string }[] = productionRun
 function ProcessFlowPreview({
   sourceBinName,
   feedstockKg,
+  feedstockDryKg,
   reactorName,
   biocharKg,
+  biocharDryKg,
   destinationBinName,
 }: {
   sourceBinName: string | null;
   feedstockKg: number | null;
+  feedstockDryKg: number | null;
   reactorName: string | null;
   biocharKg: number | null;
+  biocharDryKg: number | null;
   destinationBinName: string | null;
 }) {
   const hasSource = !!sourceBinName;
@@ -61,9 +65,12 @@ function ProcessFlowPreview({
 
   if (!hasSource && !hasReactor && !hasDestination) return null;
 
+  const useDry = feedstockDryKg !== null && biocharDryKg !== null;
   const yieldPercent =
     hasFeedstock && hasBiochar
-      ? ((biocharKg / feedstockKg) * 100).toFixed(1)
+      ? useDry
+        ? ((biocharDryKg! / feedstockDryKg!) * 100).toFixed(1)
+        : ((biocharKg / feedstockKg) * 100).toFixed(1)
       : null;
 
   return (
@@ -85,9 +92,16 @@ function ProcessFlowPreview({
               {sourceBinName}
             </span>
             {hasFeedstock && (
-              <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                {feedstockKg.toLocaleString()} kg
-              </span>
+              <>
+                <span className="body-caption text-[var(--color-text-secondary)] mt-1">
+                  {feedstockKg.toLocaleString()} kg wet
+                </span>
+                {feedstockDryKg !== null && (
+                  <span className="body-caption text-[var(--color-text-tertiary)]">
+                    {feedstockDryKg.toLocaleString()} kg dry
+                  </span>
+                )}
+              </>
             )}
           </>
         ) : (
@@ -129,7 +143,7 @@ function ProcessFlowPreview({
         )}
         {yieldPercent && (
           <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-            {yieldPercent}% yield
+            {yieldPercent}% yield{useDry ? " (dry)" : " (wet)"}
           </span>
         )}
       </div>
@@ -158,9 +172,16 @@ function ProcessFlowPreview({
               {destinationBinName}
             </span>
             {hasBiochar && (
-              <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                {biocharKg.toLocaleString()} kg
-              </span>
+              <>
+                <span className="body-caption text-[var(--color-text-secondary)] mt-1">
+                  {biocharKg.toLocaleString()} kg wet
+                </span>
+                {biocharDryKg !== null && (
+                  <span className="body-caption text-[var(--color-text-tertiary)]">
+                    {biocharDryKg.toLocaleString()} kg dry
+                  </span>
+                )}
+              </>
             )}
           </>
         ) : (
@@ -627,8 +648,10 @@ export function ProductionRunForm({
         <ProcessFlowPreview
           sourceBinName={selectedSourceBin?.name ?? null}
           feedstockKg={typeof watchWetMass === "number" ? watchWetMass : null}
+          feedstockDryKg={previewDryMass}
           reactorName={selectedReactor?.name ?? null}
           biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
+          biocharDryKg={previewBiocharDryMass}
           destinationBinName={selectedDestBin?.name ?? null}
         />
       </div>

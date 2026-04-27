@@ -264,10 +264,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             Field applications of biochar to soil
           </p>
         </div>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={18} weight="bold" />
-          New Application
-        </Button>
+        {contextFacilityId && (
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={18} weight="bold" />
+            New Application
+          </Button>
+        )}
       </div>
 
       {/* Stat Cards */}
