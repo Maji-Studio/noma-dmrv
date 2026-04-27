@@ -76,7 +76,12 @@ export async function getEntities(
     case "feedstock":
       return getFeedstocks({ search, facilityId: filterBy?.facilityId, limit });
     case "productionRun":
-      return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, status: filterBy?.status, limit });
+      return getProductionRunsEntity({
+        search,
+        facilityId: filterBy?.facilityId,
+        status: filterBy?.status as (typeof productionRuns.status.enumValues)[number] | undefined,
+        limit,
+      });
     case "application":
       return getApplicationsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
@@ -993,7 +998,7 @@ async function getFeedstockById(id: string): Promise<EntityOption | null> {
 async function getProductionRunsEntity(params: {
   search?: string;
   facilityId?: string;
-  status?: string;
+  status?: (typeof productionRuns.status.enumValues)[number];
   limit: number;
 }): Promise<EntityOption[]> {
   const { search, facilityId, status, limit } = params;

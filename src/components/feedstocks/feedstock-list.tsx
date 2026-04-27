@@ -195,8 +195,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
         vehicleId: data.vehicleId || null,
-        gpsLatitude: data.gpsLatitude,
-        gpsLongitude: data.gpsLongitude,
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
