@@ -41,6 +41,7 @@ export type IngredientInput = {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Formulation Read Operations
@@ -143,7 +144,7 @@ export async function getFormulationById(
   });
 
   if (!formulation) {
-    throw new Error("Formulation not found");
+    throw new SafeError("Formulation not found");
   }
 
   return formulation;
@@ -175,7 +176,7 @@ export async function createFormulation(
     .where(eq(formulations.code, data.code));
 
   if (existing) {
-    throw new Error("A formulation with this code already exists");
+    throw new SafeError("A formulation with this code already exists");
   }
 
   return db.transaction(async (tx) => {
@@ -237,7 +238,7 @@ export async function updateFormulation(
     .where(eq(formulations.id, formulationId));
 
   if (!existing) {
-    throw new Error("Formulation not found");
+    throw new SafeError("Formulation not found");
   }
 
   // If code is being changed, check for duplicates
@@ -248,7 +249,7 @@ export async function updateFormulation(
       .where(eq(formulations.code, data.code));
 
     if (duplicate) {
-      throw new Error("A formulation with this code already exists");
+      throw new SafeError("A formulation with this code already exists");
     }
   }
 
@@ -326,11 +327,11 @@ export async function deleteFormulation(
   ]);
 
   if (existingResult.length === 0) {
-    throw new Error("Formulation not found");
+    throw new SafeError("Formulation not found");
   }
 
   if (Number(productCountResult[0].count) > 0) {
-    throw new Error(
+    throw new SafeError(
       "Cannot delete formulation with associated biochar products. Remove products first."
     );
   }

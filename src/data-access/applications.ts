@@ -1,18 +1,20 @@
-import { desc, eq, count, sum, ne, and } from "drizzle-orm";
-import { db } from "@/db";
+import { desc, eq, count, sum, ne, and, SQL, sql } from "drizzle-orm";
+import { db, type DbTransaction } from "@/db";
 import {
   applications,
   soilTemperatureMeasurements,
   type Application,
 } from "@/db/schema/application";
 import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
-import { deliveries } from "@/db/schema/logistics";
+import { deliveries, orders } from "@/db/schema/logistics";
+import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { tonnesToKg, kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Application Data Access Layer
@@ -21,10 +23,24 @@ import { requireAuth } from "./utils";
 const DEFAULT_PAGE_SIZE = 100;
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export interface ApplicationDeliveryOptionData {
+  id: string;
+  code: string;
+  deliveryDate: Date;
+  orderCode: string | null;
+  formulationName: string | null;
+  massDryKg: number | null;
+  deliveredWetMassKg: number | null;
+  orderQuantityKg: number | null;
+  moistureContentPercent: number | null;
+  alreadyAppliedWetKg: number;
+}
 
-async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<number | null> {
-  const [delivery] = await db
+async function getDeliveryMoistureContentPercent(
+  deliveryId: string,
+  txOrDb: DbTransaction | typeof db = db,
+): Promise<number | null> {
+  const [delivery] = await txOrDb
     .select({
       moistureContentPercent: deliveries.moistureContentPercent,
     })
@@ -32,7 +48,7 @@ async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<nu
     .where(eq(deliveries.id, deliveryId));
 
   if (!delivery) {
-    throw new Error("Delivery not found");
+    throw new SafeError("Delivery not found");
   }
 
   return delivery.moistureContentPercent;
@@ -41,19 +57,24 @@ async function getDeliveryMoistureContentPercent(deliveryId: string): Promise<nu
 async function getDeliveryCapacityAndApplied(
   deliveryId: string,
   excludeApplicationId?: string,
+  txOrDb: DbTransaction | typeof db = db,
 ): Promise<{ capacityKg: number | null; alreadyAppliedTons: number }> {
-  const [delivery] = await db
+  const deliveryQuery = txOrDb
     .select({ deliveredWetMassKg: deliveries.deliveredWetMassKg })
     .from(deliveries)
     .where(eq(deliveries.id, deliveryId));
 
-  if (!delivery) throw new Error("Delivery not found");
+  const [delivery] = await (txOrDb === db
+    ? deliveryQuery
+    : deliveryQuery.for("update"));
+
+  if (!delivery) throw new SafeError("Delivery not found");
 
   const conditions = excludeApplicationId
     ? and(eq(applications.deliveryId, deliveryId), ne(applications.id, excludeApplicationId))
     : eq(applications.deliveryId, deliveryId);
 
-  const [{ total }] = await db
+  const [{ total }] = await txOrDb
     .select({ total: sum(applications.biocharAppliedTons) })
     .from(applications)
     .where(conditions);
@@ -85,13 +106,10 @@ async function getLinkedCreditBatches(
       creditBatches,
       eq(creditBatchApplications.creditBatchId, creditBatches.id),
     )
-    .where(eq(creditBatchApplications.applicationId, applicationId));
+    .where(eq(creditBatchApplications.applicationId, applicationId))
+    .for("update");
 
-  return rows.map((row) => ({
-    creditBatchId: row.creditBatchId,
-    code: row.code,
-    status: row.status,
-  }));
+  return rows;
 }
 
 async function refreshCreditBatchSummaries(
@@ -111,7 +129,7 @@ async function refreshCreditBatchSummaries(
     .where(eq(creditBatchApplications.creditBatchId, creditBatchId));
 
   const weightTons = linkedApplications.reduce(
-    (total, application) => total + application.biocharAppliedTons,
+    (total, application) => total + Number(application.biocharAppliedTons),
     0,
   );
   const hasUnknownStoredTotal = linkedApplications.some(
@@ -139,17 +157,20 @@ async function refreshCreditBatchSummaries(
     .where(eq(creditBatches.id, creditBatchId));
 }
 
-async function resolveApplicationDryMassTons(input: {
-  deliveryId: string;
-  biocharAppliedTons: number;
-  biocharAppliedDryTons?: number | null;
-  fallbackDryTons?: number | null;
-}): Promise<number> {
+async function resolveApplicationDryMassTons(
+  input: {
+    deliveryId: string;
+    biocharAppliedTons: number;
+    biocharAppliedDryTons?: number | null;
+    fallbackDryTons?: number | null;
+  },
+  txOrDb: DbTransaction | typeof db = db,
+): Promise<number> {
   if (input.biocharAppliedDryTons != null) {
     return input.biocharAppliedDryTons;
   }
 
-  const moistureContentPercent = await getDeliveryMoistureContentPercent(input.deliveryId);
+  const moistureContentPercent = await getDeliveryMoistureContentPercent(input.deliveryId, txOrDb);
 
   if (moistureContentPercent != null) {
     return kgToTonnes(
@@ -164,7 +185,7 @@ async function resolveApplicationDryMassTons(input: {
     return input.fallbackDryTons;
   }
 
-  throw new Error("Dry mass is required when delivery has no moisture content");
+  throw new SafeError("Dry mass is required when delivery has no moisture content");
 }
 
 /**
@@ -172,23 +193,54 @@ async function resolveApplicationDryMassTons(input: {
  */
 export async function getApplications(
   userId: string,
-  options?: { page?: number; pageSize?: number }
+  options?: { page?: number; pageSize?: number; facilityId?: string }
 ): Promise<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }> {
   requireAuth(userId);
 
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
+  const conditions: SQL[] = [];
+
+  if (options?.facilityId) {
+    conditions.push(eq(deliveries.facilityId, options.facilityId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
-    .from(applications);
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .where(whereClause);
 
   const total = Number(totalCount);
 
   const items = await db
-    .select()
+    .select({
+      id: applications.id,
+      code: applications.code,
+      status: applications.status,
+      applicationDate: applications.applicationDate,
+      deliveryId: applications.deliveryId,
+      biocharAppliedTons: applications.biocharAppliedTons,
+      biocharAppliedDryTons: applications.biocharAppliedDryTons,
+      fieldSizeHa: applications.fieldSizeHa,
+      fieldIdentifier: applications.fieldIdentifier,
+      cropType: applications.cropType,
+      gpsLatitude: applications.gpsLatitude,
+      gpsLongitude: applications.gpsLongitude,
+      applicationMethodType: applications.applicationMethodType,
+      gisBoundaryReference: applications.gisBoundaryReference,
+      soilTemperatureSource: applications.soilTemperatureSource,
+      soilTemperatureC: applications.soilTemperatureC,
+      co2eStoredTonnes: applications.co2eStoredTonnes,
+      createdAt: applications.createdAt,
+      updatedAt: applications.updatedAt,
+    })
     .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .where(whereClause)
     .orderBy(desc(applications.applicationDate))
     .limit(pageSize)
     .offset(offset);
@@ -200,6 +252,59 @@ export async function getApplications(
     pageSize,
     totalPages: Math.ceil(total / pageSize),
   };
+}
+
+export async function getApplicationDeliveryOptions(
+  userId: string,
+  facilityId?: string,
+): Promise<ApplicationDeliveryOptionData[]> {
+  requireAuth(userId);
+
+  const conditions: SQL[] = [];
+  if (facilityId) {
+    conditions.push(eq(deliveries.facilityId, facilityId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [rawDeliveries, appliedRows] = await Promise.all([
+    db
+      .select({
+        id: deliveries.id,
+        code: deliveries.code,
+        deliveryDate: deliveries.deliveryDate,
+        orderCode: orders.code,
+        formulationName: formulations.name,
+        massDryKg: deliveries.massDryKg,
+        deliveredWetMassKg: deliveries.deliveredWetMassKg,
+        orderQuantityKg: orders.quantityKg,
+        moistureContentPercent: deliveries.moistureContentPercent,
+      })
+      .from(deliveries)
+      .leftJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
+      .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+      .where(whereClause)
+      .orderBy(desc(deliveries.deliveryDate)),
+    db
+      .select({
+        deliveryId: applications.deliveryId,
+        totalAppliedKg: sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+      })
+      .from(applications)
+      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+      .where(whereClause)
+      .groupBy(applications.deliveryId),
+  ]);
+
+  const appliedByDeliveryId = new Map(
+    appliedRows.map((row) => [row.deliveryId, Number(row.totalAppliedKg)])
+  );
+
+  return rawDeliveries.map((delivery) => ({
+    ...delivery,
+    alreadyAppliedWetKg: appliedByDeliveryId.get(delivery.id) ?? 0,
+  }));
 }
 
 /**
@@ -250,38 +355,40 @@ export async function createApplication(
 ): Promise<Application> {
   requireAuth(userId);
 
-  const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId);
-  const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
-  if (!check.ok) throw new Error(check.errorMessage);
+  return db.transaction(async (tx) => {
+    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
+    const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
+    if (!check.ok) throw new SafeError(check.errorMessage!);
 
-  const biocharAppliedDryTons = await resolveApplicationDryMassTons({
-    deliveryId: data.deliveryId,
-    biocharAppliedTons: data.biocharAppliedTons,
-    biocharAppliedDryTons: data.biocharAppliedDryTons,
-  });
-
-  const [application] = await db
-    .insert(applications)
-    .values({
-      code: data.code,
-      status: "applied",
-      applicationDate: data.applicationDate,
+    const biocharAppliedDryTons = await resolveApplicationDryMassTons({
       deliveryId: data.deliveryId,
       biocharAppliedTons: data.biocharAppliedTons,
-      biocharAppliedDryTons,
-      fieldSizeHa: data.fieldSizeHa ?? null,
-      fieldIdentifier: data.fieldIdentifier || null,
-      cropType: data.cropType || null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      applicationMethodType: data.applicationMethodType ?? null,
-      gisBoundaryReference: data.gisBoundaryReference || null,
-      soilTemperatureSource: data.soilTemperatureSource ?? null,
-      soilTemperatureC: data.soilTemperatureC ?? null,
-    })
-    .returning();
+      biocharAppliedDryTons: data.biocharAppliedDryTons,
+    }, tx);
 
-  return application;
+    const [application] = await tx
+      .insert(applications)
+      .values({
+        code: data.code,
+        status: "applied",
+        applicationDate: data.applicationDate,
+        deliveryId: data.deliveryId,
+        biocharAppliedTons: data.biocharAppliedTons,
+        biocharAppliedDryTons,
+        fieldSizeHa: data.fieldSizeHa ?? null,
+        fieldIdentifier: data.fieldIdentifier || null,
+        cropType: data.cropType || null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        applicationMethodType: data.applicationMethodType ?? null,
+        gisBoundaryReference: data.gisBoundaryReference || null,
+        soilTemperatureSource: data.soilTemperatureSource ?? null,
+        soilTemperatureC: data.soilTemperatureC ?? null,
+      })
+      .returning();
+
+    return application;
+  });
 }
 
 /**
@@ -293,69 +400,74 @@ export async function updateApplication(
   data: Omit<UpdateApplicationData, "applicationId">
 ): Promise<Application> {
   requireAuth(userId);
-  const existingApplication = await getApplicationById(userId, id);
 
-  if (!existingApplication) {
-    throw new Error("Application not found");
-  }
+  return db.transaction(async (tx) => {
+    const [existingApplication] = await tx
+      .select()
+      .from(applications)
+      .where(eq(applications.id, id))
+      .for("update");
 
-  const updateData: Record<string, unknown> = {
-    updatedAt: new Date(),
-  };
+    if (!existingApplication) {
+      throw new SafeError("Application not found");
+    }
 
-  const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
-  const effectiveAppliedTons = data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
 
-  // Validate inventory — exclude the current application from the already-applied sum
-  if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
-    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id);
-    const check = checkDeliveryCapacity({
-      capacityKg,
-      alreadyAppliedTons,
-      requestedTons: effectiveAppliedTons,
-    });
-    if (!check.ok) throw new Error(check.errorMessage);
-  }
+    const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
+    const effectiveAppliedTons = data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
 
-  const shouldRecalculateDryMass =
-    data.deliveryId !== undefined ||
-    data.biocharAppliedTons !== undefined ||
-    data.biocharAppliedDryTons !== undefined;
+    if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
+      const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id, tx);
+      const check = checkDeliveryCapacity({
+        capacityKg,
+        alreadyAppliedTons,
+        requestedTons: effectiveAppliedTons,
+      });
+      if (!check.ok) throw new SafeError(check.errorMessage!);
+    }
 
-  if (shouldRecalculateDryMass) {
-    updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons({
-      deliveryId: effectiveDeliveryId,
-      biocharAppliedTons: effectiveAppliedTons,
-      biocharAppliedDryTons: data.biocharAppliedDryTons,
-      fallbackDryTons:
-        data.deliveryId === undefined && data.biocharAppliedTons === undefined
-          ? existingApplication.biocharAppliedDryTons
-          : null,
-    });
-  }
+    const shouldRecalculateDryMass =
+      data.deliveryId !== undefined ||
+      data.biocharAppliedTons !== undefined ||
+      data.biocharAppliedDryTons !== undefined;
 
-  // Only include fields that are explicitly provided
-  if (data.code !== undefined) updateData.code = data.code;
-  if (data.applicationDate !== undefined) updateData.applicationDate = data.applicationDate;
-  if (data.deliveryId !== undefined) updateData.deliveryId = data.deliveryId;
-  if (data.biocharAppliedTons !== undefined) updateData.biocharAppliedTons = data.biocharAppliedTons;
-  if (data.fieldSizeHa !== undefined) updateData.fieldSizeHa = data.fieldSizeHa;
-  if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = data.fieldIdentifier || null;
-  if (data.cropType !== undefined) updateData.cropType = data.cropType || null;
-  if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
-  if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
-  if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
-  if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
-  if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
-  if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
+    if (shouldRecalculateDryMass) {
+      updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons({
+        deliveryId: effectiveDeliveryId,
+        biocharAppliedTons: effectiveAppliedTons,
+        biocharAppliedDryTons: data.biocharAppliedDryTons,
+        fallbackDryTons:
+          data.deliveryId === undefined && data.biocharAppliedTons === undefined
+            ? existingApplication.biocharAppliedDryTons
+            : null,
+      }, tx);
+    }
 
-  const [application] = await db
-    .update(applications)
-    .set(updateData)
-    .where(eq(applications.id, id))
-    .returning();
+    if (data.code !== undefined) updateData.code = data.code;
+    if (data.applicationDate !== undefined) updateData.applicationDate = data.applicationDate;
+    if (data.deliveryId !== undefined) updateData.deliveryId = data.deliveryId;
+    if (data.biocharAppliedTons !== undefined) updateData.biocharAppliedTons = data.biocharAppliedTons;
+    if (data.fieldSizeHa !== undefined) updateData.fieldSizeHa = data.fieldSizeHa;
+    if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = data.fieldIdentifier || null;
+    if (data.cropType !== undefined) updateData.cropType = data.cropType || null;
+    if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
+    if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
+    if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
+    if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
+    if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
+    if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
 
-  return application;
+    const [application] = await tx
+      .update(applications)
+      .set(updateData)
+      .where(eq(applications.id, id))
+      .returning();
+
+    return application;
+  });
 }
 
 /**
@@ -371,7 +483,7 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
       .where(eq(applications.id, id));
 
     if (!existing) {
-      throw new Error("Application not found");
+      throw new SafeError("Application not found");
     }
 
     const linkedCreditBatches = await getLinkedCreditBatches(tx, id);
@@ -381,7 +493,7 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
 
     if (blockingBatches.length > 0) {
       const blockingCodes = blockingBatches.map((batch) => batch.code).join(", ");
-      throw new Error(
+      throw new SafeError(
         `Cannot delete application linked to verified or issued credit batches: ${blockingCodes}`,
       );
     }

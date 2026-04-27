@@ -5,13 +5,14 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projectMembers, projects, type Project } from "@/db/schema";
+import { SafeError } from "@/lib/errors";
 
 /**
  * Get all projects for current user
  */
 export async function getProjects(userId: string): Promise<Project[]> {
   if (!userId) {
-    throw new Error("Unauthorized");
+    throw new SafeError("Unauthorized");
   }
 
   return db
@@ -46,7 +47,7 @@ export async function getProjectById(
 
   const [project] = await db.select().from(projects).where(eq(projects.id, id));
   if (!project) {
-    throw new Error("Project not found");
+    throw new SafeError("Project not found");
   }
   return project;
 }
@@ -63,7 +64,7 @@ export async function createProject(
   }
 ): Promise<Project> {
   if (!userId) {
-    throw new Error("Unauthorized");
+    throw new SafeError("Unauthorized");
   }
 
   return db.transaction(async (tx) => {
@@ -97,7 +98,7 @@ export async function updateProject(
 ): Promise<Project> {
   const isOwner = await isProjectOwner(id, userId);
   if (!isOwner) {
-    throw new Error("Forbidden: Only project owners can update projects");
+    throw new SafeError("Forbidden: Only project owners can update projects");
   }
 
   const [updatedProject] = await db
@@ -110,7 +111,7 @@ export async function updateProject(
     .returning();
 
   if (!updatedProject) {
-    throw new Error("Project not found");
+    throw new SafeError("Project not found");
   }
 
   return updatedProject;
@@ -123,7 +124,7 @@ export async function updateProject(
 export async function deleteProject(id: string, userId: string): Promise<void> {
   const isOwner = await isProjectOwner(id, userId);
   if (!isOwner) {
-    throw new Error("Forbidden: Only project owners can delete projects");
+    throw new SafeError("Forbidden: Only project owners can delete projects");
   }
 
   await db.delete(projects).where(eq(projects.id, id));
@@ -138,7 +139,7 @@ export async function requireProjectMember(
   userId: string
 ): Promise<void> {
   if (!userId) {
-    throw new Error("Unauthorized");
+    throw new SafeError("Unauthorized");
   }
 
   const membership = await db.query.projectMembers.findFirst({
@@ -149,7 +150,7 @@ export async function requireProjectMember(
   });
 
   if (!membership) {
-    throw new Error("Forbidden: Not a project member");
+    throw new SafeError("Forbidden: Not a project member");
   }
 }
 

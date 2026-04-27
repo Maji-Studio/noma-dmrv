@@ -15,6 +15,7 @@ import {
   useSampleStats,
 } from "@/hooks/use-samples";
 import { useProductionRuns } from "@/hooks/use-production-runs";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -149,6 +150,7 @@ type SideSheetState =
 // ============================================
 
 export function SampleList() {
+  const { facilityId: contextFacilityId } = useFacilityContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [productionRunFilter, setProductionRunFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -162,15 +164,25 @@ export function SampleList() {
   const filters: Partial<SampleFilterData> = useMemo(() => ({
     search: searchQuery || undefined,
     productionRunId: productionRunFilter || undefined,
+    facilityId: contextFacilityId || undefined,
     page: currentPage,
     pageSize,
     sortBy: "samplingTime",
     sortOrder: "desc",
-  }), [searchQuery, productionRunFilter, currentPage, pageSize]);
+  }), [searchQuery, productionRunFilter, contextFacilityId, currentPage, pageSize]);
 
-  const { data: samplesData, isLoading, error: fetchError } = useSamples(filters);
-  const { data: statsData, isLoading: statsLoading } = useSampleStats(productionRunFilter || undefined);
-  const { data: productionRunsData } = useProductionRuns({ pageSize: 100 });
+  const { data: samplesData, isLoading, error: fetchError } = useSamples(filters, {
+    enabled: !!contextFacilityId,
+  });
+  const { data: statsData, isLoading: statsLoading } = useSampleStats(
+    productionRunFilter || undefined,
+    !!contextFacilityId,
+    contextFacilityId || undefined,
+  );
+  const { data: productionRunsData } = useProductionRuns(
+    contextFacilityId ? { pageSize: 100, facilityId: contextFacilityId } : { pageSize: 100 },
+    { enabled: !!contextFacilityId },
+  );
 
   const createSample = useCreateSample();
   const updateSample = useUpdateSample();

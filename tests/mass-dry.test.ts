@@ -2,12 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
   computeClampedDryMass,
   deriveMassDryKg,
+  deriveMassDryKgWithAddedWater,
   resolveDeliveryDryMass,
 } from "@/lib/calculations/mass-dry";
 
 describe("Dry mass derivation", () => {
   it("derives dry mass deterministically from wet mass and moisture percent", () => {
     expect(deriveMassDryKg(1000, 10)).toBe(900);
+  });
+
+  it("includes added water in product dry mass derivation", () => {
+    expect(deriveMassDryKgWithAddedWater(500, 10, 50)).toBe(495);
+    expect(deriveMassDryKgWithAddedWater(500, 10, null)).toBe(450);
+  });
+
+  it("rejects negative addedWaterKg", () => {
+    expect(() => deriveMassDryKgWithAddedWater(500, 10, -1)).toThrow(RangeError);
   });
 
   it("clamps derived dry mass to the wet mass input", () => {

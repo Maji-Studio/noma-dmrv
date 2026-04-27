@@ -229,7 +229,8 @@ export function ApplicationForm({
   // Remaining capacity for the selected delivery
   const deliveryCapacityKg = selectedDelivery?.deliveredWetMassKg ?? null;
   const alreadyApplied = selectedDelivery?.alreadyAppliedWetKg ?? 0;
-  const currentApplicationKg = isEditMode ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
+  const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
+  const currentApplicationKg = isSameDelivery ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
   const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
 
   const handleFormSubmit = handleSubmit(async (data) => {

@@ -7,6 +7,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { incidentReports, operators, reactors, productionRuns } from "@/db/schema";
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 export interface ProductionIncidentWithRelations {
   id: string;
@@ -73,7 +74,7 @@ export async function getProductionIncidentById(
     .where(eq(incidentReports.id, id));
 
   if (rows.length === 0) {
-    throw new Error("Production incident not found");
+    throw new SafeError("Production incident not found");
   }
 
   return rows[0];
@@ -100,7 +101,7 @@ export async function createProductionIncident(
     .where(eq(productionRuns.id, data.productionRunId));
 
   if (!run) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   const [inserted] = await db
@@ -142,7 +143,7 @@ export async function updateProductionIncident(
     .where(eq(incidentReports.id, id));
 
   if (!existing) {
-    throw new Error("Production incident not found");
+    throw new SafeError("Production incident not found");
   }
 
   const updateData: Record<string, unknown> = {
@@ -182,6 +183,6 @@ export async function deleteProductionIncident(
     .returning({ id: incidentReports.id });
 
   if (deleted.length === 0) {
-    throw new Error("Production incident not found");
+    throw new SafeError("Production incident not found");
   }
 }

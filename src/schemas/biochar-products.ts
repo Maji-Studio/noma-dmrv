@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, optionalPositiveNumber, optionalPercent } from "./helpers";
+import { optionalPositiveNumber, toNumberOrNull } from "./helpers";
 
 // ============================================
 // Constants
@@ -12,6 +12,19 @@ import { emptyToNull, optionalPositiveNumber, optionalPercent } from "./helpers"
 
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
+
+const requiredNonNegativeNumber = (message: string) => z.preprocess(
+  toNumberOrNull,
+  z.number().finite().min(0, message)
+);
+
+const requiredPercent = z.preprocess(
+  toNumberOrNull,
+  z
+    .number()
+    .min(MOISTURE_MIN, "Must be 0-100")
+    .max(MOISTURE_MAX, "Must be 0-100")
+);
 
 // ============================================
 // Status Enum
@@ -48,14 +61,20 @@ export const biocharProductFormSchema = z.object({
   status: z.enum(biocharProductStatusValues).default("testing"),
 
   // Optional relation fields (empty string → null, otherwise must be valid UUID)
-  linkedProductionRunId: emptyToNull.or(z.string().uuid("Invalid production run")).nullable().optional(),
-  storageLocationId: emptyToNull.or(z.string().uuid("Invalid storage location")).nullable().optional(),
+  linkedProductionRunId: z
+    .string()
+    .min(1, "Please select a production run")
+    .uuid("Invalid production run"),
+  storageLocationId: z
+    .string()
+    .min(1, "Please select a product bin")
+    .uuid("Invalid storage location"),
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
-  massKg: optionalPositiveNumber,
-  moistureContentPercent: optionalPercent,
+  massKg: requiredNonNegativeNumber("Wet mass must be 0 or greater"),
+  moistureContentPercent: requiredPercent,
   densityKgM3: optionalPositiveNumber,
-  waterAddedKg: optionalPositiveNumber,
+  waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
 });
 
 // ============================================
@@ -91,12 +110,12 @@ export const updateBiocharProductSchema = z.object({
     }),
   ]).optional(),
   status: z.enum(biocharProductStatusValues).optional(),
-  linkedProductionRunId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  massKg: z.number().min(0).optional().nullable(),
-  moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional().nullable(),
+  linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
+  storageLocationId: z.string().uuid("Invalid storage location").optional(),
+  massKg: z.number().min(0).optional(),
+  moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
-  waterAddedKg: z.number().min(0).optional().nullable(),
+  waterAddedKg: z.number().min(0).optional(),
 });
 
 /**
