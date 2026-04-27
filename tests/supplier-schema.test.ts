@@ -76,6 +76,28 @@ describe("supplierFormSchema GPS validation", () => {
     }
   });
 
+  it("requires GPS latitude (undefined fails)", () => {
+    const result = supplierFormSchema.safeParse({
+      ...validSupplierInput,
+      gpsLatitude: undefined,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result)).toContain("gpsLatitude");
+    }
+  });
+
+  it("requires GPS longitude (undefined fails)", () => {
+    const result = supplierFormSchema.safeParse({
+      ...validSupplierInput,
+      gpsLongitude: undefined,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result)).toContain("gpsLongitude");
+    }
+  });
+
   it("coerces string coordinates to numbers", () => {
     const result = supplierFormSchema.safeParse({
       name: "Test Supplier",

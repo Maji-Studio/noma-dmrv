@@ -135,6 +135,8 @@ function TransferFlowPreview({
 // Ingredient Bin Field
 // ============================================
 
+const INGREDIENT_BIN_PREFIX = "Ingredient Bin · ";
+
 function IngredientBinField({
   index,
   ingredientName,
@@ -156,7 +158,7 @@ function IngredientBinField({
 
   const formatLabel = (entity: { name: string; subtitle?: string }) => {
     const parts = [entity.name];
-    if (entity.subtitle) parts.push(entity.subtitle.replace("Ingredient Bin · ", ""));
+    if (entity.subtitle) parts.push(entity.subtitle.replace(INGREDIENT_BIN_PREFIX, ""));
     if (removalKg) parts.push(`(−${removalKg.toFixed(0)} kg)`);
     return parts.join(" · ");
   };
@@ -263,11 +265,10 @@ export function BiocharProductForm({
     if (selectedFormulation.id === syncedFormulationIdRef.current) return;
     syncedFormulationIdRef.current = selectedFormulation.id;
 
-    const savedBins =
-      (product?.composition as { ingredients?: IngredientBin[] } | null)?.ingredients ?? [];
+    const liveBins = getValues("ingredientBins") ?? [];
 
     const newBins = selectedFormulation.ingredients.map((ing) => {
-      const existing = savedBins.find(
+      const existing = liveBins.find(
         (eb) => eb.formulationIngredientId === ing.id
       );
       return {
@@ -280,7 +281,7 @@ export function BiocharProductForm({
       };
     });
     replaceIngredientBins(newBins);
-  }, [selectedFormulation, product?.composition, replaceIngredientBins]);
+  }, [selectedFormulation, getValues, replaceIngredientBins]);
 
   // Fetch linked run preview for transfer flow
   const { data: linkedRunPreview } = useQuery({
