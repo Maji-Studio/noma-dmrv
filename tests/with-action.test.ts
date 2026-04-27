@@ -101,16 +101,18 @@ describe("withAction", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.mocked(getUser).mockResolvedValue(mockUser);
 
-    const result = await withAction(async () => {
-      throw new Error("DB connection refused");
-    });
+    try {
+      const result = await withAction(async () => {
+        throw new Error("DB connection refused");
+      });
 
-    expect(result).toEqual({
-      success: false,
-      error: "An unexpected error occurred",
-    });
-
-    vi.unstubAllEnvs();
+      expect(result).toEqual({
+        success: false,
+        error: "An unexpected error occurred",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("uses default fallbackMessage for non-Error throws", async () => {

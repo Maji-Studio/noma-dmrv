@@ -76,7 +76,7 @@ export async function getEntities(
     case "feedstock":
       return getFeedstocks({ search, facilityId: filterBy?.facilityId, limit });
     case "productionRun":
-      return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, limit });
+      return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, status: filterBy?.status, limit });
     case "application":
       return getApplicationsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
@@ -993,14 +993,19 @@ async function getFeedstockById(id: string): Promise<EntityOption | null> {
 async function getProductionRunsEntity(params: {
   search?: string;
   facilityId?: string;
+  status?: string;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, limit } = params;
+  const { search, facilityId, status, limit } = params;
 
   const conditions: SQL[] = [];
 
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
+  }
+
+  if (status) {
+    conditions.push(eq(productionRuns.status, status));
   }
 
   if (search) {
