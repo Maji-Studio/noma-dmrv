@@ -11,7 +11,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
-import { useForm, Controller, useWatch, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useWatch, useFieldArray, type Control, type FieldValues } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/forms";
 import { useEntityById } from "@/hooks/use-entities";
@@ -148,8 +148,7 @@ function IngredientBinField({
   ingredientName: string;
   ingredientType: string;
   removalKg: number | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  control: any;
+  control: Control<FieldValues>;
   isSubmitting: boolean;
   facilityId: string;
 }) {
@@ -247,6 +246,10 @@ export function BiocharProductForm({
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchedWaterAddedKg = useWatch({ control, name: "waterAddedKg" });
 
+  // Cast control for IngredientBinField compatibility (z.preprocess makes input types `unknown`)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formControl = control as any;
+
   const { fields: ingredientBinFields, replace: replaceIngredientBins } = useFieldArray({
     control,
     name: "ingredientBins",
@@ -305,9 +308,13 @@ export function BiocharProductForm({
     if (selectedFacilityId !== previousSelectedFacilityRef.current) {
       setValue("linkedProductionRunId", "");
       setValue("storageLocationId", "");
+      const bins = getValues("ingredientBins") ?? [];
+      bins.forEach((_, i) => {
+        setValue(`ingredientBins.${i}.storageLocationId`, null);
+      });
       previousSelectedFacilityRef.current = selectedFacilityId;
     }
-  }, [selectedFacilityId, setValue]);
+  }, [selectedFacilityId, setValue, getValues]);
 
   // Auto-fill mass from linked production run
   useEffect(() => {
@@ -593,7 +600,7 @@ export function BiocharProductForm({
                 ingredientName={field.ingredientName}
                 ingredientType={field.ingredientType}
                 removalKg={removalKg}
-                control={control}
+                control={formControl}
                 isSubmitting={isSubmitting}
                 facilityId={selectedFacilityId}
               />
