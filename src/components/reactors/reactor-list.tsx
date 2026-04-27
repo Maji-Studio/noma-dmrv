@@ -17,6 +17,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -165,6 +166,8 @@ function createColumns(
 // ============================================
 
 export function ReactorList() {
+  const { facilityId: contextFacilityId } = useFacilityContext();
+
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: ReactorWithRelations | null;
@@ -180,10 +183,17 @@ export function ReactorList() {
   // Server-side search: debounce the search input before querying
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebounce(searchInput, 250);
-  const filters = debouncedSearch ? { search: debouncedSearch, pageSize: 100 } : { pageSize: 100 };
+  const filters = {
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
+    pageSize: 100,
+  };
 
   // Data fetching — pass search filter so the server does the filtering
-  const { data: reactorsData, isLoading, error: fetchError } = useReactors(filters);
+  const { data: reactorsData, isLoading, error: fetchError } = useReactors(
+    filters,
+    { enabled: !!contextFacilityId },
+  );
   const createReactor = useCreateReactor();
   const updateReactor = useUpdateReactor();
   const deleteReactor = useDeleteReactor();
@@ -321,15 +331,21 @@ export function ReactorList() {
           <div className="flex flex-col items-center justify-center gap-24 py-48">
             <Lightning size={48} className="text-[var(--color-text-tertiary)]" />
             <div className="text-center">
-              <h3 className="title-heading-3 mb-1">No reactors yet</h3>
+              <h3 className="title-heading-3 mb-1">
+                {contextFacilityId ? "No reactors yet" : "Select a facility"}
+              </h3>
               <p className="body-small text-[var(--color-text-secondary)]">
-                Create your first reactor to get started
+                {contextFacilityId
+                  ? "Create your first reactor to get started"
+                  : "Choose a facility from the sidebar to view reactors"}
               </p>
             </div>
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={18} weight="bold" />
-              New Reactor
-            </Button>
+            {contextFacilityId && (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={18} weight="bold" />
+                New Reactor
+              </Button>
+            )}
           </div>
         }
       >

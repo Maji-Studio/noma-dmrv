@@ -68,6 +68,7 @@
     "@types/pg": "^8.16.0",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
+    "@vitest/ui": "^4.0.18",
     "babel-plugin-react-compiler": "^1.0.0",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.4",

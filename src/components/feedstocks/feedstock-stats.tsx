@@ -7,6 +7,7 @@
 import { Package, Scales, Drop, CheckCircle, Warning } from "@phosphor-icons/react";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { formatMass } from "@/lib/format-utils";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFeedstockStats } from "@/hooks/use-feedstocks";
 
 // ============================================
@@ -18,7 +19,11 @@ interface FeedstockStatsProps {
 }
 
 export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
-  const { data: stats, isLoading } = useFeedstockStats(facilityId);
+  const { facilityId: contextFacilityId } = useFacilityContext();
+  const effectiveFacilityId = facilityId ?? contextFacilityId ?? undefined;
+  const { data: stats, isLoading } = useFeedstockStats(effectiveFacilityId, {
+    enabled: !!effectiveFacilityId,
+  });
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">

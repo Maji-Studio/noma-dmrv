@@ -105,6 +105,7 @@ export interface SampleStats {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 // ============================================
 // Sample Read Operations
@@ -123,6 +124,7 @@ export async function getSamples(
   const {
     search,
     productionRunId,
+    facilityId,
     // durabilityOption not yet supported in DB filtering
     startDate,
     endDate,
@@ -142,6 +144,10 @@ export async function getSamples(
 
   if (productionRunId) {
     conditions.push(eq(samples.productionRunId, productionRunId));
+  }
+
+  if (facilityId) {
+    conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
   // Note: durabilityOption is not in the DB schema, we'd need to add it or infer
@@ -172,6 +178,7 @@ export async function getSamples(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(samples)
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -315,7 +322,7 @@ export async function getSampleById(
     .where(eq(samples.id, sampleId));
 
   if (!sample) {
-    throw new Error("Sample not found");
+    throw new SafeError("Sample not found");
   }
 
   return {
@@ -339,13 +346,17 @@ export async function getSampleById(
  */
 export async function getSampleStats(
   userId: string,
-  productionRunId?: string
+  productionRunId?: string,
+  facilityId?: string,
 ): Promise<SampleStats> {
   requireAuth(userId);
 
   const conditions: SQL[] = [];
   if (productionRunId) {
     conditions.push(eq(samples.productionRunId, productionRunId));
+  }
+  if (facilityId) {
+    conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -357,12 +368,14 @@ export async function getSampleStats(
       avgOrganicCarbonPercent: avg(samples.organicCarbonPercent),
     })
     .from(samples)
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(whereClause);
 
   // Count 1000-year samples (those with R₀ reflectance data)
   const [samples1000Year] = await db
     .select({ count: count() })
     .from(samples)
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(
       whereClause
         ? and(whereClause, sql`${samples.randomReflectanceR0Percent} IS NOT NULL`)
@@ -439,7 +452,7 @@ export async function createSample(
     .where(eq(samples.sampleCode, data.sampleCode));
 
   if (existing) {
-    throw new Error("A sample with this code already exists");
+    throw new SafeError("A sample with this code already exists");
   }
 
   // Verify production run exists
@@ -449,7 +462,7 @@ export async function createSample(
     .where(eq(productionRuns.id, data.productionRunId));
 
   if (!productionRun) {
-    throw new Error("Production run not found");
+    throw new SafeError("Production run not found");
   }
 
   // Create sample
@@ -560,7 +573,7 @@ export async function updateSample(
     .where(eq(samples.id, sampleId));
 
   if (!existing) {
-    throw new Error("Sample not found");
+    throw new SafeError("Sample not found");
   }
 
   // If code is being changed, check for duplicates
@@ -571,7 +584,7 @@ export async function updateSample(
       .where(eq(samples.sampleCode, data.sampleCode));
 
     if (duplicate) {
-      throw new Error("A sample with this code already exists");
+      throw new SafeError("A sample with this code already exists");
     }
   }
 
@@ -653,7 +666,7 @@ export async function deleteSample(
     .where(eq(samples.id, sampleId));
 
   if (!existing) {
-    throw new Error("Sample not found");
+    throw new SafeError("Sample not found");
   }
 
   await db.delete(samples).where(eq(samples.id, sampleId));

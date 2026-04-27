@@ -57,7 +57,10 @@ export const productionRunKeys = {
 /**
  * Hook to fetch paginated list of production runs with filtering
  */
-export function useProductionRuns(filters?: Partial<ProductionRunFilterData>) {
+export function useProductionRuns(
+  filters?: Partial<ProductionRunFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: productionRunKeys.list(filters),
     queryFn: async () => {
@@ -68,6 +71,7 @@ export function useProductionRuns(filters?: Partial<ProductionRunFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 

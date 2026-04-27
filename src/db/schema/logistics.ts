@@ -19,6 +19,7 @@ import {
 import { facilities, storageLocations } from './facilities';
 import { customerLocations, customers, drivers } from './parties';
 import { biocharProducts } from './products';
+import { biocharStorageInventory } from './storage-inventory';
 
 // ============================================
 // Vehicles - Transport vehicles with fuel configuration
@@ -100,6 +101,11 @@ export const deliveries = pgTable(
     ),
     storageLocationId: uuid('storage_location_id').references(
       () => storageLocations.id
+    ),
+    // Specific product-in-bin record this delivery draws from.
+    // Drives quantityKgRemaining decrement and expiry check at delivery creation.
+    biocharStorageInventoryId: uuid('biochar_storage_inventory_id').references(
+      () => biocharStorageInventory.id
     ),
     moistureContentPercent: real('moisture_content_percent'),
     deliveredWetMassKg: real('delivered_wet_mass_kg'),
@@ -275,6 +281,10 @@ export const deliveriesRelations = relations(deliveries, ({ one }) => ({
   storageLocation: one(storageLocations, {
     fields: [deliveries.storageLocationId],
     references: [storageLocations.id],
+  }),
+  biocharStorageInventory: one(biocharStorageInventory, {
+    fields: [deliveries.biocharStorageInventoryId],
+    references: [biocharStorageInventory.id],
   }),
   driver: one(drivers, {
     fields: [deliveries.driverId],

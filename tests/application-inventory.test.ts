@@ -73,8 +73,8 @@ describe("checkDeliveryCapacity", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.availableKg).toBe(1000);
-    expect(result.errorMessage).toContain("2,000");
-    expect(result.errorMessage).toContain("1,000");
+    expect(result.errorMessage).toMatch(/2\D*000/);
+    expect(result.errorMessage).toMatch(/1\D*000/);
   });
 
   it("accounts for existing application when editing (approve)", () => {

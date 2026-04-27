@@ -16,6 +16,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { ApplicationForm } from "./application-form";
 import {
   formatApplicationKgFromTons,
@@ -24,6 +25,7 @@ import {
 import type { Application } from "@/db/schema/application";
 import {
   useApplications,
+  useApplicationDeliveryOptions,
   useCreateApplication,
   useUpdateApplication,
   useDeleteApplication,
@@ -147,6 +149,8 @@ interface ApplicationListProps {
 }
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
+  const { facilityId: contextFacilityId } = useFacilityContext();
+
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: Application | null;
@@ -160,7 +164,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Data fetching
-  const { data: applications, isLoading, error } = useApplications();
+  const { data: applications, isLoading, error } = useApplications(
+    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    { enabled: !!contextFacilityId },
+  );
+  const { data: scopedDeliveries } = useApplicationDeliveryOptions(
+    contextFacilityId ?? undefined,
+    { enabled: !!contextFacilityId },
+  );
   const createApplication = useCreateApplication();
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
@@ -230,6 +241,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const columns = createColumns(openEdit, handleDelete);
 
   const items = applications?.items ?? [];
+  const deliveryOptions = scopedDeliveries ?? deliveries;
   const totalApplications = items.length;
   const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
   const totalCo2e = items.reduce((sum, a) => sum + (a.co2eStoredTonnes ?? 0), 0);
@@ -297,15 +309,21 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           <div className="flex flex-col items-center justify-center gap-24 py-48">
             <MapPin size={48} className="text-[var(--color-text-tertiary)]" />
             <div className="text-center">
-              <h3 className="title-heading-3 mb-1">No applications yet</h3>
+              <h3 className="title-heading-3 mb-1">
+                {contextFacilityId ? "No applications yet" : "Select a facility"}
+              </h3>
               <p className="body-small text-[var(--color-text-secondary)]">
-                Create your first field application to get started
+                {contextFacilityId
+                  ? "Create your first field application to get started"
+                  : "Choose a facility from the sidebar to view applications"}
               </p>
             </div>
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={18} weight="bold" />
-              New Application
-            </Button>
+            {contextFacilityId && (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={18} weight="bold" />
+                New Application
+              </Button>
+            )}
           </div>
         }
       >
@@ -412,7 +430,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           <ApplicationForm
             key={sideSheet.entity?.id ?? "create"}
             application={sideSheet.entity ?? undefined}
-            deliveries={deliveries}
+            deliveries={deliveryOptions}
             onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createApplication.isPending || updateApplication.isPending}

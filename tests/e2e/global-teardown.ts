@@ -173,14 +173,83 @@ export default async function globalTeardown() {
               )
       `);
 
+      // ─── Reversal risk assessments (FK from credit_batches, must delete after batches) ───
+      await client.query(`
+        DELETE FROM reversal_risk_assessments
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
+      // ─── Loss records (polymorphic, no inbound FKs) ───
+      await client.query(`DELETE FROM loss_records WHERE code LIKE 'E2E-%'`);
+
       // ─── Applications ───
-      await client.query(`DELETE FROM applications WHERE code LIKE 'E2E-%'`);
+      await client.query(`
+        DELETE FROM applications
+        WHERE code LIKE 'E2E-%'
+           OR delivery_id IN (
+                SELECT id FROM deliveries
+                WHERE facility_id IN (
+                  SELECT id FROM facilities
+                  WHERE code LIKE 'E2E-%'
+                     OR name LIKE 'UI %'
+                     OR name LIKE 'Chain %'
+                     OR name LIKE 'Duplicate Test %'
+                )
+              )
+      `);
 
       // ─── Deliveries ───
-      await client.query(`DELETE FROM deliveries WHERE code LIKE 'E2E-%'`);
+      // Also catch UI-created deliveries (auto-generated codes) via facility or order reference
+      await client.query(`
+        DELETE FROM deliveries
+        WHERE code LIKE 'E2E-%'
+           OR facility_id IN (
+                SELECT id FROM facilities
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
+              )
+           OR order_id IN (
+                SELECT id FROM orders
+                WHERE code LIKE 'E2E-%'
+                   OR facility_id IN (
+                        SELECT id FROM facilities
+                        WHERE code LIKE 'E2E-%'
+                           OR name LIKE 'UI %'
+                           OR name LIKE 'Chain %'
+                           OR name LIKE 'Duplicate Test %'
+                      )
+              )
+      `);
 
       // ─── Orders ───
-      await client.query(`DELETE FROM orders WHERE code LIKE 'E2E-%'`);
+      // Also catch UI-created orders (auto-generated codes) that reference E2E biochar products
+      await client.query(`
+        DELETE FROM orders
+        WHERE code LIKE 'E2E-%'
+           OR biochar_product_id IN (SELECT id FROM biochar_products WHERE code LIKE 'E2E-%')
+           OR facility_id IN (
+                SELECT id FROM facilities
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
+              )
+      `);
+
+      // ─── Biochar storage inventory (FK: biochar_product_id, storage_location_id) ───
+      await client.query(`
+        DELETE FROM biochar_storage_inventory
+        WHERE biochar_product_id IN (SELECT id FROM biochar_products WHERE code LIKE 'E2E-%')
+           OR storage_location_id IN (SELECT id FROM storage_locations WHERE code LIKE 'E2E-%')
+      `);
 
       // ─── Biochar products ───
       await client.query(`DELETE FROM biochar_products WHERE code LIKE 'E2E-%'`);

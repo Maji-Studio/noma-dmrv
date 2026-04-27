@@ -39,8 +39,8 @@ export const sampleKeys = {
     [...sampleKeys.lists(), filters] as const,
   details: () => [...sampleKeys.all, "detail"] as const,
   detail: (id: string) => [...sampleKeys.details(), id] as const,
-  stats: (productionRunId?: string) =>
-    [...sampleKeys.all, "stats", productionRunId] as const,
+  stats: (productionRunId?: string, facilityId?: string) =>
+    [...sampleKeys.all, "stats", productionRunId, facilityId] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...sampleKeys.all, "codeCheck", code, excludeId] as const,
   nextCode: () => [...sampleKeys.all, "nextCode"] as const,
@@ -53,7 +53,10 @@ export const sampleKeys = {
 /**
  * Hook to fetch paginated list of samples with filtering
  */
-export function useSamples(filters?: Partial<SampleFilterData>) {
+export function useSamples(
+  filters?: Partial<SampleFilterData>,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: sampleKeys.list(filters),
     queryFn: async () => {
@@ -64,6 +67,7 @@ export function useSamples(filters?: Partial<SampleFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 
@@ -88,11 +92,15 @@ export function useSample(sampleId: string, enabled = true) {
 /**
  * Hook to fetch sample statistics
  */
-export function useSampleStats(productionRunId?: string, enabled = true) {
+export function useSampleStats(
+  productionRunId?: string,
+  enabled = true,
+  facilityId?: string,
+) {
   return useQuery({
-    queryKey: sampleKeys.stats(productionRunId),
+    queryKey: sampleKeys.stats(productionRunId, facilityId),
     queryFn: async () => {
-      const result = await getSampleStatsFn(productionRunId);
+      const result = await getSampleStatsFn(productionRunId, facilityId);
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -171,7 +179,9 @@ export function useCreateSample(
       // Invalidate all sample lists
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
       // Invalidate stats
-      queryClient.invalidateQueries({ queryKey: sampleKeys.stats() });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "samples" && q.queryKey[1] === "stats",
+      });
       // Invalidate next code
       queryClient.invalidateQueries({ queryKey: sampleKeys.nextCode() });
       // Invalidate production run detail (sample count may have changed)
@@ -284,7 +294,9 @@ export function useUpdateSample(
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: sampleKeys.stats() });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "samples" && q.queryKey[1] === "stats",
+      });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -392,7 +404,9 @@ export function useDeleteSample(
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
       // Invalidate stats
-      queryClient.invalidateQueries({ queryKey: sampleKeys.stats() });
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "samples" && q.queryKey[1] === "stats",
+      });
       // Invalidate production run data
       if (productionRunId) {
         queryClient.invalidateQueries({
@@ -508,9 +522,9 @@ export function useSampleCacheInvalidation() {
       }),
 
     /** Invalidate sample stats */
-    invalidateStats: (productionRunId?: string) =>
+    invalidateStats: (productionRunId?: string, facilityId?: string) =>
       queryClient.invalidateQueries({
-        queryKey: sampleKeys.stats(productionRunId),
+        queryKey: sampleKeys.stats(productionRunId, facilityId),
       }),
 
     /** Remove a specific sample from cache (use after deletion) */

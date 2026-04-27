@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,16 +30,18 @@ import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
 function TransferFlowPreview({
   sourceBinCode,
   availableKg,
-  massKg,
+  sourceMassKg,
+  destinationMassKg,
   destinationBinLabel,
 }: {
   sourceBinCode: string | null;
   availableKg: number | null;
-  massKg: number | null;
+  sourceMassKg: number | null;
+  destinationMassKg: number | null;
   destinationBinLabel: string | null;
 }) {
   const hasSource = sourceBinCode && availableKg !== null;
-  const hasMass = massKg !== null && massKg > 0;
+  const hasMass = sourceMassKg !== null && sourceMassKg > 0;
   const hasDestination = !!destinationBinLabel;
 
   if (!hasSource && !hasMass && !hasDestination) return null;
@@ -67,7 +69,7 @@ function TransferFlowPreview({
             </span>
             {hasMass && (
               <span className="body-caption font-medium text-[var(--clr-orange)] mt-1">
-                &minus;{massKg.toLocaleString()} kg
+                &minus;{sourceMassKg.toLocaleString()} kg
               </span>
             )}
           </>
@@ -85,7 +87,7 @@ function TransferFlowPreview({
         </svg>
         {hasMass ? (
           <span className="body-caption font-medium text-[var(--color-text-primary)] mt-2">
-            {massKg.toLocaleString()} kg
+            {sourceMassKg.toLocaleString()} kg
           </span>
         ) : (
           <span className="body-caption text-[var(--color-text-quaternary)] mt-2">
@@ -110,9 +112,9 @@ function TransferFlowPreview({
             <span className="body-small font-medium text-[var(--color-text-primary)] mt-2">
               {destinationBinLabel}
             </span>
-            {hasMass && (
+            {destinationMassKg !== null && destinationMassKg > 0 && (
               <span className="body-caption font-medium text-green-600 mt-1">
-                +{massKg.toLocaleString()} kg
+                +{destinationMassKg.toLocaleString()} kg
               </span>
             )}
           </>
@@ -176,6 +178,7 @@ export function BiocharProductForm({
   const storageLocationId = useWatch({ control, name: "storageLocationId" });
   const watchedMassKg = useWatch({ control, name: "massKg" });
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
+  const watchedWaterAddedKg = useWatch({ control, name: "waterAddedKg" });
 
   // Fetch linked run preview for transfer flow
   const { data: linkedRunPreview } = useQuery({
@@ -232,10 +235,23 @@ export function BiocharProductForm({
   // Derive preview values
   const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const moistureNum = typeof watchedMoisture === "number" ? watchedMoisture : null;
-  const dryMassKg =
-    massKgNum !== null && moistureNum !== null && moistureNum >= 0 && moistureNum <= 100
-      ? deriveMassDryKg(massKgNum, moistureNum)
+  const waterAddedKgNum = typeof watchedWaterAddedKg === "number" ? watchedWaterAddedKg : null;
+  const effectiveWetMassKg =
+    massKgNum !== null && (waterAddedKgNum === null || waterAddedKgNum >= 0)
+      ? massKgNum + (waterAddedKgNum ?? 0)
       : null;
+  const dryMassKg =
+    massKgNum !== null &&
+    moistureNum !== null &&
+    moistureNum >= 0 &&
+    moistureNum <= 100 &&
+    (waterAddedKgNum === null || waterAddedKgNum >= 0)
+      ? deriveMassDryKgWithAddedWater(massKgNum, moistureNum, waterAddedKgNum)
+      : null;
+  const dryMassFormulaBasis = waterAddedKgNum != null && waterAddedKgNum > 0
+    ? `(${massKgNum?.toFixed(2)} + ${waterAddedKgNum.toFixed(2)})`
+    : (massKgNum?.toFixed(2) ?? "0.00");
+  const dryMassFormulaMoisture = moistureNum?.toFixed(2) ?? "0.00";
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-24">
@@ -245,7 +261,8 @@ export function BiocharProductForm({
         <TransferFlowPreview
           sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
           availableKg={linkedRunPreview?.biocharOutputKg ?? null}
-          massKg={massKgNum}
+          sourceMassKg={massKgNum}
+          destinationMassKg={effectiveWetMassKg}
           destinationBinLabel={
             selectedStorageLocation?.name
               ?? ((storageLocationId == null || storageLocationId === "")
@@ -265,6 +282,7 @@ export function BiocharProductForm({
           label="Production Run"
           error={errors.linkedProductionRunId?.message}
           helperText="Which production run produced this biochar?"
+          required
         >
           <Controller
             name="linkedProductionRunId"
@@ -288,6 +306,7 @@ export function BiocharProductForm({
             id="massKg"
             label="Wet Mass (kg)"
             error={errors.massKg?.message}
+            required
             helperText={
               linkedRunPreview?.biocharOutputKg !== null && linkedRunPreview?.biocharOutputKg !== undefined
                 ? `${linkedRunPreview.biocharOutputKg.toLocaleString()} kg from run`
@@ -311,6 +330,7 @@ export function BiocharProductForm({
             label="Moisture Content (%)"
             error={errors.moistureContentPercent?.message}
             helperText="Typically 1-2% for biochar"
+            required
           >
             <FormInput
               id="moistureContentPercent"
@@ -326,25 +346,13 @@ export function BiocharProductForm({
           </FormField>
         </div>
 
-        {/* Dry mass preview */}
-        {dryMassKg !== null && (
-          <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
-            <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              {dryMassKg.toFixed(2)} kg
-            </span>
-            <span className="body-small text-[var(--color-text-quaternary)]">
-              = {Number(watchedMassKg ?? 0).toFixed(2)} &times; (1 &minus; {Number(watchedMoisture ?? 0).toFixed(2)}%)
-            </span>
-          </div>
-        )}
-
         <div className="grid grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="waterAddedKg"
             label="Water Added (kg)"
             error={errors.waterAddedKg?.message}
             helperText="Water added to reach target moisture"
+            required
           >
             <FormInput
               id="waterAddedKg"
@@ -375,6 +383,24 @@ export function BiocharProductForm({
             />
           </FormField>
         </div>
+
+        {/* Dry mass preview */}
+        {dryMassKg !== null && (
+          <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+            <span className="body-medium font-medium text-[var(--color-text-primary)]">
+              {dryMassKg.toFixed(2)} kg
+            </span>
+            <span className="body-small text-[var(--color-text-quaternary)]">
+              = {dryMassFormulaBasis} &times; (1 &minus; {dryMassFormulaMoisture}%)
+            </span>
+            {effectiveWetMassKg !== null && waterAddedKgNum != null && waterAddedKgNum > 0 && (
+              <span className="body-small text-[var(--color-text-quaternary)]">
+                Effective wet mass: {effectiveWetMassKg.toFixed(2)} kg
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Destination + Product Details */}
@@ -386,6 +412,7 @@ export function BiocharProductForm({
           label="Product Bin"
           error={errors.storageLocationId?.message}
           helperText="Where will the finished product be stored?"
+          required
         >
           <Controller
             name="storageLocationId"

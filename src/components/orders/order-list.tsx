@@ -119,7 +119,10 @@ export function OrderList() {
     sortOrder: "desc",
   }), [searchQuery, facilityId, currentPage, pageSize]);
 
-  const { data: ordersData, isLoading, error: fetchError } = useOrders(filters);
+  const { data: ordersData, isLoading, error: fetchError } = useOrders(
+    filters,
+    { enabled: !!facilityId },
+  );
 
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
