@@ -263,8 +263,11 @@ export function BiocharProductForm({
     if (selectedFormulation.id === syncedFormulationIdRef.current) return;
     syncedFormulationIdRef.current = selectedFormulation.id;
 
+    const savedBins =
+      (product?.composition as { ingredients?: IngredientBin[] } | null)?.ingredients ?? [];
+
     const newBins = selectedFormulation.ingredients.map((ing) => {
-      const existing = existingIngredientBins.find(
+      const existing = savedBins.find(
         (eb) => eb.formulationIngredientId === ing.id
       );
       return {
@@ -277,7 +280,7 @@ export function BiocharProductForm({
       };
     });
     replaceIngredientBins(newBins);
-  }, [selectedFormulation, existingIngredientBins, replaceIngredientBins]);
+  }, [selectedFormulation, product?.composition, replaceIngredientBins]);
 
   // Fetch linked run preview for transfer flow
   const { data: linkedRunPreview } = useQuery({

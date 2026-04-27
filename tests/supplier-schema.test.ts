@@ -7,6 +7,10 @@ const validSupplierInput = {
   gpsLongitude: "36.8219",
 };
 
+function fieldErrors(result: { success: false; error: { issues: { path: PropertyKey[] }[] } }) {
+  return result.error.issues.map((i) => i.path.join("."));
+}
+
 describe("supplierFormSchema GPS validation", () => {
   it("accepts valid GPS coordinates", () => {
     const result = supplierFormSchema.safeParse(validSupplierInput);
@@ -17,12 +21,26 @@ describe("supplierFormSchema GPS validation", () => {
     }
   });
 
+  it("accepts exact boundary values", () => {
+    const cases = [
+      { gpsLatitude: "90", gpsLongitude: "180" },
+      { gpsLatitude: "-90", gpsLongitude: "-180" },
+    ];
+    for (const coords of cases) {
+      const result = supplierFormSchema.safeParse({ ...validSupplierInput, ...coords });
+      expect(result.success).toBe(true);
+    }
+  });
+
   it("rejects latitude outside -90..90", () => {
     const result = supplierFormSchema.safeParse({
       ...validSupplierInput,
       gpsLatitude: "91",
     });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result)).toContain("gpsLatitude");
+    }
   });
 
   it("rejects longitude outside -180..180", () => {
@@ -31,6 +49,9 @@ describe("supplierFormSchema GPS validation", () => {
       gpsLongitude: "-181",
     });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result)).toContain("gpsLongitude");
+    }
   });
 
   it("requires GPS latitude (empty string fails)", () => {
@@ -39,6 +60,9 @@ describe("supplierFormSchema GPS validation", () => {
       gpsLatitude: "",
     });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result)).toContain("gpsLatitude");
+    }
   });
 
   it("requires GPS longitude (empty string fails)", () => {
@@ -47,6 +71,9 @@ describe("supplierFormSchema GPS validation", () => {
       gpsLongitude: "",
     });
     expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(fieldErrors(result)).toContain("gpsLongitude");
+    }
   });
 
   it("coerces string coordinates to numbers", () => {
