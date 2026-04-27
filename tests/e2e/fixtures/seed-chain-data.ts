@@ -84,6 +84,8 @@ export async function seedChainData(
         id: supplierId,
         code: `E2E-SUP-${testRunId}`,
         name: `E2E Seed Supplier ${testRunId}`,
+        gpsLatitude: -6.8,
+        gpsLongitude: 39.28,
       });
 
       // 3. Feedstock Type
@@ -106,6 +108,8 @@ export async function seedChainData(
         id: customerLocationId,
         customerId: customerId,
         name: `E2E Seed Location ${testRunId}`,
+        country: "Tanzania",
+        address: "123 Farm Road, Dar es Salaam",
         gpsLatitude: -6.8,
         gpsLongitude: 39.28,
       });

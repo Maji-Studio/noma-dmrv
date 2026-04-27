@@ -11,15 +11,18 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { toDateInputValue } from "@/lib/date-utils";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
-import { useForm, Controller, useWatch } from "react-hook-form";
+import { useForm, Controller, useWatch, useFieldArray, type Control, type FieldValues } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/forms";
 import { useEntityById } from "@/hooks/use-entities";
+import { useFormulation } from "@/hooks/use-formulations";
 import { Button } from "@/components/ui";
 import {
   biocharProductFormSchema,
   type BiocharProductFormData,
+  type IngredientBin,
 } from "@/schemas/biochar-products";
+import { INGREDIENT_TYPE_LABELS } from "@/schemas/formulations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
 
@@ -129,6 +132,66 @@ function TransferFlowPreview({
 }
 
 // ============================================
+// Ingredient Bin Field
+// ============================================
+
+const INGREDIENT_BIN_PREFIX = "Ingredient Bin · ";
+
+function IngredientBinField({
+  index,
+  ingredientName,
+  ingredientType,
+  removalKg,
+  control,
+  isSubmitting,
+  facilityId,
+}: {
+  index: number;
+  ingredientName: string;
+  ingredientType: string;
+  removalKg: number | null;
+  control: Control<FieldValues>;
+  isSubmitting: boolean;
+  facilityId: string;
+}) {
+  const typeLabel = INGREDIENT_TYPE_LABELS[ingredientType as keyof typeof INGREDIENT_TYPE_LABELS] ?? ingredientType;
+
+  const formatLabel = (entity: { name: string; subtitle?: string }) => {
+    const parts = [entity.name];
+    if (entity.subtitle) parts.push(entity.subtitle.replace(INGREDIENT_BIN_PREFIX, ""));
+    if (removalKg) parts.push(`(−${removalKg.toFixed(0)} kg)`);
+    return parts.join(" · ");
+  };
+
+  return (
+    <FormField
+      id={`ingredientBins.${index}.storageLocationId`}
+      label={ingredientName}
+      helperText={typeLabel}
+    >
+      <Controller
+        name={`ingredientBins.${index}.storageLocationId` as const}
+        control={control}
+        render={({ field }) => (
+          <EntitySelect
+            entityType="storageLocation"
+            value={field.value || ""}
+            onChange={field.onChange}
+            placeholder="Select an ingredient bin..."
+            disabled={isSubmitting}
+            filterBy={{
+              ...(facilityId ? { facilityId } : {}),
+              type: "ingredient_bin",
+            }}
+            formatSelectedLabel={formatLabel}
+          />
+        )}
+      />
+    </FormField>
+  );
+}
+
+// ============================================
 // Component
 // ============================================
 
@@ -150,6 +213,9 @@ export function BiocharProductForm({
   const isEditMode = !!product;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
+  const existingIngredientBins =
+    (product?.composition as { ingredients?: IngredientBin[] } | null)?.ingredients ?? [];
+
   const {
     register,
     handleSubmit,
@@ -170,15 +236,52 @@ export function BiocharProductForm({
       moistureContentPercent: product?.moistureContentPercent ?? null,
       densityKgM3: product?.densityKgM3 ?? null,
       waterAddedKg: product?.waterAddedKg ?? null,
+      ingredientBins: existingIngredientBins,
     },
   });
 
   const selectedFacilityId = useWatch({ control, name: "facilityId" }) || contextFacilityId || "";
   const linkedProductionRunId = useWatch({ control, name: "linkedProductionRunId" });
   const storageLocationId = useWatch({ control, name: "storageLocationId" });
+  const selectedFormulationId = useWatch({ control, name: "formulationId" });
   const watchedMassKg = useWatch({ control, name: "massKg" });
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchedWaterAddedKg = useWatch({ control, name: "waterAddedKg" });
+
+  // Cast control for IngredientBinField compatibility (z.preprocess makes input types `unknown`)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formControl = control as any;
+
+  const { fields: ingredientBinFields, replace: replaceIngredientBins } = useFieldArray({
+    control,
+    name: "ingredientBins",
+  });
+
+  const { data: selectedFormulation } = useFormulation(selectedFormulationId ?? "", !!selectedFormulationId);
+
+  const syncedFormulationIdRef = useRef(product?.formulation?.id ?? "");
+  useEffect(() => {
+    if (!selectedFormulation?.ingredients) return;
+    if (selectedFormulation.id === syncedFormulationIdRef.current) return;
+    syncedFormulationIdRef.current = selectedFormulation.id;
+
+    const liveBins = getValues("ingredientBins") ?? [];
+
+    const newBins = selectedFormulation.ingredients.map((ing) => {
+      const existing = liveBins.find(
+        (eb) => eb.formulationIngredientId === ing.id
+      );
+      return {
+        formulationIngredientId: ing.id,
+        ingredientName: ing.name,
+        ingredientType: ing.ingredientType,
+        ratio: ing.ratio ?? null,
+        storageLocationId: existing?.storageLocationId ?? null,
+        massKg: existing?.massKg ?? null,
+      };
+    });
+    replaceIngredientBins(newBins);
+  }, [selectedFormulation, getValues, replaceIngredientBins]);
 
   // Fetch linked run preview for transfer flow
   const { data: linkedRunPreview } = useQuery({
@@ -209,9 +312,13 @@ export function BiocharProductForm({
     if (selectedFacilityId !== previousSelectedFacilityRef.current) {
       setValue("linkedProductionRunId", "");
       setValue("storageLocationId", "");
+      const bins = getValues("ingredientBins") ?? [];
+      bins.forEach((_, i) => {
+        setValue(`ingredientBins.${i}.storageLocationId`, null);
+      });
       previousSelectedFacilityRef.current = selectedFacilityId;
     }
-  }, [selectedFacilityId, setValue]);
+  }, [selectedFacilityId, setValue, getValues]);
 
   // Auto-fill mass from linked production run
   useEffect(() => {
@@ -248,10 +355,11 @@ export function BiocharProductForm({
     (waterAddedKgNum === null || waterAddedKgNum >= 0)
       ? deriveMassDryKgWithAddedWater(massKgNum, moistureNum, waterAddedKgNum)
       : null;
-  const dryMassFormulaBasis = waterAddedKgNum != null && waterAddedKgNum > 0
-    ? `(${massKgNum?.toFixed(2)} + ${waterAddedKgNum.toFixed(2)})`
-    : (massKgNum?.toFixed(2) ?? "0.00");
-  const dryMassFormulaMoisture = moistureNum?.toFixed(2) ?? "0.00";
+  const hasWaterAdded = waterAddedKgNum != null && waterAddedKgNum > 0;
+  const finalMoisturePercent =
+    hasWaterAdded && massKgNum !== null && moistureNum !== null && effectiveWetMassKg !== null && effectiveWetMassKg > 0
+      ? ((massKgNum * moistureNum / 100 + waterAddedKgNum) / effectiveWetMassKg) * 100
+      : null;
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-24">
@@ -386,18 +494,28 @@ export function BiocharProductForm({
 
         {/* Dry mass preview */}
         {dryMassKg !== null && (
-          <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass</span>
             <span className="body-medium font-medium text-[var(--color-text-primary)]">
               {dryMassKg.toFixed(2)} kg
             </span>
-            <span className="body-small text-[var(--color-text-quaternary)]">
-              = {dryMassFormulaBasis} &times; (1 &minus; {dryMassFormulaMoisture}%)
-            </span>
-            {effectiveWetMassKg !== null && waterAddedKgNum != null && waterAddedKgNum > 0 && (
-              <span className="body-small text-[var(--color-text-quaternary)]">
-                Effective wet mass: {effectiveWetMassKg.toFixed(2)} kg
-              </span>
+            {hasWaterAdded && effectiveWetMassKg !== null && (
+              <>
+                <span className="text-[var(--color-text-quaternary)]">&middot;</span>
+                <span className="body-small text-[var(--color-text-tertiary)]">Effective wet mass</span>
+                <span className="body-small font-medium text-[var(--color-text-primary)]">
+                  {effectiveWetMassKg.toFixed(2)} kg
+                </span>
+              </>
+            )}
+            {hasWaterAdded && finalMoisturePercent !== null && (
+              <>
+                <span className="text-[var(--color-text-quaternary)]">&middot;</span>
+                <span className="body-small text-[var(--color-text-tertiary)]">Final moisture</span>
+                <span className="body-small font-medium text-[var(--color-text-primary)]">
+                  {finalMoisturePercent.toFixed(2)}%
+                </span>
+              </>
             )}
           </div>
         )}
@@ -464,6 +582,36 @@ export function BiocharProductForm({
           </FormField>
         </div>
       </div>
+
+      {/* Ingredient Bins */}
+      {ingredientBinFields.length > 0 && (
+        <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Ingredient Bins</SectionLabel>
+
+          {ingredientBinFields.map((field, index) => {
+            const ingredientRatio = field.ratio ?? 0;
+            const productMassKg = typeof watchedMassKg === "number" ? watchedMassKg : 0;
+            const biocharRatio = selectedFormulation?.biocharRatio;
+            const removalKg =
+              biocharRatio && biocharRatio > 0 && ingredientRatio > 0 && productMassKg > 0
+                ? (productMassKg / biocharRatio) * ingredientRatio
+                : null;
+
+            return (
+              <IngredientBinField
+                key={field.id}
+                index={index}
+                ingredientName={field.ingredientName}
+                ingredientType={field.ingredientType}
+                removalKg={removalKg}
+                control={formControl}
+                isSubmitting={isSubmitting}
+                facilityId={selectedFacilityId}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* Form Actions */}
       <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">

@@ -26,6 +26,7 @@ import {
   formulations,
   creditBatches,
 } from "@/db/schema";
+import { productionRunStatus } from "@/db/schema/common";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 
@@ -75,8 +76,18 @@ export async function getEntities(
       return getFeedstockTypes({ search, limit });
     case "feedstock":
       return getFeedstocks({ search, facilityId: filterBy?.facilityId, limit });
-    case "productionRun":
-      return getProductionRunsEntity({ search, facilityId: filterBy?.facilityId, status: filterBy?.status, limit });
+    case "productionRun": {
+      const validStatuses = productionRunStatus.enumValues as readonly string[];
+      const status = filterBy?.status && validStatuses.includes(filterBy.status)
+        ? (filterBy.status as (typeof productionRunStatus.enumValues)[number])
+        : undefined;
+      return getProductionRunsEntity({
+        search,
+        facilityId: filterBy?.facilityId,
+        status,
+        limit,
+      });
+    }
     case "application":
       return getApplicationsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
@@ -993,7 +1004,7 @@ async function getFeedstockById(id: string): Promise<EntityOption | null> {
 async function getProductionRunsEntity(params: {
   search?: string;
   facilityId?: string;
-  status?: string;
+  status?: (typeof productionRuns.status.enumValues)[number];
   limit: number;
 }): Promise<EntityOption[]> {
   const { search, facilityId, status, limit } = params;
