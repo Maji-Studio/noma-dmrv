@@ -159,6 +159,10 @@ export async function createBiocharProductFn(
 
     const validated = createBiocharProductSchema.parse(data);
 
+    const composition = validated.ingredientBins?.length
+      ? { ingredients: validated.ingredientBins }
+      : {};
+
     const product = await withAutoCode(
       "BP",
       biocharProducts,
@@ -177,6 +181,7 @@ export async function createBiocharProductFn(
           moistureContentPercent: validated.moistureContentPercent ?? null,
           densityKgM3: validated.densityKgM3 ?? null,
           waterAddedKg: validated.waterAddedKg ?? null,
+          composition,
         })
     );
 
@@ -214,6 +219,10 @@ export async function updateBiocharProductFn(
 
     const validated = updateBiocharProductSchema.parse(data);
 
+    const composition = validated.ingredientBins !== undefined
+      ? (validated.ingredientBins.length ? { ingredients: validated.ingredientBins } : {})
+      : undefined;
+
     const product = await updateBiocharProduct(user.id, validated.productId, {
       code: validated.code,
       facilityId: validated.facilityId,
@@ -226,6 +235,7 @@ export async function updateBiocharProductFn(
       moistureContentPercent: validated.moistureContentPercent,
       densityKgM3: validated.densityKgM3,
       waterAddedKg: validated.waterAddedKg,
+      ...(composition !== undefined && { composition }),
     });
 
     return { success: true, data: product };

@@ -113,6 +113,43 @@ export const createItemSchema = itemFormSchema.extend({
 onSubmit={(data) => createItemFn({ ...data, projectId })}
 ```
 
+### Shared Sub-Schemas (DRY)
+
+When form and update schemas share a repeated object shape (e.g., ingredient bins, allocations), extract a base schema and extend it for each variant:
+
+```typescript
+// Base shape shared between form and update
+const ingredientBinBaseSchema = z.object({
+  ingredientId: z.string().uuid(),
+  name: z.string(),
+  ratio: z.number().min(0).max(1).optional().nullable(),
+});
+
+// Form variant: needs preprocess for HTML inputs
+const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
+  storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
+  massKg: z.preprocess(toNumberOrNull, z.number().min(0).optional().nullable()),
+});
+
+// Update variant: server-side, no preprocess needed
+const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
+  storageLocationId: z.string().uuid().optional().nullable(),
+});
+
+// Export type from the form schema
+export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
+
+// Use in parent schemas
+export const formSchema = z.object({
+  ingredientBins: z.array(ingredientBinFormSchema).optional(),
+});
+export const updateSchema = z.object({
+  ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
+});
+```
+
+Prefer `z.infer<typeof schema>` over inline type definitions to keep types in sync with validation. Never define a type inside a component body when a schema already describes the same shape.
+
 ### Optional Fields and Empty Strings
 
 HTML inputs send `""` for empty fields, but Zod `.optional()` expects `undefined`. Use this pattern:
@@ -436,6 +473,22 @@ durationMinutes: z.preprocess(toIntOrNull, z.number().int().positive().nullable(
 ```
 
 This is cleaner than the `z.union([z.number(), z.string().transform(...), z.null()])` pattern and ensures validation runs on the coerced number.
+
+### Required vs Optional Numeric Coercion
+
+Use `toNumberOrNull` for **optional** fields (empty → `null`) and `toNumberOrUndefined` for **required** fields (empty → `undefined`, which triggers Zod's `required_error`):
+
+```typescript
+import { toNumberOrNull, toNumberOrUndefined } from "@/schemas/helpers";
+
+// Optional field: empty → null (passes through optional/nullable validators)
+optionalMass: z.preprocess(toNumberOrNull, z.number().min(0).nullable().optional()),
+
+// Required field: empty → undefined (triggers required_error message)
+requiredLat: z.preprocess(toNumberOrUndefined, z.number({ required_error: "Latitude is required" }).min(-90).max(90)),
+```
+
+Never write inline preprocess lambdas — always use the helpers from `@/schemas/helpers`.
 
 ### Pre-built Optional Number Schemas
 
