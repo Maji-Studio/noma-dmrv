@@ -295,7 +295,7 @@ export function BiocharProductForm({
                 placeholder="Select a production run..."
                 disabled={isSubmitting}
                 error={!!fieldState.error}
-                filterBy={selectedFacilityId ? { facilityId: selectedFacilityId } : undefined}
+                filterBy={selectedFacilityId ? { facilityId: selectedFacilityId, status: "complete" } : { status: "complete" }}
               />
             )}
           />
