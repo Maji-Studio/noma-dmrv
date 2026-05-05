@@ -27,6 +27,8 @@ export const certifierProjects = pgTable(
     externalProjectId: text('external_project_id').notNull(),
     protocolSlug: text('protocol_slug').notNull().default('biochar'),
     protocolVersion: text('protocol_version'),
+    // Default Certify removal template used when submitting credit batches for this facility.
+    defaultRemovalTemplateId: text('default_removal_template_id'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
     metadata: jsonb('metadata'),
