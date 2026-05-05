@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { latitudeSchema, longitudeSchema } from "./helpers";
+import { latitudeSchema, longitudeSchema, requiredLatitudeSchema, requiredLongitudeSchema, toNumberOrUndefined } from "./helpers";
 
 // ============================================
 // Supplier Form Schema (Client-side validation)
@@ -27,8 +27,8 @@ export const supplierFormSchema = z.object({
     .max(255, "Location must be less than 255 characters")
     .optional()
     .or(z.literal("")),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")

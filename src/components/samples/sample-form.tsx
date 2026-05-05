@@ -34,8 +34,10 @@ import {
 import type { SampleWithRelations } from "@/data-access/samples";
 
 // ============================================
-// Constants for select options
+// Constants
 // ============================================
+
+const NO_FACILITY_SENTINEL = "__none__";
 
 const durabilityOptions = [
   { value: "200_year", label: "200-Year Durability" },
@@ -205,7 +207,7 @@ export function SampleForm({
                       placeholder={contextFacilityId ? "Select a production run..." : "Select a facility first"}
                       disabled={isSubmitting || !!preselectedProductionRunId || !contextFacilityId}
                       error={!!errors.productionRunId}
-                      filterBy={contextFacilityId ? { facilityId: contextFacilityId } : { facilityId: "__none__" }}
+                      filterBy={{ facilityId: contextFacilityId ?? NO_FACILITY_SENTINEL }}
                       autoSelectSingle
                     />
                   )}

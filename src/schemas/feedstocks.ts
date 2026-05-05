@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, toNumberOrNull, latitudeSchema, longitudeSchema } from "./helpers";
+import { emptyToNull, toNumberOrNull } from "./helpers";
 
 // ============================================
 // Shared numeric field helpers
@@ -22,9 +22,6 @@ const requiredMoisturePercent = z.preprocess(
     .min(0, "Moisture must be between 0 and 100")
     .max(100, "Moisture must be between 0 and 100")
 );
-
-const optionalGpsLatitude = z.preprocess(toNumberOrNull, latitudeSchema);
-const optionalGpsLongitude = z.preprocess(toNumberOrNull, longitudeSchema);
 
 // ============================================
 // Bin Allocation Schema
@@ -73,8 +70,6 @@ export const feedstockFormSchema = z.object({
 
   // Optional transport
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  gpsLatitude: optionalGpsLatitude,
-  gpsLongitude: optionalGpsLongitude,
 
   // --- Material ---
   feedstockTypeId: z
@@ -126,8 +121,6 @@ export const updateFeedstockSchema = z.object({
   ]).optional(),
   supplierId: z.string().uuid().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  gpsLatitude: optionalGpsLatitude,
-  gpsLongitude: optionalGpsLongitude,
   feedstockTypeId: z.string().uuid().optional(),
   massWetKg: z.number().min(0).optional(),
   moistureContentPercent: z.number().min(0).max(100).optional(),

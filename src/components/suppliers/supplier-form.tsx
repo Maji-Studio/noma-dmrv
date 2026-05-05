@@ -141,6 +141,7 @@ export function SupplierForm({
             label="GPS Latitude"
             error={errors.gpsLatitude?.message}
             helperText="-90 to 90"
+            required
           >
             <FormInput
               id="gpsLatitude"
@@ -158,6 +159,7 @@ export function SupplierForm({
             label="GPS Longitude"
             error={errors.gpsLongitude?.message}
             helperText="-180 to 180"
+            required
           >
             <FormInput
               id="gpsLongitude"
