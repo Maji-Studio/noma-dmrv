@@ -44,6 +44,20 @@ const envSchema = z.object({
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
   ),
+
+  // Isometric Certify API (optional — boot must stay clean without these)
+  ISOMETRIC_CLIENT_SECRET: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  ),
+  ISOMETRIC_ACCESS_TOKEN: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  ),
+  ISOMETRIC_ENVIRONMENT: z
+    .enum(["sandbox", "production"])
+    .optional()
+    .default("sandbox"),
 }).superRefine((data, ctx) => {
   const hasApiKey = !!data.RESEND_API_KEY;
   const hasFromEmail = !!data.RESEND_FROM_EMAIL;
