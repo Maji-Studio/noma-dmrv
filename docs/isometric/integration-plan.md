@@ -6,9 +6,8 @@ Connect noma-dmrv to Isometric's Certify API so MRV data flowing through the
 biochar chain (Facility → ... → CreditBatch) can be submitted for verification,
 and so protocol/SOP requirements can be pulled programmatically.
 
-A working prototype exists at
-`/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/varuna-carbon-dmrv/src/lib/isometric/`
-(~4500 lines). Its credit-batch → removal → GHG statement path works
+A working prototype exists in a sibling repo (`varuna-carbon-dmrv`) under
+`src/lib/isometric/` (~4500 lines). Its credit-batch → removal → GHG statement path works
 end-to-end, but most other endpoints are stubbed with fake IDs, types are
 hand-written, and there is no retry, no lock, no payload hashing. We will
 **rebuild** in noma — generating the API client off Isometric's OpenAPI spec
@@ -91,7 +90,7 @@ those were duplicates of `certificationSubmissions` and `certifierSyncEvents`.
 Every outbound POST follows this pattern. The flow uses
 `certificationSubmissions` as the lock + ledger:
 
-```
+```text
 1. Compute payloadHash = sha256(canonicalJson(payload))
 2. SELECT FROM certification_submissions WHERE
      localEntityType=? AND localEntityId=? AND submissionType=?
@@ -138,7 +137,7 @@ fingerprint strategy (e.g., timestamp + entity-code search).
 
 ## Layered architecture (no collisions with existing files)
 
-```
+```text
 src/lib/isometric/                     # PURE — no DB, no ActionResult, no auth
   ├─ client.ts                         # fetch wrapper: headers, retry, errors,
   │                                    #   cursor pagination helper

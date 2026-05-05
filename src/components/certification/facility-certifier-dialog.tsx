@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui";
@@ -42,17 +42,14 @@ export function FacilityCertifierDialog({
 }: FacilityCertifierDialogProps) {
   const { mapping, availableProjects, linkHints, isProduction } = loaderData;
 
-  const defaultValues = useMemo<SaveMappingInput>(
-    () => ({
-      facilityId,
-      externalProjectId: mapping?.externalProjectId ?? "",
-      protocolSlug: mapping?.protocolSlug ?? "biochar",
-      protocolVersion: mapping?.protocolVersion ?? "",
-      defaultRemovalTemplateId: mapping?.defaultRemovalTemplateId ?? "",
-      confirmProduction: false,
-    }),
-    [facilityId, mapping],
-  );
+  const defaultValues: SaveMappingInput = {
+    facilityId,
+    externalProjectId: mapping?.externalProjectId ?? "",
+    protocolSlug: mapping?.protocolSlug ?? "biochar",
+    protocolVersion: mapping?.protocolVersion ?? "",
+    defaultRemovalTemplateId: mapping?.defaultRemovalTemplateId ?? "",
+    confirmProduction: false,
+  };
 
   const {
     register,
@@ -87,7 +84,7 @@ export function FacilityCertifierDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedProjectId]);
 
-  const linkedFacilitiesByProject = useMemo(() => {
+  const linkedFacilitiesByProject = (() => {
     const map = new Map<string, string[]>();
     for (const hint of linkHints) {
       const others = hint.linkedFacilities
@@ -96,24 +93,18 @@ export function FacilityCertifierDialog({
       if (others.length > 0) map.set(hint.externalProjectId, others);
     }
     return map;
-  }, [linkHints, facilityId]);
+  })();
 
-  const projectOptions = useMemo(
-    () =>
-      availableProjects.map((project) => ({
-        value: project.id,
-        label: `${project.name} — ${project.id}`,
-      })),
-    [availableProjects],
-  );
+  const projectOptions = availableProjects.map((project) => ({
+    value: project.id,
+    label: `${project.name} — ${project.id}`,
+  }));
 
-  const templateOptions = useMemo(() => {
-    const templates = liveTemplates ?? loaderData.availableTemplates;
-    return templates.map((t) => ({
-      value: t.id,
-      label: `${t.display_name} — ${t.id}`,
-    }));
-  }, [liveTemplates, loaderData.availableTemplates]);
+  const templates = liveTemplates ?? loaderData.availableTemplates;
+  const templateOptions = templates.map((t) => ({
+    value: t.id,
+    label: `${t.display_name} — ${t.id}`,
+  }));
 
   const onSubmit = async (data: SaveMappingInput) => {
     try {
@@ -132,6 +123,13 @@ export function FacilityCertifierDialog({
   const linkedHintForSelected = watchedProjectId
     ? linkedFacilitiesByProject.get(watchedProjectId)
     : undefined;
+
+  const templateHelperText = (() => {
+    if (!watchedProjectId) return "Pick a project to load templates.";
+    if (templatesLoading) return "Loading templates…";
+    if (templateOptions.length === 0) return "This project has no removal templates.";
+    return "Used as the default when submitting credit batches.";
+  })();
 
   if (!isOpen) return null;
 
@@ -186,15 +184,7 @@ export function FacilityCertifierDialog({
           id="defaultRemovalTemplateId"
           label="Default removal template"
           error={errors.defaultRemovalTemplateId?.message}
-          helperText={
-            !watchedProjectId
-              ? "Pick a project to load templates."
-              : templatesLoading
-                ? "Loading templates…"
-                : templateOptions.length === 0
-                  ? "This project has no removal templates."
-                  : "Used as the default when submitting credit batches."
-          }
+          helperText={templateHelperText}
         >
           <FormSelect
             id="defaultRemovalTemplateId"

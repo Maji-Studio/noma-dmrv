@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     console.log(`total_count: ${page.total_count}`);
     console.log(`returned: ${page.nodes.length}`);
     for (const project of page.nodes) {
-      console.log(`  ${project.id}\t${project.name ?? "(unnamed)"}`);
+      console.log(`  ${project.id}`);
     }
     if (page.page_info.has_next_page) {
       console.log(`(more pages — end_cursor=${page.page_info.end_cursor})`);
@@ -39,7 +39,13 @@ async function main(): Promise<void> {
   } catch (err) {
     if (err instanceof IsometricApiError) {
       console.error(`IsometricApiError [${err.code ?? "unknown"}]: ${err.message}`);
-      if (err.body) console.error("body:", err.body);
+      if (err.body !== undefined && err.body !== null && err.body !== "") {
+        const bodyLength =
+          typeof err.body === "string"
+            ? err.body.length
+            : JSON.stringify(err.body).length;
+        console.error(`body_present=true body_length=${bodyLength}`);
+      }
       process.exit(1);
     }
     throw err;

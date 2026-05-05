@@ -93,8 +93,10 @@ export function useBiocharComposition(
     previousFacilityIdRef.current = current;
 
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
-    live.forEach((_, i) => {
-      form.setValue(`ingredientBins.${i}.storageLocationId`, null);
+    live.forEach((row, i) => {
+      if (row?.storageLocationId != null) {
+        form.setValue(`ingredientBins.${i}.storageLocationId`, null);
+      }
     });
   }, [facilityId, form]);
 

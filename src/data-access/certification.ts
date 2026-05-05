@@ -70,6 +70,27 @@ export async function listFacilitiesLinkedToExternal(
   return rows;
 }
 
+export interface LinkedFacilityByProject extends LinkedFacilitySummary {
+  externalProjectId: string;
+}
+
+export async function listAllFacilitiesLinkedByProvider(
+  userId: string,
+  provider: CertifierProvider,
+): Promise<LinkedFacilityByProject[]> {
+  requireAuth(userId);
+  return db
+    .select({
+      externalProjectId: certifierProjects.externalProjectId,
+      facilityId: facilities.id,
+      code: facilities.code,
+      name: facilities.name,
+    })
+    .from(certifierProjects)
+    .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
+    .where(eq(certifierProjects.provider, provider));
+}
+
 export async function upsertCertifierProject(
   userId: string,
   input: UpsertCertifierProjectInput,

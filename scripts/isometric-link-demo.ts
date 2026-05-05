@@ -23,11 +23,11 @@ async function main(): Promise<void> {
   const { eq, and } = await import("drizzle-orm");
 
   const facilityRows = await db
-    .select({ id: facilities.id, name: facilities.name })
+    .select({ id: facilities.id })
     .from(facilities);
 
   console.log("Facilities:");
-  for (const f of facilityRows) console.log(`  ${f.id}\t${f.name}`);
+  for (const f of facilityRows) console.log(`  ${f.id}`);
 
   const existing = await db.select().from(certifierProjects);
   console.log(`\nExisting certifier_projects rows: ${existing.length}`);
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   );
   if (conflict) {
     console.error(
-      `Facility ${facility.name} already has isometric certifier_project: external=${conflict.externalProjectId}`
+      `Facility ${facility.id} already has isometric certifier_project: external=${conflict.externalProjectId}`
     );
     process.exit(1);
   }
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     .returning();
 
   console.log(
-    `\nLinked facility "${facility.name}" → ${DEMO_PROJECT_NAME} (${DEMO_EXTERNAL_PROJECT_ID})`
+    `\nLinked facility ${facility.id} → ${DEMO_EXTERNAL_PROJECT_ID}`
   );
   console.log(`  certifier_projects.id = ${inserted.id}`);
   process.exit(0);

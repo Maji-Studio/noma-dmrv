@@ -70,6 +70,18 @@ const envSchema = z.object({
         "RESEND_API_KEY and RESEND_FROM_EMAIL must either both be set or both be omitted",
     });
   }
+
+  const hasIsometricSecret = !!data.ISOMETRIC_CLIENT_SECRET;
+  const hasIsometricToken = !!data.ISOMETRIC_ACCESS_TOKEN;
+
+  if (hasIsometricSecret !== hasIsometricToken) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["ISOMETRIC_CLIENT_SECRET"],
+      message:
+        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted",
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
