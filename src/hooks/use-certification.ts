@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteFacilityCertifierMapping,
+  loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
@@ -18,6 +19,13 @@ export const certificationKeys = {
     [...certificationKeys.all, "facility-mapping", facilityId] as const,
   projectTemplates: (externalProjectId: string) =>
     [...certificationKeys.all, "project-templates", externalProjectId] as const,
+  certifyContextForCreditBatch: (creditBatchId: string) =>
+    [
+      ...certificationKeys.all,
+      "certify-context",
+      "credit-batch",
+      creditBatchId,
+    ] as const,
 };
 
 export function useFacilityCertifierMapping(
@@ -66,6 +74,22 @@ export function useSaveFacilityCertifierMapping() {
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+  });
+}
+
+export function useCertifyContextForCreditBatch(
+  creditBatchId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.certifyContextForCreditBatch(creditBatchId),
+    queryFn: async () => {
+      const result = await loadCertifyContextForCreditBatch(creditBatchId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!creditBatchId,
+    staleTime: 5 * 60_000,
   });
 }
 
