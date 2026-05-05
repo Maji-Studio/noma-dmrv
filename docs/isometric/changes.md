@@ -1,5 +1,41 @@
 # Isometric Docs Change Log
 
+## 2026-05-05 (Phase 2)
+
+- **Scope:** Phase 2 of the Certify API integration — read-only Certify
+  panel inside the credit-batch side sheet
+- **Updated by:** Kenji / Claude
+- New code:
+  - `src/lib/isometric/projects.ts` — added `listComponentBlueprints()`
+    against the global `GET /component_blueprints` endpoint, plus the
+    `IsometricComponentBlueprint` type alias. Re-exported from
+    `src/lib/isometric/index.ts`.
+  - `src/fn/certification.ts` — added
+    `loadCertifyContextForCreditBatch(creditBatchId)`. Resolves credit
+    batch → facility → mapping → live project + template + referenced
+    blueprints. Distinguishes "no default template" from "default template
+    is stale" (drift) via `missingDefaultTemplateId`, and per-blueprint
+    drift via `unresolvedBlueprintKeys`. Skips remote calls when
+    unlinked, and skips the global blueprint catalog when no resolvable
+    template is available.
+  - `src/hooks/use-certification.ts` — added
+    `useCertifyContextForCreditBatch(creditBatchId)` (5 min stale time)
+    and the matching `certifyContextForCreditBatch` query key.
+  - `src/components/certification/certify-panel.tsx` — accordion panel
+    with five states: loading, error, not-linked, no-default, stale-default,
+    and resolved-template (renders the blueprint list).
+  - `src/components/certification/blueprint-list.tsx` — pure presentational
+    list of resolved blueprints (display name, key, description, inputs
+    summary).
+- Side sheet:
+  - `src/components/credit-batches/credit-batch-list.tsx` mounts
+    `<CertifyPanel creditBatchId={…} />` via the existing
+    `viewModeChildren` slot on `EntitySideSheet`. No new route or
+    detail page.
+- Docs:
+  - `integration-plan.md` Phase 2 section, "Critical files",
+    "Verification": marked done with the actual files shipped.
+
 ## 2026-05-05
 
 - **Scope:** Phase 1 of the Certify API integration — facility ↔ Isometric project mapping

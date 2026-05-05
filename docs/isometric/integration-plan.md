@@ -348,19 +348,87 @@ because `getCertifierProjectByFacility(facilityId)` would always return null.
    `defaultRemovalTemplateId` against the chosen project's live
    templates).
 
-### Phase 2 — Read-only template/blueprint surfacing
+### Phase 2 — Read-only template/blueprint surfacing ✅ DONE
 
-- `lib/isometric/` exposes `listComponentBlueprints()` (HTTP-only).
-- `fn/certification.ts`:
-  - `loadCertifyContext(facilityId)` — wrapped with `withAction`, returns
-    `{ project, templates, blueprints }`. Combines DB row + live API.
-- `hooks/use-certification.ts`:
-  - `useCertifyContext(facilityId)` — React Query. Stale time 5m.
-- UI: a **"Certify" section inside the existing credit-batch side sheet**.
-  Shows facility's project link, available templates, blueprint requirements
-  inline. No new route. Phase 1's mapping UI is the prerequisite — without
-  a `certifierProjects` row, this section renders an empty state pointing
-  the user back to the facility page.
+The first non-Phase-1 surface where a noma user sees live Certify data
+inside a domain entity (a credit batch), and the visual prerequisite for
+Phase 3's submission button. Mounts via the existing `viewModeChildren`
+slot on the credit-batch `EntitySideSheet` — no new route or detail page.
+
+**Isometric client (`src/lib/isometric/projects.ts`, extended; re-exported
+from `src/lib/isometric/index.ts`):**
+- ✅ `listComponentBlueprints()` — wraps the global
+  `GET /component_blueprints` endpoint via `paginateAll`. Component
+  blueprints are catalog-scoped (not project- or template-scoped),
+  verified against `generated/certify.d.ts:55-68,3738-3774`.
+- ✅ `IsometricComponentBlueprint` type alias for
+  `components["schemas"]["ComponentBlueprint"]`.
+
+**Server action (`src/fn/certification.ts`, extended):**
+- ✅ `loadCertifyContextForCreditBatch(creditBatchId)` — `withAction`.
+  Keys off the credit batch (not the facility) so the trust boundary
+  matches Phase 3's `submitCreditBatch`: load batch via
+  `getCreditBatchById`, derive `facilityId` server-side, then resolve
+  the certifier project, live project record, default removal template,
+  and only the component blueprints that template's groups reference
+  (`groups[].components[].blueprint_key` deduped against the global
+  catalog).
+- ✅ Returns `CertifyContextForCreditBatch` with explicit fields for
+  drift detection: `missingDefaultTemplateId` distinguishes "default
+  never set" from "default set but no longer in Certify", and
+  `unresolvedBlueprintKeys` flags per-blueprint drift between the saved
+  template and the current Certify catalog.
+- ✅ Skips remote calls entirely when the facility is unlinked, and
+  skips the global blueprint catalog fetch when no resolvable template
+  is available — preserves the "no Isometric calls when not needed"
+  goal for unlinked or partially-configured batches.
+
+**React Query hook (`src/hooks/use-certification.ts`, extended):**
+- ✅ `useCertifyContextForCreditBatch(creditBatchId, enabled?)` —
+  staleTime 5 min (blueprints + templates change rarely).
+- ✅ `certificationKeys.certifyContextForCreditBatch(creditBatchId)`
+  added to the key factory.
+
+**UI (`src/components/certification/`, extended):**
+- ✅ `certify-panel.tsx` — collapsed `<details>` accordion with
+  "Isometric Certify" header. Renders five distinct states:
+  - *Loading* / *Error* — uses `error instanceof Error ? error.message
+    : fallback` (no `safeMessage` lookup; matches the existing hook
+    pattern in `use-certification.ts`).
+  - *Not linked* — body text directing the user to facility settings,
+    no remote calls made.
+  - *Linked, no default template* — shows project + ID; hint to set a
+    default. Blueprint catalog not fetched.
+  - *Linked, default template stale* (drift) — shows project header
+    plus a warning row identifying the stale `defaultRemovalTemplateId`.
+    Distinct from the no-default case so users can act on registry
+    drift before Phase 3 submission.
+  - *Linked, default template resolved* — project + template summary
+    + the `BlueprintList`; an additional warning row appears above the
+    list if any `unresolvedBlueprintKeys` are present.
+- ✅ `blueprint-list.tsx` — pure presentational list. Each row shows
+  `display_name`, monospace `key`, `description`, and an inputs summary
+  (`N input(s): <quantity_kind>, …`).
+
+**Mount point (`src/components/credit-batches/credit-batch-list.tsx`):**
+- ✅ Passes `viewModeChildren={<CertifyPanel creditBatchId={…} />}` on
+  the existing `EntitySideSheet` (line 84 holds the side-sheet entity).
+  Mirrors the Phase 1 mount pattern for `<FacilityCertifierSection />`.
+
+**Acceptance:**
+1. Open a credit batch whose facility is **not** linked → accordion
+   expands to the not-linked empty state, no Isometric calls in the
+   network panel.
+2. Link the facility (Phase 1 UI) but leave the default template unset
+   → "default template not selected" hint, `listComponentBlueprints`
+   not called.
+3. Set a valid default removal template, reopen the batch → project
+   name + template + blueprint table populated from live Certify data.
+4. Set `defaultRemovalTemplateId` to a stale ID directly in the DB,
+   reopen → drift warning, blueprint catalog still not fetched.
+5. Drop a blueprint key from the resolver via a temporary code change
+   → "N blueprint(s) … no longer in Certify's catalog" warning row
+   appears. Revert.
 
 ### Phase 3 — Single removal submission (end-to-end)
 
@@ -462,22 +530,25 @@ The Certify API does not expose protocol-compliance rules. Two paths:
   (Phase 0); `certifier_projects_provider_external_unique` dropped
   (Phase 1).
 - ✅ `src/lib/isometric/{client,index}.ts` + `generated/certify.d.ts` +
-  `projects.ts` (`listProjects`, `listRemovalTemplates`) — Phases 0–1.
+  `projects.ts` (`listProjects`, `listRemovalTemplates`,
+  `listComponentBlueprints`) — Phases 0–2.
 - ✅ `src/data-access/certification.ts` — Phase 1.
-- ✅ `src/fn/certification.ts` — Phase 1 (Phases 2–4 will extend).
+- ✅ `src/fn/certification.ts` — Phase 1; extended in Phase 2 with
+  `loadCertifyContextForCreditBatch`. (Phases 3–4 will extend further.)
 - ✅ `src/schemas/certification.ts` — Phase 1.
-- ✅ `src/hooks/use-certification.ts` — Phase 1.
+- ✅ `src/hooks/use-certification.ts` — Phase 1; extended in Phase 2 with
+  `useCertifyContextForCreditBatch`.
 - ✅ `src/components/certification/` — Phase 1
   (`facility-certifier-section.tsx`, `facility-certifier-dialog.tsx`,
-  `index.ts`).
+  `index.ts`); Phase 2 added `certify-panel.tsx`, `blueprint-list.tsx`.
+- ✅ `src/components/credit-batches/credit-batch-list.tsx` — mounts
+  `<CertifyPanel />` via `viewModeChildren` (Phase 2).
 - ✅ `src/components/ui/entity-side-sheet/index.tsx` — `viewModeChildren`
   prop (Phase 1).
 - ✅ `src/components/facilities/facility-list.tsx` — mounts
   `<FacilityCertifierSection />` via `viewModeChildren` (Phase 1).
 - *Future:* `src/lib/isometric/transformers/` +
   `utils/{aggregation,payload-hash}.ts` — Phase 3.
-- *Future:* `src/components/credit-batches/credit-batch-list.tsx` — extend
-  the side sheet with a "Certify" section (Phases 2+3).
 - *Future:* `src/app/api/certification/webhook/route.ts` — Phase 4.
 - ✅ `scripts/isometric-smoke.ts` — Phase 0.
 - ✅ `scripts/isometric-link-demo.ts` — Phase 0 stopgap; updated in
@@ -498,8 +569,13 @@ The Certify API does not expose protocol-compliance rules. Two paths:
   `externalProjectId`; insert a fake `creditBatch` +
   `certificationSubmissions` and assert unlink is refused with
   the `SafeError` message.
-- **Phase 2:** open a credit-batch side sheet — Certify section renders the
-  facility's project + templates + blueprints.
+- **Phase 2 (✅):** open a credit-batch side sheet — Certify accordion
+  renders the facility's project + default removal template + the
+  component blueprints that template references. Drift cases (stale
+  template ID, missing blueprint keys) render distinct warnings.
+  `tsc --noEmit` and `pnpm lint` pass. *To do:* light E2E in
+  `tests/e2e/credit-batches.spec.ts` asserting the not-linked empty
+  state copy is visible.
 - **Phase 3:** `tests/e2e/certification-submit.spec.ts` — seed a credit
   batch, click Submit, assert a `certificationSubmissions` row with non-null
   `externalId` and `status='submitted'`. Re-click → no new row. Manually

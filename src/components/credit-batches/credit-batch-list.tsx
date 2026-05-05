@@ -28,6 +28,7 @@ import {
   type ApplicationOption,
 } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
+import { CertifyPanel } from "@/components/certification";
 import {
   useCreditBatches,
   useCreateCreditBatch,
@@ -527,6 +528,11 @@ export function CreditBatchList({
                   },
                 ]
               : undefined
+          }
+          viewModeChildren={
+            sideSheet.entity ? (
+              <CertifyPanel creditBatchId={sideSheet.entity.id} />
+            ) : null
           }
         >
           {(createError || updateError) && (
