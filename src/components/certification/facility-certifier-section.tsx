@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -17,6 +17,7 @@ import {
   FacilityCertifierDialog,
   UnlinkConfirmDialog,
 } from "./facility-certifier-dialog";
+import { Field, Section } from "./panel-layout";
 
 interface FacilityCertifierSectionProps {
   facilityId: string;
@@ -34,21 +35,17 @@ export function FacilityCertifierSection({
   const toast = useToast();
   const deleteMutation = useDeleteFacilityCertifierMapping();
 
-  const projectName = useMemo(() => {
-    if (!data?.mapping) return null;
-    const project = data.availableProjects.find(
-      (p) => p.id === data.mapping?.externalProjectId,
-    );
-    return project?.name ?? null;
-  }, [data]);
+  const projectName = data?.mapping
+    ? (data.availableProjects.find(
+        (p) => p.id === data.mapping?.externalProjectId,
+      )?.name ?? null)
+    : null;
 
-  const templateName = useMemo(() => {
-    if (!data?.mapping?.defaultRemovalTemplateId) return null;
-    const template = data.availableTemplates.find(
-      (t) => t.id === data.mapping?.defaultRemovalTemplateId,
-    );
-    return template?.display_name ?? null;
-  }, [data]);
+  const templateName = data?.mapping?.defaultRemovalTemplateId
+    ? (data.availableTemplates.find(
+        (t) => t.id === data.mapping?.defaultRemovalTemplateId,
+      )?.display_name ?? null)
+    : null;
 
   const handleUnlinkConfirm = async () => {
     setUnlinkError(undefined);
@@ -189,27 +186,3 @@ export function FacilityCertifierSection({
   );
 }
 
-function Section({ children }: { children: React.ReactNode }) {
-  return (
-    <section className="border-t border-[var(--color-border-secondary)] pt-24">
-      {children}
-    </section>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <dt className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
-        {label}
-      </dt>
-      <dd className="flex flex-col gap-2">{children}</dd>
-    </div>
-  );
-}

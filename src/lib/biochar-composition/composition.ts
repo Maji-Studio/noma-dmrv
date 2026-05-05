@@ -53,13 +53,17 @@ export function deriveBinRemovalKg(
   ingredientRatio: number | null | undefined,
 ): number | null {
   if (
-    typeof productMassKg !== "number" || productMassKg <= 0 ||
-    typeof biocharRatio !== "number" || biocharRatio <= 0 ||
-    typeof ingredientRatio !== "number" || ingredientRatio <= 0
+    !Number.isFinite(productMassKg) ||
+    !Number.isFinite(biocharRatio) ||
+    !Number.isFinite(ingredientRatio)
   ) {
     return null;
   }
-  return (productMassKg / biocharRatio) * ingredientRatio;
+  const mass = productMassKg as number;
+  const biochar = biocharRatio as number;
+  const ingredient = ingredientRatio as number;
+  if (mass <= 0 || biochar <= 0 || ingredient <= 0) return null;
+  return (mass / biochar) * ingredient;
 }
 
 /**

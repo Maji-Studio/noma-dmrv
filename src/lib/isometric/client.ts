@@ -22,6 +22,8 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const MAX_ATTEMPTS = 3;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
+const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_RETRY_WAIT_MS = 30_000;
 
 export interface IsometricRequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
@@ -116,20 +118,38 @@ export async function isometricRequest<T = unknown>(
     ...options.headers,
   };
 
-  const init: RequestInit = { method, headers, signal: options.signal };
-  if (options.body !== undefined) {
-    init.body =
-      typeof options.body === "string"
+  const requestBody =
+    options.body === undefined
+      ? undefined
+      : typeof options.body === "string"
         ? options.body
         : JSON.stringify(options.body);
-    if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  if (requestBody !== undefined && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
   }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const timeoutController = new AbortController();
+    const timer = setTimeout(
+      () => timeoutController.abort(new Error("Isometric request timed out")),
+      REQUEST_TIMEOUT_MS
+    );
+    const onExternalAbort = () =>
+      timeoutController.abort(options.signal?.reason);
+    options.signal?.addEventListener("abort", onExternalAbort, { once: true });
+
     let response: Response;
     try {
-      response = await fetch(url, init);
+      response = await fetch(url, {
+        method,
+        headers,
+        body: requestBody,
+        signal: timeoutController.signal,
+      });
     } catch (err) {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onExternalAbort);
+      if (options.signal?.aborted) throw options.signal.reason ?? err;
       if (attempt === MAX_ATTEMPTS) {
         throw new IsometricApiError(
           `Isometric ${method} ${path}: ${(err as Error).message ?? "network error"}`,
@@ -141,6 +161,8 @@ export async function isometricRequest<T = unknown>(
       await sleep(jitterDelayMs(attempt), options.signal);
       continue;
     }
+    clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onExternalAbort);
 
     if (response.ok) {
       if (response.status === 204) return undefined as T;
@@ -161,7 +183,13 @@ export async function isometricRequest<T = unknown>(
     const shouldRetry =
       RETRYABLE_STATUS.has(response.status) && attempt < MAX_ATTEMPTS;
     if (shouldRetry) {
-      const retryAfter = parseRetryAfter(response.headers.get("retry-after"));
+      const retryAfterRaw = parseRetryAfter(
+        response.headers.get("retry-after")
+      );
+      const retryAfter =
+        retryAfterRaw !== undefined
+          ? Math.min(retryAfterRaw, MAX_RETRY_WAIT_MS)
+          : undefined;
       await sleep(retryAfter ?? jitterDelayMs(attempt), options.signal);
       continue;
     }

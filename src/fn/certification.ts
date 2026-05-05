@@ -4,7 +4,7 @@ import { env } from "@/config/env";
 import {
   deleteCertifierProject,
   getCertifierProjectByFacility,
-  listFacilitiesLinkedToExternal,
+  listAllFacilitiesLinkedByProvider,
   upsertCertifierProject,
   type CertifierProjectRow,
   type LinkedFacilitySummary,
@@ -12,6 +12,7 @@ import {
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { SafeError } from "@/lib/errors";
 import {
+  IsometricApiError,
   listComponentBlueprints,
   listProjects,
   listRemovalTemplates,
@@ -25,6 +26,19 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+
+const ISOMETRIC_PROVIDER = "isometric" as const;
+
+async function safeListIfConfigured<T>(call: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await call();
+  } catch (err) {
+    if (err instanceof IsometricApiError && err.code === "not_configured") {
+      return [];
+    }
+    throw err;
+  }
+}
 
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
@@ -41,25 +55,29 @@ export async function loadFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierMapping>> {
   return withAction(async (userId) => {
-    const mapping = await getCertifierProjectByFacility(
-      userId,
-      facilityId,
-      "isometric",
-    );
-    const availableProjects = await listProjects();
+    const [mapping, availableProjects, allLinkedFacilities] = await Promise.all([
+      getCertifierProjectByFacility(userId, facilityId, ISOMETRIC_PROVIDER),
+      safeListIfConfigured(() => listProjects()),
+      listAllFacilitiesLinkedByProvider(userId, ISOMETRIC_PROVIDER),
+    ]);
+
     const availableTemplates = mapping
-      ? await listRemovalTemplates(mapping.externalProjectId)
+      ? await safeListIfConfigured(() =>
+          listRemovalTemplates(mapping.externalProjectId),
+        )
       : [];
-    const linkHints = await Promise.all(
-      availableProjects.map(async (project) => ({
-        externalProjectId: project.id,
-        linkedFacilities: await listFacilitiesLinkedToExternal(
-          userId,
-          "isometric",
-          project.id,
-        ),
-      })),
-    );
+
+    const hintsByProject = new Map<string, LinkedFacilitySummary[]>();
+    for (const row of allLinkedFacilities) {
+      const bucket = hintsByProject.get(row.externalProjectId) ?? [];
+      bucket.push({ facilityId: row.facilityId, code: row.code, name: row.name });
+      hintsByProject.set(row.externalProjectId, bucket);
+    }
+    const linkHints = availableProjects.map((project) => ({
+      externalProjectId: project.id,
+      linkedFacilities: hintsByProject.get(project.id) ?? [],
+    }));
+
     return {
       mapping,
       availableProjects,
@@ -85,27 +103,27 @@ export async function saveFacilityCertifierMapping(
       );
     }
 
-    const projects = await listProjects();
+    const [projects, templates] = await Promise.all([
+      listProjects(),
+      parsed.defaultRemovalTemplateId
+        ? listRemovalTemplates(parsed.externalProjectId)
+        : Promise.resolve(null),
+    ]);
     if (!projects.some((p) => p.id === parsed.externalProjectId)) {
-      throw new SafeError(
-        "Selected project does not exist on Isometric.",
-      );
+      throw new SafeError("Selected project does not exist on Isometric.");
     }
-
-    if (parsed.defaultRemovalTemplateId) {
-      const templates = await listRemovalTemplates(parsed.externalProjectId);
-      if (
-        !templates.some((t) => t.id === parsed.defaultRemovalTemplateId)
-      ) {
-        throw new SafeError(
-          "Selected template does not belong to the chosen project.",
-        );
-      }
+    if (
+      templates &&
+      !templates.some((t) => t.id === parsed.defaultRemovalTemplateId)
+    ) {
+      throw new SafeError(
+        "Selected template does not belong to the chosen project.",
+      );
     }
 
     return upsertCertifierProject(userId, {
       facilityId: parsed.facilityId,
-      provider: "isometric",
+      provider: ISOMETRIC_PROVIDER,
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
       protocolVersion: parsed.protocolVersion ?? null,
@@ -118,7 +136,7 @@ export async function deleteFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<void>> {
   return withAction(async (userId) => {
-    await deleteCertifierProject(userId, facilityId, "isometric");
+    await deleteCertifierProject(userId, facilityId, ISOMETRIC_PROVIDER);
   });
 }
 
@@ -156,7 +174,7 @@ export async function loadCertifyContextForCreditBatch(
     const mapping = await getCertifierProjectByFacility(
       userId,
       facilityId,
-      "isometric",
+      ISOMETRIC_PROVIDER,
     );
 
     if (!mapping) {
@@ -173,8 +191,8 @@ export async function loadCertifyContextForCreditBatch(
     }
 
     const [projects, templates] = await Promise.all([
-      listProjects(),
-      listRemovalTemplates(mapping.externalProjectId),
+      safeListIfConfigured(() => listProjects()),
+      safeListIfConfigured(() => listRemovalTemplates(mapping.externalProjectId)),
     ]);
 
     const project =
@@ -217,7 +235,9 @@ export async function loadCertifyContextForCreditBatch(
       ),
     );
 
-    const allBlueprints = await listComponentBlueprints();
+    const allBlueprints = await safeListIfConfigured(() =>
+      listComponentBlueprints(),
+    );
     const blueprintByKey = new Map(allBlueprints.map((bp) => [bp.key, bp]));
 
     const blueprintsForTemplate: IsometricComponentBlueprint[] = [];
