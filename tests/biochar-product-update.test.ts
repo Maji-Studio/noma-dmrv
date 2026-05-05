@@ -42,8 +42,12 @@ beforeEach(() => {
   });
 });
 
+/**
+ * These tests prove the fn is wired to the composition helper correctly.
+ * The helper's tri-state semantics are unit-tested in `biochar-composition.test.ts`.
+ */
 describe("updateBiocharProductFn composition handling", () => {
-  it("omitting ingredientBins preserves existing composition", async () => {
+  it("omitting ingredientBins preserves existing composition (no composition key in payload)", async () => {
     await updateBiocharProductFn({
       productId: PRODUCT_ID,
       massKg: 100,

@@ -32,6 +32,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { FacilityCertifierSection } from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
@@ -401,6 +402,11 @@ export function FacilityList() {
                   },
                 ]
               : undefined
+          }
+          viewModeChildren={
+            sideSheet.entity ? (
+              <FacilityCertifierSection facilityId={sideSheet.entity.id} />
+            ) : undefined
           }
         >
           {(createError || updateError) && (

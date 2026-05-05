@@ -69,8 +69,12 @@ function ProcessFlowPreview({
   const yieldPercent =
     hasFeedstock && hasBiochar
       ? useDry
-        ? ((biocharDryKg! / feedstockDryKg!) * 100).toFixed(1)
-        : ((biocharKg / feedstockKg) * 100).toFixed(1)
+        ? feedstockDryKg > 0
+          ? ((biocharDryKg! / feedstockDryKg!) * 100).toFixed(1)
+          : null
+        : feedstockKg > 0
+          ? ((biocharKg / feedstockKg) * 100).toFixed(1)
+          : null
       : null;
 
   return (
