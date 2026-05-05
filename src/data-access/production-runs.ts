@@ -18,6 +18,9 @@ import {
   storageLocations,
   feedstocks,
   feedstockTypes,
+  samples,
+  type ProductionRun,
+  type Sample,
 } from "@/db/schema";
 import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -973,6 +976,45 @@ export async function isProductionRunCodeAvailable(
     .where(and(...conditions));
 
   return !existing;
+}
+
+export type ProductionRunWithSamples = ProductionRun & { samples: Sample[] };
+
+// Bulk loader used by the Certify submission orchestrator. Joins the lab-grade
+// `samples` table (carbon %, H/C and O/C ratios, ash) — NOT `productionSamples`,
+// which holds in-process proximate analysis. Runs missing from the lookup are
+// silently dropped; aggregation reports a per-run warning rather than failing.
+export async function getProductionRunsWithSamples(
+  userId: string,
+  runIds: string[]
+): Promise<ProductionRunWithSamples[]> {
+  requireAuth(userId);
+  if (runIds.length === 0) return [];
+
+  const runs = await db
+    .select()
+    .from(productionRuns)
+    .where(inArray(productionRuns.id, runIds));
+  if (runs.length === 0) return [];
+
+  const sampleRows = await db
+    .select()
+    .from(samples)
+    .where(
+      inArray(
+        samples.productionRunId,
+        runs.map((r) => r.id)
+      )
+    );
+
+  const samplesByRun = new Map<string, Sample[]>();
+  for (const s of sampleRows) {
+    const list = samplesByRun.get(s.productionRunId) ?? [];
+    list.push(s);
+    samplesByRun.set(s.productionRunId, list);
+  }
+
+  return runs.map((r) => ({ ...r, samples: samplesByRun.get(r.id) ?? [] }));
 }
 
 /**

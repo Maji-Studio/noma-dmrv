@@ -79,6 +79,15 @@ This file provides guidance to Claude Code when working with this Next.js templa
    - ✅ YES → Update the existing doc instead
    - ❌ NO → Proceed with creating new doc
 
+### Logging Deferred Work
+
+When work is intentionally deferred or depends on an external answer
+(sandbox confirmation, stakeholder decision, missing capability), add a
+dated entry to `docs/open-questions.md` rather than leaving a `TODO` in
+code or burying it in a PR description. Resolve entries by removing them
+and recording the decision in the relevant feature doc (e.g.
+`docs/isometric/changes.md`).
+
 ## Project Overview
 
 **noma-dmrv** is a biochar carbon credit MRV (Monitoring, Reporting, Verification) system built on a Next.js 16 App Router template. It uses Better Auth for authentication, PostgreSQL with Drizzle ORM (60+ tables across 15 domain schema files), and implements 16 entity CRUD workflows plus a Chain of Custody visualization covering the full traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
@@ -517,6 +526,7 @@ All local summaries are non-authoritative interpretations (last refreshed: 2026-
 - **Chain of Custody** - `docs/chain-of-custody.md` (application-first lineage graph architecture)
 - **Schema Overview** - `docs/schema-overview.md` (all 60+ tables with descriptions and source links)
 - **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
+- **Open Questions** - `docs/open-questions.md` (living tracker of deferred decisions, sandbox checks needed, and cross-cutting unfinished work)
 - **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
 
 ## E2E Testing
