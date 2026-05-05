@@ -182,6 +182,7 @@ export function EntitySelect({
   autoSelectSingle = false,
   alwaysShowSearch = false,
   hideSearch = false,
+  formatSelectedLabel,
 }: EntitySelectProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -215,8 +216,9 @@ export function EntitySelect({
   // Fetch selected entity details
   const { data: selectedEntity } = useEntityById(entityType, value);
 
-  // Get display text for the selected value (name only; subtitle shown in dropdown)
-  const displayText = selectedEntity?.name ?? "";
+  const displayText = selectedEntity
+    ? (formatSelectedLabel ? formatSelectedLabel(selectedEntity) : selectedEntity.name)
+    : "";
 
   const handleCreatedEntity = useCallback(
     (entity: EntityOption) => {

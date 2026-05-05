@@ -56,6 +56,8 @@ export interface EntitySelectProps {
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /** Custom formatter for the selected value display */
+  formatSelectedLabel?: (entity: EntityOption) => string;
 }
 
 export interface UseEntityOptionsParams {

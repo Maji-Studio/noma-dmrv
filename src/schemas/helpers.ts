@@ -37,6 +37,16 @@ export const longitudeSchema = z
   .optional()
   .nullable();
 
+export const requiredLatitudeSchema = z
+  .number({ error: (iss) => iss.input === undefined ? "Latitude is required" : "Expected number" })
+  .min(-90, "Latitude must be between -90 and 90")
+  .max(90, "Latitude must be between -90 and 90");
+
+export const requiredLongitudeSchema = z
+  .number({ error: (iss) => iss.input === undefined ? "Longitude is required" : "Expected number" })
+  .min(-180, "Longitude must be between -180 and 180")
+  .max(180, "Longitude must be between -180 and 180");
+
 /**
  * Combined GPS coordinates schema
  */
@@ -50,6 +60,18 @@ export type GpsCoordinates = z.infer<typeof gpsCoordinatesSchema>;
 // ============================================
 // Zod Preprocessors for Form String → Number Coercion
 // ============================================
+
+/** Preprocess form string values to number | undefined. Empty/null/whitespace strings become undefined (pair with Zod 4's unified `error` parameter for custom required messages). */
+export const toNumberOrUndefined = (v: unknown): unknown => {
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed === "") return undefined;
+    return Number(trimmed);
+  }
+  return v;
+};
 
 /** Preprocess form string values to number | null. Empty/whitespace strings become null. */
 export const toNumberOrNull = (v: unknown): unknown => {

@@ -231,10 +231,11 @@ const {
 - Use `ServerError` for server-side errors (use `setError('root.serverError', {...})`)
 - Use `FormError` for field-level errors (handled by FormField)
 - Client-side validation happens before server calls
-- For numeric inputs use helpers from `@/schemas/helpers`: `toNumberOrNull`, `optionalNumber`, `optionalPercent`, `toIntOrNull`
+- For numeric inputs use helpers from `@/schemas/helpers`: `toNumberOrNull`, `toNumberOrUndefined`, `optionalNumber`, `optionalPercent`, `toIntOrNull`
+- Use `toNumberOrUndefined` (→ `undefined`) for **required** fields — supply a custom message via Zod 4's unified `error` parameter (e.g., `z.number({ error: (iss) => iss.input === undefined ? "Field is required" : "Invalid number" })`); use `toNumberOrNull` (→ `null`) for **optional** fields
 - Never use `valueAsNumber: true` — it converts `""` to `NaN` which breaks Zod validation
 - For optional UUID fields (EntitySelect), use `emptyToNull` from `@/schemas/helpers` first in the union: `emptyToNull.or(z.string().uuid())`
-- For GPS coordinate fields, use `latitudeSchema` and `longitudeSchema` from `@/schemas/helpers`
+- For optional GPS fields, use `latitudeSchema`/`longitudeSchema` from `@/schemas/helpers`; for required GPS fields, use `requiredLatitudeSchema`/`requiredLongitudeSchema` with `toNumberOrUndefined`
 - Use `<SectionLabel>` from `@/components/forms/section-label` for form section headers
 - Use `<FormFileUpload>` from `@/components/forms/form-file-upload` for file upload UI (mockup — no S3 backend yet)
 - See `docs/forms.md` for complete guide, `docs/troubleshooting.md` for gotchas
@@ -380,6 +381,7 @@ The underlying `useClearOnDependencyChange` hook (`@/hooks/use-clear-on-dependen
 - **Query Keys**: `["resource", projectId, ...specifics]`
 - **Mutations**: Invalidate related queries after success
 - **Stale Time**: 30s for current data, 5m for historical
+- **Always check `src/hooks/` first**: Every entity has a dedicated hook file (e.g., `use-formulations.ts`, `use-facilities.ts`). Never write an inline `useQuery` when an existing hook covers the same server action — it duplicates query keys and risks staleTime drift
 
 ## Adding New Features
 
@@ -389,6 +391,9 @@ Follow this checklist when creating new features:
    - Create form schemas with validation messages
    - Create server action schemas (may extend form schemas)
    - Export type inference: `export type MyFormData = z.infer<typeof myFormSchema>`
+   - When form and update schemas share a sub-object shape, extract a shared base schema (e.g., `const ingredientBinBaseSchema = z.object({...})`) and extend it for each variant
+   - Prefer `z.infer<typeof schema>` over inline type definitions to keep types in sync with validation
+   - Use preprocessor helpers from `@/schemas/helpers` — never write inline `(v) => ...` preprocess lambdas
 
 2. **Database Schema** (`src/db/schema/your-feature.ts`)
    - Define table with Drizzle
@@ -406,6 +411,7 @@ Follow this checklist when creating new features:
    - Import schemas from `@/schemas`
    - Validate input with Zod schemas
    - Return `ActionResult<T>`
+   - For JSONB columns, keep create and update defaults consistent (e.g., both use `{}` for empty, not `{}` in create and `undefined` in update) — check the DB schema's `.default()` value
 
 5. **React Query Hooks** (`src/hooks/use-your-feature.ts`)
    - Query hooks for data fetching
