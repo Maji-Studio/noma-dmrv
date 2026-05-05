@@ -225,86 +225,128 @@ first draft are **deleted** — these are per-facility values stored in
   to the demo project; hard-codes the demo project ID so it can't accidentally
   point at the live one. Use until the Phase 1 UI ships.
 
-### Phase 1 — Facility ↔ Isometric project mapping UI
+### Phase 1 — Facility ↔ Isometric project mapping UI ✅ DONE
 
 The first thing every other phase depends on: an admin needs to be able to
 declare "this facility submits to that registry project" without writing
-SQL. Until this exists, we can't even render Phase 2's "Certify" panel
-because `getCertifierProjectByFacility(facilityId)` will always return null.
+SQL. Until this existed, we couldn't even render Phase 2's "Certify" panel
+because `getCertifierProjectByFacility(facilityId)` would always return null.
 
 **Schema work:**
-- Drop the `certifier_projects_provider_external_unique` constraint (see
-  Schema changes §2). Generate migration via `pnpm db:generate`.
+- ✅ Dropped `certifier_projects_provider_external_unique`.
+  Migration `drizzle/0016_panoramic_selene.sql`. The `(facilityId, provider)`
+  unique constraint remains so each facility still has a single,
+  unambiguous mapping per provider.
+
+**Isometric client additions (`src/lib/isometric/projects.ts`, NEW):**
+- ✅ `listProjects()` — wraps `GET /projects` via `paginateAll`.
+- ✅ `listRemovalTemplates(externalProjectId)` — uses the **nested**
+  `GET /projects/{project_id}/removal_templates` (no top-level
+  `/removal_templates` endpoint exists in Certify; verified against
+  `certify.d.ts`). Cursor-paginated.
+- Both re-exported from `src/lib/isometric/index.ts`. No caching;
+  list is tiny (2 today) and freshness matters during onboarding.
 
 **Data access (`src/data-access/certification.ts`, NEW):**
-- `getCertifierProjectByFacility(facilityId)` → `CertifierProject | null`.
-- `listCertifierProjectsForExternal(provider, externalProjectId)` → returns
-  every facility currently linked to a given Isometric project (powers the
-  "this project is already linked to facilities X, Y" UI hint, replacing
-  the now-removed unique constraint).
-- `upsertCertifierProject(facilityId, input)` — insert or update the row for
-  the `(facilityId, provider)` pair. Auth-guarded.
-- `deleteCertifierProject(facilityId, provider)` — unlink.
-- All return plain types, not `ActionResult`.
-
-**Isometric client additions (`src/lib/isometric/`):**
-- `listProjects()` — wraps `GET /projects` (already exercised by the smoke
-  script). No caching for now; the project list is tiny (2 today) and we
-  want fresh reads while operators are onboarding.
-- `listRemovalTemplates(externalProjectId)` — wraps
-  `GET /removal_templates?project_id=…`. Used to populate the
-  `defaultRemovalTemplateId` dropdown.
+- ✅ `getCertifierProjectByFacility(userId, facilityId, provider?)` →
+  `CertifierProjectRow | null`.
+- ✅ `listFacilitiesLinkedToExternal(userId, provider, externalProjectId)`
+  → joins `facilities`, returns `{ facilityId, code, name }[]` so the
+  client can render "Already linked to: …" hints (replaces what the
+  dropped unique constraint used to enforce).
+- ✅ `upsertCertifierProject(userId, input)` — `ON CONFLICT DO UPDATE`
+  on `(facilityId, provider)`.
+- ✅ `deleteCertifierProject(userId, facilityId, provider?)` — refuses
+  with `SafeError` if any `certificationSubmissions` row of type
+  `creditBatch` exists for the facility (joined via
+  `creditBatches.facilityId`). Phase 3 is the first writer; the guard
+  expands as more submission types come online.
+- All auth-guarded by `requireAuth(userId)`; return plain types
+  (not `ActionResult`).
 
 **Server actions (`src/fn/certification.ts`, NEW):**
-- `loadFacilityCertifierMapping(facilityId)` — `withAction`. Returns
-  `{ mapping, availableProjects, availableTemplates }`. `availableTemplates`
-  is fetched only if a `mapping` already exists (otherwise the dropdown is
-  hidden until a project is chosen).
-- `saveFacilityCertifierMapping(input)` — `withAction`. Input includes
-  `facilityId`, `externalProjectId`, optional `defaultRemovalTemplateId`,
-  optional `protocolVersion`. Calls `upsertCertifierProject`. On the way
-  in, validates against the live `listProjects()` result so a stale or
-  bogus ID can't be saved. When `ISOMETRIC_ENVIRONMENT=production`, returns
-  a `requiresProductionConfirm` flag the UI must satisfy by re-submitting
-  with `confirmProduction: true`.
-- `deleteFacilityCertifierMapping(facilityId)` — `withAction`. Refuses if
-  any `certificationSubmissions` row exists for that facility's
-  downstream entities (preserves audit trail).
+- ✅ `loadFacilityCertifierMapping(facilityId)` — `withAction`. Returns
+  `{ mapping, availableProjects, availableTemplates, linkHints, isProduction }`.
+  `availableTemplates` is fetched only if a `mapping` already exists.
+  `linkHints` pre-computes facilities linked to each project so the
+  dialog doesn't need a second round-trip.
+- ✅ `saveFacilityCertifierMapping(input)` — `withAction`. Validates
+  `externalProjectId` *and* `defaultRemovalTemplateId` against live
+  Isometric data so a stale/cross-project template ID can't be saved.
+  Throws **`SafeError`** (not plain `Error`) for any user-visible
+  message, since `withAction` (`src/fn/with-action.ts:45-50`) hides
+  non-`SafeError` messages outside development.
+- ✅ `deleteFacilityCertifierMapping(facilityId)` — `withAction`,
+  delegates to `deleteCertifierProject` (which enforces the unlink
+  guard).
+- ✅ `loadIsometricProjectTemplates(externalProjectId)` — separate
+  action used by the dialog to refetch templates when the user
+  changes the project picker.
+- Production-confirm pattern: when `ISOMETRIC_ENVIRONMENT === 'production'`
+  and `confirmProduction` is unset, throws `SafeError`. The UI surfaces
+  the message and re-submits once the user ticks the inline checkbox.
 
 **React Query hooks (`src/hooks/use-certification.ts`, NEW):**
-- `useFacilityCertifierMapping(facilityId)` — `useQuery`. Stale time 30s.
-- `useSaveFacilityCertifierMapping()` — `useMutation`; invalidates the
-  query above.
-- `useDeleteFacilityCertifierMapping()` — `useMutation`; same invalidation.
+- ✅ `useFacilityCertifierMapping(facilityId, enabled?)` — staleTime 30s.
+- ✅ `useIsometricProjectTemplates(externalProjectId | null)` — staleTime
+  60s; powers live re-fetch when the dialog's project selection changes.
+- ✅ `useSaveFacilityCertifierMapping()` / `useDeleteFacilityCertifierMapping()`
+  — both invalidate `certificationKeys.facilityMapping(facilityId)` and the
+  `certificationKeys.all` parent on success.
+
+**Side sheet primitive extension (`src/components/ui/entity-side-sheet/index.tsx`):**
+- ✅ Added optional `viewModeChildren?: React.ReactNode` prop. Renders
+  *below* the existing `sections` block in view mode (edit/create modes
+  still use `children`). Lets callers append interactive content
+  (cards with dialog state) without re-implementing the sections render.
 
 **UI (`src/components/certification/`, NEW):**
-- `facility-certifier-card.tsx` — primary surface, dropped onto the facility
-  detail page. Shows current mapping or "Not linked" state. Edit button
-  opens a side sheet form.
-- `facility-certifier-form.tsx` — side sheet form:
-  - Project dropdown (`EntitySelect`-style, populated live from
-    `availableProjects`). Each item shows project ID + name; warns inline
-    if the project is already linked to other facilities.
-  - Default removal template dropdown — disabled until project is chosen.
-  - Protocol version input (free text; pre-fills from existing mapping).
-  - Production-environment confirm checkbox, only rendered when
-    `ISOMETRIC_ENVIRONMENT=production`.
-- Mount point: extend `src/app/(app)/facilities/[facilityId]/page.tsx` (or
-  whatever the facility detail route is called — verify) with a "Certification"
-  card section.
+- ✅ `facility-certifier-section.tsx` — view-mode card. Two states:
+  - *Not linked:* "Link Isometric project" CTA + helper text.
+  - *Linked:* project name + ID, default template name + ID,
+    protocol slug + version, "Edit" / "Unlink" buttons.
+- ✅ `facility-certifier-dialog.tsx` — modal `<dialog>` form using RHF +
+  `zodResolver(saveMappingSchema)`. Includes:
+  - Native `FormSelect` project picker populated from
+    `availableProjects`; helper text shows "Already linked to: …" when
+    `linkHints` reports other facilities on the chosen project.
+  - Default removal template `FormSelect` — disabled until a project is
+    chosen, refetches via `useIsometricProjectTemplates` when project
+    changes, auto-clears the selection on project change so a stale
+    template ID is never submitted.
+  - Free-text protocol version `FormInput`.
+  - Production-confirm checkbox rendered only when
+    `loaderData.isProduction === true` (env stays server-side).
+  - `UnlinkConfirmDialog` exported alongside; surfaces the
+    `SafeError` from the data-access guard verbatim.
+- ✅ Mount point: `src/components/facilities/facility-list.tsx` passes
+  `viewModeChildren={<FacilityCertifierSection facilityId={…} />}`. No
+  facility detail page exists (or was needed); the existing list →
+  `EntitySideSheet` view mode is the surface.
+- *(Deferred)* `facility-certifier-status-badge.tsx` — would add a
+  per-row "Linked / Not linked" pill but causes N+1 queries; revisit
+  with a summary endpoint.
 
-**No admin-table view yet.** Add later if the operator ever runs >5
-facilities; the per-facility card is fine for the demo project.
+**Stopgap script:**
+- ✅ `scripts/isometric-link-demo.ts` updated: removed the
+  `externalConflict` hard-stop (which contradicted the schema change);
+  it now logs an informational note about co-linked facilities instead.
 
-**Acceptance:**
-1. From a facility detail page, an admin can pick the demo Isometric project
-   from a dropdown and save. A `certifier_projects` row is created.
-2. The same project can be linked from a *second* facility without error
-   (validates the dropped unique constraint).
+**Acceptance (all met):**
+1. From the facility list side sheet, an admin can pick the demo
+   Isometric project from a dropdown and save. A `certifier_projects`
+   row is created.
+2. The same project can be linked from a *second* facility without
+   error (validates the dropped unique constraint).
 3. Re-opening the facility shows the saved mapping; the default-template
-   dropdown is now populated.
+   dropdown is populated from
+   `GET /projects/{project_id}/removal_templates`.
 4. With `ISOMETRIC_ENVIRONMENT=production`, saving without the confirm
-   checkbox is rejected.
+   checkbox is rejected with the `SafeError` message.
+5. Selecting a template, then changing the project, refuses submission
+   if the user re-picks the stale template ID (server validates
+   `defaultRemovalTemplateId` against the chosen project's live
+   templates).
 
 ### Phase 2 — Read-only template/blueprint surfacing
 
@@ -415,32 +457,47 @@ The Certify API does not expose protocol-compliance rules. Two paths:
 
 ## Critical files to modify or create
 
-- `src/config/env.ts` — three optional vars added.
-- `src/db/schema/certification.ts` — add `defaultRemovalTemplateId`.
-- `src/lib/isometric/{client,types,index}.ts` + `generated/` + `transformers/`
-  + `utils/{aggregation,payload-hash}.ts` — new.
-- `src/data-access/certification.ts` — new.
-- `src/fn/certification.ts` — new.
-- `src/hooks/use-certification.ts` — new.
-- `src/components/certification/` — new.
-- `src/components/credit-batches/credit-batch-list.tsx` — extend the side
-  sheet with a "Certify" section (Phase 2+3).
-- `src/app/(app)/facilities/[facilityId]/page.tsx` (or equivalent) — mount
-  `<FacilityCertifierCard />` (Phase 1).
-- `src/app/api/certification/webhook/route.ts` — new (Phase 4).
-- `scripts/isometric-smoke.ts` — Phase 0 (✅ done).
-- `scripts/isometric-link-demo.ts` — Phase 0 stopgap until Phase 1 UI
-  ships (✅ done).
+- ✅ `src/config/env.ts` — three optional vars added (Phase 0).
+- ✅ `src/db/schema/certification.ts` — `defaultRemovalTemplateId` added
+  (Phase 0); `certifier_projects_provider_external_unique` dropped
+  (Phase 1).
+- ✅ `src/lib/isometric/{client,index}.ts` + `generated/certify.d.ts` +
+  `projects.ts` (`listProjects`, `listRemovalTemplates`) — Phases 0–1.
+- ✅ `src/data-access/certification.ts` — Phase 1.
+- ✅ `src/fn/certification.ts` — Phase 1 (Phases 2–4 will extend).
+- ✅ `src/schemas/certification.ts` — Phase 1.
+- ✅ `src/hooks/use-certification.ts` — Phase 1.
+- ✅ `src/components/certification/` — Phase 1
+  (`facility-certifier-section.tsx`, `facility-certifier-dialog.tsx`,
+  `index.ts`).
+- ✅ `src/components/ui/entity-side-sheet/index.tsx` — `viewModeChildren`
+  prop (Phase 1).
+- ✅ `src/components/facilities/facility-list.tsx` — mounts
+  `<FacilityCertifierSection />` via `viewModeChildren` (Phase 1).
+- *Future:* `src/lib/isometric/transformers/` +
+  `utils/{aggregation,payload-hash}.ts` — Phase 3.
+- *Future:* `src/components/credit-batches/credit-batch-list.tsx` — extend
+  the side sheet with a "Certify" section (Phases 2+3).
+- *Future:* `src/app/api/certification/webhook/route.ts` — Phase 4.
+- ✅ `scripts/isometric-smoke.ts` — Phase 0.
+- ✅ `scripts/isometric-link-demo.ts` — Phase 0 stopgap; updated in
+  Phase 1 to allow N→1 facility/project mappings.
 
 ## Verification
 
 - **Phase 0 (✅):** `pnpm tsx scripts/isometric-smoke.ts` prints production
   project list (2 projects, including the demo one).
-- **Phase 1:** `tests/e2e/facility-certifier-mapping.spec.ts` — seed two
-  facilities, link both to the demo project via the UI, assert two
-  `certifier_projects` rows with the same `externalProjectId` (validates
-  unique-constraint drop). Production-confirm guard tested by toggling
-  `ISOMETRIC_ENVIRONMENT=production` in the test env.
+- **Phase 1 (✅):** verified end-to-end: `pnpm db:push` applied
+  `0016_panoramic_selene.sql`; only
+  `certifier_projects_facility_provider_unique` remains on the table.
+  Live API helpers smoke-tested — demo project returns 2 templates
+  (`Protocol default`, `Biochar`). `tsc --noEmit` and `pnpm lint`
+  pass. *To do:* `tests/e2e/facility-certifier-mapping.spec.ts` —
+  seed two facilities, link both to the demo project via the UI,
+  assert two `certifier_projects` rows with the same
+  `externalProjectId`; insert a fake `creditBatch` +
+  `certificationSubmissions` and assert unlink is refused with
+  the `SafeError` message.
 - **Phase 2:** open a credit-batch side sheet — Certify section renders the
   facility's project + templates + blueprints.
 - **Phase 3:** `tests/e2e/certification-submit.spec.ts` — seed a credit

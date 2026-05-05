@@ -1,0 +1,1 @@
+ALTER TABLE "certifier_projects" DROP CONSTRAINT "certifier_projects_provider_external_unique";
