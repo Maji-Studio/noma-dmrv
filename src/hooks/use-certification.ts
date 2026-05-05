@@ -7,9 +7,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteFacilityCertifierMapping,
   loadCertifyContextForCreditBatch,
+  loadCreditBatchSubmissionState,
   loadFacilityCertifierMapping,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
+  submitCreditBatch,
 } from "@/fn/certification";
 import type { SaveMappingInput } from "@/schemas/certification";
 
@@ -23,6 +25,13 @@ export const certificationKeys = {
     [
       ...certificationKeys.all,
       "certify-context",
+      "credit-batch",
+      creditBatchId,
+    ] as const,
+  submissionStateForCreditBatch: (creditBatchId: string) =>
+    [
+      ...certificationKeys.all,
+      "submission-state",
       "credit-batch",
       creditBatchId,
     ] as const,
@@ -90,6 +99,44 @@ export function useCertifyContextForCreditBatch(
     },
     enabled: enabled && !!creditBatchId,
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreditBatchSubmissionState(
+  creditBatchId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.submissionStateForCreditBatch(creditBatchId),
+    queryFn: async () => {
+      const result = await loadCreditBatchSubmissionState(creditBatchId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!creditBatchId,
+    staleTime: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.isLockedInFlight ? 60_000 : false,
+  });
+}
+
+export function useSubmitCreditBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (creditBatchId: string) => {
+      const result = await submitCreditBatch(creditBatchId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (_data, creditBatchId) => {
+      queryClient.invalidateQueries({
+        queryKey:
+          certificationKeys.submissionStateForCreditBatch(creditBatchId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: certificationKeys.certifyContextForCreditBatch(creditBatchId),
+      });
+    },
   });
 }
 
