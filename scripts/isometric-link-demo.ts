@@ -61,16 +61,17 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const externalConflict = existing.find(
-    (p) =>
-      p.provider === "isometric" &&
-      p.externalProjectId === DEMO_EXTERNAL_PROJECT_ID
-  );
-  if (externalConflict) {
-    console.error(
-      `Demo project ${DEMO_EXTERNAL_PROJECT_ID} already linked to facility ${externalConflict.facilityId}.`
+  const alsoLinkedTo = existing
+    .filter(
+      (p) =>
+        p.provider === "isometric" &&
+        p.externalProjectId === DEMO_EXTERNAL_PROJECT_ID
+    )
+    .map((p) => p.facilityId);
+  if (alsoLinkedTo.length > 0) {
+    console.log(
+      `Note: demo project ${DEMO_EXTERNAL_PROJECT_ID} is also linked to facility(s): ${alsoLinkedTo.join(", ")}.`
     );
-    process.exit(1);
   }
 
   const [inserted] = await db

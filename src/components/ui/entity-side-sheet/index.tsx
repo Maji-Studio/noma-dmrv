@@ -67,6 +67,12 @@ interface EntitySideSheetProps {
   subtitle?: string;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
+  /**
+   * Optional view-mode body extension. When provided, renders below the
+   * default `sections` so callers can mount interactive content (extra
+   * cards, dialog openers). Edit/create modes still use `children`.
+   */
+  viewModeChildren?: React.ReactNode;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** The form component rendered in edit/create mode */
@@ -100,6 +106,7 @@ function EntitySideSheet({
   title,
   subtitle,
   sections,
+  viewModeChildren,
   editLabel = "Edit",
   children,
   size = "wide",
@@ -156,27 +163,28 @@ function EntitySideSheet({
           className={isViewMode ? "flex flex-col gap-32" : undefined}
           noPaddingBottom={!isViewMode}
         >
-          {isViewMode && sections
-            ? (
-                <>
-                  {sections.map((section) => (
-                    <DetailSection key={section.title} title={section.title}>
-                      {chunkFields(section.fields).map((row, rowIdx) => (
-                        <DetailRow key={rowIdx}>
-                          {row.map((field) => (
-                            <DetailField
-                              key={field.label}
-                              label={field.label}
-                              value={field.value}
-                            />
-                          ))}
-                        </DetailRow>
+          {isViewMode ? (
+            <>
+              {sections?.map((section) => (
+                <DetailSection key={section.title} title={section.title}>
+                  {chunkFields(section.fields).map((row, rowIdx) => (
+                    <DetailRow key={rowIdx}>
+                      {row.map((field) => (
+                        <DetailField
+                          key={field.label}
+                          label={field.label}
+                          value={field.value}
+                        />
                       ))}
-                    </DetailSection>
+                    </DetailRow>
                   ))}
-                </>
-              )
-            : children}
+                </DetailSection>
+              ))}
+              {viewModeChildren}
+            </>
+          ) : (
+            children
+          )}
         </SlideOverPanel.Body>
 
         {/* Footer — only in view mode */}

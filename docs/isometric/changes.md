@@ -1,5 +1,44 @@
 # Isometric Docs Change Log
 
+## 2026-05-05
+
+- **Scope:** Phase 1 of the Certify API integration — facility ↔ Isometric project mapping
+- **Updated by:** Kenji / Claude
+- Schema changes (migration `drizzle/0016_panoramic_selene.sql`):
+  - Dropped `certifier_projects_provider_external_unique` so multiple
+    noma facilities can roll up into a single registry project (matches
+    how operators register; Isometric's data model has no facility
+    concept). Kept `(facilityId, provider)` unique to preserve
+    unambiguous routing per facility.
+- New code:
+  - `src/lib/isometric/projects.ts` — `listProjects()`,
+    `listRemovalTemplates(externalProjectId)` using the nested
+    `GET /projects/{project_id}/removal_templates` endpoint
+    (verified via OpenAPI types; no top-level `/removal_templates`
+    exists).
+  - `src/data-access/certification.ts`, `src/fn/certification.ts`,
+    `src/schemas/certification.ts`, `src/hooks/use-certification.ts` —
+    layered CRUD + RHF/Zod schema for the mapping. Unlink guarded by
+    `SafeError` if any `creditBatch` submission exists for the
+    facility (one-hop join via `creditBatches.facilityId`).
+  - `src/components/certification/{facility-certifier-section,
+    facility-certifier-dialog}.tsx` — view-mode card (in the facility
+    list `EntitySideSheet`) plus modal form with project picker,
+    template select, protocol version, and a production-confirm
+    checkbox shown only when `ISOMETRIC_ENVIRONMENT === 'production'`.
+- Side sheet primitive:
+  - Added `viewModeChildren?` to `EntitySideSheet`; renders below the
+    existing `sections` block so callers can mount interactive content
+    in view mode without overriding the static-section render.
+- Stopgap:
+  - `scripts/isometric-link-demo.ts` updated: removed the
+    `externalConflict` exit (incompatible with the dropped unique
+    constraint); now logs an informational note about co-linked
+    facilities.
+- Docs:
+  - `integration-plan.md` Phase 1 section, "Critical files",
+    "Verification": marked done with the actual files shipped.
+
 ## 2026-04-19
 
 - **Scope:** P0-01, P0-07, P0-11 schema gaps closed
