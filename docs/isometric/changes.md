@@ -1,5 +1,88 @@
 # Isometric Docs Change Log
 
+## 2026-05-06 (Sandbox validation pass)
+
+- **Scope:** First validation pass against the Isometric Certify sandbox
+  (`https://api.sandbox.isometric.com/mrv/v0`) using the new sandbox
+  credentials in local `.env.local`.
+- Updated `scripts/isometric-smoke.ts` and `scripts/isometric-link-demo.ts`
+  so the demo project can be overridden by argv or
+  `ISOMETRIC_DEMO_PROJECT_ID`. The production demo project remains the
+  default guardrail.
+- Sandbox baseline:
+  - `pnpm tsx scripts/isometric-smoke.ts` confirmed
+    `ISOMETRIC_ENVIRONMENT=sandbox` and returned one project:
+    `prj_1K9YJ33RKSBX9FFF`.
+  - `pnpm tsx scripts/isometric-smoke.ts inspect-template
+    prj_1K9YJ33RKSBX9FFF` returned two templates: `Protocol default`
+    (`rvt_1K9YJ33RKSBXR2Y3`) and `Dark Earth removal template`
+    (`rvt_1K9YK6YRQSBXFVZ0`). Sandbox still has monitored-input coverage
+    gaps: 21 unmapped monitored inputs across the two templates. Fixed
+    constants are still mostly unbound; the custom template has one
+    pre-bound `carbon_intensity` datapoint on the "Last mile feedstock
+    transport" component.
+  - `pnpm tsx scripts/isometric-smoke.ts datapoint-empty-sources
+    prj_1K9YJ33RKSBX9FFF` confirmed sandbox accepts Datapoints with
+    `source_ids: []`; created `dtp_1KQYVM2KRSBX2ZF6`.
+  - `pnpm tsx scripts/isometric-smoke.ts ghg-statement-list
+    prj_1K9YJ33RKSBX9FFF` returned one visible draft statement:
+    `ggs_1K9YK7J6FSBX4QM0`, period `2026-01-01..2026-04-01`, one
+    Removal.
+- Local mapping/context checks:
+  - Repointed the two local facility mappings to sandbox project
+    `prj_1K9YJ33RKSBX9FFF`, confirming the Phase 1 N-facilities-to-one
+    project shape still works.
+  - Verified stale default-template drift by temporarily setting the local
+    credit-batch facility to production template `rvt_1K5F2F6SN1S0N53K`;
+    `loadCertifyContextForCreditBatchForUser` surfaced
+    `missingDefaultTemplateId` distinctly from the unset-template state.
+  - Restored the credit-batch facility to custom sandbox template
+    `rvt_1K9YK6YRQSBXFVZ0`; context resolved 9 component blueprints and
+    no unresolved blueprint keys. `isProduction=false`, so the production
+    confirmation gate remains off under sandbox.
+- Verification run:
+  - `pnpm test` — 146 tests passed.
+  - `pnpm test:e2e` — 75 tests passed, 2 skipped.
+  - `pnpm typecheck` — passed.
+  - `pnpm lint` — passed with 27 pre-existing warnings outside the touched
+    scripts.
+- Not yet sandbox-verified end-to-end: credit-batch Removal POST,
+  Removal idempotency/supersede, stale-lock recovery, and GHG statement
+  create/submit/refresh. The sandbox templates still need pre-bound fixed
+  constants and/or a noma-tailored template before the Phase 3 write path
+  can pass beyond its current guard.
+
+### Re-validation (later 2026-05-06)
+
+- Tightened `scripts/isometric-smoke.ts` so project-specific modes
+  (`inspect-template`, `datapoint-empty-sources`, `ghg-statement-list`)
+  refuse to silently fall back to the production demo project ID when
+  `ISOMETRIC_ENVIRONMENT=sandbox`. They now require an explicit argv or
+  `ISOMETRIC_DEMO_PROJECT_ID` env var on sandbox; production keeps the
+  hard-coded fallback.
+- Re-ran the gate sequence end-to-end against sandbox `prj_1K9YJ33RKSBX9FFF`:
+  - **Gate A**: project list + ghg-statement list reachable; smoke
+    datapoint `dtp_1KQYXPV3QSBXPPNG` created with `source_ids: []`.
+  - **Gate B**: `inspect-template` re-reports the same gap shape — 21
+    unmapped monitored inputs across both templates and unbound fixed
+    constants. `submitCreditBatch` would still bail at its template
+    guard, so Gates D + E remain `blocked-by-template-readiness`.
+  - **Gate C**: confirmed Phase 1 N→1 mapping (both local facilities
+    linked to the sandbox project) and the Phase 2 panel rendering on
+    credit batch `CB-2026-001`. Phase 2 panel showed 9 blueprints
+    matching the inspect-template output and the "Submit to Isometric"
+    button was reachable. Drift state re-verified via a temporary
+    DB-level template-id swap; the credit-batch panel surfaced the
+    distinct "Default removal template is no longer available in
+    Certify for this project" warning, and the original template ID
+    (`rvt_1K9YK6YRQSBXFVZ0`) was restored immediately.
+- Outstanding from this re-validation:
+  - Stale-template **server-action** rejection (Gate C step 3) is still
+    only covered indirectly. A pure project↔template validation helper
+    extracted from `saveFacilityCertifierMapping` would let us assert
+    the failure case from a `pnpm tsx` script without standing up a
+    Next.js request context.
+
 ## 2026-05-06 (Refactor)
 
 - **Scope:** Extract the duplicated submission-claim decision from

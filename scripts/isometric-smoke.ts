@@ -3,20 +3,24 @@
  *
  * Usage:
  *   pnpm tsx scripts/isometric-smoke.ts                          # GET /projects
- *   pnpm tsx scripts/isometric-smoke.ts inspect-template         # GET only — print
+ *   pnpm tsx scripts/isometric-smoke.ts inspect-template [projectId]
+ *                                                               # GET only — print
  *                                                                 # demo project's default
  *                                                                 # removal template inputs +
  *                                                                 # blueprint metadata; flag
  *                                                                 # any inputs not covered
  *                                                                 # by INPUT_MAPPING.
- *   pnpm tsx scripts/isometric-smoke.ts datapoint-empty-sources  # POST one Datapoint with
+ *   pnpm tsx scripts/isometric-smoke.ts datapoint-empty-sources [projectId]
+ *                                                               # POST one Datapoint with
  *                                                                 # source_ids:[] to demo
  *                                                                 # project (writes!).
- *   pnpm tsx scripts/isometric-smoke.ts ghg-statement-list       # GET only — list demo
+ *   pnpm tsx scripts/isometric-smoke.ts ghg-statement-list [projectId]
+ *                                                               # GET only — list demo
  *                                                                 # project GHG statements.
  *
- * Hard-coded to the demo project so production writes never land in the
- * live Sifuri Halisi project.
+ * Defaults to the production demo project so production writes never land in
+ * the live Sifuri Halisi project. Override with [projectId] or
+ * ISOMETRIC_DEMO_PROJECT_ID for sandbox validation.
  *
  * Requires ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN in .env.local.
  */
@@ -51,14 +55,30 @@ async function main(): Promise<void> {
   console.log(`Isometric environment: ${env.ISOMETRIC_ENVIRONMENT}`);
 
   const mode = process.argv[2];
+  const explicitProjectId =
+    process.argv[3] ?? process.env.ISOMETRIC_DEMO_PROJECT_ID ?? null;
+  const requiresProjectId =
+    mode === "inspect-template" ||
+    mode === "datapoint-empty-sources" ||
+    mode === "ghg-statement-list";
+  if (requiresProjectId && !explicitProjectId && env.ISOMETRIC_ENVIRONMENT === "sandbox") {
+    console.error(
+      `Mode "${mode}" requires a project ID on sandbox.\n` +
+        `  Pass it as the 2nd argv (pnpm tsx scripts/isometric-smoke.ts ${mode} prj_…)\n` +
+        `  or set ISOMETRIC_DEMO_PROJECT_ID in .env.local.\n` +
+        `  Refusing to fall back to the production demo project ID on sandbox.`,
+    );
+    process.exit(2);
+  }
+  const demoExternalProjectId = explicitProjectId ?? DEMO_EXTERNAL_PROJECT_ID;
 
   try {
     if (mode === "inspect-template") {
       console.log(
-        `Inspecting default removal templates on demo project ${DEMO_EXTERNAL_PROJECT_ID} (read-only)…\n`,
+        `Inspecting default removal templates on demo project ${demoExternalProjectId} (read-only)…\n`,
       );
       const [templates, blueprints] = await Promise.all([
-        listRemovalTemplates(DEMO_EXTERNAL_PROJECT_ID),
+        listRemovalTemplates(demoExternalProjectId),
         listComponentBlueprints(),
       ]);
       const blueprintByKey = new Map(blueprints.map((bp) => [bp.key, bp]));
@@ -173,12 +193,12 @@ async function main(): Promise<void> {
     if (mode === "datapoint-empty-sources") {
       const supplierRefId = `nm-smoke-empty-src-${Date.now()}`;
       console.log(
-        `Posting Datapoint with empty source_ids to demo project ${DEMO_EXTERNAL_PROJECT_ID} (ref=${supplierRefId})…`,
+        `Posting Datapoint with empty source_ids to demo project ${demoExternalProjectId} (ref=${supplierRefId})…`,
       );
       const created = await createDatapoint({
         description: "Smoke test: source_ids=[] acceptance",
         display_name: `smoke ${supplierRefId}`,
-        project_id: DEMO_EXTERNAL_PROJECT_ID,
+        project_id: demoExternalProjectId,
         quantity: { magnitude: 1, unit: "kg" },
         source_ids: [],
         supplier_reference_id: supplierRefId,
@@ -190,14 +210,14 @@ async function main(): Promise<void> {
 
     if (mode === "ghg-statement-list") {
       console.log(
-        `Listing GHG statements visible to credentials for demo project ${DEMO_EXTERNAL_PROJECT_ID} (read-only)...`,
+        `Listing GHG statements visible to credentials for demo project ${demoExternalProjectId} (read-only)...`,
       );
       const statements = await isometric.paginateAll<GhgStatement>(
         "/ghg_statements",
         { pageSize: 50 },
       );
       const filtered = statements.filter(
-        (statement) => statement.project_id === DEMO_EXTERNAL_PROJECT_ID,
+        (statement) => statement.project_id === demoExternalProjectId,
       );
       console.log(`visible_total: ${statements.length}`);
       console.log(`demo_project_count: ${filtered.length}`);
