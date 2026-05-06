@@ -429,59 +429,166 @@ from `src/lib/isometric/index.ts`):**
    → "N blueprint(s) … no longer in Certify's catalog" warning row
    appears. Revert.
 
-### Phase 3 — Single removal submission (end-to-end)
+### Phase 3 — Single removal submission (end-to-end) ✅ DONE
 
-The smallest meaningful unit is one credit batch → one removal. Phases 1–2
-are prerequisites: a facility must be linked, and templates/blueprints must
-be surfaced.
+One credit batch → one Removal, with the full idempotency ledger.
+Phases 1–2 are prerequisites; Phase 4 (GHG statements) builds on this.
 
-1. Transformers (pure functions, table-driven tests):
-   - `transformers/source.ts` — local `documents` row → `CreateSourceRequest`.
-   - `transformers/datapoint.ts` — numeric reading → `CreateDatapointRequest`
-     (with optional standard deviation for uncertainty).
-   - `transformers/component.ts` — aggregated production data → component
-     inputs, using a declarative `INPUT_MAPPING` dict (port the pattern from
-     `varuna/.../transformers/removal.ts:63-110`).
-   - `transformers/removal.ts` — assemble components into the template's
-     component groups.
-2. Port `utils/aggregation.ts` from
-   `varuna/.../utils/aggregation.ts` — mass-weighted blends, durability
-   ratios. Correct per Biochar v1.2.
-3. `fn/certification.ts` adds `submitCreditBatch(creditBatchId)`:
-   - Resolve facility → look up `certifierProjects` row → 422 if absent.
-   - Call `getApplicationLineage(applicationId)` — **reuse existing
-     branching** (`delivery.biocharProductId ?? order.biocharProductId`,
-     null `linkedProductionRunId`, empty feedstocks). If lineage warnings
-     are non-empty for blocking fields, refuse submission with a clear
-     message.
-   - Run aggregation.
-   - For each step (sources, datapoints, components, removal), call the
-     idempotency ledger flow against `certificationSubmissions`.
-   - Append a row to `certifierSyncEvents` per HTTP attempt.
-4. UI inside the credit-batch side sheet:
-   - "Submit to Isometric" button. Disabled when:
-     - facility has no certifier project, or
-     - lineage has blocking warnings, or
-     - latest submission row is locked in flight.
-   - Status badge driven by latest `certificationSubmissions.status`.
-   - Sync-event log accordion showing the last N attempts.
+**Transformers (`src/lib/isometric/transformers/`, NEW):**
+- ✅ `datapoint.ts` — `INPUT_MAPPING` table + numeric reading →
+  `CreateDatapointRequest`. Carries the `quantity_kind` / `unit`
+  conversions (e.g. `samples.organicCarbonPercent / 100` for
+  `dimensionless` inputs that the demo template expects as a 0–1
+  fraction).
+- ✅ `removal.ts` — assembles components directly into the template's
+  component groups. Replaces the originally-planned `component.ts`
+  (component-group assembly is small enough to inline) and `source.ts`
+  (sources deferred to Phase 3.5).
 
-**Acceptance:** one seeded credit batch produces a real `Removal` in sandbox
-Certify with all linked components, datapoints, and sources visible in the
-Isometric UI. Re-clicking Submit is a no-op (matched payload hash). Mutating
-the batch and re-submitting creates a `version=2` row and supersedes v1.
+**Utils (`src/lib/isometric/utils/`, NEW):**
+- ✅ `aggregation.ts` — mass-weighted blends and durability ratios,
+  ported from the varuna prototype (correct per Biochar v1.2).
+- ✅ `payload-hash.ts` — canonical-JSON sha256 used by the ledger.
+  Tests in `tests/isometric-payload-hash.test.ts`.
+- ✅ `supplier-ref.ts` — stable client-side reference IDs that round-trip
+  through Certify so a stuck draft can be reconciled by
+  GET-by-`supplier_reference_id` after a stale lock.
+- ✅ `submission-claim.ts` — pure retry-decision module
+  (`decideSubmissionClaim`). Returns one of `create-new-version` /
+  `resume` / `return-existing` / `blocked-in-flight` /
+  `blocked-rejected-with-external` / `invalid-changed-hash`. Owns all
+  versioning math; status switch is exhaustive with `assertNever`.
+  Extracted on 2026-05-06 from a prior inline branch and reused by
+  both Removal and GHG-statement orchestrators. Covered by
+  `tests/isometric-submission-claim.test.ts` (18 cases — see
+  `docs/isometric/changes.md` 2026-05-06 entry for the policy split).
 
-### Phase 4 — GHG statement lifecycle
+**Submissions helper (`src/lib/isometric/submissions.ts`, NEW):**
+- ✅ `findRemovalBySupplierRef(...)` and
+  `findDatapointBySupplierRef(...)` — used by the orchestrator on
+  same-hash retries to claim a remote row that was created by an
+  earlier failed attempt before re-POSTing.
 
-- `submitGhgStatement(removalIds[])` server action.
-- `getGhgStatementStatus(externalId)` polled by React Query while status is
-  `DRAFT|SUBMITTED`; long stale time once `VERIFIED|REJECTED`.
-- "Resubmit" path on rejection (`POST /ghg_statements/{id}/submit`).
-- Each transition appends a `certifierSyncEvents` row.
-- Webhook ingestion: `certifierProjects.webhookSecret` already exists. Add a
-  small `app/api/certification/webhook/route.ts` that validates the HMAC and
-  reconciles `certificationSubmissions` rows on inbound notifications. This
-  removes most of the need for status polling.
+**Server action — split first, then add (`src/fn/certification/`, NEW):**
+- ✅ Split `src/fn/certification.ts` into a directory module
+  (`facility-mapping.ts`, `certify-context.ts`, `submit-credit-batch.ts`,
+  `shared.ts`, `index.ts`) before Phase 4. Phase 4 added
+  `ghg-statements.ts` to the same directory.
+- ✅ `submitCreditBatch(creditBatchId)` in `submit-credit-batch.ts`:
+  - Resolves facility → looks up `certifier_projects` row → throws a
+    `SafeError` if absent.
+  - Calls `getApplicationLineage(applicationId)` — **reuses existing
+    branching** (`delivery.biocharProductId ?? order.biocharProductId`,
+    nullable `linkedProductionRunId`, possibly-empty feedstocks).
+    Refuses submission when lineage has blocking warnings.
+  - Runs aggregation, builds the payload, computes `payloadHash`.
+  - Calls `decideSubmissionClaim` and acts on the returned claim.
+    Idempotent: re-clicking Submit with the same payload returns the
+    existing externalId; mutating the batch creates a `version=2` row.
+  - Each HTTP attempt appends a `certifier_sync_events` row.
+
+**UI (`src/components/certification/`, EXTENDED):**
+- ✅ `certify-panel.tsx` gained the "Submit to Isometric" button —
+  disabled when the facility is unlinked, lineage has blocking
+  warnings, or the latest submission row is locked in flight.
+- ✅ `submission-status-badge.tsx` and `sync-event-log.tsx` — status
+  surfaces driven by the latest `certification_submissions` row and
+  the recent `certifier_sync_events` history.
+- Mounted via the same `viewModeChildren` slot as Phase 2's read-only
+  panel (`src/components/credit-batches/credit-batch-list.tsx`).
+
+**Pre-coding gates resolved during Phase 3** (see
+`docs/open-questions.md`):
+- ✅ Empty `source_ids: []` confirmed accepted by Certify against the
+  demo project. Sources stay deferred to Phase 3.5.
+- Two new blockers surfaced from live-template inspection — tracked
+  under `phase-3-input-coverage` (20 monitored inputs without
+  `INPUT_MAPPING` entries) and `phase-3-fixed-constants` (~12 fixed
+  constants needing pre-bound datapoints in the Isometric template
+  editor). `submitCreditBatch` bails with a clear `SafeError` when
+  unbound constants are detected.
+
+**Acceptance (met):** one seeded credit batch produces a real Removal in
+Certify with linked Datapoints. Re-clicking Submit is a no-op (matched
+payload hash). Mutating the batch and re-submitting creates a
+`version=2` row and supersedes v1.
+
+**To do (carried forward):** source-upload presigned-URL flow (Phase 3.5),
+per-Datapoint sub-ledger rows (Phase 4 deferral).
+
+### Phase 4 — GHG statement lifecycle ✅ DONE (webhook deferred)
+
+The lifecycle layer above Phase 3: aggregate one or more Removals into a
+`GhgStatement`, transition it through DRAFT → SUBMITTED → VERIFIED /
+REJECTED, and surface registry feedback back to operators.
+
+**Schema (migration `drizzle/0017_glorious_night_thrasher.sql`):**
+- ✅ `certifier_ghg_periods` — local project-period anchor that prevents
+  duplicate statements for the same `(project, end_on)` pair.
+  Statement *state* stays in `certification_submissions`; only the
+  period anchor is new. Supplier-hosted report URLs are recorded as
+  `documents` rows with `entity_type='ghgStatement'`.
+
+**Isometric client (`src/lib/isometric/ghg-statements.ts`, NEW):**
+- ✅ Typed wrappers for `POST /ghg_statements`,
+  `GET /ghg_statements/{id}`, and `POST /ghg_statements/{id}/submit`.
+- Note: Certify exposes `GET /ghg_statements` as pagination-only, so
+  local reconciliation client-filters by project + period end +
+  `DRAFT` status (handled in `utils/reconciliation.ts`).
+
+**Utils (`src/lib/isometric/utils/`, EXTENDED):**
+- ✅ `ghg-statement-state.ts` — `chooseGhgSubmitMode` /
+  `ghgSubmitFingerprintChanged`. Decides between `POST /submit` (first
+  submission) and the resubmit endpoint (post-rejection).
+- ✅ `reconciliation.ts` — stale-lock recovery and the
+  GET-by-`supplier_reference_id` lookup that connects a stuck draft to
+  its remote row.
+
+**Server actions (`src/fn/certification/ghg-statements.ts`, NEW):**
+- ✅ `createGhgStatementForFacility(...)` — `POST /ghg_statements`,
+  routed through the same `decideSubmissionClaim` policy as Phase 3
+  (with `onSubmittedHashChanged: 'invalid-changed-hash'` because
+  the remote period row is unique per `(project, end_on)`).
+- ✅ `submitGhgStatementForFacility(...)` — branches on draft vs
+  rejected; calls submit or resubmit accordingly.
+- ✅ `refreshGhgStatementStatus(...)` — `GET /ghg_statements/{id}` plus
+  metadata reconciliation (caches `pending_total_co2e_removed_kg` on
+  the local row).
+- ✅ `loadFacilityCertificationOverview(...)` — read-only loader for
+  the facility-scoped GHG statement page; lists recent removals + the
+  current statement row.
+
+**Hooks (`src/hooks/use-certification.ts`, EXTENDED):**
+- ✅ Added the GHG-statement query + mutation hooks consumed by the new
+  `/certification` page.
+
+**UI:**
+- ✅ Standalone facility-scoped page `src/app/(app)/certification/page.tsx`
+  → `src/components/certification/certification-page.tsx` (~389 lines):
+  table of statements with create / submit / refresh / resubmit
+  controls.
+- ✅ `ghg-statement-create-dialog.tsx` and `ghg-statement-submit-dialog.tsx`
+  — modal forms with RHF + Zod.
+- ✅ Sidebar entry added in `src/components/navigation/app-sidebar.tsx`.
+
+**Tests:**
+- ✅ `tests/isometric-ghg-statement-flow.test.ts` — submit-mode state
+  machine (draft / rejected / pending CO2e behaviour).
+- ✅ `tests/isometric-reconciliation.test.ts` — stale-lock recovery
+  and client-side filtering of `GET /ghg_statements`.
+- ✅ `tests/e2e/certification-page.spec.ts` — page-level smoke.
+
+**Explicitly deferred (Phase 5+):**
+- Webhook ingestion. `certifierProjects.webhookSecret` exists in the
+  schema, but `src/app/api/certification/webhook/route.ts` is **not**
+  built. Status polling via `refreshGhgStatementStatus` is the current
+  reconciliation surface. (Tracked separately in
+  `docs/open-questions.md` under the Phase 4/5 deferrals.)
+- noma-driven PATCH orchestration for Removals — every payload change
+  currently supersedes (creates a new version). PATCH branch deferred.
+- Automatic resubmission — manual button only.
+- External amendment claiming for registry-side statement-version
+  drafts (admin edits made directly in the Isometric UI).
 
 ### Phase 5 — Time-series + bulk paths (deferred)
 
@@ -527,28 +634,48 @@ The Certify API does not expose protocol-compliance rules. Two paths:
 - ✅ `src/config/env.ts` — three optional vars added (Phase 0).
 - ✅ `src/db/schema/certification.ts` — `defaultRemovalTemplateId` added
   (Phase 0); `certifier_projects_provider_external_unique` dropped
-  (Phase 1).
+  (Phase 1); `certifier_ghg_periods` table added (Phase 4).
 - ✅ `src/lib/isometric/{client,index}.ts` + `generated/certify.d.ts` +
   `projects.ts` (`listProjects`, `listRemovalTemplates`,
   `listComponentBlueprints`) — Phases 0–2.
-- ✅ `src/data-access/certification.ts` — Phase 1.
-- ✅ `src/fn/certification.ts` — Phase 1; extended in Phase 2 with
-  `loadCertifyContextForCreditBatch`. (Phases 3–4 will extend further.)
-- ✅ `src/schemas/certification.ts` — Phase 1.
-- ✅ `src/hooks/use-certification.ts` — Phase 1; extended in Phase 2 with
-  `useCertifyContextForCreditBatch`.
+- ✅ `src/lib/isometric/transformers/{datapoint,removal}.ts` — Phase 3.
+- ✅ `src/lib/isometric/utils/{aggregation,payload-hash,supplier-ref,
+  submission-claim,reconciliation,ghg-statement-state}.ts` —
+  Phase 3 + Phase 4. `submission-claim.ts` is shared by both
+  Removal and GHG-statement orchestrators.
+- ✅ `src/lib/isometric/submissions.ts` — Phase 3.
+- ✅ `src/lib/isometric/ghg-statements.ts` — Phase 4.
+- ✅ `src/data-access/certification.ts` — Phase 1; extended in
+  Phase 4 for GHG-statement persistence.
+- ✅ `src/fn/certification/` (split from a single file in Phase 3) —
+  `facility-mapping.ts` (Phase 1), `certify-context.ts` (Phase 2),
+  `submit-credit-batch.ts` (Phase 3), `ghg-statements.ts` (Phase 4),
+  `shared.ts`, `index.ts`.
+- ✅ `src/schemas/certification.ts` — Phase 1; extended in Phase 4.
+- ✅ `src/hooks/use-certification.ts` — Phase 1; extended in Phase 2
+  with `useCertifyContextForCreditBatch`; extended in Phase 4 with
+  GHG-statement query + mutation hooks.
 - ✅ `src/components/certification/` — Phase 1
   (`facility-certifier-section.tsx`, `facility-certifier-dialog.tsx`,
-  `index.ts`); Phase 2 added `certify-panel.tsx`, `blueprint-list.tsx`.
+  `index.ts`); Phase 2 added `certify-panel.tsx`, `blueprint-list.tsx`;
+  Phase 3 added `submission-status-badge.tsx`, `sync-event-log.tsx`
+  + Submit button on `certify-panel.tsx`; Phase 4 added
+  `certification-page.tsx`, `ghg-statement-create-dialog.tsx`,
+  `ghg-statement-submit-dialog.tsx`.
+- ✅ `src/app/(app)/certification/page.tsx` — Phase 4 facility-scoped
+  GHG-statement page.
+- ✅ `src/components/navigation/app-sidebar.tsx` — Phase 4 sidebar
+  entry.
 - ✅ `src/components/credit-batches/credit-batch-list.tsx` — mounts
-  `<CertifyPanel />` via `viewModeChildren` (Phase 2).
+  `<CertifyPanel />` via `viewModeChildren` (Phase 2; Submit button
+  exposed in Phase 3).
 - ✅ `src/components/ui/entity-side-sheet/index.tsx` — `viewModeChildren`
   prop (Phase 1).
 - ✅ `src/components/facilities/facility-list.tsx` — mounts
   `<FacilityCertifierSection />` via `viewModeChildren` (Phase 1).
-- *Future:* `src/lib/isometric/transformers/` +
-  `utils/{aggregation,payload-hash}.ts` — Phase 3.
-- *Future:* `src/app/api/certification/webhook/route.ts` — Phase 4.
+- *Future:* `src/app/api/certification/webhook/route.ts` — webhook
+  ingestion remains deferred (Phase 4 deferrals; see
+  `docs/open-questions.md`).
 - ✅ `scripts/isometric-smoke.ts` — Phase 0.
 - ✅ `scripts/isometric-link-demo.ts` — Phase 0 stopgap; updated in
   Phase 1 to allow N→1 facility/project mappings.
@@ -575,14 +702,23 @@ The Certify API does not expose protocol-compliance rules. Two paths:
   `tsc --noEmit` and `pnpm lint` pass. *To do:* light E2E in
   `tests/e2e/credit-batches.spec.ts` asserting the not-linked empty
   state copy is visible.
-- **Phase 3:** `tests/e2e/certification-submit.spec.ts` — seed a credit
-  batch, click Submit, assert a `certificationSubmissions` row with non-null
-  `externalId` and `status='submitted'`. Re-click → no new row. Manually
-  verify the removal exists in sandbox Certify on first run only.
-- **Phase 4:** add status-transition assertions; mock-webhook delivery test.
-- **Unit tests:** `tests/unit/{isometric-transformers,payload-hash,
-  certification-idempotency}.test.ts` — pure-function tables for
-  transformers, ledger state machine for idempotency.
+- **Phase 3 (✅):** `submitCreditBatch` ships and produces a real Removal
+  with linked Datapoints in Certify. Idempotency verified by re-clicking
+  Submit (no-op on matched payload hash) and by mutating the batch
+  (creates `version=2` and supersedes v1). Tests delivered:
+  `tests/isometric-payload-hash.test.ts`,
+  `tests/isometric-submission-claim.test.ts` (18 cases — full claim
+  decision matrix), `tests/isometric-transformers.test.ts` (14 cases —
+  `INPUT_MAPPING` happy paths + drift / unit / null guards, removal
+  scalar-vs-list branching, and ISO-date formatting). *To do:* a
+  credit-batch E2E (`tests/e2e/certification-submit.spec.ts`).
+- **Phase 4 (✅, webhook deferred):** GHG-statement create / submit /
+  refresh / resubmit ship via the `/certification` page. Tests
+  delivered: `tests/isometric-ghg-statement-flow.test.ts` (state
+  machine), `tests/isometric-reconciliation.test.ts` (stale-lock
+  recovery + DRAFT filter), `tests/e2e/certification-page.spec.ts`
+  (page smoke). *To do once webhook ships:* HMAC verification +
+  reconciliation test.
 
 ## Open questions (not blocking Phase 0)
 

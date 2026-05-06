@@ -156,6 +156,67 @@ Enforcement is intentionally layered:
 2. Server validation in action/data-access layer.
 3. DB trigger guardrails for any direct/bypass writes.
 
+## Certify Integration (Isometric)
+
+Outbound integration that submits MRV data to Isometric's Certify API
+and surfaces protocol/template metadata back into noma. Provider-agnostic
+schema (`certifier_*` tables) means the same persistence layer can host
+other registries later; Isometric-specific HTTP, transformers, and
+typings live under `src/lib/isometric/`.
+
+**Layered structure:**
+
+```
+components/certification/   # UI: Certify panel, GHG statements page
+       ↓
+hooks/use-certification.ts  # React Query hooks
+       ↓
+fn/certification/           # Server actions (split module):
+                            #   facility-mapping, certify-context,
+                            #   submit-credit-batch, ghg-statements,
+                            #   shared, index
+       ↓
+data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
+       ↓
+lib/isometric/              # Pure HTTP client + transformers + utils
+                            #   (no DB, no auth, no ActionResult)
+       ↓
+db/schema/certification.ts  # certifier_projects, certifier_ghg_periods,
+                            #   certifier_sources, certification_submissions,
+                            #   certifier_document_uploads,
+                            #   certifier_sync_events
+```
+
+**Idempotency:** every outbound POST runs through
+`certification_submissions` as both lock and ledger — `lockedAt` blocks
+concurrent in-flight retries, `payloadHash` (canonical-JSON sha256)
+identifies replayable submissions, `version` tracks supersedes. The
+retry-decision gate is centralised in
+`src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`)
+and applied identically by `submitCreditBatch` and
+`createGhgStatementForFacility`. Every HTTP attempt also appends a row
+to `certifier_sync_events` (append-only audit log; never used for
+state).
+
+**UI surfaces:**
+
+- Credit-batch side sheet — Certify panel mounted via the
+  `viewModeChildren` slot on `EntitySideSheet`
+  (`src/components/credit-batches/credit-batch-list.tsx`). Read-only
+  template/blueprint surfacing plus the "Submit to Isometric" button
+  and submission history.
+- Facility list side sheet — facility ↔ Isometric project mapping
+  (`src/components/certification/facility-certifier-section.tsx`).
+- `/certification` route — facility-scoped GHG statement lifecycle
+  (create / submit / refresh / resubmit) at
+  `src/app/(app)/certification/page.tsx` /
+  `src/components/certification/certification-page.tsx`.
+
+**Phase status and deferred work** — see
+`docs/isometric/integration-plan.md`. Current notable deferrals:
+source-upload presigned-URL flow (Phase 3.5), webhook ingestion,
+PATCH-vs-supersede for Removals, and external amendment claiming.
+
 ## Chain of Custody Visualization
 
 Application-first lineage graph that traces the upstream rollback path from a selected application back to its originating feedstock batches.
