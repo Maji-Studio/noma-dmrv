@@ -74,6 +74,66 @@
   orchestration for Removals, automatic resubmission, and external
   amendment claiming for registry-side statement-version drafts.
 
+## 2026-05-05 (Phase 3)
+
+- **Scope:** Phase 3 of the Certify API integration — single credit
+  batch → single Removal end-to-end, with idempotency ledger.
+  Backfilled changelog entry; Phase 3 shipped alongside Phase 4 on
+  2026-05-05.
+- **Updated by:** Kenji / Claude
+- No new schema; Phase 0's `defaultRemovalTemplateId` column is enough.
+- New library code under `src/lib/isometric/`:
+  - `transformers/datapoint.ts` — `INPUT_MAPPING` + numeric reading →
+    `CreateDatapointRequest`. Replaces the planned `source.ts` /
+    `component.ts` split: sources are deferred to Phase 3.5
+    (presigned-URL flow blocked on the documents subsystem) and
+    component-group assembly lives directly in `transformers/removal.ts`.
+  - `transformers/removal.ts` — assembles components into the live
+    template's component groups.
+  - `utils/aggregation.ts` — mass-weighted blends, durability ratios
+    (ported from the varuna prototype, correct per Biochar v1.2).
+  - `utils/payload-hash.ts` — canonical-JSON sha256 for the idempotency
+    ledger. Tests in `tests/isometric-payload-hash.test.ts`.
+  - `utils/supplier-ref.ts` — stable client-side reference IDs used to
+    GET-by-`supplier_reference_id` after stale locks.
+  - `submissions.ts` — `findRemovalBySupplierRef` /
+    `findDatapointBySupplierRef` for stale-lock recovery.
+- `src/fn/certification.ts` was split into `src/fn/certification/`
+  (`facility-mapping.ts`, `certify-context.ts`,
+  `submit-credit-batch.ts`, `shared.ts`, `index.ts`) before adding the
+  Phase 4 GHG-statement actions.
+- New server action `submitCreditBatch(creditBatchId)` in
+  `submit-credit-batch.ts`. Reuses `getApplicationLineage()` (does not
+  re-derive lineage), runs aggregation, then idempotency-ledger flow
+  against `certification_submissions` keyed on `lockedAt` +
+  `payloadHash` + `version`. Each HTTP attempt appends a
+  `certifier_sync_events` row. The retry-decision gate at the head of
+  the orchestrator was later extracted into
+  `utils/submission-claim.ts` (see 2026-05-06 entry above).
+- UI extensions in `src/components/certification/`:
+  - `certify-panel.tsx` gained the "Submit to Isometric" button —
+    disabled when the facility is unlinked, when lineage has blocking
+    warnings, or when the latest submission row is locked in flight.
+  - `submission-status-badge.tsx` and `sync-event-log.tsx` — status
+    surfaces driven by the latest `certification_submissions` row and
+    the recent `certifier_sync_events` history.
+  - Mounted via the existing `viewModeChildren` slot on the
+    credit-batch `EntitySideSheet`
+    (`src/components/credit-batches/credit-batch-list.tsx`).
+- Pre-coding gates resolved during Phase 3 (see
+  `docs/open-questions.md`):
+  - Empty `source_ids` confirmed accepted by Certify against the demo
+    project (`prj_1K5F2F6SN1S0ZKDQ`); Phase 3.5 sources stay deferred.
+  - Live-template inspection surfaced two new blockers tracked under
+    `phase-3-input-coverage` (20 monitored inputs without
+    `INPUT_MAPPING` entries) and `phase-3-fixed-constants` (~12
+    `type=fixed` constants needing pre-bound datapoints in the
+    Isometric template editor).
+- Explicitly deferred at Phase 3 close: source-upload presigned-URL
+  flow (Phase 3.5), per-Datapoint sub-ledger rows, transformer unit
+  tests. Idempotency-decision unit tests landed via the 2026-05-06
+  refactor.
+
 ## 2026-05-05 (Phase 2)
 
 - **Scope:** Phase 2 of the Certify API integration — read-only Certify
