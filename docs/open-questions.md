@@ -83,17 +83,26 @@ Each entry follows this shape:
 
 ### Phase 4 deferrals
 
-- **Reconciliation orchestration** (`isometric/phase-4`) — opened 2026-05-05
-  - Wire the GET-by-`supplier_reference_id` lookup so a stuck draft auto-recovers
-    when the remote entity already exists. Helpers (`findRemovalBySupplierRef`,
-    `findDatapointBySupplierRef`) are in `src/lib/isometric/submissions.ts`;
-    the orchestrator does not call them yet.
-  - Why: Phase 3's only recovery path for a 5xx-during-POST is the
-    `scripts/isometric-clear-stale-lock.ts` CLI, which discards the previously
-    POSTed entities. That's acceptable for sandbox iteration but not for
-    production verification once we cut over.
-  - Resolve once the sandbox-side reconciliation behaviour (and any
-    eventual-consistency window after a failed POST) is understood.
+- **External GHG statement amendment claiming** (`isometric/phase-5`) - opened 2026-05-05
+  - Detect when an admin edits GHG statement dates or attached Removals
+    directly in Isometric and the registry creates a new statement-version
+    draft that noma has not claimed.
+  - Why: Phase 4 surfaces `pending_total_co2e_removed_kg` and supports
+    resubmission against the known local row, but it does not compare the
+    local `externalId` against the registry's current period draft on every
+    refresh.
+  - Resolve by adding a claim/reconcile flow for external statement-version
+    drafts.
+
+- **Hash-changed partial-orphan cleanup** (`isometric/phase-5`) - opened 2026-05-05
+  - Reconcile or report Datapoints/Removals created by a failed attempt when
+    local inputs changed before the retry, causing a new payload hash and new
+    supplier refs.
+  - Why: same-hash retries now reuse stored refs and reconcile before POST,
+    but changed-hash retries intentionally create a fresh version. Any remote
+    resource from the failed old hash can remain orphaned.
+  - Resolve only if production traffic shows this failure mode often enough
+    to justify per-Datapoint sub-ledger bookkeeping.
 
 - **Source upload flow** (`isometric/phase-3.5`) — opened 2026-05-05
   - Implement the presigned-URL flow against whatever document-storage we

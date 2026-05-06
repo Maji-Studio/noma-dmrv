@@ -40,6 +40,7 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `emission_factors` | Emissions | Versioned lookup table for fuel/electricity emission factors. | Standardized CO2e calculations by region/fuel and validity window. | `src/db/schema/emissions.ts:19` |
 | `documents` | Documentation | Central optional evidence store linked by `entity_type` + `entity_id`. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:14` |
 | `certifier_projects` | Certification | Maps local facilities to external certifier project identifiers. | Provider project registration and linkage. | `src/db/schema/certification.ts:19` |
+| `certifier_ghg_periods` | Certification | Anchors provider project reporting periods for GHG statement submissions. | Prevents duplicate local statements for one Isometric project period while keeping statement state in `certification_submissions`. | `src/db/schema/certification.ts` |
 | `certifier_sources` | Certification | Normalizes external source references by provider/type. | Stable mapping of provider-specific IDs used in submissions. | `src/db/schema/certification.ts:46` |
 | `certification_submissions` | Certification | Immutable versioned submission history with payload snapshots. | Submission lifecycle tracking, auditability, resubmission/versioning. | `src/db/schema/certification.ts:68` |
 | `certifier_document_uploads` | Certification | Maps local documents to provider-uploaded document IDs. | Reusing uploaded evidence, avoiding duplicate uploads. | `src/db/schema/certification.ts:105` |

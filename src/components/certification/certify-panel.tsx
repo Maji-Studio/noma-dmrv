@@ -222,8 +222,8 @@ function SubmitFooter({
   const { latest, recentSyncEvents, isLockedInFlight } = state;
   const submitDisabled = isLockedInFlight || submitMutation.isPending;
 
-  const fireSubmit = () => {
-    submitMutation.mutate(creditBatchId, {
+  const fireSubmit = (confirmProduction = false) => {
+    submitMutation.mutate({ creditBatchId, confirmProduction }, {
       onSuccess: (data) => {
         toast.success(
           `Submitted to Isometric: Removal ${data.externalId} (v${data.version}).`,
@@ -285,7 +285,7 @@ function SubmitFooter({
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => {
           setConfirmOpen(false);
-          fireSubmit();
+          fireSubmit(true);
         }}
         isPending={submitMutation.isPending}
       />

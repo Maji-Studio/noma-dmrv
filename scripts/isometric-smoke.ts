@@ -12,6 +12,8 @@
  *   pnpm tsx scripts/isometric-smoke.ts datapoint-empty-sources  # POST one Datapoint with
  *                                                                 # source_ids:[] to demo
  *                                                                 # project (writes!).
+ *   pnpm tsx scripts/isometric-smoke.ts ghg-statement-list       # GET only — list demo
+ *                                                                 # project GHG statements.
  *
  * Hard-coded to the demo project so production writes never land in the
  * live Sifuri Halisi project.
@@ -43,6 +45,8 @@ async function main(): Promise<void> {
     page_info: import("../src/lib/isometric").components["schemas"]["PageInfo"];
     total_count: number;
   };
+  type GhgStatement =
+    import("../src/lib/isometric").components["schemas"]["GhgStatement"];
 
   console.log(`Isometric environment: ${env.ISOMETRIC_ENVIRONMENT}`);
 
@@ -181,6 +185,27 @@ async function main(): Promise<void> {
         type: "REPORTED",
       });
       console.log(`OK — Datapoint id=${created.id}`);
+      return;
+    }
+
+    if (mode === "ghg-statement-list") {
+      console.log(
+        `Listing GHG statements visible to credentials for demo project ${DEMO_EXTERNAL_PROJECT_ID} (read-only)...`,
+      );
+      const statements = await isometric.paginateAll<GhgStatement>(
+        "/ghg_statements",
+        { pageSize: 50 },
+      );
+      const filtered = statements.filter(
+        (statement) => statement.project_id === DEMO_EXTERNAL_PROJECT_ID,
+      );
+      console.log(`visible_total: ${statements.length}`);
+      console.log(`demo_project_count: ${filtered.length}`);
+      for (const statement of filtered) {
+        console.log(
+          `  ${statement.id} status=${statement.status} period=${statement.reporting_period_start_at}..${statement.reporting_period_end_at} removals=${statement.removal_ids.length}`,
+        );
+      }
       return;
     }
 

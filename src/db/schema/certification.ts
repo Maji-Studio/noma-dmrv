@@ -1,4 +1,5 @@
 import {
+  date,
   integer,
   jsonb,
   pgTable,
@@ -43,6 +44,25 @@ export const certifierProjects = pgTable(
     unique('certifier_projects_facility_provider_unique').on(
       table.facilityId,
       table.provider
+    ),
+  ]
+);
+
+export const certifierGhgPeriods = pgTable(
+  'certifier_ghg_periods',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    provider: certifierProvider('provider').notNull().default('isometric'),
+    externalProjectId: text('external_project_id').notNull(),
+    reportingPeriodEndAt: date('reporting_period_end_at').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('certifier_ghg_periods_provider_project_period_unique').on(
+      table.provider,
+      table.externalProjectId,
+      table.reportingPeriodEndAt
     ),
   ]
 );
