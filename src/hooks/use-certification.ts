@@ -5,15 +5,24 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createGhgStatementForFacility,
   deleteFacilityCertifierMapping,
   loadCertifyContextForCreditBatch,
   loadCreditBatchSubmissionState,
+  loadFacilityCertificationOverview,
   loadFacilityCertifierMapping,
   loadIsometricProjectTemplates,
+  refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
+  submitGhgStatementForFacility,
   submitCreditBatch,
 } from "@/fn/certification";
-import type { SaveMappingInput } from "@/schemas/certification";
+import type {
+  CreateGhgStatementInput,
+  SaveMappingInput,
+  SubmitCreditBatchInput,
+  SubmitGhgStatementInput,
+} from "@/schemas/certification";
 
 export const certificationKeys = {
   all: ["certification"] as const,
@@ -35,6 +44,10 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
+  facilityOverview: (facilityId: string) =>
+    [...certificationKeys.all, "facility-overview", facilityId] as const,
+  ghgStatementStatus: (submissionId: string) =>
+    [...certificationKeys.all, "ghg-statement-status", submissionId] as const,
 };
 
 export function useFacilityCertifierMapping(
@@ -123,12 +136,14 @@ export function useCreditBatchSubmissionState(
 export function useSubmitCreditBatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (creditBatchId: string) => {
-      const result = await submitCreditBatch(creditBatchId);
+    mutationFn: async (input: SubmitCreditBatchInput | string) => {
+      const result = await submitCreditBatch(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: (_data, creditBatchId) => {
+    onSuccess: (_data, input) => {
+      const creditBatchId =
+        typeof input === "string" ? input : input.creditBatchId;
       queryClient.invalidateQueries({
         queryKey:
           certificationKeys.submissionStateForCreditBatch(creditBatchId),
@@ -137,6 +152,91 @@ export function useSubmitCreditBatch() {
         queryKey: certificationKeys.certifyContextForCreditBatch(creditBatchId),
       });
     },
+  });
+}
+
+export function useFacilityCertificationOverview(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.facilityOverview(facilityId),
+    queryFn: async () => {
+      const result = await loadFacilityCertificationOverview(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateGhgStatementForFacility() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      facilityId: string;
+      data: CreateGhgStatementInput;
+    }) => {
+      const result = await createGhgStatementForFacility(
+        input.facilityId,
+        input.data,
+      );
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: certificationKeys.facilityOverview(variables.facilityId),
+      });
+    },
+  });
+}
+
+export function useSubmitGhgStatementForFacility() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      facilityId: string;
+      data: SubmitGhgStatementInput;
+    }) => {
+      const result = await submitGhgStatementForFacility(
+        input.facilityId,
+        input.data,
+      );
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: certificationKeys.facilityOverview(variables.facilityId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: certificationKeys.ghgStatementStatus(
+          variables.data.submissionId,
+        ),
+      });
+    },
+  });
+}
+
+export function useRefreshGhgStatementStatus(
+  submissionId: string,
+  opts: { enabled?: boolean; isInFlight: boolean } = {
+    enabled: true,
+    isInFlight: false,
+  },
+) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementStatus(submissionId),
+    queryFn: async () => {
+      const result = await refreshGhgStatementStatus(submissionId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: (opts.enabled ?? true) && !!submissionId,
+    staleTime: 30_000,
+    refetchInterval: opts.isInFlight ? 60_000 : false,
   });
 }
 

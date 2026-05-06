@@ -1,5 +1,79 @@
 # Isometric Docs Change Log
 
+## 2026-05-06 (Refactor)
+
+- **Scope:** Extract the duplicated submission-claim decision from
+  `submitCreditBatch` and `createGhgStatementForFacility` into a pure
+  policy module. No runtime-behaviour changes; previously-untested gate
+  is now covered by unit tests.
+- New code:
+  - `src/lib/isometric/utils/submission-claim.ts` —
+    `decideSubmissionClaim({ latest, payloadHash, now, lockTtlMs, policy })`
+    returns one of `create-new-version` / `resume` / `return-existing` /
+    `blocked-in-flight` / `blocked-rejected-with-external` /
+    `invalid-changed-hash`. Pure: no I/O, no DB, no fetch. Owns all
+    versioning math (callers no longer special-case version=1). Status
+    switch is exhaustive with an `assertNever` default so a future
+    `certificationSubmissionStatus` enum value is a compile-time error.
+  - The single policy parameter `onSubmittedHashChanged` is `'supersede'`
+    for Removals (bump version, mark previous superseded) and
+    `'invalid-changed-hash'` for GHG-statement creation (the remote
+    period row is unique per `(project, end_on)`, so a hash change at
+    that state is a programmer error).
+  - `tests/isometric-submission-claim.test.ts` — 18 cases covering both
+    policies, lock-TTL boundary (strict `<`), defensive
+    `submitted + externalId=null`, every status path, determinism, and
+    the assertNever guard.
+- Refactored:
+  - `src/fn/certification/submit-credit-batch.ts` — replaced the
+    `if (latest)` tree (lines 283–313 prior to the refactor) with a
+    `switch (claim.kind)` on the new module's output. `console.warn` on
+    `rejected-hash-changed` preserved.
+  - `src/fn/certification/ghg-statements.ts` — same shape for
+    `createGhgStatementForFacility` (replaced lines 156–195 prior to the
+    refactor). `console.warn` on `rejected-hash-changed` preserved.
+- Re-exports: `src/lib/isometric/index.ts` exposes
+  `decideSubmissionClaim`, `SubmissionClaim`, `SubmissionClaimInput`,
+  `SubmissionClaimPolicy`, `SubmissionClaimRow`, `SubmissionClaimStatus`.
+  Internal helpers stay private to the module.
+- Why now / why this scope:
+  - The two call sites duplicated ~30 lines of nearly identical decision
+    logic with one policy difference; small drift had already started
+    (different in-flight messages, different rejected handling).
+  - This module sits before every external API side effect, so a bug in
+    it is high-blast-radius. It was untested.
+  - Deliberately *not* an orchestrator or generic state machine — the
+    reconciliation, sync-event, and POST/retry layers below it are
+    untouched. Those depend on this landing first and remain on the
+    backlog.
+- Refactor RFCs still on the backlog (from the architecture review,
+  not started): reconciliation orchestrator
+  (`runRemovalSubmission`/`postOrReconcileRemoval`); input catalog
+  centralising `INPUT_MAPPING` + datapoint factory; sync-trail recorder
+  to guarantee paired sync events around every external call.
+
+## 2026-05-05 (Phase 4)
+
+- **Scope:** GHG statement lifecycle and reconciliation hardening.
+- Added `certifier_ghg_periods` as the local project-period anchor for
+  GHG statement submissions. Statement state stays in
+  `certification_submissions`; supplier-hosted report URLs are recorded in
+  `documents` rows with `entity_type='ghgStatement'`.
+- Added typed Certify wrappers for `POST /ghg_statements`,
+  `GET /ghg_statements/{id}`, and `POST /ghg_statements/{id}/submit`.
+  `GET /ghg_statements` is pagination-only, so local reconciliation
+  client-filters by project, period end, and `DRAFT` status.
+- Split `src/fn/certification.ts` into a `src/fn/certification/`
+  module set before adding Phase 4 actions.
+- Added `/certification` for creating, submitting, refreshing, and
+  resubmitting GHG statements for the selected facility's Isometric project.
+- Hardened Phase 3 submission recovery: stale locks and same-hash failed
+  attempts now reconcile Datapoints and Removals by stored supplier refs
+  before POSTing missing resources.
+- Explicitly still deferred: webhook ingestion, noma-driven PATCH
+  orchestration for Removals, automatic resubmission, and external
+  amendment claiming for registry-side statement-version drafts.
+
 ## 2026-05-05 (Phase 2)
 
 - **Scope:** Phase 2 of the Certify API integration — read-only Certify
