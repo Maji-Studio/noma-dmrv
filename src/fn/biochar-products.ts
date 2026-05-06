@@ -28,6 +28,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAutoCode } from "@/data-access/code-generator";
 import { biocharProducts } from "@/db/schema";
+import { toCompositionJsonb } from "@/lib/biochar-composition";
 
 // ============================================
 // Biochar Product List/Query Operations
@@ -159,9 +160,7 @@ export async function createBiocharProductFn(
 
     const validated = createBiocharProductSchema.parse(data);
 
-    const composition = validated.ingredientBins?.length
-      ? { ingredients: validated.ingredientBins }
-      : {};
+    const composition = toCompositionJsonb(validated.ingredientBins, { mode: "create" });
 
     const product = await withAutoCode(
       "BP",
@@ -219,9 +218,7 @@ export async function updateBiocharProductFn(
 
     const validated = updateBiocharProductSchema.parse(data);
 
-    const composition = validated.ingredientBins !== undefined
-      ? (validated.ingredientBins.length ? { ingredients: validated.ingredientBins } : {})
-      : undefined;
+    const composition = toCompositionJsonb(validated.ingredientBins, { mode: "update" });
 
     const product = await updateBiocharProduct(user.id, validated.productId, {
       code: validated.code,

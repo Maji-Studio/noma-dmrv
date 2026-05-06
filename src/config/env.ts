@@ -44,6 +44,20 @@ const envSchema = z.object({
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
   ),
+
+  // Isometric Certify API (optional — boot must stay clean without these)
+  ISOMETRIC_CLIENT_SECRET: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  ),
+  ISOMETRIC_ACCESS_TOKEN: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  ),
+  ISOMETRIC_ENVIRONMENT: z
+    .enum(["sandbox", "production"])
+    .optional()
+    .default("sandbox"),
 }).superRefine((data, ctx) => {
   const hasApiKey = !!data.RESEND_API_KEY;
   const hasFromEmail = !!data.RESEND_FROM_EMAIL;
@@ -54,6 +68,18 @@ const envSchema = z.object({
       path: ["RESEND_API_KEY"],
       message:
         "RESEND_API_KEY and RESEND_FROM_EMAIL must either both be set or both be omitted",
+    });
+  }
+
+  const hasIsometricSecret = !!data.ISOMETRIC_CLIENT_SECRET;
+  const hasIsometricToken = !!data.ISOMETRIC_ACCESS_TOKEN;
+
+  if (hasIsometricSecret !== hasIsometricToken) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["ISOMETRIC_CLIENT_SECRET"],
+      message:
+        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted",
     });
   }
 });

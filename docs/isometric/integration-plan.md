@@ -1,0 +1,599 @@
+# Plan: Isometric Certify API integration for noma-dmrv
+
+## Context
+
+Connect noma-dmrv to Isometric's Certify API so MRV data flowing through the
+biochar chain (Facility → ... → CreditBatch) can be submitted for verification,
+and so protocol/SOP requirements can be pulled programmatically.
+
+A working prototype exists in a sibling repo (`varuna-carbon-dmrv`) under
+`src/lib/isometric/` (~4500 lines). Its credit-batch → removal → GHG statement path works
+end-to-end, but most other endpoints are stubbed with fake IDs, types are
+hand-written, and there is no retry, no lock, no payload hashing. We will
+**rebuild** in noma — generating the API client off Isometric's OpenAPI spec
+and aligning to noma's existing layered conventions and existing certification
+schema.
+
+**Scope (user-confirmed, delivered in phases):** submit MRV → Certify; pull
+protocol requirements; pull SOPs/docs; submit GHG statements for verification.
+**Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
+Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
+
+## Reuse what already exists
+
+These files dictate the design — none of them existed in my first draft and
+all of them shape the plan:
+
+- `src/db/schema/certification.ts` — already defines the full certification
+  persistence model:
+  - `certifierProjects` (facility-scoped, provider-aware project registration
+    with `externalProjectId`, `protocolSlug`, `protocolVersion`, optional
+    `webhookSecret`, JSONB `metadata`).
+  - `certifierSources` (provider-agnostic source mappings).
+  - `certificationSubmissions` — has everything we need for safe idempotency:
+    `submissionType`, `localEntityType/Id`, `externalId`, `version`, `status`
+    (`draft|submitted|accepted|rejected|superseded`), `payloadSnapshot`,
+    `payloadHash`, `submittedAt`, **`lockedAt`** (in-flight lock),
+    `supersededAt`. Two unique constraints already cover the right things.
+  - `certifierDocumentUploads` (links our `documents` table to external
+    document IDs).
+  - `certifierSyncEvents` (append-only audit log of sync attempts).
+- `src/data-access/chain-of-custody.ts` — `getApplicationLineage()` resolves
+  the full chain with the correct branching: `delivery.biocharProductId ??
+  order.biocharProductId`; product may have no `linkedProductionRunId`;
+  production run may have no feedstock allocations. Each branch emits a
+  warning. **Submission must consume this result, not re-derive.**
+- `src/fn/with-action.ts` — `withAction(fn)` is the canonical server-action
+  wrapper (auth check + try/catch + `ActionResult<T>`). All new server actions
+  must use it.
+- `src/data-access/isometric.ts` and `src/fn/isometric.ts` — **already in use
+  for sampling eligibility (Method A/B) and protocol-condition validators.
+  Do not touch them.** New work goes into separate files.
+- `src/config/env.ts` — eager `envSchema.parse(process.env)` at import (line
+  64). Adding required env vars breaks boot for everyone, including local dev
+  without sandbox credentials. New vars must be **optional** in the schema.
+- `src/components/credit-batches/credit-batch-list.tsx` — credit batches are
+  viewed/edited in a side sheet (`sideSheet` state on line 84). There is no
+  detail page route. UI surface lives in the side sheet.
+
+## Schema changes (additive, minimal)
+
+The existing `certification.ts` model covers ~95% of what we need.
+
+1. **Default removal template per project.** ✅ Done in Phase 0 — added
+   `defaultRemovalTemplateId text` to `certifierProjects` (migration
+   `drizzle/0015_flimsy_arachne.sql`).
+
+2. **Allow N facilities → 1 Isometric project.** **Drop** the existing
+   `certifier_projects_provider_external_unique` constraint on
+   `(provider, externalProjectId)`. Real biochar operators register multiple
+   physical sites under a single registry project, and Isometric's data model
+   has no notion of "facility" — Removals roll up at the project level. Keep
+   the second unique constraint on `(facilityId, provider)` so one facility
+   never has ambiguous routing.
+
+   ```sql
+   ALTER TABLE certifier_projects
+     DROP CONSTRAINT certifier_projects_provider_external_unique;
+   ```
+
+3. **Feedstock-type external mapping.** Today `certifierSources` can already
+   carry this with `sourceType='feedstock_type'` + `sourceReferenceId=<local
+   uuid>`. Use it as-is; no schema change. Confirm by inspecting `seed.ts` to
+   see if any seeded mappings already exist.
+
+No new tables. No `isometric_external_ids`, no `isometric_submission_log` —
+those were duplicates of `certificationSubmissions` and `certifierSyncEvents`.
+
+## Idempotency design (first-class)
+
+Every outbound POST follows this pattern. The flow uses
+`certificationSubmissions` as the lock + ledger:
+
+```text
+1. Compute payloadHash = sha256(canonicalJson(payload))
+2. SELECT FROM certification_submissions WHERE
+     localEntityType=? AND localEntityId=? AND submissionType=?
+   ORDER BY version DESC LIMIT 1
+3. Branch on the latest row:
+   a. No row, or status='superseded'
+      → INSERT new row (version=N+1, status='draft', lockedAt=now(),
+        payloadSnapshot, payloadHash). This INSERT is the lock.
+      → POST to Isometric.
+      → On 2xx: UPDATE row SET externalId=..., status='submitted',
+                          submittedAt=now(), lockedAt=NULL.
+      → On 5xx/network: leave row locked. Next attempt reconciles.
+   b. Latest row has status='draft' AND lockedAt within ttl
+      → A submission is in flight. Reject the new request.
+   c. Latest row has status='draft' AND lockedAt past ttl AND
+        payloadHash matches → reconciliation path:
+      → Try GET /removals?metadata.localEntityId=<uuid>
+        (or list + filter — Certify has no metadata filter, so we'll need
+         to store a client-generated nonce in payload metadata and search
+         by it; verify via openapi_documents_get_object before relying).
+      → If found remotely: UPDATE row with externalId, mark submitted.
+      → If not found: clear lockedAt and re-POST with the SAME payloadHash.
+   d. Latest row status='submitted'/'accepted' AND payloadHash matches new
+        payload → no-op, return existing externalId.
+   e. Latest row status='submitted'/'accepted' AND payloadHash differs →
+        intentional update: PATCH /removals/{id} or supersede + new version,
+        depending on what Certify allows for that resource.
+   f. Latest row status='rejected' → caller must explicitly resubmit; bump
+        version and follow path (a).
+```
+
+This is the right place for this logic per the reviewer's feedback. The
+existing `lockedAt` + `payloadHash` + `version` schema is exactly the
+primitive needed.
+
+**`certifierSyncEvents`** receives an append-only entry on every attempt
+(request, response, status, error) — used for debugging and the UI sync log,
+not for state.
+
+**Open implementation question (not blocking Phase 0):** Certify list
+endpoints — verify whether a metadata field can be used to round-trip a
+client-side nonce for reconciliation lookups. If not, we'll need a different
+fingerprint strategy (e.g., timestamp + entity-code search).
+
+## Layered architecture (no collisions with existing files)
+
+```text
+src/lib/isometric/                     # PURE — no DB, no ActionResult, no auth
+  ├─ client.ts                         # fetch wrapper: headers, retry, errors,
+  │                                    #   cursor pagination helper
+  ├─ generated/certify.d.ts            # openapi-typescript output (committed)
+  ├─ types.ts                          # re-exports + augmentations
+  ├─ transformers/                     # noma domain → Certify request shape
+  │   ├─ source.ts
+  │   ├─ datapoint.ts
+  │   ├─ component.ts
+  │   ├─ removal.ts
+  │   └─ ghg-statement.ts
+  ├─ utils/
+  │   ├─ aggregation.ts                # port verbatim from varuna
+  │   └─ payload-hash.ts               # canonicalJson + sha256
+  └─ index.ts
+
+src/data-access/certification.ts       # NEW — auth-guarded DB ops on the
+                                       #   certifierProjects, certifierSources,
+                                       #   certificationSubmissions,
+                                       #   certifierDocumentUploads,
+                                       #   certifierSyncEvents tables.
+                                       #   Returns plain types (NOT ActionResult).
+
+src/fn/certification.ts                # NEW — server actions wrapped with
+                                       #   withAction(). Orchestrates: load
+                                       #   lineage → transform → idempotency
+                                       #   ledger → HTTP call → ledger update.
+
+src/hooks/use-certification.ts         # NEW — React Query hooks.
+
+src/components/certification/          # NEW — Certify panel inside the existing
+  ├─ certify-panel.tsx                 #   credit-batch side sheet.
+  ├─ submission-status-badge.tsx
+  └─ sync-event-log.tsx
+```
+
+**Naming note:** "certification" rather than "isometric" because the existing
+schema is provider-agnostic (`certifierProvider` enum supports `puro_earth`
+and `verra`). New code should follow that convention. Provider-specific bits
+(transformers, client) stay under `src/lib/isometric/`.
+
+## Env vars (credentials only — facility/project IDs live in DB)
+
+Add to `src/config/env.ts` as **optional**:
+
+```ts
+ISOMETRIC_CLIENT_SECRET: z.preprocess(emptyToUndefined,
+  z.string().min(1).optional()),
+ISOMETRIC_ACCESS_TOKEN: z.preprocess(emptyToUndefined,
+  z.string().min(1).optional()),
+ISOMETRIC_ENVIRONMENT: z.enum(['sandbox', 'production']).optional()
+  .default('sandbox'),
+```
+
+The client throws `IsometricApiError('not configured')` at call time if
+either credential is missing — boot stays clean for unrelated work.
+
+`ISOMETRIC_PROJECT_ID` / `ISOMETRIC_BIOCHAR_REMOVAL_TEMPLATE_ID` from my
+first draft are **deleted** — these are per-facility values stored in
+`certifierProjects.externalProjectId` and the new
+`defaultRemovalTemplateId` column.
+
+## Phased delivery
+
+### Phase 0 — Foundation, no business logic ✅ DONE
+
+- ✅ `pnpm add openapi-typescript -D`.
+- ✅ Generated `src/lib/isometric/generated/certify.d.ts`.
+- ✅ Three optional env vars added to `src/config/env.ts`.
+- ✅ `src/lib/isometric/client.ts` built:
+  - Native `fetch`. Base-URL from `ISOMETRIC_ENVIRONMENT`.
+  - Headers from env. Typed `IsometricApiError` on non-2xx.
+  - Retry with exponential backoff on `429` and `5xx` (max 3, jitter).
+  - Cursor-pagination helper.
+  - Throws `IsometricApiError('not configured')` if creds absent.
+- ✅ Migration `drizzle/0015_flimsy_arachne.sql` adds
+  `defaultRemovalTemplateId text` to `certifierProjects`.
+- ✅ `scripts/isometric-smoke.ts` — verified against **production** (read-only
+  `GET /projects`). Two projects returned:
+  - `prj_1K6G4S1PJ1S0TR4Z` — Sifuri Halisi TZ001-B (live — do not touch)
+  - `prj_1K5F2F6SN1S0ZKDQ` — Dark Earth Carbon Ltd's Biochar Demo Project
+    (target for all Phase 1+ work)
+- ✅ `scripts/isometric-link-demo.ts` — one-shot CLI to link a noma facility
+  to the demo project; hard-codes the demo project ID so it can't accidentally
+  point at the live one. Use until the Phase 1 UI ships.
+
+### Phase 1 — Facility ↔ Isometric project mapping UI ✅ DONE
+
+The first thing every other phase depends on: an admin needs to be able to
+declare "this facility submits to that registry project" without writing
+SQL. Until this existed, we couldn't even render Phase 2's "Certify" panel
+because `getCertifierProjectByFacility(facilityId)` would always return null.
+
+**Schema work:**
+- ✅ Dropped `certifier_projects_provider_external_unique`.
+  Migration `drizzle/0016_panoramic_selene.sql`. The `(facilityId, provider)`
+  unique constraint remains so each facility still has a single,
+  unambiguous mapping per provider.
+
+**Isometric client additions (`src/lib/isometric/projects.ts`, NEW):**
+- ✅ `listProjects()` — wraps `GET /projects` via `paginateAll`.
+- ✅ `listRemovalTemplates(externalProjectId)` — uses the **nested**
+  `GET /projects/{project_id}/removal_templates` (no top-level
+  `/removal_templates` endpoint exists in Certify; verified against
+  `certify.d.ts`). Cursor-paginated.
+- Both re-exported from `src/lib/isometric/index.ts`. No caching;
+  list is tiny (2 today) and freshness matters during onboarding.
+
+**Data access (`src/data-access/certification.ts`, NEW):**
+- ✅ `getCertifierProjectByFacility(userId, facilityId, provider?)` →
+  `CertifierProjectRow | null`.
+- ✅ `listFacilitiesLinkedToExternal(userId, provider, externalProjectId)`
+  → joins `facilities`, returns `{ facilityId, code, name }[]` so the
+  client can render "Already linked to: …" hints (replaces what the
+  dropped unique constraint used to enforce).
+- ✅ `upsertCertifierProject(userId, input)` — `ON CONFLICT DO UPDATE`
+  on `(facilityId, provider)`.
+- ✅ `deleteCertifierProject(userId, facilityId, provider?)` — refuses
+  with `SafeError` if any `certificationSubmissions` row of type
+  `creditBatch` exists for the facility (joined via
+  `creditBatches.facilityId`). Phase 3 is the first writer; the guard
+  expands as more submission types come online.
+- All auth-guarded by `requireAuth(userId)`; return plain types
+  (not `ActionResult`).
+
+**Server actions (`src/fn/certification.ts`, NEW):**
+- ✅ `loadFacilityCertifierMapping(facilityId)` — `withAction`. Returns
+  `{ mapping, availableProjects, availableTemplates, linkHints, isProduction }`.
+  `availableTemplates` is fetched only if a `mapping` already exists.
+  `linkHints` pre-computes facilities linked to each project so the
+  dialog doesn't need a second round-trip.
+- ✅ `saveFacilityCertifierMapping(input)` — `withAction`. Validates
+  `externalProjectId` *and* `defaultRemovalTemplateId` against live
+  Isometric data so a stale/cross-project template ID can't be saved.
+  Throws **`SafeError`** (not plain `Error`) for any user-visible
+  message, since `withAction` (`src/fn/with-action.ts:45-50`) hides
+  non-`SafeError` messages outside development.
+- ✅ `deleteFacilityCertifierMapping(facilityId)` — `withAction`,
+  delegates to `deleteCertifierProject` (which enforces the unlink
+  guard).
+- ✅ `loadIsometricProjectTemplates(externalProjectId)` — separate
+  action used by the dialog to refetch templates when the user
+  changes the project picker.
+- Production-confirm pattern: when `ISOMETRIC_ENVIRONMENT === 'production'`
+  and `confirmProduction` is unset, throws `SafeError`. The UI surfaces
+  the message and re-submits once the user ticks the inline checkbox.
+
+**React Query hooks (`src/hooks/use-certification.ts`, NEW):**
+- ✅ `useFacilityCertifierMapping(facilityId, enabled?)` — staleTime 30s.
+- ✅ `useIsometricProjectTemplates(externalProjectId | null)` — staleTime
+  60s; powers live re-fetch when the dialog's project selection changes.
+- ✅ `useSaveFacilityCertifierMapping()` / `useDeleteFacilityCertifierMapping()`
+  — both invalidate `certificationKeys.facilityMapping(facilityId)` and the
+  `certificationKeys.all` parent on success.
+
+**Side sheet primitive extension (`src/components/ui/entity-side-sheet/index.tsx`):**
+- ✅ Added optional `viewModeChildren?: React.ReactNode` prop. Renders
+  *below* the existing `sections` block in view mode (edit/create modes
+  still use `children`). Lets callers append interactive content
+  (cards with dialog state) without re-implementing the sections render.
+
+**UI (`src/components/certification/`, NEW):**
+- ✅ `facility-certifier-section.tsx` — view-mode card. Two states:
+  - *Not linked:* "Link Isometric project" CTA + helper text.
+  - *Linked:* project name + ID, default template name + ID,
+    protocol slug + version, "Edit" / "Unlink" buttons.
+- ✅ `facility-certifier-dialog.tsx` — modal `<dialog>` form using RHF +
+  `zodResolver(saveMappingSchema)`. Includes:
+  - Native `FormSelect` project picker populated from
+    `availableProjects`; helper text shows "Already linked to: …" when
+    `linkHints` reports other facilities on the chosen project.
+  - Default removal template `FormSelect` — disabled until a project is
+    chosen, refetches via `useIsometricProjectTemplates` when project
+    changes, auto-clears the selection on project change so a stale
+    template ID is never submitted.
+  - Free-text protocol version `FormInput`.
+  - Production-confirm checkbox rendered only when
+    `loaderData.isProduction === true` (env stays server-side).
+  - `UnlinkConfirmDialog` exported alongside; surfaces the
+    `SafeError` from the data-access guard verbatim.
+- ✅ Mount point: `src/components/facilities/facility-list.tsx` passes
+  `viewModeChildren={<FacilityCertifierSection facilityId={…} />}`. No
+  facility detail page exists (or was needed); the existing list →
+  `EntitySideSheet` view mode is the surface.
+- *(Deferred)* `facility-certifier-status-badge.tsx` — would add a
+  per-row "Linked / Not linked" pill but causes N+1 queries; revisit
+  with a summary endpoint.
+
+**Stopgap script:**
+- ✅ `scripts/isometric-link-demo.ts` updated: removed the
+  `externalConflict` hard-stop (which contradicted the schema change);
+  it now logs an informational note about co-linked facilities instead.
+
+**Acceptance (all met):**
+1. From the facility list side sheet, an admin can pick the demo
+   Isometric project from a dropdown and save. A `certifier_projects`
+   row is created.
+2. The same project can be linked from a *second* facility without
+   error (validates the dropped unique constraint).
+3. Re-opening the facility shows the saved mapping; the default-template
+   dropdown is populated from
+   `GET /projects/{project_id}/removal_templates`.
+4. With `ISOMETRIC_ENVIRONMENT=production`, saving without the confirm
+   checkbox is rejected with the `SafeError` message.
+5. Selecting a template, then changing the project, refuses submission
+   if the user re-picks the stale template ID (server validates
+   `defaultRemovalTemplateId` against the chosen project's live
+   templates).
+
+### Phase 2 — Read-only template/blueprint surfacing ✅ DONE
+
+The first non-Phase-1 surface where a noma user sees live Certify data
+inside a domain entity (a credit batch), and the visual prerequisite for
+Phase 3's submission button. Mounts via the existing `viewModeChildren`
+slot on the credit-batch `EntitySideSheet` — no new route or detail page.
+
+**Isometric client (`src/lib/isometric/projects.ts`, extended; re-exported
+from `src/lib/isometric/index.ts`):**
+- ✅ `listComponentBlueprints()` — wraps the global
+  `GET /component_blueprints` endpoint via `paginateAll`. Component
+  blueprints are catalog-scoped (not project- or template-scoped),
+  verified against `generated/certify.d.ts:55-68,3738-3774`.
+- ✅ `IsometricComponentBlueprint` type alias for
+  `components["schemas"]["ComponentBlueprint"]`.
+
+**Server action (`src/fn/certification.ts`, extended):**
+- ✅ `loadCertifyContextForCreditBatch(creditBatchId)` — `withAction`.
+  Keys off the credit batch (not the facility) so the trust boundary
+  matches Phase 3's `submitCreditBatch`: load batch via
+  `getCreditBatchById`, derive `facilityId` server-side, then resolve
+  the certifier project, live project record, default removal template,
+  and only the component blueprints that template's groups reference
+  (`groups[].components[].blueprint_key` deduped against the global
+  catalog).
+- ✅ Returns `CertifyContextForCreditBatch` with explicit fields for
+  drift detection: `missingDefaultTemplateId` distinguishes "default
+  never set" from "default set but no longer in Certify", and
+  `unresolvedBlueprintKeys` flags per-blueprint drift between the saved
+  template and the current Certify catalog.
+- ✅ Skips remote calls entirely when the facility is unlinked, and
+  skips the global blueprint catalog fetch when no resolvable template
+  is available — preserves the "no Isometric calls when not needed"
+  goal for unlinked or partially-configured batches.
+
+**React Query hook (`src/hooks/use-certification.ts`, extended):**
+- ✅ `useCertifyContextForCreditBatch(creditBatchId, enabled?)` —
+  staleTime 5 min (blueprints + templates change rarely).
+- ✅ `certificationKeys.certifyContextForCreditBatch(creditBatchId)`
+  added to the key factory.
+
+**UI (`src/components/certification/`, extended):**
+- ✅ `certify-panel.tsx` — collapsed `<details>` accordion with
+  "Isometric Certify" header. Renders five distinct states:
+  - *Loading* / *Error* — uses `error instanceof Error ? error.message
+    : fallback` (no `safeMessage` lookup; matches the existing hook
+    pattern in `use-certification.ts`).
+  - *Not linked* — body text directing the user to facility settings,
+    no remote calls made.
+  - *Linked, no default template* — shows project + ID; hint to set a
+    default. Blueprint catalog not fetched.
+  - *Linked, default template stale* (drift) — shows project header
+    plus a warning row identifying the stale `defaultRemovalTemplateId`.
+    Distinct from the no-default case so users can act on registry
+    drift before Phase 3 submission.
+  - *Linked, default template resolved* — project + template summary
+    + the `BlueprintList`; an additional warning row appears above the
+    list if any `unresolvedBlueprintKeys` are present.
+- ✅ `blueprint-list.tsx` — pure presentational list. Each row shows
+  `display_name`, monospace `key`, `description`, and an inputs summary
+  (`N input(s): <quantity_kind>, …`).
+
+**Mount point (`src/components/credit-batches/credit-batch-list.tsx`):**
+- ✅ Passes `viewModeChildren={<CertifyPanel creditBatchId={…} />}` on
+  the existing `EntitySideSheet` (line 84 holds the side-sheet entity).
+  Mirrors the Phase 1 mount pattern for `<FacilityCertifierSection />`.
+
+**Acceptance:**
+1. Open a credit batch whose facility is **not** linked → accordion
+   expands to the not-linked empty state, no Isometric calls in the
+   network panel.
+2. Link the facility (Phase 1 UI) but leave the default template unset
+   → "default template not selected" hint, `listComponentBlueprints`
+   not called.
+3. Set a valid default removal template, reopen the batch → project
+   name + template + blueprint table populated from live Certify data.
+4. Set `defaultRemovalTemplateId` to a stale ID directly in the DB,
+   reopen → drift warning, blueprint catalog still not fetched.
+5. Drop a blueprint key from the resolver via a temporary code change
+   → "N blueprint(s) … no longer in Certify's catalog" warning row
+   appears. Revert.
+
+### Phase 3 — Single removal submission (end-to-end)
+
+The smallest meaningful unit is one credit batch → one removal. Phases 1–2
+are prerequisites: a facility must be linked, and templates/blueprints must
+be surfaced.
+
+1. Transformers (pure functions, table-driven tests):
+   - `transformers/source.ts` — local `documents` row → `CreateSourceRequest`.
+   - `transformers/datapoint.ts` — numeric reading → `CreateDatapointRequest`
+     (with optional standard deviation for uncertainty).
+   - `transformers/component.ts` — aggregated production data → component
+     inputs, using a declarative `INPUT_MAPPING` dict (port the pattern from
+     `varuna/.../transformers/removal.ts:63-110`).
+   - `transformers/removal.ts` — assemble components into the template's
+     component groups.
+2. Port `utils/aggregation.ts` from
+   `varuna/.../utils/aggregation.ts` — mass-weighted blends, durability
+   ratios. Correct per Biochar v1.2.
+3. `fn/certification.ts` adds `submitCreditBatch(creditBatchId)`:
+   - Resolve facility → look up `certifierProjects` row → 422 if absent.
+   - Call `getApplicationLineage(applicationId)` — **reuse existing
+     branching** (`delivery.biocharProductId ?? order.biocharProductId`,
+     null `linkedProductionRunId`, empty feedstocks). If lineage warnings
+     are non-empty for blocking fields, refuse submission with a clear
+     message.
+   - Run aggregation.
+   - For each step (sources, datapoints, components, removal), call the
+     idempotency ledger flow against `certificationSubmissions`.
+   - Append a row to `certifierSyncEvents` per HTTP attempt.
+4. UI inside the credit-batch side sheet:
+   - "Submit to Isometric" button. Disabled when:
+     - facility has no certifier project, or
+     - lineage has blocking warnings, or
+     - latest submission row is locked in flight.
+   - Status badge driven by latest `certificationSubmissions.status`.
+   - Sync-event log accordion showing the last N attempts.
+
+**Acceptance:** one seeded credit batch produces a real `Removal` in sandbox
+Certify with all linked components, datapoints, and sources visible in the
+Isometric UI. Re-clicking Submit is a no-op (matched payload hash). Mutating
+the batch and re-submitting creates a `version=2` row and supersedes v1.
+
+### Phase 4 — GHG statement lifecycle
+
+- `submitGhgStatement(removalIds[])` server action.
+- `getGhgStatementStatus(externalId)` polled by React Query while status is
+  `DRAFT|SUBMITTED`; long stale time once `VERIFIED|REJECTED`.
+- "Resubmit" path on rejection (`POST /ghg_statements/{id}/submit`).
+- Each transition appends a `certifierSyncEvents` row.
+- Webhook ingestion: `certifierProjects.webhookSecret` already exists. Add a
+  small `app/api/certification/webhook/route.ts` that validates the HMAC and
+  reconciles `certificationSubmissions` rows on inbound notifications. This
+  removes most of the need for status polling.
+
+### Phase 5 — Time-series + bulk paths (deferred)
+
+`MonitoringSubmission`, `DataUploadSubmission`, biochar-specific
+`POST /biochar_applications`. Skip until Phase 3/4 is stable in production.
+
+### Phase 6 — Protocol/SOP surfacing (orthogonal)
+
+The Certify API does not expose protocol-compliance rules. Two paths:
+
+- **Build-time snapshot (recommended):** extend the existing
+  `docs/isometric/update-playbook.md` workflow to dump SOP markdown into
+  `public/isometric-sops/` for in-app reference. No runtime MCP dependency.
+- **Runtime via MCP:** a server action that calls
+  `mcp__claude_ai_isometric__protocols_get_content` /
+  `isometric_docs_get`. Only viable if the MCP server is reachable from the
+  Next.js runtime — confirm before committing.
+
+## What to deliberately NOT do (lessons from varuna AND this review)
+
+- **No fake-ID stubs.** If an endpoint isn't wired, the corresponding submit
+  button stays disabled (`varuna/.../adapter.ts:70,204,251,262`).
+- **No hand-written types.** Generate from OpenAPI.
+- **No new sync tables.** `certificationSubmissions` + `certifierSyncEvents`
+  are the source of truth.
+- **No global `ISOMETRIC_PROJECT_ID` env var.** Project linkage is
+  facility-scoped and lives in `certifierProjects`.
+- **No required env vars** for credentials — keep them optional so unrelated
+  app boot is unaffected.
+- **No re-deriving lineage.** Always go through
+  `getApplicationLineage()` to handle the delivery/order product fallback and
+  missing-production-run / missing-feedstock cases.
+- **No new files at `src/data-access/isometric.ts` or `src/fn/isometric.ts`.**
+  Those names are taken by the sampling/compliance code. Use
+  `certification.ts`.
+- **No invented credit-batch detail route.** Surface lives in the existing
+  side sheet (`credit-batch-list.tsx:84`).
+- **No "skip if local external ID exists" idempotency.** That leaves a
+  corruption window; use the lock + payload-hash + reconciliation flow.
+
+## Critical files to modify or create
+
+- ✅ `src/config/env.ts` — three optional vars added (Phase 0).
+- ✅ `src/db/schema/certification.ts` — `defaultRemovalTemplateId` added
+  (Phase 0); `certifier_projects_provider_external_unique` dropped
+  (Phase 1).
+- ✅ `src/lib/isometric/{client,index}.ts` + `generated/certify.d.ts` +
+  `projects.ts` (`listProjects`, `listRemovalTemplates`,
+  `listComponentBlueprints`) — Phases 0–2.
+- ✅ `src/data-access/certification.ts` — Phase 1.
+- ✅ `src/fn/certification.ts` — Phase 1; extended in Phase 2 with
+  `loadCertifyContextForCreditBatch`. (Phases 3–4 will extend further.)
+- ✅ `src/schemas/certification.ts` — Phase 1.
+- ✅ `src/hooks/use-certification.ts` — Phase 1; extended in Phase 2 with
+  `useCertifyContextForCreditBatch`.
+- ✅ `src/components/certification/` — Phase 1
+  (`facility-certifier-section.tsx`, `facility-certifier-dialog.tsx`,
+  `index.ts`); Phase 2 added `certify-panel.tsx`, `blueprint-list.tsx`.
+- ✅ `src/components/credit-batches/credit-batch-list.tsx` — mounts
+  `<CertifyPanel />` via `viewModeChildren` (Phase 2).
+- ✅ `src/components/ui/entity-side-sheet/index.tsx` — `viewModeChildren`
+  prop (Phase 1).
+- ✅ `src/components/facilities/facility-list.tsx` — mounts
+  `<FacilityCertifierSection />` via `viewModeChildren` (Phase 1).
+- *Future:* `src/lib/isometric/transformers/` +
+  `utils/{aggregation,payload-hash}.ts` — Phase 3.
+- *Future:* `src/app/api/certification/webhook/route.ts` — Phase 4.
+- ✅ `scripts/isometric-smoke.ts` — Phase 0.
+- ✅ `scripts/isometric-link-demo.ts` — Phase 0 stopgap; updated in
+  Phase 1 to allow N→1 facility/project mappings.
+
+## Verification
+
+- **Phase 0 (✅):** `pnpm tsx scripts/isometric-smoke.ts` prints production
+  project list (2 projects, including the demo one).
+- **Phase 1 (✅):** verified end-to-end: `pnpm db:push` applied
+  `0016_panoramic_selene.sql`; only
+  `certifier_projects_facility_provider_unique` remains on the table.
+  Live API helpers smoke-tested — demo project returns 2 templates
+  (`Protocol default`, `Biochar`). `tsc --noEmit` and `pnpm lint`
+  pass. *To do:* `tests/e2e/facility-certifier-mapping.spec.ts` —
+  seed two facilities, link both to the demo project via the UI,
+  assert two `certifier_projects` rows with the same
+  `externalProjectId`; insert a fake `creditBatch` +
+  `certificationSubmissions` and assert unlink is refused with
+  the `SafeError` message.
+- **Phase 2 (✅):** open a credit-batch side sheet — Certify accordion
+  renders the facility's project + default removal template + the
+  component blueprints that template references. Drift cases (stale
+  template ID, missing blueprint keys) render distinct warnings.
+  `tsc --noEmit` and `pnpm lint` pass. *To do:* light E2E in
+  `tests/e2e/credit-batches.spec.ts` asserting the not-linked empty
+  state copy is visible.
+- **Phase 3:** `tests/e2e/certification-submit.spec.ts` — seed a credit
+  batch, click Submit, assert a `certificationSubmissions` row with non-null
+  `externalId` and `status='submitted'`. Re-click → no new row. Manually
+  verify the removal exists in sandbox Certify on first run only.
+- **Phase 4:** add status-transition assertions; mock-webhook delivery test.
+- **Unit tests:** `tests/unit/{isometric-transformers,payload-hash,
+  certification-idempotency}.test.ts` — pure-function tables for
+  transformers, ledger state machine for idempotency.
+
+## Open questions (not blocking Phase 0)
+
+1. Does Certify support a metadata field on POSTed entities that lets us
+   round-trip a client nonce for reconciliation lookups? If not, design an
+   alternative fingerprint (timestamp + entity-code search). Verify via
+   `openapi_documents_get_object` for `Removal`/`Datapoint`/`Source`.
+2. Sources upload order: must `Source` be uploaded (presigned URL flow)
+   *before* the `Datapoint` that references it, or can it be attached later?
+   Affects whether the orchestrator needs a true two-phase commit. Read
+   `user-guides/certify/key-certify-concepts`.
+3. Multi-org credentials within 12 months? If yes, `client.ts` should already
+   accept credentials as a constructor argument so a future per-facility-creds
+   refactor is cheap. Plan assumes single-org for now.
