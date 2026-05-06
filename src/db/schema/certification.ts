@@ -27,6 +27,8 @@ export const certifierProjects = pgTable(
     externalProjectId: text('external_project_id').notNull(),
     protocolSlug: text('protocol_slug').notNull().default('biochar'),
     protocolVersion: text('protocol_version'),
+    // Default Certify removal template used when submitting credit batches for this facility.
+    defaultRemovalTemplateId: text('default_removal_template_id'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
     metadata: jsonb('metadata'),
@@ -34,10 +36,10 @@ export const certifierProjects = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    unique('certifier_projects_provider_external_unique').on(
-      table.provider,
-      table.externalProjectId
-    ),
+    // One facility submits to at most one project per provider. The previous
+    // (provider, externalProjectId) unique constraint was dropped: real
+    // operators commonly register multiple physical sites under one registry
+    // project, since Isometric's data model has no facility concept.
     unique('certifier_projects_facility_provider_unique').on(
       table.facilityId,
       table.provider
