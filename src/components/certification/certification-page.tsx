@@ -11,7 +11,8 @@ import {
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
-import { isometricDocs } from "@/lib/isometric";
+import { isometricDocs } from "@/lib/isometric/links";
+import { EnvBanner } from "./env-banner";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -82,6 +83,8 @@ export function CertificationPage() {
   return (
     <main className="min-h-screen bg-[var(--color-background)]">
       <div className="max-w-[1180px] mx-auto p-24 flex flex-col gap-24">
+        <EnvBanner isProduction={data.isProduction} />
+
         <header className="flex items-center justify-between gap-16">
           <div className="flex items-center gap-12 min-w-0">
             <SealCheck size={28} className="shrink-0 text-[var(--clr-pink)]" />
@@ -118,9 +121,6 @@ export function CertificationPage() {
                 </p>
               )}
             </div>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              {data.isProduction ? "production" : "sandbox"}
-            </span>
           </div>
         </section>
 

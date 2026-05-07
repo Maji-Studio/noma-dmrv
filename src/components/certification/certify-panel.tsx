@@ -1,25 +1,29 @@
 /**
- * CertifyPanel
- * Isometric Certify context inside the credit-batch side sheet — read-only
- * project + template + blueprints surface (Phase 2) plus the submit-to-Isometric
- * footer (Phase 3).
+ * CertifyPanel — slim status strip inside the credit-batch side sheet.
+ *
+ * Replaces the previous heavy accordion with a compact "what's the state of
+ * this batch's submission?" view: status, last attempt, inline error, one-tap
+ * resubmit. Heavy detail (blueprints, drift warnings, full audit log) lives
+ * on the certification surface — accessible via the "View in certification →"
+ * link below.
  */
 "use client";
 
-import { CaretDown } from "@phosphor-icons/react";
-import { useState } from "react";
+import { ArrowSquareOut, ArrowsClockwise } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
-import { useDialog } from "@/hooks/use-dialog";
 import { useToast } from "@/components/ui/toast";
 import {
   useCertifyContextForCreditBatch,
   useCreditBatchSubmissionState,
   useSubmitCreditBatch,
 } from "@/hooks/use-certification";
-import { isometricDocs, isometricRegistry } from "@/lib/isometric";
-import { BlueprintList } from "./blueprint-list";
-import { Field, Section } from "./panel-layout";
+import type { CertificationSubmissionRow } from "@/data-access/certification";
+import { EnvBanner } from "./env-banner";
+import { Section } from "./panel-layout";
 import { SubmissionStatusBadge } from "./submission-status-badge";
+import { SubmitConfirmDialog } from "./submit-confirm-dialog";
 import { SyncEventLog } from "./sync-event-log";
 
 interface CertifyPanelProps {
@@ -27,71 +31,40 @@ interface CertifyPanelProps {
 }
 
 export function CertifyPanel({ creditBatchId }: CertifyPanelProps) {
-  const { data, isLoading, error } =
-    useCertifyContextForCreditBatch(creditBatchId);
-
   return (
     <Section>
-      <details className="group">
-        <summary className="flex cursor-pointer items-center justify-between gap-12 list-none [&::-webkit-details-marker]:hidden">
-          <div className="flex flex-col gap-4">
-            <h3 className="title-chapter-title">Isometric Certify</h3>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              {data?.isProduction === true
-                ? "Isometric · production"
-                : data?.isProduction === false
-                  ? "Isometric · sandbox"
-                  : "Isometric"}
-            </p>
-          </div>
-          <CaretDown
-            size={18}
-            weight="bold"
-            className="shrink-0 text-[var(--color-text-tertiary)] transition-transform duration-150 group-open:rotate-180"
-          />
-        </summary>
-
-        <div className="mt-16">
-          <PanelBody
-            creditBatchId={creditBatchId}
-            data={data}
-            isLoading={isLoading}
-            error={error ?? null}
-          />
-        </div>
-      </details>
+      <div className="flex flex-col gap-12">
+        <header className="flex items-baseline justify-between gap-12">
+          <h3 className="title-chapter-title">Isometric Certify</h3>
+          <Link
+            href={`/certification?batch=${creditBatchId}`}
+            className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)] inline-flex items-center gap-4"
+          >
+            View in certification
+            <ArrowSquareOut size={12} weight="bold" />
+          </Link>
+        </header>
+        <PanelBody creditBatchId={creditBatchId} />
+      </div>
     </Section>
   );
 }
 
-function PanelBody({
-  creditBatchId,
-  data,
-  isLoading,
-  error,
-}: {
-  creditBatchId: string;
-  data: ReturnType<typeof useCertifyContextForCreditBatch>["data"];
-  isLoading: boolean;
-  error: Error | null;
-}) {
-  if (isLoading) {
+function PanelBody({ creditBatchId }: { creditBatchId: string }) {
+  const ctx = useCertifyContextForCreditBatch(creditBatchId);
+
+  if (ctx.isLoading) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
-        Loading certification context…
+        Loading certification state…
       </p>
     );
   }
 
-  if (error || !data) {
-    if (error) {
-      console.error(
-        `CertifyPanel: failed to load context for creditBatchId=${creditBatchId}`,
-      );
-    }
+  if (ctx.error || !ctx.data) {
     return (
-      <p className="body-small text-[var(--color-signal-red)]">
-        Unable to load certification information. Please try again.
+      <p className="body-small text-[var(--clr-red)]">
+        Unable to load certification state. Try refreshing the page.
       </p>
     );
   }
@@ -101,17 +74,19 @@ function PanelBody({
     project,
     defaultTemplate,
     missingDefaultTemplateId,
-    blueprintsForTemplate,
     unresolvedBlueprintKeys,
     isProduction,
-  } = data;
+  } = ctx.data;
 
   if (!mapping) {
     return (
-      <p className="body-small text-[var(--color-text-secondary)]">
-        This facility isn&apos;t linked to an Isometric project. Open the
-        facility settings to set up registry submission.
-      </p>
+      <div className="flex flex-col gap-8">
+        <EnvBanner isProduction={isProduction} variant="inline" />
+        <p className="body-small text-[var(--color-text-secondary)]">
+          This facility isn&apos;t linked to an Isometric project. Open the
+          facility settings to set up registry submission.
+        </p>
+      </div>
     );
   }
 
@@ -121,108 +96,53 @@ function PanelBody({
     !missingDefaultTemplateId &&
     unresolvedBlueprintKeys.length === 0;
 
+  const blocker = !submitReady
+    ? deriveBlocker({
+        hasDefaultTemplate: !!defaultTemplate,
+        missingDefaultTemplateId,
+        unresolvedBlueprintKeys,
+      })
+    : null;
+
   return (
-    <div className="flex flex-col gap-20">
-      <dl className="grid grid-cols-2 gap-x-16 gap-y-12">
-        <Field label="Project">
-          <span className="body-small">{projectLabel}</span>
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {mapping.externalProjectId}
-          </span>
-          <a
-            href={isometricRegistry.project(mapping.externalProjectId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-          >
-            View on Isometric ↗
-          </a>
-        </Field>
-        <Field label="Default removal template">
-          {defaultTemplate ? (
-            <>
-              <span className="body-small">
-                {defaultTemplate.display_name}
-              </span>
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                {defaultTemplate.id}
-              </span>
-            </>
-          ) : missingDefaultTemplateId ? (
-            <span className="body-small text-[var(--color-text-tertiary)]">
-              {missingDefaultTemplateId}
-            </span>
-          ) : (
-            <span className="body-small text-[var(--color-text-tertiary)]">
-              Not set
-            </span>
-          )}
-        </Field>
-      </dl>
+    <div className="flex flex-col gap-12">
+      <EnvBanner isProduction={isProduction} variant="inline" />
 
-      {missingDefaultTemplateId && (
-        <Warning>
-          Default removal template{" "}
-          <code className="font-mono">{missingDefaultTemplateId}</code> is no
-          longer available in Certify for this project. Pick a new default in
-          the facility&apos;s Isometric link.
-        </Warning>
-      )}
+      <div className="flex flex-col gap-2">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Project
+        </span>
+        <span className="body-small">{projectLabel}</span>
+        <span className="body-caption text-[var(--color-text-tertiary)] font-mono">
+          {mapping.externalProjectId}
+        </span>
+      </div>
 
-      {!defaultTemplate && !missingDefaultTemplateId && (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Default removal template not selected. Set one in the facility&apos;s
-          Isometric link to enable submission previews.
-        </p>
-      )}
-
-      {defaultTemplate && (
-        <div className="flex flex-col gap-12">
-          <div className="flex items-center justify-between gap-12">
-            <h4 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Component blueprints required by this template
-            </h4>
-            <a
-              href={isometricDocs.componentBlueprints}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-            >
-              Learn about component blueprints ↗
-            </a>
-          </div>
-          {unresolvedBlueprintKeys.length > 0 && (
-            <Warning>
-              {unresolvedBlueprintKeys.length} blueprint
-              {unresolvedBlueprintKeys.length === 1 ? "" : "s"} referenced by
-              this template{" "}
-              {unresolvedBlueprintKeys.length === 1 ? "is" : "are"} no longer
-              in Certify&apos;s catalog:{" "}
-              <code className="font-mono">
-                {unresolvedBlueprintKeys.join(", ")}
-              </code>
-            </Warning>
-          )}
-          <BlueprintList blueprints={blueprintsForTemplate} />
-        </div>
-      )}
-
-      {submitReady && (
-        <SubmitFooter
-          creditBatchId={creditBatchId}
-          isProduction={isProduction}
+      {blocker && (
+        <BlockerNotice
+          message={blocker.message}
+          fixHint={blocker.fixHint}
+          fixHref={blocker.fixHref}
         />
       )}
+
+      <SubmissionRow
+        creditBatchId={creditBatchId}
+        isProduction={isProduction}
+        canSubmit={submitReady}
+      />
     </div>
   );
 }
 
-function SubmitFooter({
+function SubmissionRow({
   creditBatchId,
   isProduction,
+  canSubmit,
 }: {
   creditBatchId: string;
   isProduction: boolean;
+  canSubmit: boolean;
 }) {
   const { data: state, isLoading } =
     useCreditBatchSubmissionState(creditBatchId);
@@ -232,30 +152,41 @@ function SubmitFooter({
 
   if (isLoading || !state) {
     return (
-      <div className="border-t border-[var(--color-border-secondary)] pt-16">
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          Loading submission state…
-        </p>
-      </div>
+      <p className="body-small text-[var(--color-text-tertiary)]">
+        Loading submission state…
+      </p>
     );
   }
 
   const { latest, recentSyncEvents, isLockedInFlight } = state;
-  const submitDisabled = isLockedInFlight || submitMutation.isPending;
+  const submitDisabled =
+    !canSubmit || isLockedInFlight || submitMutation.isPending;
+
+  const buttonLabel = (() => {
+    if (submitMutation.isPending) return "Submitting…";
+    if (isLockedInFlight) return "In progress";
+    if (latest?.status === "submitted" || latest?.status === "accepted") {
+      return "Resubmit";
+    }
+    return "Submit to Isometric";
+  })();
 
   const fireSubmit = (confirmProduction = false) => {
-    submitMutation.mutate({ creditBatchId, confirmProduction }, {
-      onSuccess: (data) => {
-        toast.success(
-          `Submitted to Isometric: Removal ${data.externalId} (v${data.version}).`,
-        );
+    submitMutation.mutate(
+      { creditBatchId, confirmProduction },
+      {
+        onSuccess: (data) => {
+          toast.success(
+            `Submitted to Isometric · Removal ${data.externalId} (v${data.version}).`,
+          );
+        },
+        onError: (err) => {
+          toast.error(
+            `Submission failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        },
       },
-      onError: (err) => {
-        toast.error(
-          `Submission failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      },
-    });
+    );
   };
 
   const handleClick = () => {
@@ -266,22 +197,22 @@ function SubmitFooter({
     fireSubmit();
   };
 
+  const errorMessage = deriveErrorMessage(latest, recentSyncEvents);
+
   return (
-    <div className="border-t border-[var(--color-border-secondary)] pt-16 flex flex-col gap-16">
-      <div className="flex items-center justify-between gap-12">
-        <div className="flex flex-col gap-4">
-          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Submission status
-          </span>
-          <SubmissionStatusBadge
-            latest={latest}
-            isLockedInFlight={isLockedInFlight}
-          />
-          {latest?.externalId && (
-            <span className="body-caption text-[var(--color-text-tertiary)] font-mono">
-              {latest.externalId} · v{latest.version}
-            </span>
-          )}
+    <div className="flex flex-col gap-12 border-t border-[var(--color-border-secondary)] pt-12">
+      <div className="flex items-start justify-between gap-12">
+        <div className="flex flex-col gap-4 min-w-0">
+          <div className="flex items-center gap-8 flex-wrap">
+            <SubmissionStatusBadge
+              latest={latest}
+              isLockedInFlight={isLockedInFlight}
+            />
+            {isLockedInFlight && latest?.lockedAt && (
+              <ElapsedChip since={latest.lockedAt} />
+            )}
+          </div>
+          <SubmissionMeta latest={latest} />
         </div>
         <Button
           variant="primary"
@@ -289,17 +220,22 @@ function SubmitFooter({
           onClick={handleClick}
           disabled={submitDisabled}
         >
-          {submitMutation.isPending
-            ? "Submitting…"
-            : isLockedInFlight
-              ? "In progress"
-              : latest?.status === "submitted" || latest?.status === "accepted"
-                ? "Resubmit"
-                : "Submit to Isometric"}
+          {!isLockedInFlight && submitMutation.isPending && (
+            <ArrowsClockwise size={14} className="animate-spin" />
+          )}
+          {buttonLabel}
         </Button>
       </div>
 
-      <SyncEventLog events={recentSyncEvents} />
+      {errorMessage && (
+        <p className="body-small text-[var(--clr-red)] break-words">
+          {errorMessage}
+        </p>
+      )}
+
+      {recentSyncEvents.length > 0 && (
+        <SyncEventLog events={recentSyncEvents} compact />
+      )}
 
       <SubmitConfirmDialog
         isOpen={confirmOpen}
@@ -309,63 +245,146 @@ function SubmitFooter({
           fireSubmit(true);
         }}
         isPending={submitMutation.isPending}
+        artifactLabel="Removal"
       />
     </div>
   );
 }
 
-function SubmitConfirmDialog({
-  isOpen,
-  onClose,
-  onConfirm,
-  isPending,
+function SubmissionMeta({
+  latest,
 }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  isPending: boolean;
+  latest: CertificationSubmissionRow | null;
 }) {
-  const dialogRef = useDialog(isOpen, onClose);
-  if (!isOpen) return null;
+  if (!latest) {
+    return (
+      <span className="body-caption text-[var(--color-text-tertiary)]">
+        Never submitted
+      </span>
+    );
+  }
+  const submittedLabel = latest.submittedAt
+    ? new Date(latest.submittedAt).toLocaleDateString()
+    : "—";
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-32 border border-[var(--color-border-primary)] backdrop:bg-black/50"
-      aria-labelledby="submit-confirm-title"
-    >
-      <div className="flex flex-col gap-24 min-w-[360px]">
-        <h2 id="submit-confirm-title" className="title-heading-3">
-          Submit to production Isometric
-        </h2>
-        <p className="body-medium text-[var(--color-text-secondary)]">
-          This creates a real Removal in the Isometric production environment.
-          Confirm before continuing.
-        </p>
-        <div className="flex gap-16 justify-end">
-          <Button
-            size="large"
-            variant="default"
-            onClick={onClose}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="large"
-            variant="primary"
-            onClick={onConfirm}
-            disabled={isPending}
-          >
-            {isPending ? "Submitting…" : "Submit"}
-          </Button>
-        </div>
-      </div>
-    </dialog>
+    <span className="body-caption text-[var(--color-text-tertiary)]">
+      {latest.externalId ? (
+        <span className="font-mono">
+          {latest.externalId} · v{latest.version}
+        </span>
+      ) : (
+        <span>Draft · v{latest.version}</span>
+      )}
+      <span className="mx-6">·</span>
+      Last attempt {submittedLabel}
+    </span>
   );
 }
 
-function Warning({ children }: { children: React.ReactNode }) {
+function ElapsedChip({ since }: { since: Date }) {
+  const elapsed = useElapsed(since);
   return (
-    <p className="body-small text-[var(--color-signal-orange)]">{children}</p>
+    <span className="body-caption text-[var(--color-text-tertiary)] font-mono">
+      {formatElapsed(elapsed)}
+    </span>
   );
+}
+
+const ELAPSED_TICK_MS = 1000;
+
+function useElapsed(since: Date): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), ELAPSED_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
+  return Math.max(0, now - since.getTime());
+}
+
+function formatElapsed(ms: number): string {
+  const SECONDS_PER_MINUTE = 60;
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < SECONDS_PER_MINUTE) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+}
+
+function deriveErrorMessage(
+  latest: CertificationSubmissionRow | null,
+  recentSyncEvents: { status: string; errorMessage: string | null }[],
+): string | null {
+  if (!latest) return null;
+  if (latest.status === "rejected") {
+    const rejectionFromMetadata =
+      latest.metadata &&
+      typeof latest.metadata === "object" &&
+      "rejectionReason" in (latest.metadata as Record<string, unknown>)
+        ? (latest.metadata as Record<string, unknown>).rejectionReason
+        : null;
+    if (typeof rejectionFromMetadata === "string" && rejectionFromMetadata) {
+      return rejectionFromMetadata;
+    }
+  }
+  const lastFailure = recentSyncEvents.find((e) => e.status === "failed");
+  return lastFailure?.errorMessage ?? null;
+}
+
+function BlockerNotice({
+  message,
+  fixHint,
+  fixHref,
+}: {
+  message: string;
+  fixHint: string;
+  fixHref?: string;
+}) {
+  return (
+    <div className="border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+      <p className="body-small text-[var(--color-text-primary)]">{message}</p>
+      {fixHref ? (
+        <Link
+          href={fixHref}
+          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+        >
+          {fixHint}
+        </Link>
+      ) : (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          {fixHint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function deriveBlocker({
+  hasDefaultTemplate,
+  missingDefaultTemplateId,
+  unresolvedBlueprintKeys,
+}: {
+  hasDefaultTemplate: boolean;
+  missingDefaultTemplateId: string | null;
+  unresolvedBlueprintKeys: string[];
+}): { message: string; fixHint: string; fixHref?: string } {
+  if (missingDefaultTemplateId) {
+    return {
+      message: `Default removal template ${missingDefaultTemplateId} is no longer available in Certify.`,
+      fixHint: "Pick a new template in facility settings →",
+    };
+  }
+  if (!hasDefaultTemplate) {
+    return {
+      message: "No default removal template selected for this facility.",
+      fixHint: "Set one in facility settings →",
+    };
+  }
+  if (unresolvedBlueprintKeys.length > 0) {
+    const list = unresolvedBlueprintKeys.join(", ");
+    return {
+      message: `Template references ${unresolvedBlueprintKeys.length} unresolved blueprint${unresolvedBlueprintKeys.length === 1 ? "" : "s"}: ${list}.`,
+      fixHint: "View blueprint detail in certification →",
+    };
+  }
+  return { message: "Submission blocked.", fixHint: "Check certification →" };
 }

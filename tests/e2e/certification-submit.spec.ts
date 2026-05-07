@@ -36,16 +36,27 @@ test.describe("Certify panel — credit-batch side sheet", () => {
     const sideSheet = page.locator('[role="dialog"]');
     await expect(sideSheet).toBeVisible({ timeout: 10000 });
 
-    const certifySummary = sideSheet.getByText("Isometric Certify", {
+    const certifyHeader = sideSheet.getByText("Isometric Certify", {
       exact: true,
     });
-    await expect(certifySummary).toBeVisible();
-    await certifySummary.click();
+    await expect(certifyHeader).toBeVisible();
+
+    // Slim panel: env banner is rendered inline alongside the not-linked
+    // copy so operators can see which environment they're not linked to.
+    await expect(
+      sideSheet.getByText(/Sandbox · Isometric registry/i),
+    ).toBeVisible();
 
     await expect(sideSheet.getByText(NOT_LINKED_FRAGMENT)).toBeVisible();
     await expect(
       sideSheet.getByRole("button", { name: /submit to isometric/i }),
     ).toHaveCount(0);
+
+    // Deep-link out to the certification surface should always be reachable
+    // from the slim panel.
+    await expect(
+      sideSheet.getByRole("link", { name: /view in certification/i }),
+    ).toBeVisible();
 
     const databaseUrl =
       process.env.DATABASE_URL ||
