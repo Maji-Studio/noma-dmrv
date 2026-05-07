@@ -11,6 +11,7 @@ import {
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { isometricDocs } from "@/lib/isometric";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -127,7 +128,17 @@ export function CertificationPage() {
           <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20 flex flex-col gap-18">
             <div className="flex items-start justify-between gap-16">
               <div>
-                <h2 className="title-heading-3">GHG Statement</h2>
+                <div className="flex items-baseline gap-12">
+                  <h2 className="title-heading-3">GHG Statement</h2>
+                  <a
+                    href={isometricDocs.ghgStatements}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+                  >
+                    View GHG statement guide ↗
+                  </a>
+                </div>
                 {activeStatement ? (
                   <p className="body-small text-[var(--color-text-secondary)] mt-4">
                     Period ending {activeStatement.period.reportingPeriodEndAt}

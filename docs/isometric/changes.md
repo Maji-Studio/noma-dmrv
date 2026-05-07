@@ -1,5 +1,37 @@
 # Isometric Docs Change Log
 
+## 2026-05-07 (Phase 6 deferred — outbound links shipped)
+
+- **Decision:** defer the Phase 6 build-time SOP snapshot indefinitely.
+  Operators read protocol/Certify documentation directly on
+  `registry.isometric.com` and `docs.isometric.com`; copying it into
+  the app would carry ongoing snapshot-refresh maintenance with no
+  workflow benefit.
+- **Shipped instead:** `src/lib/isometric/links.ts` with
+  `isometricRegistry.{project,protocol,module}` and `isometricDocs.*`
+  URL builders. Verified URL conventions: registry public projects use
+  the singular `/project/<id>` path; protocol/module URLs match the
+  `authoritative_url` shape already pinned in `versions.json`. All
+  helpers `encodeURIComponent` their inputs so future non-URL-safe
+  IDs/slugs stay safe.
+- **Link additions:**
+  - `facility-certifier-section.tsx` — "View on Isometric ↗" beside
+    the project ID; protocol slug + version is now an outbound link
+    when `protocolVersion` is set.
+  - `certify-panel.tsx` (credit-batch side sheet) — "View on
+    Isometric ↗" beside the project ID; "Learn about component
+    blueprints ↗" beside the blueprint section heading.
+  - `certification-page.tsx` (`/certification`) — "View GHG
+    statement guide ↗" beside the GHG Statement section heading
+    (chosen over the page header to sit next to the action it
+    contextualises).
+- **Plan doc updated:** Phase 6 in `integration-plan.md` rewritten to
+  record the deferral and point at `links.ts` as the lighter-weight
+  alternative; the build-time snapshot and runtime-MCP options remain
+  documented as fallback paths if external-link friction surfaces.
+- Verification: `pnpm typecheck` and `pnpm lint` pass; manual click
+  verification covered by the implementer.
+
 ## 2026-05-07 (Phase 1 carryover E2E)
 
 - **`tests/e2e/facility-certifier-mapping.spec.ts`.** Two-test
