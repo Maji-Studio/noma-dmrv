@@ -55,6 +55,28 @@ export type SubmitGhgStatementDialogInput = z.infer<
   typeof submitGhgStatementDialogSchema
 >;
 
+export function buildSubmitGhgStatementDialogSchema(args: {
+  isResubmit: boolean;
+  isProduction: boolean;
+}) {
+  return submitGhgStatementDialogSchema.superRefine((value, ctx) => {
+    if (args.isResubmit && !value.summaryOfChanges?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["summaryOfChanges"],
+        message: "Summary of changes is required",
+      });
+    }
+    if (args.isProduction && value.confirmProduction !== true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["confirmProduction"],
+        message: "Confirm production submission to continue",
+      });
+    }
+  });
+}
+
 export const submitGhgStatementSchema = z.object({
   submissionId: z.string().uuid(),
   reportUrl: httpsUrlSchema,

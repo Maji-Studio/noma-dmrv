@@ -2,13 +2,19 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
+import {
+  FormError,
+  FormField,
+  FormInput,
+  FormTextarea,
+  ServerError,
+} from "@/components/forms";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitGhgStatementForFacility } from "@/hooks/use-certification";
 import { useDialog } from "@/hooks/use-dialog";
 import {
-  submitGhgStatementDialogSchema,
+  buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
 } from "@/schemas/certification";
 
@@ -32,15 +38,10 @@ export function GhgStatementSubmitDialog({
   const dialogRef = useDialog(isOpen, onClose);
   const mutation = useSubmitGhgStatementForFacility();
   const toast = useToast();
-  const schema = isResubmit
-    ? submitGhgStatementDialogSchema.refine(
-        (value) => !!value.summaryOfChanges?.trim(),
-        {
-          path: ["summaryOfChanges"],
-          message: "Summary of changes is required",
-        },
-      )
-    : submitGhgStatementDialogSchema;
+  const schema = buildSubmitGhgStatementDialogSchema({
+    isResubmit,
+    isProduction,
+  });
   const {
     register,
     handleSubmit,
@@ -122,14 +123,17 @@ export function GhgStatementSubmitDialog({
           )}
 
           {isProduction && (
-            <label className="flex items-start gap-10 body-small text-[var(--color-text-secondary)]">
-              <input
-                type="checkbox"
-                className="mt-3"
-                {...register("confirmProduction")}
-              />
-              <span>Confirm production Isometric submission</span>
-            </label>
+            <div className="flex flex-col">
+              <label className="flex items-start gap-10 body-small text-[var(--color-text-secondary)]">
+                <input
+                  type="checkbox"
+                  className="mt-3"
+                  {...register("confirmProduction")}
+                />
+                <span>Confirm production Isometric submission</span>
+              </label>
+              <FormError message={errors.confirmProduction?.message} />
+            </div>
           )}
 
           {errors.root?.message && <ServerError message={errors.root.message} />}
