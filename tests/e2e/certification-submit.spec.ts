@@ -28,7 +28,6 @@ test.describe("Certify panel — credit-batch side sheet", () => {
     const batch = await seedCreditBatch(seededData.facility.id, testRunId);
 
     await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
 
     const card = page.locator("article").filter({ hasText: batch.code });
     await expect(card).toBeVisible({ timeout: 15000 });

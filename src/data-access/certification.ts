@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certifierGhgPeriods,
@@ -101,6 +101,15 @@ export async function listAllFacilitiesLinkedByProvider(
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+// Statuses that still depend on the facility's certifier mapping. Terminal
+// statuses (`rejected`, `superseded`) are intentionally excluded — those rows
+// have no remote dependency that a repoint/unlink could orphan.
+const BLOCKING_SUBMISSION_STATUSES = [
+  "draft",
+  "submitted",
+  "accepted",
+] as const;
+
 async function hasBlockingFacilitySubmission(
   executor: Tx | typeof db,
   facilityId: string,
@@ -119,6 +128,7 @@ async function hasBlockingFacilitySubmission(
         eq(certificationSubmissions.provider, provider),
         eq(certificationSubmissions.localEntityType, "creditBatch"),
         eq(creditBatches.facilityId, facilityId),
+        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
       ),
     )
     .limit(1);
@@ -141,6 +151,7 @@ async function hasBlockingFacilitySubmission(
         eq(certificationSubmissions.localEntityType, "ghgPeriod"),
         eq(certificationSubmissions.submissionType, "ghg_statement"),
         eq(certifierGhgPeriods.externalProjectId, externalProjectId),
+        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
       ),
     )
     .limit(1);
