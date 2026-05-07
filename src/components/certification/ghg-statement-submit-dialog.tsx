@@ -126,8 +126,8 @@ export function GhgStatementSubmitDialog({
             <ProductionConfirmation
               actionLabel={
                 isResubmit
-                  ? "resubmit this GHG statement to the verifier"
-                  : "submit this GHG statement to the verifier"
+                  ? "resubmit this GHG statement to the verifier on the production Isometric registry"
+                  : "submit this GHG statement to the verifier on the production Isometric registry"
               }
               registerProps={register("confirmProduction")}
               errorMessage={errors.confirmProduction?.message}

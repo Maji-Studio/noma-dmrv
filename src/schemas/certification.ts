@@ -35,6 +35,7 @@ export const createGhgStatementSchema = z.object({
   endOn: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date")
+    .refine(isValidCalendarDate, { message: "Invalid calendar date" })
     .refine((value) => value <= todayLocalDateString(), {
       message: "End date cannot be in the future",
     }),
@@ -92,4 +93,17 @@ function todayLocalDateString(date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(DATE_PART_PAD_LENGTH, "0");
   const day = String(date.getDate()).padStart(DATE_PART_PAD_LENGTH, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function isValidCalendarDate(value: string): boolean {
+  const [yearStr, monthStr, dayStr] = value.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }

@@ -52,7 +52,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         const { listProjects } = await import("@/lib/isometric");
         const projects = await listProjects();
         expect(projects.length).toBeGreaterThan(0);
-        const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID;
+        const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID as string;
         expect(projects.some((p) => p.id === demoId)).toBe(true);
       },
       TEST_TIMEOUT_MS,

@@ -16,17 +16,6 @@ Each entry follows this shape:
 
 ### Pre-coding gates (status as of 2026-05-06)
 
-- **Datapoint with empty `source_ids`** (`isometric/phase-3`) — opened 2026-05-05, **RESOLVED 2026-05-05; SANDBOX RE-CONFIRMED 2026-05-06 ✓**
-  - Confirmed: `POST /datapoints` with `source_ids: []` returns 2xx against the
-    demo project (`prj_1K5F2F6SN1S0ZKDQ`). One smoke datapoint
-    (`dtp_1KQVZYB741S02H7Y`, supplier_reference_id `nm-smoke-empty-src-…`)
-    was created in production for verification — safe to delete via the
-    Isometric UI.
-  - Re-confirmed against sandbox project `prj_1K9YJ33RKSBX9FFF` on
-    2026-05-06; smoke datapoint `dtp_1KQYVM2KRSBX2ZF6` was created.
-  - Sources can stay deferred to Phase 3.5; Datapoints+Removal MVP is
-    API-valid.
-
 - **Live-template `INPUT_MAPPING` coverage** (`isometric/phase-3`) — opened 2026-05-05, **GAPS FOUND**
   - Ran `pnpm tsx scripts/isometric-smoke.ts inspect-template` against the demo
     project's two default templates ("Protocol default", "Biochar"). Findings:
@@ -42,17 +31,12 @@ Each entry follows this shape:
       bails with a clear "bind constants in the Isometric template editor"
       message. Tracked separately under
       `isometric/phase-3-fixed-constants` below.
-  - Sandbox re-check on 2026-05-06 against project `prj_1K9YJ33RKSBX9FFF`
-    returned two templates (`Protocol default`,
-    `Dark Earth removal template`). The same blocker class remains: 21
-    monitored inputs are unmapped across the two sandbox templates, and
-    fixed constants are still mostly unbound. Consequence: the sandbox
-    validation pass keeps Gates D (credit-batch Removal POST +
-    idempotency + stale-lock recovery) and E (GHG statement lifecycle)
-    in `blocked-by-template-readiness` — Phases 1, 2 and the read paths
-    are sandbox-verified, but the write paths cannot proceed until a
-    sandbox template has both required-input coverage and pre-bound
-    fixed constants.
+  - Current status: sandbox verification found the same template-readiness
+    blocker class as the demo project. Gates D (credit-batch Removal POST +
+    idempotency + stale-lock recovery) and E (GHG statement lifecycle) remain
+    `blocked-by-template-readiness` until a sandbox template has required-input
+    coverage and pre-bound fixed constants. The dated re-check log is archived
+    in `docs/archive/isometric-sandbox-recheck-2026-05-06.md`.
 
 ### Phase 3 blockers found in template inspection
 

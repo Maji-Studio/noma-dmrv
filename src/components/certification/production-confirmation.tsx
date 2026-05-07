@@ -1,8 +1,8 @@
 /**
  * ProductionConfirmation
- * Reusable inline production-environment gate for dialogs that perform an
- * irreversible (verifier-visible) write. Renders an inline EnvBanner plus a
- * descriptive checkbox bound to a react-hook-form `confirmProduction` field.
+ * Reusable inline production-environment gate for dialogs. Renders an inline
+ * EnvBanner plus a descriptive checkbox bound to a react-hook-form
+ * `confirmProduction` field.
  */
 "use client";
 
@@ -11,8 +11,10 @@ import { FormError } from "@/components/forms";
 import { EnvBanner } from "./env-banner";
 
 interface ProductionConfirmationProps {
-  /** What is about to happen, in lowercase verb form (e.g. "submit this removal"). */
+  /** What is about to happen, written as a full sentence fragment. */
   actionLabel: string;
+  /** Consequence shown after the action. Defaults to submission-specific copy. */
+  consequenceLabel?: string;
   /** react-hook-form register output for the boolean confirmation field. */
   registerProps: UseFormRegisterReturn;
   errorMessage?: string;
@@ -20,6 +22,7 @@ interface ProductionConfirmationProps {
 
 export function ProductionConfirmation({
   actionLabel,
+  consequenceLabel = "This creates a verifier-visible record.",
   registerProps,
   errorMessage,
 }: ProductionConfirmationProps) {
@@ -33,9 +36,8 @@ export function ProductionConfirmation({
           {...registerProps}
         />
         <span>
-          I understand that this will {actionLabel} on the{" "}
-          <strong className="font-semibold">production Isometric registry</strong>{" "}
-          and create a verifier-visible record.
+          I understand that this will {actionLabel}.{" "}
+          <strong className="font-semibold">{consequenceLabel}</strong>
         </span>
       </label>
       <FormError message={errorMessage} />
