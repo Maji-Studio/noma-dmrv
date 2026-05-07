@@ -17,7 +17,8 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-const LOCK_TTL_MS = 10 * 60 * 1000;
+import { LOCK_TTL_MS } from "../src/lib/isometric/utils/lock";
+
 const PROVIDER = "isometric" as const;
 const SUBMISSION_TYPE = "removal" as const;
 const ENTITY_TYPE = "creditBatch" as const;

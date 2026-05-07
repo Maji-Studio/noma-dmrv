@@ -12,6 +12,11 @@ import { eq, inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 
+const SEEDED_CREDIT_BATCH_CODE_PREFIX = "E2E-CB";
+const SEEDED_CREDIT_BATCH_DURATION_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const SEEDED_H_TO_CORG_RATIO = 0.4;
+
 export interface SeededChainData {
   facility: { id: string; code: string; name: string };
   reactor: { id: string; code: string; identifier: string };
@@ -216,6 +221,45 @@ export async function seedChainData(
 }
 
 /**
+ * Insert a minimal credit batch on a seeded facility. Used by the
+ * Phase 3 Certify-panel rendering spec, which only needs the batch to
+ * exist (no linked applications). Uses a code prefix that global teardown
+ * can match if a test aborts mid-run.
+ */
+export async function seedCreditBatch(
+  facilityId: string,
+  testRunId: string
+): Promise<{ id: string; code: string }> {
+  const { db, pool } = createDbConnection();
+  try {
+    const id = crypto.randomUUID();
+    const code = `${SEEDED_CREDIT_BATCH_CODE_PREFIX}-${testRunId}`;
+    const now = new Date();
+    const start = now.toISOString().slice(0, 10);
+    const end = new Date(
+      now.getTime() + SEEDED_CREDIT_BATCH_DURATION_DAYS * MS_PER_DAY,
+    )
+      .toISOString()
+      .slice(0, 10);
+    await db.insert(schema.creditBatches).values({
+      id,
+      code,
+      facilityId,
+      startDate: start,
+      endDate: end,
+      // Default durabilityOption='200_year' has a CHECK constraint
+      // (credit_batches_200_year_requires_h_to_corg) that requires this
+      // field. Any non-null value satisfies it; the spec doesn't depend
+      // on the actual durability calculation.
+      hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
+    });
+    return { id, code };
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
  * Clean up all seeded chain data in FK-safe order.
  */
 export async function cleanupChainData(data: SeededChainData): Promise<void> {
@@ -232,12 +276,29 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .from(schema.creditBatches)
         .where(eq(schema.creditBatches.facilityId, data.facility.id));
       if (facilityBatches.length > 0) {
+        const batchIds = facilityBatches.map((b) => b.id);
+        // Certifier sync events and submissions reference credit batches by
+        // uuid (no FK constraint), but stale rows would accumulate across
+        // test runs. Sweep them first so the spec is idempotent.
+        await tx
+          .delete(schema.certifierSyncEvents)
+          .where(
+            inArray(schema.certifierSyncEvents.entityId, batchIds)
+          );
+        await tx
+          .delete(schema.certificationSubmissions)
+          .where(
+            inArray(
+              schema.certificationSubmissions.localEntityId,
+              batchIds
+            )
+          );
         await tx
           .delete(schema.creditBatchApplications)
           .where(
             inArray(
               schema.creditBatchApplications.creditBatchId,
-              facilityBatches.map((b) => b.id)
+              batchIds
             )
           );
         await tx
@@ -407,6 +468,12 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.suppliers)
         .where(eq(schema.suppliers.id, data.supplier.id));
+
+      // Certifier projects FK to facility — must clear before the facility
+      // delete or PG raises "violates foreign key constraint".
+      await tx
+        .delete(schema.certifierProjects)
+        .where(eq(schema.certifierProjects.facilityId, data.facility.id));
 
       // Facility (must be last — everything references it)
       await tx

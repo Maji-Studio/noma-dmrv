@@ -84,7 +84,9 @@ function PanelBody({
 
   if (error || !data) {
     if (error) {
-      console.error("CertifyPanel: failed to load context", error);
+      console.error(
+        `CertifyPanel: failed to load context for creditBatchId=${creditBatchId}`,
+      );
     }
     return (
       <p className="body-small text-[var(--color-signal-red)]">
