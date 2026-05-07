@@ -108,7 +108,10 @@ test.describe("Facility ↔ Isometric project mapping", () => {
       await closeSideSheet(page);
 
       const rows = await db
-        .select({ id: schema.certifierProjects.id })
+        .select({
+          id: schema.certifierProjects.id,
+          facilityId: schema.certifierProjects.facilityId,
+        })
         .from(schema.certifierProjects)
         .where(
           and(
@@ -116,24 +119,7 @@ test.describe("Facility ↔ Isometric project mapping", () => {
             eq(schema.certifierProjects.externalProjectId, sharedProjectId),
           ),
         );
-      const linkedFacilityIds = new Set(
-        (
-          await db
-            .select({
-              facilityId: schema.certifierProjects.facilityId,
-            })
-            .from(schema.certifierProjects)
-            .where(
-              and(
-                eq(schema.certifierProjects.provider, "isometric"),
-                eq(
-                  schema.certifierProjects.externalProjectId,
-                  sharedProjectId,
-                ),
-              ),
-            )
-        ).map((row) => row.facilityId),
-      );
+      const linkedFacilityIds = new Set(rows.map((row) => row.facilityId));
       expect(rows.length).toBeGreaterThanOrEqual(2);
       expect(linkedFacilityIds.has(facilityF1.id)).toBe(true);
       expect(linkedFacilityIds.has(facilityF2.id)).toBe(true);
