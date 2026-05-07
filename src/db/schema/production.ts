@@ -9,7 +9,7 @@ import {
   integer,
   jsonb,
 } from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
+import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
@@ -375,3 +375,7 @@ export const productionSamplesRelations = relations(
     }),
   })
 );
+
+export type ProductionRun = InferSelectModel<typeof productionRuns>;
+export type Sample = InferSelectModel<typeof samples>;
+export type ProductionSample = InferSelectModel<typeof productionSamples>;

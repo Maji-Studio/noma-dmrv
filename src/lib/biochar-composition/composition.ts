@@ -74,10 +74,20 @@ export function fromCompositionJsonb(raw: unknown): IngredientBin[] {
   if (!raw || typeof raw !== "object") return [];
   const ingredients = (raw as { ingredients?: unknown }).ingredients;
   if (!Array.isArray(ingredients)) return [];
-  return ingredients.filter(
-    (b): b is IngredientBin =>
-      !!b && typeof b === "object" && typeof (b as IngredientBin).formulationIngredientId === "string",
-  );
+  return ingredients.filter((b): b is IngredientBin => {
+    if (!b || typeof b !== "object") return false;
+    const bin = b as Partial<IngredientBin>;
+    return (
+      typeof bin.formulationIngredientId === "string" &&
+      typeof bin.ingredientName === "string" &&
+      typeof bin.ingredientType === "string" &&
+      (bin.ratio == null || Number.isFinite(bin.ratio)) &&
+      (bin.massKg == null ||
+        (Number.isFinite(bin.massKg) && bin.massKg >= 0)) &&
+      (bin.storageLocationId == null ||
+        typeof bin.storageLocationId === "string")
+    );
+  });
 }
 
 type CreateOpts = { mode: "create" };

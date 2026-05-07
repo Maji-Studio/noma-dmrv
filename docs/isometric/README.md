@@ -19,6 +19,7 @@
 | `simple-implementation-guide.md` | Plain-language implementation notes, derived-vs-stored decisions, and glossary |
 | `condition-registry.md` | Canonical trigger map for `conditional_required` fields |
 | `update-playbook.md` | Repeatable refresh workflow for version bumps |
+| `integration-plan.md` | Phased plan + as-shipped status for the Certify API integration (separate from the requirements KB) |
 | `changes.md` | Local changelog for documentation updates |
 
 ## How To Use
@@ -41,4 +42,6 @@
 ## Freshness
 
 - Last refreshed: 2026-02-11
+- Integration docs refreshed: 2026-05-06 (scope: `integration-plan.md`,
+  `changes.md` only — protocol/source KB unchanged)
 - Source of truth: Isometric Registry URLs in `versions.json`

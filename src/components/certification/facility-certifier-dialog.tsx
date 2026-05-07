@@ -25,7 +25,7 @@ import {
   useIsometricProjectTemplates,
   useSaveFacilityCertifierMapping,
 } from "@/hooks/use-certification";
-import type { FacilityCertifierMapping } from "@/fn/certification";
+import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
 
 interface FacilityCertifierDialogProps {
   isOpen: boolean;

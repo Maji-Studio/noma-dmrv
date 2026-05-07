@@ -175,6 +175,26 @@ Reactor-level is currently used as the process proxy until a dedicated `producti
 
 ---
 
+## Certification (Isometric Certify)
+
+Provider-agnostic persistence for outbound certifier integrations.
+Source: `src/db/schema/certification.ts`.
+
+| Table | Purpose |
+|---|---|
+| `certifier_projects` | Maps a facility to an external certifier project + default removal template. |
+| `certifier_ghg_periods` | Anchors registry reporting periods so a single Isometric project period yields one local statement row. |
+| `certifier_sources` | Provider-agnostic external source mappings (e.g. feedstock-type IDs). |
+| `certification_submissions` | Versioned submission ledger with `lockedAt` + `payloadHash` + `version`. The lock + idempotency primitive for every outbound POST. |
+| `certifier_document_uploads` | Links local `documents` rows to provider-uploaded document IDs. |
+| `certifier_sync_events` | Append-only audit log of every outbound HTTP attempt (request, response, status). Never used as state — debugging/UI only. |
+
+Row-level descriptions live in `docs/schema-overview.md`; the
+integration design (idempotency rules, layered architecture, phase
+status) is documented in `docs/isometric/integration-plan.md`.
+
+---
+
 ## Migration History
 
 This template starts with a clean schema for multi-project applications.
