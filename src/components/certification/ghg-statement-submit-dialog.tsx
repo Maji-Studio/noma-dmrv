@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
-  FormError,
   FormField,
   FormInput,
   FormTextarea,
@@ -17,6 +16,7 @@ import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
 } from "@/schemas/certification";
+import { ProductionConfirmation } from "./production-confirmation";
 
 interface GhgStatementSubmitDialogProps {
   facilityId: string;
@@ -123,17 +123,15 @@ export function GhgStatementSubmitDialog({
           )}
 
           {isProduction && (
-            <div className="flex flex-col">
-              <label className="flex items-start gap-10 body-small text-[var(--color-text-secondary)]">
-                <input
-                  type="checkbox"
-                  className="mt-3"
-                  {...register("confirmProduction")}
-                />
-                <span>Confirm production Isometric submission</span>
-              </label>
-              <FormError message={errors.confirmProduction?.message} />
-            </div>
+            <ProductionConfirmation
+              actionLabel={
+                isResubmit
+                  ? "resubmit this GHG statement to the verifier"
+                  : "submit this GHG statement to the verifier"
+              }
+              registerProps={register("confirmProduction")}
+              errorMessage={errors.confirmProduction?.message}
+            />
           )}
 
           {errors.root?.message && <ServerError message={errors.root.message} />}

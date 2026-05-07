@@ -26,6 +26,7 @@ import {
   useSaveFacilityCertifierMapping,
 } from "@/hooks/use-certification";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
+import { ProductionConfirmation } from "./production-confirmation";
 
 interface FacilityCertifierDialogProps {
   isOpen: boolean;
@@ -210,18 +211,14 @@ export function FacilityCertifierDialog({
         </FormField>
 
         {isProduction && (
-          <label className="flex items-start gap-12 border border-[var(--color-signal-red)] p-16 bg-[var(--color-background-medium)]">
-            <input
-              type="checkbox"
-              className="mt-4"
-              {...register("confirmProduction")}
-            />
-            <span className="body-small text-[var(--color-text-primary)]">
-              I understand this saves against the{" "}
-              <strong>production</strong> Isometric environment, and any
-              future submissions from this facility will be live.
-            </span>
-          </label>
+          <ProductionConfirmation
+            actionLabel={
+              mapping
+                ? "update this facility's link to the production registry"
+                : "link this facility to the production registry"
+            }
+            registerProps={register("confirmProduction")}
+          />
         )}
 
         <FormActions

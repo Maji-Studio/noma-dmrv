@@ -13,7 +13,7 @@ import {
   useDeleteFacilityCertifierMapping,
   useFacilityCertifierMapping,
 } from "@/hooks/use-certification";
-import { isometricRegistry } from "@/lib/isometric";
+import { isometricRegistry } from "@/lib/isometric/links";
 import {
   FacilityCertifierDialog,
   UnlinkConfirmDialog,

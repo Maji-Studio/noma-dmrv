@@ -11,6 +11,7 @@ import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
 } from "@/schemas/certification";
+import { ProductionConfirmation } from "./production-confirmation";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -84,14 +85,10 @@ export function GhgStatementCreateDialog({
           </FormField>
 
           {isProduction && (
-            <label className="flex items-start gap-10 body-small text-[var(--color-text-secondary)]">
-              <input
-                type="checkbox"
-                className="mt-3"
-                {...register("confirmProduction")}
-              />
-              <span>Confirm production Isometric creation</span>
-            </label>
+            <ProductionConfirmation
+              actionLabel="create a draft GHG statement"
+              registerProps={register("confirmProduction")}
+            />
           )}
 
           {errors.root?.message && <ServerError message={errors.root.message} />}
