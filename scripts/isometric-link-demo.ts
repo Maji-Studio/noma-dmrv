@@ -4,10 +4,11 @@
  *
  * Usage:
  *   pnpm tsx scripts/isometric-link-demo.ts            # list only
- *   pnpm tsx scripts/isometric-link-demo.ts <facilityId>
+ *   pnpm tsx scripts/isometric-link-demo.ts <facilityId> [projectId]
  *
- * Hard-coded to the Dark Earth Carbon Ltd's Biochar Demo Project so we never
- * accidentally point a facility at the live Sifuri Halisi project.
+ * Defaults to Dark Earth Carbon Ltd's Biochar Demo Project so we never
+ * accidentally point a facility at the live Sifuri Halisi project. Override
+ * with [projectId] or ISOMETRIC_DEMO_PROJECT_ID for sandbox validation.
  */
 import { config } from "dotenv";
 
@@ -20,7 +21,6 @@ async function main(): Promise<void> {
   const { db } = await import("../src/db");
   const { facilities } = await import("../src/db/schema/facilities");
   const { certifierProjects } = await import("../src/db/schema/certification");
-  const { eq, and } = await import("drizzle-orm");
 
   const facilityRows = await db
     .select({ id: facilities.id })
@@ -38,9 +38,15 @@ async function main(): Promise<void> {
   }
 
   const targetFacilityId = process.argv[2];
+  const demoExternalProjectId =
+    process.argv[3] ??
+    process.env.ISOMETRIC_DEMO_PROJECT_ID ??
+    DEMO_EXTERNAL_PROJECT_ID;
+  const demoProjectName =
+    process.env.ISOMETRIC_DEMO_PROJECT_NAME ?? DEMO_PROJECT_NAME;
   if (!targetFacilityId) {
     console.log(
-      "\nNo facility id passed. Re-run with: pnpm tsx scripts/isometric-link-demo.ts <facilityId>"
+      "\nNo facility id passed. Re-run with: pnpm tsx scripts/isometric-link-demo.ts <facilityId> [projectId]"
     );
     process.exit(0);
   }
@@ -65,12 +71,12 @@ async function main(): Promise<void> {
     .filter(
       (p) =>
         p.provider === "isometric" &&
-        p.externalProjectId === DEMO_EXTERNAL_PROJECT_ID
+        p.externalProjectId === demoExternalProjectId
     )
     .map((p) => p.facilityId);
   if (alsoLinkedTo.length > 0) {
     console.log(
-      `Note: demo project ${DEMO_EXTERNAL_PROJECT_ID} is also linked to facility(s): ${alsoLinkedTo.join(", ")}.`
+      `Note: demo project ${demoExternalProjectId} is also linked to facility(s): ${alsoLinkedTo.join(", ")}.`
     );
   }
 
@@ -79,14 +85,14 @@ async function main(): Promise<void> {
     .values({
       facilityId: targetFacilityId,
       provider: "isometric",
-      externalProjectId: DEMO_EXTERNAL_PROJECT_ID,
+      externalProjectId: demoExternalProjectId,
       protocolSlug: "biochar",
-      metadata: { externalProjectName: DEMO_PROJECT_NAME },
+      metadata: { externalProjectName: demoProjectName },
     })
     .returning();
 
   console.log(
-    `\nLinked facility ${facility.id} → ${DEMO_EXTERNAL_PROJECT_ID}`
+    `\nLinked facility ${facility.id} → ${demoExternalProjectId}`
   );
   console.log(`  certifier_projects.id = ${inserted.id}`);
   process.exit(0);
