@@ -2,25 +2,15 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitGhgStatementForFacility } from "@/hooks/use-certification";
 import { useDialog } from "@/hooks/use-dialog";
-
-const submitDialogSchema = z.object({
-  reportUrl: z
-    .string()
-    .url("Enter a valid report URL")
-    .refine((value) => value.startsWith("https://"), {
-      message: "Report URL must use HTTPS",
-    }),
-  summaryOfChanges: z.string().optional(),
-  confirmProduction: z.boolean().optional(),
-});
-
-type SubmitDialogInput = z.infer<typeof submitDialogSchema>;
+import {
+  submitGhgStatementDialogSchema,
+  type SubmitGhgStatementDialogInput,
+} from "@/schemas/certification";
 
 interface GhgStatementSubmitDialogProps {
   facilityId: string;
@@ -43,20 +33,20 @@ export function GhgStatementSubmitDialog({
   const mutation = useSubmitGhgStatementForFacility();
   const toast = useToast();
   const schema = isResubmit
-    ? submitDialogSchema.refine(
+    ? submitGhgStatementDialogSchema.refine(
         (value) => !!value.summaryOfChanges?.trim(),
         {
           path: ["summaryOfChanges"],
           message: "Summary of changes is required",
         },
       )
-    : submitDialogSchema;
+    : submitGhgStatementDialogSchema;
   const {
     register,
     handleSubmit,
     formState: { errors },
     setError,
-  } = useForm<SubmitDialogInput>({
+  } = useForm<SubmitGhgStatementDialogInput>({
     resolver: zodResolver(schema),
     defaultValues: {
       reportUrl: "",

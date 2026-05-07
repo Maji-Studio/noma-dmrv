@@ -3,6 +3,13 @@ import { emptyToNull } from "@/schemas/helpers";
 
 const DATE_PART_PAD_LENGTH = 2;
 
+const httpsUrlSchema = z
+  .string()
+  .url("Enter a valid report URL")
+  .refine((value) => value.startsWith("https://"), {
+    message: "Report URL must use HTTPS",
+  });
+
 export const saveMappingSchema = z.object({
   facilityId: z.string().uuid(),
   externalProjectId: z.string().min(1, "Pick an Isometric project"),
@@ -38,14 +45,19 @@ export type CreateGhgStatementInput = z.infer<
   typeof createGhgStatementSchema
 >;
 
+export const submitGhgStatementDialogSchema = z.object({
+  reportUrl: httpsUrlSchema,
+  summaryOfChanges: z.string().optional(),
+  confirmProduction: z.boolean().optional(),
+});
+
+export type SubmitGhgStatementDialogInput = z.infer<
+  typeof submitGhgStatementDialogSchema
+>;
+
 export const submitGhgStatementSchema = z.object({
   submissionId: z.string().uuid(),
-  reportUrl: z
-    .string()
-    .url("Enter a valid report URL")
-    .refine((value) => value.startsWith("https://"), {
-      message: "Report URL must use HTTPS",
-    }),
+  reportUrl: httpsUrlSchema,
   summaryOfChanges: emptyToNull.or(z.string().min(1)).nullable().optional(),
   confirmProduction: z.boolean().optional(),
 });

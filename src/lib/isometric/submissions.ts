@@ -1,6 +1,10 @@
 import { isometric } from "./client";
 import type { components } from "./generated/certify";
 
+// Reconciliation lookups stop after the first hit, so request the smallest
+// page the API allows.
+const SUPPLIER_REF_LOOKUP_PAGE_SIZE = 1;
+
 export type CreateDatapointRequest =
   components["schemas"]["CreateDatapointRequest"];
 export type Datapoint = components["schemas"]["Datapoint"];
@@ -36,7 +40,7 @@ async function findBySupplierRef<T>(
 ): Promise<T | null> {
   for await (const node of isometric.paginate<T>(path, {
     query: { supplier_reference_id: ref },
-    pageSize: 1,
+    pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
   })) {
     return node;
   }
