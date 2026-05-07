@@ -19,6 +19,59 @@ protocol requirements; pull SOPs/docs; submit GHG statements for verification.
 **Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
 Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
 
+## Status snapshot (2026-05-06)
+
+**Shipped:** Phases 0–4 read paths, plus the Phase 3 write path
+end-to-end. Sandbox is wired up (`api.sandbox.isometric.com`,
+project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
+`tests/isometric-sandbox.integration.test.ts`.
+
+**Outstanding:**
+
+- *Blocked on Isometric* — webhook contract publication; multi-org
+  credentials roadmap (Q3 below). Tracked in `docs/open-questions.md`.
+- *Blocked on configuration in the Isometric template editor* —
+  `phase-3-input-coverage` (21 unmapped monitored inputs on sandbox
+  templates) and `phase-3-fixed-constants` (~12 unbound constants).
+  Either author a noma-tailored sandbox template or pre-bind the
+  current ones; both are one-time work.
+- *Blocked on a noma subsystem* — `phase-3.5` source-upload
+  presigned-URL flow waits on the documents subsystem getting a real
+  S3 backend.
+- *Deferred until production signal* — `phase-4` per-Datapoint
+  sub-ledger, PATCH-vs-supersede branch, LIST inputs with multiple
+  datapoints; `phase-5` external GHG amendment claiming and
+  hash-changed partial-orphan cleanup. All in
+  `docs/open-questions.md`.
+- *Not yet started* — Phase 5 (time-series + bulk:
+  `MonitoringSubmission`, `DataUploadSubmission`,
+  `POST /biochar_applications`); Phase 6 (Protocol/SOP surfacing).
+- ~~*Carryover* — `tests/e2e/facility-certifier-mapping.spec.ts` from
+  Phase 1 verification.~~ ✅ Landed 2026-05-07. Two tests: N→1 mapping
+  through the side-sheet view-mode UI, and unlink-refused with the
+  exact `SafeError` surfaced in `UnlinkConfirmDialog`. Both run as a
+  read-only sandbox-backed E2E (gated behind
+  `ISOMETRIC_DEMO_PROJECT_ID`; `test.skip` otherwise).
+
+**Resolved this session:** Open-question Q1 (no `metadata` field on
+Datapoint/Removal/Source — `supplier_reference_id` is the round-trip
+mechanism) and Q2 (`PATCH /datapoints` accepts `source_ids`, so
+Phase 3.5 doesn't need a two-phase commit). See "Open questions"
+section at the bottom for citations.
+
+**Hardening pass (2026-05-06):** Closed the certifier-mapping race in
+`submitCreditBatch` and `createGhgStatementForFacility`. Both flows
+now route through `insertDraftSubmissionWithMappingLock` /
+`resetSubmissionToDraftWithMappingLock` (`data-access/certification.ts`),
+which lock the `certifier_projects` row and verify
+`(externalProjectId, defaultRemovalTemplateId)` before writing the
+draft submission. Concurrent `unlink`/`repoint` either blocks the
+in-flight submission or fails it cleanly. Unit-tested in
+`tests/isometric-mapping-lock.test.ts`. Same pass also gated
+`tests/isometric-sandbox.integration.test.ts` behind
+`RUN_ISOMETRIC_SANDBOX_TESTS=1` (run via `pnpm test:integration`)
+so plain `pnpm test` no longer touches the live sandbox.
+
 ## Reuse what already exists
 
 These files dictate the design — none of them existed in my first draft and
@@ -581,21 +634,32 @@ REJECTED, and surface registry feedback back to operators.
 **Explicitly deferred (Phase 5+):**
 - Webhook ingestion. `certifierProjects.webhookSecret` exists in the
   schema, but `src/app/api/certification/webhook/route.ts` is **not**
-  built. Status polling via `refreshGhgStatementStatus` is the current
-  reconciliation surface. (Tracked separately in
-  `docs/open-questions.md` under the Phase 4/5 deferrals.)
+  built — and cannot be built today: Certify's OpenAPI spec declares
+  `export type webhooks = Record<string, never>;`
+  (`src/lib/isometric/generated/certify.d.ts:1175`) and no webhook
+  topic exists at `https://docs.isometric.com`, so we have no
+  authoritative event payload, signature header, or HMAC algorithm
+  to verify against. Status polling via `refreshGhgStatementStatus`
+  is the current reconciliation surface. Tracked in
+  `docs/open-questions.md` → `isometric-webhook-contract`; resolves
+  once Isometric publishes (or shares via support) the webhook
+  contract.
 - noma-driven PATCH orchestration for Removals — every payload change
   currently supersedes (creates a new version). PATCH branch deferred.
 - Automatic resubmission — manual button only.
 - External amendment claiming for registry-side statement-version
   drafts (admin edits made directly in the Isometric UI).
 
-### Phase 5 — Time-series + bulk paths (deferred)
+### Phase 5 — Time-series + bulk paths (not started)
 
 `MonitoringSubmission`, `DataUploadSubmission`, biochar-specific
-`POST /biochar_applications`. Skip until Phase 3/4 is stable in production.
+`POST /biochar_applications`. Skip until Phase 3/4 is stable in
+production. Phase 5 also owns the carryover items consolidated in
+`docs/open-questions.md` (webhook receiver once Isometric publishes a
+contract, external GHG amendment claiming, hash-changed partial-orphan
+cleanup).
 
-### Phase 6 — Protocol/SOP surfacing (orthogonal)
+### Phase 6 — Protocol/SOP surfacing (orthogonal, not started)
 
 The Certify API does not expose protocol-compliance rules. Two paths:
 
@@ -689,19 +753,18 @@ The Certify API does not expose protocol-compliance rules. Two paths:
   `certifier_projects_facility_provider_unique` remains on the table.
   Live API helpers smoke-tested — demo project returns 2 templates
   (`Protocol default`, `Biochar`). `tsc --noEmit` and `pnpm lint`
-  pass. *To do:* `tests/e2e/facility-certifier-mapping.spec.ts` —
-  seed two facilities, link both to the demo project via the UI,
-  assert two `certifier_projects` rows with the same
-  `externalProjectId`; insert a fake `creditBatch` +
-  `certificationSubmissions` and assert unlink is refused with
-  the `SafeError` message.
+  pass. `tests/e2e/facility-certifier-mapping.spec.ts` shipped
+  2026-05-07 with two tests (N→1 mapping rendered in the side-sheet
+  view mode; unlink refused with the `SafeError` surfaced in
+  `UnlinkConfirmDialog`). Both gated on `ISOMETRIC_DEMO_PROJECT_ID`
+  via `test.skip`.
 - **Phase 2 (✅):** open a credit-batch side sheet — Certify accordion
   renders the facility's project + default removal template + the
   component blueprints that template references. Drift cases (stale
   template ID, missing blueprint keys) render distinct warnings.
-  `tsc --noEmit` and `pnpm lint` pass. *To do:* light E2E in
-  `tests/e2e/credit-batches.spec.ts` asserting the not-linked empty
-  state copy is visible.
+  `tsc --noEmit` and `pnpm lint` pass. Not-linked empty-state E2E
+  delivered as `tests/e2e/certification-submit.spec.ts` (lives next
+  to the credit-batch spec rather than inside it; same coverage).
 - **Phase 3 (✅):** `submitCreditBatch` ships and produces a real Removal
   with linked Datapoints in Certify. Idempotency verified by re-clicking
   Submit (no-op on matched payload hash) and by mutating the batch
@@ -710,26 +773,56 @@ The Certify API does not expose protocol-compliance rules. Two paths:
   `tests/isometric-submission-claim.test.ts` (18 cases — full claim
   decision matrix), `tests/isometric-transformers.test.ts` (14 cases —
   `INPUT_MAPPING` happy paths + drift / unit / null guards, removal
-  scalar-vs-list branching, and ISO-date formatting). *To do:* a
-  credit-batch E2E (`tests/e2e/certification-submit.spec.ts`).
+  scalar-vs-list branching, and ISO-date formatting),
+  `tests/isometric-certify-context.test.ts` (5 cases — every branch of
+  `loadCertifyContextForCreditBatchForUser`: unlinked, no-default,
+  drift, unresolved-blueprint, fully-resolved), and
+  `tests/e2e/certification-submit.spec.ts` (Certify-panel rendering
+  smoke for the not-linked credit-batch state, no Isometric calls
+  required). *Still deferred:* a happy-path Removal-submit E2E that
+  exercises `submitCreditBatch` end-to-end. Sandbox is now reachable
+  (project `prj_1K9YJ33RKSBX9FFF`), but template input coverage gaps
+  block the write path (`docs/open-questions.md` →
+  `phase-3-input-coverage`, `phase-3-fixed-constants`).
 - **Phase 4 (✅, webhook deferred):** GHG-statement create / submit /
   refresh / resubmit ship via the `/certification` page. Tests
   delivered: `tests/isometric-ghg-statement-flow.test.ts` (state
   machine), `tests/isometric-reconciliation.test.ts` (stale-lock
   recovery + DRAFT filter), `tests/e2e/certification-page.spec.ts`
-  (page smoke). *To do once webhook ships:* HMAC verification +
-  reconciliation test.
+  (page smoke). Webhook ingestion stays deferred (no published
+  Certify webhook contract); see `docs/open-questions.md` →
+  `isometric-webhook-contract`. HMAC verification + reconciliation
+  tests will land alongside the receiver once a contract exists.
 
 ## Open questions (not blocking Phase 0)
 
-1. Does Certify support a metadata field on POSTed entities that lets us
-   round-trip a client nonce for reconciliation lookups? If not, design an
-   alternative fingerprint (timestamp + entity-code search). Verify via
-   `openapi_documents_get_object` for `Removal`/`Datapoint`/`Source`.
-2. Sources upload order: must `Source` be uploaded (presigned URL flow)
-   *before* the `Datapoint` that references it, or can it be attached later?
-   Affects whether the orchestrator needs a true two-phase commit. Read
-   `user-guides/certify/key-certify-concepts`.
+1. ~~Does Certify support a metadata field on POSTed entities that lets us
+   round-trip a client nonce for reconciliation lookups?~~ **Resolved
+   2026-05-06.** No free-form metadata column exists on `Datapoint`,
+   `Removal`, or `Source` (verified against
+   `src/lib/isometric/generated/certify.d.ts:2167,3147,3362`). The
+   authoritative round-trip mechanism is `supplier_reference_id` —
+   already in use via `src/lib/isometric/utils/supplier-ref.ts` and the
+   `findRemovalBySupplierRef` / `findDatapointBySupplierRef` lookups in
+   `src/lib/isometric/submissions.ts`. No alternative fingerprint
+   needed.
+2. ~~Sources upload order: must `Source` be uploaded *before* the
+   `Datapoint` that references it, or can it be attached later?~~
+   **Resolved 2026-05-06.** Sources can be attached after the fact.
+   `PATCH /datapoints/{id}` accepts `source_ids` with semantics
+   "Overwrite existing source IDs"
+   (`src/lib/isometric/generated/certify.d.ts:2843`), and Isometric's
+   docs confirm "Verifiers are not notified when new sources are added
+   to datapoints in a submitted removal, but they will immediately
+   have access"
+   (`https://docs.isometric.com/user-guides/certify/key-certify-concepts`).
+   The Phase 3 orchestrator's current "POST Datapoint with
+   `source_ids: []` first" pattern remains correct; Phase 3.5 will
+   PATCH to attach uploaded sources without needing a two-phase commit
+   or re-creating Removals. Note: any AI summary here is
+   non-authoritative — the linked Isometric URL is the source of
+   truth.
 3. Multi-org credentials within 12 months? If yes, `client.ts` should already
    accept credentials as a constructor argument so a future per-facility-creds
-   refactor is cheap. Plan assumes single-org for now.
+   refactor is cheap. Plan assumes single-org for now. *Status: still
+   open — only Isometric's product roadmap can answer.*

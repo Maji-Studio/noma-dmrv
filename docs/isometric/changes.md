@@ -1,5 +1,65 @@
 # Isometric Docs Change Log
 
+## 2026-05-07 (Phase 1 carryover E2E)
+
+- **`tests/e2e/facility-certifier-mapping.spec.ts`.** Two-test
+  Playwright spec covering the Phase 1 deferrals: N facilities → one
+  Isometric project (proves the dropped
+  `certifier_projects_provider_external_unique` constraint
+  end-to-end through the side-sheet view-mode UI), and unlink
+  refused with the exact `SafeError`
+  ("Cannot unlink: this facility has certifier submissions.
+  Supersede or reject them first.") surfaced in
+  `UnlinkConfirmDialog`.
+- DB-seeded preconditions, UI-driven assertions: `certifierProjects`
+  (and a `creditBatches` + `certificationSubmissions` pair for the
+  unlink case) inserted directly via Drizzle so the spec doesn't
+  drive the link/edit dialog and doesn't perform Isometric writes.
+  The loader's `listProjects` + `listRemovalTemplates` reads still
+  fire — sandbox project ID is required.
+- **Skip gate.** Reads `ISOMETRIC_DEMO_PROJECT_ID` from
+  `process.env`; `test.skip` if absent. Loads `.env.local` from the
+  spec file (Playwright's harness only reads `.env.test`).
+- Recorded `ISOMETRIC_DEMO_PROJECT_ID=prj_1K9YJ33RKSBX9FFF` in
+  local `.env.local` so `pnpm test:e2e
+  tests/e2e/facility-certifier-mapping.spec.ts` runs the spec by
+  default; CI without the var skips cleanly.
+- Verified twice in succession (idempotent cleanup); `pnpm
+  typecheck` and `pnpm lint` pass with no new warnings.
+
+## 2026-05-06 (Simplify pass — race fix + sandbox test gating)
+
+- **Certifier mapping race in `submitCreditBatch`.** Added
+  `insertDraftSubmissionWithMappingLock` and
+  `resetSubmissionToDraftWithMappingLock` in `data-access/certification.ts`.
+  Each opens a transaction, takes `SELECT ... FOR UPDATE` on the
+  `certifier_projects` row keyed by `(facilityId, provider)`, and verifies
+  the locked row still matches the `expectedExternalProjectId` (and, for
+  Removals, the `expectedDefaultRemovalTemplateId`) the orchestrator
+  observed when it built the payload. Both `submitCreditBatch` and
+  `createGhgStatementForFacility` now use these variants. The lock
+  serializes against the `unlink`/`repoint` paths in
+  `upsertCertifierProject` / `deleteCertifierProject`, so a concurrent
+  remap either blocks the in-flight submission or fails it cleanly with
+  no `certification_submissions` row written.
+- **Live sandbox tests are now opt-in.** `tests/isometric-sandbox.integration.test.ts`
+  also requires `RUN_ISOMETRIC_SANDBOX_TESTS=1`, on top of the existing
+  `ISOMETRIC_*` env preconditions. `pnpm test` skips the file by default;
+  use `pnpm test:integration` (sets the env var and includes only
+  `tests/**/*.integration.test.ts`) to exercise it. This stops accidental
+  hits on the live sandbox during plain `pnpm test`.
+- **Internal simplifications.** `submit-credit-batch.ts` now uses a single
+  `createOrReconcile` helper for both the datapoint loop and the removal
+  POST, replacing two duplicated try/reconcile/log paths.
+  `submissions.ts` consolidated `findRemovalBySupplierRef` /
+  `findDatapointBySupplierRef` onto a shared `findBySupplierRef` helper.
+  `utils/supplier-ref.ts` now names the slug-length constants instead of
+  inlining magic numbers.
+- **New unit tests** (`tests/isometric-mapping-lock.test.ts`) cover the
+  three mapping-lock failure paths (missing row, repointed
+  externalProjectId, changed defaultRemovalTemplateId) and both happy
+  paths (insert-draft + reset-to-draft).
+
 ## 2026-05-06 (Sandbox validation pass)
 
 - **Scope:** First validation pass against the Isometric Certify sandbox
