@@ -16,6 +16,7 @@ import {
   useCreditBatchSubmissionState,
   useSubmitCreditBatch,
 } from "@/hooks/use-certification";
+import { isometricDocs, isometricRegistry } from "@/lib/isometric";
 import { BlueprintList } from "./blueprint-list";
 import { Field, Section } from "./panel-layout";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -128,6 +129,14 @@ function PanelBody({
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {mapping.externalProjectId}
           </span>
+          <a
+            href={isometricRegistry.project(mapping.externalProjectId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+          >
+            View on Isometric ↗
+          </a>
         </Field>
         <Field label="Default removal template">
           {defaultTemplate ? (
@@ -169,9 +178,19 @@ function PanelBody({
 
       {defaultTemplate && (
         <div className="flex flex-col gap-12">
-          <h4 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Component blueprints required by this template
-          </h4>
+          <div className="flex items-center justify-between gap-12">
+            <h4 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+              Component blueprints required by this template
+            </h4>
+            <a
+              href={isometricDocs.componentBlueprints}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+            >
+              Learn about component blueprints ↗
+            </a>
+          </div>
           {unresolvedBlueprintKeys.length > 0 && (
             <Warning>
               {unresolvedBlueprintKeys.length} blueprint

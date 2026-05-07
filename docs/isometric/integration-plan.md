@@ -659,17 +659,27 @@ production. Phase 5 also owns the carryover items consolidated in
 contract, external GHG amendment claiming, hash-changed partial-orphan
 cleanup).
 
-### Phase 6 — Protocol/SOP surfacing (orthogonal, not started)
+### Phase 6 — Protocol/SOP surfacing (deferred indefinitely; outbound links shipped)
 
-The Certify API does not expose protocol-compliance rules. Two paths:
+The Certify API does not expose protocol-compliance rules. Three paths
+were on the table:
 
-- **Build-time snapshot (recommended):** extend the existing
+- **Build-time snapshot:** extend the
   `docs/isometric/update-playbook.md` workflow to dump SOP markdown into
-  `public/isometric-sops/` for in-app reference. No runtime MCP dependency.
+  `public/isometric-sops/` for in-app reference.
 - **Runtime via MCP:** a server action that calls
   `mcp__claude_ai_isometric__protocols_get_content` /
-  `isometric_docs_get`. Only viable if the MCP server is reachable from the
-  Next.js runtime — confirm before committing.
+  `isometric_docs_get`. Only viable if the MCP server is reachable from
+  the Next.js runtime.
+- **Outbound links (chosen 2026-05-07):** plain `<a target="_blank">`
+  links from the Certify UI to authoritative pages on
+  `registry.isometric.com` and `docs.isometric.com`. Shipped via
+  `src/lib/isometric/links.ts` (URL builders) plus link additions in
+  `facility-certifier-section.tsx`, `certify-panel.tsx`, and
+  `certification-page.tsx`. Zero ongoing maintenance, no new
+  dependencies, no new routes. Snapshot/runtime paths above are
+  deferred indefinitely; revisit only if operators report that
+  external tab-switching is a real friction point.
 
 ## What to deliberately NOT do (lessons from varuna AND this review)
 

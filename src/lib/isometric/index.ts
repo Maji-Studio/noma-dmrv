@@ -72,4 +72,5 @@ export {
   type ResolvedTemplateInput,
   type MissingInput,
 } from "./utils/aggregation";
+export { isometricRegistry, isometricDocs } from "./links";
 export type { paths, components, operations } from "./generated/certify";

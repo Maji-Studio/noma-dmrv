@@ -199,12 +199,12 @@ export function FacilityCertifierDialog({
           id="protocolVersion"
           label="Protocol version"
           error={errors.protocolVersion?.message}
-          helperText="Optional. Free-form (e.g., Biochar v1.2)."
+          helperText="Optional. Use the registry minor version, e.g. 1.2."
         >
           <FormInput
             id="protocolVersion"
             error={!!errors.protocolVersion}
-            placeholder="Biochar v1.2"
+            placeholder="1.2"
             {...register("protocolVersion")}
           />
         </FormField>
