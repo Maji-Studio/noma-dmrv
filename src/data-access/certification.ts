@@ -10,9 +10,10 @@ import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { requireAuth } from "./utils";
 
-export const LOCK_TTL_MS = 10 * 60 * 1000;
+export { LOCK_TTL_MS };
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;

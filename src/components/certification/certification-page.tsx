@@ -10,11 +10,10 @@ import {
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStatusBadge } from "./submission-status-badge";
-
-const SUBMISSION_LOCK_TTL_MS = 10 * 60 * 1000;
 
 type StatementRow = NonNullable<
   ReturnType<typeof useFacilityCertificationOverview>["data"]
@@ -393,6 +392,6 @@ function isLockedInFlight(row: CertificationSubmissionRow): boolean {
   const lockedAtMs = row.lockedAt?.getTime() ?? 0;
   return (
     row.status === "draft" &&
-    Date.now() - lockedAtMs < SUBMISSION_LOCK_TTL_MS
+    Date.now() - lockedAtMs < LOCK_TTL_MS
   );
 }
