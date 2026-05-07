@@ -81,8 +81,7 @@ export function FacilityCertifierDialog({
     ) {
       setValue("defaultRemovalTemplateId", "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedProjectId]);
+  }, [watchedProjectId, mapping?.externalProjectId, setValue]);
 
   const linkedFacilitiesByProject = (() => {
     const map = new Map<string, string[]>();

@@ -146,6 +146,42 @@ export default async function globalTeardown() {
         )
       `);
 
+      // ─── Certifier sync events + submissions for E2E credit batches ───
+      // No FK constraint to credit_batches (entity_id / local_entity_id are
+      // plain uuid), but stale rows would accumulate across runs. Sweep
+      // before the credit_batches delete so the local_entity_id values can
+      // still be resolved.
+      await client.query(`
+        DELETE FROM certifier_sync_events
+        WHERE entity_type = 'creditBatch'
+          AND entity_id IN (
+            SELECT id FROM credit_batches
+            WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+          )
+      `);
+      await client.query(`
+        DELETE FROM certification_submissions
+        WHERE local_entity_type = 'creditBatch'
+          AND local_entity_id IN (
+            SELECT id FROM credit_batches
+            WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+          )
+      `);
+
       // ─── Credit batches ───
       // Delete by code prefix AND by facility reference (UI-created batches have auto-generated codes)
       await client.query(`
@@ -355,6 +391,18 @@ export default async function globalTeardown() {
                 SELECT id FROM facilities
                 WHERE name LIKE 'UI %' OR name LIKE 'Chain %' OR name LIKE 'Duplicate Test %'
               )
+      `);
+
+      // ─── Certifier projects (FK to facilities) ───
+      await client.query(`
+        DELETE FROM certifier_projects
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
       `);
 
       // ─── Facilities ───

@@ -10,9 +10,10 @@ import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { requireAuth } from "./utils";
 
-export const LOCK_TTL_MS = 10 * 60 * 1000;
+export { LOCK_TTL_MS };
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
@@ -98,6 +99,54 @@ export async function listAllFacilitiesLinkedByProvider(
     .where(eq(certifierProjects.provider, provider));
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function hasBlockingFacilitySubmission(
+  executor: Tx | typeof db,
+  facilityId: string,
+  provider: CertifierProvider,
+  externalProjectId: string | null,
+): Promise<boolean> {
+  const [blockingRemoval] = await executor
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .innerJoin(
+      creditBatches,
+      eq(certificationSubmissions.localEntityId, creditBatches.id),
+    )
+    .where(
+      and(
+        eq(certificationSubmissions.provider, provider),
+        eq(certificationSubmissions.localEntityType, "creditBatch"),
+        eq(creditBatches.facilityId, facilityId),
+      ),
+    )
+    .limit(1);
+  if (blockingRemoval) return true;
+  if (!externalProjectId) return false;
+
+  const [blockingGhgStatement] = await executor
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .innerJoin(
+      certifierGhgPeriods,
+      and(
+        eq(certificationSubmissions.localEntityId, certifierGhgPeriods.id),
+        eq(certificationSubmissions.provider, certifierGhgPeriods.provider),
+      ),
+    )
+    .where(
+      and(
+        eq(certificationSubmissions.provider, provider),
+        eq(certificationSubmissions.localEntityType, "ghgPeriod"),
+        eq(certificationSubmissions.submissionType, "ghg_statement"),
+        eq(certifierGhgPeriods.externalProjectId, externalProjectId),
+      ),
+    )
+    .limit(1);
+  return Boolean(blockingGhgStatement);
+}
+
 export async function upsertCertifierProject(
   userId: string,
   input: UpsertCertifierProjectInput,
@@ -113,22 +162,50 @@ export async function upsertCertifierProject(
     metadata: input.metadata ?? null,
   };
 
-  const [row] = await db
-    .insert(certifierProjects)
-    .values(values)
-    .onConflictDoUpdate({
-      target: [certifierProjects.facilityId, certifierProjects.provider],
-      set: {
-        externalProjectId: values.externalProjectId,
-        protocolSlug: values.protocolSlug,
-        protocolVersion: values.protocolVersion,
-        defaultRemovalTemplateId: values.defaultRemovalTemplateId,
-        metadata: values.metadata,
-        updatedAt: sql`now()`,
-      },
-    })
-    .returning();
-  return row;
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(certifierProjects)
+      .where(
+        and(
+          eq(certifierProjects.facilityId, input.facilityId),
+          eq(certifierProjects.provider, input.provider),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (existing && existing.externalProjectId !== values.externalProjectId) {
+      const blocked = await hasBlockingFacilitySubmission(
+        tx,
+        input.facilityId,
+        input.provider,
+        existing.externalProjectId,
+      );
+      if (blocked) {
+        throw new SafeError(
+          "Cannot repoint: this facility has certifier submissions. Supersede or reject them first.",
+        );
+      }
+    }
+
+    const [row] = await tx
+      .insert(certifierProjects)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [certifierProjects.facilityId, certifierProjects.provider],
+        set: {
+          externalProjectId: values.externalProjectId,
+          protocolSlug: values.protocolSlug,
+          protocolVersion: values.protocolVersion,
+          defaultRemovalTemplateId: values.defaultRemovalTemplateId,
+          metadata: values.metadata,
+          updatedAt: sql`now()`,
+        },
+      })
+      .returning();
+    return row;
+  });
 }
 
 export async function deleteCertifierProject(
@@ -138,39 +215,47 @@ export async function deleteCertifierProject(
 ): Promise<void> {
   requireAuth(userId);
 
-  // Unlink guard: refuse if any credit batch from this facility has been
-  // submitted to the certifier. Phase 3 will be the first writer; this guard
-  // expands as additional submission types come online.
-  const [blocking] = await db
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .innerJoin(
-      creditBatches,
-      eq(certificationSubmissions.localEntityId, creditBatches.id),
-    )
-    .where(
-      and(
-        eq(certificationSubmissions.provider, provider),
-        eq(certificationSubmissions.localEntityType, "creditBatch"),
-        eq(creditBatches.facilityId, facilityId),
-      ),
-    )
-    .limit(1);
+  await db.transaction(async (tx) => {
+    // Lock the mapping row so a concurrent submission insert that depends on
+    // this mapping cannot race the unlink check.
+    const [existing] = await tx
+      .select({
+        id: certifierProjects.id,
+        externalProjectId: certifierProjects.externalProjectId,
+      })
+      .from(certifierProjects)
+      .where(
+        and(
+          eq(certifierProjects.facilityId, facilityId),
+          eq(certifierProjects.provider, provider),
+        ),
+      )
+      .for("update")
+      .limit(1);
 
-  if (blocking) {
-    throw new SafeError(
-      "Cannot unlink: this facility has credit batch submissions on the certifier. Supersede or reject them first.",
+    // Unlink guard: refuse if any facility-scoped or project-scoped certifier
+    // submission depends on this mapping.
+    const blocked = await hasBlockingFacilitySubmission(
+      tx,
+      facilityId,
+      provider,
+      existing?.externalProjectId ?? null,
     );
-  }
+    if (blocked) {
+      throw new SafeError(
+        "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.",
+      );
+    }
 
-  await db
-    .delete(certifierProjects)
-    .where(
-      and(
-        eq(certifierProjects.facilityId, facilityId),
-        eq(certifierProjects.provider, provider),
-      ),
-    );
+    await tx
+      .delete(certifierProjects)
+      .where(
+        and(
+          eq(certifierProjects.facilityId, facilityId),
+          eq(certifierProjects.provider, provider),
+        ),
+      );
+  });
 }
 
 export async function getOrCreateGhgPeriod(
@@ -459,6 +544,91 @@ export async function insertDraftSubmission(
   }
 }
 
+export interface MappingClaimGuard {
+  facilityId: string;
+  provider: CertifierProvider;
+  expectedExternalProjectId: string;
+  expectedDefaultRemovalTemplateId?: string | null;
+}
+
+async function lockAndVerifyMapping(
+  executor: Tx,
+  guard: MappingClaimGuard,
+): Promise<void> {
+  const [current] = await executor
+    .select({
+      externalProjectId: certifierProjects.externalProjectId,
+      defaultRemovalTemplateId: certifierProjects.defaultRemovalTemplateId,
+    })
+    .from(certifierProjects)
+    .where(
+      and(
+        eq(certifierProjects.facilityId, guard.facilityId),
+        eq(certifierProjects.provider, guard.provider),
+      ),
+    )
+    .for("update")
+    .limit(1);
+
+  if (!current) {
+    throw new SafeError(
+      "Facility is no longer linked to a certifier project. Re-link in facility settings before submitting.",
+    );
+  }
+  if (current.externalProjectId !== guard.expectedExternalProjectId) {
+    throw new SafeError(
+      "Facility was repointed to a different certifier project mid-submission. Refresh and retry.",
+    );
+  }
+  if (
+    guard.expectedDefaultRemovalTemplateId !== undefined &&
+    current.defaultRemovalTemplateId !== guard.expectedDefaultRemovalTemplateId
+  ) {
+    throw new SafeError(
+      "Facility's default removal template changed mid-submission. Refresh and retry.",
+    );
+  }
+}
+
+export async function insertDraftSubmissionWithMappingLock(
+  userId: string,
+  input: InsertDraftSubmissionInput,
+  guard: MappingClaimGuard,
+): Promise<CertificationSubmissionRow> {
+  requireAuth(userId);
+  try {
+    return await db.transaction(async (tx) => {
+      await lockAndVerifyMapping(tx, guard);
+      const [row] = await tx
+        .insert(certificationSubmissions)
+        .values({
+          provider: input.provider,
+          submissionType: input.submissionType,
+          localEntityType: input.localEntityType,
+          localEntityId: input.localEntityId,
+          version: input.version,
+          status: "draft",
+          payloadSnapshot: input.payloadSnapshot as Record<string, unknown>,
+          payloadHash: input.payloadHash,
+          lockedAt: sql`now()`,
+          metadata: (input.metadata ?? null) as Record<string, unknown> | null,
+        })
+        .returning();
+      return row;
+    });
+  } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code?: string }).code === "23505"
+    ) {
+      throw new SafeError("Submission already in progress");
+    }
+    throw err;
+  }
+}
+
 export async function markSubmissionSubmitted(
   userId: string,
   id: string,
@@ -523,6 +693,29 @@ export async function resetSubmissionToDraft(
     .returning();
   if (!row) throw new SafeError("Submission not found");
   return row;
+}
+
+export async function resetSubmissionToDraftWithMappingLock(
+  userId: string,
+  id: string,
+  guard: MappingClaimGuard,
+): Promise<CertificationSubmissionRow> {
+  requireAuth(userId);
+  return db.transaction(async (tx) => {
+    await lockAndVerifyMapping(tx, guard);
+    const [row] = await tx
+      .update(certificationSubmissions)
+      .set({
+        status: "draft",
+        lockedAt: sql`now()`,
+        updatedAt: sql`now()`,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
+      })
+      .where(eq(certificationSubmissions.id, id))
+      .returning();
+    if (!row) throw new SafeError("Submission not found");
+    return row;
+  });
 }
 
 export async function updateSubmissionMetadata(

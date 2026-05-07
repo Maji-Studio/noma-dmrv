@@ -9,26 +9,16 @@ import { useToast } from "@/components/ui/toast";
 import { useSubmitGhgStatementForFacility } from "@/hooks/use-certification";
 import { useDialog } from "@/hooks/use-dialog";
 
-const submitDialogSchema = z
-  .object({
-    reportUrl: z
-      .string()
-      .url("Enter a valid report URL")
-      .refine((value) => value.startsWith("https://"), {
-        message: "Report URL must use HTTPS",
-      }),
-    summaryOfChanges: z.string().optional(),
-    confirmProduction: z.boolean().optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.summaryOfChanges !== undefined && value.summaryOfChanges.trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["summaryOfChanges"],
-        message: "Summary of changes is required",
-      });
-    }
-  });
+const submitDialogSchema = z.object({
+  reportUrl: z
+    .string()
+    .url("Enter a valid report URL")
+    .refine((value) => value.startsWith("https://"), {
+      message: "Report URL must use HTTPS",
+    }),
+  summaryOfChanges: z.string().optional(),
+  confirmProduction: z.boolean().optional(),
+});
 
 type SubmitDialogInput = z.infer<typeof submitDialogSchema>;
 
