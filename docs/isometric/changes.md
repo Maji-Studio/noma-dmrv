@@ -1,5 +1,32 @@
 # Isometric Docs Change Log
 
+## 2026-05-07 (Phase 1 carryover E2E)
+
+- **`tests/e2e/facility-certifier-mapping.spec.ts`.** Two-test
+  Playwright spec covering the Phase 1 deferrals: N facilities → one
+  Isometric project (proves the dropped
+  `certifier_projects_provider_external_unique` constraint
+  end-to-end through the side-sheet view-mode UI), and unlink
+  refused with the exact `SafeError`
+  ("Cannot unlink: this facility has certifier submissions.
+  Supersede or reject them first.") surfaced in
+  `UnlinkConfirmDialog`.
+- DB-seeded preconditions, UI-driven assertions: `certifierProjects`
+  (and a `creditBatches` + `certificationSubmissions` pair for the
+  unlink case) inserted directly via Drizzle so the spec doesn't
+  drive the link/edit dialog and doesn't perform Isometric writes.
+  The loader's `listProjects` + `listRemovalTemplates` reads still
+  fire — sandbox project ID is required.
+- **Skip gate.** Reads `ISOMETRIC_DEMO_PROJECT_ID` from
+  `process.env`; `test.skip` if absent. Loads `.env.local` from the
+  spec file (Playwright's harness only reads `.env.test`).
+- Recorded `ISOMETRIC_DEMO_PROJECT_ID=prj_1K9YJ33RKSBX9FFF` in
+  local `.env.local` so `pnpm test:e2e
+  tests/e2e/facility-certifier-mapping.spec.ts` runs the spec by
+  default; CI without the var skips cleanly.
+- Verified twice in succession (idempotent cleanup); `pnpm
+  typecheck` and `pnpm lint` pass with no new warnings.
+
 ## 2026-05-06 (Simplify pass — race fix + sandbox test gating)
 
 - **Certifier mapping race in `submitCreditBatch`.** Added

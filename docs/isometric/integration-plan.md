@@ -46,9 +46,12 @@ project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
 - *Not yet started* — Phase 5 (time-series + bulk:
   `MonitoringSubmission`, `DataUploadSubmission`,
   `POST /biochar_applications`); Phase 6 (Protocol/SOP surfacing).
-- *Carryover* — `tests/e2e/facility-certifier-mapping.spec.ts` from
-  Phase 1 verification (N→1 mapping + unlink-refused with existing
-  submissions). Small, fits the new seed/cleanup fixtures cleanly.
+- ~~*Carryover* — `tests/e2e/facility-certifier-mapping.spec.ts` from
+  Phase 1 verification.~~ ✅ Landed 2026-05-07. Two tests: N→1 mapping
+  through the side-sheet view-mode UI, and unlink-refused with the
+  exact `SafeError` surfaced in `UnlinkConfirmDialog`. Both run as a
+  read-only sandbox-backed E2E (gated behind
+  `ISOMETRIC_DEMO_PROJECT_ID`; `test.skip` otherwise).
 
 **Resolved this session:** Open-question Q1 (no `metadata` field on
 Datapoint/Removal/Source — `supplier_reference_id` is the round-trip
@@ -750,12 +753,11 @@ The Certify API does not expose protocol-compliance rules. Two paths:
   `certifier_projects_facility_provider_unique` remains on the table.
   Live API helpers smoke-tested — demo project returns 2 templates
   (`Protocol default`, `Biochar`). `tsc --noEmit` and `pnpm lint`
-  pass. *To do:* `tests/e2e/facility-certifier-mapping.spec.ts` —
-  seed two facilities, link both to the demo project via the UI,
-  assert two `certifier_projects` rows with the same
-  `externalProjectId`; insert a fake `creditBatch` +
-  `certificationSubmissions` and assert unlink is refused with
-  the `SafeError` message.
+  pass. `tests/e2e/facility-certifier-mapping.spec.ts` shipped
+  2026-05-07 with two tests (N→1 mapping rendered in the side-sheet
+  view mode; unlink refused with the `SafeError` surfaced in
+  `UnlinkConfirmDialog`). Both gated on `ISOMETRIC_DEMO_PROJECT_ID`
+  via `test.skip`.
 - **Phase 2 (✅):** open a credit-batch side sheet — Certify accordion
   renders the facility's project + default removal template + the
   component blueprints that template references. Drift cases (stale

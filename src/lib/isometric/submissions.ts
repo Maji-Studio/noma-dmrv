@@ -28,16 +28,19 @@ export function createComponent(body: CreateComponentRequest): Promise<Component
 
 // Reconciliation lookup: when a draft submission row is left locked after a
 // 5xx and the remote entity may already exist, look it up by the
-// supplier_reference_id we wrote at insert time.
+// supplier_reference_id we wrote at insert time. Stops after the first hit
+// instead of paginating to exhaustion.
 async function findBySupplierRef<T>(
   path: string,
   ref: string,
 ): Promise<T | null> {
-  const [first] = await isometric.paginateAll<T>(path, {
+  for await (const node of isometric.paginate<T>(path, {
     query: { supplier_reference_id: ref },
     pageSize: 1,
-  });
-  return first ?? null;
+  })) {
+    return node;
+  }
+  return null;
 }
 
 export function findRemovalBySupplierRef(ref: string): Promise<Removal | null> {
