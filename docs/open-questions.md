@@ -96,6 +96,23 @@ Each entry follows this shape:
 
 ### Phase 4 deferrals
 
+- **Isometric webhook contract availability** (`isometric/phase-5`) — opened 2026-05-06
+  - When will Isometric publish a webhook event schema, signature
+    header, and HMAC algorithm we can verify against?
+  - Why it matters: blocks any automated reconciliation of GHG-statement
+    state. `certifierProjects.webhookSecret` exists in the schema, but
+    Certify's OpenAPI declares `webhooks = Record<string, never>` and
+    no webhook topic exists at `https://docs.isometric.com`. Today
+    users rely on the manual "Refresh" button calling
+    `refreshGhgStatementStatus` to reconcile. A receiver built today
+    would be guessing payload shape, signature header name, and HMAC
+    algorithm.
+  - Resolve via: ask Isometric support directly; check
+    `api-reference/` quarterly via the existing update playbook
+    (`docs/isometric/update-playbook.md`). Once the contract is
+    published, build `src/app/api/certification/webhook/route.ts`
+    and add HMAC + reconciliation tests.
+
 - **External GHG statement amendment claiming** (`isometric/phase-5`) - opened 2026-05-05
   - Detect when an admin edits GHG statement dates or attached Removals
     directly in Isometric and the registry creates a new statement-version

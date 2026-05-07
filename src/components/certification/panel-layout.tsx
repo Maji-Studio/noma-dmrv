@@ -16,11 +16,11 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <dl className="flex flex-col gap-2">
       <dt className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
         {label}
       </dt>
       <dd className="flex flex-col gap-2">{children}</dd>
-    </div>
+    </dl>
   );
 }

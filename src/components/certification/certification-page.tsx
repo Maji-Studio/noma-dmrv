@@ -14,6 +14,8 @@ import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 
+const SUBMISSION_LOCK_TTL_MS = 10 * 60 * 1000;
+
 type StatementRow = NonNullable<
   ReturnType<typeof useFacilityCertificationOverview>["data"]
 >["statementsForProject"][number];
@@ -251,7 +253,7 @@ function StatementList({ rows }: { rows: StatementRow[] }) {
               <td className="py-10 pr-12">
                 <SubmissionStatusBadge
                   latest={row.submission}
-                  isLockedInFlight={row.submission.status === "draft"}
+                  isLockedInFlight={isLockedInFlight(row.submission)}
                 />
               </td>
               <td className="py-10 pr-12 font-mono body-caption">
@@ -326,7 +328,7 @@ function RecentRemovals({ rows }: { rows: CertificationSubmissionRow[] }) {
                   <td className="py-10 pr-12">
                     <SubmissionStatusBadge
                       latest={row}
-                      isLockedInFlight={row.status === "draft"}
+                      isLockedInFlight={isLockedInFlight(row)}
                     />
                   </td>
                   <td className="py-10 pr-12 font-mono body-caption">
@@ -385,4 +387,12 @@ function getMetadataValue(
     return (submission.metadata as Record<string, unknown>)[key];
   }
   return null;
+}
+
+function isLockedInFlight(row: CertificationSubmissionRow): boolean {
+  const lockedAtMs = row.lockedAt?.getTime() ?? 0;
+  return (
+    row.status === "draft" &&
+    Date.now() - lockedAtMs < SUBMISSION_LOCK_TTL_MS
+  );
 }

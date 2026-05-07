@@ -10,19 +10,20 @@ import {
   getLatestGhgSubmissionForPeriod,
   getOrCreateGhgPeriod,
   getSubmissionById,
-  insertDraftSubmission,
+  insertDraftSubmissionWithMappingLock,
   listGhgSubmissionsForProject,
   listSubmissionsForFacility,
   LOCK_TTL_MS,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraft,
+  resetSubmissionToDraftWithMappingLock,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type CertifierGhgPeriodRow,
   type CertifierProjectRow,
   type GhgSubmissionWithPeriod,
+  type MappingClaimGuard,
 } from "@/data-access/certification";
 import { getFacilityById } from "@/data-access/facilities";
 import { SafeError } from "@/lib/errors";
@@ -144,6 +145,11 @@ export async function createGhgStatementForFacility(
 
     assertProductionConfirmed(parsed.confirmProduction);
 
+    const mappingGuard: MappingClaimGuard = {
+      facilityId,
+      provider: ISOMETRIC_PROVIDER,
+      expectedExternalProjectId: mapping.externalProjectId,
+    };
     const period = await getOrCreateGhgPeriod(userId, {
       provider: ISOMETRIC_PROVIDER,
       externalProjectId: mapping.externalProjectId,
@@ -182,7 +188,11 @@ export async function createGhgStatementForFacility(
           version: claim.version,
         };
       case "resume": {
-        const row = await resetSubmissionToDraft(userId, claim.resumeRowId);
+        const row = await resetSubmissionToDraftWithMappingLock(
+          userId,
+          claim.resumeRowId,
+          mappingGuard,
+        );
         return createOrClaimGhgStatement({
           userId,
           row,
@@ -199,18 +209,22 @@ export async function createGhgStatementForFacility(
             { submissionId: latest!.id },
           );
         }
-        const row = await insertDraftSubmission(userId, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-          localEntityType: GHG_PERIOD_ENTITY_TYPE,
-          localEntityId: period.id,
-          version: claim.nextVersion,
-          payloadSnapshot: {
-            semantic: semanticPayload,
-            transport: {},
+        const row = await insertDraftSubmissionWithMappingLock(
+          userId,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+            localEntityType: GHG_PERIOD_ENTITY_TYPE,
+            localEntityId: period.id,
+            version: claim.nextVersion,
+            payloadSnapshot: {
+              semantic: semanticPayload,
+              transport: {},
+            },
+            payloadHash: semanticHash,
           },
-          payloadHash: semanticHash,
-        });
+          mappingGuard,
+        );
         return createOrClaimGhgStatement({
           userId,
           row,

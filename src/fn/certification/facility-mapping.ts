@@ -86,22 +86,17 @@ export async function saveFacilityCertifierMapping(
       );
     }
 
-    const [projects, templates] = await Promise.all([
-      listProjects(),
-      parsed.defaultRemovalTemplateId
-        ? listRemovalTemplates(parsed.externalProjectId)
-        : Promise.resolve(null),
-    ]);
+    const projects = await listProjects();
     if (!projects.some((p) => p.id === parsed.externalProjectId)) {
       throw new SafeError("Selected project does not exist on Isometric.");
     }
-    if (
-      templates &&
-      !templates.some((t) => t.id === parsed.defaultRemovalTemplateId)
-    ) {
-      throw new SafeError(
-        "Selected template does not belong to the chosen project.",
-      );
+    if (parsed.defaultRemovalTemplateId) {
+      const templates = await listRemovalTemplates(parsed.externalProjectId);
+      if (!templates.some((t) => t.id === parsed.defaultRemovalTemplateId)) {
+        throw new SafeError(
+          "Selected template does not belong to the chosen project.",
+        );
+      }
     }
 
     return upsertCertifierProject(userId, {
