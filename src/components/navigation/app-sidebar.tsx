@@ -23,6 +23,7 @@ import {
   ShoppingCart,
   MapPin,
   Certificate,
+  SealCheck,
   TestTube,
   ListChecks,
   SignOut,
@@ -94,6 +95,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.verification,
     items: [
       { href: "/credit-batches", label: "Credit Batches", icon: Certificate },
+      { href: "/certification", label: "Certification", icon: SealCheck },
       { href: "/samples", label: "Lab Samples", icon: TestTube },
     ],
   },
