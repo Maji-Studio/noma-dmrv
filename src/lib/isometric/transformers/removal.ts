@@ -72,12 +72,16 @@ export function buildCreateRemovalRequest(
             datapoint_ids: [datapointId],
             input_key: rtcInput.input_key,
           });
-        } else {
+        } else if (blueprintInput.data_shape === "SCALAR") {
           inputs.push({
             __typename: "CreateComponentScalarInput",
             datapoint_id: datapointId,
             input_key: rtcInput.input_key,
           });
+        } else {
+          throw new SafeError(
+            `Blueprint "${component.blueprint_key}" input "${rtcInput.input_key}" has unsupported data_shape "${blueprintInput.data_shape}".`,
+          );
         }
       }
 

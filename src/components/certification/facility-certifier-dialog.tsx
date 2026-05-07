@@ -214,10 +214,12 @@ export function FacilityCertifierDialog({
           <ProductionConfirmation
             actionLabel={
               mapping
-                ? "update this facility's link to the production registry"
-                : "link this facility to the production registry"
+                ? "update this facility's production Isometric link"
+                : "link this facility to the production Isometric registry"
             }
+            consequenceLabel="Future submissions from this facility will use production."
             registerProps={register("confirmProduction")}
+            errorMessage={errors.confirmProduction?.message}
           />
         )}
 

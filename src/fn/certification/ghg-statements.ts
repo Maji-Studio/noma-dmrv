@@ -43,6 +43,7 @@ import {
 import {
   chooseGhgSubmitMode,
   ghgSubmitFingerprintChanged,
+  type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import {
   createGhgStatementSchema,
@@ -263,8 +264,13 @@ export async function submitGhgStatementForFacility(
       throw new SafeError("Selected facility is not linked to this GHG statement project.");
     }
     const facility = await getFacilityById(userId, facilityId);
-    const remoteBefore = await getGhgStatement(submission.externalId);
-    const submitMode = chooseGhgSubmitMode(remoteBefore);
+    const remoteBefore = await getGhgStatement(submission.externalId).catch(
+      () => null,
+    );
+    const submitMode = chooseGhgSubmitModeFromKnownState(
+      remoteBefore,
+      submission,
+    );
     if (submitMode === "blocked-awaiting") {
       throw new SafeError("This GHG statement is already awaiting verification.");
     }
@@ -297,7 +303,10 @@ export async function submitGhgStatementForFacility(
       const after = await getGhgStatement(submission.externalId).catch(
         () => null,
       );
-      if (after && ghgSubmitFingerprintChanged(remoteBefore, after)) {
+      const submitApplied = remoteBefore
+        ? after && ghgSubmitFingerprintChanged(remoteBefore, after)
+        : after && ghgSubmitAppearsApplied(after, parsed.reportUrl);
+      if (after && submitApplied) {
         await appendSyncEvent(userId, {
           provider: ISOMETRIC_PROVIDER,
           entityType: GHG_PERIOD_ENTITY_TYPE,
@@ -307,7 +316,7 @@ export async function submitGhgStatementForFacility(
           requestPayload: buildSubmitRequestPayload(
             submitMode,
             parsed.reportUrl,
-            parsed.summaryOfChanges,
+            Boolean(parsed.summaryOfChanges?.trim()),
           ),
           responsePayload: {
             id: submission.externalId,
@@ -334,7 +343,7 @@ export async function submitGhgStatementForFacility(
         requestPayload: buildSubmitRequestPayload(
           submitMode,
           parsed.reportUrl,
-          parsed.summaryOfChanges,
+          Boolean(parsed.summaryOfChanges?.trim()),
         ),
         errorMessage: message,
       });
@@ -350,7 +359,7 @@ export async function submitGhgStatementForFacility(
       requestPayload: buildSubmitRequestPayload(
         submitMode,
         parsed.reportUrl,
-        parsed.summaryOfChanges,
+        Boolean(parsed.summaryOfChanges?.trim()),
       ),
       responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
     });
@@ -573,15 +582,63 @@ function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
   };
 }
 
+function chooseGhgSubmitModeFromKnownState(
+  remote: GhgStatement | null,
+  submission: CertificationSubmissionRow,
+): GhgSubmitMode {
+  if (remote) return chooseGhgSubmitMode(remote);
+
+  const status = getSubmissionMetadataValue(submission, "remoteStatus");
+  const pendingTotal = getSubmissionMetadataValue(
+    submission,
+    "pendingTotalCo2eRemovedKg",
+  );
+  if (status === "DRAFT") return "submit";
+  if (
+    status === "FAILED_VERIFICATION" ||
+    (typeof pendingTotal === "number" && pendingTotal > 0)
+  ) {
+    return "resubmit";
+  }
+  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
+  if (typeof status === "string") return "blocked-verified";
+
+  throw new SafeError("Unable to determine the GHG statement submit state.");
+}
+
+function ghgSubmitAppearsApplied(
+  remote: GhgStatement,
+  reportUrl: string,
+): boolean {
+  return (
+    remote.ghg_statement_report_url === reportUrl &&
+    (remote.status === "AWAITING_VERIFICATION" || remote.submitted_at !== null)
+  );
+}
+
+function getSubmissionMetadataValue(
+  submission: CertificationSubmissionRow,
+  key: string,
+): unknown {
+  if (
+    typeof submission.metadata === "object" &&
+    submission.metadata !== null &&
+    key in submission.metadata
+  ) {
+    return (submission.metadata as Record<string, unknown>)[key];
+  }
+  return null;
+}
+
 function buildSubmitRequestPayload(
   mode: "submit" | "resubmit",
   reportUrl: string,
-  summaryOfChanges?: string | null,
-): Record<string, string> {
+  summaryProvided: boolean,
+): Record<string, string | boolean> {
   if (mode === "resubmit") {
     return {
       ghg_statement_report_url: reportUrl,
-      summary_of_changes: summaryOfChanges?.trim() ?? "",
+      summary_of_changes_provided: summaryProvided,
     };
   }
   return { ghg_statement_report_url: reportUrl };

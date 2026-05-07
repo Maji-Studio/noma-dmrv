@@ -250,13 +250,25 @@ async function main(): Promise<void> {
             : JSON.stringify(err.body).length;
         console.error(`body_present=true body_length=${bodyLength}`);
         if (typeof err.body !== "string") {
-          console.error(JSON.stringify(err.body, null, 2));
+          console.error(JSON.stringify(sanitizeErrorBody(err.body), null, 2));
         }
       }
       process.exit(1);
     }
     throw err;
   }
+}
+
+const SENSITIVE_KEY_RE = /(token|secret|api[_-]?key|email|password)/i;
+
+function sanitizeErrorBody(input: unknown): unknown {
+  if (input === null || typeof input !== "object") return input;
+  if (Array.isArray(input)) return input.map(sanitizeErrorBody);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    out[key] = SENSITIVE_KEY_RE.test(key) ? "[REDACTED]" : sanitizeErrorBody(value);
+  }
+  return out;
 }
 
 main().catch((err) => {

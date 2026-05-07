@@ -144,17 +144,27 @@ function SubmissionRow({
   isProduction: boolean;
   canSubmit: boolean;
 }) {
-  const { data: state, isLoading } =
+  const { data: state, isLoading, isError, error } =
     useCreditBatchSubmissionState(creditBatchId);
   const submitMutation = useSubmitCreditBatch();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  if (isLoading || !state) {
+  if (isLoading) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
         Loading submission state…
       </p>
+    );
+  }
+
+  if (isError || !state) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load submission state.";
+    return (
+      <p className="body-small text-[var(--clr-red)]">{message}</p>
     );
   }
 

@@ -30,6 +30,17 @@ export interface IsometricRequestOptions {
   body?: unknown;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /**
+   * Opt in to retrying non-idempotent methods (POST/PATCH). Off by default to
+   * prevent duplicate writes on transient retries.
+   */
+  allowUnsafeRetries?: boolean;
+}
+
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
+
+function isIdempotentMethod(method: string): boolean {
+  return IDEMPOTENT_METHODS.has(method);
 }
 
 interface IsometricCredentials {
@@ -151,7 +162,9 @@ export async function isometricRequest<T = unknown>(
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onExternalAbort);
       if (options.signal?.aborted) throw options.signal.reason ?? err;
-      if (attempt === MAX_ATTEMPTS) {
+      const canRetry =
+        isIdempotentMethod(method) || options.allowUnsafeRetries === true;
+      if (!canRetry || attempt === MAX_ATTEMPTS) {
         throw new IsometricApiError(
           `Isometric ${method} ${path}: ${(err as Error).message ?? "network error"}`,
           undefined,
@@ -191,8 +204,12 @@ export async function isometricRequest<T = unknown>(
       }
     }
 
+    const canRetryMethod =
+      isIdempotentMethod(method) || options.allowUnsafeRetries === true;
     const shouldRetry =
-      RETRYABLE_STATUS.has(response.status) && attempt < MAX_ATTEMPTS;
+      canRetryMethod &&
+      RETRYABLE_STATUS.has(response.status) &&
+      attempt < MAX_ATTEMPTS;
     if (shouldRetry) {
       const retryAfterRaw = parseRetryAfter(
         response.headers.get("retry-after")

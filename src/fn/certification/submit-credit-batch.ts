@@ -179,6 +179,11 @@ export async function submitCreditBatch(
       );
     }
     const agg = aggregateProductionRuns(runs);
+    if (agg.warnings.length > 0) {
+      throw new SafeError(
+        `Aggregation warnings — submission blocked:\n${agg.warnings.join("\n")}`,
+      );
+    }
 
     const monitored: ResolvedMonitoredInput[] = [];
     const fixed: ResolvedFixedInput[] = [];

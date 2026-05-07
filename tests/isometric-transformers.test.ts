@@ -198,7 +198,7 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/null/);
   });
 
-  it("INPUT_MAPPING covers the nine demo-template inputs the orchestrator depends on", () => {
+  it("INPUT_MAPPING covers the ten demo-template inputs the orchestrator depends on", () => {
     // Sanity: any deletion here is a real schema change, not a refactor.
     const expected = [
       "carbon_content",

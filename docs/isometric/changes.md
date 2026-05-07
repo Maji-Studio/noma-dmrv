@@ -2,6 +2,12 @@
 
 ## 2026-05-07 (Phase 6 deferred — outbound links shipped)
 
+- **Resolved open question:** Datapoints with empty `source_ids` are valid for
+  the Datapoints + Removal MVP. `POST /datapoints` with `source_ids: []`
+  returned 2xx against the production demo project
+  (`prj_1K5F2F6SN1S0ZKDQ`) on 2026-05-05 and the sandbox project
+  (`prj_1K9YJ33RKSBX9FFF`) on 2026-05-06. Source upload remains deferred to
+  Phase 3.5.
 - **Decision:** defer the Phase 6 build-time SOP snapshot indefinitely.
   Operators read protocol/Certify documentation directly on
   `registry.isometric.com` and `docs.isometric.com`; copying it into

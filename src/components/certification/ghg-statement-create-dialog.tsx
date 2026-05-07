@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui";
 import { FormField, FormInput, ServerError } from "@/components/forms";
@@ -33,6 +34,7 @@ export function GhgStatementCreateDialog({
     register,
     handleSubmit,
     formState: { errors },
+    reset,
     setError,
   } = useForm<CreateGhgStatementInput>({
     resolver: zodResolver(createGhgStatementSchema),
@@ -41,6 +43,12 @@ export function GhgStatementCreateDialog({
       confirmProduction: false,
     },
   });
+
+  useEffect(() => {
+    if (!isOpen) {
+      reset();
+    }
+  }, [isOpen, reset]);
 
   if (!isOpen) return null;
 
@@ -86,7 +94,7 @@ export function GhgStatementCreateDialog({
 
           {isProduction && (
             <ProductionConfirmation
-              actionLabel="create a draft GHG statement"
+              actionLabel="create a draft GHG statement on the production Isometric registry"
               registerProps={register("confirmProduction")}
             />
           )}

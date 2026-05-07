@@ -10,7 +10,8 @@ export function chooseGhgSubmitMode(remote: GhgStatement): GhgSubmitMode {
   if (remote.status === "DRAFT") return "submit";
   if (
     remote.status === "FAILED_VERIFICATION" ||
-    remote.pending_total_co2e_removed_kg !== null
+    (remote.pending_total_co2e_removed_kg !== null &&
+      remote.pending_total_co2e_removed_kg > 0)
   ) {
     return "resubmit";
   }

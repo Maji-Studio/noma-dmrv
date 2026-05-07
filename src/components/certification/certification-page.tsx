@@ -75,10 +75,17 @@ export function CertificationPage() {
   const activePending = activeStatement
     ? getPendingTotal(activeStatement)
     : null;
-  const canSubmit = activeStatement && activeStatus === "DRAFT";
+  const activeLocked = activeStatement
+    ? isLockedInFlight(activeStatement.submission)
+    : false;
+  const canSubmit =
+    activeStatement && activeStatus === "DRAFT" && !activeLocked;
   const canResubmit =
     activeStatement &&
-    (activeStatus === "FAILED_VERIFICATION" || activePending !== null);
+    activeStatus !== "DRAFT" &&
+    !activeLocked &&
+    (activeStatus === "FAILED_VERIFICATION" ||
+      (activePending !== null && activePending > 0));
 
   return (
     <main className="min-h-screen bg-[var(--color-background)]">
@@ -400,7 +407,14 @@ function getMetadataValue(
 }
 
 function isLockedInFlight(row: CertificationSubmissionRow): boolean {
-  const lockedAtMs = row.lockedAt?.getTime() ?? 0;
+  const lockedAt = row.lockedAt;
+  const lockedAtMs =
+    lockedAt instanceof Date
+      ? lockedAt.getTime()
+      : typeof lockedAt === "string"
+        ? new Date(lockedAt).getTime()
+        : 0;
+  if (!Number.isFinite(lockedAtMs) || lockedAtMs <= 0) return false;
   return (
     row.status === "draft" &&
     Date.now() - lockedAtMs < LOCK_TTL_MS
