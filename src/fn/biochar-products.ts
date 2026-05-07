@@ -28,7 +28,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAutoCode } from "@/data-access/code-generator";
 import { biocharProducts } from "@/db/schema";
-import { toCompositionJsonb } from "@/lib/biochar-composition";
+import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
 
 // ============================================
 // Biochar Product List/Query Operations

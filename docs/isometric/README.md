@@ -42,6 +42,4 @@
 ## Freshness
 
 - Last refreshed: 2026-02-11
-- Integration docs refreshed: 2026-05-06 (scope: `integration-plan.md`,
-  `changes.md` only — protocol/source KB unchanged)
 - Source of truth: Isometric Registry URLs in `versions.json`

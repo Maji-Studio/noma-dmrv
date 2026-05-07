@@ -129,6 +129,7 @@ export async function isometricRequest<T = unknown>(
   }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (options.signal?.aborted) throw options.signal.reason;
     const timeoutController = new AbortController();
     const timer = setTimeout(
       () => timeoutController.abort(new Error("Isometric request timed out")),
@@ -167,7 +168,17 @@ export async function isometricRequest<T = unknown>(
     if (response.ok) {
       if (response.status === 204) return undefined as T;
       const text = await response.text();
-      return text ? (JSON.parse(text) as T) : (undefined as T);
+      if (!text) return undefined as T;
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new IsometricApiError(
+          `Isometric ${method} ${path}: malformed JSON in response body`,
+          response.status,
+          text,
+          "http"
+        );
+      }
     }
 
     const bodyText = await response.text().catch(() => "");
