@@ -26,25 +26,26 @@ export function createComponent(body: CreateComponentRequest): Promise<Component
   return isometric.post<Component>("/components", body);
 }
 
-// Reserved for Phase 4 reconciliation: when a draft submission row is left
-// locked after a 5xx and the remote entity may already exist, look it up by
-// the supplier_reference_id we wrote at insert time.
-export async function findRemovalBySupplierRef(
+// Reconciliation lookup: when a draft submission row is left locked after a
+// 5xx and the remote entity may already exist, look it up by the
+// supplier_reference_id we wrote at insert time.
+async function findBySupplierRef<T>(
+  path: string,
   ref: string,
-): Promise<Removal | null> {
-  const list = await isometric.paginateAll<Removal>("/removals", {
+): Promise<T | null> {
+  const [first] = await isometric.paginateAll<T>(path, {
     query: { supplier_reference_id: ref },
     pageSize: 1,
   });
-  return list[0] ?? null;
+  return first ?? null;
 }
 
-export async function findDatapointBySupplierRef(
+export function findRemovalBySupplierRef(ref: string): Promise<Removal | null> {
+  return findBySupplierRef<Removal>("/removals", ref);
+}
+
+export function findDatapointBySupplierRef(
   ref: string,
 ): Promise<Datapoint | null> {
-  const list = await isometric.paginateAll<Datapoint>("/datapoints", {
-    query: { supplier_reference_id: ref },
-    pageSize: 1,
-  });
-  return list[0] ?? null;
+  return findBySupplierRef<Datapoint>("/datapoints", ref);
 }

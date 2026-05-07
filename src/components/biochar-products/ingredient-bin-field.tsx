@@ -32,15 +32,16 @@ export function IngredientBinField({
   };
 
   return (
-    <FormField
-      id={row.storageLocationFieldName}
-      label={row.ingredientName}
-      helperText={typeLabel}
-    >
-      <Controller
-        name={row.storageLocationFieldName}
-        control={control}
-        render={({ field }) => (
+    <Controller
+      name={row.storageLocationFieldName}
+      control={control}
+      render={({ field, fieldState }) => (
+        <FormField
+          id={row.storageLocationFieldName}
+          label={row.ingredientName}
+          helperText={typeLabel}
+          error={fieldState.error?.message}
+        >
           <EntitySelect
             entityType="storageLocation"
             value={field.value || ""}
@@ -53,8 +54,8 @@ export function IngredientBinField({
             }}
             formatSelectedLabel={formatLabel}
           />
-        )}
-      />
-    </FormField>
+        </FormField>
+      )}
+    />
   );
 }

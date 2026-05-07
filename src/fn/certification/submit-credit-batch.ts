@@ -2,15 +2,17 @@
 
 import {
   appendSyncEvent,
+  type AppendSyncEventInput,
   getLatestSubmission,
-  insertDraftSubmission,
+  insertDraftSubmissionWithMappingLock,
   listRecentSyncEvents,
   LOCK_TTL_MS,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraft,
+  resetSubmissionToDraftWithMappingLock,
   type CertificationSubmissionRow,
   type CertifierSyncEventRow,
+  type MappingClaimGuard,
 } from "@/data-access/certification";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
@@ -26,7 +28,6 @@ import {
   reconcileDatapoint,
   reconcileRemoval,
   type CreateDatapointRequest,
-  type CreateRemovalRequest,
   type IsometricComponentBlueprint,
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
@@ -133,6 +134,12 @@ export async function submitCreditBatch(
       ctx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
     );
     const externalProjectId = ctx.mapping.externalProjectId;
+    const mappingGuard: MappingClaimGuard = {
+      facilityId: ctx.facilityId,
+      provider: ISOMETRIC_PROVIDER,
+      expectedExternalProjectId: externalProjectId,
+      expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
+    };
 
     const creditBatch = await getCreditBatchById(userId, parsed.creditBatchId);
     if (!creditBatch) throw new SafeError("Credit batch not found");
@@ -299,7 +306,11 @@ export async function submitCreditBatch(
       case "return-existing":
         return { externalId: claim.externalId, version: claim.version };
       case "resume": {
-        const row = await resetSubmissionToDraft(userId, claim.resumeRowId);
+        const row = await resetSubmissionToDraftWithMappingLock(
+          userId,
+          claim.resumeRowId,
+          mappingGuard,
+        );
         const transport = readRemovalTransport(row);
         return runRemovalSubmission({
           userId,
@@ -346,21 +357,25 @@ export async function submitCreditBatch(
           };
         });
 
-        const draftRow = await insertDraftSubmission(userId, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: REMOVAL_SUBMISSION_TYPE,
-          localEntityType: CREDIT_BATCH_ENTITY_TYPE,
-          localEntityId: parsed.creditBatchId,
-          version: claim.nextVersion,
-          payloadSnapshot: {
-            semantic: semanticPayload,
-            transport: {
-              removalSupplierRef,
-              datapointBodies,
+        const draftRow = await insertDraftSubmissionWithMappingLock(
+          userId,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: CREDIT_BATCH_ENTITY_TYPE,
+            localEntityId: parsed.creditBatchId,
+            version: claim.nextVersion,
+            payloadSnapshot: {
+              semantic: semanticPayload,
+              transport: {
+                removalSupplierRef,
+                datapointBodies,
+              },
             },
+            payloadHash: semanticHash,
           },
-          payloadHash: semanticHash,
-        });
+          mappingGuard,
+        );
 
         return runRemovalSubmission({
           userId,
@@ -435,66 +450,19 @@ async function runRemovalSubmission({
 
   for (const dp of transport.datapointBodies) {
     const supplierRefId = dp.body.supplier_reference_id;
-    if (resumed) {
-      const reconciled = await reconcileDatapoint({ supplierRefId });
-      if (reconciled.found) {
-        datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, reconciled.externalId);
-        await appendSyncEvent(userId, {
-          provider: ISOMETRIC_PROVIDER,
-          entityType: CREDIT_BATCH_ENTITY_TYPE,
-          entityId: creditBatchId,
-          operation: `datapoint:create:${dp.inputKey}:reconciled`,
-          status: "succeeded",
-          requestPayload: dp.body,
-          responsePayload: { id: reconciled.externalId, source: "reconciliation" },
-        });
-        continue;
-      }
-    }
-
-    try {
-      const created = await createDatapoint(dp.body);
-      datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, created.id);
-      await appendSyncEvent(userId, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: CREDIT_BATCH_ENTITY_TYPE,
-        entityId: creditBatchId,
-        operation: `datapoint:create:${dp.inputKey}`,
-        status: "succeeded",
-        requestPayload: dp.body,
-        responsePayload: { id: created.id, supplier_reference_id: supplierRefId },
-      });
-    } catch (err) {
-      const reconciled = await reconcileDatapoint({ supplierRefId });
-      if (reconciled.found) {
-        datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, reconciled.externalId);
-        await appendSyncEvent(userId, {
-          provider: ISOMETRIC_PROVIDER,
-          entityType: CREDIT_BATCH_ENTITY_TYPE,
-          entityId: creditBatchId,
-          operation: `datapoint:create:${dp.inputKey}:reconciled`,
-          status: "succeeded",
-          requestPayload: dp.body,
-          responsePayload: { id: reconciled.externalId, source: "reconciliation" },
-        });
-        continue;
-      }
-
-      const message = err instanceof Error ? err.message : String(err);
-      await appendSyncEvent(userId, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: CREDIT_BATCH_ENTITY_TYPE,
-        entityId: creditBatchId,
-        operation: `datapoint:create:${dp.inputKey}`,
-        status: "failed",
-        requestPayload: dp.body,
-        errorMessage: message,
-      });
-      await markSubmissionRejected(userId, row.id, { errorMessage: message });
-      throw new SafeError(
-        `Datapoint POST failed for "${dp.inputKey}": ${message}`,
-      );
-    }
+    const externalId = await createOrReconcile({
+      userId,
+      creditBatchId,
+      row,
+      operation: `datapoint:create:${dp.inputKey}`,
+      requestPayload: dp.body,
+      supplierRefId,
+      resumed,
+      create: () => createDatapoint(dp.body).then((d) => d.id),
+      reconcile: () => reconcileDatapoint({ supplierRefId }),
+      failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
+    });
+    datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, externalId);
   }
 
   const removalBody = buildCreateRemovalRequest({
@@ -505,13 +473,18 @@ async function runRemovalSubmission({
     projectId: externalProjectId,
     supplierRefId: transport.removalSupplierRef,
   });
-  const removalId = await postOrReconcileRemoval({
+  const removalId = await createOrReconcile({
     userId,
     creditBatchId,
     row,
-    body: removalBody,
+    operation: "removal:create",
+    requestPayload: removalBody,
     supplierRefId: transport.removalSupplierRef,
     resumed,
+    create: () => createRemoval(removalBody).then((r) => r.id),
+    reconcile: () =>
+      reconcileRemoval({ supplierRefId: transport.removalSupplierRef }),
+    failureMessagePrefix: "Removal POST failed",
   });
 
   await markSubmissionSubmitted(userId, row.id, {
@@ -520,87 +493,123 @@ async function runRemovalSubmission({
   });
 
   if (resumed) {
-    await appendSyncEvent(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: CREDIT_BATCH_ENTITY_TYPE,
-      entityId: creditBatchId,
-      operation: "removal:create:resumed",
-      status: "succeeded",
-      responsePayload: { id: removalId },
-    });
+    await appendSyncEventBestEffort(
+      userId,
+      {
+        provider: ISOMETRIC_PROVIDER,
+        entityType: CREDIT_BATCH_ENTITY_TYPE,
+        entityId: creditBatchId,
+        operation: "removal:create:resumed",
+        status: "succeeded",
+        responsePayload: { id: removalId },
+      },
+      row.id,
+    );
   }
 
   return { externalId: removalId, version: row.version };
 }
 
-async function postOrReconcileRemoval(args: {
+interface CreateOrReconcileArgs {
   userId: string;
   creditBatchId: string;
   row: CertificationSubmissionRow;
-  body: CreateRemovalRequest;
+  operation: string;
+  requestPayload: unknown;
   supplierRefId: string;
   resumed: boolean;
-}): Promise<string> {
-  if (args.resumed) {
-    const reconciled = await reconcileRemoval({ supplierRefId: args.supplierRefId });
-    if (reconciled.found) {
-      await appendSyncEvent(args.userId, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: CREDIT_BATCH_ENTITY_TYPE,
-        entityId: args.creditBatchId,
-        operation: "removal:create:reconciled",
+  create: () => Promise<string>;
+  reconcile: () => Promise<{ found: true; externalId: string } | { found: false }>;
+  failureMessagePrefix: string;
+}
+
+async function createOrReconcile(
+  args: CreateOrReconcileArgs,
+): Promise<string> {
+  const baseEvent = {
+    provider: ISOMETRIC_PROVIDER,
+    entityType: CREDIT_BATCH_ENTITY_TYPE,
+    entityId: args.creditBatchId,
+  } as const;
+
+  const recordReconciled = async (externalId: string) => {
+    await appendSyncEventBestEffort(
+      args.userId,
+      {
+        ...baseEvent,
+        operation: `${args.operation}:reconciled`,
         status: "succeeded",
-        requestPayload: args.body,
-        responsePayload: { id: reconciled.externalId, source: "reconciliation" },
-      });
+        requestPayload: args.requestPayload,
+        responsePayload: { id: externalId, source: "reconciliation" },
+      },
+      args.row.id,
+    );
+  };
+
+  if (args.resumed) {
+    const reconciled = await args.reconcile();
+    if (reconciled.found) {
+      await recordReconciled(reconciled.externalId);
       return reconciled.externalId;
     }
   }
 
   try {
-    const created = await createRemoval(args.body);
-    await appendSyncEvent(args.userId, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: CREDIT_BATCH_ENTITY_TYPE,
-      entityId: args.creditBatchId,
-      operation: "removal:create",
-      status: "succeeded",
-      requestPayload: args.body,
-      responsePayload: {
-        id: created.id,
-        supplier_reference_id: args.supplierRefId,
-      },
-    });
-    return created.id;
-  } catch (err) {
-    const reconciled = await reconcileRemoval({ supplierRefId: args.supplierRefId });
-    if (reconciled.found) {
-      await appendSyncEvent(args.userId, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: CREDIT_BATCH_ENTITY_TYPE,
-        entityId: args.creditBatchId,
-        operation: "removal:create:reconciled",
+    const externalId = await args.create();
+    await appendSyncEventBestEffort(
+      args.userId,
+      {
+        ...baseEvent,
+        operation: args.operation,
         status: "succeeded",
-        requestPayload: args.body,
-        responsePayload: { id: reconciled.externalId, source: "reconciliation" },
-      });
+        requestPayload: args.requestPayload,
+        responsePayload: {
+          id: externalId,
+          supplier_reference_id: args.supplierRefId,
+        },
+      },
+      args.row.id,
+    );
+    return externalId;
+  } catch (err) {
+    const reconciled = await args.reconcile();
+    if (reconciled.found) {
+      await recordReconciled(reconciled.externalId);
       return reconciled.externalId;
     }
 
     const message = err instanceof Error ? err.message : String(err);
-    await appendSyncEvent(args.userId, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: CREDIT_BATCH_ENTITY_TYPE,
-      entityId: args.creditBatchId,
-      operation: "removal:create",
-      status: "failed",
-      requestPayload: args.body,
-      errorMessage: message,
-    });
+    await appendSyncEventBestEffort(
+      args.userId,
+      {
+        ...baseEvent,
+        operation: args.operation,
+        status: "failed",
+        requestPayload: args.requestPayload,
+        errorMessage: message,
+      },
+      args.row.id,
+    );
     await markSubmissionRejected(args.userId, args.row.id, {
       errorMessage: message,
     });
-    throw new SafeError(`Removal POST failed: ${message}`);
+    throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
+  }
+}
+
+async function appendSyncEventBestEffort(
+  userId: string,
+  input: AppendSyncEventInput,
+  submissionId: string,
+): Promise<void> {
+  try {
+    await appendSyncEvent(userId, input);
+  } catch (err) {
+    console.warn("Failed to record certifier sync event", {
+      operation: input.operation,
+      submissionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

@@ -31,6 +31,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
+    "test:integration": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run tests/**/*.integration.test.ts",
     "test:e2e": "playwright test --workers=1 --retries=2",
     "test:e2e:ui": "playwright test --ui"
   },
