@@ -17,10 +17,10 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <dt className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
+      <div className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
         {label}
-      </dt>
-      <dd className="flex flex-col gap-2">{children}</dd>
+      </div>
+      <div className="flex flex-col gap-2">{children}</div>
     </div>
   );
 }

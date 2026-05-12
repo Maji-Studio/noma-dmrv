@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   buildCreateDatapointRequest,
-  INPUT_MAPPING,
+  lookupInputMapping,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateRemovalRequest } from "@/lib/isometric/transformers/removal";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
@@ -16,6 +16,21 @@ type RemovalTemplateComponentInput =
 const PROJECT_ID = "prj_TEST";
 const SUPPLIER_REF = "nm-test-001";
 
+// Group + blueprint pairs the tests anchor against. Mirrors the real-template
+// disambiguation introduced when INPUT_MAPPING moved from flat to three-level.
+const CO2_STORED = {
+  groupKey: "co2-stored",
+  blueprintKey: "carbon_rich_substance_sequestration",
+} as const;
+const BIOCHAR_PROCESSING = {
+  groupKey: "biochar-processing",
+  blueprintKey: "grid_electricity_use",
+} as const;
+const SAMPLING_MASS = {
+  groupKey: "sampling-required-for-mrv",
+  blueprintKey: "mass_based_ci_emissions",
+} as const;
+
 const baseAgg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
   weightedHToCorgRatio: 0.4,
@@ -26,6 +41,9 @@ const baseAgg: AggregatedProductionData = {
   totalFeedstockDryMassKg: 4000,
   totalDieselLiters: 50,
   totalElectricityKwh: 200,
+  feedstockTransportAvgDistanceKm: 50,
+  biocharTransportAvgDistanceKm: 100,
+  sampleTransportAvgDistanceKm: 25,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1", "pr_2"],
@@ -61,6 +79,8 @@ function rtcInput(
 describe("buildCreateDatapointRequest", () => {
   it("emits a CreateDatapointRequest matching the blueprint input for a straightforward mass mapping", () => {
     const result = buildCreateDatapointRequest({
+      groupKey: CO2_STORED.groupKey,
+      componentBlueprintKey: CO2_STORED.blueprintKey,
       rtcInput: rtcInput({ input_key: "product_mass", quantity_kind: "mass" }),
       blueprintInput: blueprintInput({
         input_key: "product_mass",
@@ -84,6 +104,8 @@ describe("buildCreateDatapointRequest", () => {
   it("applies the /100 transform for carbon_content (percent → fraction)", () => {
     // samples.organicCarbonPercent stored as 0–100; blueprint expects 0–1.
     const result = buildCreateDatapointRequest({
+      groupKey: CO2_STORED.groupKey,
+      componentBlueprintKey: CO2_STORED.blueprintKey,
       rtcInput: rtcInput({
         input_key: "carbon_content",
         quantity_kind: "dimensionless",
@@ -103,6 +125,8 @@ describe("buildCreateDatapointRequest", () => {
 
   it("matches units case-insensitively (kWh ↔ kwh)", () => {
     const result = buildCreateDatapointRequest({
+      groupKey: BIOCHAR_PROCESSING.groupKey,
+      componentBlueprintKey: BIOCHAR_PROCESSING.blueprintKey,
       rtcInput: rtcInput({
         input_key: "electricity_use",
         quantity_kind: "energy",
@@ -121,9 +145,11 @@ describe("buildCreateDatapointRequest", () => {
     expect(result.quantity.magnitude).toBe(200);
   });
 
-  it("rejects an unknown blueprint input key with a SafeError pointing to the mapping file", () => {
+  it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
     expect(() =>
       buildCreateDatapointRequest({
+        groupKey: CO2_STORED.groupKey,
+        componentBlueprintKey: CO2_STORED.blueprintKey,
         rtcInput: rtcInput({
           input_key: "unmapped_input",
           quantity_kind: "mass",
@@ -136,10 +162,66 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/transformers\/datapoint\.ts/);
   });
 
+  it("rejects when only the group_key differs (same blueprint+input, wrong group)", () => {
+    // `distance` exists under multiple groups in INPUT_MAPPING but only with
+    // the `transport` blueprint. Calling with a bogus group_key must miss.
+    expect(() =>
+      buildCreateDatapointRequest({
+        groupKey: "nonexistent-group",
+        componentBlueprintKey: "transport",
+        rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+        blueprintInput: blueprintInput({
+          input_key: "distance",
+          compatible_unit: "km",
+          quantity_kind: "distance",
+        }),
+        agg: baseAgg,
+        projectId: PROJECT_ID,
+        supplierRefId: SUPPLIER_REF,
+      }),
+    ).toThrowError(/No INPUT_MAPPING entry for group="nonexistent-group"/);
+  });
+
+  it("disambiguates `distance` between feedstock and biochar transport groups", () => {
+    // Same blueprint (`transport`), same input_key (`distance`), different
+    // groups should resolve to different aggregated sources.
+    const feedstockDistance = buildCreateDatapointRequest({
+      groupKey: "biomass-feedstock-transport",
+      componentBlueprintKey: "transport",
+      rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+      blueprintInput: blueprintInput({
+        input_key: "distance",
+        compatible_unit: "km",
+        quantity_kind: "distance",
+      }),
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+    const biocharDistance = buildCreateDatapointRequest({
+      groupKey: "biochar-transport",
+      componentBlueprintKey: "transport",
+      rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+      blueprintInput: blueprintInput({
+        input_key: "distance",
+        compatible_unit: "km",
+        quantity_kind: "distance",
+      }),
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+    // baseAgg has feedstockTransport=50, biocharTransport=100
+    expect(feedstockDistance.quantity.magnitude).toBe(50);
+    expect(biocharDistance.quantity.magnitude).toBe(100);
+  });
+
   it("rejects a quantity_kind drift between mapping and live blueprint", () => {
     // Mapping declares product_mass as `mass`; pretend the catalog drifted to `volume`.
     expect(() =>
       buildCreateDatapointRequest({
+        groupKey: CO2_STORED.groupKey,
+        componentBlueprintKey: CO2_STORED.blueprintKey,
         rtcInput: rtcInput({
           input_key: "product_mass",
           quantity_kind: "volume",
@@ -159,6 +241,8 @@ describe("buildCreateDatapointRequest", () => {
   it("rejects a unit mismatch (Phase 3 requires exact match — no conversion)", () => {
     expect(() =>
       buildCreateDatapointRequest({
+        groupKey: CO2_STORED.groupKey,
+        componentBlueprintKey: CO2_STORED.blueprintKey,
         rtcInput: rtcInput({
           input_key: "product_mass",
           quantity_kind: "mass",
@@ -182,6 +266,8 @@ describe("buildCreateDatapointRequest", () => {
     };
     expect(() =>
       buildCreateDatapointRequest({
+        groupKey: CO2_STORED.groupKey,
+        componentBlueprintKey: CO2_STORED.blueprintKey,
         rtcInput: rtcInput({
           input_key: "carbon_content",
           quantity_kind: "dimensionless",
@@ -198,23 +284,32 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/null/);
   });
 
-  it("INPUT_MAPPING covers the ten demo-template inputs the orchestrator depends on", () => {
+  it("INPUT_MAPPING covers the MVP demo-template (group, blueprint, input) tuples", () => {
     // Sanity: any deletion here is a real schema change, not a refactor.
-    const expected = [
-      "carbon_content",
-      "product_mass",
-      "mass",
-      "feedstock_mass",
-      "volume_of_fuel",
-      "electricity_use",
-      "h_to_c_ratio",
-      "o_to_c_ratio",
-      "ash_content",
-      "moisture_content",
+    // Anchors the contract with the noma-mvp tailored template authored in
+    // `docs/isometric/sandbox-template-authoring.md`.
+    const expected: Array<[string, string, string]> = [
+      ["co2-stored", "carbon_rich_substance_sequestration", "carbon_content"],
+      ["co2-stored", "carbon_rich_substance_sequestration", "product_mass"],
+      ["biomass-feedstock-transport", "transport", "distance"],
+      ["biomass-feedstock-transport", "transport", "mass"],
+      ["biochar-transport", "transport", "distance"],
+      ["biochar-transport", "transport", "mass"],
+      ["sampling-required-for-mrv", "distance_based_ci_emissions", "distance"],
     ];
-    for (const key of expected) {
-      expect(INPUT_MAPPING[key]).toBeDefined();
+    for (const [groupKey, blueprintKey, inputKey] of expected) {
+      expect(
+        lookupInputMapping(groupKey, blueprintKey, inputKey),
+      ).toBeDefined();
     }
+    // SAMPLING_MASS placeholder exists for follow-on test cases.
+    expect(
+      lookupInputMapping(
+        SAMPLING_MASS.groupKey,
+        SAMPLING_MASS.blueprintKey,
+        "mass",
+      ),
+    ).toBeDefined();
   });
 });
 

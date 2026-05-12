@@ -6,7 +6,6 @@ import {
   getLatestSubmission,
   insertDraftSubmissionWithMappingLock,
   listRecentSyncEvents,
-  LOCK_TTL_MS,
   markSubmissionRejected,
   markSubmissionSubmitted,
   resetSubmissionToDraftWithMappingLock,
@@ -14,6 +13,10 @@ import {
   type CertifierSyncEventRow,
   type MappingClaimGuard,
 } from "@/data-access/certification";
+import {
+  isLockedInFlight as computeIsLockedInFlight,
+  LOCK_TTL_MS,
+} from "@/lib/isometric/utils/lock";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
@@ -33,7 +36,7 @@ import {
 } from "@/lib/isometric";
 import {
   buildCreateDatapointRequest,
-  INPUT_MAPPING,
+  lookupInputMapping,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateRemovalRequest } from "@/lib/isometric/transformers/removal";
 import {
@@ -147,10 +150,14 @@ export async function submitCreditBatch(
       throw new SafeError("Credit batch has no linked applications.");
     }
 
+    const lineages = await Promise.all(
+      creditBatch.applicationIds.map((id) =>
+        getChainOfCustodyData(userId, id),
+      ),
+    );
     const lineageWarnings: string[] = [];
     const productionRunIds = new Set<string>();
-    for (const applicationId of creditBatch.applicationIds) {
-      const lineage = await getChainOfCustodyData(userId, applicationId);
+    for (const lineage of lineages) {
       lineageWarnings.push(
         ...lineage.warnings.map(
           (warning) => `Application ${lineage.application.code}: ${warning}`,
@@ -220,19 +227,25 @@ export async function submitCreditBatch(
               `Blueprint "${blueprint.key}" missing input "${rtcInput.input_key}".`,
             );
           }
-          const mapping = INPUT_MAPPING[rtcInput.input_key];
+          const mapping = lookupInputMapping(
+            group.key,
+            component.blueprint_key,
+            rtcInput.input_key,
+          );
           if (!mapping) {
             throw new SafeError(
-              `No INPUT_MAPPING entry for input "${rtcInput.input_key}".`,
+              `No INPUT_MAPPING entry for group="${group.key}" blueprint="${component.blueprint_key}" input="${rtcInput.input_key}".`,
             );
           }
           const raw = agg[mapping.source];
           if (raw == null) {
             throw new SafeError(
-              `Aggregated source ${String(mapping.source)} for input "${rtcInput.input_key}" is null.`,
+              `Aggregated source ${String(mapping.source)} for input "${rtcInput.input_key}" (group="${group.key}") is null.`,
             );
           }
           const draft = buildCreateDatapointRequest({
+            groupKey: group.key,
+            componentBlueprintKey: component.blueprint_key,
             rtcInput,
             blueprintInput,
             agg,
@@ -424,9 +437,7 @@ export async function loadCreditBatchSubmissionState(
       }),
     ]);
 
-    const lockedAtMs = latest?.lockedAt?.getTime() ?? 0;
-    const isLockedInFlight =
-      latest?.status === "draft" && Date.now() - lockedAtMs < LOCK_TTL_MS;
+    const isLockedInFlight = latest ? computeIsLockedInFlight(latest) : false;
 
     return { latest, recentSyncEvents, isLockedInFlight };
   });

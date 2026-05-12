@@ -10,13 +10,20 @@ import { Button } from "@/components/ui";
 import { useDialog } from "@/hooks/use-dialog";
 import { EnvBanner } from "./env-banner";
 
+export type SubmitArtifact = "removal" | "ghgStatement";
+
+const ARTIFACT_LABEL: Record<SubmitArtifact, string> = {
+  removal: "removal",
+  ghgStatement: "GHG statement",
+};
+
 interface SubmitConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   isPending: boolean;
-  /** What gets submitted, e.g. "Removal" or "GHG statement". */
-  artifactLabel?: string;
+  artifact?: SubmitArtifact;
+  isProduction?: boolean;
 }
 
 export function SubmitConfirmDialog({
@@ -24,10 +31,12 @@ export function SubmitConfirmDialog({
   onClose,
   onConfirm,
   isPending,
-  artifactLabel = "Removal",
+  artifact = "removal",
+  isProduction = false,
 }: SubmitConfirmDialogProps) {
   const dialogRef = useDialog(isOpen, onClose);
   if (!isOpen) return null;
+  const label = ARTIFACT_LABEL[artifact];
 
   return (
     <dialog
@@ -36,18 +45,18 @@ export function SubmitConfirmDialog({
       aria-labelledby="submit-confirm-title"
     >
       <div className="flex flex-col gap-20 w-[440px] max-w-[calc(100vw-32px)] p-24">
-        <EnvBanner isProduction variant="inline" />
+        <EnvBanner isProduction={isProduction} variant="inline" />
 
         <div className="flex flex-col gap-12">
           <h2 id="submit-confirm-title" className="title-heading-3">
-            Submit {artifactLabel.toLowerCase()} to production?
+            Submit {label} to production?
           </h2>
           <p className="body-medium text-[var(--color-text-secondary)]">
             <strong className="font-semibold text-[var(--color-text-primary)]">
               This creates a verifier-visible record on the production Isometric
               registry.
             </strong>{" "}
-            The {artifactLabel.toLowerCase()} can be resubmitted, but cannot be
+            The {label} can be resubmitted, but cannot be
             removed once it&apos;s been seen by the verifier.
           </p>
         </div>
@@ -67,7 +76,7 @@ export function SubmitConfirmDialog({
             onClick={onConfirm}
             disabled={isPending}
           >
-            {isPending ? "Submitting…" : `Submit ${artifactLabel.toLowerCase()}`}
+            {isPending ? "Submitting…" : `Submit ${label}`}
           </Button>
         </div>
       </div>

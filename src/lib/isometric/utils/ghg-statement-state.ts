@@ -8,6 +8,7 @@ export type GhgSubmitMode =
 
 export function chooseGhgSubmitMode(remote: GhgStatement): GhgSubmitMode {
   if (remote.status === "DRAFT") return "submit";
+  if (remote.status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (
     remote.status === "FAILED_VERIFICATION" ||
     (remote.pending_total_co2e_removed_kg !== null &&
@@ -15,7 +16,6 @@ export function chooseGhgSubmitMode(remote: GhgStatement): GhgSubmitMode {
   ) {
     return "resubmit";
   }
-  if (remote.status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   return "blocked-verified";
 }
 

@@ -13,8 +13,6 @@ import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { requireAuth } from "./utils";
 
-export { LOCK_TTL_MS };
-
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
 export type CertifierGhgPeriodRow = typeof certifierGhgPeriods.$inferSelect;

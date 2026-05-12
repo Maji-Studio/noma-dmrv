@@ -140,7 +140,9 @@ export async function isometricRequest<T = unknown>(
   }
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (options.signal?.aborted) throw options.signal.reason;
+    if (options.signal?.aborted) {
+      throw options.signal.reason ?? new Error("Isometric request aborted");
+    }
     const timeoutController = new AbortController();
     const timer = setTimeout(
       () => timeoutController.abort(new Error("Isometric request timed out")),
