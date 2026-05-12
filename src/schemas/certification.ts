@@ -1,13 +1,21 @@
 import { z } from "zod";
 import { emptyToNull } from "@/schemas/helpers";
+import { formatLocalDate, parseLocalDateString } from "@/lib/date-utils";
 
-const DATE_PART_PAD_LENGTH = 2;
+function isValidCalendarDate(value: string): boolean {
+  try {
+    parseLocalDateString(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const httpsUrlSchema = z
   .string()
-  .url("Enter a valid report URL")
+  .url({ error: "Enter a valid report URL" })
   .refine((value) => value.startsWith("https://"), {
-    message: "Report URL must use HTTPS",
+    error: "Report URL must use HTTPS",
   });
 
 export const saveMappingSchema = z.object({
@@ -34,10 +42,10 @@ export type SubmitCreditBatchInput = z.infer<typeof submitCreditBatchSchema>;
 export const createGhgStatementSchema = z.object({
   endOn: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date")
-    .refine(isValidCalendarDate, { message: "Invalid calendar date" })
-    .refine((value) => value <= todayLocalDateString(), {
-      message: "End date cannot be in the future",
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Enter a valid date" })
+    .refine(isValidCalendarDate, { error: "Invalid calendar date" })
+    .refine((value) => value <= formatLocalDate(new Date()), {
+      error: "End date cannot be in the future",
     }),
   confirmProduction: z.boolean().optional(),
 });
@@ -60,17 +68,20 @@ export function buildSubmitGhgStatementDialogSchema(args: {
   isResubmit: boolean;
   isProduction: boolean;
 }) {
-  return submitGhgStatementDialogSchema.superRefine((value, ctx) => {
+  return submitGhgStatementDialogSchema.check((ctx) => {
+    const value = ctx.value;
     if (args.isResubmit && !value.summaryOfChanges?.trim()) {
-      ctx.addIssue({
+      ctx.issues.push({
         code: "custom",
+        input: value,
         path: ["summaryOfChanges"],
         message: "Summary of changes is required",
       });
     }
     if (args.isProduction && value.confirmProduction !== true) {
-      ctx.addIssue({
+      ctx.issues.push({
         code: "custom",
+        input: value,
         path: ["confirmProduction"],
         message: "Confirm production submission to continue",
       });
@@ -89,21 +100,3 @@ export type SubmitGhgStatementInput = z.infer<
   typeof submitGhgStatementSchema
 >;
 
-function todayLocalDateString(date = new Date()): string {
-  const month = String(date.getMonth() + 1).padStart(DATE_PART_PAD_LENGTH, "0");
-  const day = String(date.getDate()).padStart(DATE_PART_PAD_LENGTH, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function isValidCalendarDate(value: string): boolean {
-  const [yearStr, monthStr, dayStr] = value.split("-");
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-}

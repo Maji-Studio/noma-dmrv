@@ -1,5 +1,213 @@
 # Isometric Docs Change Log
 
+## 2026-05-11 (Phase 3.6 foundation — tailored-template path)
+
+- **Scope:** Foundation work that unblocks the `phase-3-input-coverage`
+  (transport portion) and `phase-3-fixed-constants` gates by making
+  `INPUT_MAPPING` and the aggregation surface match real-template
+  shape, plus authoring guidance for the sandbox template.
+- **`INPUT_MAPPING` refactor — flat → three-level.**
+  `src/lib/isometric/transformers/datapoint.ts` now keys mapping
+  entries by `(group_key, blueprint_key, input_key)` rather than just
+  `input_key`. Required because real templates re-use blueprints
+  across groups (e.g., the `transport` blueprint appears in both
+  `biomass-feedstock-transport` and `biochar-transport`, with
+  different semantic meaning). New `lookupInputMapping(groupKey,
+  blueprintKey, inputKey)` helper exported.
+- **Datapoint builder signature.** `BuildCreateDatapointArgs` gained
+  `groupKey` + `componentBlueprintKey` fields. The
+  `submitCreditBatch` orchestrator threads them through its
+  `(group, component, rtcInput)` loop and surfaces them in the
+  `SafeError` messages for missing mapping / null source cases.
+- **Transport aggregation.** `AggregatedProductionData` gained three
+  optional fields: `feedstockTransportAvgDistanceKm`,
+  `biocharTransportAvgDistanceKm`, `sampleTransportAvgDistanceKm`.
+  Populated by two new pure helpers in
+  `src/lib/isometric/utils/aggregation.ts`:
+  - `aggregateTransportLegs(legs)` — mass-weighted average
+    `Σ(distance × load_mass) / Σ(load_mass)`. Returns `null` for
+    empty input or when every leg has `loadMassKg == null`. Legs
+    with null mass are skipped (don't contribute to either sum) so
+    the result stays finite.
+  - `enrichWithTransportLegs(agg, { feedstock, biochar, sample })` —
+    layers the three category averages onto an existing aggregation
+    result without mutating it.
+- **Template-validation signatures.** `ResolvedTemplateInput` (in
+  `aggregation.ts`) gained `groupKey`; `validateForTemplate` now
+  takes the nested `NestedInputMapping` shape and reports
+  group/blueprint/input in its `MissingInput.reason` text.
+- **Smoke script.** `scripts/isometric-smoke.ts inspect-template`
+  now reports unmapped entries as
+  `group_key / blueprint_key / input_key` so operators can see which
+  group context an input belongs to.
+- **New doc — `docs/isometric/sandbox-template-authoring.md`.**
+  Step-by-step walkthrough for an admin to author a `noma-mvp`
+  Removal Template in the Registry UI:
+  - 4 components across 4 groups
+    (`co2-stored/carbon_rich_substance_sequestration`,
+    `biomass-feedstock-transport/transport`,
+    `biochar-transport/transport`,
+    `sampling-required-for-mrv/distance_based_ci_emissions`).
+  - 7 monitored inputs (carbon_content, product_mass, distance×2,
+    mass×2, sample distance).
+  - 6 fixed-constant Datapoints to pre-bind
+    (`carbon_intensity` per transport leg, with DEFRA/IPCC defaults).
+  - Omitted from MVP: `grid_electricity_use`, `fuel_usage_by_volume`,
+    `mass_based_ci_emissions`, `metered_energy_based_ci_emissions`
+    (blocked by electricity-readout schema work), `ghg_direct_emissions`
+    (blocked by per-run GHG-concentration schema work), `staff-travel`
+    (noma has no data).
+  - Verification: `pnpm tsx scripts/isometric-smoke.ts
+    inspect-template` should list the new template with all 7
+    monitored inputs unbound and all 3 `carbon_intensity` fixed
+    inputs pre-bound.
+- **New utility — `src/lib/isometric/utils/submission-metadata.ts`.**
+  Pure `getMetadataValue(metadata, key)` helper that safely reads a
+  key off an `unknown` metadata blob (typed as `Record<string,
+  unknown>` after the guard). Replaces three near-identical local
+  copies that previously lived in `certify-panel.tsx`,
+  `certification-page.tsx`, and `ghg-statements.ts`.
+- **Tests.**
+  - All 16 `tests/isometric-transformers.test.ts` cases updated to
+    pass `groupKey` + `componentBlueprintKey` (anchored on
+    `co2-stored / carbon_rich_substance_sequestration`,
+    `biochar-processing / grid_electricity_use`,
+    `sampling-required-for-mrv / mass_based_ci_emissions`).
+  - New `tests/isometric-transport-aggregation.test.ts` — 11 cases
+    covering empty input, single leg, multi-leg mass-weighted
+    average, equal-load simple-average equivalence, null-mass skip,
+    all-null-mass returns null, zero-distance handling, and
+    `enrichWithTransportLegs` non-mutation + non-transport-field
+    preservation.
+  - Full suite: 175 / 178 passing (3 pre-existing skips).
+- **Status snapshot in `integration-plan.md`** updated to
+  2026-05-11 and rewritten to gate on the user authoring `noma-mvp`
+  in the Registry UI rather than on Isometric template configuration
+  in general.
+- **Phase 3.6 still pending:** polymorphic
+  `<TransportLegForm entityType entityId>` + data-access
+  generalization (`getTransportLegsForEntity`) + 3 mount points
+  (delivery, feedstock-delivery, sample) + pre-flight
+  transport-coverage checklist on `<CertifyPanel>`. Electricity-readout
+  and per-run-GHG portions of `phase-3-input-coverage` stay deferred.
+
+## 2026-05-07 (Env awareness + dialog/schema refactor)
+
+- **Scope:** UX polish across the certification dialogs plus a small
+  helper-extraction pass that removed three near-duplicate local
+  implementations. No public API changes; all server actions and
+  data-access functions keep their existing signatures.
+- **New components.**
+  - `src/components/certification/env-banner.tsx` — ambient
+    environment indicator. Sandbox is informational (orange,
+    `TestTube` icon); production is high-attention (red border,
+    `ShieldWarning` icon). Supports `variant="page"` and
+    `variant="inline"` so the same component fits both page headers
+    and inside dialogs. Used in `CertificationPage`, `CertifyPanel`,
+    and inside `ProductionConfirmation`.
+  - `src/components/certification/production-confirmation.tsx` —
+    reusable inline production-environment gate that combines an
+    inline `EnvBanner` with a descriptive checkbox bound to a
+    react-hook-form `confirmProduction` field. Consumed by
+    `GhgStatementCreateDialog`, `GhgStatementSubmitDialog`, and
+    `FacilityCertifierDialog`. Replaces three near-identical
+    per-dialog confirmation gates.
+- **`SubmitConfirmDialog` refactor.** Replaced the freeform
+  `artifactLabel?: string` prop with a typed
+  `artifact?: "removal" | "ghgStatement"` discriminator backed by an
+  internal `ARTIFACT_LABEL` map. Added an `isProduction?: boolean`
+  prop that drives the embedded `EnvBanner`, so the dialog correctly
+  shows the sandbox banner under sandbox (it was hard-coded to
+  production previously). `CertifyPanel` now passes
+  `artifact="removal"` + the resolved `isProduction` flag.
+- **`chooseGhgSubmitMode` ordering fix.**
+  `src/lib/isometric/utils/ghg-statement-state.ts` previously
+  short-circuited an `AWAITING_VERIFICATION` statement into the
+  `resubmit` branch when `pending_total_co2e_removed_kg > 0` because
+  the `pending > 0` check was evaluated before the
+  `AWAITING_VERIFICATION` check. Reordered so
+  `AWAITING_VERIFICATION` blocks first. The matching
+  `chooseGhgSubmitModeFromKnownState` fallback in
+  `ghg-statements.ts` got the same reordering.
+- **`ghgSubmitAppearsApplied` correctness.** Previously trusted
+  `remote.submitted_at !== null` as a "submission landed" signal;
+  but `submitted_at` is set on every Certify-side state transition,
+  not only on transitions away from `DRAFT`. Now checks
+  `status === "AWAITING_VERIFICATION" || status === "VERIFIED"` for
+  an unambiguous post-submit signal.
+- **`isLockedInFlight` consolidated.** Promoted to a shared helper
+  on `src/lib/isometric/utils/lock.ts`:
+  `isLockedInFlight({ status, lockedAt }) -> boolean`. Three call
+  sites collapsed onto it (`loadCreditBatchSubmissionState` in
+  `submit-credit-batch.ts`, `CertifyPanel`/`SubmissionRow`,
+  `CertificationPage`). The page-side variant previously also did
+  date-string parsing because the row may arrive over the
+  serialization boundary as ISO string; that variant is now expressed
+  via `toDate(value)` at the call site, leaving the lock helper a
+  pure `Date | null` consumer.
+- **`getMetadataValue` consolidated.** Moved to
+  `src/lib/isometric/utils/submission-metadata.ts` (see Phase 3.6
+  entry above). The local copies in `certification-page.tsx`,
+  `certify-panel.tsx`, and `ghg-statements.ts` were deleted.
+- **Centralized GHG-statement schemas.**
+  `src/schemas/certification.ts` now owns
+  `createGhgStatementSchema`, `submitGhgStatementSchema`,
+  `submitGhgStatementDialogSchema`, and the
+  `buildSubmitGhgStatementDialogSchema({ isResubmit, isProduction })`
+  factory. The factory returns a schema that conditionally requires
+  `summaryOfChanges` (resubmit-only) and `confirmProduction`
+  (production-only). `GhgStatementCreateDialog` and
+  `GhgStatementSubmitDialog` were updated to import from there
+  rather than declaring their own inline schemas.
+- **`httpsUrlSchema` added.** A shared
+  "valid URL + must use HTTPS" schema for report URLs, used by both
+  the GHG-statement create and submit flows.
+- **Zod 4 migration touchups.** `createGhgStatementSchema` and
+  `submitGhgStatementDialogSchema` now use Zod 4's unified `error`
+  parameter (instead of `message`), the new
+  `superRefine` → `check` callback shape (mutating `ctx.issues`),
+  and `parseLocalDateString` / `formatLocalDate` from
+  `@/lib/date-utils` instead of two private helpers. Net effect: one
+  source of truth for "yyyy-mm-dd in this user's local time."
+- **`panel-layout.tsx` — `<dt>`/`<dd>` → `<div>`.** `Field` previously
+  emitted a `<dt>`/`<dd>` pair without a wrapping `<dl>`, which is
+  invalid markup. Switched to plain `<div>` to keep the visual
+  structure without the HTML conformance error.
+- **`certify-panel.tsx` orchestration fixups.**
+  - Hoisted `MS_PER_SECOND` / `SECONDS_PER_MINUTE` to module-level
+    constants (instead of being re-declared every render of
+    `formatElapsed`).
+  - Added a `toDate(value)` helper that coerces the
+    `Date | string | null | undefined` shape from server-serialised
+    rows; `ElapsedChip` only renders when `toDate(latest.lockedAt)`
+    returns a finite `Date`.
+  - `deriveErrorMessage` now reads `rejectionReason` via
+    `getMetadataValue` instead of an ad-hoc `key in metadata` check.
+- **`submitCreditBatch` orchestration fixups.**
+  - Lineage fetch parallelised:
+    `creditBatch.applicationIds.map((id) => getChainOfCustodyData(...))`
+    is now wrapped in `Promise.all` rather than awaited
+    sequentially.
+  - `LOCK_TTL_MS` re-export removed from
+    `src/data-access/certification.ts`; the constant now lives only
+    in `src/lib/isometric/utils/lock.ts` and is imported directly by
+    the two server-action files that need it.
+- **`ghg-statements.ts` orchestration fixups.**
+  - `submitGhgStatementForFacility` parallelised its preflight
+    reads (`getGhgPeriodById`, `getCertifierProjectByFacility`,
+    `getFacilityById`, `getGhgStatement`) under one `Promise.all`.
+- **Dependency bump.** `next` and `eslint-config-next` from
+  `16.2.5` → `16.2.6`. No code changes required.
+- **`src/lib/isometric/client.ts` defensive fix.** When an outer
+  `AbortController` aborts without a `reason`, the request now
+  throws a synthetic `new Error("Isometric request aborted")`
+  instead of `throw undefined`.
+- **Open question resolved.** `docs/open-questions.md`'s
+  `Live-template INPUT_MAPPING coverage` block was trimmed to a
+  one-line status summary; the detailed findings are now covered by
+  `phase-3-input-coverage` / `phase-3-fixed-constants` plus the
+  Phase 3.6 changes-log entry above.
+
 ## 2026-05-07 (Phase 6 deferred — outbound links shipped)
 
 - **Resolved open question:** Datapoints with empty `source_ids` are valid for

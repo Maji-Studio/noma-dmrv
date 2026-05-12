@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui";
 import { FormField, FormInput, ServerError } from "@/components/forms";
@@ -27,7 +26,6 @@ export function GhgStatementCreateDialog({
   onClose,
   isProduction,
 }: GhgStatementCreateDialogProps) {
-  const dialogRef = useDialog(isOpen, onClose);
   const mutation = useCreateGhgStatementForFacility();
   const toast = useToast();
   const {
@@ -43,12 +41,7 @@ export function GhgStatementCreateDialog({
       confirmProduction: false,
     },
   });
-
-  useEffect(() => {
-    if (!isOpen) {
-      reset();
-    }
-  }, [isOpen, reset]);
+  const dialogRef = useDialog(isOpen, onClose, reset);
 
   if (!isOpen) return null;
 

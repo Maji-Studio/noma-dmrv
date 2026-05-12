@@ -1,0 +1,140 @@
+# Sandbox Template Authoring — noma-tailored Removal Template
+
+A one-time walkthrough for an admin to author a sandbox Removal Template in
+Isometric's Registry UI that noma can actually fill end-to-end. This unblocks
+the Phase 3 `submitCreditBatch` write path against
+`api.sandbox.isometric.com` / project `prj_1K9YJ33RKSBX9FFF`.
+
+The sandbox's two default templates (`Protocol default`,
+`Dark Earth removal template`) declare **21 monitored inputs** and **~12
+unbound fixed constants** — most of which noma can't supply today
+(`docs/open-questions.md` → `isometric/phase-3-input-coverage`,
+`isometric/phase-3-fixed-constants`). Authoring a tailored template that
+declares only the inputs noma already aggregates side-steps both gates.
+
+## Scope (MVP)
+
+The MVP template contains **4 components across 4 groups**, covering
+**7 monitored inputs** sourced from noma's aggregation pipeline plus
+**6 fixed-constant Datapoints** pre-bound in the template editor.
+
+| Group key | Component (blueprint) | Monitored inputs | Fixed constants |
+|---|---|---|---|
+| `co2-stored` | CO₂ stored from biochar application (`carbon_rich_substance_sequestration`) | `carbon_content`, `product_mass` | — |
+| `biomass-feedstock-transport` | Biomass transportation to processing site via truck (`transport`) | `distance`, `mass` | `carbon_intensity` |
+| `biochar-transport` | Biochar transportation to storage site via truck (`transport`) | `distance`, `mass` | `carbon_intensity` |
+| `sampling-required-for-mrv` | Sample transportation via car (`distance_based_ci_emissions`) | `distance` | `carbon_intensity` |
+
+Omitted from MVP (incremental follow-ups):
+
+- `grid_electricity_use` (biochar processing electricity, lab electricity)
+- `fuel_usage_by_volume` (biomass handling, processing fuel)
+- `mass_based_ci_emissions` (sampling consumables)
+- `metered_energy_based_ci_emissions` (pyrolyzer electricity — blocked by
+  electricity-readout schema work, see `phase-3-input-coverage`)
+- `ghg_direct_emissions` (CH₄ / CO direct emissions — blocked by per-run
+  GHG-concentration schema work)
+- `staff-travel` group (noma has no data for this category)
+
+## Prerequisites
+
+- Isometric account with admin access to project
+  `prj_1K9YJ33RKSBX9FFF` (sandbox demo).
+- `.env.local` already has `ISOMETRIC_ENVIRONMENT=sandbox`,
+  `ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`,
+  `ISOMETRIC_DEMO_PROJECT_ID=prj_1K9YJ33RKSBX9FFF` (verified
+  2026-05-11 via `scripts/isometric-smoke.ts inspect-template`).
+
+## Step 1 — Create the template
+
+1. Open `https://registry.sandbox.isometric.com` and sign in.
+2. Navigate to project `prj_1K9YJ33RKSBX9FFF` → **Removal Templates** →
+   **New template**.
+3. Name it `noma-mvp` (or any name; keep it short — facility settings
+   reference the `rt_…` ID, not the name).
+
+## Step 2 — Add the 4 components
+
+For each row in the MVP table above, click **Add component**, then:
+
+a. **CO₂ stored from biochar application** — group `co2-stored`,
+   blueprint `carbon_rich_substance_sequestration`.
+
+b. **Biomass transportation to processing site via truck** — group
+   `biomass-feedstock-transport`, blueprint `transport`. Default
+   display name is fine.
+
+c. **Biochar transportation to storage site via truck** — group
+   `biochar-transport`, blueprint `transport`.
+
+d. **Sample transportation via car** — group
+   `sampling-required-for-mrv`, blueprint `distance_based_ci_emissions`.
+
+Leave all monitored inputs (carbon_content, product_mass, distance, mass)
+unbound — noma supplies these as Datapoints at submit time.
+
+## Step 3 — Pre-bind fixed constants
+
+Each `type=fixed` input needs a Datapoint bound in the template editor.
+For each fixed input below, in the template editor click **Bind
+constant** → **Create new Datapoint** → enter `magnitude` + `unit` →
+save → re-open the input row and select the new Datapoint.
+
+| Component | Input | Recommended value | Source |
+|---|---|---|---|
+| Biomass transport via truck | `carbon_intensity` | `100` gCO2e / (tonne · km) | DEFRA / IPCC default for heavy-duty diesel truck |
+| Biochar transport via truck | `carbon_intensity` | `100` gCO2e / (tonne · km) | Same |
+| Sample transport via car | `carbon_intensity` | `0.171` kgCO2e / km | DEFRA average passenger car |
+
+The CO₂ stored component (`carbon_rich_substance_sequestration`) has no
+fixed inputs in the demo blueprint — verify the same is true after
+creation; if any appear, bind them and update this doc.
+
+If a verifier requests different emission factors, edit each Datapoint's
+magnitude in the registry UI; the template ID stays the same.
+
+## Step 4 — Save and link
+
+1. Click **Save** at the top of the template editor.
+2. Copy the new template ID (format `rt_…` or `rvt_…`).
+3. In noma, open the facility side-sheet that's linked to
+   `prj_1K9YJ33RKSBX9FFF` → **Edit Isometric mapping** → set
+   **Default removal template** to the new template → save.
+4. Verify via:
+   ```bash
+   pnpm tsx scripts/isometric-smoke.ts inspect-template
+   ```
+   The output should now include the new `noma-mvp` template alongside
+   the existing two. All 7 monitored inputs should show `preboundDatapoint=—`;
+   all 3 fixed `carbon_intensity` inputs should show `preboundDatapoint=dtp_…`.
+
+## Step 5 — End-to-end submit
+
+1. Open a credit batch whose facility is linked to the sandbox project
+   and has the new template set as default.
+2. Record transport legs:
+   - For the credit batch's outbound delivery: at least one
+     `entityType='delivery'` leg with `distance_km` and `load_mass_kg`.
+   - For each upstream feedstock delivery: at least one
+     `entityType='feedstock'` leg.
+   - For at least one sample taken during the production runs: at least
+     one `entityType='sample'` leg.
+3. On the Certify Panel, verify the **Transport coverage** checklist
+   shows ✓ for all three categories. The Submit button enables.
+4. Click **Submit to Isometric**. A real Removal appears in the sandbox
+   registry. The `certification_submissions` table has a row with
+   `version=1`, `status='submitted'`, and `externalId=rmv_…`.
+5. Re-click Submit — no-op (matched payload hash).
+
+## Troubleshooting
+
+- **`SafeError: No INPUT_MAPPING entry for ...`** — A blueprint or
+  input on your template isn't covered in
+  `src/lib/isometric/transformers/datapoint.ts`. Either remove that
+  component from the template or add the entry.
+- **`SafeError: ... fixed input ... without a pre-bound datapoint`** —
+  Re-open the template in the registry UI and bind a Datapoint for
+  every fixed input.
+- **`SafeError: Aggregated source ... is null`** — The credit batch's
+  upstream chain has missing data (no transport legs, no biochar mass,
+  etc.). Fix the source data, not the template.

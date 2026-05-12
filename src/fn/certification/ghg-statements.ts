@@ -13,7 +13,6 @@ import {
   insertDraftSubmissionWithMappingLock,
   listGhgSubmissionsForProject,
   listSubmissionsForFacility,
-  LOCK_TTL_MS,
   markSubmissionRejected,
   markSubmissionSubmitted,
   resetSubmissionToDraftWithMappingLock,
@@ -45,6 +44,8 @@ import {
   ghgSubmitFingerprintChanged,
   type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementSchema,
@@ -253,20 +254,16 @@ export async function submitGhgStatementForFacility(
       throw new SafeError("Create the GHG statement before submitting it.");
     }
 
-    const period = await getGhgPeriodById(userId, submission.localEntityId);
+    const [period, mapping, facility, remoteBefore] = await Promise.all([
+      getGhgPeriodById(userId, submission.localEntityId),
+      getCertifierProjectByFacility(userId, facilityId, ISOMETRIC_PROVIDER),
+      getFacilityById(userId, facilityId),
+      getGhgStatement(submission.externalId).catch(() => null),
+    ]);
     if (!period) throw new SafeError("GHG statement period not found.");
-    const mapping = await getCertifierProjectByFacility(
-      userId,
-      facilityId,
-      ISOMETRIC_PROVIDER,
-    );
     if (!mapping || mapping.externalProjectId !== period.externalProjectId) {
       throw new SafeError("Selected facility is not linked to this GHG statement project.");
     }
-    const facility = await getFacilityById(userId, facilityId);
-    const remoteBefore = await getGhgStatement(submission.externalId).catch(
-      () => null,
-    );
     const submitMode = chooseGhgSubmitModeFromKnownState(
       remoteBefore,
       submission,
@@ -588,19 +585,19 @@ function chooseGhgSubmitModeFromKnownState(
 ): GhgSubmitMode {
   if (remote) return chooseGhgSubmitMode(remote);
 
-  const status = getSubmissionMetadataValue(submission, "remoteStatus");
-  const pendingTotal = getSubmissionMetadataValue(
-    submission,
+  const status = getMetadataValue(submission.metadata, "remoteStatus");
+  const pendingTotal = getMetadataValue(
+    submission.metadata,
     "pendingTotalCo2eRemovedKg",
   );
   if (status === "DRAFT") return "submit";
+  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (
     status === "FAILED_VERIFICATION" ||
     (typeof pendingTotal === "number" && pendingTotal > 0)
   ) {
     return "resubmit";
   }
-  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
   if (typeof status === "string") return "blocked-verified";
 
   throw new SafeError("Unable to determine the GHG statement submit state.");
@@ -612,22 +609,8 @@ function ghgSubmitAppearsApplied(
 ): boolean {
   return (
     remote.ghg_statement_report_url === reportUrl &&
-    (remote.status === "AWAITING_VERIFICATION" || remote.submitted_at !== null)
+    (remote.status === "AWAITING_VERIFICATION" || remote.status === "VERIFIED")
   );
-}
-
-function getSubmissionMetadataValue(
-  submission: CertificationSubmissionRow,
-  key: string,
-): unknown {
-  if (
-    typeof submission.metadata === "object" &&
-    submission.metadata !== null &&
-    key in submission.metadata
-  ) {
-    return (submission.metadata as Record<string, unknown>)[key];
-  }
-  return null;
 }
 
 function buildSubmitRequestPayload(

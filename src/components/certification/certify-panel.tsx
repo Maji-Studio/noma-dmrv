@@ -20,6 +20,7 @@ import {
   useSubmitCreditBatch,
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
+import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
 import { EnvBanner } from "./env-banner";
 import { Section } from "./panel-layout";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -169,6 +170,7 @@ function SubmissionRow({
   }
 
   const { latest, recentSyncEvents, isLockedInFlight } = state;
+  const lockedAt = toDate(latest?.lockedAt);
   const submitDisabled =
     !canSubmit || isLockedInFlight || submitMutation.isPending;
 
@@ -218,9 +220,7 @@ function SubmissionRow({
               latest={latest}
               isLockedInFlight={isLockedInFlight}
             />
-            {isLockedInFlight && latest?.lockedAt && (
-              <ElapsedChip since={latest.lockedAt} />
-            )}
+            {isLockedInFlight && lockedAt && <ElapsedChip since={lockedAt} />}
           </div>
           <SubmissionMeta latest={latest} />
         </div>
@@ -255,7 +255,8 @@ function SubmissionRow({
           fireSubmit(true);
         }}
         isPending={submitMutation.isPending}
-        artifactLabel="Removal"
+        artifact="removal"
+        isProduction={isProduction}
       />
     </div>
   );
@@ -301,6 +302,8 @@ function ElapsedChip({ since }: { since: Date }) {
 }
 
 const ELAPSED_TICK_MS = 1000;
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
 
 function useElapsed(since: Date): number {
   const [now, setNow] = useState(() => Date.now());
@@ -311,9 +314,14 @@ function useElapsed(since: Date): number {
   return Math.max(0, now - since.getTime());
 }
 
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
 function formatElapsed(ms: number): string {
-  const SECONDS_PER_MINUTE = 60;
-  const totalSeconds = Math.floor(ms / 1000);
+  const totalSeconds = Math.floor(ms / MS_PER_SECOND);
   if (totalSeconds < SECONDS_PER_MINUTE) return `${totalSeconds}s`;
   const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
   const seconds = totalSeconds % SECONDS_PER_MINUTE;
@@ -326,15 +334,8 @@ function deriveErrorMessage(
 ): string | null {
   if (!latest) return null;
   if (latest.status === "rejected") {
-    const rejectionFromMetadata =
-      latest.metadata &&
-      typeof latest.metadata === "object" &&
-      "rejectionReason" in (latest.metadata as Record<string, unknown>)
-        ? (latest.metadata as Record<string, unknown>).rejectionReason
-        : null;
-    if (typeof rejectionFromMetadata === "string" && rejectionFromMetadata) {
-      return rejectionFromMetadata;
-    }
+    const rejection = getMetadataValue(latest.metadata, "rejectionReason");
+    if (typeof rejection === "string" && rejection) return rejection;
   }
   const lastFailure = recentSyncEvents.find((e) => e.status === "failed");
   return lastFailure?.errorMessage ?? null;

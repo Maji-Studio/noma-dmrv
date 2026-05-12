@@ -19,22 +19,64 @@ protocol requirements; pull SOPs/docs; submit GHG statements for verification.
 **Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
 Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
 
-## Status snapshot (2026-05-06)
+## Status snapshot (2026-05-11)
 
 **Shipped:** Phases 0–4 read paths, plus the Phase 3 write path
 end-to-end. Sandbox is wired up (`api.sandbox.isometric.com`,
 project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
 `tests/isometric-sandbox.integration.test.ts`.
 
+**Phase 3.6 foundation landed 2026-05-11** (tailored-template path
+that unblocks `phase-3-input-coverage` / `phase-3-fixed-constants`):
+
+- `INPUT_MAPPING` refactored from flat `Record<string, …>` to
+  three-level `Record<group_key, Record<blueprint_key, Record<input_key, …>>>`
+  in `src/lib/isometric/transformers/datapoint.ts`. Disambiguation by
+  `(group_key, blueprint_key, input_key)` is required because real
+  templates re-use blueprints across groups (e.g., `transport` appears
+  twice — biomass→processing AND biochar→storage). New helper
+  `lookupInputMapping(groupKey, blueprintKey, inputKey)` exported.
+- `BuildCreateDatapointArgs` gained `groupKey` + `componentBlueprintKey`
+  fields; `submit-credit-batch.ts` orchestrator threads them through.
+- `AggregatedProductionData` extended with three optional fields:
+  `feedstockTransportAvgDistanceKm`, `biocharTransportAvgDistanceKm`,
+  `sampleTransportAvgDistanceKm`. Populated by new
+  `enrichWithTransportLegs(agg, { feedstock, biochar, sample })` pure
+  helper that calls `aggregateTransportLegs(legs)` (mass-weighted
+  average: `Σ(distance × load_mass) / Σ(load_mass)`).
+- `ResolvedTemplateInput` (in `aggregation.ts`) gained `groupKey` field;
+  `validateForTemplate` updated to use nested lookup.
+- `scripts/isometric-smoke.ts inspect-template` now reports the
+  `(group, blueprint, input)` tuple for any unmapped entries.
+- New `docs/isometric/sandbox-template-authoring.md` — step-by-step
+  walkthrough for an admin to author a noma-tailored template
+  (4 components, 7 monitored inputs, 6 fixed constants) in the
+  Registry UI so Phase 3 sandbox writes can succeed end-to-end.
+- Tests: 16 transformer tests updated + 11 new
+  `tests/isometric-transport-aggregation.test.ts` cases covering
+  mass-weighted average correctness, null/empty handling, and
+  `enrichWithTransportLegs` non-mutation. Full suite: 175 / 178
+  passing (3 pre-existing skips).
+
+**Phase 3.6 still pending:** polymorphic
+`<TransportLegForm entityType entityId>` + data-access generalization
+(`getTransportLegsForEntity`) + 3 mount points (delivery,
+feedstock-delivery, sample) + pre-flight transport-coverage checklist
+on `<CertifyPanel>`. Decisions recorded in
+`~/.claude/plans/whats-next-schema-changes-curried-hickey.md`.
+
 **Outstanding:**
 
 - *Blocked on Isometric* — webhook contract publication; multi-org
   credentials roadmap (Q3 below). Tracked in `docs/open-questions.md`.
-- *Blocked on configuration in the Isometric template editor* —
-  `phase-3-input-coverage` (21 unmapped monitored inputs on sandbox
-  templates) and `phase-3-fixed-constants` (~12 unbound constants).
-  Either author a noma-tailored sandbox template or pre-bind the
-  current ones; both are one-time work.
+- *Blocked on the user authoring `noma-mvp` template in the Isometric
+  Registry UI* — Phase 3 sandbox write E2E gated on having a template
+  whose monitored inputs are subsets of `INPUT_MAPPING`. Walkthrough at
+  `docs/isometric/sandbox-template-authoring.md`. After template ships,
+  `phase-3-input-coverage` (transport portion) and
+  `phase-3-fixed-constants` close. Electricity-readout and per-run-GHG
+  portions of `phase-3-input-coverage` stay deferred (need schema
+  work; not part of Phase 3.6).
 - *Blocked on a noma subsystem* — `phase-3.5` source-upload
   presigned-URL flow waits on the documents subsystem getting a real
   S3 backend.
@@ -659,7 +701,7 @@ production. Phase 5 also owns the carryover items consolidated in
 contract, external GHG amendment claiming, hash-changed partial-orphan
 cleanup).
 
-### Phase 6 — Protocol/SOP surfacing (deferred indefinitely; outbound links shipped)
+### Phase 6 — Protocol/SOP surfacing (deferred indefinitely)
 
 The Certify API does not expose protocol-compliance rules. Three paths
 were on the table:
@@ -671,15 +713,12 @@ were on the table:
   `mcp__claude_ai_isometric__protocols_get_content` /
   `isometric_docs_get`. Only viable if the MCP server is reachable from
   the Next.js runtime.
-- **Outbound links (chosen 2026-05-07):** plain `<a target="_blank">`
-  links from the Certify UI to authoritative pages on
-  `registry.isometric.com` and `docs.isometric.com`. Shipped via
-  `src/lib/isometric/links.ts` (URL builders) plus link additions in
-  `facility-certifier-section.tsx`, `certify-panel.tsx`, and
-  `certification-page.tsx`. Zero ongoing maintenance, no new
-  dependencies, no new routes. Snapshot/runtime paths above are
-  deferred indefinitely; revisit only if operators report that
-  external tab-switching is a real friction point.
+- **Outbound links:** plain `<a target="_blank">` links from the
+  Certify UI to authoritative pages on `registry.isometric.com` and
+  `docs.isometric.com`. Zero ongoing maintenance, no new dependencies,
+  no new routes. Snapshot/runtime paths above are deferred
+  indefinitely; revisit only if operators report that external
+  tab-switching is a real friction point.
 
 ## What to deliberately NOT do (lessons from varuna AND this review)
 

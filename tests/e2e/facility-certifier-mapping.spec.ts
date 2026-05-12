@@ -27,15 +27,14 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });
 
 import * as crypto from "crypto";
-import { drizzle } from "drizzle-orm/node-postgres";
 import { and, eq } from "drizzle-orm";
-import { Pool } from "pg";
 import {
   createTestFacility,
   deleteTestFacility,
   expect,
   test,
 } from "./fixtures";
+import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 
 const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
@@ -44,14 +43,6 @@ const UNLINK_GUARD_MESSAGE =
   "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.";
 
 const RUN_ID = crypto.randomUUID().slice(0, 8);
-
-function createDbConnection() {
-  const databaseUrl =
-    process.env.DATABASE_URL ||
-    "postgresql://postgres:postgres@localhost:5432/app_template_test";
-  const pool = new Pool({ connectionString: databaseUrl });
-  return { db: drizzle(pool, { schema }), pool };
-}
 
 test.describe("Facility ↔ Isometric project mapping", () => {
   test.skip(

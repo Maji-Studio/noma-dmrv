@@ -18,27 +18,13 @@
  * The UI navigation tests verify the end-to-end workflow is accessible.
  */
 import { test, expect } from "@playwright/test";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import { eq } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import * as crypto from "crypto";
+import { createDbConnection } from "./fixtures/db";
 
 // Test run unique ID to avoid collisions
 const testRunId = crypto.randomUUID().slice(0, 8);
-
-// Database connection helper
-function createDbConnection() {
-  const databaseUrl =
-    process.env.DATABASE_URL ||
-    "postgresql://postgres:postgres@localhost:5432/app_template_test";
-
-  const pool = new Pool({
-    connectionString: databaseUrl,
-  });
-
-  return { db: drizzle(pool, { schema }), pool };
-}
 
 // ============================================
 // Full Workflow Data Types

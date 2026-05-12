@@ -14,69 +14,65 @@ Each entry follows this shape:
 
 ## Isometric Certify integration
 
-### Pre-coding gates (status as of 2026-05-06)
+### Pre-coding gates (status as of 2026-05-11)
 
-- **Live-template `INPUT_MAPPING` coverage** (`isometric/phase-3`) — opened 2026-05-05, **GAPS FOUND**
-  - Ran `pnpm tsx scripts/isometric-smoke.ts inspect-template` against the demo
-    project's two default templates ("Protocol default", "Biochar"). Findings:
-    - **Fixed `carbon_content` mismatch — RESOLVED.** Blueprint expects
-      `quantity_kind=dimensionless` / `unit=dimensionless` (a 0–1 fraction);
-      mapping previously declared `mass_fraction` / `%`. Updated mapping with
-      a `/100` transform from `samples.organicCarbonPercent`.
-    - **20 monitored inputs not covered by `INPUT_MAPPING`.** See
-      `isometric/phase-3-input-coverage` below for the full list and noma-side
-      data availability per input.
-    - **All `type=fixed` constants on the demo template are NOT pre-bound**
-      (carbon_intensity, GWP, emissions_factor, etc.). `submitCreditBatch` now
-      bails with a clear "bind constants in the Isometric template editor"
-      message. Tracked separately under
-      `isometric/phase-3-fixed-constants` below.
-  - Current status: sandbox verification found the same template-readiness
-    blocker class as the demo project. Gates D (credit-batch Removal POST +
-    idempotency + stale-lock recovery) and E (GHG statement lifecycle) remain
-    `blocked-by-template-readiness` until a sandbox template has required-input
-    coverage and pre-bound fixed constants. The dated re-check log is archived
-    in `docs/archive/isometric-sandbox-recheck-2026-05-06.md`.
+- **Live-template `INPUT_MAPPING` coverage** (`isometric/phase-3`) — opened
+  2026-05-05, **resolution path chosen** (Phase 3.6).
+  - Resolution path: author a noma-tailored `noma-mvp` Removal Template in
+    the sandbox Registry UI (walkthrough at
+    `docs/isometric/sandbox-template-authoring.md`). Phase 3.6 foundation
+    landed 2026-05-11 — `INPUT_MAPPING` refactored to three-level
+    `(group, blueprint, input)`, transport-leg aggregation utilities added,
+    smoke script updated. Once the template ships, the transport portion of
+    `phase-3-input-coverage` and all of `phase-3-fixed-constants` close.
 
 ### Phase 3 blockers found in template inspection
 
-- **`isometric/phase-3-input-coverage`** — opened 2026-05-05
-  - 20 monitored inputs on the demo project's default templates have no
-    `INPUT_MAPPING` entry. Categories:
+- **`isometric/phase-3-input-coverage`** — opened 2026-05-05, **partial
+  progress 2026-05-11**.
+  - Original 20–21 monitored inputs without `INPUT_MAPPING` entries, split
+    into three categories. Status now:
     - `distance` (km) — used by 4 transport components (biomass→processing,
-      biochar→storage, sample→lab, staff travel). noma has per-leg `distance_km`
-      on `transport_legs` (logistics.ts:174); aggregation needs to roll up
-      transport-leg distances per credit-batch application — a new aggregation
-      surface, not a production-run extension.
-    - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity meter
-      pre/post readings. noma stores `production_runs.electricityKwh` as a
-      delta only; pre/post readouts are not captured. Either add columns or
-      synthesize (`final = electricityKwh`, `initial = 0`).
+      biochar→storage, sample→lab, staff travel). noma has per-leg
+      `distance_km` on `transport_legs`. **Foundation landed 2026-05-11:**
+      `aggregateTransportLegs` + `enrichWithTransportLegs` helpers (mass-
+      weighted average), plus three new fields on `AggregatedProductionData`
+      (`feedstockTransportAvgDistanceKm`, `biocharTransportAvgDistanceKm`,
+      `sampleTransportAvgDistanceKm`). Staff travel intentionally omitted
+      from the MVP template. **Still pending:** polymorphic
+      `<TransportLegForm entityType entityId>` + data-access generalization
+      (`getTransportLegsForEntity`) + 3 mount points (delivery,
+      feedstock-delivery, sample) + pre-flight transport-coverage checklist
+      on `<CertifyPanel>`.
+    - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity
+      meter pre/post readings. noma stores `production_runs.electricityKwh`
+      as a delta only; pre/post readouts are not captured. **Still
+      deferred:** out of scope for Phase 3.6; needs schema work
+      (add columns or synthesize).
     - `concentration` (mg/kg) + `mass_flow` (kg) — pyrolyzer GHG direct
       emissions (CH4, CO). noma has `credit_batches.ch4Ppm` /
-      `ch4CompositionPercent` but at credit-batch level, not run level. Mapping
-      shape mismatches (concentration is mg/kg, ppm is by mass at trace level).
-  - Why it matters: every monitored input above is required by the demo
-    template. Submitting the demo template's full graph requires either
-    extending noma's schema/aggregation or asking the supplier to author a
-    simpler removal template.
-  - Resolve via product call: do we (a) author a noma-tailored removal
-    template via Isometric's UI that uses only inputs noma has data for, or
-    (b) extend noma to capture transport legs + electricity readouts + GHG
-    concentrations? (a) is fastest; (b) is right long-term.
+      `ch4CompositionPercent` but at credit-batch level, not run level.
+      Unit-shape mismatch (concentration is mg/kg; ppm is by mass at trace
+      level). **Still deferred:** needs per-run GHG-concentration schema
+      work; out of scope for Phase 3.6.
+  - Resolve fully: ship the Phase 3.6 transport-leg UI + checklist (now
+    on the next-up list), then revisit electricity-readout and per-run-GHG
+    when a tailored sandbox template needs those components.
 
-- **`isometric/phase-3-fixed-constants`** — opened 2026-05-05
-  - The demo templates have ~12 `type=fixed` constants (carbon intensities,
-    GWP, emission factors, specific volumes) without pre-bound datapoints.
-    Phase 3's orchestrator bails with `SafeError` directing the admin to
-    Isometric's template editor.
+- **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
+  path documented 2026-05-11**.
+  - The default sandbox templates (`Protocol default`,
+    `Dark Earth removal template`) have ~12 `type=fixed` constants without
+    pre-bound datapoints. Phase 3's orchestrator bails with `SafeError`
+    directing the admin to Isometric's template editor.
   - Why: constants are policy-level decisions (which emission factor to
     use for which fuel, which IPCC GWP value to use) — Isometric maintains
     these via supplier-managed Datapoints bound to the template, not
     noma-managed values. Phase 3 explicitly does not auto-create them.
-  - Resolve via Isometric template setup: pre-bind a Datapoint per fixed
-    input in the registry UI before the first credit-batch submission. This
-    is one-time work per template, not per submission.
+  - Resolve via the `noma-mvp` template authoring walkthrough
+    (`docs/isometric/sandbox-template-authoring.md`, Step 3 —
+    "Pre-bind fixed constants"). MVP scope = 3 `carbon_intensity`
+    bindings (one per transport leg) using DEFRA/IPCC defaults.
 
 ### Phase 4 deferrals
 
