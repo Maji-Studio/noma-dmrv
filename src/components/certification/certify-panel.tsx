@@ -42,7 +42,7 @@ export function CertifyPanel({ creditBatchId }: CertifyPanelProps) {
             className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)] inline-flex items-center gap-4"
           >
             View in certification
-            <ArrowSquareOut size={12} weight="bold" />
+            <ArrowSquareOut size={ICON_SIZE_SMALL} weight="bold" />
           </Link>
         </header>
         <PanelBody creditBatchId={creditBatchId} />
@@ -231,7 +231,7 @@ function SubmissionRow({
           disabled={submitDisabled}
         >
           {!isLockedInFlight && submitMutation.isPending && (
-            <ArrowsClockwise size={14} className="animate-spin" />
+            <ArrowsClockwise size={ICON_SIZE_MEDIUM} className="animate-spin" />
           )}
           {buttonLabel}
         </Button>
@@ -304,6 +304,8 @@ function ElapsedChip({ since }: { since: Date }) {
 const ELAPSED_TICK_MS = 1000;
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
+const ICON_SIZE_SMALL = 12;
+const ICON_SIZE_MEDIUM = 14;
 
 function useElapsed(since: Date): number {
   const [now, setNow] = useState(() => Date.now());
@@ -336,6 +338,9 @@ function deriveErrorMessage(
   if (latest.status === "rejected") {
     const rejection = getMetadataValue(latest.metadata, "rejectionReason");
     if (typeof rejection === "string" && rejection) return rejection;
+  }
+  if (latest.status === "submitted" || latest.status === "accepted") {
+    return null;
   }
   const lastFailure = recentSyncEvents.find((e) => e.status === "failed");
   return lastFailure?.errorMessage ?? null;
