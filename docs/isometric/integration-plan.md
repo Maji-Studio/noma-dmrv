@@ -19,12 +19,56 @@ protocol requirements; pull SOPs/docs; submit GHG statements for verification.
 **Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
 Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
 
-## Status snapshot (2026-05-11)
+## Status snapshot (2026-05-13)
 
 **Shipped:** Phases 0–4 read paths, plus the Phase 3 write path
-end-to-end. Sandbox is wired up (`api.sandbox.isometric.com`,
+end-to-end **with full transport-leg coverage (Phase 3.6 ✅ DONE)**.
+Sandbox is wired up (`api.sandbox.isometric.com`,
 project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
 `tests/isometric-sandbox.integration.test.ts`.
+
+**Phase 3.6 completed 2026-05-13** — the UI / submission half of the
+phase that the 2026-05-11 foundation set up. Delivers:
+
+- **Polymorphic transport-leg CRUD** — new
+  `src/data-access/transport-legs.ts` with
+  `getTransportLegsForEntity(userId, entityType, entityId)` +
+  `getTransportLegsForEntities(userId, entityType, entityIds[])`
+  (bulk) + auth-guarded create/update/delete with per-entityType
+  existence checks. `entityType='feedstock'` references
+  `feedstocks.id` (not the vestigial `feedstock_deliveries.id` —
+  users only interact with the combined `feedstocks` surface).
+- **Schemas / server actions / hooks** —
+  `src/schemas/transport-legs.ts` (Zod superRefine mirrors the DB
+  energy-usage vs distance-based check constraints),
+  `src/fn/transport-legs.ts` (`withAction`-wrapped),
+  `src/hooks/use-transport-legs.ts`.
+- **Polymorphic UI** — `TransportLegForm` (modal, method-conditional
+  required fields) + `TransportLegsPanel` (list / add / edit / delete)
+  in `src/components/transport-legs/`. Mounted via `viewModeChildren`
+  on the delivery side-sheet (replacing the read-only display),
+  sample side-sheet, and feedstock side-sheet. Legacy
+  `useTransportLegsForDelivery` / `getTransportLegsForDeliveryFn`
+  removed.
+- **Lineage walker** — new pure
+  `src/lib/isometric/utils/transport-lineage.ts` with
+  `collectTransportEntityIds(lineages, runs)` returning
+  `{feedstockIds, biocharProductIds, sampleIds}`. Shared by both
+  `submit-credit-batch.ts` and `certify-context.ts`.
+- **Submission wiring** — `submitCreditBatch` now calls
+  `collectTransportEntityIds` → `getTransportLegsForEntities`
+  (parallel per category) → `enrichWithTransportLegs(agg, …)` before
+  payload build. Submitted Removals carry real transport distances.
+- **Pre-flight coverage UX** — `<CertifyPanel>` reads new
+  `transportCoverage` field from the context loader and renders a
+  three-row checklist (`✓ Feedstock — 3 legs` /
+  `! Sample — no legs recorded. Add legs →`). Submit button is
+  disabled when any category is empty; the tooltip names the missing
+  categories.
+- **Tests** — full suite green: 28 files / 182 tests, 3 pre-existing
+  skips. New `tests/isometric-transport-lineage.test.ts` (6 cases)
+  covers the lineage walker; `tests/isometric-certify-context.test.ts`
+  extended (now 6 cases incl. populated-coverage walker assertions).
 
 **Phase 3.6 foundation landed 2026-05-11** (tailored-template path
 that unblocks `phase-3-input-coverage` / `phase-3-fixed-constants`):
@@ -58,13 +102,6 @@ that unblocks `phase-3-input-coverage` / `phase-3-fixed-constants`):
   `enrichWithTransportLegs` non-mutation. Full suite: 175 / 178
   passing (3 pre-existing skips).
 
-**Phase 3.6 still pending:** polymorphic
-`<TransportLegForm entityType entityId>` + data-access generalization
-(`getTransportLegsForEntity`) + 3 mount points (delivery,
-feedstock-delivery, sample) + pre-flight transport-coverage checklist
-on `<CertifyPanel>`. Decisions recorded in
-`~/.claude/plans/whats-next-schema-changes-curried-hickey.md`.
-
 **Outstanding:**
 
 - *Blocked on Isometric* — webhook contract publication; multi-org
@@ -73,7 +110,7 @@ on `<CertifyPanel>`. Decisions recorded in
   Registry UI* — Phase 3 sandbox write E2E gated on having a template
   whose monitored inputs are subsets of `INPUT_MAPPING`. Walkthrough at
   `docs/isometric/sandbox-template-authoring.md`. After template ships,
-  `phase-3-input-coverage` (transport portion) and
+  the `phase-3-input-coverage` transport portion and
   `phase-3-fixed-constants` close. Electricity-readout and per-run-GHG
   portions of `phase-3-input-coverage` stay deferred (need schema
   work; not part of Phase 3.6).
