@@ -6,11 +6,10 @@
  * (Facility → Reactor → Production Run → Sample → Order → Delivery → Application → Credit Batch)
  * through the browser UI.
  */
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import { eq, inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
+import { createDbConnection } from "./db";
 
 const SEEDED_CREDIT_BATCH_CODE_PREFIX = "E2E-CB";
 const SEEDED_CREDIT_BATCH_DURATION_DAYS = 30;
@@ -31,14 +30,6 @@ export interface SeededChainData {
   vehicle: { id: string; code: string; name: string };
   feedstockDelivery: { id: string; code: string };
   feedstock: { id: string; code: string };
-}
-
-function createDbConnection() {
-  const databaseUrl =
-    process.env.DATABASE_URL ||
-    "postgresql://postgres:postgres@localhost:5432/app_template_test";
-  const pool = new Pool({ connectionString: databaseUrl });
-  return { db: drizzle(pool, { schema }), pool };
 }
 
 /**

@@ -1,16 +1,34 @@
 /**
  * SyncEventLog
- * Append-only log of the last N HTTP attempts against Certify for a
- * credit batch. Terminal events only (no `pending` rows are written).
+ * Append-only log of recent HTTP attempts against Certify. Two variants:
+ *
+ * - default ("relaxed"): full table view used at the bottom of a section.
+ * - "compact": inline timeline used directly under a single submission row,
+ *   so the failure context lives next to the thing that failed.
+ *
+ * Terminal events only (no `pending` rows are written).
  */
 import { CaretDown } from "@phosphor-icons/react";
 import type { CertifierSyncEventRow } from "@/data-access/certification";
 
+const COMPACT_DEFAULT_LIMIT = 5;
+
 interface SyncEventLogProps {
   events: CertifierSyncEventRow[];
+  /** Compact variant for inline per-submission display. */
+  compact?: boolean;
+  /** Cap rows when compact. */
+  limit?: number;
+  /** Override the disclosure label. */
+  label?: string;
 }
 
-export function SyncEventLog({ events }: SyncEventLogProps) {
+export function SyncEventLog({
+  events,
+  compact = false,
+  limit,
+  label,
+}: SyncEventLogProps) {
   if (events.length === 0) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
@@ -18,10 +36,68 @@ export function SyncEventLog({ events }: SyncEventLogProps) {
       </p>
     );
   }
+
+  const visible = compact
+    ? events.slice(0, limit ?? COMPACT_DEFAULT_LIMIT)
+    : events;
+  const triggerLabel =
+    label ??
+    (compact
+      ? `View attempt history (${events.length})`
+      : `Recent attempts (${events.length})`);
+
+  if (compact) {
+    return (
+      <details className="group">
+        <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
+          <CaretDown
+            size={10}
+            weight="bold"
+            className="transition-transform duration-150 group-open:rotate-180"
+          />
+          <span className="underline underline-offset-2">{triggerLabel}</span>
+        </summary>
+        <ol className="mt-8 flex flex-col gap-6 border-l border-[var(--color-border-secondary)] pl-12">
+          {visible.map((event) => (
+            <li
+              key={event.id}
+              className="flex flex-col gap-2 body-caption"
+            >
+              <div className="flex items-center gap-8">
+                <span
+                  className={
+                    event.status === "succeeded"
+                      ? "text-[var(--color-status-success)]"
+                      : event.status === "failed"
+                        ? "text-[var(--clr-red)]"
+                        : "text-[var(--color-text-tertiary)]"
+                  }
+                >
+                  {event.status}
+                </span>
+                <span className="font-mono text-[var(--color-text-tertiary)]">
+                  {event.operation}
+                </span>
+                <span className="text-[var(--color-text-tertiary)]">
+                  {new Date(event.attemptedAt).toLocaleString()}
+                </span>
+              </div>
+              {event.errorMessage && (
+                <p className="body-caption text-[var(--color-text-secondary)] pl-2 break-words">
+                  {event.errorMessage}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      </details>
+    );
+  }
+
   return (
     <details className="group">
       <summary className="flex cursor-pointer items-center gap-8 list-none [&::-webkit-details-marker]:hidden body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        Recent attempts ({events.length})
+        {triggerLabel}
         <CaretDown
           size={12}
           weight="bold"
@@ -38,7 +114,7 @@ export function SyncEventLog({ events }: SyncEventLogProps) {
           </tr>
         </thead>
         <tbody>
-          {events.map((event) => (
+          {visible.map((event) => (
             <tr
               key={event.id}
               className="border-b border-[var(--color-border-secondary)] last:border-b-0"

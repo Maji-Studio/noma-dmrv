@@ -28,10 +28,10 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
 
-  // Global timeout - 60s to accommodate Next.js dev-mode page compilation
-  timeout: 60000,
+  // Global per-test timeout. CI uses a production build (fast page loads), local uses dev mode (Turbopack compilation can be slow on first hit).
+  timeout: process.env.CI ? 60000 : 90000,
   expect: {
-    timeout: 10000,
+    timeout: 15000,
   },
 
   use: {
@@ -48,10 +48,13 @@ export default defineConfig({
     },
   ],
 
+  // On CI we build once and start the production server — dev-mode compilation
+  // was timing out tests waiting for first page render. Locally we keep the dev
+  // server for fast iteration and `reuseExistingServer`.
   webServer: {
-    command: "pnpm dev:manual",
+    command: process.env.CI ? "pnpm build && pnpm start -p 3100" : "pnpm dev:manual",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
-    timeout: 120000, // Allow 2 minutes for server startup
+    timeout: process.env.CI ? 300000 : 120000, // 5 min for CI build, 2 min local
   },
 });

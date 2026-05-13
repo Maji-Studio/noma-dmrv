@@ -16,11 +16,11 @@ export function SubmissionStatusBadge({
   latest,
   isLockedInFlight,
 }: SubmissionStatusBadgeProps) {
-  if (!latest) {
-    return <StatusBadge status="draft" label="Not submitted" />;
-  }
   if (isLockedInFlight) {
     return <StatusBadge status="running" label="In progress" />;
+  }
+  if (!latest) {
+    return <StatusBadge status="draft" label="Not submitted" />;
   }
   const { status, value, label } = mapStatus(latest.status);
   return <StatusBadge status={value} label={label} title={status} />;

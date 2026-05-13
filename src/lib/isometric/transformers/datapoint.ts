@@ -16,78 +16,161 @@ export interface InputMappingEntry {
   transform?: (value: number) => number;
 }
 
-// Maps blueprint input_keys to a noma aggregated source field. Validated
-// against the live blueprint at submit time (see buildCreateDatapointRequest)
-// so a key that drifts from the catalog surfaces immediately rather than
-// silently producing a malformed datapoint.
-export const INPUT_MAPPING: Record<string, InputMappingEntry> = {
-  // Demo project's Protocol default + Biochar templates declare carbon_content
-  // as dimensionless (a 0–1 fraction), not a percent. samples.organicCarbonPercent
-  // is 0–100, so the transform converts before emit.
-  carbon_content: {
-    source: "weightedOrganicCarbonPercent",
-    unit: "dimensionless",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "dimensionless",
-    transform: (v) => v / 100,
+// Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
+// source field. The 3-level structure is required because blueprints repeat
+// across groups in real templates (e.g., the `transport` blueprint appears
+// in both `biomass-feedstock-transport` and `biochar-transport` groups, with
+// different semantic meaning). Group keys are stable kebab-case slugs from
+// the template's RemovalTemplateComponentGroup.key field.
+//
+// Validated against the live blueprint at submit time (see
+// buildCreateDatapointRequest) so a key that drifts from the catalog
+// surfaces immediately rather than silently producing a malformed datapoint.
+export type InputMappingTable = Record<
+  string,
+  Record<string, Record<string, InputMappingEntry>>
+>;
+
+export const INPUT_MAPPING: InputMappingTable = {
+  // CO₂ stored from biochar application
+  "co2-stored": {
+    carbon_rich_substance_sequestration: {
+      // Demo template declares carbon_content as dimensionless (a 0–1 fraction).
+      // samples.organicCarbonPercent is 0–100, so transform converts before emit.
+      carbon_content: {
+        source: "weightedOrganicCarbonPercent",
+        unit: "dimensionless",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "dimensionless",
+        transform: (v) => v / 100,
+      },
+      product_mass: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+      },
+    },
   },
-  product_mass: {
-    source: "totalBiocharDryMassKg",
-    unit: "kg",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "mass",
+
+  // Biomass → processing transport (feedstock leg category)
+  "biomass-feedstock-transport": {
+    transport: {
+      distance: {
+        source: "feedstockTransportAvgDistanceKm",
+        unit: "km",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "distance",
+      },
+      mass: {
+        source: "totalFeedstockDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+      },
+    },
+    specific_volume_based_emissions: {
+      feedstock_mass: {
+        source: "totalFeedstockDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+      },
+    },
   },
-  mass: {
-    source: "totalBiocharDryMassKg",
-    unit: "kg",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "mass",
+
+  // Biochar → storage transport (delivery leg category)
+  "biochar-transport": {
+    transport: {
+      distance: {
+        source: "biocharTransportAvgDistanceKm",
+        unit: "km",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "distance",
+      },
+      mass: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+      },
+    },
+    specific_volume_based_emissions: {
+      feedstock_mass: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+      },
+    },
   },
-  feedstock_mass: {
-    source: "totalFeedstockDryMassKg",
-    unit: "kg",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "mass",
+
+  // Sample shipping to lab
+  "sampling-required-for-mrv": {
+    distance_based_ci_emissions: {
+      distance: {
+        source: "sampleTransportAvgDistanceKm",
+        unit: "km",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "distance",
+      },
+    },
+    mass_based_ci_emissions: {
+      mass: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+      },
+    },
   },
-  volume_of_fuel: {
-    source: "totalDieselLiters",
-    unit: "l",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "volume",
+
+  // Biochar processing electricity
+  "biochar-processing": {
+    grid_electricity_use: {
+      electricity_use: {
+        source: "totalElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+      },
+    },
   },
-  electricity_use: {
-    source: "totalElectricityKwh",
-    unit: "kWh",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "energy",
+
+  // Biomass handling / processing fuel
+  "biomass-feedstock-sourcing": {
+    fuel_usage_by_volume: {
+      volume_of_fuel: {
+        source: "totalDieselLiters",
+        unit: "l",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "volume",
+      },
+    },
   },
-  h_to_c_ratio: {
-    source: "weightedHToCorgRatio",
-    unit: "",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "dimensionless_ratio",
-  },
-  o_to_c_ratio: {
-    source: "weightedOToCorgRatio",
-    unit: "",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "dimensionless_ratio",
-  },
-  ash_content: {
-    source: "weightedAshPercent",
-    unit: "%",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "mass_fraction",
-  },
-  moisture_content: {
-    source: "weightedMoisturePercent",
-    unit: "%",
-    datapointType: "REPORTED",
-    expectedQuantityKind: "mass_fraction",
+  "biomass-feedstock-processing": {
+    fuel_usage_by_volume: {
+      volume_of_fuel: {
+        source: "totalDieselLiters",
+        unit: "l",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "volume",
+      },
+    },
   },
 };
 
+export function lookupInputMapping(
+  groupKey: string,
+  blueprintKey: string,
+  inputKey: string,
+): InputMappingEntry | undefined {
+  return INPUT_MAPPING[groupKey]?.[blueprintKey]?.[inputKey];
+}
+
 export interface BuildCreateDatapointArgs {
+  groupKey: string;
+  componentBlueprintKey: string;
   rtcInput: RemovalTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
   agg: AggregatedProductionData;
@@ -98,13 +181,21 @@ export interface BuildCreateDatapointArgs {
 export function buildCreateDatapointRequest(
   args: BuildCreateDatapointArgs,
 ): components["schemas"]["CreateDatapointRequest"] {
-  const { rtcInput, blueprintInput, agg, projectId, supplierRefId } = args;
+  const {
+    groupKey,
+    componentBlueprintKey,
+    rtcInput,
+    blueprintInput,
+    agg,
+    projectId,
+    supplierRefId,
+  } = args;
   const inputKey = rtcInput.input_key;
 
-  const mapping = INPUT_MAPPING[inputKey];
+  const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey);
   if (!mapping) {
     throw new SafeError(
-      `No INPUT_MAPPING entry for blueprint input "${inputKey}" — update transformers/datapoint.ts before submitting.`,
+      `No INPUT_MAPPING entry for group="${groupKey}" blueprint="${componentBlueprintKey}" input="${inputKey}" — update transformers/datapoint.ts before submitting.`,
     );
   }
   if (mapping.expectedQuantityKind !== blueprintInput.quantity_kind) {

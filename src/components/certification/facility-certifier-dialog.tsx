@@ -26,6 +26,7 @@ import {
   useSaveFacilityCertifierMapping,
 } from "@/hooks/use-certification";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
+import { ProductionConfirmation } from "./production-confirmation";
 
 interface FacilityCertifierDialogProps {
   isOpen: boolean;
@@ -199,29 +200,27 @@ export function FacilityCertifierDialog({
           id="protocolVersion"
           label="Protocol version"
           error={errors.protocolVersion?.message}
-          helperText="Optional. Free-form (e.g., Biochar v1.2)."
+          helperText="Optional. Use the registry minor version, e.g. 1.2."
         >
           <FormInput
             id="protocolVersion"
             error={!!errors.protocolVersion}
-            placeholder="Biochar v1.2"
+            placeholder="1.2"
             {...register("protocolVersion")}
           />
         </FormField>
 
         {isProduction && (
-          <label className="flex items-start gap-12 border border-[var(--color-signal-red)] p-16 bg-[var(--color-background-medium)]">
-            <input
-              type="checkbox"
-              className="mt-4"
-              {...register("confirmProduction")}
-            />
-            <span className="body-small text-[var(--color-text-primary)]">
-              I understand this saves against the{" "}
-              <strong>production</strong> Isometric environment, and any
-              future submissions from this facility will be live.
-            </span>
-          </label>
+          <ProductionConfirmation
+            actionLabel={
+              mapping
+                ? "update this facility's production Isometric link"
+                : "link this facility to the production Isometric registry"
+            }
+            consequenceLabel="Future submissions from this facility will use production."
+            registerProps={register("confirmProduction")}
+            errorMessage={errors.confirmProduction?.message}
+          />
         )}
 
         <FormActions
