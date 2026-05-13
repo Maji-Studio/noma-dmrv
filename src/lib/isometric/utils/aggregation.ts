@@ -25,8 +25,9 @@ export interface AggregatedProductionData {
 }
 
 // Mass-weighted average distance: Σ(distance × load_mass) / Σ(load_mass).
-// Returns null when no legs are supplied or total load mass is zero/null.
-// Legs with null load_mass_kg are skipped (don't contribute to either sum).
+// Falls back to a simple mean of distances when no leg has load_mass_kg
+// (legitimate for the energy_usage calculation method, where mass is optional).
+// Returns null only when no legs are supplied.
 export function aggregateTransportLegs(legs: TransportLeg[]): number | null {
   if (legs.length === 0) return null;
   let weighted = 0;
@@ -36,7 +37,9 @@ export function aggregateTransportLegs(legs: TransportLeg[]): number | null {
     weighted += leg.distanceKm * leg.loadMassKg;
     weightSum += leg.loadMassKg;
   }
-  return weightSum === 0 ? null : weighted / weightSum;
+  if (weightSum > 0) return weighted / weightSum;
+  const distanceSum = legs.reduce((acc, leg) => acc + leg.distanceKm, 0);
+  return distanceSum / legs.length;
 }
 
 export function aggregateProductionRuns(

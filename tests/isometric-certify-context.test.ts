@@ -3,7 +3,10 @@ import {
   getCertifierProjectByFacility,
   type CertifierProjectRow,
 } from "@/data-access/certification";
+import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import {
   listComponentBlueprints,
   listProjects,
@@ -22,6 +25,18 @@ vi.mock("@/data-access/certification", () => ({
   getCertifierProjectByFacility: vi.fn(),
 }));
 
+vi.mock("@/data-access/chain-of-custody", () => ({
+  getChainOfCustodyData: vi.fn(),
+}));
+
+vi.mock("@/data-access/production-runs", () => ({
+  getProductionRunsWithSamples: vi.fn(),
+}));
+
+vi.mock("@/data-access/transport-legs", () => ({
+  getTransportLegsForEntities: vi.fn(),
+}));
+
 vi.mock("@/lib/isometric", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/isometric")>("@/lib/isometric");
@@ -35,6 +50,9 @@ vi.mock("@/lib/isometric", async () => {
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
+const mockedGetLineage = vi.mocked(getChainOfCustodyData);
+const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
+const mockedGetLegs = vi.mocked(getTransportLegsForEntities);
 const mockedListProjects = vi.mocked(listProjects);
 const mockedListTemplates = vi.mocked(listRemovalTemplates);
 const mockedListBlueprints = vi.mocked(listComponentBlueprints);
@@ -102,7 +120,15 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       facilityId: FACILITY_ID,
-    } as Awaited<ReturnType<typeof getCreditBatchById>>);
+      applicationIds: [],
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    // Default the transport-coverage walkers to empty so each test only
+    // overrides what it cares about.
+    mockedGetLineage.mockResolvedValue(
+      undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
+    );
+    mockedGetRuns.mockResolvedValue([]);
+    mockedGetLegs.mockResolvedValue([]);
   });
 
   it("returns the unlinked shape and skips remote calls when no certifier mapping exists", async () => {
@@ -121,10 +147,16 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
+      transportCoverage: {
+        feedstock: { count: 0, entityIds: [] },
+        biochar: { count: 0, entityIds: [] },
+        sample: { count: 0, entityIds: [] },
+      },
     });
     expect(mockedListProjects).not.toHaveBeenCalled();
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
+    expect(mockedGetLegs).not.toHaveBeenCalled();
   });
 
   it("returns linked-no-default shape when defaultRemovalTemplateId is null", async () => {
@@ -215,5 +247,68 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       "key_a",
       "key_b",
     ]);
+    // No applications on the stub batch -> coverage walker short-circuits.
+    expect(result.transportCoverage.feedstock.count).toBe(0);
+    expect(mockedGetLegs).not.toHaveBeenCalled();
+  });
+
+  it("populates transportCoverage by walking lineage when applications exist", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
+    );
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([template("rvt_resolved")]);
+    mockedListBlueprints.mockResolvedValue([]);
+
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: {} as never,
+      delivery: {} as never,
+      order: null,
+      biocharProduct: { id: "bp-1" } as never,
+      productionRun: { id: "pr-1" } as never,
+      reactor: null,
+      feedstocks: [{ id: "fs-1" } as never, { id: "fs-2" } as never],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
+      } as never,
+    ]);
+
+    // Per-category leg counts: 3 feedstock, 0 biochar, 1 sample.
+    mockedGetLegs.mockImplementation(async (_user, entityType) => {
+      if (entityType === "feedstock") {
+        return [{ id: "tl-f1" }, { id: "tl-f2" }, { id: "tl-f3" }] as never;
+      }
+      if (entityType === "sample") return [{ id: "tl-s1" }] as never;
+      return [];
+    });
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.transportCoverage.feedstock.count).toBe(3);
+    expect(result.transportCoverage.feedstock.entityIds.sort()).toEqual([
+      "fs-1",
+      "fs-2",
+    ]);
+    expect(result.transportCoverage.biochar.count).toBe(0);
+    expect(result.transportCoverage.biochar.entityIds).toEqual(["bp-1"]);
+    expect(result.transportCoverage.sample.count).toBe(1);
+    expect(result.transportCoverage.sample.entityIds.sort()).toEqual([
+      "s-1",
+      "s-2",
+    ]);
+    expect(mockedGetLegs).toHaveBeenCalledTimes(3);
   });
 });

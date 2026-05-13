@@ -1,5 +1,87 @@
 # Isometric Docs Change Log
 
+## 2026-05-13 (Phase 3.6 completion — transport-leg UI + submission wiring)
+
+- **Scope:** finished the UI / orchestration half of Phase 3.6 sitting on
+  top of the 2026-05-11 foundation. Closes the transport portion of
+  `phase-3-input-coverage` in `docs/open-questions.md`. The biomass→
+  processing, biochar→storage, and sample→lab transport-distance inputs
+  on the `noma-mvp` template now have a real end-to-end path from data
+  entry through to the Removal payload.
+- **Polymorphic data layer.** New `src/data-access/transport-legs.ts`:
+  `getTransportLegsForEntity(userId, entityType, entityId)` +
+  `getTransportLegsForEntities(userId, entityType, entityIds[])` (bulk;
+  single `IN`-query) + auth-guarded `create / update / delete` with
+  per-`entityType` existence checks. **Schema decision:**
+  `entityType='feedstock'` references `feedstocks.id` (not the vestigial
+  `feedstock_deliveries.id`). Users only see `feedstocks` in the UI;
+  pointing the polymorphic system at the user-visible entity removes the
+  "feedstockDeliveryId might be null" mounting trap.
+- **Schemas + server actions + hooks.** `src/schemas/transport-legs.ts`
+  uses a Zod `superRefine` that mirrors the DB-level check constraints
+  exactly (`energy_usage` requires `fuelType` + (`fuelConsumedLiters`
+  OR `electricityKwh`) + `emissionFactorUsed`; `distance_based` requires
+  `loadMassKg` + `vehicleType` + `emissionFactorUsed`).
+  `src/fn/transport-legs.ts` wraps with `withAction`.
+  `src/hooks/use-transport-legs.ts` exposes
+  `useTransportLegsForEntity` + the three mutations with per-`(entityType,
+  entityId)` invalidation.
+- **UI components.** New `src/components/transport-legs/`:
+  - `TransportLegForm` — modal dialog, method-conditional required
+    fields.
+  - `TransportLegsPanel` — list / add / edit / delete, dropped into any
+    surface with `(entityType, entityId)` via `viewModeChildren`.
+  Mounted in three places:
+  - `src/components/deliveries/delivery-list.tsx` —
+    `entityType="delivery"`, replacing the previous read-only
+    transport-leg sections that ran through `useTransportLegsForDelivery`.
+  - `src/components/samples/sample-list.tsx` — `entityType="sample"`.
+  - `src/components/feedstocks/feedstock-list.tsx` —
+    `entityType="feedstock"`, always rendered (no `feedstockDeliveryId`
+    conditional).
+  Legacy `getTransportLegsForDeliveryFn` / `useTransportLegsForDelivery`
+  / `deliveryKeys.transportLegs` removed; old read-only display deleted.
+- **Shared lineage walker.** New
+  `src/lib/isometric/utils/transport-lineage.ts` exporting a pure
+  `collectTransportEntityIds(lineages, runs)` that returns
+  `{feedstockIds, biocharProductIds, sampleIds}` (deduped). Re-exported
+  from `src/lib/isometric/index.ts`. Consumed by both the submission
+  orchestrator and the Certify-Panel coverage loader so the two views
+  can't drift.
+- **Submission wiring.** `src/fn/certification/submit-credit-batch.ts`
+  now, after `aggregateProductionRuns(runs)`:
+  1. Calls `collectTransportEntityIds(lineages, runs)`.
+  2. Fans out `getTransportLegsForEntities` in parallel for all three
+     categories.
+  3. Pipes the result through the existing
+     `enrichWithTransportLegs(agg, { feedstock, biochar, sample })`.
+  4. Passes the enriched aggregation (not the bare one) to the payload
+     build. Submitted Removals now carry real transport distances on
+     the three transport blueprints.
+- **Pre-flight coverage UX.** `src/fn/certification/certify-context.ts`
+  gained a `transportCoverage` field on `CertifyContextForCreditBatch`:
+  `{ feedstock|biochar|sample: { count, entityIds } }`. Populated only
+  in the fully-resolved branch (no remote calls when unlinked /
+  template missing / drift). `<CertifyPanel>`
+  (`src/components/certification/certify-panel.tsx`) renders a
+  three-row checklist between the template-blocker notice and the
+  Submission row. Each missing category gets an `Add legs →` link to
+  the relevant entity surface (`/feedstocks`, `/biochar-products`,
+  `/samples`). The Submit button is disabled while any required
+  category is empty; the tooltip names the missing categories.
+- **Tests.** Full unit suite green: 28 files / 182 tests / 3 pre-existing
+  skips.
+  - New `tests/isometric-transport-lineage.test.ts` (6 cases) covers
+    the lineage walker — empty / dedup / null biocharProduct / runs
+    with no samples.
+  - `tests/isometric-certify-context.test.ts` extended to mock the new
+    data-access deps and assert the `transportCoverage` shape across
+    every branch + a populated-coverage walker case.
+- **Out of scope** (carried in `docs/open-questions.md`): per-run
+  electricity readouts (`final_readout`/`initial_readout`), per-run
+  GHG concentrations (CH4/CO at run level), webhook ingestion (no
+  Certify contract yet), source-upload presigned-URL flow.
+
 ## 2026-05-11 (Phase 3.6 foundation — tailored-template path)
 
 - **Scope:** Foundation work that unblocks the `phase-3-input-coverage`

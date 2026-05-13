@@ -18,13 +18,13 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
+import { TransportLegsPanel } from "@/components/transport-legs";
 import {
   useCreateDelivery,
   useDeleteDelivery,
   useDeliveries,
   useUpdateDelivery,
   useDeliveryStats,
-  useTransportLegsForDelivery,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import type {
@@ -172,11 +172,6 @@ export function DeliveryList() {
   const { data: statsData, isLoading: statsLoading } = useDeliveryStats(
     contextFacilityId ? { facilityId: contextFacilityId } : undefined,
     { enabled: !!contextFacilityId },
-  );
-
-  // Transport legs for the currently viewed delivery
-  const { data: transportLegs } = useTransportLegsForDelivery(
-    sideSheet?.mode === "view" ? sideSheet.entity?.id : undefined
   );
 
   // Mutations
@@ -437,33 +432,16 @@ export function DeliveryList() {
                     },
                   ],
                 },
-                ...(transportLegs && transportLegs.length > 0
-                  ? transportLegs.map((leg, i) => ({
-                      title: `Transport Leg ${transportLegs.length > 1 ? i + 1 : ""}`.trim(),
-                      fields: [
-                        { label: "Method", value: leg.transportMethodType },
-                        { label: "Distance", value: leg.distanceKm != null ? `${leg.distanceKm} km` : null },
-                        { label: "Origin", value: leg.originName },
-                        { label: "Destination", value: leg.destinationName },
-                        { label: "Vehicle Type", value: leg.vehicleType },
-                        { label: "Fuel Type", value: leg.fuelType },
-                        {
-                          label: "Fuel Consumed",
-                          value: leg.fuelConsumedLiters != null ? `${leg.fuelConsumedLiters} L` : null,
-                        },
-                        {
-                          label: "CO₂e Emissions",
-                          value: leg.transportEmissionsCo2eKg != null
-                            ? `${leg.transportEmissionsCo2eKg.toLocaleString()} kg`
-                            : null,
-                        },
-                        { label: "Calculation Method", value: leg.calculationMethodType?.replace("_", " ") },
-                        { label: "Load Mass", value: leg.loadMassKg != null ? `${leg.loadMassKg} kg` : null },
-                      ],
-                    }))
-                  : []),
               ]
             : undefined
+        }
+        viewModeChildren={
+          sideSheetMode === "view" && sideSheetEntity ? (
+            <TransportLegsPanel
+              entityType="delivery"
+              entityId={sideSheetEntity.id}
+            />
+          ) : null
         }
       >
         {formError && <ServerError message={formError} />}

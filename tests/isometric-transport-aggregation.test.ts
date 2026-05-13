@@ -69,9 +69,10 @@ describe("aggregateTransportLegs", () => {
     expect(result).toBe(100);
   });
 
-  it("returns null when all legs have null load_mass_kg (weightSum=0)", () => {
-    // No usable legs → undefined behavior → null, not NaN.
-    expect(aggregateTransportLegs([leg(50, null), leg(100, null)])).toBeNull();
+  it("falls back to a simple mean of distances when every leg has null load_mass_kg", () => {
+    // Energy-usage legs don't require load mass; we keep them in the average
+    // by switching to a simple mean so submission isn't blocked.
+    expect(aggregateTransportLegs([leg(50, null), leg(100, null)])).toBe(75);
   });
 
   it("handles zero-distance legs cleanly", () => {
