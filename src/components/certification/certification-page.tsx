@@ -10,7 +10,10 @@ import {
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
+import { isometricDocs } from "@/lib/isometric/links";
+import { EnvBanner } from "./env-banner";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -73,14 +76,23 @@ export function CertificationPage() {
   const activePending = activeStatement
     ? getPendingTotal(activeStatement)
     : null;
-  const canSubmit = activeStatement && activeStatus === "DRAFT";
+  const activeLocked = activeStatement
+    ? isLockedInFlight(activeStatement.submission)
+    : false;
+  const canSubmit =
+    activeStatement && activeStatus === "DRAFT" && !activeLocked;
   const canResubmit =
     activeStatement &&
-    (activeStatus === "FAILED_VERIFICATION" || activePending !== null);
+    activeStatus !== "DRAFT" &&
+    !activeLocked &&
+    (activeStatus === "FAILED_VERIFICATION" ||
+      (activePending !== null && activePending > 0));
 
   return (
     <main className="min-h-screen bg-[var(--color-background)]">
       <div className="max-w-[1180px] mx-auto p-24 flex flex-col gap-24">
+        <EnvBanner isProduction={data.isProduction} />
+
         <header className="flex items-center justify-between gap-16">
           <div className="flex items-center gap-12 min-w-0">
             <SealCheck size={28} className="shrink-0 text-[var(--clr-pink)]" />
@@ -117,9 +129,6 @@ export function CertificationPage() {
                 </p>
               )}
             </div>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              {data.isProduction ? "production" : "sandbox"}
-            </span>
           </div>
         </section>
 
@@ -127,7 +136,17 @@ export function CertificationPage() {
           <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20 flex flex-col gap-18">
             <div className="flex items-start justify-between gap-16">
               <div>
-                <h2 className="title-heading-3">GHG Statement</h2>
+                <div className="flex items-baseline gap-12">
+                  <h2 className="title-heading-3">GHG Statement</h2>
+                  <a
+                    href={isometricDocs.ghgStatements}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+                  >
+                    View GHG statement guide ↗
+                  </a>
+                </div>
                 {activeStatement ? (
                   <p className="body-small text-[var(--color-text-secondary)] mt-4">
                     Period ending {activeStatement.period.reportingPeriodEndAt}
@@ -358,40 +377,19 @@ function RemoteStatusLabel({ status }: { status: string | null }) {
 }
 
 function getRemoteStatus(row: StatementRow): string | null {
-  const metadataStatus = getMetadataValue(row.submission, "remoteStatus");
+  const metadataStatus = getMetadataValue(row.submission.metadata,"remoteStatus");
   return row.remote?.status ?? (typeof metadataStatus === "string" ? metadataStatus : null);
 }
 
 function getPendingTotal(row: StatementRow): number | null {
   const value = row.remote
     ? row.remote.pending_total_co2e_removed_kg
-    : getMetadataValue(row.submission, "pendingTotalCo2eRemovedKg");
+    : getMetadataValue(row.submission.metadata,"pendingTotalCo2eRemovedKg");
   return typeof value === "number" ? value : null;
 }
 
 function getRemovalIds(row: StatementRow): string[] {
-  const value = getMetadataValue(row.submission, "removalIds");
+  const value = getMetadataValue(row.submission.metadata,"removalIds");
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 }
 
-function getMetadataValue(
-  submission: CertificationSubmissionRow,
-  key: string,
-): unknown {
-  if (
-    typeof submission.metadata === "object" &&
-    submission.metadata !== null &&
-    key in submission.metadata
-  ) {
-    return (submission.metadata as Record<string, unknown>)[key];
-  }
-  return null;
-}
-
-function isLockedInFlight(row: CertificationSubmissionRow): boolean {
-  const lockedAtMs = row.lockedAt?.getTime() ?? 0;
-  return (
-    row.status === "draft" &&
-    Date.now() - lockedAtMs < LOCK_TTL_MS
-  );
-}

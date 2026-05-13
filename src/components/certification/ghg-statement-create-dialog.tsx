@@ -11,6 +11,7 @@ import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
 } from "@/schemas/certification";
+import { ProductionConfirmation } from "./production-confirmation";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -25,13 +26,13 @@ export function GhgStatementCreateDialog({
   onClose,
   isProduction,
 }: GhgStatementCreateDialogProps) {
-  const dialogRef = useDialog(isOpen, onClose);
   const mutation = useCreateGhgStatementForFacility();
   const toast = useToast();
   const {
     register,
     handleSubmit,
     formState: { errors },
+    reset,
     setError,
   } = useForm<CreateGhgStatementInput>({
     resolver: zodResolver(createGhgStatementSchema),
@@ -40,6 +41,7 @@ export function GhgStatementCreateDialog({
       confirmProduction: false,
     },
   });
+  const dialogRef = useDialog(isOpen, onClose, reset);
 
   if (!isOpen) return null;
 
@@ -84,14 +86,10 @@ export function GhgStatementCreateDialog({
           </FormField>
 
           {isProduction && (
-            <label className="flex items-start gap-10 body-small text-[var(--color-text-secondary)]">
-              <input
-                type="checkbox"
-                className="mt-3"
-                {...register("confirmProduction")}
-              />
-              <span>Confirm production Isometric creation</span>
-            </label>
+            <ProductionConfirmation
+              actionLabel="create a draft GHG statement on the production Isometric registry"
+              registerProps={register("confirmProduction")}
+            />
           )}
 
           {errors.root?.message && <ServerError message={errors.root.message} />}

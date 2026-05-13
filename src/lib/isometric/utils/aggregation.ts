@@ -1,4 +1,4 @@
-import type { ProductionRun, Sample } from "@/db/schema";
+import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
 export type ProductionRunWithSamples = ProductionRun & { samples: Sample[] };
 
@@ -12,10 +12,31 @@ export interface AggregatedProductionData {
   totalFeedstockDryMassKg: number;
   totalDieselLiters: number;
   totalElectricityKwh: number;
+  // Mass-weighted average distance per transport-leg category. Null when no
+  // legs are recorded for that category. Caller (submit-credit-batch.ts)
+  // populates these by querying `transport_legs` along the lineage.
+  feedstockTransportAvgDistanceKm: number | null;
+  biocharTransportAvgDistanceKm: number | null;
+  sampleTransportAvgDistanceKm: number | null;
   earliestStartTime: Date;
   latestEndTime: Date;
   sourceProductionRunIds: string[];
   warnings: string[];
+}
+
+// Mass-weighted average distance: Σ(distance × load_mass) / Σ(load_mass).
+// Returns null when no legs are supplied or total load mass is zero/null.
+// Legs with null load_mass_kg are skipped (don't contribute to either sum).
+export function aggregateTransportLegs(legs: TransportLeg[]): number | null {
+  if (legs.length === 0) return null;
+  let weighted = 0;
+  let weightSum = 0;
+  for (const leg of legs) {
+    if (leg.loadMassKg == null) continue;
+    weighted += leg.distanceKm * leg.loadMassKg;
+    weightSum += leg.loadMassKg;
+  }
+  return weightSum === 0 ? null : weighted / weightSum;
 }
 
 export function aggregateProductionRuns(
@@ -70,10 +91,35 @@ export function aggregateProductionRuns(
     totalFeedstockDryMassKg,
     totalDieselLiters,
     totalElectricityKwh,
+    // Transport distance fields default to null. Caller enriches via
+    // `enrichWithTransportLegs` after fetching legs along the lineage.
+    feedstockTransportAvgDistanceKm: null,
+    biocharTransportAvgDistanceKm: null,
+    sampleTransportAvgDistanceKm: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
     warnings,
+  };
+}
+
+export interface TransportLegsByCategory {
+  feedstock: TransportLeg[];
+  biochar: TransportLeg[];
+  sample: TransportLeg[];
+}
+
+// Layers transport-leg averages onto an existing aggregation result.
+// Pure: returns a new object, doesn't mutate `agg`.
+export function enrichWithTransportLegs(
+  agg: AggregatedProductionData,
+  legs: TransportLegsByCategory,
+): AggregatedProductionData {
+  return {
+    ...agg,
+    feedstockTransportAvgDistanceKm: aggregateTransportLegs(legs.feedstock),
+    biocharTransportAvgDistanceKm: aggregateTransportLegs(legs.biochar),
+    sampleTransportAvgDistanceKm: aggregateTransportLegs(legs.sample),
   };
 }
 
@@ -105,43 +151,60 @@ function nz(value: number | null | undefined): number {
 }
 
 export interface ResolvedTemplateInput {
+  groupKey: string;
   removalTemplateComponentId: string;
+  componentBlueprintKey: string;
   inputKey: string;
   type: "fixed" | "monitored";
   preboundDatapointId: string | null;
-  componentBlueprintKey: string;
 }
 
 export interface MissingInput {
+  groupKey: string;
   removalTemplateComponentId: string;
   inputKey: string;
   reason: string;
 }
 
+// Three-level nested INPUT_MAPPING shape passed in by the caller. Decouples
+// this utility from the concrete `transformers/datapoint.ts` import.
+type NestedInputMapping = Record<
+  string,
+  Record<
+    string,
+    Record<string, { source: keyof AggregatedProductionData }>
+  >
+>;
+
 // Walks the resolved template's monitored inputs (delegated by caller) and
 // reports which can't be served by `agg`. INPUT_MAPPING covers the link from
-// inputKey → AggregatedProductionData field; this function checks both presence
-// in the mapping and a non-null source value.
+// (group, blueprint, input) → AggregatedProductionData field; this function
+// checks both presence in the mapping and a non-null source value.
 export function validateForTemplate(
   agg: AggregatedProductionData,
   monitoredInputs: ResolvedTemplateInput[],
-  inputMapping: Record<string, { source: keyof AggregatedProductionData }>,
+  inputMapping: NestedInputMapping,
 ): { ok: true } | { ok: false; missing: MissingInput[] } {
   const missing: MissingInput[] = [];
   for (const input of monitoredInputs) {
     if (input.type !== "monitored") continue;
-    const map = inputMapping[input.inputKey];
+    const map =
+      inputMapping[input.groupKey]?.[input.componentBlueprintKey]?.[
+        input.inputKey
+      ];
     if (!map) {
       missing.push({
+        groupKey: input.groupKey,
         removalTemplateComponentId: input.removalTemplateComponentId,
         inputKey: input.inputKey,
-        reason: `No INPUT_MAPPING entry for "${input.inputKey}"`,
+        reason: `No INPUT_MAPPING entry for group="${input.groupKey}" blueprint="${input.componentBlueprintKey}" input="${input.inputKey}"`,
       });
       continue;
     }
     const value = agg[map.source];
     if (value == null) {
       missing.push({
+        groupKey: input.groupKey,
         removalTemplateComponentId: input.removalTemplateComponentId,
         inputKey: input.inputKey,
         reason: `Aggregated source ${String(map.source)} is null`,

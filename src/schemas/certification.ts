@@ -1,7 +1,22 @@
 import { z } from "zod";
 import { emptyToNull } from "@/schemas/helpers";
+import { formatLocalDate, parseLocalDateString } from "@/lib/date-utils";
 
-const DATE_PART_PAD_LENGTH = 2;
+function isValidCalendarDate(value: string): boolean {
+  try {
+    parseLocalDateString(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const httpsUrlSchema = z
+  .string()
+  .url({ error: "Enter a valid report URL" })
+  .refine((value) => value.startsWith("https://"), {
+    error: "Report URL must use HTTPS",
+  });
 
 export const saveMappingSchema = z.object({
   facilityId: z.string().uuid(),
@@ -27,9 +42,10 @@ export type SubmitCreditBatchInput = z.infer<typeof submitCreditBatchSchema>;
 export const createGhgStatementSchema = z.object({
   endOn: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date")
-    .refine((value) => value <= todayLocalDateString(), {
-      message: "End date cannot be in the future",
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Enter a valid date" })
+    .refine(isValidCalendarDate, { error: "Invalid calendar date" })
+    .refine((value) => value <= formatLocalDate(new Date()), {
+      error: "End date cannot be in the future",
     }),
   confirmProduction: z.boolean().optional(),
 });
@@ -38,14 +54,44 @@ export type CreateGhgStatementInput = z.infer<
   typeof createGhgStatementSchema
 >;
 
+export const submitGhgStatementDialogSchema = z.object({
+  reportUrl: httpsUrlSchema,
+  summaryOfChanges: z.string().optional(),
+  confirmProduction: z.boolean().optional(),
+});
+
+export type SubmitGhgStatementDialogInput = z.infer<
+  typeof submitGhgStatementDialogSchema
+>;
+
+export function buildSubmitGhgStatementDialogSchema(args: {
+  isResubmit: boolean;
+  isProduction: boolean;
+}) {
+  return submitGhgStatementDialogSchema.check((ctx) => {
+    const value = ctx.value;
+    if (args.isResubmit && !value.summaryOfChanges?.trim()) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["summaryOfChanges"],
+        message: "Summary of changes is required",
+      });
+    }
+    if (args.isProduction && value.confirmProduction !== true) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["confirmProduction"],
+        message: "Confirm production submission to continue",
+      });
+    }
+  });
+}
+
 export const submitGhgStatementSchema = z.object({
   submissionId: z.string().uuid(),
-  reportUrl: z
-    .string()
-    .url("Enter a valid report URL")
-    .refine((value) => value.startsWith("https://"), {
-      message: "Report URL must use HTTPS",
-    }),
+  reportUrl: httpsUrlSchema,
   summaryOfChanges: emptyToNull.or(z.string().min(1)).nullable().optional(),
   confirmProduction: z.boolean().optional(),
 });
@@ -54,8 +100,3 @@ export type SubmitGhgStatementInput = z.infer<
   typeof submitGhgStatementSchema
 >;
 
-function todayLocalDateString(date = new Date()): string {
-  const month = String(date.getMonth() + 1).padStart(DATE_PART_PAD_LENGTH, "0");
-  const day = String(date.getDate()).padStart(DATE_PART_PAD_LENGTH, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}

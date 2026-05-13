@@ -24,12 +24,22 @@ import { describe, expect, it } from "vitest";
 loadDotenv({ path: ".env.local", override: false });
 
 const OPTED_IN = process.env.RUN_ISOMETRIC_SANDBOX_TESTS === "1";
-const SANDBOX_CONFIGURED =
-  OPTED_IN &&
-  !!process.env.ISOMETRIC_CLIENT_SECRET &&
-  !!process.env.ISOMETRIC_ACCESS_TOKEN &&
-  process.env.ISOMETRIC_ENVIRONMENT === "sandbox" &&
-  !!process.env.ISOMETRIC_DEMO_PROJECT_ID;
+const MISSING_SANDBOX_VARS = [
+  !process.env.ISOMETRIC_CLIENT_SECRET && "ISOMETRIC_CLIENT_SECRET",
+  !process.env.ISOMETRIC_ACCESS_TOKEN && "ISOMETRIC_ACCESS_TOKEN",
+  process.env.ISOMETRIC_ENVIRONMENT !== "sandbox" &&
+    'ISOMETRIC_ENVIRONMENT (must equal "sandbox")',
+  !process.env.ISOMETRIC_DEMO_PROJECT_ID && "ISOMETRIC_DEMO_PROJECT_ID",
+].filter(Boolean) as string[];
+const SANDBOX_CONFIGURED = OPTED_IN && MISSING_SANDBOX_VARS.length === 0;
+
+if (OPTED_IN && !SANDBOX_CONFIGURED) {
+  throw new Error(
+    `RUN_ISOMETRIC_SANDBOX_TESTS=1 but sandbox env is incomplete. Missing/misconfigured: ${MISSING_SANDBOX_VARS.join(
+      ", ",
+    )}.`,
+  );
+}
 
 const TEST_TIMEOUT_MS = 30_000;
 
@@ -42,7 +52,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         const { listProjects } = await import("@/lib/isometric");
         const projects = await listProjects();
         expect(projects.length).toBeGreaterThan(0);
-        const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID;
+        const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID as string;
         expect(projects.some((p) => p.id === demoId)).toBe(true);
       },
       TEST_TIMEOUT_MS,

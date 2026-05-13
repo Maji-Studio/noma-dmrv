@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   const { certificationSubmissions } = await import(
     "../src/db/schema/certification"
   );
-  const { and, desc, eq, sql } = await import("drizzle-orm");
+  const { and, desc, eq, lte, sql } = await import("drizzle-orm");
 
   const [latest] = await db
     .select()
@@ -73,7 +73,11 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  await db
+  const staleCutoff = new Date(Date.now() - LOCK_TTL_MS);
+
+  // Atomic update: include draft status + stale lock age in the WHERE clause so
+  // an active writer that refreshed the lock cannot be cleared.
+  const updated = await db
     .update(certificationSubmissions)
     .set({
       status: "rejected",
@@ -81,7 +85,21 @@ async function main(): Promise<void> {
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', 'stale_lock_cleared_via_cli', 'clearedAt', to_jsonb(now()))`,
     })
-    .where(eq(certificationSubmissions.id, latest.id));
+    .where(
+      and(
+        eq(certificationSubmissions.id, latest.id),
+        eq(certificationSubmissions.status, "draft"),
+        lte(certificationSubmissions.lockedAt, staleCutoff),
+      ),
+    )
+    .returning({ id: certificationSubmissions.id });
+
+  if (updated.length !== 1) {
+    console.log(
+      `\nRow changed since read (concurrent writer?). No update applied.`,
+    );
+    process.exit(3);
+  }
 
   console.log(
     `\nCleared stale lock on submission ${latest.id} (was locked for ${Math.round(ageMs / 1000)}s). Status set to rejected; next submit re-versions.`,
