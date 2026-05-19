@@ -210,6 +210,22 @@ export function TransportLegForm({
                 {...register("transportMethodType")}
               />
             </FormField>
+            <FormField
+              id="loadMassKg"
+              label="Load mass (kg)"
+              required
+              error={errors.loadMassKg?.message}
+              helperText="Mass moved on this leg. Required on every leg so the Certify aggregator can mass-weight distance (Transportation v1.1 §5)."
+            >
+              <FormInput
+                id="loadMassKg"
+                type="number"
+                step="any"
+                min={0}
+                error={!!errors.loadMassKg}
+                {...register("loadMassKg")}
+              />
+            </FormField>
           </div>
         </div>
 
@@ -279,21 +295,6 @@ export function TransportLegForm({
 
           {isDistanceBased && (
             <div className="grid grid-cols-2 gap-16">
-              <FormField
-                id="loadMassKg"
-                label="Load mass (kg)"
-                required
-                error={errors.loadMassKg?.message}
-              >
-                <FormInput
-                  id="loadMassKg"
-                  type="number"
-                  step="any"
-                  min={0}
-                  error={!!errors.loadMassKg}
-                  {...register("loadMassKg")}
-                />
-              </FormField>
               <FormField
                 id="vehicleType"
                 label="Vehicle type"

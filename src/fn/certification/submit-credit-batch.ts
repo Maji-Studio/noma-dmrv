@@ -218,6 +218,15 @@ export async function submitCreditBatch(
       biochar: biocharLegs,
       sample: sampleLegs,
     });
+    // Transport-leg enrichment may append warnings (mixed methods/factors,
+    // missing per-leg fields). Block submission on those too — required by
+    // Isometric Transportation v1.1 §5 per-leg accounting rules.
+    const transportWarnings = agg.warnings.slice(baseAgg.warnings.length);
+    if (transportWarnings.length > 0) {
+      throw new SafeError(
+        `Transport-leg aggregation — submission blocked:\n${transportWarnings.join("\n")}`,
+      );
+    }
 
     const monitored: ResolvedMonitoredInput[] = [];
     const fixed: ResolvedFixedInput[] = [];

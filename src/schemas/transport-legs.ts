@@ -80,8 +80,21 @@ const baseTransportLegShape = {
   fuelConsumedLiters: optionalPositiveNumber,
   electricityKwh: optionalPositiveNumber,
 
-  // Load (distance_based method)
-  loadMassKg: optionalPositiveNumber,
+  // Load mass — required on every leg regardless of calculation method.
+  // The Certify aggregator mass-weights distance across a category so that
+  // `distance × Σmass × factor = Σⱼ(distⱼ × massⱼ × factor)` (Transportation
+  // v1.1 §5), which requires a per-leg mass even for energy_usage legs.
+  loadMassKg: z.preprocess(
+    toNumberOrUndefined,
+    z
+      .number({
+        error: (iss) =>
+          iss.input === undefined
+            ? "Load mass is required"
+            : "Load mass must be a number",
+      })
+      .positive("Load mass must be greater than 0"),
+  ),
 
   // Emissions
   calculationMethodType: z.enum(emissionsCalculationMethods, {
@@ -106,7 +119,6 @@ function refineMethodRequirements(
     fuelType?: string | null;
     fuelConsumedLiters?: number | null;
     electricityKwh?: number | null;
-    loadMassKg?: number | null;
     vehicleType?: string | null;
     emissionFactorUsed?: number | null;
   },
@@ -141,13 +153,6 @@ function refineMethodRequirements(
   }
 
   if (data.calculationMethodType === "distance_based") {
-    if ((data.loadMassKg ?? null) === null) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["loadMassKg"],
-        message: "Load mass is required for distance-based method",
-      });
-    }
     if (!data.vehicleType?.trim()) {
       ctx.addIssue({
         code: "custom",

@@ -11,6 +11,7 @@ import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { SafeError } from "@/lib/errors";
 import {
+  aggregateTransportLegs,
   collectTransportEntityIds,
   listComponentBlueprints,
   listProjects,
@@ -19,6 +20,7 @@ import {
   type IsometricProject,
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
+import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
@@ -26,6 +28,12 @@ import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 export interface TransportCoverageBucket {
   count: number;
   entityIds: string[];
+  // Non-null when at least one leg in the category fails the per-leg
+  // uniformity / completeness checks that `aggregateTransportLegs` enforces
+  // (missing load_mass_kg, missing emission_factor_used, mixed methods,
+  // mixed factors). The panel surfaces this so the user discovers the gap
+  // BEFORE clicking submit, instead of after the server-side block.
+  aggregationWarning: string | null;
 }
 
 export interface TransportCoverage {
@@ -34,10 +42,21 @@ export interface TransportCoverage {
   sample: TransportCoverageBucket;
 }
 
+export type TransportCategory = keyof TransportCoverage;
+
 const EMPTY_COVERAGE: TransportCoverage = {
-  feedstock: { count: 0, entityIds: [] },
-  biochar: { count: 0, entityIds: [] },
-  sample: { count: 0, entityIds: [] },
+  feedstock: { count: 0, entityIds: [], aggregationWarning: null },
+  biochar: { count: 0, entityIds: [], aggregationWarning: null },
+  sample: { count: 0, entityIds: [], aggregationWarning: null },
+};
+
+// Maps the INPUT_MAPPING.source field name that a monitored template input
+// resolves to back to a transport category. Keep in sync with the three
+// transport rows in `src/lib/isometric/transformers/datapoint.ts`.
+const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
+  feedstockTransportAvgDistanceKm: "feedstock",
+  biocharTransportAvgDistanceKm: "biochar",
+  sampleTransportAvgDistanceKm: "sample",
 };
 
 export interface CertifyContextForCreditBatch {
@@ -49,7 +68,37 @@ export interface CertifyContextForCreditBatch {
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
   transportCoverage: TransportCoverage;
+  // Transport categories the active removal template actually consumes,
+  // derived by walking `defaultTemplate.groups[*].components[*].inputs[*]`
+  // and matching monitored inputs to INPUT_MAPPING transport rows. The
+  // Certify panel only blocks coverage on these categories.
+  requiredTransportCategories: TransportCategory[];
   isProduction: boolean;
+}
+
+function deriveRequiredTransportCategories(
+  template: IsometricRemovalTemplate,
+): TransportCategory[] {
+  const seen = new Set<TransportCategory>();
+  for (const group of template.groups) {
+    for (const component of group.components) {
+      for (const rtcInput of component.inputs) {
+        if (rtcInput.type !== "monitored") continue;
+        const mapping = lookupInputMapping(
+          group.key,
+          component.blueprint_key,
+          rtcInput.input_key,
+        );
+        if (!mapping) continue;
+        const category = TRANSPORT_SOURCE_TO_CATEGORY[mapping.source];
+        if (category) seen.add(category);
+      }
+    }
+  }
+  // Stable ordering matches TransportCoverage key order.
+  return (["feedstock", "biochar", "sample"] as const).filter((c) =>
+    seen.has(c),
+  );
 }
 
 async function loadTransportCoverage(
@@ -84,12 +133,20 @@ async function loadTransportCoverage(
     feedstock: {
       count: feedstockLegs.length,
       entityIds: entityIds.feedstockIds,
+      aggregationWarning: aggregateTransportLegs(feedstockLegs, "Feedstock")
+        .warning,
     },
     biochar: {
       count: biocharLegs.length,
       entityIds: entityIds.biocharProductIds,
+      aggregationWarning: aggregateTransportLegs(biocharLegs, "Biochar")
+        .warning,
     },
-    sample: { count: sampleLegs.length, entityIds: entityIds.sampleIds },
+    sample: {
+      count: sampleLegs.length,
+      entityIds: entityIds.sampleIds,
+      aggregationWarning: aggregateTransportLegs(sampleLegs, "Sample").warning,
+    },
   };
 }
 
@@ -121,6 +178,7 @@ export async function loadCertifyContextForCreditBatchForUser(
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
       transportCoverage: EMPTY_COVERAGE,
+      requiredTransportCategories: [],
       isProduction,
     };
   }
@@ -143,6 +201,7 @@ export async function loadCertifyContextForCreditBatchForUser(
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
       transportCoverage: EMPTY_COVERAGE,
+      requiredTransportCategories: [],
       isProduction,
     };
   }
@@ -160,6 +219,7 @@ export async function loadCertifyContextForCreditBatchForUser(
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
       transportCoverage: EMPTY_COVERAGE,
+      requiredTransportCategories: [],
       isProduction,
     };
   }
@@ -192,6 +252,8 @@ export async function loadCertifyContextForCreditBatchForUser(
     userId,
     creditBatch.applicationIds,
   );
+  const requiredTransportCategories =
+    deriveRequiredTransportCategories(defaultTemplate);
 
   return {
     facilityId,
@@ -202,6 +264,7 @@ export async function loadCertifyContextForCreditBatchForUser(
     blueprintsForTemplate,
     unresolvedBlueprintKeys,
     transportCoverage,
+    requiredTransportCategories,
     isProduction,
   };
 }

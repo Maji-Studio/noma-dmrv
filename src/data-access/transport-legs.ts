@@ -8,8 +8,15 @@
  * `entityType` discriminates which upstream entity each leg attaches to:
  *   - 'feedstock' → feedstocks.id
  *   - 'biochar'   → biochar_products.id
- *   - 'sample'    → samples.id
+ *   - 'sample'    → samples.id      (resolves to facility via production_runs)
  *   - 'delivery'  → deliveries.id
+ *
+ * Authorization model: `transport_legs.entity_id` is polymorphic and not
+ * FK-constrained, so every read of a single leg and every write resolves
+ * the parent chain back to a facility via `resolveEntityFacility`. This
+ * closes the "mutate a leg whose parent doesn't exist" hole. When a
+ * facility-membership model lands in this codebase, swap this single
+ * helper for a `requireFacilityAccess(userId, facilityId)` check.
  */
 
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -18,6 +25,7 @@ import {
   biocharProducts,
   deliveries,
   feedstocks,
+  productionRuns,
   samples,
   transportLegs,
   type NewTransportLeg,
@@ -36,23 +44,52 @@ const ENTITY_LABEL: Record<TransportEntityType, string> = {
   delivery: "Delivery",
 };
 
-const ENTITY_TABLE = {
-  feedstock: feedstocks,
-  biochar: biocharProducts,
-  sample: samples,
-  delivery: deliveries,
-} as const;
-
-async function assertEntityExists(
+/**
+ * Walk a polymorphic transport-leg parent back to its facility.
+ * Throws SafeError if the parent doesn't resolve.
+ *
+ * - feedstock / biochar / delivery: direct `facility_id` column.
+ * - sample: indirect via `production_runs.facility_id`.
+ */
+async function resolveEntityFacility(
   entityType: TransportEntityType,
   entityId: string,
-): Promise<void> {
-  const table = ENTITY_TABLE[entityType];
+): Promise<{ facilityId: string }> {
+  if (entityType === "feedstock") {
+    const [row] = await db
+      .select({ facilityId: feedstocks.facilityId })
+      .from(feedstocks)
+      .where(eq(feedstocks.id, entityId));
+    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+    return { facilityId: row.facilityId };
+  }
+
+  if (entityType === "biochar") {
+    const [row] = await db
+      .select({ facilityId: biocharProducts.facilityId })
+      .from(biocharProducts)
+      .where(eq(biocharProducts.id, entityId));
+    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+    return { facilityId: row.facilityId };
+  }
+
+  if (entityType === "delivery") {
+    const [row] = await db
+      .select({ facilityId: deliveries.facilityId })
+      .from(deliveries)
+      .where(eq(deliveries.id, entityId));
+    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+    return { facilityId: row.facilityId };
+  }
+
+  // sample: samples → production_runs → facilities
   const [row] = await db
-    .select({ id: table.id })
-    .from(table)
-    .where(eq(table.id, entityId));
+    .select({ facilityId: productionRuns.facilityId })
+    .from(samples)
+    .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .where(eq(samples.id, entityId));
   if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+  return { facilityId: row.facilityId };
 }
 
 // ============================================
@@ -61,6 +98,7 @@ async function assertEntityExists(
 
 /**
  * Get all transport legs attached to a given entity, oldest first.
+ * Verifies the parent entity resolves to a facility before issuing the read.
  */
 export async function getTransportLegsForEntity(
   userId: string,
@@ -68,6 +106,7 @@ export async function getTransportLegsForEntity(
   entityId: string,
 ): Promise<TransportLeg[]> {
   requireAuth(userId);
+  await resolveEntityFacility(entityType, entityId);
 
   return db
     .select()
@@ -84,7 +123,8 @@ export async function getTransportLegsForEntity(
 /**
  * Bulk fetch transport legs across many entity IDs of the same type.
  * Single query — used by the submission orchestrator and the Certify-Panel
- * coverage loader, both of which walk the credit-batch lineage.
+ * coverage loader, both of which walk the credit-batch lineage and have
+ * already validated parent access upstream.
  */
 export async function getTransportLegsForEntities(
   userId: string,
@@ -107,7 +147,8 @@ export async function getTransportLegsForEntities(
 }
 
 /**
- * Get a single transport leg by ID.
+ * Get a single transport leg by ID. Returns null if the leg doesn't exist
+ * OR if its polymorphic parent no longer resolves (orphaned leg).
  */
 export async function getTransportLegById(
   userId: string,
@@ -120,7 +161,9 @@ export async function getTransportLegById(
     .from(transportLegs)
     .where(eq(transportLegs.id, id));
 
-  return row ?? null;
+  if (!row) return null;
+  await resolveEntityFacility(row.entityType, row.entityId);
+  return row;
 }
 
 // ============================================
@@ -140,7 +183,7 @@ export async function createTransportLeg(
 ): Promise<TransportLeg> {
   requireAuth(userId);
 
-  await assertEntityExists(input.entityType, input.entityId);
+  await resolveEntityFacility(input.entityType, input.entityId);
 
   const [row] = await db
     .insert(transportLegs)
@@ -168,6 +211,15 @@ export async function updateTransportLeg(
 ): Promise<TransportLeg> {
   requireAuth(userId);
 
+  const [existing] = await db
+    .select({ entityType: transportLegs.entityType, entityId: transportLegs.entityId })
+    .from(transportLegs)
+    .where(eq(transportLegs.id, id));
+  if (!existing) {
+    throw new SafeError("Transport leg not found");
+  }
+  await resolveEntityFacility(existing.entityType, existing.entityId);
+
   const [row] = await db
     .update(transportLegs)
     .set({ ...input, updatedAt: new Date() })
@@ -186,6 +238,15 @@ export async function deleteTransportLeg(
   id: string,
 ): Promise<void> {
   requireAuth(userId);
+
+  const [existing] = await db
+    .select({ entityType: transportLegs.entityType, entityId: transportLegs.entityId })
+    .from(transportLegs)
+    .where(eq(transportLegs.id, id));
+  if (!existing) {
+    throw new SafeError("Transport leg not found");
+  }
+  await resolveEntityFacility(existing.entityType, existing.entityId);
 
   const result = await db
     .delete(transportLegs)
