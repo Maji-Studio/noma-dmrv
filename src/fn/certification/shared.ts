@@ -1,6 +1,9 @@
 import { env } from "@/config/env";
+import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import type { TransportLeg } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import { IsometricApiError } from "@/lib/isometric";
+import type { TransportEntityIdsByCategory } from "@/lib/isometric/utils/transport-lineage";
 
 export const ISOMETRIC_PROVIDER = "isometric" as const;
 export const REMOVAL_SUBMISSION_TYPE = "removal" as const;
@@ -27,4 +30,22 @@ export function assertProductionConfirmed(confirmProduction?: boolean): void {
       "Confirm you want to write to the production Isometric environment.",
     );
   }
+}
+
+export interface TransportLegsByCategory {
+  feedstock: TransportLeg[];
+  biochar: TransportLeg[];
+  sample: TransportLeg[];
+}
+
+export async function loadTransportLegsByCategory(
+  userId: string,
+  entityIds: TransportEntityIdsByCategory,
+): Promise<TransportLegsByCategory> {
+  const [feedstock, biochar, sample] = await Promise.all([
+    getTransportLegsForEntities(userId, "feedstock", entityIds.feedstockIds),
+    getTransportLegsForEntities(userId, "biochar", entityIds.biocharProductIds),
+    getTransportLegsForEntities(userId, "sample", entityIds.sampleIds),
+  ]);
+  return { feedstock, biochar, sample };
 }

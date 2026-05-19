@@ -1,11 +1,3 @@
-/**
- * TransportLegForm
- *
- * Modal form for creating or editing a single transport leg attached to any
- * polymorphic entity (`feedstock | biochar | sample | delivery`). Method-
- * conditional required fields mirror the DB check constraints and the Zod
- * `superRefine` in `src/schemas/transport-legs.ts`.
- */
 "use client";
 
 import { useForm } from "react-hook-form";
