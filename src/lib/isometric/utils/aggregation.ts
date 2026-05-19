@@ -12,9 +12,13 @@ export interface AggregatedProductionData {
   totalFeedstockDryMassKg: number;
   totalDieselLiters: number;
   totalElectricityKwh: number;
-  // Mass-weighted average distance per transport-leg category. Null when no
-  // legs are recorded for that category. Caller (submit-credit-batch.ts)
-  // populates these by querying `transport_legs` along the lineage.
+  // Mass-weighted distance per transport-leg category, such that Certify's
+  // server-side `distance × Σmass × factor` equals Σⱼ(distⱼ × massⱼ × factor)
+  // — compliant with Isometric Transportation v1.1 §5 when every leg in the
+  // category shares the same method + emission factor. Mixed categories
+  // surface a warning instead of a value (see `aggregateTransportLegs`).
+  // Null when no legs are recorded OR when uniformity could not be
+  // established. Caller populates via `enrichWithTransportLegs`.
   feedstockTransportAvgDistanceKm: number | null;
   biocharTransportAvgDistanceKm: number | null;
   sampleTransportAvgDistanceKm: number | null;
@@ -24,22 +28,79 @@ export interface AggregatedProductionData {
   warnings: string[];
 }
 
-// Mass-weighted average distance: Σ(distance × load_mass) / Σ(load_mass).
-// Falls back to a simple mean of distances when no leg has load_mass_kg
-// (legitimate for the energy_usage calculation method, where mass is optional).
-// Returns null only when no legs are supplied.
-export function aggregateTransportLegs(legs: TransportLeg[]): number | null {
-  if (legs.length === 0) return null;
+// Aggregates a category's transport legs into a single distance value such
+// that Certify's `distance × Σmass × factor` server-side calculation equals
+// the per-leg sum Σⱼ(distⱼ × massⱼ × factor) — i.e., compliant with Isometric
+// Transportation v1.1 §5 ("Calculations shall be completed separately for
+// each leg ... total emissions calculated by the sum of emissions from
+// each leg"). This equivalence ONLY holds when every leg in the category
+// shares the same calculation method and emission factor. Mixed factors
+// break the linearity, so this function refuses to aggregate them and
+// records a warning instead.
+//
+// Returns:
+//   { distanceKm }                  — uniform legs, mass-weighted distance
+//   { warning }                     — non-uniform, missing data, or empty
+export interface TransportAggregationResult {
+  distanceKm: number | null;
+  warning: string | null;
+}
+
+const FACTOR_TOLERANCE = 1e-9;
+
+export function aggregateTransportLegs(
+  legs: TransportLeg[],
+  categoryLabel: string,
+): TransportAggregationResult {
+  if (legs.length === 0) {
+    return { distanceKm: null, warning: null };
+  }
+
+  // Every leg must carry the per-leg fields needed to verify uniformity and
+  // to compute the mass-weighted sum. Unweighted means are non-compliant
+  // (they would silently underweight large loads).
+  for (const leg of legs) {
+    if (leg.loadMassKg == null || leg.loadMassKg <= 0) {
+      return {
+        distanceKm: null,
+        warning: `${categoryLabel} transport leg ${leg.id}: missing load_mass_kg — required for per-leg accounting`,
+      };
+    }
+    if (leg.emissionFactorUsed == null) {
+      return {
+        distanceKm: null,
+        warning: `${categoryLabel} transport leg ${leg.id}: missing emission_factor_used — required to verify per-leg uniformity (Isometric v1.1 §5)`,
+      };
+    }
+  }
+
+  const method = legs[0].calculationMethodType;
+  const factor = legs[0].emissionFactorUsed as number;
+  for (const leg of legs) {
+    if (leg.calculationMethodType !== method) {
+      return {
+        distanceKm: null,
+        warning: `${categoryLabel} transport legs mix calculation methods (${method} vs ${leg.calculationMethodType}); Isometric v1.1 §5 requires per-leg accounting. Submit separately or unify methods.`,
+      };
+    }
+    if (
+      Math.abs((leg.emissionFactorUsed as number) - factor) > FACTOR_TOLERANCE
+    ) {
+      return {
+        distanceKm: null,
+        warning: `${categoryLabel} transport legs mix emission factors (${factor} vs ${leg.emissionFactorUsed}); Isometric v1.1 §5 requires per-leg accounting. Submit separately or unify factors.`,
+      };
+    }
+  }
+
   let weighted = 0;
   let weightSum = 0;
   for (const leg of legs) {
-    if (leg.loadMassKg == null) continue;
-    weighted += leg.distanceKm * leg.loadMassKg;
-    weightSum += leg.loadMassKg;
+    const mass = leg.loadMassKg as number;
+    weighted += leg.distanceKm * mass;
+    weightSum += mass;
   }
-  if (weightSum > 0) return weighted / weightSum;
-  const distanceSum = legs.reduce((acc, leg) => acc + leg.distanceKm, 0);
-  return distanceSum / legs.length;
+  return { distanceKm: weighted / weightSum, warning: null };
 }
 
 export function aggregateProductionRuns(
@@ -112,17 +173,29 @@ export interface TransportLegsByCategory {
   sample: TransportLeg[];
 }
 
-// Layers transport-leg averages onto an existing aggregation result.
-// Pure: returns a new object, doesn't mutate `agg`.
+// Layers transport-leg distances onto an existing aggregation result.
+// Pure: returns a new object, doesn't mutate `agg`. Per-category warnings
+// (mixed methods/factors, missing per-leg data) are appended to
+// `agg.warnings`, which the submission pipeline short-circuits on.
 export function enrichWithTransportLegs(
   agg: AggregatedProductionData,
   legs: TransportLegsByCategory,
 ): AggregatedProductionData {
+  const feedstock = aggregateTransportLegs(legs.feedstock, "Feedstock");
+  const biochar = aggregateTransportLegs(legs.biochar, "Biochar");
+  const sample = aggregateTransportLegs(legs.sample, "Sample");
+  const newWarnings = [
+    feedstock.warning,
+    biochar.warning,
+    sample.warning,
+  ].filter((w): w is string => w !== null);
+
   return {
     ...agg,
-    feedstockTransportAvgDistanceKm: aggregateTransportLegs(legs.feedstock),
-    biocharTransportAvgDistanceKm: aggregateTransportLegs(legs.biochar),
-    sampleTransportAvgDistanceKm: aggregateTransportLegs(legs.sample),
+    feedstockTransportAvgDistanceKm: feedstock.distanceKm,
+    biocharTransportAvgDistanceKm: biochar.distanceKm,
+    sampleTransportAvgDistanceKm: sample.distanceKm,
+    warnings: [...agg.warnings, ...newWarnings],
   };
 }
 

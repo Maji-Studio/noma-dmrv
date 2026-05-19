@@ -95,10 +95,12 @@ function template(
     groups: [
       {
         id: `${id}-group-1`,
+        key: `${id}-group-1`,
         name: "Group",
         components: blueprintKeys.map((key, idx) => ({
           id: `${id}-comp-${idx}`,
           blueprint_key: key,
+          inputs: [],
         })),
       },
     ],
@@ -310,5 +312,144 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       "s-2",
     ]);
     expect(mockedGetLegs).toHaveBeenCalledTimes(3);
+  });
+});
+
+// ============================================================
+// requiredTransportCategories derivation
+// ============================================================
+
+// Builds a template whose first group bundles three components, each with a
+// single monitored `distance` input — matching the three transport rows in
+// INPUT_MAPPING. The optional `omit` list lets a test simulate a template
+// that doesn't request a particular category.
+function transportTemplate(
+  id: string,
+  omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
+): IsometricRemovalTemplate {
+  const categories = [
+    {
+      key: "biomass-feedstock-transport",
+      blueprint_key: "transport",
+      input_key: "distance",
+      category: "feedstock" as const,
+    },
+    {
+      key: "biochar-transport",
+      blueprint_key: "transport",
+      input_key: "distance",
+      category: "biochar" as const,
+    },
+    {
+      key: "sampling-required-for-mrv",
+      blueprint_key: "distance_based_ci_emissions",
+      input_key: "distance",
+      category: "sample" as const,
+    },
+  ].filter((c) => !omit.includes(c.category));
+
+  return {
+    id,
+    name: `Template ${id}`,
+    groups: categories.map((c, idx) => ({
+      id: `${id}-grp-${idx}`,
+      key: c.key,
+      name: c.key,
+      components: [
+        {
+          id: `${id}-comp-${idx}`,
+          blueprint_key: c.blueprint_key,
+          display_name: c.blueprint_key,
+          inputs: [
+            {
+              type: "monitored",
+              input_key: c.input_key,
+              datapoint_id: null,
+            },
+          ],
+        },
+      ],
+    })),
+  } as unknown as IsometricRemovalTemplate;
+}
+
+describe("requiredTransportCategories", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      facilityId: FACILITY_ID,
+      applicationIds: [],
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetLegs.mockResolvedValue([]);
+    mockedGetLineage.mockResolvedValue(
+      undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
+    );
+    mockedGetRuns.mockResolvedValue([]);
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListBlueprints.mockResolvedValue([]);
+  });
+
+  it("collects all three categories when the template requests all of them", async () => {
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "tpl_full" }),
+    );
+    mockedListTemplates.mockResolvedValue([transportTemplate("tpl_full")]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+    expect(result.requiredTransportCategories).toEqual([
+      "feedstock",
+      "biochar",
+      "sample",
+    ]);
+  });
+
+  it("returns a subset when the template omits a transport group", async () => {
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "tpl_no_sample" }),
+    );
+    mockedListTemplates.mockResolvedValue([
+      transportTemplate("tpl_no_sample", ["sample"]),
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+    expect(result.requiredTransportCategories).toEqual([
+      "feedstock",
+      "biochar",
+    ]);
+  });
+
+  it("returns an empty list when the template has no transport inputs", async () => {
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "tpl_none" }),
+    );
+    mockedListTemplates.mockResolvedValue([
+      transportTemplate("tpl_none", ["feedstock", "biochar", "sample"]),
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+    expect(result.requiredTransportCategories).toEqual([]);
+  });
+
+  it("returns an empty list when there is no resolved template", async () => {
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: null }),
+    );
+    mockedListTemplates.mockResolvedValue([]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+    expect(result.requiredTransportCategories).toEqual([]);
   });
 });
