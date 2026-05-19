@@ -18,11 +18,13 @@ export {
 } from "./projects";
 export {
   createDatapoint,
+  patchDatapoint,
   createRemoval,
   createComponent,
   findRemovalBySupplierRef,
   findDatapointBySupplierRef,
   type CreateDatapointRequest,
+  type PatchDatapointRequest,
   type Datapoint,
   type CreateRemovalRequest,
   type Removal,

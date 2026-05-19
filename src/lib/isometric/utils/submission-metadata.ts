@@ -1,3 +1,10 @@
+export const SUBMISSION_METADATA_KEYS = {
+  remoteStatus: "remoteStatus",
+  pendingTotalCo2eRemovedKg: "pendingTotalCo2eRemovedKg",
+  removalIds: "removalIds",
+  rejectionReason: "rejectionReason",
+} as const;
+
 export function getMetadataValue(
   metadata: unknown,
   key: string,

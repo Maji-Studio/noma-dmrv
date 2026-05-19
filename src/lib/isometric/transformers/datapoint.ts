@@ -105,7 +105,10 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Sample shipping to lab
+  // Sample shipping to lab. `grid_electricity_use.electricity_use`
+  // (lab analysis electricity) is a sandbox zero stub — noma does not
+  // capture lab-side electricity; see the zero-stub block below for the
+  // rationale.
   "sampling-required-for-mrv": {
     distance_based_ci_emissions: {
       distance: {
@@ -123,6 +126,15 @@ export const INPUT_MAPPING: InputMappingTable = {
         expectedQuantityKind: "mass",
       },
     },
+    grid_electricity_use: {
+      electricity_use: {
+        source: "totalBiocharDryMassKg",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
+      },
+    },
   },
 
   // Biochar processing electricity
@@ -133,6 +145,87 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
+      },
+    },
+  },
+
+  // Pyrolyzer electricity. Certify's `metered_energy_based_ci_emissions`
+  // blueprint wants pre/post meter readouts and computes consumption as
+  // `final − initial`. noma only stores the delta on
+  // `production_runs.electricityKwh` (summed into `totalElectricityKwh`),
+  // so we synthesize: initial_readout = 0, final_readout = delta. The
+  // difference equals the real consumption, which is the only value
+  // Certify uses downstream. Tracked in `docs/open-questions.md` under
+  // `isometric/phase-3-input-coverage` (pyrolyzer meter readouts).
+  pyrolysis: {
+    metered_energy_based_ci_emissions: {
+      initial_readout: {
+        source: "totalElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
+      },
+      final_readout: {
+        source: "totalElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+      },
+    },
+  },
+
+  // ─── Sandbox-only zero stubs ───
+  // The two sandbox templates ("Protocol default" and "Dark Earth removal
+  // template") still pull in template components that noma has no per-run
+  // data for. The entries below let end-to-end sandbox submission proceed
+  // by emitting a `0` datapoint with the unit + quantity_kind the blueprint
+  // declares. EACH of these must be replaced with a real source before the
+  // template is moved to production. Tracked in `docs/open-questions.md`
+  // under `isometric/phase-3-input-coverage` and
+  // `isometric/sandbox-zero-stubs`.
+  //
+  // Convention: reuse `totalBiocharDryMassKg` as the source (it is always
+  // a finite non-null number after aggregation) and override with
+  // `transform: () => 0`. The `expectedQuantityKind` still gates against
+  // blueprint drift.
+  "direct-emissions": {
+    ghg_direct_emissions: {
+      concentration: {
+        source: "totalBiocharDryMassKg",
+        unit: "mg / kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass_fraction",
+        transform: () => 0,
+      },
+      mass_flow: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+        transform: () => 0,
+      },
+    },
+  },
+  "biochar-storage": {
+    fuel_usage_by_volume: {
+      volume_of_fuel: {
+        source: "totalBiocharDryMassKg",
+        unit: "L",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "volume",
+        transform: () => 0,
+      },
+    },
+  },
+  "staff-travel": {
+    distance_based_ci_emissions: {
+      distance: {
+        source: "totalBiocharDryMassKg",
+        unit: "km",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "distance",
+        transform: () => 0,
       },
     },
   },

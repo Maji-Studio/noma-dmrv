@@ -11,7 +11,10 @@ import {
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
+import {
+  SUBMISSION_METADATA_KEYS,
+  getMetadataValue,
+} from "@/lib/isometric/utils/submission-metadata";
 import { isometricDocs } from "@/lib/isometric/links";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
@@ -377,19 +380,28 @@ function RemoteStatusLabel({ status }: { status: string | null }) {
 }
 
 function getRemoteStatus(row: StatementRow): string | null {
-  const metadataStatus = getMetadataValue(row.submission.metadata,"remoteStatus");
+  const metadataStatus = getMetadataValue(
+    row.submission.metadata,
+    SUBMISSION_METADATA_KEYS.remoteStatus,
+  );
   return row.remote?.status ?? (typeof metadataStatus === "string" ? metadataStatus : null);
 }
 
 function getPendingTotal(row: StatementRow): number | null {
   const value = row.remote
     ? row.remote.pending_total_co2e_removed_kg
-    : getMetadataValue(row.submission.metadata,"pendingTotalCo2eRemovedKg");
+    : getMetadataValue(
+        row.submission.metadata,
+        SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg,
+      );
   return typeof value === "number" ? value : null;
 }
 
 function getRemovalIds(row: StatementRow): string[] {
-  const value = getMetadataValue(row.submission.metadata,"removalIds");
+  const value = getMetadataValue(
+    row.submission.metadata,
+    SUBMISSION_METADATA_KEYS.removalIds,
+  );
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
 }
 

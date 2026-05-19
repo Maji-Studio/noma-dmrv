@@ -7,8 +7,17 @@ import {
 } from "@/lib/isometric/utils/aggregation";
 
 // Minimal-shape TransportLeg builder. Only the columns the aggregator reads
-// are populated; the rest stay typed but undefined-ish to keep tests focused.
-function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
+// are populated; the rest stay typed but nullish to keep tests focused on
+// the uniformity rules introduced for Isometric Transportation v1.1 §5
+// compliance.
+function leg(
+  distanceKm: number,
+  loadMassKg: number | null,
+  opts: {
+    method?: TransportLeg["calculationMethodType"];
+    factor?: number | null;
+  } = {},
+): TransportLeg {
   return {
     id: "tl_" + Math.random().toString(36).slice(2, 8),
     entityType: "delivery",
@@ -27,8 +36,8 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     fuelConsumedLiters: null,
     electricityKwh: null,
     loadMassKg,
-    calculationMethodType: "distance_based",
-    emissionFactorUsed: null,
+    calculationMethodType: opts.method ?? "distance_based",
+    emissionFactorUsed: opts.factor === undefined ? 0.12 : opts.factor,
     emissionFactorSource: null,
     transportEmissionsCo2eKg: null,
     billOfLading: null,
@@ -39,45 +48,85 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
 }
 
 describe("aggregateTransportLegs", () => {
-  it("returns null when no legs are supplied", () => {
-    expect(aggregateTransportLegs([])).toBeNull();
+  it("returns {distanceKm: null, warning: null} when no legs are supplied", () => {
+    const result = aggregateTransportLegs([], "Feedstock");
+    expect(result.distanceKm).toBeNull();
+    expect(result.warning).toBeNull();
   });
 
-  it("returns the single distance when one leg is supplied", () => {
-    expect(aggregateTransportLegs([leg(50, 1000)])).toBe(50);
+  it("returns the single distance when one uniform leg is supplied", () => {
+    const result = aggregateTransportLegs([leg(50, 1000)], "Feedstock");
+    expect(result.distanceKm).toBe(50);
+    expect(result.warning).toBeNull();
   });
 
-  it("computes mass-weighted average across multiple legs", () => {
+  it("computes mass-weighted distance across multiple uniform legs", () => {
     // (50*1000 + 100*4000) / (1000 + 4000) = 450000 / 5000 = 90
-    const result = aggregateTransportLegs([leg(50, 1000), leg(100, 4000)]);
-    expect(result).toBe(90);
+    const result = aggregateTransportLegs(
+      [leg(50, 1000), leg(100, 4000)],
+      "Feedstock",
+    );
+    expect(result.distanceKm).toBe(90);
+    expect(result.warning).toBeNull();
   });
 
-  it("equals simple average when all loads are equal", () => {
-    // (50 + 100 + 150) * 1000 / (3 * 1000) = 100
-    const result = aggregateTransportLegs([
-      leg(50, 1000),
-      leg(100, 1000),
-      leg(150, 1000),
-    ]);
-    expect(result).toBe(100);
+  it("warns when legs in a category mix calculation methods", () => {
+    const result = aggregateTransportLegs(
+      [leg(50, 1000, { method: "distance_based" }), leg(100, 1000, { method: "energy_usage" })],
+      "Feedstock",
+    );
+    expect(result.distanceKm).toBeNull();
+    expect(result.warning).toMatch(/mix calculation methods/);
+    expect(result.warning).toMatch(/§5/);
   });
 
-  it("skips legs with null load_mass_kg (they don't contribute to either sum)", () => {
-    // Only the 100km leg with 1000kg counts; the null-mass leg is ignored.
-    const result = aggregateTransportLegs([leg(50, null), leg(100, 1000)]);
-    expect(result).toBe(100);
+  it("warns when legs in a category mix emission factors", () => {
+    const result = aggregateTransportLegs(
+      [leg(50, 1000, { factor: 0.12 }), leg(100, 1000, { factor: 0.25 })],
+      "Biochar",
+    );
+    expect(result.distanceKm).toBeNull();
+    expect(result.warning).toMatch(/mix emission factors/);
   });
 
-  it("falls back to a simple mean of distances when every leg has null load_mass_kg", () => {
-    // Energy-usage legs don't require load mass; we keep them in the average
-    // by switching to a simple mean so submission isn't blocked.
-    expect(aggregateTransportLegs([leg(50, null), leg(100, null)])).toBe(75);
+  it("warns when a leg is missing load_mass_kg (per-leg accounting requires it)", () => {
+    const result = aggregateTransportLegs(
+      [leg(50, 1000), leg(100, null)],
+      "Sample",
+    );
+    expect(result.distanceKm).toBeNull();
+    expect(result.warning).toMatch(/missing load_mass_kg/);
   });
 
-  it("handles zero-distance legs cleanly", () => {
+  it("warns when a leg is missing emission_factor_used", () => {
+    const result = aggregateTransportLegs(
+      [leg(50, 1000, { factor: null })],
+      "Sample",
+    );
+    expect(result.distanceKm).toBeNull();
+    expect(result.warning).toMatch(/missing emission_factor_used/);
+  });
+
+  it("tolerates floating-point factor jitter within 1e-9", () => {
+    const result = aggregateTransportLegs(
+      [
+        leg(50, 1000, { factor: 0.12 }),
+        leg(100, 1000, { factor: 0.12 + 1e-12 }),
+      ],
+      "Feedstock",
+    );
+    expect(result.warning).toBeNull();
+    expect(result.distanceKm).toBeCloseTo(75);
+  });
+
+  it("handles zero-distance legs cleanly when uniform", () => {
     // (0*1000 + 100*1000) / 2000 = 50
-    expect(aggregateTransportLegs([leg(0, 1000), leg(100, 1000)])).toBe(50);
+    const result = aggregateTransportLegs(
+      [leg(0, 1000), leg(100, 1000)],
+      "Feedstock",
+    );
+    expect(result.distanceKm).toBe(50);
+    expect(result.warning).toBeNull();
   });
 });
 
@@ -101,7 +150,7 @@ describe("enrichWithTransportLegs", () => {
     warnings: [],
   };
 
-  it("populates all three transport fields with mass-weighted averages", () => {
+  it("populates all three transport fields with mass-weighted distances", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
       feedstock: [leg(50, 1000), leg(100, 4000)], // → 90
       biochar: [leg(200, 1000)], // → 200
@@ -111,6 +160,7 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.feedstockTransportAvgDistanceKm).toBe(90);
     expect(enriched.biocharTransportAvgDistanceKm).toBe(200);
     expect(enriched.sampleTransportAvgDistanceKm).toBe(20);
+    expect(enriched.warnings).toEqual([]);
   });
 
   it("does not mutate the input aggregation object", () => {
@@ -151,5 +201,44 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.feedstockTransportAvgDistanceKm).toBeNull();
     expect(enriched.biocharTransportAvgDistanceKm).toBe(100);
     expect(enriched.sampleTransportAvgDistanceKm).toBeNull();
+  });
+
+  it("appends a warning per non-uniform category instead of returning a distance", () => {
+    const enriched = enrichWithTransportLegs(baseAgg, {
+      feedstock: [
+        leg(50, 1000, { factor: 0.12 }),
+        leg(100, 1000, { factor: 0.25 }),
+      ],
+      biochar: [leg(200, 1000)],
+      sample: [
+        leg(10, 500, { method: "distance_based" }),
+        leg(30, 500, { method: "energy_usage" }),
+      ],
+    });
+
+    expect(enriched.feedstockTransportAvgDistanceKm).toBeNull();
+    expect(enriched.biocharTransportAvgDistanceKm).toBe(200);
+    expect(enriched.sampleTransportAvgDistanceKm).toBeNull();
+    expect(enriched.warnings).toHaveLength(2);
+    expect(enriched.warnings[0]).toMatch(/Feedstock/);
+    expect(enriched.warnings[1]).toMatch(/Sample/);
+  });
+
+  it("preserves pre-existing warnings on the base aggregation", () => {
+    const aggWithExisting: AggregatedProductionData = {
+      ...baseAgg,
+      warnings: ["Run PR-2026-001: missing biocharDryMassKg"],
+    };
+    const enriched = enrichWithTransportLegs(aggWithExisting, {
+      feedstock: [leg(50, 1000)],
+      biochar: [
+        leg(100, 1000, { factor: 0.1 }),
+        leg(200, 1000, { factor: 0.5 }),
+      ],
+      sample: [],
+    });
+
+    expect(enriched.warnings[0]).toMatch(/missing biocharDryMassKg/);
+    expect(enriched.warnings[1]).toMatch(/Biochar transport legs mix/);
   });
 });
