@@ -1,12 +1,5 @@
 "use server";
 
-/**
- * Transport Legs Server Actions
- *
- * Server-side wrappers around `src/data-access/transport-legs.ts`.
- * Each action validates input with Zod and returns an `ActionResult<T>`.
- */
-
 import {
   createTransportLeg,
   deleteTransportLeg,

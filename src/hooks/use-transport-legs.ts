@@ -1,11 +1,3 @@
-/**
- * Transport Legs React Query Hooks
- *
- * Polymorphic CRUD hooks for the `transport_legs` table. Query keys are
- * scoped by `(entityType, entityId)` so the same hook drives delivery,
- * feedstock-delivery, biochar-product, and sample surfaces.
- */
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createTransportLegFn,
@@ -87,8 +79,6 @@ export function useCreateTransportLeg(
 }
 
 export function useUpdateTransportLeg(
-  /** Caller must supply the (entityType, entityId) the leg belongs to so the
-   *  list query is invalidated on success. */
   entityType: TransportEntityTypeValue,
   entityId: string,
   callbacks?: MutationCallbacks<TransportLeg, UpdateTransportLegData>,

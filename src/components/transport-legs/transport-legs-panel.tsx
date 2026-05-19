@@ -1,10 +1,3 @@
-/**
- * TransportLegsPanel
- *
- * Read + create + edit + delete panel for the polymorphic `transport_legs`
- * table. Drop into any entity surface (delivery side-sheet, feedstock-delivery
- * side-sheet, sample form, etc.) by passing `(entityType, entityId)`.
- */
 "use client";
 
 import { useState } from "react";

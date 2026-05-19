@@ -41,9 +41,10 @@ Omitted from MVP (incremental follow-ups):
 - Isometric account with admin access to project
   `prj_1K9YJ33RKSBX9FFF` (sandbox demo).
 - `.env.local` already has `ISOMETRIC_ENVIRONMENT=sandbox`,
-  `ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`,
-  `ISOMETRIC_DEMO_PROJECT_ID=prj_1K9YJ33RKSBX9FFF` (verified
-  2026-05-11 via `scripts/isometric-smoke.ts inspect-template`).
+  `ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`, and
+  `ISOMETRIC_DEMO_PROJECT_ID=prj_1K9YJ33RKSBX9FFF`. Run
+  `pnpm tsx scripts/isometric-smoke.ts inspect-template` to confirm
+  connectivity before proceeding.
 
 ## Step 1 — Create the template
 
@@ -138,3 +139,82 @@ magnitude in the registry UI; the template ID stays the same.
 - **`SafeError: Aggregated source ... is null`** — The credit batch's
   upstream chain has missing data (no transport legs, no biochar mass,
   etc.). Fix the source data, not the template.
+
+---
+
+## Alternative — Bootstrap fixed constants on `Dark Earth removal template`
+
+Use this path when the noma facility must submit against the broader
+`Dark Earth removal template` (`rvt_1K9YK6YRQSBXFVZ0`) rather than the
+minimal `noma-mvp` template. That template has **13 unbound fixed
+constants** that `submitCreditBatch` will refuse to submit against.
+
+Rather than clicking "Create new Datapoint" 13 times in the Registry UI,
+run the bootstrap script and paste the resulting IDs into the template
+editor.
+
+### Step A — Create the constant Datapoints
+
+```bash
+pnpm tsx scripts/isometric-smoke.ts bootstrap-fixed-constants \
+  prj_1K9YJ33RKSBX9FFF rvt_1K9YK6YRQSBXFVZ0
+```
+
+The script:
+
+1. Reads every `type=fixed` input whose `datapoint_id` is null.
+2. Looks each up in `scripts/isometric-bootstrap-constants.ts` →
+   `FIXED_CONSTANT_DEFAULTS` (keyed by `${componentDisplayName}::${inputKey}`).
+3. POSTs one Datapoint per input via `POST /datapoints`, reading the
+   `compatible_unit` straight off the live blueprint (no hardcoded units
+   in the magnitude → POST path).
+4. Uses a stable `supplier_reference_id` of
+   `nm-fc-<templateId>-<rtcId>-<inputKey>` so re-runs reconcile via
+   `findDatapointBySupplierRef` instead of POSTing duplicates.
+5. Prints a binding table of `{ status, datapoint_id, component → input }`.
+
+### Step B — Bind in the Registry UI
+
+1. Open `https://registry.sandbox.isometric.com` → project
+   `prj_1K9YJ33RKSBX9FFF` → **Removal Templates** →
+   `Dark Earth removal template` → **Edit**.
+2. For each row in the script output, locate the matching component +
+   fixed input, click **Bind constant** → **Select existing Datapoint**,
+   and paste the `datapoint id`.
+3. Save the template.
+
+### Step C — Verify
+
+```bash
+pnpm tsx scripts/isometric-smoke.ts inspect-template prj_1K9YJ33RKSBX9FFF
+```
+
+All 13 fixed inputs on `Dark Earth removal template` should now show
+`preboundDatapoint=dtp_…`. `submitCreditBatch` will get past its
+fixed-input guard.
+
+### Curated DEFRA / IPCC values
+
+The 13 defaults are static reference data (DEFRA 2024, IPCC AR6). Source
+of truth and override guidance:
+
+| Component | Input | Default | Source |
+|---|---|---|---|
+| Biomass processing fuel usage | `fuel_combustion_carbon_intensity` | 2.68 kgCO2e/L | DEFRA 2024 diesel |
+| Pyrolyzer electricity usage | `carbon_intensity` | 0.21 kgCO2e/kWh | DEFRA 2024 UK grid |
+| Pyrolyzer CH₄ emissions | `global_warming_potential` | 27 | IPCC AR6 100-yr |
+| Pyrolyzer CO emissions | `global_warming_potential` | 1.9 | IPCC AR4 indirect (no AR6 update) |
+| Biochar processing electricity usage | `grid_carbon_intensity` | 0.21 kgCO2e/kWh | DEFRA 2024 UK grid |
+| Biochar transport to storage (truck) | `carbon_intensity` | 0.107 kgCO2e/(tonne·km) | DEFRA 2024 HGV |
+| Biochar to tractor (loader) | `emissions_factor` | 2.68 kgCO2e/L | DEFRA 2024 diesel |
+| Biochar to tractor (loader) | `volume_material_per_mass` | 2.5 m³/tonne | IBI v2.1 bulk density |
+| Biochar application via tractor | `fuel_combustion_carbon_intensity` | 2.68 kgCO2e/L | DEFRA 2024 diesel |
+| Sampling consumables | `carbon_intensity` | **1.0** (placeholder) | **Replace before production** |
+| Sample transport via car | `carbon_intensity` | 0.171 kgCO2e/km | DEFRA 2024 average car |
+| Laboratory analysis electricity | `grid_carbon_intensity` | 0.21 kgCO2e/kWh | DEFRA 2024 UK grid |
+| Staff travel | `carbon_intensity` | 0.171 kgCO2e/km | DEFRA 2024 average car |
+
+Override path: edit each Datapoint's magnitude directly in the Registry
+UI — the template binding survives. Do **not** add a `fixed_constants`
+DB table or admin UI; see `docs/isometric/next-steps.md` for the
+rationale.

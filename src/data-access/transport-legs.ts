@@ -1,16 +1,7 @@
-/**
- * Transport Legs Data Access Layer
- *
- * Polymorphic CRUD operations for the `transport_legs` table, which is the
- * canonical record of transportation emissions across the chain
- * (Isometric Transportation Emissions Accounting Module v1.1).
- *
- * `entityType` discriminates which upstream entity each leg attaches to:
- *   - 'feedstock' → feedstocks.id
- *   - 'biochar'   → biochar_products.id
- *   - 'sample'    → samples.id
- *   - 'delivery'  → deliveries.id
- */
+// `transport_legs.entity_id` is polymorphic and not FK-constrained, so every
+// read of a single leg and every write resolves the parent chain back to a
+// facility via `resolveEntityFacility`. Swap for `requireFacilityAccess` once
+// a facility-membership model lands.
 
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -18,6 +9,7 @@ import {
   biocharProducts,
   deliveries,
   feedstocks,
+  productionRuns,
   samples,
   transportLegs,
   type NewTransportLeg,
@@ -36,38 +28,60 @@ const ENTITY_LABEL: Record<TransportEntityType, string> = {
   delivery: "Delivery",
 };
 
-const ENTITY_TABLE = {
-  feedstock: feedstocks,
-  biochar: biocharProducts,
-  sample: samples,
-  delivery: deliveries,
-} as const;
-
-async function assertEntityExists(
+// sample resolves indirectly via `production_runs.facility_id`; others have
+// a direct `facility_id` column.
+async function resolveEntityFacility(
   entityType: TransportEntityType,
   entityId: string,
-): Promise<void> {
-  const table = ENTITY_TABLE[entityType];
+): Promise<{ facilityId: string }> {
+  if (entityType === "feedstock") {
+    const [row] = await db
+      .select({ facilityId: feedstocks.facilityId })
+      .from(feedstocks)
+      .where(eq(feedstocks.id, entityId));
+    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+    return { facilityId: row.facilityId };
+  }
+
+  if (entityType === "biochar") {
+    const [row] = await db
+      .select({ facilityId: biocharProducts.facilityId })
+      .from(biocharProducts)
+      .where(eq(biocharProducts.id, entityId));
+    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+    return { facilityId: row.facilityId };
+  }
+
+  if (entityType === "delivery") {
+    const [row] = await db
+      .select({ facilityId: deliveries.facilityId })
+      .from(deliveries)
+      .where(eq(deliveries.id, entityId));
+    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+    return { facilityId: row.facilityId };
+  }
+
+  // sample: samples → production_runs → facilities
   const [row] = await db
-    .select({ id: table.id })
-    .from(table)
-    .where(eq(table.id, entityId));
+    .select({ facilityId: productionRuns.facilityId })
+    .from(samples)
+    .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .where(eq(samples.id, entityId));
   if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
+  return { facilityId: row.facilityId };
 }
 
 // ============================================
 // Read Operations
 // ============================================
 
-/**
- * Get all transport legs attached to a given entity, oldest first.
- */
 export async function getTransportLegsForEntity(
   userId: string,
   entityType: TransportEntityType,
   entityId: string,
 ): Promise<TransportLeg[]> {
   requireAuth(userId);
+  await resolveEntityFacility(entityType, entityId);
 
   return db
     .select()
@@ -81,11 +95,9 @@ export async function getTransportLegsForEntity(
     .orderBy(asc(transportLegs.createdAt));
 }
 
-/**
- * Bulk fetch transport legs across many entity IDs of the same type.
- * Single query — used by the submission orchestrator and the Certify-Panel
- * coverage loader, both of which walk the credit-batch lineage.
- */
+// Skips per-entity facility resolution: callers (submission orchestrator,
+// Certify-Panel coverage loader) walk the credit-batch lineage and have
+// already validated parent access upstream.
 export async function getTransportLegsForEntities(
   userId: string,
   entityType: TransportEntityType,
@@ -106,9 +118,6 @@ export async function getTransportLegsForEntities(
     .orderBy(asc(transportLegs.createdAt));
 }
 
-/**
- * Get a single transport leg by ID.
- */
 export async function getTransportLegById(
   userId: string,
   id: string,
@@ -120,7 +129,9 @@ export async function getTransportLegById(
     .from(transportLegs)
     .where(eq(transportLegs.id, id));
 
-  return row ?? null;
+  if (!row) return null;
+  await resolveEntityFacility(row.entityType, row.entityId);
+  return row;
 }
 
 // ============================================
@@ -140,7 +151,7 @@ export async function createTransportLeg(
 ): Promise<TransportLeg> {
   requireAuth(userId);
 
-  await assertEntityExists(input.entityType, input.entityId);
+  await resolveEntityFacility(input.entityType, input.entityId);
 
   const [row] = await db
     .insert(transportLegs)
@@ -168,6 +179,15 @@ export async function updateTransportLeg(
 ): Promise<TransportLeg> {
   requireAuth(userId);
 
+  const [existing] = await db
+    .select({ entityType: transportLegs.entityType, entityId: transportLegs.entityId })
+    .from(transportLegs)
+    .where(eq(transportLegs.id, id));
+  if (!existing) {
+    throw new SafeError("Transport leg not found");
+  }
+  await resolveEntityFacility(existing.entityType, existing.entityId);
+
   const [row] = await db
     .update(transportLegs)
     .set({ ...input, updatedAt: new Date() })
@@ -186,6 +206,15 @@ export async function deleteTransportLeg(
   id: string,
 ): Promise<void> {
   requireAuth(userId);
+
+  const [existing] = await db
+    .select({ entityType: transportLegs.entityType, entityId: transportLegs.entityId })
+    .from(transportLegs)
+    .where(eq(transportLegs.id, id));
+  if (!existing) {
+    throw new SafeError("Transport leg not found");
+  }
+  await resolveEntityFacility(existing.entityType, existing.entityId);
 
   const result = await db
     .delete(transportLegs)
