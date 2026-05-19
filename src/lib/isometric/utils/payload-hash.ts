@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalize(value));
+  if (value === undefined) {
+    throw new TypeError("canonicalJson: value must not be undefined");
+  }
+  const json = JSON.stringify(canonicalize(value));
+  if (json === undefined) {
+    throw new TypeError("canonicalJson: value is not serializable");
+  }
+  return json;
 }
 
 export function payloadHash(value: unknown): string {

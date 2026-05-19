@@ -530,7 +530,7 @@ export function CreditBatchList({
               : undefined
           }
           viewModeChildren={
-            sideSheet.entity ? (
+            sideSheet.entity && sideSheet.mode === "view" ? (
               <CertifyPanel creditBatchId={sideSheet.entity.id} />
             ) : null
           }

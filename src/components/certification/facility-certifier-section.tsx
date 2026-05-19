@@ -13,6 +13,7 @@ import {
   useDeleteFacilityCertifierMapping,
   useFacilityCertifierMapping,
 } from "@/hooks/use-certification";
+import { isometricRegistry } from "@/lib/isometric/links";
 import {
   FacilityCertifierDialog,
   UnlinkConfirmDialog,
@@ -82,6 +83,9 @@ export function FacilityCertifierSection({
   }
 
   const { mapping, isProduction } = data;
+  const protocolUrl = mapping?.protocolVersion
+    ? isometricRegistry.protocol(mapping.protocolSlug, mapping.protocolVersion)
+    : null;
 
   return (
     <>
@@ -130,6 +134,14 @@ export function FacilityCertifierSection({
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {mapping.externalProjectId}
               </span>
+              <a
+                href={isometricRegistry.project(mapping.externalProjectId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+              >
+                View on Isometric ↗
+              </a>
             </Field>
             <Field label="Default removal template">
               <span className="body-small">
@@ -142,10 +154,21 @@ export function FacilityCertifierSection({
               )}
             </Field>
             <Field label="Protocol">
-              <span className="body-small">
-                {mapping.protocolSlug}
-                {mapping.protocolVersion ? ` ${mapping.protocolVersion}` : ""}
-              </span>
+              {protocolUrl ? (
+                <a
+                  href={protocolUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="body-small underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+                >
+                  {mapping.protocolSlug} {mapping.protocolVersion} ↗
+                </a>
+              ) : (
+                <span className="body-small">
+                  {mapping.protocolSlug}
+                  {mapping.protocolVersion ? ` ${mapping.protocolVersion}` : ""}
+                </span>
+              )}
             </Field>
             <Field label="Linked at">
               <span className="body-small">
@@ -185,4 +208,3 @@ export function FacilityCertifierSection({
     </>
   );
 }
-
