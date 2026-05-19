@@ -24,9 +24,11 @@ import { SafeError } from "@/lib/errors";
 import {
   aggregateProductionRuns,
   buildSupplierRef,
+  collectTransportEntityIds,
   createDatapoint,
   createRemoval,
   decideSubmissionClaim,
+  enrichWithTransportLegs,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
@@ -34,6 +36,7 @@ import {
   type IsometricComponentBlueprint,
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
+import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import {
   buildCreateDatapointRequest,
   lookupInputMapping,
@@ -185,16 +188,41 @@ export async function submitCreditBatch(
         "Production runs not found for the credit batch's applications.",
       );
     }
-    const agg = aggregateProductionRuns(runs);
-    if (agg.warnings.length > 0) {
+    const baseAgg = aggregateProductionRuns(runs);
+    if (baseAgg.warnings.length > 0) {
       throw new SafeError(
-        `Aggregation warnings — submission blocked:\n${agg.warnings.join("\n")}`,
+        `Aggregation warnings — submission blocked:\n${baseAgg.warnings.join("\n")}`,
       );
     }
+
+    const transportEntityIds = collectTransportEntityIds(lineages, runs);
+    const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
+      getTransportLegsForEntities(
+        userId,
+        "feedstock",
+        transportEntityIds.feedstockIds,
+      ),
+      getTransportLegsForEntities(
+        userId,
+        "biochar",
+        transportEntityIds.biocharProductIds,
+      ),
+      getTransportLegsForEntities(
+        userId,
+        "sample",
+        transportEntityIds.sampleIds,
+      ),
+    ]);
+    const agg = enrichWithTransportLegs(baseAgg, {
+      feedstock: feedstockLegs,
+      biochar: biocharLegs,
+      sample: sampleLegs,
+    });
 
     const monitored: ResolvedMonitoredInput[] = [];
     const fixed: ResolvedFixedInput[] = [];
     const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
+    const unboundFixedInputs: { component: string; inputKey: string }[] = [];
 
     for (const group of ctx.defaultTemplate.groups) {
       for (const component of group.components) {
@@ -207,9 +235,11 @@ export async function submitCreditBatch(
         for (const rtcInput of component.inputs) {
           if (rtcInput.type === "fixed") {
             if (!rtcInput.datapoint_id) {
-              throw new SafeError(
-                `Template "${ctx.defaultTemplate.display_name}" has a fixed input "${rtcInput.input_key}" on component "${component.display_name}" without a pre-bound datapoint. Bind a constant for this input in the Isometric template editor before submitting.`,
-              );
+              unboundFixedInputs.push({
+                component: component.display_name,
+                inputKey: rtcInput.input_key,
+              });
+              continue;
             }
             fixed.push({
               removalTemplateComponentId: component.id,
@@ -268,6 +298,15 @@ export async function submitCreditBatch(
           );
         }
       }
+    }
+
+    if (unboundFixedInputs.length > 0) {
+      const lines = unboundFixedInputs
+        .map((u) => `  • ${u.component} → ${u.inputKey}`)
+        .join("\n");
+      throw new SafeError(
+        `Template "${ctx.defaultTemplate.display_name}" has ${unboundFixedInputs.length} fixed input(s) without a pre-bound datapoint:\n${lines}\nBind each as a constant in the Isometric template editor before submitting.`,
+      );
     }
 
     const semanticPayload = {
