@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "isometric": {
+      "type": "http",
+      "url": "https://api.isometric.com/mcp",
+      "note": "Official Isometric remote MCP server. Uses Isometric OAuth on first connection and provides context from the Isometric Standard, protocols, protocol modules, Certify and Registry user guides, and API documentation. Sandbox endpoint: https://api.sandbox.isometric.com/mcp."
+    }
+  }
+}
