@@ -127,6 +127,13 @@
       "when": 1777987011602,
       "tag": "0017_glorious_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1779192381313,
+      "tag": "0018_hesitant_nico_minoru",
+      "breakpoints": true
     }
   ]
 }

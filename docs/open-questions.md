@@ -201,15 +201,29 @@ Each entry follows this shape:
   - Resolve only if production traffic shows this failure mode often enough
     to justify per-Datapoint sub-ledger bookkeeping.
 
-- **Source upload flow** (`isometric/phase-3.5`) — opened 2026-05-05
-  - Implement the presigned-URL flow against whatever document-storage we
-    land on. Until then, `certifierDocumentUploads` stays empty and
-    `source_ids: []` on every Datapoint.
-  - Why: Removals without Sources can be created in sandbox but verifiers
-    will require source-of-truth attachments before Phase 4's GHG
-    statement step.
-  - Resolve once the noma documents subsystem has a real S3-equivalent
-    backend (currently a mockup per `docs/forms.md`).
+- **Source upload flow** (`isometric/phase-3.5`) — opened 2026-05-05,
+  storage prerequisite resolved 2026-05-19
+  - Storage prerequisite is now in place: see `docs/storage.md` and the
+    `useFileUpload` hook (`src/hooks/use-file-upload.ts`). The same
+    request → PUT → confirm orchestration can be pointed at Isometric's
+    `/sources/{id}/signed_upload_url` instead of our own `requestUpload`
+    server action.
+  - Remaining work: wire `certifierDocumentUploads` table writes, plumb
+    `source_ids` into Datapoint payloads, and add the UI hook for
+    selecting which existing noma documents to upload as Isometric
+    sources.
+
+- **Per-column upload-URL field migration** (`storage/phase-2`) — opened 2026-05-19
+  - `production.plc_data_file_url`, `samples.r0_histogram_file_url`,
+    `samples.tga_thermogram_file_url`, `production_samples.photo_url`,
+    `feedstock.registry_url`, `emissions.source_url` are still plain
+    text columns. Phase 2 plan: add a `*_document_id` FK alongside each,
+    backfill via UI, drop the URL column.
+  - Why: route all uploaded evidence through the single `documents`
+    table (one audit trail, one storage-key convention, one
+    visibility/ACL model).
+  - Not urgent; existing URL fields keep working as external/legacy
+    links via the `/api/documents/[id]` proxy route's fileUrl branch.
 
 - **Per-Datapoint ledger sub-rows** (`isometric/phase-4`) — opened 2026-05-05
   - Add `submissionType='datapoint'` rows in `certification_submissions`

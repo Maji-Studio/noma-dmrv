@@ -77,8 +77,10 @@ function parseFlags(): CliFlags {
     }
   }
 
-  if (!["dev", "prod"].includes(opEnv)) {
-    console.error(`Invalid --1p-env: ${opEnv} (must be dev or prod)`);
+  if (!["dev", "prod", "staging", "production"].includes(opEnv)) {
+    console.error(
+      `Invalid --1p-env: ${opEnv} (must be dev, prod, staging, or production)`
+    );
     process.exit(1);
   }
 
@@ -166,7 +168,8 @@ function checkVercelProject(): void {
 }
 
 function fetchFromOnePassword(opEnv: string): Map<string, string> {
-  const itemName = `${ITEM_PREFIX} ${opEnv}`;
+  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
+  const itemName = `${ITEM_PREFIX} ${itemSuffix}`;
   console.log(`\nFetching from 1Password (${itemName})...`);
 
   const templatePath = join(process.cwd(), ".env.tpl");
@@ -181,7 +184,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
 
   // Replace the default "dev" environment with the requested one
   const modifiedTemplate = template.replace(
-    new RegExp(`${ITEM_PREFIX} (dev|\\{\\{ENV\\}\\})`, "g"),
+    new RegExp(`${ITEM_PREFIX} (dev|prod|production|staging|\\{\\{ENV\\}\\})`, "g"),
     itemName
   );
 

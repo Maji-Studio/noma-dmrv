@@ -54,3 +54,6 @@ test-results
 # claude code
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# local-fs storage provider (dev/test only)
+.storage/
