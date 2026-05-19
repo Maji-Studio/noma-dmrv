@@ -1,11 +1,6 @@
-/**
- * Transport Legs Validation Schemas
- *
- * Zod schemas for the polymorphic transport_legs form. Method-conditional
- * required-field rules mirror the DB-level check constraints
- * (`transport_legs_energy_usage_requirements`,
- * `transport_legs_distance_based_requirements`).
- */
+// Conditional required-field rules mirror the DB check constraints
+// `transport_legs_energy_usage_requirements` and
+// `transport_legs_distance_based_requirements`.
 
 import { z } from "zod";
 import {

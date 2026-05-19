@@ -5,10 +5,15 @@ import {
   getCertifierProjectByFacility,
   type CertifierProjectRow,
 } from "@/data-access/certification";
-import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { getCreditBatchById } from "@/data-access/credit-batches";
+import {
+  getChainOfCustodyData,
+  type ChainOfCustodyData,
+} from "@/data-access/chain-of-custody";
+import {
+  getCreditBatchById,
+  type CreditBatchWithRelations,
+} from "@/data-access/credit-batches";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportLegs,
@@ -21,9 +26,15 @@ import {
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
+import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+import {
+  ISOMETRIC_PROVIDER,
+  loadTransportLegsByCategory,
+  safeListIfConfigured,
+  type TransportLegsByCategory,
+} from "./shared";
 
 export interface TransportCoverageBucket {
   count: number;
@@ -101,59 +112,45 @@ function deriveRequiredTransportCategories(
   );
 }
 
-async function loadTransportCoverage(
-  userId: string,
-  applicationIds: string[],
-): Promise<TransportCoverage> {
-  if (applicationIds.length === 0) return EMPTY_COVERAGE;
+// Extends the UI-facing context with the raw chain data needed by the submit
+// pipeline. Kept server-internal so the React Query-cached UI payload stays
+// lean (lineages/runs/legs are heavy).
+export interface SubmissionContext extends CertifyContextForCreditBatch {
+  creditBatch: CreditBatchWithRelations;
+  lineages: ChainOfCustodyData[];
+  runs: ProductionRunWithSamples[];
+  transportLegs: TransportLegsByCategory;
+}
 
-  const lineages = await Promise.all(
-    applicationIds.map((id) => getChainOfCustodyData(userId, id)),
-  );
-  const productionRunIds = Array.from(
-    new Set(
-      lineages
-        .map((l) => l.productionRun?.id)
-        .filter((id): id is string => !!id),
-    ),
-  );
-  const runs =
-    productionRunIds.length > 0
-      ? await getProductionRunsWithSamples(userId, productionRunIds)
-      : [];
-
-  const entityIds = collectTransportEntityIds(lineages, runs);
-  const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
-    getTransportLegsForEntities(userId, "feedstock", entityIds.feedstockIds),
-    getTransportLegsForEntities(userId, "biochar", entityIds.biocharProductIds),
-    getTransportLegsForEntities(userId, "sample", entityIds.sampleIds),
-  ]);
-
+function buildCoverage(
+  legs: TransportLegsByCategory,
+  entityIds: ReturnType<typeof collectTransportEntityIds>,
+): TransportCoverage {
   return {
     feedstock: {
-      count: feedstockLegs.length,
+      count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
-      aggregationWarning: aggregateTransportLegs(feedstockLegs, "Feedstock")
+      aggregationWarning: aggregateTransportLegs(legs.feedstock, "Feedstock")
         .warning,
     },
     biochar: {
-      count: biocharLegs.length,
+      count: legs.biochar.length,
       entityIds: entityIds.biocharProductIds,
-      aggregationWarning: aggregateTransportLegs(biocharLegs, "Biochar")
+      aggregationWarning: aggregateTransportLegs(legs.biochar, "Biochar")
         .warning,
     },
     sample: {
-      count: sampleLegs.length,
+      count: legs.sample.length,
       entityIds: entityIds.sampleIds,
-      aggregationWarning: aggregateTransportLegs(sampleLegs, "Sample").warning,
+      aggregationWarning: aggregateTransportLegs(legs.sample, "Sample").warning,
     },
   };
 }
 
-export async function loadCertifyContextForCreditBatchForUser(
+export async function loadSubmissionContext(
   userId: string,
   creditBatchId: string,
-): Promise<CertifyContextForCreditBatch> {
+): Promise<SubmissionContext> {
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
 
   const creditBatch = await getCreditBatchById(userId, creditBatchId);
@@ -162,6 +159,22 @@ export async function loadCertifyContextForCreditBatchForUser(
   }
 
   const facilityId = creditBatch.facilityId;
+  const emptyLegs: TransportLegsByCategory = {
+    feedstock: [],
+    biochar: [],
+    sample: [],
+  };
+  const baseEmpty = {
+    facilityId,
+    creditBatch,
+    lineages: [] as ChainOfCustodyData[],
+    runs: [] as ProductionRunWithSamples[],
+    transportLegs: emptyLegs,
+    transportCoverage: EMPTY_COVERAGE,
+    requiredTransportCategories: [] as TransportCategory[],
+    isProduction,
+  };
+
   const mapping = await getCertifierProjectByFacility(
     userId,
     facilityId,
@@ -170,16 +183,13 @@ export async function loadCertifyContextForCreditBatchForUser(
 
   if (!mapping) {
     return {
-      facilityId,
+      ...baseEmpty,
       mapping: null,
       project: null,
       defaultTemplate: null,
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
-      transportCoverage: EMPTY_COVERAGE,
-      requiredTransportCategories: [],
-      isProduction,
     };
   }
 
@@ -193,16 +203,13 @@ export async function loadCertifyContextForCreditBatchForUser(
 
   if (!mapping.defaultRemovalTemplateId) {
     return {
-      facilityId,
+      ...baseEmpty,
       mapping,
       project,
       defaultTemplate: null,
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
-      transportCoverage: EMPTY_COVERAGE,
-      requiredTransportCategories: [],
-      isProduction,
     };
   }
 
@@ -211,16 +218,13 @@ export async function loadCertifyContextForCreditBatchForUser(
 
   if (!defaultTemplate) {
     return {
-      facilityId,
+      ...baseEmpty,
       mapping,
       project,
       defaultTemplate: null,
       missingDefaultTemplateId: mapping.defaultRemovalTemplateId,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
-      transportCoverage: EMPTY_COVERAGE,
-      requiredTransportCategories: [],
-      isProduction,
     };
   }
 
@@ -248,25 +252,85 @@ export async function loadCertifyContextForCreditBatchForUser(
     }
   }
 
-  const transportCoverage = await loadTransportCoverage(
-    userId,
-    creditBatch.applicationIds,
-  );
   const requiredTransportCategories =
     deriveRequiredTransportCategories(defaultTemplate);
 
+  if (creditBatch.applicationIds.length === 0) {
+    return {
+      ...baseEmpty,
+      mapping,
+      project,
+      defaultTemplate,
+      missingDefaultTemplateId: null,
+      blueprintsForTemplate,
+      unresolvedBlueprintKeys,
+      requiredTransportCategories,
+    };
+  }
+
+  const lineages = await Promise.all(
+    creditBatch.applicationIds.map((id) =>
+      getChainOfCustodyData(userId, id),
+    ),
+  );
+  const productionRunIds = Array.from(
+    new Set(
+      lineages
+        .map((l) => l.productionRun?.id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const runs =
+    productionRunIds.length > 0
+      ? await getProductionRunsWithSamples(userId, productionRunIds)
+      : [];
+
+  const entityIds = collectTransportEntityIds(lineages, runs);
+  const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
+  const transportCoverage = buildCoverage(transportLegs, entityIds);
+
   return {
     facilityId,
+    creditBatch,
     mapping,
     project,
     defaultTemplate,
     missingDefaultTemplateId: null,
     blueprintsForTemplate,
     unresolvedBlueprintKeys,
+    lineages,
+    runs,
+    transportLegs,
     transportCoverage,
     requiredTransportCategories,
     isProduction,
   };
+}
+
+// Strip heavy raw fields (lineages, runs, legs) — only the UI summary
+// crosses the network to React Query.
+function projectUiContext(
+  ctx: SubmissionContext,
+): CertifyContextForCreditBatch {
+  return {
+    facilityId: ctx.facilityId,
+    mapping: ctx.mapping,
+    project: ctx.project,
+    defaultTemplate: ctx.defaultTemplate,
+    missingDefaultTemplateId: ctx.missingDefaultTemplateId,
+    blueprintsForTemplate: ctx.blueprintsForTemplate,
+    unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
+    transportCoverage: ctx.transportCoverage,
+    requiredTransportCategories: ctx.requiredTransportCategories,
+    isProduction: ctx.isProduction,
+  };
+}
+
+export async function loadCertifyContextForCreditBatchForUser(
+  userId: string,
+  creditBatchId: string,
+): Promise<CertifyContextForCreditBatch> {
+  return projectUiContext(await loadSubmissionContext(userId, creditBatchId));
 }
 
 export async function loadCertifyContextForCreditBatch(

@@ -17,14 +17,10 @@ import {
   isLockedInFlight as computeIsLockedInFlight,
   LOCK_TTL_MS,
 } from "@/lib/isometric/utils/lock";
-import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { getCreditBatchById } from "@/data-access/credit-batches";
-import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateProductionRuns,
   buildSupplierRef,
-  collectTransportEntityIds,
   createDatapoint,
   createRemoval,
   decideSubmissionClaim,
@@ -36,7 +32,6 @@ import {
   type IsometricComponentBlueprint,
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import {
   buildCreateDatapointRequest,
   lookupInputMapping,
@@ -48,7 +43,7 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadCertifyContextForCreditBatchForUser } from "./certify-context";
+import { loadSubmissionContext } from "./certify-context";
 import {
   assertProductionConfirmed,
   CREDIT_BATCH_ENTITY_TYPE,
@@ -108,10 +103,7 @@ export async function submitCreditBatch(
       typeof input === "string" ? { creditBatchId: input } : input,
     );
 
-    const ctx = await loadCertifyContextForCreditBatchForUser(
-      userId,
-      parsed.creditBatchId,
-    );
+    const ctx = await loadSubmissionContext(userId, parsed.creditBatchId);
     if (!ctx.mapping) {
       throw new SafeError("Link a facility to an Isometric project first.");
     }
@@ -147,20 +139,12 @@ export async function submitCreditBatch(
       expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
     };
 
-    const creditBatch = await getCreditBatchById(userId, parsed.creditBatchId);
-    if (!creditBatch) throw new SafeError("Credit batch not found");
-    if (creditBatch.applicationIds.length === 0) {
+    if (ctx.creditBatch.applicationIds.length === 0) {
       throw new SafeError("Credit batch has no linked applications.");
     }
 
-    const lineages = await Promise.all(
-      creditBatch.applicationIds.map((id) =>
-        getChainOfCustodyData(userId, id),
-      ),
-    );
     const lineageWarnings: string[] = [];
-    const productionRunIds = new Set<string>();
-    for (const lineage of lineages) {
+    for (const lineage of ctx.lineages) {
       lineageWarnings.push(
         ...lineage.warnings.map(
           (warning) => `Application ${lineage.application.code}: ${warning}`,
@@ -171,7 +155,6 @@ export async function submitCreditBatch(
           `Application ${lineage.application.code} has no linked production run - cannot aggregate.`,
         );
       }
-      productionRunIds.add(lineage.productionRun.id);
     }
     if (lineageWarnings.length > 0) {
       throw new SafeError(
@@ -179,45 +162,19 @@ export async function submitCreditBatch(
       );
     }
 
-    const runs = await getProductionRunsWithSamples(
-      userId,
-      Array.from(productionRunIds),
-    );
-    if (runs.length === 0) {
+    if (ctx.runs.length === 0) {
       throw new SafeError(
         "Production runs not found for the credit batch's applications.",
       );
     }
-    const baseAgg = aggregateProductionRuns(runs);
+    const baseAgg = aggregateProductionRuns(ctx.runs);
     if (baseAgg.warnings.length > 0) {
       throw new SafeError(
         `Aggregation warnings — submission blocked:\n${baseAgg.warnings.join("\n")}`,
       );
     }
 
-    const transportEntityIds = collectTransportEntityIds(lineages, runs);
-    const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
-      getTransportLegsForEntities(
-        userId,
-        "feedstock",
-        transportEntityIds.feedstockIds,
-      ),
-      getTransportLegsForEntities(
-        userId,
-        "biochar",
-        transportEntityIds.biocharProductIds,
-      ),
-      getTransportLegsForEntities(
-        userId,
-        "sample",
-        transportEntityIds.sampleIds,
-      ),
-    ]);
-    const agg = enrichWithTransportLegs(baseAgg, {
-      feedstock: feedstockLegs,
-      biochar: biocharLegs,
-      sample: sampleLegs,
-    });
+    const agg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
     // Transport-leg enrichment may append warnings (mixed methods/factors,
     // missing per-leg fields). Block submission on those too — required by
     // Isometric Transportation v1.1 §5 per-leg accounting rules.

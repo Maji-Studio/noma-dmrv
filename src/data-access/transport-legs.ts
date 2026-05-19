@@ -1,23 +1,7 @@
-/**
- * Transport Legs Data Access Layer
- *
- * Polymorphic CRUD operations for the `transport_legs` table, which is the
- * canonical record of transportation emissions across the chain
- * (Isometric Transportation Emissions Accounting Module v1.1).
- *
- * `entityType` discriminates which upstream entity each leg attaches to:
- *   - 'feedstock' → feedstocks.id
- *   - 'biochar'   → biochar_products.id
- *   - 'sample'    → samples.id      (resolves to facility via production_runs)
- *   - 'delivery'  → deliveries.id
- *
- * Authorization model: `transport_legs.entity_id` is polymorphic and not
- * FK-constrained, so every read of a single leg and every write resolves
- * the parent chain back to a facility via `resolveEntityFacility`. This
- * closes the "mutate a leg whose parent doesn't exist" hole. When a
- * facility-membership model lands in this codebase, swap this single
- * helper for a `requireFacilityAccess(userId, facilityId)` check.
- */
+// `transport_legs.entity_id` is polymorphic and not FK-constrained, so every
+// read of a single leg and every write resolves the parent chain back to a
+// facility via `resolveEntityFacility`. Swap for `requireFacilityAccess` once
+// a facility-membership model lands.
 
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -44,13 +28,8 @@ const ENTITY_LABEL: Record<TransportEntityType, string> = {
   delivery: "Delivery",
 };
 
-/**
- * Walk a polymorphic transport-leg parent back to its facility.
- * Throws SafeError if the parent doesn't resolve.
- *
- * - feedstock / biochar / delivery: direct `facility_id` column.
- * - sample: indirect via `production_runs.facility_id`.
- */
+// sample resolves indirectly via `production_runs.facility_id`; others have
+// a direct `facility_id` column.
 async function resolveEntityFacility(
   entityType: TransportEntityType,
   entityId: string,
@@ -96,10 +75,6 @@ async function resolveEntityFacility(
 // Read Operations
 // ============================================
 
-/**
- * Get all transport legs attached to a given entity, oldest first.
- * Verifies the parent entity resolves to a facility before issuing the read.
- */
 export async function getTransportLegsForEntity(
   userId: string,
   entityType: TransportEntityType,
@@ -120,12 +95,9 @@ export async function getTransportLegsForEntity(
     .orderBy(asc(transportLegs.createdAt));
 }
 
-/**
- * Bulk fetch transport legs across many entity IDs of the same type.
- * Single query — used by the submission orchestrator and the Certify-Panel
- * coverage loader, both of which walk the credit-batch lineage and have
- * already validated parent access upstream.
- */
+// Skips per-entity facility resolution: callers (submission orchestrator,
+// Certify-Panel coverage loader) walk the credit-batch lineage and have
+// already validated parent access upstream.
 export async function getTransportLegsForEntities(
   userId: string,
   entityType: TransportEntityType,
@@ -146,10 +118,6 @@ export async function getTransportLegsForEntities(
     .orderBy(asc(transportLegs.createdAt));
 }
 
-/**
- * Get a single transport leg by ID. Returns null if the leg doesn't exist
- * OR if its polymorphic parent no longer resolves (orphaned leg).
- */
 export async function getTransportLegById(
   userId: string,
   id: string,

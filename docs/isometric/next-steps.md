@@ -63,8 +63,10 @@ least one leg per category:
 
 - `entityType='feedstock'` on each upstream feedstock with `distance_km`
   and `load_mass_kg`.
-- `entityType='biochar'` on each biochar product (truck to storage).
-- `entityType='sample'` on at least one sample (car to lab).
+- For each biochar product, record a `transport` leg with
+  `entityType='biochar'` representing truck-to-storage.
+- Record at least one sample transport to the lab with
+  `entityType='sample'` — car to lab.
 
 The Certify Panel's "Transport coverage" checklist should show ✓✓✓.
 

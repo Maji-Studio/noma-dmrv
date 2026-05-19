@@ -105,15 +105,10 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
     !!defaultTemplate &&
     !missingDefaultTemplateId &&
     unresolvedBlueprintKeys.length === 0;
-  const missingCoverageCategories = templateResolved
-    ? getMissingCoverageCategories(transportCoverage, requiredTransportCategories)
-    : [];
-  const incompleteCoverageCategories = templateResolved
-    ? getIncompleteCoverageCategories(
-        transportCoverage,
-        requiredTransportCategories,
-      )
-    : [];
+  const { missing: missingCoverageCategories, incomplete: incompleteCoverageCategories } =
+    templateResolved
+      ? splitCoverageCategories(transportCoverage, requiredTransportCategories)
+      : { missing: [], incomplete: [] };
   const submitReady =
     templateResolved &&
     missingCoverageCategories.length === 0 &&
@@ -439,19 +434,70 @@ const TRANSPORT_CATEGORY_FIX_HREF: Record<TransportCategory, string> = {
   sample: "/samples",
 };
 
-function getMissingCoverageCategories(
-  coverage: TransportCoverage,
-  required: TransportCategory[],
-): TransportCategory[] {
-  return required.filter((c) => coverage[c].count === 0);
+type CoverageStatus = "missing" | "incomplete" | "complete";
+
+function coverageStatus(bucket: TransportCoverage[TransportCategory]): CoverageStatus {
+  if (bucket.count === 0) return "missing";
+  return bucket.aggregationWarning !== null ? "incomplete" : "complete";
 }
 
-function getIncompleteCoverageCategories(
+function splitCoverageCategories(
   coverage: TransportCoverage,
   required: TransportCategory[],
-): TransportCategory[] {
-  return required.filter(
-    (c) => coverage[c].count > 0 && coverage[c].aggregationWarning !== null,
+): { missing: TransportCategory[]; incomplete: TransportCategory[] } {
+  const missing: TransportCategory[] = [];
+  const incomplete: TransportCategory[] = [];
+  for (const c of required) {
+    const status = coverageStatus(coverage[c]);
+    if (status === "missing") missing.push(c);
+    else if (status === "incomplete") incomplete.push(c);
+  }
+  return { missing, incomplete };
+}
+
+function CoverageRow({
+  category,
+  bucket,
+}: {
+  category: TransportCategory;
+  bucket: TransportCoverage[TransportCategory];
+}) {
+  const label = TRANSPORT_CATEGORY_LABELS[category];
+  const status = coverageStatus(bucket);
+
+  if (status === "complete") {
+    return (
+      <li className="body-small text-[var(--color-text-secondary)]">
+        <span className="text-[var(--clr-green,var(--color-text-primary))]">
+          ✓
+        </span>{" "}
+        {label} — {bucket.count} leg{bucket.count === 1 ? "" : "s"}
+      </li>
+    );
+  }
+
+  const isIncomplete = status === "incomplete";
+  const summary = isIncomplete
+    ? `${bucket.count} leg${bucket.count === 1 ? "" : "s"}, incomplete.`
+    : "no legs recorded.";
+  const linkLabel = isIncomplete ? "Fix legs →" : "Add legs →";
+
+  return (
+    <li className="body-small text-[var(--color-text-primary)]">
+      <span className="text-[var(--color-signal-orange)]">!</span> {label} —{" "}
+      {summary}{" "}
+      <Link
+        href={TRANSPORT_CATEGORY_FIX_HREF[category]}
+        className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+      >
+        {linkLabel}
+      </Link>
+      {isIncomplete && bucket.aggregationWarning && (
+        <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
+          {bucket.aggregationWarning}
+        </p>
+      )}
+    </li>
   );
 }
 
@@ -473,59 +519,13 @@ function TransportCoverageNotice({
         </p>
       ) : (
         <ul className="flex flex-col gap-4 mt-6">
-          {required.map((category) => {
-            const bucket = coverage[category];
-            const label = TRANSPORT_CATEGORY_LABELS[category];
-            if (bucket.count > 0 && bucket.aggregationWarning) {
-              return (
-                <li
-                  key={category}
-                  className="body-small text-[var(--color-text-primary)]"
-                >
-                  <span className="text-[var(--color-signal-orange)]">!</span>{" "}
-                  {label} — {bucket.count} leg{bucket.count === 1 ? "" : "s"},
-                  incomplete.{" "}
-                  <Link
-                    href={TRANSPORT_CATEGORY_FIX_HREF[category]}
-                    className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-                  >
-                    Fix legs →
-                  </Link>
-                  <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
-                    {bucket.aggregationWarning}
-                  </p>
-                </li>
-              );
-            }
-            if (bucket.count > 0) {
-              return (
-                <li
-                  key={category}
-                  className="body-small text-[var(--color-text-secondary)]"
-                >
-                  <span className="text-[var(--clr-green,var(--color-text-primary))]">
-                    ✓
-                  </span>{" "}
-                  {label} — {bucket.count} leg{bucket.count === 1 ? "" : "s"}
-                </li>
-              );
-            }
-            return (
-              <li
-                key={category}
-                className="body-small text-[var(--color-text-primary)]"
-              >
-                <span className="text-[var(--color-signal-orange)]">!</span>{" "}
-                {label} — no legs recorded.{" "}
-                <Link
-                  href={TRANSPORT_CATEGORY_FIX_HREF[category]}
-                  className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-                >
-                  Add legs →
-                </Link>
-              </li>
-            );
-          })}
+          {required.map((category) => (
+            <CoverageRow
+              key={category}
+              category={category}
+              bucket={coverage[category]}
+            />
+          ))}
         </ul>
       )}
     </div>
