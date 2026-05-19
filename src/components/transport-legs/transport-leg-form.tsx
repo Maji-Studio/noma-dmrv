@@ -100,8 +100,7 @@ export function TransportLegForm({
   const updateMutation = useUpdateTransportLeg(entityType, entityId);
   const watchedMethod = watch("calculationMethodType");
 
-  const onSubmit = handleSubmit(async (raw) => {
-    const data = raw as unknown as TransportLegFormData;
+  const onSubmit = handleSubmit(async (data) => {
     try {
       if (isEditMode && leg) {
         await updateMutation.mutateAsync({ id: leg.id, ...data });

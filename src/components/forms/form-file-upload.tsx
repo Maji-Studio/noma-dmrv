@@ -1,21 +1,35 @@
 /**
  * FormFileUpload component
- * Mockup file upload field with drop zone styling
- * Follows the design system's brutalist aesthetic (no border-radius)
+ * Drag-and-drop file upload with optional real upload to documents storage.
  *
- * NOTE: This is a UI mockup. File upload infrastructure (S3, API routes)
- * is not yet implemented. The component captures selected files and
- * exposes them via onChange, but does not upload anywhere.
+ * Two modes:
+ *   - **Mockup** (default, backward-compatible): captures FileEntry[] locally
+ *     and emits via onChange. No network calls. Used in legacy forms that
+ *     haven't migrated to the documents storage layer yet.
+ *   - **Real upload**: when `entityType`, `entityId`, and `documentType` are
+ *     provided, files are PUT directly to storage via the useFileUpload hook
+ *     and onUploaded is invoked with each documentId.
  */
 "use client";
 
 import { useRef, useState } from "react";
-import { UploadSimple, File, X } from "@phosphor-icons/react/dist/ssr";
+import { UploadSimple, File, X, CheckCircle, WarningCircle, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { formatFileSize } from "@/lib/format-utils";
+import { useFileUpload } from "@/hooks/use-file-upload";
+import type { DocumentType } from "@/schemas/documents";
 
 interface FileEntry {
   name: string;
   size: number;
   type: string;
+}
+
+interface UploadedEntry extends FileEntry {
+  documentId: string;
+  status: "uploading" | "uploaded" | "failed";
+  progress?: number;
+  error?: string;
+  tempKey: string;
 }
 
 interface FormFileUploadProps {
@@ -27,12 +41,28 @@ interface FormFileUploadProps {
   maxSizeMb?: number;
   helperText?: string;
   onChange?: (files: FileEntry[]) => void;
+  entityType?: string;
+  entityId?: string;
+  documentType?: DocumentType;
+  onUploaded?: (documentId: string) => void;
+  onUploadError?: (error: string) => void;
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+function getDropzoneClass(opts: {
+  disabled: boolean;
+  dragOver: boolean;
+  error: boolean;
+}): string {
+  if (opts.disabled) {
+    return "cursor-not-allowed opacity-50 border-[var(--color-border-tertiary)]";
+  }
+  if (opts.dragOver) {
+    return "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]";
+  }
+  if (opts.error) {
+    return "border-[var(--color-signal-red)] hover:border-[var(--color-signal-red)]";
+  }
+  return "border-[var(--color-border-secondary)] hover:border-[var(--color-interaction)]";
 }
 
 export function FormFileUpload({
@@ -43,14 +73,79 @@ export function FormFileUpload({
   error = false,
   maxSizeMb = 10,
   onChange,
+  entityType,
+  entityId,
+  documentType,
+  onUploaded,
+  onUploadError,
 }: FormFileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [uploads, setUploads] = useState<UploadedEntry[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const { upload } = useFileUpload();
+
+  const isRealMode = !!(entityType && entityId && documentType);
+
+  async function startUpload(file: File) {
+    const tempKey = crypto.randomUUID();
+    setUploads((prev) => [
+      ...prev,
+      {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        documentId: "",
+        status: "uploading",
+        progress: 0,
+        tempKey,
+      },
+    ]);
+    try {
+      const { documentId } = await upload({
+        entityType: entityType!,
+        entityId: entityId!,
+        documentType: documentType!,
+        file,
+        onProgress: (p) => {
+          setUploads((prev) =>
+            prev.map((u) =>
+              u.tempKey === tempKey ? { ...u, progress: p } : u
+            )
+          );
+        },
+      });
+      setUploads((prev) =>
+        prev.map((u) =>
+          u.tempKey === tempKey
+            ? { ...u, status: "uploaded", documentId, progress: 1 }
+            : u
+        )
+      );
+      onUploaded?.(documentId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setUploads((prev) =>
+        prev.map((u) =>
+          u.tempKey === tempKey ? { ...u, status: "failed", error: message } : u
+        )
+      );
+      onUploadError?.(message);
+    }
+  }
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
-    const entries: FileEntry[] = Array.from(fileList).map((f) => ({
+    const arr = Array.from(fileList);
+
+    if (isRealMode) {
+      const queue = multiple ? arr : arr.slice(0, 1);
+      if (!multiple) setUploads([]);
+      for (const f of queue) void startUpload(f);
+      return;
+    }
+
+    const entries: FileEntry[] = arr.map((f) => ({
       name: f.name,
       size: f.size,
       type: f.type,
@@ -60,15 +155,18 @@ export function FormFileUpload({
     onChange?.(next);
   }
 
-  function removeFile(index: number) {
+  function removeMockup(index: number) {
     const next = files.filter((_, i) => i !== index);
     setFiles(next);
     onChange?.(next);
   }
 
+  function removeUpload(tempKey: string) {
+    setUploads((prev) => prev.filter((u) => u.tempKey !== tempKey));
+  }
+
   return (
     <div className="space-y-8">
-      {/* Drop zone */}
       <button
         type="button"
         disabled={disabled}
@@ -85,13 +183,7 @@ export function FormFileUpload({
         }}
         className={[
           "flex w-full flex-col items-center justify-center gap-8 border-2 border-dashed px-16 py-24 transition-colors duration-300",
-          disabled
-            ? "cursor-not-allowed opacity-50 border-[var(--color-border-tertiary)]"
-            : isDragOver
-              ? "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]"
-              : error
-                ? "border-[var(--color-signal-red)] hover:border-[var(--color-signal-red)]"
-                : "border-[var(--color-border-secondary)] hover:border-[var(--color-interaction)]",
+          getDropzoneClass({ disabled, dragOver: isDragOver, error }),
         ].join(" ")}
       >
         <UploadSimple
@@ -111,7 +203,6 @@ export function FormFileUpload({
         </span>
       </button>
 
-      {/* Hidden native input */}
       <input
         ref={inputRef}
         id={id}
@@ -123,8 +214,61 @@ export function FormFileUpload({
         onChange={(e) => handleFiles(e.target.files)}
       />
 
-      {/* File list */}
-      {files.length > 0 && (
+      {isRealMode && uploads.length > 0 && (
+        <ul className="space-y-4">
+          {uploads.map((u) => (
+            <li
+              key={u.tempKey}
+              className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
+            >
+              {u.status === "uploading" && (
+                <Spinner
+                  size={16}
+                  weight="bold"
+                  className="shrink-0 animate-spin text-[var(--color-text-tertiary)]"
+                />
+              )}
+              {u.status === "uploaded" && (
+                <CheckCircle
+                  size={16}
+                  weight="fill"
+                  className="shrink-0 text-[var(--color-signal-green)]"
+                />
+              )}
+              {u.status === "failed" && (
+                <WarningCircle
+                  size={16}
+                  weight="fill"
+                  className="shrink-0 text-[var(--color-signal-red)]"
+                />
+              )}
+              <span className="body-small truncate text-[var(--color-text-primary)]">
+                {u.name}
+              </span>
+              <span className="body-caption shrink-0 text-[var(--color-text-tertiary)]">
+                {u.status === "uploading"
+                  ? `${Math.round((u.progress ?? 0) * 100)}%`
+                  : formatFileSize(u.size)}
+              </span>
+              {u.status === "failed" && u.error && (
+                <span className="body-caption shrink-0 text-[var(--color-signal-red)]">
+                  {u.error}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => removeUpload(u.tempKey)}
+                className="ml-auto shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors duration-300"
+                aria-label={`Remove ${u.name}`}
+              >
+                <X size={14} weight="bold" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!isRealMode && files.length > 0 && (
         <ul className="space-y-4">
           {files.map((file, i) => (
             <li
@@ -145,7 +289,7 @@ export function FormFileUpload({
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => removeFile(i)}
+                onClick={() => removeMockup(i)}
                 className="ml-auto shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors duration-300 disabled:opacity-50"
                 aria-label={`Remove ${file.name}`}
               >

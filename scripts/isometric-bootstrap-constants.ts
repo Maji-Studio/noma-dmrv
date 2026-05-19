@@ -125,5 +125,5 @@ export function buildBootstrapSupplierRef(args: {
   // Stable across re-runs so we reconcile via findDatapointBySupplierRef
   // rather than POSTing duplicates. The template ID alone is too coarse
   // (multiple inputs per template); the rtcId disambiguates per component.
-  return `nm-fc-${args.templateId}-${args.rtcId}-${args.inputKey}`.slice(0, 120);
+  return `nm-fc-${args.templateId}-${args.rtcId}-${args.inputKey}`.slice(0, 100);
 }
