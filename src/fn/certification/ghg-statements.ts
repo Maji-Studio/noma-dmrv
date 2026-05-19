@@ -13,7 +13,6 @@ import {
   insertDraftSubmissionWithMappingLock,
   listGhgSubmissionsForProject,
   listSubmissionsForFacility,
-  LOCK_TTL_MS,
   markSubmissionRejected,
   markSubmissionSubmitted,
   resetSubmissionToDraftWithMappingLock,
@@ -43,7 +42,10 @@ import {
 import {
   chooseGhgSubmitMode,
   ghgSubmitFingerprintChanged,
+  type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementSchema,
@@ -252,19 +254,20 @@ export async function submitGhgStatementForFacility(
       throw new SafeError("Create the GHG statement before submitting it.");
     }
 
-    const period = await getGhgPeriodById(userId, submission.localEntityId);
+    const [period, mapping, facility, remoteBefore] = await Promise.all([
+      getGhgPeriodById(userId, submission.localEntityId),
+      getCertifierProjectByFacility(userId, facilityId, ISOMETRIC_PROVIDER),
+      getFacilityById(userId, facilityId),
+      getGhgStatement(submission.externalId).catch(() => null),
+    ]);
     if (!period) throw new SafeError("GHG statement period not found.");
-    const mapping = await getCertifierProjectByFacility(
-      userId,
-      facilityId,
-      ISOMETRIC_PROVIDER,
-    );
     if (!mapping || mapping.externalProjectId !== period.externalProjectId) {
       throw new SafeError("Selected facility is not linked to this GHG statement project.");
     }
-    const facility = await getFacilityById(userId, facilityId);
-    const remoteBefore = await getGhgStatement(submission.externalId);
-    const submitMode = chooseGhgSubmitMode(remoteBefore);
+    const submitMode = chooseGhgSubmitModeFromKnownState(
+      remoteBefore,
+      submission,
+    );
     if (submitMode === "blocked-awaiting") {
       throw new SafeError("This GHG statement is already awaiting verification.");
     }
@@ -297,7 +300,10 @@ export async function submitGhgStatementForFacility(
       const after = await getGhgStatement(submission.externalId).catch(
         () => null,
       );
-      if (after && ghgSubmitFingerprintChanged(remoteBefore, after)) {
+      const submitApplied = remoteBefore
+        ? after && ghgSubmitFingerprintChanged(remoteBefore, after)
+        : after && ghgSubmitAppearsApplied(after, parsed.reportUrl);
+      if (after && submitApplied) {
         await appendSyncEvent(userId, {
           provider: ISOMETRIC_PROVIDER,
           entityType: GHG_PERIOD_ENTITY_TYPE,
@@ -307,7 +313,7 @@ export async function submitGhgStatementForFacility(
           requestPayload: buildSubmitRequestPayload(
             submitMode,
             parsed.reportUrl,
-            parsed.summaryOfChanges,
+            Boolean(parsed.summaryOfChanges?.trim()),
           ),
           responsePayload: {
             id: submission.externalId,
@@ -334,7 +340,7 @@ export async function submitGhgStatementForFacility(
         requestPayload: buildSubmitRequestPayload(
           submitMode,
           parsed.reportUrl,
-          parsed.summaryOfChanges,
+          Boolean(parsed.summaryOfChanges?.trim()),
         ),
         errorMessage: message,
       });
@@ -350,7 +356,7 @@ export async function submitGhgStatementForFacility(
       requestPayload: buildSubmitRequestPayload(
         submitMode,
         parsed.reportUrl,
-        parsed.summaryOfChanges,
+        Boolean(parsed.summaryOfChanges?.trim()),
       ),
       responsePayload: { id: remoteAfter.id, status: remoteAfter.status },
     });
@@ -573,15 +579,49 @@ function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
   };
 }
 
+function chooseGhgSubmitModeFromKnownState(
+  remote: GhgStatement | null,
+  submission: CertificationSubmissionRow,
+): GhgSubmitMode {
+  if (remote) return chooseGhgSubmitMode(remote);
+
+  const status = getMetadataValue(submission.metadata, "remoteStatus");
+  const pendingTotal = getMetadataValue(
+    submission.metadata,
+    "pendingTotalCo2eRemovedKg",
+  );
+  if (status === "DRAFT") return "submit";
+  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
+  if (
+    status === "FAILED_VERIFICATION" ||
+    (typeof pendingTotal === "number" && pendingTotal > 0)
+  ) {
+    return "resubmit";
+  }
+  if (typeof status === "string") return "blocked-verified";
+
+  throw new SafeError("Unable to determine the GHG statement submit state.");
+}
+
+function ghgSubmitAppearsApplied(
+  remote: GhgStatement,
+  reportUrl: string,
+): boolean {
+  return (
+    remote.ghg_statement_report_url === reportUrl &&
+    (remote.status === "AWAITING_VERIFICATION" || remote.status === "VERIFIED")
+  );
+}
+
 function buildSubmitRequestPayload(
   mode: "submit" | "resubmit",
   reportUrl: string,
-  summaryOfChanges?: string | null,
-): Record<string, string> {
+  summaryProvided: boolean,
+): Record<string, string | boolean> {
   if (mode === "resubmit") {
     return {
       ghg_statement_report_url: reportUrl,
-      summary_of_changes: summaryOfChanges?.trim() ?? "",
+      summary_of_changes_provided: summaryProvided,
     };
   }
   return { ghg_statement_report_url: reportUrl };

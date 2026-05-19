@@ -39,7 +39,7 @@ async function main(): Promise<void> {
     listRemovalTemplates,
     listComponentBlueprints,
   } = await import("../src/lib/isometric");
-  const { INPUT_MAPPING } = await import(
+  const { lookupInputMapping } = await import(
     "../src/lib/isometric/transformers/datapoint"
   );
   const { env } = await import("../src/config/env");
@@ -88,10 +88,11 @@ async function main(): Promise<void> {
         return;
       }
 
-      const knownInputKeys = new Set(Object.keys(INPUT_MAPPING));
       const unmapped: Array<{
         template: string;
+        group_key: string;
         component: string;
+        blueprint_key: string;
         input_key: string;
         quantity_kind: string;
         compatible_unit: string;
@@ -128,10 +129,17 @@ async function main(): Promise<void> {
               );
 
               if (rtcInput.type !== "monitored") continue;
-              if (!knownInputKeys.has(rtcInput.input_key)) {
+              const mapping = lookupInputMapping(
+                group.key,
+                component.blueprint_key,
+                rtcInput.input_key,
+              );
+              if (!mapping) {
                 unmapped.push({
                   template: template.display_name,
+                  group_key: group.key,
                   component: component.display_name,
+                  blueprint_key: component.blueprint_key,
                   input_key: rtcInput.input_key,
                   quantity_kind: rtcInput.quantity_kind,
                   compatible_unit: compatibleUnit,
@@ -139,7 +147,6 @@ async function main(): Promise<void> {
                 });
                 continue;
               }
-              const mapping = INPUT_MAPPING[rtcInput.input_key];
               if (
                 mapping.expectedQuantityKind !== rtcInput.quantity_kind ||
                 (blueprintInput &&
@@ -173,7 +180,7 @@ async function main(): Promise<void> {
         );
         for (const u of unmapped) {
           console.log(
-            `  - ${u.input_key} (${u.template} / ${u.component}) qkind=${u.quantity_kind} unit=${u.compatible_unit} shape=${u.data_shape}`,
+            `  - ${u.group_key} / ${u.blueprint_key} / ${u.input_key} (${u.template} / ${u.component}) qkind=${u.quantity_kind} unit=${u.compatible_unit} shape=${u.data_shape}`,
           );
         }
       }
@@ -250,13 +257,25 @@ async function main(): Promise<void> {
             : JSON.stringify(err.body).length;
         console.error(`body_present=true body_length=${bodyLength}`);
         if (typeof err.body !== "string") {
-          console.error(JSON.stringify(err.body, null, 2));
+          console.error(JSON.stringify(sanitizeErrorBody(err.body), null, 2));
         }
       }
       process.exit(1);
     }
     throw err;
   }
+}
+
+const SENSITIVE_KEY_RE = /(token|secret|api[_-]?key|email|password)/i;
+
+function sanitizeErrorBody(input: unknown): unknown {
+  if (input === null || typeof input !== "object") return input;
+  if (Array.isArray(input)) return input.map(sanitizeErrorBody);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    out[key] = SENSITIVE_KEY_RE.test(key) ? "[REDACTED]" : sanitizeErrorBody(value);
+  }
+  return out;
 }
 
 main().catch((err) => {

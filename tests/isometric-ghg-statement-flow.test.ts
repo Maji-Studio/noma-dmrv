@@ -25,6 +25,22 @@ describe("GHG statement submit state", () => {
     expect(chooseGhgSubmitMode(statement({ status: "VERIFIED" }))).toBe(
       "blocked-verified",
     );
+    expect(
+      chooseGhgSubmitMode(
+        statement({
+          status: "VERIFIED",
+          pending_total_co2e_removed_kg: 0,
+        }),
+      ),
+    ).toBe("blocked-verified");
+    expect(
+      chooseGhgSubmitMode(
+        statement({
+          status: "AWAITING_VERIFICATION",
+          pending_total_co2e_removed_kg: 42,
+        }),
+      ),
+    ).toBe("blocked-awaiting");
   });
 
   it("detects ambiguous submit success by remote fingerprint", () => {

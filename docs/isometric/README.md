@@ -20,6 +20,7 @@
 | `condition-registry.md` | Canonical trigger map for `conditional_required` fields |
 | `update-playbook.md` | Repeatable refresh workflow for version bumps |
 | `integration-plan.md` | Phased plan + as-shipped status for the Certify API integration (separate from the requirements KB) |
+| `sandbox-template-authoring.md` | Step-by-step walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI (unblocks Phase 3 sandbox writes) |
 | `changes.md` | Local changelog for documentation updates |
 
 ## How To Use
@@ -41,5 +42,5 @@
 
 ## Freshness
 
-- Last refreshed: 2026-02-11
+- Last refreshed: 2026-05-11
 - Source of truth: Isometric Registry URLs in `versions.json`

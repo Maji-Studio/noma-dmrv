@@ -2,25 +2,21 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  FormTextarea,
+  ServerError,
+} from "@/components/forms";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitGhgStatementForFacility } from "@/hooks/use-certification";
 import { useDialog } from "@/hooks/use-dialog";
-
-const submitDialogSchema = z.object({
-  reportUrl: z
-    .string()
-    .url("Enter a valid report URL")
-    .refine((value) => value.startsWith("https://"), {
-      message: "Report URL must use HTTPS",
-    }),
-  summaryOfChanges: z.string().optional(),
-  confirmProduction: z.boolean().optional(),
-});
-
-type SubmitDialogInput = z.infer<typeof submitDialogSchema>;
+import {
+  buildSubmitGhgStatementDialogSchema,
+  type SubmitGhgStatementDialogInput,
+} from "@/schemas/certification";
+import { ProductionConfirmation } from "./production-confirmation";
 
 interface GhgStatementSubmitDialogProps {
   facilityId: string;
@@ -42,21 +38,16 @@ export function GhgStatementSubmitDialog({
   const dialogRef = useDialog(isOpen, onClose);
   const mutation = useSubmitGhgStatementForFacility();
   const toast = useToast();
-  const schema = isResubmit
-    ? submitDialogSchema.refine(
-        (value) => !!value.summaryOfChanges?.trim(),
-        {
-          path: ["summaryOfChanges"],
-          message: "Summary of changes is required",
-        },
-      )
-    : submitDialogSchema;
+  const schema = buildSubmitGhgStatementDialogSchema({
+    isResubmit,
+    isProduction,
+  });
   const {
     register,
     handleSubmit,
     formState: { errors },
     setError,
-  } = useForm<SubmitDialogInput>({
+  } = useForm<SubmitGhgStatementDialogInput>({
     resolver: zodResolver(schema),
     defaultValues: {
       reportUrl: "",
@@ -132,14 +123,15 @@ export function GhgStatementSubmitDialog({
           )}
 
           {isProduction && (
-            <label className="flex items-start gap-10 body-small text-[var(--color-text-secondary)]">
-              <input
-                type="checkbox"
-                className="mt-3"
-                {...register("confirmProduction")}
-              />
-              <span>Confirm production Isometric submission</span>
-            </label>
+            <ProductionConfirmation
+              actionLabel={
+                isResubmit
+                  ? "resubmit this GHG statement to the verifier on the production Isometric registry"
+                  : "submit this GHG statement to the verifier on the production Isometric registry"
+              }
+              registerProps={register("confirmProduction")}
+              errorMessage={errors.confirmProduction?.message}
+            />
           )}
 
           {errors.root?.message && <ServerError message={errors.root.message} />}

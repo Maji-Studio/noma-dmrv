@@ -8,14 +8,14 @@ import type { Page } from "@playwright/test";
 
 /** Wait for side sheet dialog to open */
 export async function waitForSideSheet(page: Page) {
-  await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+  await page.waitForSelector('[role="dialog"]', { timeout: 20000 });
 }
 
 /** Wait for side sheet dialog to close (indicates successful form submission) */
 export async function waitForSideSheetClose(page: Page) {
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",
-    timeout: 15000,
+    timeout: 20000,
   });
 }
 

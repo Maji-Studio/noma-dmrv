@@ -166,7 +166,7 @@ typings live under `src/lib/isometric/`.
 
 **Layered structure:**
 
-```
+```text
 components/certification/   # UI: Certify panel, GHG statements page
        ↓
 hooks/use-certification.ts  # React Query hooks
@@ -191,7 +191,7 @@ db/schema/certification.ts  # certifier_projects, certifier_ghg_periods,
 `certification_submissions` as both lock and ledger — `lockedAt` blocks
 concurrent in-flight retries, `payloadHash` (canonical-JSON sha256)
 identifies replayable submissions, `version` tracks supersedes. The
-retry-decision gate is centralised in
+retry-decision gate is centralized in
 `src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`)
 and applied identically by `submitCreditBatch` and
 `createGhgStatementForFacility`. Every HTTP attempt also appends a row
