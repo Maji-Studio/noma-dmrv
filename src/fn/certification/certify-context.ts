@@ -5,9 +5,13 @@ import {
   getCertifierProjectByFacility,
   type CertifierProjectRow,
 } from "@/data-access/certification";
+import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { SafeError } from "@/lib/errors";
 import {
+  collectTransportEntityIds,
   listComponentBlueprints,
   listProjects,
   listRemovalTemplates,
@@ -19,6 +23,23 @@ import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 
+export interface TransportCoverageBucket {
+  count: number;
+  entityIds: string[];
+}
+
+export interface TransportCoverage {
+  feedstock: TransportCoverageBucket;
+  biochar: TransportCoverageBucket;
+  sample: TransportCoverageBucket;
+}
+
+const EMPTY_COVERAGE: TransportCoverage = {
+  feedstock: { count: 0, entityIds: [] },
+  biochar: { count: 0, entityIds: [] },
+  sample: { count: 0, entityIds: [] },
+};
+
 export interface CertifyContextForCreditBatch {
   facilityId: string;
   mapping: CertifierProjectRow | null;
@@ -27,7 +48,49 @@ export interface CertifyContextForCreditBatch {
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
+  transportCoverage: TransportCoverage;
   isProduction: boolean;
+}
+
+async function loadTransportCoverage(
+  userId: string,
+  applicationIds: string[],
+): Promise<TransportCoverage> {
+  if (applicationIds.length === 0) return EMPTY_COVERAGE;
+
+  const lineages = await Promise.all(
+    applicationIds.map((id) => getChainOfCustodyData(userId, id)),
+  );
+  const productionRunIds = Array.from(
+    new Set(
+      lineages
+        .map((l) => l.productionRun?.id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  const runs =
+    productionRunIds.length > 0
+      ? await getProductionRunsWithSamples(userId, productionRunIds)
+      : [];
+
+  const entityIds = collectTransportEntityIds(lineages, runs);
+  const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
+    getTransportLegsForEntities(userId, "feedstock", entityIds.feedstockIds),
+    getTransportLegsForEntities(userId, "biochar", entityIds.biocharProductIds),
+    getTransportLegsForEntities(userId, "sample", entityIds.sampleIds),
+  ]);
+
+  return {
+    feedstock: {
+      count: feedstockLegs.length,
+      entityIds: entityIds.feedstockIds,
+    },
+    biochar: {
+      count: biocharLegs.length,
+      entityIds: entityIds.biocharProductIds,
+    },
+    sample: { count: sampleLegs.length, entityIds: entityIds.sampleIds },
+  };
 }
 
 export async function loadCertifyContextForCreditBatchForUser(
@@ -57,6 +120,7 @@ export async function loadCertifyContextForCreditBatchForUser(
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
+      transportCoverage: EMPTY_COVERAGE,
       isProduction,
     };
   }
@@ -78,6 +142,7 @@ export async function loadCertifyContextForCreditBatchForUser(
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
+      transportCoverage: EMPTY_COVERAGE,
       isProduction,
     };
   }
@@ -94,6 +159,7 @@ export async function loadCertifyContextForCreditBatchForUser(
       missingDefaultTemplateId: mapping.defaultRemovalTemplateId,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
+      transportCoverage: EMPTY_COVERAGE,
       isProduction,
     };
   }
@@ -122,6 +188,11 @@ export async function loadCertifyContextForCreditBatchForUser(
     }
   }
 
+  const transportCoverage = await loadTransportCoverage(
+    userId,
+    creditBatch.applicationIds,
+  );
+
   return {
     facilityId,
     mapping,
@@ -130,6 +201,7 @@ export async function loadCertifyContextForCreditBatchForUser(
     missingDefaultTemplateId: null,
     blueprintsForTemplate,
     unresolvedBlueprintKeys,
+    transportCoverage,
     isProduction,
   };
 }

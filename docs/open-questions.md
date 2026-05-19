@@ -28,36 +28,32 @@ Each entry follows this shape:
 
 ### Phase 3 blockers found in template inspection
 
-- **`isometric/phase-3-input-coverage`** — opened 2026-05-05, **partial
-  progress 2026-05-11**.
-  - Original 20–21 monitored inputs without `INPUT_MAPPING` entries, split
-    into three categories. Status now:
-    - `distance` (km) — used by 4 transport components (biomass→processing,
-      biochar→storage, sample→lab, staff travel). noma has per-leg
-      `distance_km` on `transport_legs`. **Foundation landed 2026-05-11:**
-      `aggregateTransportLegs` + `enrichWithTransportLegs` helpers (mass-
-      weighted average), plus three new fields on `AggregatedProductionData`
-      (`feedstockTransportAvgDistanceKm`, `biocharTransportAvgDistanceKm`,
-      `sampleTransportAvgDistanceKm`). Staff travel intentionally omitted
-      from the MVP template. **Still pending:** polymorphic
-      `<TransportLegForm entityType entityId>` + data-access generalization
-      (`getTransportLegsForEntity`) + 3 mount points (delivery,
-      feedstock-delivery, sample) + pre-flight transport-coverage checklist
-      on `<CertifyPanel>`.
-    - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity
-      meter pre/post readings. noma stores `production_runs.electricityKwh`
-      as a delta only; pre/post readouts are not captured. **Still
-      deferred:** out of scope for Phase 3.6; needs schema work
-      (add columns or synthesize).
-    - `concentration` (mg/kg) + `mass_flow` (kg) — pyrolyzer GHG direct
-      emissions (CH4, CO). noma has `credit_batches.ch4Ppm` /
-      `ch4CompositionPercent` but at credit-batch level, not run level.
-      Unit-shape mismatch (concentration is mg/kg; ppm is by mass at trace
-      level). **Still deferred:** needs per-run GHG-concentration schema
-      work; out of scope for Phase 3.6.
-  - Resolve fully: ship the Phase 3.6 transport-leg UI + checklist (now
-    on the next-up list), then revisit electricity-readout and per-run-GHG
-    when a tailored sandbox template needs those components.
+- **`isometric/phase-3-input-coverage`** — opened 2026-05-05, **transport
+  portion closed 2026-05-13**. Status now:
+  - `distance` (km) — used by 3 transport components (biomass→processing,
+    biochar→storage, sample→lab). **Closed 2026-05-13.** Phase 3.6
+    completion shipped polymorphic transport-leg CRUD (data-access,
+    schemas, server actions, hooks), `<TransportLegsPanel>` mounted on
+    delivery / sample / feedstock side sheets, shared
+    `collectTransportEntityIds` lineage walker, `submitCreditBatch`
+    wiring via `enrichWithTransportLegs`, and a pre-flight transport-
+    coverage checklist on `<CertifyPanel>` that gates the Submit button.
+    Staff travel intentionally omitted from the MVP template (no
+    corresponding noma entity).
+  - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity
+    meter pre/post readings. noma stores `production_runs.electricityKwh`
+    as a delta only; pre/post readouts are not captured. **Still
+    deferred:** out of scope for Phase 3.6; needs schema work
+    (add columns or synthesize).
+  - `concentration` (mg/kg) + `mass_flow` (kg) — pyrolyzer GHG direct
+    emissions (CH4, CO). noma has `credit_batches.ch4Ppm` /
+    `ch4CompositionPercent` but at credit-batch level, not run level.
+    Unit-shape mismatch (concentration is mg/kg; ppm is by mass at trace
+    level). **Still deferred:** needs per-run GHG-concentration schema
+    work; out of scope for Phase 3.6.
+  - Resolve the remaining electricity-readout and per-run-GHG portions
+    when a tailored sandbox template surfaces a need for those
+    components.
 
 - **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
   path documented 2026-05-11**.
@@ -154,5 +150,22 @@ Each entry follows this shape:
     with aggregated values; per-run is overkill but may be required for
     some templates.
   - Resolve only when a template surfaces that needs per-run breakdown.
+
+### Sandbox Removal Template lacks pre-bound fixed constant
+
+- **`isometric/sandbox-template-binding`** — opened 2026-05-13
+  - Both sandbox templates available on `prj_1K9YJ33RKSBX9FFF` (`Protocol
+    default` `rvt_1K9YJ33RKSBXR2Y3` and `Dark Earth removal template`
+    `rvt_1K9YK6YRQSBXFVZ0`) have a fixed input `fuel_combustion_carbon_intensity`
+    on the `Biomass handling equipment fuel usage` component without a
+    pre-bound datapoint. `submitCreditBatch` rejects with:
+    `Template "<name>" has a fixed input "fuel_combustion_carbon_intensity"
+    on component "Biomass handling equipment fuel usage" without a
+    pre-bound datapoint.`
+  - Blocks: end-to-end sandbox submission from a freshly-seeded facility.
+    All in-app gating (transport coverage, aggregation, template resolution)
+    passes — the only remaining stop is the template's own config.
+  - Resolve via the Isometric template editor: bind a constant value for
+    `fuel_combustion_carbon_intensity` on the chosen template, then resubmit.
 
 ## (other areas added as they appear)

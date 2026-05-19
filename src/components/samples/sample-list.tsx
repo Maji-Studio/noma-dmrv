@@ -20,6 +20,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { TransportLegsPanel } from "@/components/transport-legs";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -413,6 +414,14 @@ export function SampleList() {
             ],
           },
         ] : undefined}
+        viewModeChildren={
+          sideSheet?.mode === "view" && sideSheet.entity ? (
+            <TransportLegsPanel
+              entityType="sample"
+              entityId={sideSheet.entity.id}
+            />
+          ) : null
+        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <SampleForm
