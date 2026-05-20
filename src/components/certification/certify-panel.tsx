@@ -20,7 +20,14 @@ import {
   useSubmitCreditBatch,
 } from "@/hooks/use-certification";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
+import type {
+  TransportCategory,
+  TransportCoverage,
+} from "@/fn/certification/certify-context";
+import {
+  SUBMISSION_METADATA_KEYS,
+  getMetadataValue,
+} from "@/lib/isometric/utils/submission-metadata";
 import { EnvBanner } from "./env-banner";
 import { Section } from "./panel-layout";
 import { SubmissionStatusBadge } from "./submission-status-badge";
@@ -76,6 +83,8 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
     defaultTemplate,
     missingDefaultTemplateId,
     unresolvedBlueprintKeys,
+    transportCoverage,
+    requiredTransportCategories,
     isProduction,
   } = ctx.data;
 
@@ -92,12 +101,20 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
   }
 
   const projectLabel = project?.name ?? mapping.externalProjectId;
-  const submitReady =
+  const templateResolved =
     !!defaultTemplate &&
     !missingDefaultTemplateId &&
     unresolvedBlueprintKeys.length === 0;
+  const { missing: missingCoverageCategories, incomplete: incompleteCoverageCategories } =
+    templateResolved
+      ? splitCoverageCategories(transportCoverage, requiredTransportCategories)
+      : { missing: [], incomplete: [] };
+  const submitReady =
+    templateResolved &&
+    missingCoverageCategories.length === 0 &&
+    incompleteCoverageCategories.length === 0;
 
-  const blocker = !submitReady
+  const blocker = !templateResolved
     ? deriveBlocker({
         hasDefaultTemplate: !!defaultTemplate,
         missingDefaultTemplateId,
@@ -127,10 +144,19 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
         />
       )}
 
+      {templateResolved && (
+        <TransportCoverageNotice
+          coverage={transportCoverage}
+          required={requiredTransportCategories}
+        />
+      )}
+
       <SubmissionRow
         creditBatchId={creditBatchId}
         isProduction={isProduction}
         canSubmit={submitReady}
+        missingCoverageCategories={missingCoverageCategories}
+        incompleteCoverageCategories={incompleteCoverageCategories}
       />
     </div>
   );
@@ -140,10 +166,14 @@ function SubmissionRow({
   creditBatchId,
   isProduction,
   canSubmit,
+  missingCoverageCategories,
+  incompleteCoverageCategories,
 }: {
   creditBatchId: string;
   isProduction: boolean;
   canSubmit: boolean;
+  missingCoverageCategories: TransportCategory[];
+  incompleteCoverageCategories: TransportCategory[];
 }) {
   const { data: state, isLoading, isError, error } =
     useCreditBatchSubmissionState(creditBatchId);
@@ -181,6 +211,20 @@ function SubmissionRow({
       return "Resubmit";
     }
     return "Submit to Isometric";
+  })();
+
+  const submitTitle = (() => {
+    if (missingCoverageCategories.length > 0) {
+      return `Add transport legs for: ${missingCoverageCategories
+        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
+        .join(", ")}`;
+    }
+    if (incompleteCoverageCategories.length > 0) {
+      return `Fix incomplete legs for: ${incompleteCoverageCategories
+        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
+        .join(", ")}`;
+    }
+    return undefined;
   })();
 
   const fireSubmit = (confirmProduction = false) => {
@@ -229,6 +273,7 @@ function SubmissionRow({
           size="default"
           onClick={handleClick}
           disabled={submitDisabled}
+          title={submitTitle}
         >
           {!isLockedInFlight && submitMutation.isPending && (
             <ArrowsClockwise size={ICON_SIZE_MEDIUM} className="animate-spin" />
@@ -336,7 +381,10 @@ function deriveErrorMessage(
 ): string | null {
   if (!latest) return null;
   if (latest.status === "rejected") {
-    const rejection = getMetadataValue(latest.metadata, "rejectionReason");
+    const rejection = getMetadataValue(
+      latest.metadata,
+      SUBMISSION_METADATA_KEYS.rejectionReason,
+    );
     if (typeof rejection === "string" && rejection) return rejection;
   }
   if (latest.status === "submitted" || latest.status === "accepted") {
@@ -369,6 +417,116 @@ function BlockerNotice({
         <p className="body-caption text-[var(--color-text-tertiary)]">
           {fixHint}
         </p>
+      )}
+    </div>
+  );
+}
+
+const TRANSPORT_CATEGORY_LABELS: Record<TransportCategory, string> = {
+  feedstock: "Feedstock → processing",
+  biochar: "Biochar → storage",
+  sample: "Sample → lab",
+};
+
+const TRANSPORT_CATEGORY_FIX_HREF: Record<TransportCategory, string> = {
+  feedstock: "/feedstocks",
+  biochar: "/biochar-products",
+  sample: "/samples",
+};
+
+type CoverageStatus = "missing" | "incomplete" | "complete";
+
+function coverageStatus(bucket: TransportCoverage[TransportCategory]): CoverageStatus {
+  if (bucket.count === 0) return "missing";
+  return bucket.aggregationWarning !== null ? "incomplete" : "complete";
+}
+
+function splitCoverageCategories(
+  coverage: TransportCoverage,
+  required: TransportCategory[],
+): { missing: TransportCategory[]; incomplete: TransportCategory[] } {
+  const missing: TransportCategory[] = [];
+  const incomplete: TransportCategory[] = [];
+  for (const c of required) {
+    const status = coverageStatus(coverage[c]);
+    if (status === "missing") missing.push(c);
+    else if (status === "incomplete") incomplete.push(c);
+  }
+  return { missing, incomplete };
+}
+
+function CoverageRow({
+  category,
+  bucket,
+}: {
+  category: TransportCategory;
+  bucket: TransportCoverage[TransportCategory];
+}) {
+  const label = TRANSPORT_CATEGORY_LABELS[category];
+  const status = coverageStatus(bucket);
+
+  if (status === "complete") {
+    return (
+      <li className="body-small text-[var(--color-text-secondary)]">
+        <span className="text-[var(--clr-green,var(--color-text-primary))]">
+          ✓
+        </span>{" "}
+        {label} — {bucket.count} leg{bucket.count === 1 ? "" : "s"}
+      </li>
+    );
+  }
+
+  const isIncomplete = status === "incomplete";
+  const summary = isIncomplete
+    ? `${bucket.count} leg${bucket.count === 1 ? "" : "s"}, incomplete.`
+    : "no legs recorded.";
+  const linkLabel = isIncomplete ? "Fix legs →" : "Add legs →";
+
+  return (
+    <li className="body-small text-[var(--color-text-primary)]">
+      <span className="text-[var(--color-signal-orange)]">!</span> {label} —{" "}
+      {summary}{" "}
+      <Link
+        href={TRANSPORT_CATEGORY_FIX_HREF[category]}
+        className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+      >
+        {linkLabel}
+      </Link>
+      {isIncomplete && bucket.aggregationWarning && (
+        <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
+          {bucket.aggregationWarning}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function TransportCoverageNotice({
+  coverage,
+  required,
+}: {
+  coverage: TransportCoverage;
+  required: TransportCategory[];
+}) {
+  return (
+    <div className="border-t border-[var(--color-border-secondary)] pt-12">
+      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+        Transport coverage
+      </span>
+      {required.length === 0 ? (
+        <p className="body-small text-[var(--color-text-tertiary)] mt-6">
+          Not requested by the active removal template.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-4 mt-6">
+          {required.map((category) => (
+            <CoverageRow
+              key={category}
+              category={category}
+              bucket={coverage[category]}
+            />
+          ))}
+        </ul>
       )}
     </div>
   );

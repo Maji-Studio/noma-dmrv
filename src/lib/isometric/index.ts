@@ -18,11 +18,13 @@ export {
 } from "./projects";
 export {
   createDatapoint,
+  patchDatapoint,
   createRemoval,
   createComponent,
   findRemovalBySupplierRef,
   findDatapointBySupplierRef,
   type CreateDatapointRequest,
+  type PatchDatapointRequest,
   type Datapoint,
   type CreateRemovalRequest,
   type Removal,
@@ -66,11 +68,18 @@ export {
 } from "./utils/submission-claim";
 export {
   aggregateProductionRuns,
+  aggregateTransportLegs,
+  enrichWithTransportLegs,
   validateForTemplate,
   type AggregatedProductionData,
   type ProductionRunWithSamples,
   type ResolvedTemplateInput,
   type MissingInput,
+  type TransportLegsByCategory,
 } from "./utils/aggregation";
+export {
+  collectTransportEntityIds,
+  type TransportEntityIdsByCategory,
+} from "./utils/transport-lineage";
 export { isometricRegistry, isometricDocs } from "./links";
 export type { paths, components, operations } from "./generated/certify";

@@ -1,5 +1,206 @@
 # Isometric Docs Change Log
 
+## 2026-05-19 (Review follow-ups — minor)
+
+- **Centralised submission-metadata keys.** Added
+  `SUBMISSION_METADATA_KEYS` to
+  `src/lib/isometric/utils/submission-metadata.ts` covering the four
+  read/write keys (`remoteStatus`, `pendingTotalCo2eRemovedKg`,
+  `removalIds`, `rejectionReason`). Replaced the literal strings in
+  `certification-page.tsx`, `certify-panel.tsx`, and `ghg-statements.ts`
+  (read sites + `remoteMetadata` write site) so reader and writer cannot
+  drift independently.
+- **Evergreen polish on `sandbox-template-authoring.md`.** Removed the
+  dated parenthetical "verified 2026-05-11 via …" from the prerequisites
+  block; replaced with an evergreen instruction to run
+  `pnpm tsx scripts/isometric-smoke.ts inspect-template` to confirm
+  connectivity.
+- **Deferred review suggestions parked** in
+  `docs/open-questions.md` → "Documentation hygiene" (changelog
+  archival, plan-snapshot extraction, open-questions reformatting,
+  README phase-language polish, `env-banner` style constants). Each
+  carries a rationale + resolve-via hint so they don't get lost.
+
+## 2026-05-13 (Dark Earth template — fixed-constant bootstrap script)
+
+Unblocks `submitCreditBatch` against `Dark Earth removal template`
+(`rvt_1K9YK6YRQSBXFVZ0`) on sandbox project `prj_1K9YJ33RKSBX9FFF`. The
+template carried 13 unbound `type=fixed` inputs (DEFRA / IPCC constants);
+`submit-credit-batch.ts:312-319` refused to submit until each was bound
+to a Datapoint in the Registry UI.
+
+- **New — `scripts/isometric-bootstrap-constants.ts`.** Curated
+  `FIXED_CONSTANT_DEFAULTS` table keyed by
+  `${componentDisplayName}::${inputKey}`, with magnitude + citation per
+  entry. Unit string is intentionally NOT in the table — it is read
+  off the live blueprint's `compatible_unit` at POST time to avoid
+  string drift (`"L"` vs `"l"`).
+- **New mode — `bootstrap-fixed-constants <projectId> <templateId>` on
+  `scripts/isometric-smoke.ts`.** Walks every unbound fixed input,
+  POSTs a constant Datapoint with `source_ids: []`, prints the binding
+  table for the admin to paste into the Registry UI. Idempotent via
+  `supplier_reference_id = nm-fc-<templateId>-<rtcId>-<inputKey>` —
+  re-runs reconcile through `findDatapointBySupplierRef` rather than
+  POSTing duplicates.
+- **Walkthrough — `docs/isometric/sandbox-template-authoring.md`**
+  appended with an "Alternative — Bootstrap fixed constants on
+  `Dark Earth removal template`" section (Steps A/B/C plus the 13-row
+  defaults table).
+- **Closed open question:** `isometric/sandbox-template-binding`
+  (opened 2026-05-13) — the 13-input failure is now resolvable via the
+  bootstrap script + UI bind.
+
+**Overengineering guard (per request 2026-05-13):**
+
+The Datapoint magnitudes are hardcoded in the script. This is the
+deliberate minimum:
+
+- ✅ Defaults live in a single TS file (`isometric-bootstrap-constants.ts`)
+  — diff-reviewable, citation per entry.
+- ✅ Unit string read live from blueprint — no hardcoded unit assertions.
+- ✅ Supplier-ref idempotency — script is safe to re-run.
+- ❌ **No `fixed_constants` DB table.** Constants are policy-level
+  reference data, not noma-specific operational data.
+- ❌ **No admin UI for editing factors.** Override path: edit the
+  Datapoint magnitude in the Registry UI; binding survives.
+- ❌ **No per-project configuration.** If a verifier asks for
+  project-specific factors, lift the map into a small JSON keyed by
+  project ID — do not promote it to a DB table.
+- ⚠️ **`Sampling consumables / carbon_intensity = 1.0` is a
+  placeholder**, flagged in the script and in
+  `docs/isometric/next-steps.md`. Must be researched before any
+  production submission.
+
+## 2026-05-13 (Transport v1.1 compliance fixes — review follow-up)
+
+Addresses P1/P2 findings from the code review of commit 6bb0576 against
+Isometric Transportation Emissions Accounting Module v1.1
+(https://registry.isometric.com/module/transportation/1.1).
+
+- **Per-leg uniformity enforced (P1).** `aggregateTransportLegs` in
+  `src/lib/isometric/utils/aggregation.ts` now rejects mixed methods,
+  mixed emission factors, or missing per-leg fields within a transport
+  category, surfacing the issue via `agg.warnings`. The mass-weighted
+  distance is preserved only when the category is uniform — that's the
+  condition under which Certify's
+  `distance × Σmass × factor = Σⱼ(distⱼ × massⱼ × factor)`, the per-leg
+  sum required by v1.1 §5. `submit-credit-batch.ts` short-circuits on
+  the new warnings post-`enrichWithTransportLegs`.
+  - Original plan (flip `INPUT_MAPPING` to CO2e) abandoned: Certify's
+    `transport` blueprint takes `distance` / `mass` / `carbon_intensity`
+    as separate inputs with strict unit + `quantity_kind` guards.
+    Rationale logged in `docs/open-questions.md` under
+    `isometric/transport-v1.1-aggregation`.
+- **Parent-scoped transport-leg auth (P1).** New
+  `resolveEntityFacility` in `src/data-access/transport-legs.ts`
+  walks the polymorphic `entity_id` back to a facility on every
+  read-by-id, update, and delete (sample resolves via
+  `production_runs.facility_id`). Closes the orphan-mutation hole the
+  bare `requireAuth` guard left open.
+- **Template-aware Certify coverage (P2#1).**
+  `loadCertifyContextForCreditBatchForUser` now emits
+  `requiredTransportCategories` derived from
+  `defaultTemplate.groups[*].components[*].inputs[*]` via
+  `INPUT_MAPPING`. `<CertifyPanel>` only blocks on the categories the
+  active template actually consumes, and shows
+  "Not requested by the active removal template." for templates with
+  no transport inputs.
+- **Deferred (P2#2 evidence model).** `transport_legs` schema columns
+  for factor source citation, factor vintage, round-trip flag, onward
+  destination, and distance-method fallback evidence are tracked in
+  `docs/open-questions.md` under `isometric/transport-v1.1-evidence`
+  for a follow-up PR with its own migration + condition-registry
+  updates.
+- **Tests:** 47 unit tests pass
+  (`tests/isometric-transport-aggregation.test.ts`,
+  `tests/isometric-certify-context.test.ts`,
+  `tests/isometric-transformers.test.ts`,
+  `tests/isometric-transport-lineage.test.ts`).
+  `pnpm typecheck` and `pnpm lint` pass with the pre-existing warning
+  list unchanged.
+
+## 2026-05-13 (Phase 3.6 completion — transport-leg UI + submission wiring)
+
+- **Scope:** finished the UI / orchestration half of Phase 3.6 sitting on
+  top of the 2026-05-11 foundation. Closes the transport portion of
+  `phase-3-input-coverage` in `docs/open-questions.md`. The biomass→
+  processing, biochar→storage, and sample→lab transport-distance inputs
+  on the `noma-mvp` template now have a real end-to-end path from data
+  entry through to the Removal payload.
+- **Polymorphic data layer.** New `src/data-access/transport-legs.ts`:
+  `getTransportLegsForEntity(userId, entityType, entityId)` +
+  `getTransportLegsForEntities(userId, entityType, entityIds[])` (bulk;
+  single `IN`-query) + auth-guarded `create / update / delete` with
+  per-`entityType` existence checks. **Schema decision:**
+  `entityType='feedstock'` references `feedstocks.id` (not the vestigial
+  `feedstock_deliveries.id`). Users only see `feedstocks` in the UI;
+  pointing the polymorphic system at the user-visible entity removes the
+  "feedstockDeliveryId might be null" mounting trap.
+- **Schemas + server actions + hooks.** `src/schemas/transport-legs.ts`
+  uses a Zod `superRefine` that mirrors the DB-level check constraints
+  exactly (`energy_usage` requires `fuelType` + (`fuelConsumedLiters`
+  OR `electricityKwh`) + `emissionFactorUsed`; `distance_based` requires
+  `loadMassKg` + `vehicleType` + `emissionFactorUsed`).
+  `src/fn/transport-legs.ts` wraps with `withAction`.
+  `src/hooks/use-transport-legs.ts` exposes
+  `useTransportLegsForEntity` + the three mutations with per-`(entityType,
+  entityId)` invalidation.
+- **UI components.** New `src/components/transport-legs/`:
+  - `TransportLegForm` — modal dialog, method-conditional required
+    fields.
+  - `TransportLegsPanel` — list / add / edit / delete, dropped into any
+    surface with `(entityType, entityId)` via `viewModeChildren`.
+  Mounted in three places:
+  - `src/components/deliveries/delivery-list.tsx` —
+    `entityType="delivery"`, replacing the previous read-only
+    transport-leg sections that ran through `useTransportLegsForDelivery`.
+  - `src/components/samples/sample-list.tsx` — `entityType="sample"`.
+  - `src/components/feedstocks/feedstock-list.tsx` —
+    `entityType="feedstock"`, always rendered (no `feedstockDeliveryId`
+    conditional).
+  Legacy `getTransportLegsForDeliveryFn` / `useTransportLegsForDelivery`
+  / `deliveryKeys.transportLegs` removed; old read-only display deleted.
+- **Shared lineage walker.** New
+  `src/lib/isometric/utils/transport-lineage.ts` exporting a pure
+  `collectTransportEntityIds(lineages, runs)` that returns
+  `{feedstockIds, biocharProductIds, sampleIds}` (deduped). Re-exported
+  from `src/lib/isometric/index.ts`. Consumed by both the submission
+  orchestrator and the Certify-Panel coverage loader so the two views
+  can't drift.
+- **Submission wiring.** `src/fn/certification/submit-credit-batch.ts`
+  now, after `aggregateProductionRuns(runs)`:
+  1. Calls `collectTransportEntityIds(lineages, runs)`.
+  2. Fans out `getTransportLegsForEntities` in parallel for all three
+     categories.
+  3. Pipes the result through the existing
+     `enrichWithTransportLegs(agg, { feedstock, biochar, sample })`.
+  4. Passes the enriched aggregation (not the bare one) to the payload
+     build. Submitted Removals now carry real transport distances on
+     the three transport blueprints.
+- **Pre-flight coverage UX.** `src/fn/certification/certify-context.ts`
+  gained a `transportCoverage` field on `CertifyContextForCreditBatch`:
+  `{ feedstock|biochar|sample: { count, entityIds } }`. Populated only
+  in the fully-resolved branch (no remote calls when unlinked /
+  template missing / drift). `<CertifyPanel>`
+  (`src/components/certification/certify-panel.tsx`) renders a
+  three-row checklist between the template-blocker notice and the
+  Submission row. Each missing category gets an `Add legs →` link to
+  the relevant entity surface (`/feedstocks`, `/biochar-products`,
+  `/samples`). The Submit button is disabled while any required
+  category is empty; the tooltip names the missing categories.
+- **Tests.** Full unit suite green: 28 files / 182 tests / 3 pre-existing
+  skips.
+  - New `tests/isometric-transport-lineage.test.ts` (6 cases) covers
+    the lineage walker — empty / dedup / null biocharProduct / runs
+    with no samples.
+  - `tests/isometric-certify-context.test.ts` extended to mock the new
+    data-access deps and assert the `transportCoverage` shape across
+    every branch + a populated-coverage walker case.
+- **Out of scope** (carried in `docs/open-questions.md`): per-run
+  electricity readouts (`final_readout`/`initial_readout`), per-run
+  GHG concentrations (CH4/CO at run level), webhook ingestion (no
+  Certify contract yet), source-upload presigned-URL flow.
+
 ## 2026-05-11 (Phase 3.6 foundation — tailored-template path)
 
 - **Scope:** Foundation work that unblocks the `phase-3-input-coverage`

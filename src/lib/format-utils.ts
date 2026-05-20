@@ -41,3 +41,13 @@ export function getPaginationLabel(
   const end = Math.min(page * pageSize, total);
   return `${start}-${end} of ${total} ${entityLabel}`;
 }
+
+export const BYTES_PER_KB = 1024;
+export const BYTES_PER_MB = 1024 * 1024;
+
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null) return "—";
+  if (bytes < BYTES_PER_KB) return `${bytes} B`;
+  if (bytes < BYTES_PER_MB) return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
+  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
+}

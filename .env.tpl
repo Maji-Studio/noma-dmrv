@@ -6,33 +6,43 @@
 # -----------------------------------------------------------------------------
 # Database (PostgreSQL via Drizzle ORM)
 # -----------------------------------------------------------------------------
-DATABASE_URL="op://Environment Variables/noma-dmrv env dev/DATABASE_URL"
+DATABASE_URL="op://Environment Variables/noma-dmrv env staging/DATABASE_URL"
 
 # -----------------------------------------------------------------------------
 # App URL (Used for Better Auth and general app links)
 # -----------------------------------------------------------------------------
-NEXT_PUBLIC_APP_URL="op://Environment Variables/noma-dmrv env dev/NEXT_PUBLIC_APP_URL"
+NEXT_PUBLIC_APP_URL="op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_APP_URL"
 
 # -----------------------------------------------------------------------------
 # Better Auth (Authentication)
 # -----------------------------------------------------------------------------
-BETTER_AUTH_SECRET="op://Environment Variables/noma-dmrv env dev/BETTER_AUTH_SECRET"
+BETTER_AUTH_SECRET="op://Environment Variables/noma-dmrv env staging/BETTER_AUTH_SECRET"
 
 # -----------------------------------------------------------------------------
 # Resend (Email Service)
 # -----------------------------------------------------------------------------
-RESEND_API_KEY="op://Environment Variables/noma-dmrv env dev/RESEND_API_KEY"
-RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env dev/RESEND_FROM_EMAIL"
+RESEND_API_KEY="op://Environment Variables/noma-dmrv env staging/RESEND_API_KEY"
+RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env staging/RESEND_FROM_EMAIL"
 
 # -----------------------------------------------------------------------------
 # Admin Configuration
 # -----------------------------------------------------------------------------
-ADMIN_EMAIL="op://Environment Variables/noma-dmrv env dev/ADMIN_EMAIL"
+ADMIN_EMAIL="op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL"
 
 # -----------------------------------------------------------------------------
-# Optional (uncomment if stored in 1Password)
+# Isometric (Carbon Registry API)
 # -----------------------------------------------------------------------------
-# LOG_LEVEL="op://Environment Variables/noma-dmrv env dev/LOG_LEVEL"
+ISOMETRIC_CLIENT_SECRET="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET"
+ISOMETRIC_ACCESS_TOKEN="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN"
+
+# -----------------------------------------------------------------------------
+# Storage (S3-compatible object storage)
+# -----------------------------------------------------------------------------
+STORAGE_PROVIDER="op://Environment Variables/noma-dmrv env staging/STORAGE_PROVIDER"
+STORAGE_BUCKET="op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET"
+STORAGE_REGION="op://Environment Variables/noma-dmrv env staging/STORAGE_REGION"
+STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID"
+STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
 
 # -----------------------------------------------------------------------------
 # App Configuration

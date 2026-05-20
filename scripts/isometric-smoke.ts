@@ -17,6 +17,14 @@
  *   pnpm tsx scripts/isometric-smoke.ts ghg-statement-list [projectId]
  *                                                               # GET only — list demo
  *                                                                 # project GHG statements.
+ *   pnpm tsx scripts/isometric-smoke.ts bootstrap-fixed-constants <projectId> <templateId>
+ *                                                               # POST one Datapoint per
+ *                                                                 # unbound `type=fixed`
+ *                                                                 # input on the given
+ *                                                                 # template. Idempotent
+ *                                                                 # via supplier_reference_id.
+ *                                                                 # Admin then pastes IDs
+ *                                                                 # into the Registry UI.
  *
  * Defaults to the production demo project so production writes never land in
  * the live Sifuri Halisi project. Override with [projectId] or
@@ -36,6 +44,8 @@ async function main(): Promise<void> {
     isometric,
     IsometricApiError,
     createDatapoint,
+    patchDatapoint,
+    findDatapointBySupplierRef,
     listRemovalTemplates,
     listComponentBlueprints,
   } = await import("../src/lib/isometric");
@@ -43,6 +53,10 @@ async function main(): Promise<void> {
     "../src/lib/isometric/transformers/datapoint"
   );
   const { env } = await import("../src/config/env");
+  const {
+    lookupFixedConstantDefault,
+    buildBootstrapSupplierRef,
+  } = await import("./isometric-bootstrap-constants");
   type Project = import("../src/lib/isometric").components["schemas"]["Project"];
   type ProjectsPage = {
     nodes: Project[];
@@ -60,7 +74,17 @@ async function main(): Promise<void> {
   const requiresProjectId =
     mode === "inspect-template" ||
     mode === "datapoint-empty-sources" ||
-    mode === "ghg-statement-list";
+    mode === "ghg-statement-list" ||
+    mode === "bootstrap-fixed-constants";
+  const bootstrapTemplateId =
+    mode === "bootstrap-fixed-constants" ? process.argv[4] : undefined;
+  if (mode === "bootstrap-fixed-constants" && !bootstrapTemplateId) {
+    console.error(
+      `Mode "bootstrap-fixed-constants" requires <projectId> <templateId>.\n` +
+        `  Usage: pnpm tsx scripts/isometric-smoke.ts bootstrap-fixed-constants prj_… rvt_…`,
+    );
+    process.exit(2);
+  }
   if (requiresProjectId && !explicitProjectId && env.ISOMETRIC_ENVIRONMENT === "sandbox") {
     console.error(
       `Mode "${mode}" requires a project ID on sandbox.\n` +
@@ -212,6 +236,209 @@ async function main(): Promise<void> {
         type: "REPORTED",
       });
       console.log(`OK — Datapoint id=${created.id}`);
+      return;
+    }
+
+    if (mode === "bootstrap-fixed-constants") {
+      console.log(
+        `Bootstrapping fixed-input constants on template ${bootstrapTemplateId!} (project ${demoExternalProjectId})…\n`,
+      );
+      const [templates, blueprints] = await Promise.all([
+        listRemovalTemplates(demoExternalProjectId),
+        listComponentBlueprints(),
+      ]);
+      const blueprintByKey = new Map(blueprints.map((bp) => [bp.key, bp]));
+      const template = templates.find((t) => t.id === bootstrapTemplateId);
+      if (!template) {
+        console.error(
+          `Template ${bootstrapTemplateId} not found on project ${demoExternalProjectId}.`,
+        );
+        process.exit(2);
+      }
+      console.log(`Template: ${template.display_name} (${template.id})\n`);
+
+      interface BootstrapRow {
+        component: string;
+        rtcId: string;
+        inputKey: string;
+        datapointId: string;
+        magnitude: number;
+        unit: string;
+        status: "created" | "existing" | "updated" | "skipped";
+        note?: string;
+      }
+      const rows: BootstrapRow[] = [];
+      const unmapped: Array<{ component: string; inputKey: string }> = [];
+
+      for (const group of template.groups) {
+        for (const component of group.components) {
+          const blueprint = blueprintByKey.get(component.blueprint_key);
+          for (const rtcInput of component.inputs) {
+            if (rtcInput.type !== "fixed") continue;
+            if (rtcInput.datapoint_id) continue; // Already bound.
+
+            const defaults = lookupFixedConstantDefault(
+              component.display_name,
+              rtcInput.input_key,
+            );
+            if (!defaults) {
+              unmapped.push({
+                component: component.display_name,
+                inputKey: rtcInput.input_key,
+              });
+              continue;
+            }
+
+            const blueprintInput = blueprint?.inputs.find(
+              (i) => i.input_key === rtcInput.input_key,
+            );
+            // Trust the live blueprint's compatible_unit; the hint in
+            // FIXED_CONSTANT_DEFAULTS is a sanity reference, not the source
+            // of truth.
+            const unit = blueprintInput?.compatible_unit ?? "";
+            if (!unit) {
+              console.warn(
+                `  ! ${component.display_name} / ${rtcInput.input_key}: blueprint missing compatible_unit; skipping`,
+              );
+              rows.push({
+                component: component.display_name,
+                rtcId: component.id,
+                inputKey: rtcInput.input_key,
+                datapointId: "—",
+                magnitude: defaults.magnitude,
+                unit,
+                status: "skipped",
+                note: "blueprint missing compatible_unit",
+              });
+              continue;
+            }
+
+            // Magnitude in FIXED_CONSTANT_DEFAULTS is calibrated for the
+            // expectedUnitHint. If the live blueprint declares a different
+            // unit, the magnitude is likely wrong by an order of magnitude
+            // (e.g. kgCO2e/L vs gCO2e/L). Refuse to bootstrap until the
+            // curated default is updated to match.
+            if (
+              defaults.expectedUnitHint.toLowerCase() !== unit.toLowerCase()
+            ) {
+              console.warn(
+                `  ! ${component.display_name} / ${rtcInput.input_key}: blueprint unit "${unit}" does not match curated expectedUnitHint "${defaults.expectedUnitHint}"; skipping`,
+              );
+              rows.push({
+                component: component.display_name,
+                rtcId: component.id,
+                inputKey: rtcInput.input_key,
+                datapointId: "—",
+                magnitude: defaults.magnitude,
+                unit,
+                status: "skipped",
+                note: `unit mismatch: blueprint=${unit} expected=${defaults.expectedUnitHint}`,
+              });
+              continue;
+            }
+
+            const supplierRef = buildBootstrapSupplierRef({
+              projectId: demoExternalProjectId,
+              templateId: template.id,
+              rtcId: component.id,
+              inputKey: rtcInput.input_key,
+            });
+            // Idempotency: if a datapoint with this supplier_reference_id
+            // already exists, reuse it. PATCH magnitude/unit if they drifted
+            // (catches the case where the curated default changed after the
+            // first bootstrap run).
+            const existing = await findDatapointBySupplierRef(supplierRef);
+            if (existing) {
+              const existingMagnitude = existing.quantity?.magnitude;
+              const existingUnit = existing.quantity?.unit;
+              const needsPatch =
+                existingMagnitude !== defaults.magnitude ||
+                existingUnit !== unit;
+              if (needsPatch) {
+                const undef = { __typename: "Undefined" as const };
+                const patched = await patchDatapoint(existing.id, {
+                  quantity: { magnitude: defaults.magnitude, unit },
+                  description: undef,
+                  display_name: undef,
+                  source_ids: undef,
+                  type: undef,
+                  uncertainty_justification: undef,
+                });
+                rows.push({
+                  component: component.display_name,
+                  rtcId: component.id,
+                  inputKey: rtcInput.input_key,
+                  datapointId: patched.id,
+                  magnitude: defaults.magnitude,
+                  unit,
+                  status: "updated",
+                  note: `was ${existingMagnitude} ${existingUnit}`,
+                });
+              } else {
+                rows.push({
+                  component: component.display_name,
+                  rtcId: component.id,
+                  inputKey: rtcInput.input_key,
+                  datapointId: existing.id,
+                  magnitude: defaults.magnitude,
+                  unit,
+                  status: "existing",
+                });
+              }
+              continue;
+            }
+
+            const created = await createDatapoint({
+              description: `${defaults.description} — ${defaults.citation}`,
+              display_name: `${component.display_name} — ${rtcInput.input_key}`,
+              project_id: demoExternalProjectId,
+              quantity: { magnitude: defaults.magnitude, unit },
+              source_ids: [],
+              supplier_reference_id: supplierRef,
+              type: "REPORTED",
+            });
+            rows.push({
+              component: component.display_name,
+              rtcId: component.id,
+              inputKey: rtcInput.input_key,
+              datapointId: created.id,
+              magnitude: defaults.magnitude,
+              unit,
+              status: "created",
+            });
+          }
+        }
+      }
+
+      if (unmapped.length > 0) {
+        console.log(
+          `\n${unmapped.length} unbound fixed input(s) have no entry in FIXED_CONSTANT_DEFAULTS:`,
+        );
+        for (const u of unmapped) {
+          console.log(`  - ${u.component} → ${u.inputKey}`);
+        }
+        console.log(
+          `\nAdd entries to scripts/isometric-bootstrap-constants.ts and re-run.`,
+        );
+      }
+
+      if (rows.length === 0 && unmapped.length === 0) {
+        console.log("No unbound fixed inputs on this template — nothing to do.");
+        return;
+      }
+
+      console.log(
+        `\nBootstrapped ${rows.length} datapoint(s). Paste these IDs into the Registry UI template editor:\n`,
+      );
+      console.log("status   | datapoint id              | component → input");
+      console.log("---------+---------------------------+-----------------------------------");
+      for (const r of rows) {
+        console.log(
+          `${r.status.padEnd(8)} | ${r.datapointId.padEnd(25)} | ${r.component} → ${r.inputKey} (${r.magnitude} ${r.unit})`,
+        );
+      }
+
+      if (unmapped.length > 0) process.exit(2);
       return;
     }
 

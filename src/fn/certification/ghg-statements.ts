@@ -45,7 +45,10 @@ import {
   type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
-import { getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
+import {
+  SUBMISSION_METADATA_KEYS,
+  getMetadataValue,
+} from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementSchema,
@@ -524,7 +527,7 @@ async function updateGhgCreateMetadata(
   const remote = await getGhgStatement(externalId).catch(() => null);
   if (!remote) {
     await updateSubmissionMetadata(userId, submission.id, {
-      remoteStatus: "DRAFT",
+      [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
     });
     return;
   }
@@ -567,15 +570,16 @@ async function applyGhgRemoteState(
 
 function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
   return {
-    remoteStatus: remote.status,
-    pendingTotalCo2eRemovedKg: remote.pending_total_co2e_removed_kg,
+    [SUBMISSION_METADATA_KEYS.remoteStatus]: remote.status,
+    [SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg]:
+      remote.pending_total_co2e_removed_kg,
     reportUrl: remote.ghg_statement_report_url,
     reportingPeriodStartAt: remote.reporting_period_start_at,
     reportingPeriodEndAt: remote.reporting_period_end_at,
     submittedToVerifierAt: remote.submitted_at,
     creditsIssuedAt: remote.credits_issued_at,
     verifier: remote.verifier,
-    removalIds: remote.removal_ids,
+    [SUBMISSION_METADATA_KEYS.removalIds]: remote.removal_ids,
   };
 }
 
@@ -585,10 +589,13 @@ function chooseGhgSubmitModeFromKnownState(
 ): GhgSubmitMode {
   if (remote) return chooseGhgSubmitMode(remote);
 
-  const status = getMetadataValue(submission.metadata, "remoteStatus");
+  const status = getMetadataValue(
+    submission.metadata,
+    SUBMISSION_METADATA_KEYS.remoteStatus,
+  );
   const pendingTotal = getMetadataValue(
     submission.metadata,
-    "pendingTotalCo2eRemovedKg",
+    SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg,
   );
   if (status === "DRAFT") return "submit";
   if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";

@@ -21,6 +21,7 @@
 | `update-playbook.md` | Repeatable refresh workflow for version bumps |
 | `integration-plan.md` | Phased plan + as-shipped status for the Certify API integration (separate from the requirements KB) |
 | `sandbox-template-authoring.md` | Step-by-step walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI (unblocks Phase 3 sandbox writes) |
+| `openapi-index.md` | Annotated index of every Certify + Registry OpenAPI operation/schema with current noma integration status |
 | `changes.md` | Local changelog for documentation updates |
 
 ## How To Use

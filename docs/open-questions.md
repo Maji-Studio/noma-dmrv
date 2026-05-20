@@ -14,6 +14,70 @@ Each entry follows this shape:
 
 ## Isometric Certify integration
 
+### Transport-leg compliance follow-ups (opened 2026-05-13)
+
+- **Per-leg evidence model deferred** (`isometric/transport-v1.1-evidence`) —
+  opened 2026-05-13, deferred to follow-up PR.
+  - Isometric Transportation v1.1 §6 + Appendix 1 require: emission-factor
+    source citation, factor vintage by mode (road ≤3 y, ship/air ≤5 y,
+    rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, distance-method
+    fallback justification (§3.1 "appropriately evidenced"), weigh-scale
+    calibration record, vehicle class/model year.
+  - Current state: `transport_legs.emissionFactorSource` exists but is
+    optional; no schema columns for factor vintage, round-trip flag, onward
+    destination, or fallback evidence. Form text mentions §3.2 but
+    validators do not enforce.
+  - Resolve via: a dedicated PR with a Drizzle migration adding the
+    columns, condition-registry rules, refreshed
+    `docs/isometric/schema-mapping.md` rows 30–32, and three new entries
+    on `docs/isometric/p0-compliance-checklist.md`
+    (P0-16 method-hierarchy + fallback evidence, P0-17 per-leg
+    round-trip default, P0-18 factor vintage by mode).
+
+- **Per-leg vs aggregated submission strategy** (`isometric/transport-v1.1-aggregation`) —
+  opened 2026-05-13, **interim resolution shipped 2026-05-13**.
+  - Original plan: flip `INPUT_MAPPING` transport rows from
+    `distance` (km) to `co2e` (kg) and submit summed per-leg emissions.
+    Blocked because Certify's `transport` blueprint exposes
+    `distance` / `mass` / `carbon_intensity` as separate inputs with
+    `quantity_kind = "distance"`; the strict guard in
+    `src/lib/isometric/transformers/datapoint.ts:201-211` rejects unit
+    mismatches.
+  - Interim: keep mass-weighted distance, but enforce per-category
+    uniformity (same method, same emission factor, all legs have load
+    mass) so Certify's server-side
+    `distance × Σmass × factor = Σⱼ(distⱼ × massⱼ × factor)` holds —
+    compliant with §5 within the current template shape. See
+    `aggregateTransportLegs` in
+    `src/lib/isometric/utils/aggregation.ts`.
+  - True per-leg submission (each leg as its own Certify datapoint)
+    is blocked on Isometric exposing a transport template input that
+    accepts N>1 datapoints per leg category. Re-raise with Isometric
+    support before any future work here.
+
+- **No facility-membership model in codebase**
+  (`auth/facility-scoping`) — opened 2026-05-13, parked.
+  - The new `resolveEntityFacility` in
+    `src/data-access/transport-legs.ts` walks the polymorphic parent
+    chain back to a facility on every read/write, closing the
+    orphan-mutation hole — but the codebase has no "user X may access
+    facility Y" check anywhere (audited across `feedstocks`,
+    `biochar-products`, `samples`, `deliveries`, `production-runs`).
+  - Upgrade: when a facility-membership model lands, swap
+    `resolveEntityFacility` for `requireFacilityAccess(userId, fac)` in
+    `transport-legs.ts` (one chokepoint) and propagate the helper to
+    the other data-access modules.
+
+- **Isometric MCP token-URL deprecated 2026-05-15** (`isometric/mcp-auth`) —
+  opened 2026-05-13.
+  - `https://api.isometric.com/mcp/?token=…` is removed 2026-05-15
+    (2 days from 2026-05-13). Replacement: `https://api.isometric.com/mcp`
+    with Certify/Registry account sign-in
+    (https://docs.isometric.com/user-guides/ai/mcp-server). Dev-tooling
+    only; no production code path affected.
+  - Migration tracked separately; verify via
+    `mcp__claude_ai_isometric__me` after switching.
+
 ### Pre-coding gates (status as of 2026-05-11)
 
 - **Live-template `INPUT_MAPPING` coverage** (`isometric/phase-3`) — opened
@@ -28,36 +92,59 @@ Each entry follows this shape:
 
 ### Phase 3 blockers found in template inspection
 
-- **`isometric/phase-3-input-coverage`** — opened 2026-05-05, **partial
-  progress 2026-05-11**.
-  - Original 20–21 monitored inputs without `INPUT_MAPPING` entries, split
-    into three categories. Status now:
-    - `distance` (km) — used by 4 transport components (biomass→processing,
-      biochar→storage, sample→lab, staff travel). noma has per-leg
-      `distance_km` on `transport_legs`. **Foundation landed 2026-05-11:**
-      `aggregateTransportLegs` + `enrichWithTransportLegs` helpers (mass-
-      weighted average), plus three new fields on `AggregatedProductionData`
-      (`feedstockTransportAvgDistanceKm`, `biocharTransportAvgDistanceKm`,
-      `sampleTransportAvgDistanceKm`). Staff travel intentionally omitted
-      from the MVP template. **Still pending:** polymorphic
-      `<TransportLegForm entityType entityId>` + data-access generalization
-      (`getTransportLegsForEntity`) + 3 mount points (delivery,
-      feedstock-delivery, sample) + pre-flight transport-coverage checklist
-      on `<CertifyPanel>`.
-    - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity
-      meter pre/post readings. noma stores `production_runs.electricityKwh`
-      as a delta only; pre/post readouts are not captured. **Still
-      deferred:** out of scope for Phase 3.6; needs schema work
-      (add columns or synthesize).
-    - `concentration` (mg/kg) + `mass_flow` (kg) — pyrolyzer GHG direct
-      emissions (CH4, CO). noma has `credit_batches.ch4Ppm` /
-      `ch4CompositionPercent` but at credit-batch level, not run level.
-      Unit-shape mismatch (concentration is mg/kg; ppm is by mass at trace
-      level). **Still deferred:** needs per-run GHG-concentration schema
-      work; out of scope for Phase 3.6.
-  - Resolve fully: ship the Phase 3.6 transport-leg UI + checklist (now
-    on the next-up list), then revisit electricity-readout and per-run-GHG
-    when a tailored sandbox template needs those components.
+- **`isometric/phase-3-input-coverage`** — opened 2026-05-05, **transport
+  portion closed 2026-05-13**. Status now:
+  - `distance` (km) — used by 3 transport components (biomass→processing,
+    biochar→storage, sample→lab). **Closed 2026-05-13.** Phase 3.6
+    completion shipped polymorphic transport-leg CRUD (data-access,
+    schemas, server actions, hooks), `<TransportLegsPanel>` mounted on
+    delivery / sample / feedstock side sheets, shared
+    `collectTransportEntityIds` lineage walker, `submitCreditBatch`
+    wiring via `enrichWithTransportLegs`, and a pre-flight transport-
+    coverage checklist on `<CertifyPanel>` that gates the Submit button.
+    Staff travel intentionally omitted from the MVP template (no
+    corresponding noma entity).
+  - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity
+    meter pre/post readings. noma stores `production_runs.electricityKwh`
+    as a delta only; pre/post readouts are not captured. **Interim
+    synthesis shipped 2026-05-13** (see `INPUT_MAPPING` under
+    `pyrolysis / metered_energy_based_ci_emissions` in
+    `src/lib/isometric/transformers/datapoint.ts`):
+    `initial_readout = 0`, `final_readout = totalElectricityKwh`. The
+    difference equals the real consumption, which is the only quantity
+    Certify uses downstream. Replace with real per-run pre/post readouts
+    when the `production_runs` schema gains the columns.
+  - `concentration` (mg/kg) + `mass_flow` (kg) — pyrolyzer GHG direct
+    emissions (CH4, CO). noma has `credit_batches.ch4Ppm` /
+    `ch4CompositionPercent` but at credit-batch level, not run level.
+    Unit-shape mismatch (concentration is mg/kg; ppm is by mass at trace
+    level). **Sandbox zero stub shipped 2026-05-13** in `INPUT_MAPPING`
+    under `direct-emissions / ghg_direct_emissions` — emits 0 with the
+    correct quantity_kind so end-to-end sandbox submission proceeds. Must
+    be replaced with a real per-run source before the template moves to
+    production. Tracked under `isometric/sandbox-zero-stubs`.
+  - `biochar-storage / fuel_usage_by_volume / volume_of_fuel` (L) —
+    biochar application via tractor. noma has `applications` rows but no
+    per-application fuel volume. **Sandbox zero stub shipped 2026-05-13.**
+  - `sampling-required-for-mrv / grid_electricity_use / electricity_use`
+    (kWh) — lab analysis electricity. noma does not capture lab-side
+    electricity. **Sandbox zero stub shipped 2026-05-13.**
+  - `staff-travel / distance_based_ci_emissions / distance` (km) — noma
+    has no staff-travel entity. **Sandbox zero stub shipped 2026-05-13.**
+
+- **`isometric/sandbox-zero-stubs`** — opened 2026-05-13, blocked on
+  data-model gaps above.
+  - `INPUT_MAPPING` in `src/lib/isometric/transformers/datapoint.ts`
+    currently emits `0` for 5 monitored inputs that noma cannot yet
+    source (CH4 concentration / mass_flow, CO concentration / mass_flow,
+    biochar-storage fuel volume, lab electricity, staff-travel
+    distance). Quantity_kind is still enforced against the blueprint, so
+    schema drift will still surface. Replace each with a real source as
+    the corresponding schema gap closes; do NOT promote the active
+    template to production while any zero stub is in use.
+  - Resolve the remaining electricity-readout and per-run-GHG portions
+    when a tailored sandbox template surfaces a need for those
+    components.
 
 - **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
   path documented 2026-05-11**.
@@ -114,15 +201,29 @@ Each entry follows this shape:
   - Resolve only if production traffic shows this failure mode often enough
     to justify per-Datapoint sub-ledger bookkeeping.
 
-- **Source upload flow** (`isometric/phase-3.5`) — opened 2026-05-05
-  - Implement the presigned-URL flow against whatever document-storage we
-    land on. Until then, `certifierDocumentUploads` stays empty and
-    `source_ids: []` on every Datapoint.
-  - Why: Removals without Sources can be created in sandbox but verifiers
-    will require source-of-truth attachments before Phase 4's GHG
-    statement step.
-  - Resolve once the noma documents subsystem has a real S3-equivalent
-    backend (currently a mockup per `docs/forms.md`).
+- **Source upload flow** (`isometric/phase-3.5`) — opened 2026-05-05,
+  storage prerequisite resolved 2026-05-19
+  - Storage prerequisite is now in place: see `docs/storage.md` and the
+    `useFileUpload` hook (`src/hooks/use-file-upload.ts`). The same
+    request → PUT → confirm orchestration can be pointed at Isometric's
+    `/sources/{id}/signed_upload_url` instead of our own `requestUpload`
+    server action.
+  - Remaining work: wire `certifierDocumentUploads` table writes, plumb
+    `source_ids` into Datapoint payloads, and add the UI hook for
+    selecting which existing noma documents to upload as Isometric
+    sources.
+
+- **Per-column upload-URL field migration** (`storage/phase-2`) — opened 2026-05-19
+  - `production.plc_data_file_url`, `samples.r0_histogram_file_url`,
+    `samples.tga_thermogram_file_url`, `production_samples.photo_url`,
+    `feedstock.registry_url`, `emissions.source_url` are still plain
+    text columns. Phase 2 plan: add a `*_document_id` FK alongside each,
+    backfill via UI, drop the URL column.
+  - Why: route all uploaded evidence through the single `documents`
+    table (one audit trail, one storage-key convention, one
+    visibility/ACL model).
+  - Not urgent; existing URL fields keep working as external/legacy
+    links via the `/api/documents/[id]` proxy route's fileUrl branch.
 
 - **Per-Datapoint ledger sub-rows** (`isometric/phase-4`) — opened 2026-05-05
   - Add `submissionType='datapoint'` rows in `certification_submissions`
@@ -155,4 +256,74 @@ Each entry follows this shape:
     some templates.
   - Resolve only when a template surfaces that needs per-run breakdown.
 
-## (other areas added as they appear)
+### Sandbox Removal Template lacks pre-bound fixed constant
+
+- **`isometric/sandbox-template-binding`** — **resolved 2026-05-13**.
+  Bootstrap script + walkthrough shipped; see
+  `docs/isometric/changes.md` (2026-05-13 Dark Earth bootstrap entry)
+  and `docs/isometric/sandbox-template-authoring.md` →
+  "Alternative — Bootstrap fixed constants". Operational follow-ups
+  (sampling-consumables value research, production gate) tracked in
+  `docs/isometric/next-steps.md`.
+
+## Documentation hygiene
+
+### Review feedback parked for future PRs (opened 2026-05-19)
+
+- **`docs/isometric/changes.md` archival split** (`docs/changelog-archival`) —
+  opened 2026-05-19, **deferred**.
+  - Review suggested moving dated implementation-history sections (e.g.,
+    2026-05-11 Phase 3.6 foundation, 2026-05-07 env/dialog refactor) out of
+    `docs/isometric/changes.md` into `docs/archive/` and leaving only an
+    evergreen status pointer in the original file.
+  - Why parked: `changes.md` is documented in `CLAUDE.md` and
+    `docs/isometric/README.md` as the project's local changelog. A
+    changelog is dated by construction; splitting every entry into
+    `docs/archive/` would defeat its discoverability without changing
+    information density.
+  - Resolve via: agree on a retention policy first (e.g., "entries older
+    than 6 months move to `docs/archive/isometric-changes-<year>.md`"),
+    then execute the cut in one PR rather than ad-hoc per review.
+
+- **`docs/isometric/integration-plan.md` snapshot history** (`docs/plan-snapshots`) —
+  opened 2026-05-19, **deferred**.
+  - Review suggested extracting historical "Status snapshot" blocks into
+    a separate archive doc and keeping only the current snapshot inline.
+  - Why parked: the file currently contains a single status snapshot
+    (2026-05-13) followed by per-phase status — there is no historical
+    snapshot to extract yet. Re-raise when the next snapshot lands so
+    the prior one can be archived in the same PR.
+
+- **`docs/open-questions.md` dated-section extraction** (`docs/open-questions-format`) —
+  opened 2026-05-19, **deferred**.
+  - Review suggested moving "Pre-coding gates (status as of 2026-05-11)"
+    and "Phase 3 blockers found in template inspection" into
+    `docs/archive/` because they read as implementation logs.
+  - Why parked: the file's documented entry shape (top of file) is
+    `Title (area/topic) — owner, opened YYYY-MM-DD`. Dates are part of
+    the contract, and the "Phase 3 blockers" entries are still partly
+    open (sandbox zero stubs, electricity-readout schema work). They
+    will leave this file when resolved, not when stale.
+  - Resolve via: a dedicated pass that closes the still-open
+    sub-entries (electricity readout, per-run GHG concentration,
+    fuel-volume capture) so the parent gate can be removed.
+
+- **`docs/isometric/README.md` and `sandbox-template-authoring.md` phase
+  language** (`docs/evergreen-language`) — opened 2026-05-19, **deferred**.
+  - Review flagged phase- or date-specific phrasing in the README index
+    entry for `sandbox-template-authoring.md` and elsewhere.
+  - Why parked low-priority: the phase references describe what the
+    walkthrough *unblocks*, which remains accurate. Rephrasing is
+    cosmetic; bundle with the next substantive update to the
+    walkthrough (e.g., once a noma-mvp template ships and the doc is
+    rewritten to reflect lived experience).
+
+- **`env-banner.tsx` style-constant extraction** (`code/env-banner-style-consts`) —
+  opened 2026-05-19, **deferred**.
+  - Review suggested extracting padding (`px-12 py-8` / `px-16 py-12`)
+    and icon-size (`16` / `20`) literals into named constants.
+  - Why parked: only two call sites duplicate each literal, and the
+    inline ternary makes the inline/page divergence immediately
+    visible. Per `CLAUDE.md` ("Don't add abstractions beyond what the
+    task requires"), this is below the threshold for extraction.
+    Revisit if a third variant is added.
