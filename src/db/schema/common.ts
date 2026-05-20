@@ -73,6 +73,17 @@ export const documentationType = pgEnum('documentation_type', [
   'pdf',
 ]);
 
+export const documentVisibility = pgEnum('document_visibility', [
+  'private',
+  'public',
+]);
+
+export const documentUploadStatus = pgEnum('document_upload_status', [
+  'pending',
+  'uploaded',
+  'failed',
+]);
+
 export const incidentSeverity = pgEnum('incident_severity', [
   'low',
   'medium',
