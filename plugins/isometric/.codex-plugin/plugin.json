@@ -1,0 +1,37 @@
+{
+  "name": "isometric",
+  "version": "0.1.0",
+  "description": "Connect Codex to Isometric's official remote MCP server for authoritative Isometric documentation and platform context.",
+  "author": {
+    "name": "Isometric",
+    "url": "https://isometric.com/"
+  },
+  "homepage": "https://docs.isometric.com/user-guides/ai/mcp-server",
+  "keywords": [
+    "isometric",
+    "mcp",
+    "carbon-removal",
+    "registry",
+    "certify"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Isometric",
+    "shortDescription": "Use Isometric's official MCP server for Standard, protocol, Certify, Registry, and API documentation context.",
+    "longDescription": "Connects Codex to Isometric's official remote MCP server. The server uses Isometric OAuth on first connection and provides context from the Isometric Standard, protocols, protocol modules, Certify and Registry user guides, and API documentation.",
+    "developerName": "Isometric",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://isometric.com/",
+    "defaultPrompt": [
+      "What Isometric-specific capabilities do you have?",
+      "How does attribution of emissions work in Certify?",
+      "What modules does Biochar v1.2 reference?"
+    ],
+    "brandColor": "#111827"
+  }
+}

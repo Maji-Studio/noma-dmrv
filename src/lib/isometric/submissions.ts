@@ -7,6 +7,8 @@ const SUPPLIER_REF_LOOKUP_PAGE_SIZE = 1;
 
 export type CreateDatapointRequest =
   components["schemas"]["CreateDatapointRequest"];
+export type PatchDatapointRequest =
+  components["schemas"]["PatchDatapointRequest"];
 export type Datapoint = components["schemas"]["Datapoint"];
 export type CreateRemovalRequest =
   components["schemas"]["CreateRemovalRequest"];
@@ -17,6 +19,13 @@ export type Component = components["schemas"]["Component"];
 
 export function createDatapoint(body: CreateDatapointRequest): Promise<Datapoint> {
   return isometric.post<Datapoint>("/datapoints", body);
+}
+
+export function patchDatapoint(
+  id: string,
+  body: PatchDatapointRequest,
+): Promise<Datapoint> {
+  return isometric.patch<Datapoint>(`/datapoints/${id}`, body);
 }
 
 export function createRemoval(body: CreateRemovalRequest): Promise<Removal> {

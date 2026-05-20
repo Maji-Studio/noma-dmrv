@@ -1,0 +1,20 @@
+{
+  "name": "noma-dmrv",
+  "interface": {
+    "displayName": "noma-dmrv"
+  },
+  "plugins": [
+    {
+      "name": "isometric",
+      "source": {
+        "source": "local",
+        "path": "./plugins/isometric"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
