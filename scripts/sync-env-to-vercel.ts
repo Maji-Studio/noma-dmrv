@@ -110,7 +110,7 @@ Advanced:
   tsx scripts/sync-env-to-vercel.ts --yes    Skip confirmation (CI/CD)
 
 Flags:
-  --1p-env=<dev|prod>                          1Password item (default: prod)
+  --1p-env=<dev|prod|staging|production>       1Password item (default: prod)
   --vercel-env=<production|preview|development>  Vercel environment (default: production)
   --dry-run                                    Preview changes without applying
   --yes, -y                                    Skip confirmation prompt
@@ -382,8 +382,9 @@ async function main() {
 
   const flags = parseFlags();
 
+  const itemSuffix = flags.opEnv === "prod" ? "production" : flags.opEnv;
   console.log("Configuration:");
-  console.log(`  1Password item: ${ITEM_PREFIX} ${flags.opEnv}`);
+  console.log(`  1Password item: ${ITEM_PREFIX} ${itemSuffix}`);
   console.log(`  Vercel environment: ${flags.vercelEnv}`);
   console.log(`  Dry-run: ${flags.dryRun ? "yes" : "no"}`);
 

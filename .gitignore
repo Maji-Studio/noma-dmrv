@@ -57,3 +57,4 @@ test-results
 
 # local-fs storage provider (dev/test only)
 .storage/
+.storage-test/
