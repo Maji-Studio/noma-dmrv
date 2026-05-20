@@ -120,14 +120,15 @@ export function lookupFixedConstantDefault(
 }
 
 export function buildBootstrapSupplierRef(args: {
+  projectId: string;
   templateId: string;
   rtcId: string;
   inputKey: string;
 }): string {
   // Stable across re-runs so we reconcile via findDatapointBySupplierRef
-  // rather than POSTing duplicates. The template ID alone is too coarse
-  // (multiple inputs per template); the rtcId disambiguates per component.
-  const full = `nm-fc-${args.templateId}-${args.rtcId}-${args.inputKey}`;
+  // rather than POSTing duplicates. projectId scopes the ref so the same
+  // template/input shared across projects can't collide on supplier refs.
+  const full = `nm-fc-${args.projectId}-${args.templateId}-${args.rtcId}-${args.inputKey}`;
   if (full.length <= 100) return full;
   // Naive truncation can collide when distinct inputKeys share a prefix;
   // append a short content hash so collisions remain impossible.

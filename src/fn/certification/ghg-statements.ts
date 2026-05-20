@@ -527,7 +527,7 @@ async function updateGhgCreateMetadata(
   const remote = await getGhgStatement(externalId).catch(() => null);
   if (!remote) {
     await updateSubmissionMetadata(userId, submission.id, {
-      remoteStatus: "DRAFT",
+      [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
     });
     return;
   }

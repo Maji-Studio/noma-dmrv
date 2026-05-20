@@ -313,7 +313,32 @@ async function main(): Promise<void> {
               continue;
             }
 
+            // Magnitude in FIXED_CONSTANT_DEFAULTS is calibrated for the
+            // expectedUnitHint. If the live blueprint declares a different
+            // unit, the magnitude is likely wrong by an order of magnitude
+            // (e.g. kgCO2e/L vs gCO2e/L). Refuse to bootstrap until the
+            // curated default is updated to match.
+            if (
+              defaults.expectedUnitHint.toLowerCase() !== unit.toLowerCase()
+            ) {
+              console.warn(
+                `  ! ${component.display_name} / ${rtcInput.input_key}: blueprint unit "${unit}" does not match curated expectedUnitHint "${defaults.expectedUnitHint}"; skipping`,
+              );
+              rows.push({
+                component: component.display_name,
+                rtcId: component.id,
+                inputKey: rtcInput.input_key,
+                datapointId: "—",
+                magnitude: defaults.magnitude,
+                unit,
+                status: "skipped",
+                note: `unit mismatch: blueprint=${unit} expected=${defaults.expectedUnitHint}`,
+              });
+              continue;
+            }
+
             const supplierRef = buildBootstrapSupplierRef({
+              projectId: demoExternalProjectId,
               templateId: template.id,
               rtcId: component.id,
               inputKey: rtcInput.input_key,
