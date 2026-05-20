@@ -26,8 +26,8 @@
     "env:local": "op inject -i .env.tpl -o .env",
     "env:vercel": "pnpm env:prod && pnpm env:preview && pnpm env:dev",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",
-    "env:preview": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=preview",
-    "env:dev": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=development",
+    "env:preview": "tsx scripts/sync-env-to-vercel.ts --1p-env=staging --vercel-env=preview",
+    "env:dev": "tsx scripts/sync-env-to-vercel.ts --1p-env=staging --vercel-env=development",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -36,6 +36,8 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1049.0",
+    "@aws-sdk/s3-request-presigner": "^3.1049.0",
     "@base-ui/react": "^1.1.0",
     "@dagrejs/dagre": "^2.0.4",
     "@hookform/resolvers": "^5.2.2",
@@ -58,6 +60,7 @@
     "react-hook-form": "^7.71.1",
     "resend": "^6.9.1",
     "tailwind-merge": "^3.4.0",
+    "ulid": "^3.0.2",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },

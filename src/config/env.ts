@@ -58,6 +58,24 @@ const envSchema = z.object({
     .enum(["sandbox", "production"])
     .optional()
     .default("sandbox"),
+
+  // Object storage (Digital Ocean Spaces / AWS S3 / local-fs fallback)
+  STORAGE_PROVIDER: z
+    .preprocess(emptyToUndefined, z.enum(["s3-compatible", "local-fs"]).optional())
+    .default("local-fs"),
+  STORAGE_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  STORAGE_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  STORAGE_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  STORAGE_ACCESS_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  STORAGE_SECRET_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  STORAGE_LOCAL_FS_ROOT: z
+    .preprocess(emptyToUndefined, z.string().min(1).optional())
+    .default(".storage"),
+  STORAGE_SIGNING_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
+  NODE_ENV: z.preprocess(
+    emptyToUndefined,
+    z.enum(["development", "test", "production"])
+  ),
 }).superRefine((data, ctx) => {
   const hasApiKey = !!data.RESEND_API_KEY;
   const hasFromEmail = !!data.RESEND_FROM_EMAIL;
@@ -80,6 +98,38 @@ const envSchema = z.object({
       path: ["ISOMETRIC_CLIENT_SECRET"],
       message:
         "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted",
+    });
+  }
+
+  // Storage provider gates
+  if (data.STORAGE_PROVIDER === "s3-compatible") {
+    const missing: string[] = [];
+    if (!data.STORAGE_BUCKET) missing.push("STORAGE_BUCKET");
+    if (!data.STORAGE_REGION) missing.push("STORAGE_REGION");
+    if (!data.STORAGE_ACCESS_KEY_ID) missing.push("STORAGE_ACCESS_KEY_ID");
+    if (!data.STORAGE_SECRET_ACCESS_KEY) missing.push("STORAGE_SECRET_ACCESS_KEY");
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["STORAGE_PROVIDER"],
+        message: `STORAGE_PROVIDER='s3-compatible' requires: ${missing.join(", ")}`,
+      });
+    }
+  }
+
+  // STORAGE_SIGNING_SECRET is only meaningful for local-fs (s3-compatible uses
+  // AWS SigV4 from STORAGE_SECRET_ACCESS_KEY). Production rejects local-fs
+  // outright (next check), so we only require the secret when explicitly using
+  // local-fs in production-like environments. In dev/test it's optional and the
+  // local-fs provider falls back to an ephemeral random secret with a warning.
+
+  // Production fail-closed: never serve filesystem-backed storage in prod.
+  if (data.NODE_ENV === "production" && data.STORAGE_PROVIDER !== "s3-compatible") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["STORAGE_PROVIDER"],
+      message:
+        "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' is rejected as a security safeguard.",
     });
   }
 });
