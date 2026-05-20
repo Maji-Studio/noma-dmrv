@@ -28,7 +28,7 @@ export function buildStorageKey({
     ["entityId", entityId],
     ["documentType", documentType],
   ] as const) {
-    if (!SAFE_SEGMENT_RE.test(value)) {
+    if (!SAFE_SEGMENT_RE.test(value) || value.includes("..")) {
       throw new Error(`Invalid storage key segment ${name}: ${value}`);
     }
   }

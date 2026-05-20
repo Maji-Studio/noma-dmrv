@@ -92,6 +92,7 @@ export function useFileUpload(): UseFileUploadResult {
         else signal.addEventListener("abort", () => controller.abort(), { once: true });
       }
 
+      const isActive = () => abortRef.current === controller;
       safeSetState({ status: "uploading", progress: 0 });
       try {
         const presign = await requestMutation.mutateAsync({
@@ -111,6 +112,7 @@ export function useFileUpload(): UseFileUploadResult {
           presign.headers,
           file,
           (p) => {
+            if (!isActive()) return;
             safeSetState({ status: "uploading", progress: p });
             onProgress?.(p);
           },
@@ -118,11 +120,15 @@ export function useFileUpload(): UseFileUploadResult {
         );
 
         await confirmMutation.mutateAsync(presign.documentId);
-        safeSetState({ status: "uploaded", documentId: presign.documentId });
+        if (isActive()) {
+          safeSetState({ status: "uploaded", documentId: presign.documentId });
+        }
         return { documentId: presign.documentId };
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Upload failed";
-        safeSetState({ status: "failed", error: message });
+        if (isActive()) {
+          const message = err instanceof Error ? err.message : "Upload failed";
+          safeSetState({ status: "failed", error: message });
+        }
         throw err;
       }
     },
