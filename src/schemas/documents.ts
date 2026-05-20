@@ -70,9 +70,9 @@ export function isAllowedMime(
   documentType: DocumentType,
   contentType: string
 ): boolean {
-  return UPLOAD_RULES[documentType].mimeTypes.includes(
-    contentType.toLowerCase()
-  );
+  // Strip parameters (e.g. "application/pdf; charset=binary") before matching.
+  const normalized = contentType.split(";")[0].trim().toLowerCase();
+  return UPLOAD_RULES[documentType].mimeTypes.includes(normalized);
 }
 
 export function maxBytesFor(documentType: DocumentType): number {

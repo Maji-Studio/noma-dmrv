@@ -136,7 +136,13 @@ export async function PUT(
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 
-  await rename(tempPath, abs);
+  try {
+    await rename(tempPath, abs);
+  } catch (err) {
+    await rm(tempPath, { force: true }).catch(() => {});
+    console.error("storage-local: rename failed", err);
+    return new NextResponse("Internal Server Error", { status: 500 });
+  }
 
   if (claims.c) {
     await writeFile(

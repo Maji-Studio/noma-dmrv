@@ -157,9 +157,13 @@ export class LocalFsProvider implements StorageProvider {
   async deleteObject(key: string): Promise<void> {
     const abs = resolveLocalFsPath(this.root, key);
     if (!abs) return;
+    const ignoreEnoent = (err: unknown) => {
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return;
+      throw err;
+    };
     await Promise.all([
-      rm(abs, { force: true }).catch(() => {}),
-      rm(`${abs}.meta.json`, { force: true }).catch(() => {}),
+      rm(abs, { force: true }).catch(ignoreEnoent),
+      rm(`${abs}.meta.json`, { force: true }).catch(ignoreEnoent),
     ]);
   }
 

@@ -15,6 +15,8 @@
  * small JSON config keyed by project ID. See
  * `docs/isometric/changes.md` (2026-05-13 bootstrap-constants entry).
  */
+import { createHash } from "crypto";
+
 export interface FixedConstantDefault {
   magnitude: number;
   // Hint for the operator only — the actual unit POSTed is read from the
@@ -125,5 +127,10 @@ export function buildBootstrapSupplierRef(args: {
   // Stable across re-runs so we reconcile via findDatapointBySupplierRef
   // rather than POSTing duplicates. The template ID alone is too coarse
   // (multiple inputs per template); the rtcId disambiguates per component.
-  return `nm-fc-${args.templateId}-${args.rtcId}-${args.inputKey}`.slice(0, 100);
+  const full = `nm-fc-${args.templateId}-${args.rtcId}-${args.inputKey}`;
+  if (full.length <= 100) return full;
+  // Naive truncation can collide when distinct inputKeys share a prefix;
+  // append a short content hash so collisions remain impossible.
+  const digest = createHash("sha256").update(full).digest("hex").slice(0, 10);
+  return `${full.slice(0, 100 - 1 - digest.length)}-${digest}`;
 }

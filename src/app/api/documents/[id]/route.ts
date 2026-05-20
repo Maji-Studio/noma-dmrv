@@ -41,7 +41,16 @@ export async function GET(
   }
 
   if (row.fileUrl) {
-    return NextResponse.redirect(row.fileUrl, { status: 302 });
+    let parsed: URL;
+    try {
+      parsed = new URL(row.fileUrl);
+    } catch {
+      return new NextResponse("Invalid document URL", { status: 500 });
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return new NextResponse("Invalid document URL", { status: 500 });
+    }
+    return NextResponse.redirect(parsed.toString(), { status: 302 });
   }
 
   console.error("Document has neither storageKey nor fileUrl", { id: row.id });
