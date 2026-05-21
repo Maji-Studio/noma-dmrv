@@ -39,11 +39,19 @@ const baseAgg: AggregatedProductionData = {
   weightedMoisturePercent: 10,
   totalBiocharDryMassKg: 1000,
   totalFeedstockDryMassKg: 4000,
-  totalDieselLiters: 50,
+  totalStartupDieselLitres: 50,
+  totalGensetDieselLitres: 20,
   totalElectricityKwh: 200,
   feedstockTransportAvgDistanceKm: 50,
   biocharTransportAvgDistanceKm: 100,
   sampleTransportAvgDistanceKm: 25,
+  sampleTransportMassDistanceTonneKm: 12,
+  biomassElectricityKwh: 40,
+  pyrolysisElectricityKwh: 130,
+  biocharElectricityKwh: 30,
+  biomassGensetKwh: 13.5,
+  pyrolysisGensetKwh: 43.875,
+  biocharGensetKwh: 6.975,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1", "pr_2"],
@@ -142,7 +150,7 @@ describe("buildCreateDatapointRequest", () => {
     });
 
     expect(result.quantity.unit).toBe("kWh");
-    expect(result.quantity.magnitude).toBe(200);
+    expect(result.quantity.magnitude).toBe(30);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
@@ -296,6 +304,31 @@ describe("buildCreateDatapointRequest", () => {
       ["biochar-transport", "transport", "distance"],
       ["biochar-transport", "transport", "mass"],
       ["sampling-required-for-mrv", "distance_based_ci_emissions", "distance"],
+      // Granular "Dark Earth Carbon Template" (rvt_1KS4S43VPSBXA26X)
+      // inputs — zero stubs pending Phase 3.7 schema work.
+      [
+        "biomass-feedstock-processing",
+        "metered_energy_based_ci_emissions",
+        "initial_readout",
+      ],
+      [
+        "biomass-feedstock-processing",
+        "metered_energy_based_ci_emissions",
+        "final_readout",
+      ],
+      [
+        "biomass-feedstock-processing",
+        "energy_based_ci_emissions",
+        "energy",
+      ],
+      ["pyrolysis", "energy_based_ci_emissions", "energy"],
+      ["biochar-processing", "energy_based_ci_emissions", "energy"],
+      [
+        "sampling-required-for-mrv",
+        "mass_distance_based_ci_emissions",
+        "mass_distance",
+      ],
+      ["miscellaneous", "mass_based_ci_emissions", "mass"],
     ];
     for (const [groupKey, blueprintKey, inputKey] of expected) {
       expect(

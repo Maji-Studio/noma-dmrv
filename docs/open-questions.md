@@ -132,19 +132,43 @@ Each entry follows this shape:
   - `staff-travel / distance_based_ci_emissions / distance` (km) — noma
     has no staff-travel entity. **Sandbox zero stub shipped 2026-05-13.**
 
-- **`isometric/sandbox-zero-stubs`** — opened 2026-05-13, blocked on
-  data-model gaps above.
-  - `INPUT_MAPPING` in `src/lib/isometric/transformers/datapoint.ts`
-    currently emits `0` for 5 monitored inputs that noma cannot yet
-    source (CH4 concentration / mass_flow, CO concentration / mass_flow,
-    biochar-storage fuel volume, lab electricity, staff-travel
-    distance). Quantity_kind is still enforced against the blueprint, so
-    schema drift will still surface. Replace each with a real source as
-    the corresponding schema gap closes; do NOT promote the active
-    template to production while any zero stub is in use.
-  - Resolve the remaining electricity-readout and per-run-GHG portions
-    when a tailored sandbox template surfaces a need for those
-    components.
+- **`isometric/sandbox-zero-stubs`** — opened 2026-05-13, **energy
+  portion closed 2026-05-21 (Phase 3.7)**.
+  - Phase 3.7 closed the **energy** stubs: biomass metered electricity
+    (initial + final readout) and the biomass / pyrolysis / biochar
+    diesel-genset energy now carry real per-run data routed via
+    `enrichWithFacilityConfig`. Sample transport `mass_distance` is also
+    real now (derived from transport legs).
+  - Still zero-stubbed — the **per-reporting-period inputs**: pyrolyzer
+    CH4/CO `concentration` + gas `mass_flow`, lab-analysis
+    `electricity_use`, sampling consumables `mass`, staff-travel
+    `distance`, miscellaneous `mass`. Tracked in the dedicated entry
+    `isometric/phase-3.7-period-inputs` below.
+  - Quantity_kind is still enforced against the blueprint. Do NOT
+    promote the active template to a production project while any zero
+    stub is in use. This entry resolves once the period-inputs entry
+    does.
+
+- **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21.
+  - **Question:** how should the per-reporting-period emission inputs
+    be sourced — pyrolyzer CH4/CO concentration + gas mass-flow,
+    lab-analysis electricity, sampling consumables mass, staff travel
+    distance, miscellaneous mass? Two sub-decisions: (a) tracked
+    operational entities (a `staff_travel` table, per-run pyrolyzer gas
+    measurement, per-sample lab electricity) vs admin-configured
+    estimates seeded from the LCA; and (b) **apportionment** — the LCA
+    measures these once per ~1-year reporting period, but noma submits
+    one Removal per credit batch and a period spans many batches.
+    Reading a flat per-period figure on every credit-batch submission
+    would count it once per batch (N× over-count).
+  - **Why it matters:** these are the last zero stubs blocking a
+    production submission; staff travel alone is ~59 tCO2e in the
+    sample LCA.
+  - **Resolve via:** decide the apportionment rule (e.g. split by the
+    batch's share of period biochar mass) and the source model. The
+    Phase 3.7 per-facility config table (`certifier_projects` columns)
+    is designed so per-period columns can be added without migration
+    pain once the model is chosen.
 
 - **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
   path documented 2026-05-11**.

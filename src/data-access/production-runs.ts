@@ -96,6 +96,13 @@ export interface ProductionRunStats {
   draftCount: number;
 }
 
+export interface FacilityEnergyTotals {
+  runCount: number;
+  electricityKwh: number;
+  gensetLitres: number;
+  startupLitres: number;
+}
+
 export interface ProductionRunReadingRecord {
   id: string;
   productionRunId: string;
@@ -451,6 +458,37 @@ export async function getProductionRunStats(
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
     draftCount: statusMap["draft"] ?? 0,
+  };
+}
+
+/**
+ * Sum electricity + diesel across every production run for a facility.
+ * Aggregates in SQL so the totals are not capped by list pagination.
+ */
+export async function getFacilityEnergyTotals(
+  userId: string,
+  facilityId: string
+): Promise<FacilityEnergyTotals> {
+  requireAuth(userId);
+
+  const [row] = await db
+    .select({
+      runCount: count(),
+      electricityKwh: sum(productionRuns.electricityKwh),
+      gensetLitres: sum(productionRuns.dieselGensetLiters),
+      operationLitres: sum(productionRuns.dieselOperationLiters),
+      preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
+    })
+    .from(productionRuns)
+    .where(eq(productionRuns.facilityId, facilityId));
+
+  return {
+    runCount: Number(row.runCount),
+    electricityKwh: Number(row.electricityKwh) || 0,
+    gensetLitres: Number(row.gensetLitres) || 0,
+    startupLitres:
+      (Number(row.operationLitres) || 0) +
+      (Number(row.preprocessingLitres) || 0),
   };
 }
 

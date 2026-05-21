@@ -14,6 +14,16 @@ export interface InputMappingEntry {
   datapointType: DatapointType;
   expectedQuantityKind: QuantityKindType;
   transform?: (value: number) => number;
+  /**
+   * Marks a deferred per-reporting-period input that currently emits a
+   * hardcoded placeholder 0 because noma has no data model for it yet.
+   * `submitCreditBatch` blocks submission to a production Isometric
+   * project when any resolved monitored input carries this flag. Do NOT
+   * set it on legitimate zeros (e.g. the `initial_readout` of a metered
+   * consumption delta) — only on genuine placeholders. Tracked in
+   * docs/open-questions.md → isometric/phase-3.7-period-inputs.
+   */
+  zeroStub?: true;
 }
 
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
@@ -30,6 +40,12 @@ export type InputMappingTable = Record<
   string,
   Record<string, Record<string, InputMappingEntry>>
 >;
+
+// Shared zero-magnitude transform. Used by deferred per-reporting-period
+// zero stubs (paired with `zeroStub: true`) and by metered `initial_readout`
+// inputs whose consumption delta starts from 0 — centralised so the intent
+// is named once rather than re-spelled inline.
+const zeroTransform = () => 0;
 
 export const INPUT_MAPPING: InputMappingTable = {
   // CO₂ stored from biochar application
@@ -105,10 +121,7 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Sample shipping to lab. `grid_electricity_use.electricity_use`
-  // (lab analysis electricity) is a sandbox zero stub — noma does not
-  // capture lab-side electricity; see the zero-stub block below for the
-  // rationale.
+  // Sample shipping to lab.
   "sampling-required-for-mrv": {
     distance_based_ci_emissions: {
       distance: {
@@ -118,30 +131,59 @@ export const INPUT_MAPPING: InputMappingTable = {
         expectedQuantityKind: "distance",
       },
     },
+    // Zero stub — sampling consumables mass. noma has no per-period
+    // consumables figure; deferred per-period input (see Phase 3.7 +
+    // `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`).
     mass_based_ci_emissions: {
       mass: {
         source: "totalBiocharDryMassKg",
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
+        transform: zeroTransform,
+        zeroStub: true,
       },
     },
+    // Zero stub — lab-analysis electricity. Deferred per-period input.
     grid_electricity_use: {
       electricity_use: {
         source: "totalBiocharDryMassKg",
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
-        transform: () => 0,
+        transform: zeroTransform,
+        zeroStub: true,
+      },
+    },
+    // Real (Phase 3.7) — sample shipment to the lab as mass-distance
+    // (tonne·km), derived from the sample transport legs by
+    // `enrichWithTransportLegs`. 0 when no sample legs.
+    mass_distance_based_ci_emissions: {
+      mass_distance: {
+        source: "sampleTransportMassDistanceTonneKm",
+        unit: "tonne * km",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass_distance",
       },
     },
   },
 
-  // Biochar processing electricity
+  // Biochar processing energy (Phase 3.7). Grid electricity = the
+  // biochar-stage share of the run's combined `electricity_kwh`; genset
+  // = the biochar-stage share of genset diesel converted to kWh. Both
+  // shares come from `enrichWithFacilityConfig`.
   "biochar-processing": {
     grid_electricity_use: {
       electricity_use: {
-        source: "totalElectricityKwh",
+        source: "biocharElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+      },
+    },
+    energy_based_ci_emissions: {
+      energy: {
+        source: "biocharGensetKwh",
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
@@ -149,25 +191,31 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Pyrolyzer electricity. Certify's `metered_energy_based_ci_emissions`
-  // blueprint wants pre/post meter readouts and computes consumption as
-  // `final − initial`. noma only stores the delta on
-  // `production_runs.electricityKwh` (summed into `totalElectricityKwh`),
-  // so we synthesize: initial_readout = 0, final_readout = delta. The
-  // difference equals the real consumption, which is the only value
-  // Certify uses downstream. Tracked in `docs/open-questions.md` under
-  // `isometric/phase-3-input-coverage` (pyrolyzer meter readouts).
+  // Pyrolysis energy (Phase 3.7). Certify's
+  // `metered_energy_based_ci_emissions` computes consumption as
+  // `final − initial`; noma has only the consumption delta, so
+  // initial_readout = 0 and final_readout = the pyrolysis-stage share
+  // of the run's combined electricity. Genset = pyrolysis-stage share
+  // of genset diesel as kWh. Shares from `enrichWithFacilityConfig`.
   pyrolysis: {
     metered_energy_based_ci_emissions: {
       initial_readout: {
-        source: "totalElectricityKwh",
+        source: "pyrolysisElectricityKwh",
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
-        transform: () => 0,
+        transform: zeroTransform,
       },
       final_readout: {
-        source: "totalElectricityKwh",
+        source: "pyrolysisElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+      },
+    },
+    energy_based_ci_emissions: {
+      energy: {
+        source: "pyrolysisGensetKwh",
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
@@ -175,19 +223,21 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // ─── Sandbox-only zero stubs ───
-  // The two sandbox templates ("Protocol default" and "Dark Earth removal
-  // template") still pull in template components that noma has no per-run
-  // data for. The entries below let end-to-end sandbox submission proceed
-  // by emitting a `0` datapoint with the unit + quantity_kind the blueprint
-  // declares. EACH of these must be replaced with a real source before the
-  // template is moved to production. Tracked in `docs/open-questions.md`
-  // under `isometric/phase-3-input-coverage` and
-  // `isometric/sandbox-zero-stubs`.
+  // ─── Remaining zero stubs — deferred per-period inputs ───
+  // Phase 3.7 closed the energy stubs (electricity + genset, now real
+  // per-run data routed via `enrichWithFacilityConfig`). What remains
+  // below are *per-reporting-period* inputs noma has no model for yet —
+  // pyrolyzer gas (CH4/CO concentration + mass flow), staff travel, lab
+  // electricity, sampling consumables, miscellaneous mass. They still
+  // emit a `0` datapoint with the unit + quantity_kind the blueprint
+  // declares. EACH must be replaced before the template moves to a
+  // production project. Tracked in `docs/open-questions.md` →
+  // `isometric/phase-3.7-period-inputs` (placement + apportionment
+  // unresolved).
   //
-  // Convention: reuse `totalBiocharDryMassKg` as the source (it is always
-  // a finite non-null number after aggregation) and override with
-  // `transform: () => 0`. The `expectedQuantityKind` still gates against
+  // Convention: reuse `totalBiocharDryMassKg` as the source (always a
+  // finite non-null number after aggregation) and override with
+  // `transform: zeroTransform`. The `expectedQuantityKind` still gates against
   // blueprint drift.
   "direct-emissions": {
     ghg_direct_emissions: {
@@ -196,14 +246,16 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "mg / kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass_fraction",
-        transform: () => 0,
+        transform: zeroTransform,
+        zeroStub: true,
       },
       mass_flow: {
         source: "totalBiocharDryMassKg",
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
-        transform: () => 0,
+        transform: zeroTransform,
+        zeroStub: true,
       },
     },
   },
@@ -214,7 +266,8 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "L",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
-        transform: () => 0,
+        transform: zeroTransform,
+        zeroStub: true,
       },
     },
   },
@@ -225,16 +278,19 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "km",
         datapointType: "REPORTED",
         expectedQuantityKind: "distance",
-        transform: () => 0,
+        transform: zeroTransform,
+        zeroStub: true,
       },
     },
   },
 
-  // Biomass handling / processing fuel
+  // Startup / plant diesel — volume-based. `totalStartupDieselLitres`
+  // excludes genset diesel (that flows through the energy-based genset
+  // components above), so diesel is never double-counted.
   "biomass-feedstock-sourcing": {
     fuel_usage_by_volume: {
       volume_of_fuel: {
-        source: "totalDieselLiters",
+        source: "totalStartupDieselLitres",
         unit: "l",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
@@ -244,10 +300,54 @@ export const INPUT_MAPPING: InputMappingTable = {
   "biomass-feedstock-processing": {
     fuel_usage_by_volume: {
       volume_of_fuel: {
-        source: "totalDieselLiters",
+        source: "totalStartupDieselLitres",
         unit: "l",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
+      },
+    },
+    // Biomass-stage metered electricity (Phase 3.7). Consumption delta
+    // only, so initial_readout = 0 and final_readout = the biomass-stage
+    // share of the run's combined electricity (from
+    // `enrichWithFacilityConfig`).
+    metered_energy_based_ci_emissions: {
+      initial_readout: {
+        source: "biomassElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: zeroTransform,
+      },
+      final_readout: {
+        source: "biomassElectricityKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+      },
+    },
+    // Biomass-stage diesel genset (Phase 3.7) — biomass-stage share of
+    // genset diesel converted to kWh.
+    energy_based_ci_emissions: {
+      energy: {
+        source: "biomassGensetKwh",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+      },
+    },
+  },
+
+  // Zero stub — generic miscellaneous mass-based CI. noma has no
+  // corresponding entity; emits 0. Deferred per-period input (Phase 3.7).
+  miscellaneous: {
+    mass_based_ci_emissions: {
+      mass: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+        transform: zeroTransform,
+        zeroStub: true,
       },
     },
   },
