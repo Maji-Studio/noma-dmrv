@@ -30,15 +30,15 @@ function sanitizeAuthUrl(url: string) {
 function logAuthEmailFallback(args: {
   type: "reset-password" | "verify-email";
   userId: string;
-  email: string;
   url: string;
 }) {
   const sanitizedUrl = sanitizeAuthUrl(args.url);
   console.warn(
     `[auth:${args.type}] RESEND_* env vars are not configured, using local fallback.`
   );
+  // Never log the user's email — log userId only (see CLAUDE.md: no PII in logs).
   console.warn(
-    `[auth:${args.type}] userId=${args.userId} email=${args.email} url=${sanitizedUrl}`
+    `[auth:${args.type}] userId=${args.userId} url=${sanitizedUrl}`
   );
   if (!isProduction) {
     console.warn(`[auth:${args.type}] fullUrl=${args.url}`);
@@ -57,7 +57,6 @@ async function sendAuthEmail(args: {
     logAuthEmailFallback({
       type: args.type,
       userId: args.userId,
-      email: args.to,
       url: args.url,
     });
     return;
@@ -81,6 +80,19 @@ export const auth = betterAuth({
       verification: schema.verifications,
     },
   }),
+  user: {
+    additionalFields: {
+      // Surfaces the `role` column (admin | user) on the session user so
+      // requireAdmin() can gate admin routes. input:false keeps it out
+      // of self-service signup.
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "user",
+        input: false,
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     disableSignUp: !env.ALLOW_SELF_SIGNUP,

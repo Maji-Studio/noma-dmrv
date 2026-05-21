@@ -10,7 +10,11 @@ export interface AggregatedProductionData {
   weightedMoisturePercent: number | null;
   totalBiocharDryMassKg: number;
   totalFeedstockDryMassKg: number;
-  totalDieselLiters: number;
+  // Diesel split by use: startup/plant diesel feeds the volume-based
+  // Certify component; genset diesel feeds the energy-based genset
+  // components (converted to kWh via the facility's genset yield).
+  totalStartupDieselLitres: number;
+  totalGensetDieselLitres: number;
   totalElectricityKwh: number;
   // Mass-weighted distance per transport-leg category, such that Certify's
   // server-side `distance × Σmass × factor` equals Σⱼ(distⱼ × massⱼ × factor)
@@ -22,6 +26,19 @@ export interface AggregatedProductionData {
   feedstockTransportAvgDistanceKm: number | null;
   biocharTransportAvgDistanceKm: number | null;
   sampleTransportAvgDistanceKm: number | null;
+  // Total sample-shipment mass-distance (tonne·km) — Σ(distance × load
+  // mass) over the sample legs. 0 when no sample legs (a valid value:
+  // no sample transport). Populated by `enrichWithTransportLegs`.
+  sampleTransportMassDistanceTonneKm: number;
+  // Per-process-stage energy, populated by `enrichWithFacilityConfig`
+  // from the combined per-run totals + the facility's stage-split
+  // estimate. Null until enriched.
+  biomassElectricityKwh: number | null;
+  pyrolysisElectricityKwh: number | null;
+  biocharElectricityKwh: number | null;
+  biomassGensetKwh: number | null;
+  pyrolysisGensetKwh: number | null;
+  biocharGensetKwh: number | null;
   earliestStartTime: Date;
   latestEndTime: Date;
   sourceProductionRunIds: string[];
@@ -115,7 +132,8 @@ export function aggregateProductionRuns(
 
   let totalBiocharDryMassKg = 0;
   let totalFeedstockDryMassKg = 0;
-  let totalDieselLiters = 0;
+  let totalStartupDieselLitres = 0;
+  let totalGensetDieselLitres = 0;
   let totalElectricityKwh = 0;
   let earliestStartTime = runs[0].startTime;
   let latestEndTime = runs[0].endTime;
@@ -123,10 +141,9 @@ export function aggregateProductionRuns(
   for (const run of runs) {
     totalBiocharDryMassKg += nz(run.biocharDryMassKg);
     totalFeedstockDryMassKg += nz(run.feedstockMassDryKg);
-    totalDieselLiters +=
-      nz(run.dieselOperationLiters) +
-      nz(run.dieselGensetLiters) +
-      nz(run.preprocessingFuelLiters);
+    totalStartupDieselLitres +=
+      nz(run.dieselOperationLiters) + nz(run.preprocessingFuelLiters);
+    totalGensetDieselLitres += nz(run.dieselGensetLiters);
     totalElectricityKwh += nz(run.electricityKwh);
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
     if (run.endTime > latestEndTime) latestEndTime = run.endTime;
@@ -153,13 +170,21 @@ export function aggregateProductionRuns(
     ),
     totalBiocharDryMassKg,
     totalFeedstockDryMassKg,
-    totalDieselLiters,
+    totalStartupDieselLitres,
+    totalGensetDieselLitres,
     totalElectricityKwh,
-    // Transport distance fields default to null. Caller enriches via
-    // `enrichWithTransportLegs` after fetching legs along the lineage.
+    // Transport + per-stage fields default to null. Caller enriches via
+    // `enrichWithTransportLegs` and `enrichWithFacilityConfig`.
     feedstockTransportAvgDistanceKm: null,
     biocharTransportAvgDistanceKm: null,
     sampleTransportAvgDistanceKm: null,
+    sampleTransportMassDistanceTonneKm: 0,
+    biomassElectricityKwh: null,
+    pyrolysisElectricityKwh: null,
+    biocharElectricityKwh: null,
+    biomassGensetKwh: null,
+    pyrolysisGensetKwh: null,
+    biocharGensetKwh: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
@@ -195,7 +220,58 @@ export function enrichWithTransportLegs(
     feedstockTransportAvgDistanceKm: feedstock.distanceKm,
     biocharTransportAvgDistanceKm: biochar.distanceKm,
     sampleTransportAvgDistanceKm: sample.distanceKm,
+    sampleTransportMassDistanceTonneKm: sumMassDistanceTonneKm(legs.sample),
     warnings: [...agg.warnings, ...newWarnings],
+  };
+}
+
+// Σ(distance_km × load_mass_tonnes) over the legs — the `mass_distance`
+// quantity (tonne·km) the Certify `mass_distance_based_ci_emissions`
+// blueprint expects. 0 for an empty category (no sample transport).
+function sumMassDistanceTonneKm(legs: TransportLeg[]): number {
+  let total = 0;
+  for (const leg of legs) {
+    total += leg.distanceKm * (nz(leg.loadMassKg) / 1000);
+  }
+  return total;
+}
+
+// Per-facility emission-estimate config — the four columns added to
+// `certifier_projects` in Phase 3.7. All required (the submission path
+// validates non-null before calling `enrichWithFacilityConfig`).
+export interface FacilityEmissionConfig {
+  gensetEnergyYieldKwhPerLitre: number;
+  stageSplitBiomassPct: number;
+  stageSplitPyrolysisPct: number;
+  stageSplitBiocharPct: number;
+}
+
+// Layers per-process-stage energy onto an aggregation result. Pure;
+// returns a new object. Splits the combined per-run electricity and
+// genset energy across biomass / pyrolysis / biochar by the facility's
+// estimated stage ratios. The split is emissions-neutral (all three
+// stages share one carbon intensity in the template) — it only shapes
+// the per-stage breakdown shown in the registry. Genset litres are
+// converted to kWh via the facility's genset yield.
+export function enrichWithFacilityConfig(
+  agg: AggregatedProductionData,
+  config: FacilityEmissionConfig,
+): AggregatedProductionData {
+  const electricity = agg.totalElectricityKwh;
+  const gensetKwh =
+    agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre;
+  const biomass = config.stageSplitBiomassPct / 100;
+  const pyrolysis = config.stageSplitPyrolysisPct / 100;
+  const biochar = config.stageSplitBiocharPct / 100;
+
+  return {
+    ...agg,
+    biomassElectricityKwh: electricity * biomass,
+    pyrolysisElectricityKwh: electricity * pyrolysis,
+    biocharElectricityKwh: electricity * biochar,
+    biomassGensetKwh: gensetKwh * biomass,
+    pyrolysisGensetKwh: gensetKwh * pyrolysis,
+    biocharGensetKwh: gensetKwh * biochar,
   };
 }
 

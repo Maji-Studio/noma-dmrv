@@ -16,6 +16,7 @@ import {
   getProductionRuns as getProductionRunsData,
   getProductionRunById as getProductionRunByIdData,
   getProductionRunStats as getProductionRunStatsData,
+  getFacilityEnergyTotals as getFacilityEnergyTotalsData,
   getProductionRunReadings as getProductionRunReadingsData,
   addProductionRunReading as addProductionRunReadingData,
   updateProductionRun,
@@ -23,6 +24,7 @@ import {
   type PaginatedProductionRuns,
   type ProductionRunWithRelations,
   type ProductionRunStats,
+  type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
 import { getUser } from "@/lib/auth/server";
@@ -150,6 +152,31 @@ export async function getProductionRunStatsFn(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to load production run stats",
+    };
+  }
+}
+
+/**
+ * Get facility-wide electricity + diesel totals (SQL aggregate)
+ */
+export async function getFacilityEnergyTotalsFn(
+  facilityId: string
+): Promise<ActionResult<FacilityEnergyTotals>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const totals = await getFacilityEnergyTotalsData(user.id, facilityId);
+    return { success: true, data: totals };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load facility energy totals",
     };
   }
 }
