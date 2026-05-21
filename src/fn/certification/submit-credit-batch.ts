@@ -83,6 +83,39 @@ function resolveFacilityEmissionConfig(
       "Set this facility's genset yield and stage splits in the admin area (Emission estimates) before submitting.",
     );
   }
+
+  // Defence-in-depth: the admin form validates these through
+  // facilityEmissionConfigSchema, but a direct DB edit or seed insert could
+  // bypass it. A bad value here would silently corrupt a registry
+  // submission, so re-check the bounds before building the payload.
+  if (
+    !Number.isFinite(gensetEnergyYieldKwhPerLitre) ||
+    gensetEnergyYieldKwhPerLitre <= 0
+  ) {
+    throw new SafeError(
+      "This facility's genset energy yield must be a positive number. Correct it in the admin area (Emission estimates).",
+    );
+  }
+  const stageSplits = [
+    stageSplitBiomassPct,
+    stageSplitPyrolysisPct,
+    stageSplitBiocharPct,
+  ];
+  if (
+    stageSplits.some((pct) => !Number.isFinite(pct) || pct < 0 || pct > 100)
+  ) {
+    throw new SafeError(
+      "This facility's stage splits must each be between 0 and 100. Correct them in the admin area (Emission estimates).",
+    );
+  }
+  const splitSum =
+    stageSplitBiomassPct + stageSplitPyrolysisPct + stageSplitBiocharPct;
+  if (Math.abs(splitSum - 100) > 0.1) {
+    throw new SafeError(
+      "This facility's stage splits must sum to 100%. Correct them in the admin area (Emission estimates).",
+    );
+  }
+
   return {
     gensetEnergyYieldKwhPerLitre,
     stageSplitBiomassPct,
