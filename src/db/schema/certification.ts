@@ -3,6 +3,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   unique,
@@ -30,6 +31,19 @@ export const certifierProjects = pgTable(
     protocolVersion: text('protocol_version'),
     // Default Certify removal template used when submitting credit batches for this facility.
     defaultRemovalTemplateId: text('default_removal_template_id'),
+    // --- Phase 3.7 emission-estimate config (per facility) ---
+    // Diesel-genset electrical yield: kWh produced per litre of genset
+    // diesel. Converts noma's litre measurement to the kWh the Certify
+    // `energy_based_ci_emissions` components expect. Seed 3.375 (LCA
+    // diesel CI 2.7 kgCO2e/L ÷ genset CI 0.8 kgCO2e/kWh).
+    gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
+    // Estimated split of combined per-run energy across the three process
+    // stages. Emissions-neutral (all stages share one CI) — affects only
+    // the per-stage breakdown shown in the registry. The three must sum
+    // to 100.
+    stageSplitBiomassPct: real('stage_split_biomass_pct'),
+    stageSplitPyrolysisPct: real('stage_split_pyrolysis_pct'),
+    stageSplitBiocharPct: real('stage_split_biochar_pct'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
     metadata: jsonb('metadata'),

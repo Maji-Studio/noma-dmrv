@@ -1,0 +1,1 @@
+CREATE INDEX "production_runs_facility_id_idx" ON "production_runs" USING btree ("facility_id");

@@ -660,157 +660,81 @@ payload hash). Mutating the batch and re-submitting creates a
 **To do (carried forward):** source-upload presigned-URL flow (Phase 3.5),
 per-Datapoint sub-ledger rows (Phase 4 deferral).
 
-### Phase 3.7 — Replace zero-stubs with real monitored data (NOT started)
+### Phase 3.7 — Real energy data + per-facility emission config ✅ DONE (energy; period inputs deferred)
 
-**Context.** Phase 3 submits a Removal whose monitored Datapoints come
-from noma's production data via the `INPUT_MAPPING` table in
-`src/lib/isometric/transformers/datapoint.ts`. When a removal template
-declares a monitored input that noma has no field to source, the entry
-emits a hard-coded `0` ("zero stub"). Certify accepts a `0` Datapoint, so
-this lets the end-to-end pipeline be proven in the sandbox — but a zero
-stub **understates the Removal's real emissions**. As of 2026-05-21 there
-are **12 zero stubs**, driven by the granular **Dark Earth Carbon
-Template** (`rvt_1KS4S43VPSBXA26X`) the operator authored in the Registry
-UI. This phase enumerates the schema work to turn each stub into a real
-value.
+**Shipped 2026-05-21.** Phase 3 submitted Removals with monitored inputs
+hard-coded to `0` ("zero stubs"). Phase 3.7 replaces the *energy* stubs
+with real per-run data and builds the admin surface for the estimates
+the routing needs. The per-reporting-period inputs are deferred.
 
-**Hard rule:** no template carrying *any* zero stub may be promoted to a
-*production* Isometric project. Sandbox only until this phase closes.
+**What grilling + the Sifuri Halisi LCA established:**
 
-The 12 stubs group into seven workstreams. "Effort" is relative.
+- Operators record ONE combined electricity figure + diesel litres per
+  production run; they cannot differentiate the pre-processing /
+  pyrolysis / post-processing stages on site. The LCA's per-stage split
+  is an estimate.
+- All three per-stage electricity components share carbon intensity
+  0.531 kgCO₂e/kWh; all three diesel-genset components share 0.8 — so
+  splitting energy across stages is **emissions-neutral** (it shapes
+  only the per-stage breakdown shown in the registry, not the total).
+- The genset components are energy-based (kWh); noma measures genset
+  diesel in litres. Conversion yield ≈ **3.375 kWh/L** (LCA diesel CI
+  2.7 ÷ genset CI 0.8).
 
-#### A. Per-stage energy split — `production_runs` table
+**Schema — no new table.** Four nullable columns on `certifier_projects`
+(migration `drizzle/0019_magical_menace.sql`):
+`genset_energy_yield_kwh_per_litre`, `stage_split_biomass_pct`,
+`stage_split_pyrolysis_pct`, `stage_split_biochar_pct`. They sit
+alongside `default_removal_template_id` as "how this facility submits"
+config.
 
-noma stores **one** `electricity_kwh` and **one** `diesel_genset_liters`
-per run. The Dark Earth Carbon Template models energy at three stages
-(biomass processing / pyrolysis / biochar processing), each with a
-grid-electricity component **and** a diesel-genset component. One combined
-number cannot feed those slots without double-counting — today
-`electricity_kwh` is read by *both* the pyrolysis meter and the
-biochar-processing grid input.
+**Transformer.** `aggregateProductionRuns` splits diesel into
+`totalStartupDieselLitres` (operation + preprocessing) and
+`totalGensetDieselLitres`. New pure `enrichWithFacilityConfig(agg,
+config)` routes the combined electricity + genset kWh across the
+per-stage components by the facility's stage-split estimate.
+`enrichWithTransportLegs` also computes
+`sampleTransportMassDistanceTonneKm`. The `INPUT_MAPPING` energy entries
+point at the new fields (zero-stub `transform: () => 0` removed) — this
+also fixes a latent double-count where `totalElectricityKwh` fed both
+the pyrolysis meter and the biochar-processing grid input at full value,
+and a diesel double-count (genset litres were in the volume component).
 
-New columns on `production_runs` (all `real`, nullable):
+**Admin.** New `/admin/emission-estimates` page — facility selector +
+numeric form editing the emission columns of the facility's
+`certifier_projects` row. Minimal admin nav added to `admin/layout.tsx`.
+Stack: `updateFacilityEmissionConfig` (data-access),
+`saveFacilityEmissionConfig` (fn), `useSaveFacilityEmissionConfig`
+(hook), `facilityEmissionConfigSchema` with a sum-to-100 `superRefine`.
 
-| Column | Unit | Feeds template input | Replaces stub |
-|---|---|---|---|
-| `biomass_processing_electricity_kwh` | kWh | biomass-feedstock-processing · metered · final_readout | #6, #7 |
-| `pyrolysis_electricity_kwh` | kWh | pyrolysis · metered · final_readout (split from shared `electricity_kwh`) | — (fixes double-count) |
-| `biochar_processing_electricity_kwh` | kWh | biochar-processing · grid_electricity_use | — (fixes double-count) |
-| `biomass_genset_energy_kwh` | kWh | biomass-feedstock-processing · energy_based · energy | #8 |
-| `pyrolysis_genset_energy_kwh` | kWh | pyrolysis · energy_based · energy | #9 |
-| `biochar_processing_genset_energy_kwh` | kWh | biochar-processing · energy_based · energy | #10 |
+**Energy summary page.** New `/energy` route (Production section) — a
+read-only facility rollup of electricity + diesel across production
+runs, with the per-stage submission preview.
 
-**Decision needed:** the genset components want energy in **kWh**, but
-noma records genset fuel in **litres** (`diesel_genset_liters`). Either
-(a) capture genset energy directly in kWh, or (b) keep litres and convert
-with a genset-efficiency constant (kWh per litre). Also — genset diesel is
-currently summed into `totalDieselLiters`, which already feeds the
-`fuel_usage_by_volume` components; routing it to the genset components too
-would **double-count diesel**. Phase 3.7 must split "fuel-volume diesel"
-(startup/handling) from "genset diesel" cleanly. *Effort: medium.*
+**Seed.** `seed-data.ts` creates a `certifier_projects` row for Moshi
+(sandbox project `prj_1K9YJ33RKSBX9FFF` + `Dark Earth Carbon Template`
++ emission columns from the LCA: yield 3.375; splits 32.2 / 58.5 / 9.3).
+This also removes the manual "link facility" step from sandbox test runs.
 
-#### B. Pyrolyzer stack GHG — `production_runs` (or `production_run_readings`)
+**Deferred — `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`.**
+These stay zero-stubbed: pyrolyzer CH₄/CO concentration + gas mass-flow,
+lab-analysis electricity, sampling consumables mass, staff-travel
+distance, miscellaneous mass. Unresolved: tracked operational entities
+vs admin estimates, and how a per-reporting-period figure is apportioned
+across the many credit batches in that period. **No template carrying a
+zero stub may go to a production project.**
 
-The Dark Earth Carbon Template's `direct-emissions` group needs CH₄ and CO
-**concentration** (mg/kg) and **mass flow** (kg) of the pyrolyzer exhaust.
-noma has `credit_batches.ch4Ppm` / `ch4CompositionPercent` at *credit-batch*
-level only — too coarse. New per-run columns (or a typed
-`production_run_readings` measurement kind):
-
-| Column | Unit | Feeds | Replaces stub |
-|---|---|---|---|
-| `ch4_concentration_mg_per_kg` | mg/kg | direct-emissions · ghg_direct_emissions · concentration (CH₄) | #1 (part) |
-| `co_concentration_mg_per_kg` | mg/kg | direct-emissions · ghg_direct_emissions · concentration (CO) | #1 (part) |
-| `ch4_mass_flow_kg` | kg | direct-emissions · ghg_direct_emissions · mass_flow (CH₄) | #2 (part) |
-| `co_mass_flow_kg` | kg | direct-emissions · ghg_direct_emissions · mass_flow (CO) | #2 (part) |
-
-Note `INPUT_MAPPING` keys on `(group, blueprint, input)` — CH₄ and CO
-share the input key, so distinguishing them needs the transformer to also
-look at the component (a small `datapoint.ts` change beyond the columns).
-*Effort: medium — needs a measurement source decision (PLC export vs
-manual entry).*
-
-#### C. Biochar-application fuel — `applications` table
-
-`biochar-storage` component "Biochar application via tractor" wants the
-fuel volume burned spreading biochar. New column on `applications`:
-
-| Column | Unit | Feeds | Replaces stub |
-|---|---|---|---|
-| `application_fuel_volume_liters` | L | biochar-storage · fuel_usage_by_volume · volume_of_fuel | #3 |
-
-*Effort: low — one column + one form field.*
-
-#### D. Lab-analysis electricity — `samples` table
-
-`sampling-required-for-mrv` component "Laboratory analysis electricity
-use" wants the lab's electricity per analysis. New column on `samples`:
-
-| Column | Unit | Feeds | Replaces stub |
-|---|---|---|---|
-| `lab_analysis_electricity_kwh` | kWh | sampling-required-for-mrv · grid_electricity_use · electricity_use | #4 |
-
-*Effort: low — one column + one form field. May be supplier-provided
-from the lab rather than operator-entered.*
-
-#### E. Sample transport mass-distance — aggregation only, **no schema change**
-
-`sampling-required-for-mrv` component "Mass-distance-based CI emissions
-samples to EU" wants **mass × distance** (tonne·km). noma's
-`transport_legs` rows (`src/db/schema/logistics.ts`) **already** carry
-`distance_km` and `load_mass_kg` per leg. Add a derived field
-`sampleTransportMassDistanceTonneKm` to `AggregatedProductionData`
-(`src/lib/isometric/utils/aggregation.ts`), computed as
-`Σ(distance_km × load_mass_kg / 1000)` over the sample legs, then point
-the `INPUT_MAPPING` entry at it. *Effort: low — the only stub that needs
-no migration. Easiest first win.*
-
-#### F. Staff travel — new entity
-
-`staff-travel` group ("Staff travel flights" + "Staff travel local")
-wants travel distance (km). noma has **no staff-travel concept at all**.
-Options: (a) a new `staff_travel_legs` table scoped to a production run or
-credit batch, or (b) drop the staff-travel components from the template
-if the protocol treats them as optional. *Effort: high if built (new
-table + data-access + fn + hooks + form + aggregation); zero if the
-template drops the components. Decide with the protocol scope.*
-
-| Stub | Replaces |
-|---|---|
-| `staff-travel · distance_based_ci_emissions · distance` | #5 |
-
-#### G. Miscellaneous mass — definition needed
-
-`miscellaneous` group "Mass-based CI emissions" — the LCA intent of this
-component is unclear from the template alone. **Action:** the operator
-defines what "miscellaneous mass-based CI" represents (consumables?
-packaging?), then it routes to an existing or new field — or the
-component is removed from the template. *Effort: unknown until defined.*
-
-| Stub | Replaces |
-|---|---|
-| `miscellaneous · mass_based_ci_emissions · mass` | #12 |
-
-#### Suggested order
-
-1. **E** (sample mass-distance) — no migration, immediate accuracy win.
-2. **C** + **D** (application fuel, lab electricity) — one column each.
-3. **A** (per-stage energy) — also fixes the existing electricity
-   double-count; the largest correctness gain.
-4. **B** (pyrolyzer GHG) — needs a measurement-source decision.
-5. **F** + **G** (staff travel, miscellaneous) — need scope/definition
-   decisions before any code.
-
-Each closed stub: delete its `transform: () => 0` line in
-`INPUT_MAPPING`, point `source` at the real `AggregatedProductionData`
-field, and add a `tests/isometric-transformers.test.ts` case. When the
-**last** stub closes, the template may move to a production project.
-
-**Acceptance:** `pnpm tsx scripts/isometric-smoke.ts inspect-template`
-shows 0 uncovered inputs (already true), AND
-`docs/open-questions.md` → `isometric/sandbox-zero-stubs` is empty, AND a
-Removal submitted against the production project carries no `0`-valued
-monitored Datapoint that should be non-zero.
+**Critical files:** `src/db/schema/certification.ts`,
+`src/lib/isometric/utils/aggregation.ts`,
+`src/lib/isometric/transformers/datapoint.ts`,
+`src/fn/certification/{submit-credit-batch,facility-mapping}.ts`,
+`src/data-access/certification.ts`, `src/schemas/certification.ts`,
+`src/hooks/use-certification.ts`,
+`src/components/admin/emission-estimates-form.tsx`,
+`src/app/admin/{layout.tsx,emission-estimates/page.tsx}`,
+`src/components/energy/energy-summary.tsx`,
+`src/app/(app)/energy/page.tsx`,
+`src/components/navigation/app-sidebar.tsx`, `src/db/seed-data.ts`.
 
 ### Phase 4 — GHG statement lifecycle ✅ DONE (webhook deferred)
 
