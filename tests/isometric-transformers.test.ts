@@ -296,6 +296,31 @@ describe("buildCreateDatapointRequest", () => {
       ["biochar-transport", "transport", "distance"],
       ["biochar-transport", "transport", "mass"],
       ["sampling-required-for-mrv", "distance_based_ci_emissions", "distance"],
+      // Granular "Dark Earth Carbon Template" (rvt_1KS4S43VPSBXA26X)
+      // inputs — zero stubs pending Phase 3.7 schema work.
+      [
+        "biomass-feedstock-processing",
+        "metered_energy_based_ci_emissions",
+        "initial_readout",
+      ],
+      [
+        "biomass-feedstock-processing",
+        "metered_energy_based_ci_emissions",
+        "final_readout",
+      ],
+      [
+        "biomass-feedstock-processing",
+        "energy_based_ci_emissions",
+        "energy",
+      ],
+      ["pyrolysis", "energy_based_ci_emissions", "energy"],
+      ["biochar-processing", "energy_based_ci_emissions", "energy"],
+      [
+        "sampling-required-for-mrv",
+        "mass_distance_based_ci_emissions",
+        "mass_distance",
+      ],
+      ["miscellaneous", "mass_based_ci_emissions", "mass"],
     ];
     for (const [groupKey, blueprintKey, inputKey] of expected) {
       expect(
