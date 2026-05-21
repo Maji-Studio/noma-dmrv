@@ -131,7 +131,7 @@ export async function confirmUpload(
   const docType = row.documentType as DocumentType;
   const cap = maxBytesFor(docType);
   if (head.size > cap) {
-    await Promise.all([
+    await Promise.allSettled([
       provider.deleteObject(row.storageKey),
       updateDocument(user.id, row.id, { uploadStatus: "failed" }),
     ]);
@@ -140,7 +140,7 @@ export async function confirmUpload(
     );
   }
   if (!isAllowedMime(docType, head.contentType)) {
-    await Promise.all([
+    await Promise.allSettled([
       provider.deleteObject(row.storageKey),
       updateDocument(user.id, row.id, { uploadStatus: "failed" }),
     ]);
