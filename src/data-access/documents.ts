@@ -3,6 +3,13 @@ import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { requireAuth } from "./utils";
 
+/**
+ * Hard cap on documents returned for a single entity. This is a guardrail
+ * against unbounded scans — NOT pagination. Full pagination is tracked
+ * separately (architecture audit, Phase 3).
+ */
+const MAX_DOCUMENTS_PER_ENTITY = 200;
+
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
 
@@ -18,7 +25,8 @@ export async function listDocumentsForEntity(
     .where(
       and(eq(documents.entityType, entityType), eq(documents.entityId, entityId))
     )
-    .orderBy(desc(documents.createdAt));
+    .orderBy(desc(documents.createdAt))
+    .limit(MAX_DOCUMENTS_PER_ENTITY);
 }
 
 export async function getDocumentById(
