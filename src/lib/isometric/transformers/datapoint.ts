@@ -41,6 +41,12 @@ export type InputMappingTable = Record<
   Record<string, Record<string, InputMappingEntry>>
 >;
 
+// Shared zero-magnitude transform. Used by deferred per-reporting-period
+// zero stubs (paired with `zeroStub: true`) and by metered `initial_readout`
+// inputs whose consumption delta starts from 0 — centralised so the intent
+// is named once rather than re-spelled inline.
+const zeroTransform = () => 0;
+
 export const INPUT_MAPPING: InputMappingTable = {
   // CO₂ stored from biochar application
   "co2-stored": {
@@ -134,7 +140,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
     },
@@ -145,7 +151,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
     },
@@ -198,7 +204,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
-        transform: () => 0,
+        transform: zeroTransform,
       },
       final_readout: {
         source: "pyrolysisElectricityKwh",
@@ -231,7 +237,7 @@ export const INPUT_MAPPING: InputMappingTable = {
   //
   // Convention: reuse `totalBiocharDryMassKg` as the source (always a
   // finite non-null number after aggregation) and override with
-  // `transform: () => 0`. The `expectedQuantityKind` still gates against
+  // `transform: zeroTransform`. The `expectedQuantityKind` still gates against
   // blueprint drift.
   "direct-emissions": {
     ghg_direct_emissions: {
@@ -240,7 +246,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "mg / kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass_fraction",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
       mass_flow: {
@@ -248,7 +254,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
     },
@@ -260,7 +266,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "L",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
     },
@@ -272,7 +278,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "km",
         datapointType: "REPORTED",
         expectedQuantityKind: "distance",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
     },
@@ -310,7 +316,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
-        transform: () => 0,
+        transform: zeroTransform,
       },
       final_readout: {
         source: "biomassElectricityKwh",
@@ -340,7 +346,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
-        transform: () => 0,
+        transform: zeroTransform,
         zeroStub: true,
       },
     },

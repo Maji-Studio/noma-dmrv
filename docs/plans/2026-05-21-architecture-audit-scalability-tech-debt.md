@@ -8,7 +8,7 @@ Read-only architecture audit of **noma-dmrv** (Next.js 16, Drizzle + Postgres,
 Better Auth, 27 entity CRUD modules), requested via `/ship AUDIT`. The project is
 **pre-launch / low traffic**.
 
-Steering principle: **lean, simple, safe, a bit scaleable.** Fix the real risks
+Steering principle: **lean, simple, safe, a bit scalable.** Fix the real risks
 cheaply, leave a documented roadmap for the rest, don't gold-plate. The
 architecture is fundamentally sound — strict layers, `requireAuth()` everywhere,
 TS strict, Zod env validation, clean storage abstraction. Nothing here is a

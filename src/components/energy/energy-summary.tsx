@@ -113,7 +113,7 @@ export function EnergySummary() {
             to see the per-stage breakdown.
           </p>
         )}
-        {config && splits && yieldKwhPerL != null && gensetKwh != null && (
+        {config && splits && yieldKwhPerL != null && gensetKwh != null && totals && (
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-[var(--color-border-secondary)] text-left">
