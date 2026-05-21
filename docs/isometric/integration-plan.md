@@ -19,13 +19,24 @@ protocol requirements; pull SOPs/docs; submit GHG statements for verification.
 **Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
 Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
 
-## Status snapshot (2026-05-13)
+## Status snapshot (2026-05-21)
 
 **Shipped:** Phases 0–4 read paths, plus the Phase 3 write path
 end-to-end **with full transport-leg coverage (Phase 3.6 ✅ DONE)**.
 Sandbox is wired up (`api.sandbox.isometric.com`,
 project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
 `tests/isometric-sandbox.integration.test.ts`.
+
+**2026-05-21 — granular template + zero-stub expansion.** The operator
+authored a new, more detailed removal template, **Dark Earth Carbon
+Template** (`rvt_1KS4S43VPSBXA26X`), in the sandbox Registry UI and bound
+all its fixed-constant Datapoints. It declares 7 monitored inputs the
+previous `INPUT_MAPPING` did not cover. Those 7 were added as **zero
+stubs** in `src/lib/isometric/transformers/datapoint.ts` so the Phase 3
+sandbox submit can run end-to-end — bringing the total to **12 zero
+stubs**. The schema work to replace all 12 with real data is now
+specified as **Phase 3.7** (below). `inspect-template` reports 0
+uncovered inputs; transformer + aggregation tests green.
 
 **Phase 3.6 completed 2026-05-13** — the UI / submission half of the
 phase that the 2026-05-11 foundation set up. Delivers:
@@ -106,14 +117,15 @@ that unblocks `phase-3-input-coverage` / `phase-3-fixed-constants`):
 
 - *Blocked on Isometric* — webhook contract publication; multi-org
   credentials roadmap (Q3 below). Tracked in `docs/open-questions.md`.
-- *Blocked on the user authoring `noma-mvp` template in the Isometric
-  Registry UI* — Phase 3 sandbox write E2E gated on having a template
-  whose monitored inputs are subsets of `INPUT_MAPPING`. Walkthrough at
-  `docs/isometric/sandbox-template-authoring.md`. After template ships,
-  the `phase-3-input-coverage` transport portion and
-  `phase-3-fixed-constants` close. Electricity-readout and per-run-GHG
-  portions of `phase-3-input-coverage` stay deferred (need schema
-  work; not part of Phase 3.6).
+- *Tailored template authored 2026-05-21* — the operator built
+  **Dark Earth Carbon Template** (`rvt_1KS4S43VPSBXA26X`) in the sandbox
+  Registry UI with all fixed constants bound; `INPUT_MAPPING` now covers
+  every monitored input it declares (7 added as zero stubs). Phase 3
+  sandbox write E2E is no longer template-blocked.
+- *Not yet started — Phase 3.7* — replace all 12 `INPUT_MAPPING` zero
+  stubs with real monitored data (schema work). Full field-by-field
+  spec in the Phase 3.7 section below. Prerequisite for any *production*
+  Isometric project.
 - *Blocked on a noma subsystem* — `phase-3.5` source-upload
   presigned-URL flow waits on the documents subsystem getting a real
   S3 backend.
@@ -647,6 +659,158 @@ payload hash). Mutating the batch and re-submitting creates a
 
 **To do (carried forward):** source-upload presigned-URL flow (Phase 3.5),
 per-Datapoint sub-ledger rows (Phase 4 deferral).
+
+### Phase 3.7 — Replace zero-stubs with real monitored data (NOT started)
+
+**Context.** Phase 3 submits a Removal whose monitored Datapoints come
+from noma's production data via the `INPUT_MAPPING` table in
+`src/lib/isometric/transformers/datapoint.ts`. When a removal template
+declares a monitored input that noma has no field to source, the entry
+emits a hard-coded `0` ("zero stub"). Certify accepts a `0` Datapoint, so
+this lets the end-to-end pipeline be proven in the sandbox — but a zero
+stub **understates the Removal's real emissions**. As of 2026-05-21 there
+are **12 zero stubs**, driven by the granular **Dark Earth Carbon
+Template** (`rvt_1KS4S43VPSBXA26X`) the operator authored in the Registry
+UI. This phase enumerates the schema work to turn each stub into a real
+value.
+
+**Hard rule:** no template carrying *any* zero stub may be promoted to a
+*production* Isometric project. Sandbox only until this phase closes.
+
+The 12 stubs group into seven workstreams. "Effort" is relative.
+
+#### A. Per-stage energy split — `production_runs` table
+
+noma stores **one** `electricity_kwh` and **one** `diesel_genset_liters`
+per run. The Dark Earth Carbon Template models energy at three stages
+(biomass processing / pyrolysis / biochar processing), each with a
+grid-electricity component **and** a diesel-genset component. One combined
+number cannot feed those slots without double-counting — today
+`electricity_kwh` is read by *both* the pyrolysis meter and the
+biochar-processing grid input.
+
+New columns on `production_runs` (all `real`, nullable):
+
+| Column | Unit | Feeds template input | Replaces stub |
+|---|---|---|---|
+| `biomass_processing_electricity_kwh` | kWh | biomass-feedstock-processing · metered · final_readout | #6, #7 |
+| `pyrolysis_electricity_kwh` | kWh | pyrolysis · metered · final_readout (split from shared `electricity_kwh`) | — (fixes double-count) |
+| `biochar_processing_electricity_kwh` | kWh | biochar-processing · grid_electricity_use | — (fixes double-count) |
+| `biomass_genset_energy_kwh` | kWh | biomass-feedstock-processing · energy_based · energy | #8 |
+| `pyrolysis_genset_energy_kwh` | kWh | pyrolysis · energy_based · energy | #9 |
+| `biochar_processing_genset_energy_kwh` | kWh | biochar-processing · energy_based · energy | #10 |
+
+**Decision needed:** the genset components want energy in **kWh**, but
+noma records genset fuel in **litres** (`diesel_genset_liters`). Either
+(a) capture genset energy directly in kWh, or (b) keep litres and convert
+with a genset-efficiency constant (kWh per litre). Also — genset diesel is
+currently summed into `totalDieselLiters`, which already feeds the
+`fuel_usage_by_volume` components; routing it to the genset components too
+would **double-count diesel**. Phase 3.7 must split "fuel-volume diesel"
+(startup/handling) from "genset diesel" cleanly. *Effort: medium.*
+
+#### B. Pyrolyzer stack GHG — `production_runs` (or `production_run_readings`)
+
+The Dark Earth Carbon Template's `direct-emissions` group needs CH₄ and CO
+**concentration** (mg/kg) and **mass flow** (kg) of the pyrolyzer exhaust.
+noma has `credit_batches.ch4Ppm` / `ch4CompositionPercent` at *credit-batch*
+level only — too coarse. New per-run columns (or a typed
+`production_run_readings` measurement kind):
+
+| Column | Unit | Feeds | Replaces stub |
+|---|---|---|---|
+| `ch4_concentration_mg_per_kg` | mg/kg | direct-emissions · ghg_direct_emissions · concentration (CH₄) | #1 (part) |
+| `co_concentration_mg_per_kg` | mg/kg | direct-emissions · ghg_direct_emissions · concentration (CO) | #1 (part) |
+| `ch4_mass_flow_kg` | kg | direct-emissions · ghg_direct_emissions · mass_flow (CH₄) | #2 (part) |
+| `co_mass_flow_kg` | kg | direct-emissions · ghg_direct_emissions · mass_flow (CO) | #2 (part) |
+
+Note `INPUT_MAPPING` keys on `(group, blueprint, input)` — CH₄ and CO
+share the input key, so distinguishing them needs the transformer to also
+look at the component (a small `datapoint.ts` change beyond the columns).
+*Effort: medium — needs a measurement source decision (PLC export vs
+manual entry).*
+
+#### C. Biochar-application fuel — `applications` table
+
+`biochar-storage` component "Biochar application via tractor" wants the
+fuel volume burned spreading biochar. New column on `applications`:
+
+| Column | Unit | Feeds | Replaces stub |
+|---|---|---|---|
+| `application_fuel_volume_liters` | L | biochar-storage · fuel_usage_by_volume · volume_of_fuel | #3 |
+
+*Effort: low — one column + one form field.*
+
+#### D. Lab-analysis electricity — `samples` table
+
+`sampling-required-for-mrv` component "Laboratory analysis electricity
+use" wants the lab's electricity per analysis. New column on `samples`:
+
+| Column | Unit | Feeds | Replaces stub |
+|---|---|---|---|
+| `lab_analysis_electricity_kwh` | kWh | sampling-required-for-mrv · grid_electricity_use · electricity_use | #4 |
+
+*Effort: low — one column + one form field. May be supplier-provided
+from the lab rather than operator-entered.*
+
+#### E. Sample transport mass-distance — aggregation only, **no schema change**
+
+`sampling-required-for-mrv` component "Mass-distance-based CI emissions
+samples to EU" wants **mass × distance** (tonne·km). noma's
+`transport_legs` rows (`src/db/schema/logistics.ts`) **already** carry
+`distance_km` and `load_mass_kg` per leg. Add a derived field
+`sampleTransportMassDistanceTonneKm` to `AggregatedProductionData`
+(`src/lib/isometric/utils/aggregation.ts`), computed as
+`Σ(distance_km × load_mass_kg / 1000)` over the sample legs, then point
+the `INPUT_MAPPING` entry at it. *Effort: low — the only stub that needs
+no migration. Easiest first win.*
+
+#### F. Staff travel — new entity
+
+`staff-travel` group ("Staff travel flights" + "Staff travel local")
+wants travel distance (km). noma has **no staff-travel concept at all**.
+Options: (a) a new `staff_travel_legs` table scoped to a production run or
+credit batch, or (b) drop the staff-travel components from the template
+if the protocol treats them as optional. *Effort: high if built (new
+table + data-access + fn + hooks + form + aggregation); zero if the
+template drops the components. Decide with the protocol scope.*
+
+| Stub | Replaces |
+|---|---|
+| `staff-travel · distance_based_ci_emissions · distance` | #5 |
+
+#### G. Miscellaneous mass — definition needed
+
+`miscellaneous` group "Mass-based CI emissions" — the LCA intent of this
+component is unclear from the template alone. **Action:** the operator
+defines what "miscellaneous mass-based CI" represents (consumables?
+packaging?), then it routes to an existing or new field — or the
+component is removed from the template. *Effort: unknown until defined.*
+
+| Stub | Replaces |
+|---|---|
+| `miscellaneous · mass_based_ci_emissions · mass` | #12 |
+
+#### Suggested order
+
+1. **E** (sample mass-distance) — no migration, immediate accuracy win.
+2. **C** + **D** (application fuel, lab electricity) — one column each.
+3. **A** (per-stage energy) — also fixes the existing electricity
+   double-count; the largest correctness gain.
+4. **B** (pyrolyzer GHG) — needs a measurement-source decision.
+5. **F** + **G** (staff travel, miscellaneous) — need scope/definition
+   decisions before any code.
+
+Each closed stub: delete its `transform: () => 0` line in
+`INPUT_MAPPING`, point `source` at the real `AggregatedProductionData`
+field, and add a `tests/isometric-transformers.test.ts` case. When the
+**last** stub closes, the template may move to a production project.
+
+**Acceptance:** `pnpm tsx scripts/isometric-smoke.ts inspect-template`
+shows 0 uncovered inputs (already true), AND
+`docs/open-questions.md` → `isometric/sandbox-zero-stubs` is empty, AND a
+Removal submitted against the production project carries no `0`-valued
+monitored Datapoint that should be non-zero.
 
 ### Phase 4 — GHG statement lifecycle ✅ DONE (webhook deferred)
 

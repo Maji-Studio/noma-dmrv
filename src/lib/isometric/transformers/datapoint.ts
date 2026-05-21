@@ -135,6 +135,19 @@ export const INPUT_MAPPING: InputMappingTable = {
         transform: () => 0,
       },
     },
+    // Zero stub — sample shipment to the EU lab as mass-distance
+    // (tonne·km). noma transport legs carry distance + load mass
+    // separately; a real value is computable from existing leg data
+    // without a schema change (see Phase 3.7 — easiest to un-stub).
+    mass_distance_based_ci_emissions: {
+      mass_distance: {
+        source: "totalBiocharDryMassKg",
+        unit: "tonne * km",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass_distance",
+        transform: () => 0,
+      },
+    },
   },
 
   // Biochar processing electricity
@@ -145,6 +158,19 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
+      },
+    },
+    // Zero stub — post-processing diesel genset. noma has
+    // `production_runs.dieselGensetLiters` (litres), already counted via
+    // the `fuel_usage_by_volume` components; re-feeding it here as genset
+    // energy (kWh) would double-count diesel. See Phase 3.7.
+    energy_based_ci_emissions: {
+      energy: {
+        source: "totalBiocharDryMassKg",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
       },
     },
   },
@@ -173,17 +199,32 @@ export const INPUT_MAPPING: InputMappingTable = {
         expectedQuantityKind: "energy",
       },
     },
+    // Zero stub — pyrolysis diesel genset. Same rationale as
+    // `biochar-processing.energy_based_ci_emissions`: genset diesel is
+    // already counted in litres via the fuel components. See Phase 3.7.
+    energy_based_ci_emissions: {
+      energy: {
+        source: "totalBiocharDryMassKg",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
+      },
+    },
   },
 
   // ─── Sandbox-only zero stubs ───
-  // The two sandbox templates ("Protocol default" and "Dark Earth removal
-  // template") still pull in template components that noma has no per-run
-  // data for. The entries below let end-to-end sandbox submission proceed
-  // by emitting a `0` datapoint with the unit + quantity_kind the blueprint
-  // declares. EACH of these must be replaced with a real source before the
-  // template is moved to production. Tracked in `docs/open-questions.md`
-  // under `isometric/phase-3-input-coverage` and
-  // `isometric/sandbox-zero-stubs`.
+  // The sandbox templates ("Protocol default", "Dark Earth removal
+  // template", and the granular "Dark Earth Carbon Template",
+  // rvt_1KS4S43VPSBXA26X) pull in template components that noma has no
+  // per-run data for. The entries below — plus the genset / metered /
+  // mass_distance / miscellaneous stubs inlined into their respective
+  // groups above — let end-to-end sandbox submission proceed by emitting
+  // a `0` datapoint with the unit + quantity_kind the blueprint declares.
+  // EACH of these must be replaced with a real source before the template
+  // is moved to production; the schema work to do so is enumerated in
+  // `docs/isometric/integration-plan.md` → Phase 3.7. Tracked in
+  // `docs/open-questions.md` under `isometric/sandbox-zero-stubs`.
   //
   // Convention: reuse `totalBiocharDryMassKg` as the source (it is always
   // a finite non-null number after aggregation) and override with
@@ -248,6 +289,53 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "l",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
+      },
+    },
+    // Zero stub — biomass-stage metered electricity. noma stores ONE
+    // combined `production_runs.electricityKwh` (→ totalElectricityKwh),
+    // already consumed by `pyrolysis.metered_energy_based_ci_emissions`
+    // and `biochar-processing.grid_electricity_use`. There is no
+    // biomass-stage split, so both readouts emit 0 (component computes
+    // final − initial = 0). See Phase 3.7.
+    metered_energy_based_ci_emissions: {
+      initial_readout: {
+        source: "totalBiocharDryMassKg",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
+      },
+      final_readout: {
+        source: "totalBiocharDryMassKg",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
+      },
+    },
+    // Zero stub — biomass-processing diesel genset. Same rationale as
+    // the pyrolysis / biochar-processing genset stubs. See Phase 3.7.
+    energy_based_ci_emissions: {
+      energy: {
+        source: "totalBiocharDryMassKg",
+        unit: "kWh",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "energy",
+        transform: () => 0,
+      },
+    },
+  },
+
+  // Zero stub — generic miscellaneous mass-based CI. noma has no
+  // corresponding entity; emits 0. See Phase 3.7.
+  miscellaneous: {
+    mass_based_ci_emissions: {
+      mass: {
+        source: "totalBiocharDryMassKg",
+        unit: "kg",
+        datapointType: "REPORTED",
+        expectedQuantityKind: "mass",
+        transform: () => 0,
       },
     },
   },

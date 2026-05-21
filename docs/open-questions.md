@@ -132,19 +132,24 @@ Each entry follows this shape:
   - `staff-travel / distance_based_ci_emissions / distance` (km) — noma
     has no staff-travel entity. **Sandbox zero stub shipped 2026-05-13.**
 
-- **`isometric/sandbox-zero-stubs`** — opened 2026-05-13, blocked on
-  data-model gaps above.
+- **`isometric/sandbox-zero-stubs`** — opened 2026-05-13, **expanded
+  2026-05-21**, blocked on data-model gaps above.
   - `INPUT_MAPPING` in `src/lib/isometric/transformers/datapoint.ts`
-    currently emits `0` for 5 monitored inputs that noma cannot yet
-    source (CH4 concentration / mass_flow, CO concentration / mass_flow,
-    biochar-storage fuel volume, lab electricity, staff-travel
-    distance). Quantity_kind is still enforced against the blueprint, so
-    schema drift will still surface. Replace each with a real source as
-    the corresponding schema gap closes; do NOT promote the active
-    template to production while any zero stub is in use.
-  - Resolve the remaining electricity-readout and per-run-GHG portions
-    when a tailored sandbox template surfaces a need for those
-    components.
+    now emits `0` for **12 monitored inputs** that noma cannot yet
+    source. Original 5: CH4 concentration / mass_flow, CO concentration /
+    mass_flow, biochar-storage fuel volume, lab electricity,
+    staff-travel distance. Plus 7 added 2026-05-21 for the granular
+    **Dark Earth Carbon Template** (`rvt_1KS4S43VPSBXA26X`):
+    biomass-processing metered electricity (initial + final readout),
+    biomass / pyrolysis / biochar diesel-genset energy (×3), sample
+    transport mass-distance, miscellaneous mass.
+  - Quantity_kind is still enforced against the blueprint, so schema
+    drift will still surface. Replace each with a real source as the
+    corresponding schema gap closes; do NOT promote the active template
+    to a production project while any zero stub is in use.
+  - **The full field-by-field replacement spec is now
+    `docs/isometric/integration-plan.md` → Phase 3.7.** This entry
+    resolves (and is deleted) when Phase 3.7 closes the last stub.
 
 - **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
   path documented 2026-05-11**.
