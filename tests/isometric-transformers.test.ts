@@ -39,11 +39,19 @@ const baseAgg: AggregatedProductionData = {
   weightedMoisturePercent: 10,
   totalBiocharDryMassKg: 1000,
   totalFeedstockDryMassKg: 4000,
-  totalDieselLiters: 50,
+  totalStartupDieselLitres: 50,
+  totalGensetDieselLitres: 20,
   totalElectricityKwh: 200,
   feedstockTransportAvgDistanceKm: 50,
   biocharTransportAvgDistanceKm: 100,
   sampleTransportAvgDistanceKm: 25,
+  sampleTransportMassDistanceTonneKm: 12,
+  biomassElectricityKwh: 40,
+  pyrolysisElectricityKwh: 130,
+  biocharElectricityKwh: 30,
+  biomassGensetKwh: 13.5,
+  pyrolysisGensetKwh: 43.875,
+  biocharGensetKwh: 6.975,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1", "pr_2"],
@@ -142,7 +150,7 @@ describe("buildCreateDatapointRequest", () => {
     });
 
     expect(result.quantity.unit).toBe("kWh");
-    expect(result.quantity.magnitude).toBe(200);
+    expect(result.quantity.magnitude).toBe(30);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {

@@ -3,6 +3,7 @@
  * For use in Server Components and Server Actions
  */
 import { redirect } from "next/navigation";
+import { SafeError } from "@/lib/errors";
 import {
   getBetterAuthSession,
   mapBetterAuthUser,
@@ -62,6 +63,25 @@ export async function requireAdmin(): Promise<AuthUser> {
     redirect("/unauthorized");
   }
 
+  return user;
+}
+
+/**
+ * Require admin role inside a server action. Throws SafeError instead of
+ * redirecting — redirect() throws a control-flow signal that an action's
+ * try/catch wrapper would swallow, silently letting non-admins through.
+ */
+export async function requireAdminAction(): Promise<AuthUser> {
+  const user = await getUser();
+  if (!user) {
+    throw new SafeError("You must be signed in.");
+  }
+  if (!user.emailVerified) {
+    throw new SafeError("Verify your email before performing this action.");
+  }
+  if (user.role !== "admin") {
+    throw new SafeError("Admin access is required for this action.");
+  }
   return user;
 }
 

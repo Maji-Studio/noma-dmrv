@@ -1133,6 +1133,24 @@ async function seedDemoData() {
           applicationId: ids.application3,
         },
       ]);
+
+      // Links the Moshi facility to the Isometric sandbox project +
+      // Dark Earth Carbon Template, with the Phase 3.7 emission-estimate
+      // config seeded from the Sifuri Halisi LCA. Lets a freshly seeded
+      // DB submit to the sandbox without the manual link step.
+      console.log('Creating Isometric certifier project (Moshi)...');
+      await tx.insert(schema.certifierProjects).values([
+        {
+          facilityId: ids.facilityMoshi,
+          externalProjectId: 'prj_1K9YJ33RKSBX9FFF',
+          protocolVersion: '1.2',
+          defaultRemovalTemplateId: 'rvt_1KS4S43VPSBXA26X',
+          gensetEnergyYieldKwhPerLitre: 3.375,
+          stageSplitBiomassPct: 32.2,
+          stageSplitPyrolysisPct: 58.5,
+          stageSplitBiocharPct: 9.3,
+        },
+      ]);
     });
 
     console.log('');
@@ -1153,6 +1171,7 @@ async function seedDemoData() {
     console.log('  - 3 Orders -> 3 Deliveries');
     console.log('  - 3 Applications');
     console.log('  - 2 Credit Batches (1 with 3 linked applications)');
+    console.log('  - 1 Isometric certifier project (Moshi, sandbox)');
     console.log('');
   } catch (error) {
     console.error('Demo data seed failed:', error);

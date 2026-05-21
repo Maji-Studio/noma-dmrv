@@ -19,6 +19,7 @@ import {
   getProductionRunsFn,
   getProductionRunByIdFn,
   getProductionRunStatsFn,
+  getFacilityEnergyTotalsFn,
   getProductionRunReadingsFn,
   checkProductionRunCodeFn,
   createProductionRunFn,
@@ -44,6 +45,8 @@ export const productionRunKeys = {
   detail: (id: string) => [...productionRunKeys.details(), id] as const,
   stats: (facilityId?: string) =>
     [...productionRunKeys.all, "stats", facilityId] as const,
+  energyTotals: (facilityId: string) =>
+    [...productionRunKeys.all, "energyTotals", facilityId] as const,
   readings: (productionRunId: string) =>
     [...productionRunKeys.all, productionRunId, "readings"] as const,
   codeCheck: (code: string, excludeId?: string) =>
@@ -107,6 +110,24 @@ export function useProductionRunStats(facilityId?: string, enabled = true) {
       return result.data;
     },
     enabled,
+    staleTime: 30000,
+  });
+}
+
+/**
+ * Hook to fetch facility-wide electricity + diesel totals
+ */
+export function useFacilityEnergyTotals(facilityId: string, enabled = true) {
+  return useQuery({
+    queryKey: productionRunKeys.energyTotals(facilityId),
+    queryFn: async () => {
+      const result = await getFacilityEnergyTotalsFn(facilityId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
     staleTime: 30000,
   });
 }

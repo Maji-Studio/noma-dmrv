@@ -80,6 +80,19 @@ export const auth = betterAuth({
       verification: schema.verifications,
     },
   }),
+  user: {
+    additionalFields: {
+      // Surfaces the `role` column (admin | user) on the session user so
+      // requireAdmin() can gate admin routes. input:false keeps it out
+      // of self-service signup.
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "user",
+        input: false,
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     disableSignUp: !env.ALLOW_SELF_SIGNUP,

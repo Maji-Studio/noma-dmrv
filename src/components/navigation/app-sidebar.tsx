@@ -26,6 +26,8 @@ import {
   SealCheck,
   TestTube,
   ListChecks,
+  Lightning,
+  GearSix,
   SignOut,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
@@ -37,6 +39,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: ElementType;
+  /** Skip appending the `?facility=` query param (e.g. admin pages with their own selectors). */
+  skipFacilityParam?: boolean;
 }
 
 interface NavSection {
@@ -50,6 +54,7 @@ const SECTION_ACCENTS = {
   infrastructure: "var(--clr-purple)",
   distribution: "var(--clr-rose)",
   verification: "var(--clr-pink)",
+  admin: "var(--clr-red)",
   default: "var(--clr-rose)",
 } as const;
 
@@ -67,6 +72,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/feedstocks", label: "Feedstocks", icon: Leaf },
       { href: "/production-runs", label: "Production Runs", icon: Factory },
+      { href: "/energy", label: "Energy", icon: Lightning },
       { href: "/formulations", label: "Formulations", icon: ListChecks },
       { href: "/biochar-products", label: "Biochar Products", icon: Cube },
     ],
@@ -101,6 +107,24 @@ const navSections: NavSection[] = [
   },
 ];
 
+/**
+ * Admin section — appended to the nav only for users with the admin role.
+ * Admin pages carry their own facility selectors, so the `?facility=` param
+ * is skipped on this link.
+ */
+const adminSection: NavSection = {
+  title: "Admin",
+  accent: SECTION_ACCENTS.admin,
+  items: [
+    {
+      href: "/admin",
+      label: "Admin Panel",
+      icon: GearSix,
+      skipFacilityParam: true,
+    },
+  ],
+};
+
 function NavLink({
   item,
   isActive,
@@ -113,9 +137,10 @@ function NavLink({
   facilityParam: string | null;
 }) {
   const Icon = item.icon;
-  const href = facilityParam
-    ? `${item.href}?facility=${facilityParam}`
-    : item.href;
+  const href =
+    facilityParam && !item.skipFacilityParam
+      ? `${item.href}?facility=${facilityParam}`
+      : item.href;
   return (
     <Link
       href={href}
@@ -145,6 +170,7 @@ function NavLink({
       )}
 
       <Icon
+        aria-hidden
         size={18}
         weight={isActive ? "fill" : "regular"}
         className="shrink-0 relative"
@@ -174,6 +200,14 @@ export function AppSidebar() {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
+
+  // Append the Admin section only for admin users. Server-side `requireAdmin()`
+  // in src/app/admin/layout.tsx remains the actual access boundary.
+  // `role` is a Better Auth additionalField absent from the inferred client
+  // user type — assert it as the auth provider layer does.
+  const userRole = (session?.user as { role?: string } | undefined)?.role;
+  const sections =
+    userRole === "admin" ? [...navSections, adminSection] : navSections;
 
   return (
     <aside
@@ -206,7 +240,7 @@ export function AppSidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-12 px-6">
         <div className="flex flex-col gap-20">
-          {navSections.map((section, idx) => {
+          {sections.map((section, idx) => {
             const accent = section.accent ?? SECTION_ACCENTS.default;
             return (
               <div key={section.title ?? idx} className="flex flex-col gap-1">
