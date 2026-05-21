@@ -23,7 +23,7 @@ export function useDocumentsForEntity(
   options?: { enabled?: boolean }
 ) {
   return useQuery({
-    queryKey: documentKeys.forEntity(entityType, entityId ?? ""),
+    queryKey: documentKeys.forEntity(entityType, entityId ?? "__none__"),
     enabled: !!entityId && options?.enabled !== false,
     queryFn: async () => {
       if (!entityId) return [];

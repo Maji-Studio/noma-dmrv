@@ -145,7 +145,8 @@ export function FormFileUpload({
       return;
     }
 
-    const entries: FileEntry[] = arr.map((f) => ({
+    const queue = multiple ? arr : arr.slice(0, 1);
+    const entries: FileEntry[] = queue.map((f) => ({
       name: f.name,
       size: f.size,
       type: f.type,

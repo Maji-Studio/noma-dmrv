@@ -72,10 +72,7 @@ const envSchema = z.object({
     .preprocess(emptyToUndefined, z.string().min(1).optional())
     .default(".storage"),
   STORAGE_SIGNING_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
-  NODE_ENV: z.preprocess(
-    emptyToUndefined,
-    z.enum(["development", "test", "production"])
-  ),
+  NODE_ENV: z.enum(["development", "test", "production"]),
 }).superRefine((data, ctx) => {
   const hasApiKey = !!data.RESEND_API_KEY;
   const hasFromEmail = !!data.RESEND_FROM_EMAIL;
