@@ -62,24 +62,25 @@ export const certifierProjects = pgTable(
   ]
 );
 
-export const certifierGhgPeriods = pgTable(
-  'certifier_ghg_periods',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    provider: certifierProvider('provider').notNull().default('isometric'),
-    externalProjectId: text('external_project_id').notNull(),
-    reportingPeriodEndAt: date('reporting_period_end_at').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    unique('certifier_ghg_periods_provider_project_period_unique').on(
-      table.provider,
-      table.externalProjectId,
-      table.reportingPeriodEndAt
-    ),
-  ]
-);
+// One Isometric Removal — the submission unit. N credit batches map into a
+// single removal (default 1:1 per month; multiple supported). Facility-scoped:
+// every member credit batch shares one Isometric project. The remote Removal
+// id, status and payload live on the certification_submissions ledger row
+// keyed (provider, 'removal', 'removal', certifierRemovals.id).
+export const certifierRemovals = pgTable('certifier_removals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  facilityId: uuid('facility_id')
+    .notNull()
+    .references(() => facilities.id),
+  provider: certifierProvider('provider').notNull().default('isometric'),
+  // Reporting window, derived from the aggregated member production runs at
+  // submit time. Null until the first submission writes them.
+  startedOn: date('started_on'),
+  completedOn: date('completed_on'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 export const certifierSources = pgTable(
   'certifier_sources',

@@ -1,15 +1,21 @@
 import { env } from "@/config/env";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
-import type { TransportLeg } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
-import { IsometricApiError } from "@/lib/isometric";
+import { IsometricApiError, type TransportLegsByCategory } from "@/lib/isometric";
 import type { TransportEntityIdsByCategory } from "@/lib/isometric/utils/transport-lineage";
+
+export type { TransportLegsByCategory };
 
 export const ISOMETRIC_PROVIDER = "isometric" as const;
 export const REMOVAL_SUBMISSION_TYPE = "removal" as const;
+// The Removal ledger row is keyed localEntityType='removal', localEntityId=
+// certifierRemovals.id. N credit batches map into one removal.
+export const REMOVAL_ENTITY_TYPE = "removal" as const;
+// GHG-statement constants are retained for the dormant, decoupled GHG flow
+// (ADR 0003) — they are not used by the live Removal submit path.
 export const GHG_STATEMENT_SUBMISSION_TYPE = "ghg_statement" as const;
 export const CREDIT_BATCH_ENTITY_TYPE = "creditBatch" as const;
-export const GHG_PERIOD_ENTITY_TYPE = "ghgPeriod" as const;
+export const PRODUCTION_RUN_ENTITY_TYPE = "productionRun" as const;
 
 export async function safeListIfConfigured<T>(
   call: () => Promise<T[]>,
@@ -53,12 +59,6 @@ export function assertNoZeroStubsInProduction(
   throw new SafeError(
     `Cannot submit to a production Isometric project: ${zeroStubInputs.length} template input(s) still emit a placeholder 0 (deferred per-reporting-period data):\n${lines}\nReplace these with real data before submitting to production.`,
   );
-}
-
-export interface TransportLegsByCategory {
-  feedstock: TransportLeg[];
-  biochar: TransportLeg[];
-  sample: TransportLeg[];
 }
 
 export async function loadTransportLegsByCategory(

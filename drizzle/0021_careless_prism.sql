@@ -1,0 +1,1 @@
+DROP TABLE "certifier_ghg_periods" CASCADE;

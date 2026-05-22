@@ -21,6 +21,7 @@ import {
 } from './common';
 import { facilities } from './facilities';
 import { applications } from './application';
+import { certifierRemovals } from './certification';
 
 // ============================================
 // Reversal Risk Assessments - Justification for buffer pool %
@@ -141,6 +142,12 @@ export const creditBatches = pgTable(
       () => reversalRiskAssessments.id
     ),
 
+    // --- Isometric Removal grouping ---
+    // The Isometric Removal this credit batch is submitted within. N credit
+    // batches may share one removalId (default 1:1 per month). Null until the
+    // batch is assigned to — or lazily creates — a removal at submission time.
+    removalId: uuid('removal_id').references(() => certifierRemovals.id),
+
     // --- Third-Party Sale Verification (Isometric: SubRequirement G-SZZR-0) ---
     // Required when biochar is sold to third parties before application
     affidavitReference: text('affidavit_reference'), // Legally binding declaration ref
@@ -231,6 +238,10 @@ export const creditBatchesRelations = relations(
     reversalRiskAssessment: one(reversalRiskAssessments, {
       fields: [creditBatches.reversalRiskAssessmentId],
       references: [reversalRiskAssessments.id],
+    }),
+    removal: one(certifierRemovals, {
+      fields: [creditBatches.removalId],
+      references: [certifierRemovals.id],
     }),
     creditBatchApplications: many(creditBatchApplications),
   })
