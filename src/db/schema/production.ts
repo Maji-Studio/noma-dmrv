@@ -1,5 +1,6 @@
 import {
   check,
+  index,
   pgTable,
   text,
   timestamp,
@@ -74,6 +75,7 @@ export const productionRuns = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('production_runs_facility_id_idx').on(table.facilityId),
     check(
       'production_runs_feedstock_wet_mass_non_negative',
       sql`${table.feedstockWetMassKg} is null or ${table.feedstockWetMassKg} >= 0`

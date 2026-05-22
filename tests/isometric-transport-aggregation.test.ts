@@ -139,11 +139,19 @@ describe("enrichWithTransportLegs", () => {
     weightedMoisturePercent: 10,
     totalBiocharDryMassKg: 1000,
     totalFeedstockDryMassKg: 4000,
-    totalDieselLiters: 50,
+    totalStartupDieselLitres: 50,
+    totalGensetDieselLitres: 20,
     totalElectricityKwh: 200,
     feedstockTransportAvgDistanceKm: null,
     biocharTransportAvgDistanceKm: null,
     sampleTransportAvgDistanceKm: null,
+    sampleTransportMassDistanceTonneKm: 0,
+    biomassElectricityKwh: null,
+    pyrolysisElectricityKwh: null,
+    biocharElectricityKwh: null,
+    biomassGensetKwh: null,
+    pyrolysisGensetKwh: null,
+    biocharGensetKwh: null,
     earliestStartTime: new Date("2026-01-01T00:00:00Z"),
     latestEndTime: new Date("2026-01-31T23:59:59Z"),
     sourceProductionRunIds: ["pr_1"],
@@ -161,6 +169,25 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.biocharTransportAvgDistanceKm).toBe(200);
     expect(enriched.sampleTransportAvgDistanceKm).toBe(20);
     expect(enriched.warnings).toEqual([]);
+  });
+
+  it("computes sample mass-distance as Σ(distance × load mass in tonnes)", () => {
+    const enriched = enrichWithTransportLegs(baseAgg, {
+      feedstock: [],
+      biochar: [],
+      // 10 km × 0.5 t + 30 km × 0.5 t = 5 + 15 = 20 t·km
+      sample: [leg(10, 500), leg(30, 500)],
+    });
+    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
+  });
+
+  it("sample mass-distance is 0 when there are no sample legs", () => {
+    const enriched = enrichWithTransportLegs(baseAgg, {
+      feedstock: [leg(50, 1000)],
+      biochar: [],
+      sample: [],
+    });
+    expect(enriched.sampleTransportMassDistanceTonneKm).toBe(0);
   });
 
   it("does not mutate the input aggregation object", () => {

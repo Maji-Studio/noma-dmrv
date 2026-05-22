@@ -354,21 +354,23 @@ export async function createBiocharProduct(
     throw new SafeError("A biochar product with this code already exists");
   }
 
-  // Verify facility exists
-  const [facility] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(eq(facilities.id, data.facilityId));
+  // Verify facility + formulation exist. The lookups are independent, so run
+  // them in parallel — but evaluate the results in a fixed order so the
+  // surfaced error stays deterministic (facility before formulation).
+  const [[facility], [formulation]] = await Promise.all([
+    db
+      .select({ id: facilities.id })
+      .from(facilities)
+      .where(eq(facilities.id, data.facilityId)),
+    db
+      .select({ id: formulations.id })
+      .from(formulations)
+      .where(eq(formulations.id, data.formulationId)),
+  ]);
 
   if (!facility) {
     throw new SafeError("Facility not found");
   }
-
-  // Verify formulation exists
-  const [formulation] = await db
-    .select({ id: formulations.id })
-    .from(formulations)
-    .where(eq(formulations.id, data.formulationId));
 
   if (!formulation) {
     throw new SafeError("Formulation not found");
@@ -399,11 +401,24 @@ export async function createBiocharProduct(
     throw new SafeError("Water added must be a non-negative finite number");
   }
 
-  // Verify linked production run exists and belongs to same facility
-  const [run] = await db
-    .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
-    .from(productionRuns)
-    .where(eq(productionRuns.id, data.linkedProductionRunId));
+  // Verify the linked production run + storage location. Both lookups are
+  // independent and the required-field guards above guarantee non-null ids,
+  // so run them in parallel — results are evaluated in a fixed order (run
+  // before storage) to keep the surfaced error deterministic.
+  const [[run], [storage]] = await Promise.all([
+    db
+      .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
+      .from(productionRuns)
+      .where(eq(productionRuns.id, data.linkedProductionRunId)),
+    db
+      .select({
+        id: storageLocations.id,
+        facilityId: storageLocations.facilityId,
+        type: storageLocations.type,
+      })
+      .from(storageLocations)
+      .where(eq(storageLocations.id, data.storageLocationId)),
+  ]);
 
   if (!run) {
     throw new SafeError("Linked production run not found");
@@ -411,12 +426,6 @@ export async function createBiocharProduct(
   if (run.facilityId !== data.facilityId) {
     throw new SafeError("Linked production run belongs to a different facility");
   }
-
-  // Verify storage location exists, belongs to same facility, and is a product bin
-  const [storage] = await db
-    .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
-    .from(storageLocations)
-    .where(eq(storageLocations.id, data.storageLocationId));
 
   if (!storage) {
     throw new SafeError("Storage location not found");

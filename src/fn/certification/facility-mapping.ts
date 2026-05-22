@@ -5,10 +5,12 @@ import {
   deleteCertifierProject,
   getCertifierProjectByFacility,
   listAllFacilitiesLinkedByProvider,
+  updateFacilityEmissionConfig,
   upsertCertifierProject,
   type CertifierProjectRow,
   type LinkedFacilitySummary,
 } from "@/data-access/certification";
+import { requireAdminAction } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
   listProjects,
@@ -17,7 +19,9 @@ import {
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
 import {
+  facilityEmissionConfigSchema,
   saveMappingSchema,
+  type FacilityEmissionConfigFormData,
   type SaveMappingInput,
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
@@ -123,5 +127,25 @@ export async function loadIsometricProjectTemplates(
 ): Promise<ActionResult<IsometricRemovalTemplate[]>> {
   return withAction(async () => {
     return listRemovalTemplates(externalProjectId);
+  });
+}
+
+// Admin-only: this per-facility emission-estimate config feeds the
+// per-stage energy datapoints of every Isometric submission, so the
+// admin-area UI guard alone is not sufficient.
+export async function saveFacilityEmissionConfig(
+  input: FacilityEmissionConfigFormData,
+): Promise<ActionResult<CertifierProjectRow>> {
+  return withAction(async (userId) => {
+    await requireAdminAction();
+    const parsed = facilityEmissionConfigSchema.parse(input);
+    return updateFacilityEmissionConfig(userId, {
+      facilityId: parsed.facilityId,
+      provider: ISOMETRIC_PROVIDER,
+      gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre,
+      stageSplitBiomassPct: parsed.stageSplitBiomassPct,
+      stageSplitPyrolysisPct: parsed.stageSplitPyrolysisPct,
+      stageSplitBiocharPct: parsed.stageSplitBiocharPct,
+    });
   });
 }

@@ -3,6 +3,7 @@ export {
   loadFacilityCertifierMapping,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
+  saveFacilityEmissionConfig,
 } from "./facility-mapping";
 export {
   loadCertifyContextForCreditBatch,

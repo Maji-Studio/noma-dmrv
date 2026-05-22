@@ -8,7 +8,7 @@
  * 4. fileUrl branch (direct redirect; gate still applies)
  * 5. Invariant violation → 500
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/lib/auth/server", () => ({
@@ -93,6 +93,10 @@ beforeEach(() => {
   vi.mocked(getUser).mockReset();
   vi.mocked(getDocumentById).mockReset();
   vi.mocked(getPublicDocumentById).mockReset();
+});
+
+afterEach(() => {
+  __setStorageProviderForTests(null);
 });
 
 describe("GET /api/documents/[id]", () => {

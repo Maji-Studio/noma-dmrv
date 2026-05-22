@@ -19,13 +19,24 @@ protocol requirements; pull SOPs/docs; submit GHG statements for verification.
 **Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
 Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
 
-## Status snapshot (2026-05-13)
+## Status snapshot (2026-05-21)
 
 **Shipped:** Phases 0–4 read paths, plus the Phase 3 write path
 end-to-end **with full transport-leg coverage (Phase 3.6 ✅ DONE)**.
 Sandbox is wired up (`api.sandbox.isometric.com`,
 project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
 `tests/isometric-sandbox.integration.test.ts`.
+
+**2026-05-21 — granular template + zero-stub expansion.** The operator
+authored a new, more detailed removal template, **Dark Earth Carbon
+Template** (`rvt_1KS4S43VPSBXA26X`), in the sandbox Registry UI and bound
+all its fixed-constant Datapoints. It declares 7 monitored inputs the
+previous `INPUT_MAPPING` did not cover. Those 7 were added as **zero
+stubs** in `src/lib/isometric/transformers/datapoint.ts` so the Phase 3
+sandbox submit can run end-to-end — bringing the total to **12 zero
+stubs**. The schema work to replace all 12 with real data is now
+specified as **Phase 3.7** (below). `inspect-template` reports 0
+uncovered inputs; transformer + aggregation tests green.
 
 **Phase 3.6 completed 2026-05-13** — the UI / submission half of the
 phase that the 2026-05-11 foundation set up. Delivers:
@@ -106,14 +117,15 @@ that unblocks `phase-3-input-coverage` / `phase-3-fixed-constants`):
 
 - *Blocked on Isometric* — webhook contract publication; multi-org
   credentials roadmap (Q3 below). Tracked in `docs/open-questions.md`.
-- *Blocked on the user authoring `noma-mvp` template in the Isometric
-  Registry UI* — Phase 3 sandbox write E2E gated on having a template
-  whose monitored inputs are subsets of `INPUT_MAPPING`. Walkthrough at
-  `docs/isometric/sandbox-template-authoring.md`. After template ships,
-  the `phase-3-input-coverage` transport portion and
-  `phase-3-fixed-constants` close. Electricity-readout and per-run-GHG
-  portions of `phase-3-input-coverage` stay deferred (need schema
-  work; not part of Phase 3.6).
+- *Tailored template authored 2026-05-21* — the operator built
+  **Dark Earth Carbon Template** (`rvt_1KS4S43VPSBXA26X`) in the sandbox
+  Registry UI with all fixed constants bound; `INPUT_MAPPING` now covers
+  every monitored input it declares (7 added as zero stubs). Phase 3
+  sandbox write E2E is no longer template-blocked.
+- *Not yet started — Phase 3.7* — replace all 12 `INPUT_MAPPING` zero
+  stubs with real monitored data (schema work). Full field-by-field
+  spec in the Phase 3.7 section below. Prerequisite for any *production*
+  Isometric project.
 - *Blocked on a noma subsystem* — `phase-3.5` source-upload
   presigned-URL flow waits on the documents subsystem getting a real
   S3 backend.
@@ -647,6 +659,82 @@ payload hash). Mutating the batch and re-submitting creates a
 
 **To do (carried forward):** source-upload presigned-URL flow (Phase 3.5),
 per-Datapoint sub-ledger rows (Phase 4 deferral).
+
+### Phase 3.7 — Real energy data + per-facility emission config ✅ DONE (energy; period inputs deferred)
+
+**Shipped 2026-05-21.** Phase 3 submitted Removals with monitored inputs
+hard-coded to `0` ("zero stubs"). Phase 3.7 replaces the *energy* stubs
+with real per-run data and builds the admin surface for the estimates
+the routing needs. The per-reporting-period inputs are deferred.
+
+**What grilling + the Sifuri Halisi LCA established:**
+
+- Operators record ONE combined electricity figure + diesel litres per
+  production run; they cannot differentiate the pre-processing /
+  pyrolysis / post-processing stages on site. The LCA's per-stage split
+  is an estimate.
+- All three per-stage electricity components share carbon intensity
+  0.531 kgCO₂e/kWh; all three diesel-genset components share 0.8 — so
+  splitting energy across stages is **emissions-neutral** (it shapes
+  only the per-stage breakdown shown in the registry, not the total).
+- The genset components are energy-based (kWh); noma measures genset
+  diesel in litres. Conversion yield ≈ **3.375 kWh/L** (LCA diesel CI
+  2.7 ÷ genset CI 0.8).
+
+**Schema — no new table.** Four nullable columns on `certifier_projects`
+(migration `drizzle/0019_magical_menace.sql`):
+`genset_energy_yield_kwh_per_litre`, `stage_split_biomass_pct`,
+`stage_split_pyrolysis_pct`, `stage_split_biochar_pct`. They sit
+alongside `default_removal_template_id` as "how this facility submits"
+config.
+
+**Transformer.** `aggregateProductionRuns` splits diesel into
+`totalStartupDieselLitres` (operation + preprocessing) and
+`totalGensetDieselLitres`. New pure `enrichWithFacilityConfig(agg,
+config)` routes the combined electricity + genset kWh across the
+per-stage components by the facility's stage-split estimate.
+`enrichWithTransportLegs` also computes
+`sampleTransportMassDistanceTonneKm`. The `INPUT_MAPPING` energy entries
+point at the new fields (zero-stub `transform: () => 0` removed) — this
+also fixes a latent double-count where `totalElectricityKwh` fed both
+the pyrolysis meter and the biochar-processing grid input at full value,
+and a diesel double-count (genset litres were in the volume component).
+
+**Admin.** New `/admin/emission-estimates` page — facility selector +
+numeric form editing the emission columns of the facility's
+`certifier_projects` row. Minimal admin nav added to `admin/layout.tsx`.
+Stack: `updateFacilityEmissionConfig` (data-access),
+`saveFacilityEmissionConfig` (fn), `useSaveFacilityEmissionConfig`
+(hook), `facilityEmissionConfigSchema` with a sum-to-100 `superRefine`.
+
+**Energy summary page.** New `/energy` route (Production section) — a
+read-only facility rollup of electricity + diesel across production
+runs, with the per-stage submission preview.
+
+**Seed.** `seed-data.ts` creates a `certifier_projects` row for Moshi
+(sandbox project `prj_1K9YJ33RKSBX9FFF` + `Dark Earth Carbon Template`
++ emission columns from the LCA: yield 3.375; splits 32.2 / 58.5 / 9.3).
+This also removes the manual "link facility" step from sandbox test runs.
+
+**Deferred — `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`.**
+These stay zero-stubbed: pyrolyzer CH₄/CO concentration + gas mass-flow,
+lab-analysis electricity, sampling consumables mass, staff-travel
+distance, miscellaneous mass. Unresolved: tracked operational entities
+vs admin estimates, and how a per-reporting-period figure is apportioned
+across the many credit batches in that period. **No template carrying a
+zero stub may go to a production project.**
+
+**Critical files:** `src/db/schema/certification.ts`,
+`src/lib/isometric/utils/aggregation.ts`,
+`src/lib/isometric/transformers/datapoint.ts`,
+`src/fn/certification/{submit-credit-batch,facility-mapping}.ts`,
+`src/data-access/certification.ts`, `src/schemas/certification.ts`,
+`src/hooks/use-certification.ts`,
+`src/components/admin/emission-estimates-form.tsx`,
+`src/app/admin/{layout.tsx,emission-estimates/page.tsx}`,
+`src/components/energy/energy-summary.tsx`,
+`src/app/(app)/energy/page.tsx`,
+`src/components/navigation/app-sidebar.tsx`, `src/db/seed-data.ts`.
 
 ### Phase 4 — GHG statement lifecycle ✅ DONE (webhook deferred)
 

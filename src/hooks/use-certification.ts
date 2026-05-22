@@ -14,11 +14,13 @@ import {
   loadIsometricProjectTemplates,
   refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
+  saveFacilityEmissionConfig,
   submitGhgStatementForFacility,
   submitCreditBatch,
 } from "@/fn/certification";
 import type {
   CreateGhgStatementInput,
+  FacilityEmissionConfigFormData,
   SaveMappingInput,
   SubmitCreditBatchInput,
   SubmitGhgStatementInput,
@@ -87,6 +89,23 @@ export function useSaveFacilityCertifierMapping() {
   return useMutation({
     mutationFn: async (input: SaveMappingInput) => {
       const result = await saveFacilityCertifierMapping(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: certificationKeys.facilityMapping(variables.facilityId),
+      });
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+export function useSaveFacilityEmissionConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: FacilityEmissionConfigFormData) => {
+      const result = await saveFacilityEmissionConfig(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
