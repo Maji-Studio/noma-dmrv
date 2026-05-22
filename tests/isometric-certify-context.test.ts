@@ -149,11 +149,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
       unresolvedBlueprintKeys: [],
-      transportCoverage: {
-        feedstock: { count: 0, entityIds: [] },
-        biochar: { count: 0, entityIds: [] },
-        sample: { count: 0, entityIds: [] },
-      },
     });
     expect(mockedListProjects).not.toHaveBeenCalled();
     expect(mockedListTemplates).not.toHaveBeenCalled();
@@ -249,12 +244,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       "key_a",
       "key_b",
     ]);
-    // No applications on the stub batch -> coverage walker short-circuits.
+    // No applications on the stub batch -> transport coverage is empty.
     expect(result.transportCoverage.feedstock.count).toBe(0);
     expect(mockedGetLegs).not.toHaveBeenCalled();
   });
 
-  it("populates transportCoverage by walking lineage when applications exist", async () => {
+  it("populates removal-level transportCoverage by walking the application lineage", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       facilityId: FACILITY_ID,
@@ -281,6 +276,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetRuns.mockResolvedValue([
       {
         id: "pr-1",
+        code: "PR-1",
         samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
       } as never,
     ]);
@@ -299,18 +295,14 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.transportCoverage.feedstock.count).toBe(3);
-    expect(result.transportCoverage.feedstock.entityIds.sort()).toEqual([
-      "fs-1",
-      "fs-2",
-    ]);
-    expect(result.transportCoverage.biochar.count).toBe(0);
-    expect(result.transportCoverage.biochar.entityIds).toEqual(["bp-1"]);
-    expect(result.transportCoverage.sample.count).toBe(1);
-    expect(result.transportCoverage.sample.entityIds.sort()).toEqual([
-      "s-1",
-      "s-2",
-    ]);
+    const coverage = result.transportCoverage;
+    expect(coverage.feedstock.count).toBe(3);
+    expect(coverage.feedstock.entityIds.sort()).toEqual(["fs-1", "fs-2"]);
+    expect(coverage.biochar.count).toBe(0);
+    expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
+    expect(coverage.sample.count).toBe(1);
+    expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
+    // Three transport categories, one pooled load each.
     expect(mockedGetLegs).toHaveBeenCalledTimes(3);
   });
 });

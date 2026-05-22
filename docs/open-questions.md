@@ -67,6 +67,18 @@ Each entry follows this shape:
     `resolveEntityFacility` for `requireFacilityAccess(userId, fac)` in
     `transport-legs.ts` (one chokepoint) and propagate the helper to
     the other data-access modules.
+  - **2026-05-22 update (ADR 0003):** `src/data-access/certifier-removals.ts`
+    joins this list — `getCertifierRemovalById`, `listRemovalsForFacility`,
+    `getCreditBatchesByRemovalId`, `ensureRemovalForCreditBatch`,
+    `assignCreditBatchToRemoval`, `updateRemovalDates` all guard with
+    `requireAuth` only. The refactor widened the id-addressable surface
+    (`submitRemovalAction` / `assignCreditBatchToRemovalAction` take a raw
+    `removalId` from the client), so an authenticated user can submit or
+    regroup any facility's removal by id — including driving an external
+    Isometric POST. No regression vs. the deleted `submit-credit-batch.ts`
+    (same posture), but **decision needed before a second facility operator
+    is onboarded**: accept as single-tenant, or land the membership model
+    and gate every removal accessor on the resolved facility.
 
 - **Isometric MCP token-URL deprecated 2026-05-15** (`isometric/mcp-auth`) —
   opened 2026-05-13.
@@ -77,6 +89,38 @@ Each entry follows this shape:
     only; no production code path affected.
   - Migration tracked separately; verify via
     `mcp__claude_ai_isometric__me` after switching.
+
+### ADR 0003 removal-as-submission-unit — pre-deploy gates (opened 2026-05-22)
+
+- **Legacy certifier-submission ledger rows** (`isometric/adr-0003-ledger-cutover`) —
+  opened 2026-05-22.
+  - ADR 0003 assumes the prior model's `certification_submissions` rows
+    (`localEntityType IN ('creditBatch','ghgPeriod')`) are **sandbox-only**
+    and can be abandoned in a clean cutover. The new submit path only looks
+    up submissions by `localEntityType='removal'`; if any *real* (non-sandbox)
+    `creditBatch`-keyed submitted row exists in a target environment, that
+    credit batch will appear ungrouped, spawn a fresh removal, and can POST a
+    **duplicate Isometric Removal** instead of reconciling. The unlink guard
+    also stops seeing those legacy rows.
+  - Why it matters: blocks deploy to any environment that ran the ADR-0002
+    model against real registry data.
+  - Resolve before deploy: run
+    `SELECT count(*) FROM certification_submissions WHERE local_entity_type IN ('creditBatch','ghgPeriod')`
+    against staging/production. If 0 → the ADR's assumption holds, no action.
+    If > 0 → author a forward data migration to purge or remap them, and
+    note that `cert_submissions_external_unique` is **not** scoped by
+    `localEntityType`, so a stale `creditBatch` row sharing an `externalId`
+    with a new removal would raise a unique-constraint violation.
+
+- **Migration `0021` is destructive and irreversible**
+  (`isometric/adr-0003-migration-0021`) — opened 2026-05-22.
+  - `drizzle/0021_careless_prism.sql` runs `DROP TABLE
+    "certifier_ghg_periods" CASCADE` with no down-migration. `migrate.yml`
+    auto-applies it on push to `main`/`staging`.
+  - Resolve before deploy: confirm a database backup exists and that
+    `certifier_ghg_periods` is genuinely empty in every target environment.
+    The `CASCADE` keyword is unnecessary (no dependents) — harmless, left
+    as-is to avoid re-hashing an already-generated migration.
 
 ### Pre-coding gates (status as of 2026-05-11)
 
@@ -149,26 +193,35 @@ Each entry follows this shape:
     stub is in use. This entry resolves once the period-inputs entry
     does.
 
-- **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21.
+- **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21, **scope
+  revised 2026-05-21 (credit-batch re-leveling, ADR 0002)**.
   - **Question:** how should the per-reporting-period emission inputs
     be sourced — pyrolyzer CH4/CO concentration + gas mass-flow,
     lab-analysis electricity, sampling consumables mass, staff travel
-    distance, miscellaneous mass? Two sub-decisions: (a) tracked
-    operational entities (a `staff_travel` table, per-run pyrolyzer gas
-    measurement, per-sample lab electricity) vs admin-configured
-    estimates seeded from the LCA; and (b) **apportionment** — the LCA
-    measures these once per ~1-year reporting period, but noma submits
-    one Removal per credit batch and a period spans many batches.
-    Reading a flat per-period figure on every credit-batch submission
-    would count it once per batch (N× over-count).
-  - **Why it matters:** these are the last zero stubs blocking a
-    production submission; staff travel alone is ~59 tCO2e in the
-    sample LCA.
-  - **Resolve via:** decide the apportionment rule (e.g. split by the
-    batch's share of period biochar mass) and the source model. The
-    Phase 3.7 per-facility config table (`certifier_projects` columns)
-    is designed so per-period columns can be added without migration
-    pain once the model is chosen.
+    distance, miscellaneous mass?
+  - **Where they belong:** these inputs are period-level, not per-run.
+    After the re-leveling, a noma credit batch submits as one Isometric
+    **GHG Statement** (one per month) and each production run is one
+    **Removal**. Per-reporting-period emissions belong on the **GHG
+    Statement's "Reporting period emissions" tab**, not as zero-stubbed
+    monitored inputs on each per-run Removal template. Moving them there
+    also removes them as a blocker for the per-run Removal payload.
+  - **Remaining sub-decisions:** (a) source model — tracked operational
+    entities (a `staff_travel` table, per-run pyrolyzer gas measurement,
+    per-sample lab electricity) vs admin-configured estimates seeded
+    from the LCA; and (b) **apportionment** — the LCA measures these
+    once per ~1-year reporting period, but a GHG Statement covers one
+    month. A flat per-period figure must be split across the ~12 monthly
+    GHG Statements (e.g. by each month's share of period biochar mass),
+    not reported whole on each.
+  - **Why it matters:** staff travel alone is ~59 tCO2e in the sample
+    LCA; until the GHG Statement carries these, a production submission
+    understates emissions.
+  - **Resolve via:** decide the apportionment rule and source model,
+    then wire the GHG Statement's reporting-period-emissions fields in
+    `submitGhgStatementForCreditBatch`. The Phase 3.7 per-facility
+    config table (`certifier_projects` columns) can hold per-period
+    estimates without migration pain once the model is chosen.
 
 - **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
   path documented 2026-05-11**.
@@ -308,15 +361,6 @@ Each entry follows this shape:
   - Resolve via: agree on a retention policy first (e.g., "entries older
     than 6 months move to `docs/archive/isometric-changes-<year>.md`"),
     then execute the cut in one PR rather than ad-hoc per review.
-
-- **`docs/isometric/integration-plan.md` snapshot history** (`docs/plan-snapshots`) —
-  opened 2026-05-19, **deferred**.
-  - Review suggested extracting historical "Status snapshot" blocks into
-    a separate archive doc and keeping only the current snapshot inline.
-  - Why parked: the file currently contains a single status snapshot
-    (2026-05-13) followed by per-phase status — there is no historical
-    snapshot to extract yet. Re-raise when the next snapshot lands so
-    the prior one can be archived in the same PR.
 
 - **`docs/open-questions.md` dated-section extraction** (`docs/open-questions-format`) —
   opened 2026-05-19, **deferred**.

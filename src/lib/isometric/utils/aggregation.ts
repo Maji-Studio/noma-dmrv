@@ -1,3 +1,4 @@
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
 export type ProductionRunWithSamples = ProductionRun & { samples: Sample[] };
@@ -65,6 +66,9 @@ export interface TransportAggregationResult {
 
 const FACTOR_TOLERANCE = 1e-9;
 
+// Percent-to-fraction denominator.
+const PERCENT_DENOMINATOR = 100;
+
 export function aggregateTransportLegs(
   legs: TransportLeg[],
   categoryLabel: string,
@@ -120,8 +124,25 @@ export function aggregateTransportLegs(
   return { distanceKm: weighted / weightSum, warning: null };
 }
 
+// Clamps a per-run attribution factor into [0, 1]. A removal can only count
+// the share of a run's biochar that actually got applied. A missing entry
+// (no attribution map, or run absent from it) defaults to 1.0 — the run is
+// fully attributed. A non-finite value signals corrupt data and fails safe
+// to 0 (the run is excluded) rather than silently counting the whole run.
+function clampFactor(value: number | null | undefined): number {
+  if (value == null) return 1;
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
+
+// `attributionByRunId` carries the applied-biochar fraction for each run —
+// appliedDryKgFromThisRemoval / runTotalBiocharOutput. A run only partially
+// applied within this removal contributes proportionally (linear mass
+// allocation, equivalent to an Isometric attribution factor). Omitted or a
+// missing entry defaults to 1.0 (the run is fully attributed).
 export function aggregateProductionRuns(
   runs: ProductionRunWithSamples[],
+  attributionByRunId?: Map<string, number>,
 ): AggregatedProductionData {
   if (runs.length === 0) {
     throw new Error("aggregateProductionRuns: no production runs supplied");
@@ -139,12 +160,14 @@ export function aggregateProductionRuns(
   let latestEndTime = runs[0].endTime;
 
   for (const run of runs) {
-    totalBiocharDryMassKg += nz(run.biocharDryMassKg);
-    totalFeedstockDryMassKg += nz(run.feedstockMassDryKg);
+    const factor = clampFactor(attributionByRunId?.get(run.id));
+    totalBiocharDryMassKg += nz(run.biocharDryMassKg) * factor;
+    totalFeedstockDryMassKg += nz(run.feedstockMassDryKg) * factor;
     totalStartupDieselLitres +=
-      nz(run.dieselOperationLiters) + nz(run.preprocessingFuelLiters);
-    totalGensetDieselLitres += nz(run.dieselGensetLiters);
-    totalElectricityKwh += nz(run.electricityKwh);
+      (nz(run.dieselOperationLiters) + nz(run.preprocessingFuelLiters)) *
+      factor;
+    totalGensetDieselLitres += nz(run.dieselGensetLiters) * factor;
+    totalElectricityKwh += nz(run.electricityKwh) * factor;
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
     if (run.endTime > latestEndTime) latestEndTime = run.endTime;
 
@@ -160,13 +183,27 @@ export function aggregateProductionRuns(
     weightedOrganicCarbonPercent: weightedAverage(
       runs,
       (s) => s.organicCarbonPercent,
+      attributionByRunId,
     ),
-    weightedHToCorgRatio: weightedAverage(runs, (s) => s.hToCOrgRatio),
-    weightedOToCorgRatio: weightedAverage(runs, (s) => s.oToCOrgRatio),
-    weightedAshPercent: weightedAverage(runs, (s) => s.ashContentPercent),
+    weightedHToCorgRatio: weightedAverage(
+      runs,
+      (s) => s.hToCOrgRatio,
+      attributionByRunId,
+    ),
+    weightedOToCorgRatio: weightedAverage(
+      runs,
+      (s) => s.oToCOrgRatio,
+      attributionByRunId,
+    ),
+    weightedAshPercent: weightedAverage(
+      runs,
+      (s) => s.ashContentPercent,
+      attributionByRunId,
+    ),
     weightedMoisturePercent: weightedAverage(
       runs,
       (s) => s.moistureContentPercent,
+      attributionByRunId,
     ),
     totalBiocharDryMassKg,
     totalFeedstockDryMassKg,
@@ -231,7 +268,7 @@ export function enrichWithTransportLegs(
 function sumMassDistanceTonneKm(legs: TransportLeg[]): number {
   let total = 0;
   for (const leg of legs) {
-    total += leg.distanceKm * (nz(leg.loadMassKg) / 1000);
+    total += leg.distanceKm * kgToTonnes(nz(leg.loadMassKg));
   }
   return total;
 }
@@ -260,9 +297,9 @@ export function enrichWithFacilityConfig(
   const electricity = agg.totalElectricityKwh;
   const gensetKwh =
     agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre;
-  const biomass = config.stageSplitBiomassPct / 100;
-  const pyrolysis = config.stageSplitPyrolysisPct / 100;
-  const biochar = config.stageSplitBiocharPct / 100;
+  const biomass = config.stageSplitBiomassPct / PERCENT_DENOMINATOR;
+  const pyrolysis = config.stageSplitPyrolysisPct / PERCENT_DENOMINATOR;
+  const biochar = config.stageSplitBiocharPct / PERCENT_DENOMINATOR;
 
   return {
     ...agg,
@@ -275,25 +312,30 @@ export function enrichWithFacilityConfig(
   };
 }
 
-// Mass-weighted by run.biocharDryMassKg using the per-run mean of `pick`
-// across that run's samples. Runs with no usable samples or zero mass are
-// dropped from both numerator and denominator.
+// Mass-weighted by the applied share of run.biocharDryMassKg using the
+// per-run mean of `pick` across that run's samples — so the carbon content
+// reflects the biochar that actually got applied. Runs with no usable
+// samples, zero mass, or a zero attribution factor are dropped from both
+// numerator and denominator.
 function weightedAverage(
   runs: ProductionRunWithSamples[],
   pick: (s: Sample) => number | null,
+  attributionByRunId?: Map<string, number>,
 ): number | null {
   let weightSum = 0;
   let weighted = 0;
   for (const run of runs) {
+    const factor = clampFactor(attributionByRunId?.get(run.id));
     const mass = run.biocharDryMassKg;
-    if (mass == null || mass <= 0) continue;
+    if (mass == null || mass <= 0 || factor <= 0) continue;
     const values = run.samples
       .map(pick)
       .filter((v): v is number => v != null && Number.isFinite(v));
     if (values.length === 0) continue;
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    weighted += mean * mass;
-    weightSum += mass;
+    const weight = mass * factor;
+    weighted += mean * weight;
+    weightSum += weight;
   }
   return weightSum === 0 ? null : weighted / weightSum;
 }

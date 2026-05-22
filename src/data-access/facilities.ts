@@ -16,6 +16,7 @@ import {
   formulations,
   stockpileEvents,
   powerProcurementEvidence,
+  certifierRemovals,
   type Facility,
 } from "@/db/schema";
 import type { FacilityFilterData } from "@/schemas/facilities";
@@ -654,13 +655,19 @@ export async function deleteFacility(
     throw new SafeError("Facility not found");
   }
 
-  const [[reactorCount], [storageCount], [stockpileCount], [powerCount]] =
-    await Promise.all([
-      db.select({ count: count() }).from(reactors).where(eq(reactors.facilityId, facilityId)),
-      db.select({ count: count() }).from(storageLocations).where(eq(storageLocations.facilityId, facilityId)),
-      db.select({ count: count() }).from(stockpileEvents).where(eq(stockpileEvents.facilityId, facilityId)),
-      db.select({ count: count() }).from(powerProcurementEvidence).where(eq(powerProcurementEvidence.facilityId, facilityId)),
-    ]);
+  const [
+    [reactorCount],
+    [storageCount],
+    [stockpileCount],
+    [powerCount],
+    [removalCount],
+  ] = await Promise.all([
+    db.select({ count: count() }).from(reactors).where(eq(reactors.facilityId, facilityId)),
+    db.select({ count: count() }).from(storageLocations).where(eq(storageLocations.facilityId, facilityId)),
+    db.select({ count: count() }).from(stockpileEvents).where(eq(stockpileEvents.facilityId, facilityId)),
+    db.select({ count: count() }).from(powerProcurementEvidence).where(eq(powerProcurementEvidence.facilityId, facilityId)),
+    db.select({ count: count() }).from(certifierRemovals).where(eq(certifierRemovals.facilityId, facilityId)),
+  ]);
 
   if (Number(reactorCount.count) > 0) {
     throw new SafeError(
@@ -680,6 +687,11 @@ export async function deleteFacility(
   if (Number(powerCount.count) > 0) {
     throw new SafeError(
       "Cannot delete facility with associated power procurement evidence. Remove power procurement evidence first."
+    );
+  }
+  if (Number(removalCount.count) > 0) {
+    throw new SafeError(
+      "Cannot delete facility with associated certifier removals. Remove its credit batches first."
     );
   }
 
