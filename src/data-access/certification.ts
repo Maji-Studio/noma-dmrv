@@ -217,6 +217,48 @@ export async function upsertCertifierProject(
   });
 }
 
+export interface FacilityEmissionConfigInput {
+  facilityId: string;
+  provider?: CertifierProvider;
+  gensetEnergyYieldKwhPerLitre: number;
+  stageSplitBiomassPct: number;
+  stageSplitPyrolysisPct: number;
+  stageSplitBiocharPct: number;
+}
+
+// Updates only the four Phase 3.7 emission-estimate columns on an
+// existing certifier_projects row. The facility must already be linked
+// to an Isometric project — the config has no meaning otherwise.
+export async function updateFacilityEmissionConfig(
+  userId: string,
+  input: FacilityEmissionConfigInput,
+): Promise<CertifierProjectRow> {
+  requireAuth(userId);
+  const provider = input.provider ?? "isometric";
+  const [row] = await db
+    .update(certifierProjects)
+    .set({
+      gensetEnergyYieldKwhPerLitre: input.gensetEnergyYieldKwhPerLitre,
+      stageSplitBiomassPct: input.stageSplitBiomassPct,
+      stageSplitPyrolysisPct: input.stageSplitPyrolysisPct,
+      stageSplitBiocharPct: input.stageSplitBiocharPct,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certifierProjects.facilityId, input.facilityId),
+        eq(certifierProjects.provider, provider),
+      ),
+    )
+    .returning();
+  if (!row) {
+    throw new SafeError(
+      "Link this facility to an Isometric project before setting emission estimates.",
+    );
+  }
+  return row;
+}
+
 export async function deleteCertifierProject(
   userId: string,
   facilityId: string,

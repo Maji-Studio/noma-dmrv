@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emptyToNull } from "@/schemas/helpers";
+import { emptyToNull, toNumberOrUndefined } from "@/schemas/helpers";
 import { formatLocalDate, parseLocalDateString } from "@/lib/date-utils";
 
 function isValidCalendarDate(value: string): boolean {
@@ -31,6 +31,58 @@ export const saveMappingSchema = z.object({
 });
 
 export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
+
+// --- Phase 3.7 per-facility emission-estimate config ---
+
+function requiredNumber(label: string) {
+  return z.preprocess(
+    toNumberOrUndefined,
+    z.number({
+      error: (iss) =>
+        iss.input === undefined ? `${label} is required` : "Invalid number",
+    }),
+  );
+}
+
+export const facilityEmissionConfigSchema = z
+  .object({
+    facilityId: z.string().uuid("Select a facility"),
+    gensetEnergyYieldKwhPerLitre: requiredNumber("Genset energy yield").pipe(
+      z.number().positive("Genset energy yield must be greater than 0"),
+    ),
+    stageSplitBiomassPct: requiredNumber("Biomass processing split").pipe(
+      z.number().min(0).max(100, "Split must be between 0 and 100"),
+    ),
+    stageSplitPyrolysisPct: requiredNumber("Pyrolysis split").pipe(
+      z.number().min(0).max(100, "Split must be between 0 and 100"),
+    ),
+    stageSplitBiocharPct: requiredNumber("Biochar processing split").pipe(
+      z.number().min(0).max(100, "Split must be between 0 and 100"),
+    ),
+  })
+  .superRefine((value, ctx) => {
+    const sum =
+      value.stageSplitBiomassPct +
+      value.stageSplitPyrolysisPct +
+      value.stageSplitBiocharPct;
+    if (Math.abs(sum - 100) > 0.1) {
+      for (const path of [
+        "stageSplitBiomassPct",
+        "stageSplitPyrolysisPct",
+        "stageSplitBiocharPct",
+      ] as const) {
+        ctx.addIssue({
+          code: "custom",
+          path: [path],
+          message: `Stage splits must sum to 100% (currently ${sum.toFixed(1)}%)`,
+        });
+      }
+    }
+  });
+
+export type FacilityEmissionConfigFormData = z.infer<
+  typeof facilityEmissionConfigSchema
+>;
 
 export const submitCreditBatchSchema = z.object({
   creditBatchId: z.string().uuid(),

@@ -30,7 +30,7 @@ export function mapBetterAuthUser(user: {
   id: string;
   email: string;
   name?: string | null;
-  role?: string;
+  role?: string | null;
   emailVerified?: boolean;
   createdAt: string | Date;
   updatedAt: string | Date;

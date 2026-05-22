@@ -10,6 +10,7 @@ import {
   markSubmissionSubmitted,
   resetSubmissionToDraftWithMappingLock,
   type CertificationSubmissionRow,
+  type CertifierProjectRow,
   type CertifierSyncEventRow,
   type MappingClaimGuard,
 } from "@/data-access/certification";
@@ -24,11 +25,13 @@ import {
   createDatapoint,
   createRemoval,
   decideSubmissionClaim,
+  enrichWithFacilityConfig,
   enrichWithTransportLegs,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
   type CreateDatapointRequest,
+  type FacilityEmissionConfig,
   type IsometricComponentBlueprint,
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
@@ -45,6 +48,7 @@ import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadSubmissionContext } from "./certify-context";
 import {
+  assertNoZeroStubsInProduction,
   assertProductionConfirmed,
   CREDIT_BATCH_ENTITY_TYPE,
   ISOMETRIC_PROVIDER,
@@ -54,6 +58,70 @@ import {
 export interface SubmitCreditBatchResult {
   externalId: string;
   version: number;
+}
+
+// Reads the four Phase 3.7 emission-estimate columns off the facility's
+// certifier_projects row. Throws if any is unset — they must be
+// configured in the admin area (Emission estimates) before a submission
+// can carry real per-stage energy data.
+function resolveFacilityEmissionConfig(
+  mapping: CertifierProjectRow,
+): FacilityEmissionConfig {
+  const {
+    gensetEnergyYieldKwhPerLitre,
+    stageSplitBiomassPct,
+    stageSplitPyrolysisPct,
+    stageSplitBiocharPct,
+  } = mapping;
+  if (
+    gensetEnergyYieldKwhPerLitre == null ||
+    stageSplitBiomassPct == null ||
+    stageSplitPyrolysisPct == null ||
+    stageSplitBiocharPct == null
+  ) {
+    throw new SafeError(
+      "Set this facility's genset yield and stage splits in the admin area (Emission estimates) before submitting.",
+    );
+  }
+
+  // Defence-in-depth: the admin form validates these through
+  // facilityEmissionConfigSchema, but a direct DB edit or seed insert could
+  // bypass it. A bad value here would silently corrupt a registry
+  // submission, so re-check the bounds before building the payload.
+  if (
+    !Number.isFinite(gensetEnergyYieldKwhPerLitre) ||
+    gensetEnergyYieldKwhPerLitre <= 0
+  ) {
+    throw new SafeError(
+      "This facility's genset energy yield must be a positive number. Correct it in the admin area (Emission estimates).",
+    );
+  }
+  const stageSplits = [
+    stageSplitBiomassPct,
+    stageSplitPyrolysisPct,
+    stageSplitBiocharPct,
+  ];
+  if (
+    stageSplits.some((pct) => !Number.isFinite(pct) || pct < 0 || pct > 100)
+  ) {
+    throw new SafeError(
+      "This facility's stage splits must each be between 0 and 100. Correct them in the admin area (Emission estimates).",
+    );
+  }
+  const splitSum =
+    stageSplitBiomassPct + stageSplitPyrolysisPct + stageSplitBiocharPct;
+  if (Math.abs(splitSum - 100) > 0.1) {
+    throw new SafeError(
+      "This facility's stage splits must sum to 100%. Correct them in the admin area (Emission estimates).",
+    );
+  }
+
+  return {
+    gensetEnergyYieldKwhPerLitre,
+    stageSplitBiomassPct,
+    stageSplitPyrolysisPct,
+    stageSplitBiocharPct,
+  };
 }
 
 interface ResolvedMonitoredInput {
@@ -167,6 +235,8 @@ export async function submitCreditBatch(
         "Production runs not found for the credit batch's applications.",
       );
     }
+    const emissionConfig = resolveFacilityEmissionConfig(ctx.mapping);
+
     const baseAgg = aggregateProductionRuns(ctx.runs);
     if (baseAgg.warnings.length > 0) {
       throw new SafeError(
@@ -174,21 +244,29 @@ export async function submitCreditBatch(
       );
     }
 
-    const agg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
+    const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
     // Transport-leg enrichment may append warnings (mixed methods/factors,
     // missing per-leg fields). Block submission on those too — required by
     // Isometric Transportation v1.1 §5 per-leg accounting rules.
-    const transportWarnings = agg.warnings.slice(baseAgg.warnings.length);
+    const transportWarnings = transportAgg.warnings.slice(
+      baseAgg.warnings.length,
+    );
     if (transportWarnings.length > 0) {
       throw new SafeError(
         `Transport-leg aggregation — submission blocked:\n${transportWarnings.join("\n")}`,
       );
     }
 
+    // Phase 3.7: route the combined per-run electricity + genset diesel
+    // into the template's per-stage components using the facility's
+    // emission-estimate config.
+    const agg = enrichWithFacilityConfig(transportAgg, emissionConfig);
+
     const monitored: ResolvedMonitoredInput[] = [];
     const fixed: ResolvedFixedInput[] = [];
     const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
     const unboundFixedInputs: { component: string; inputKey: string }[] = [];
+    const zeroStubInputs: { component: string; inputKey: string }[] = [];
 
     for (const group of ctx.defaultTemplate.groups) {
       for (const component of group.components) {
@@ -233,6 +311,12 @@ export async function submitCreditBatch(
               `No INPUT_MAPPING entry for group="${group.key}" blueprint="${component.blueprint_key}" input="${rtcInput.input_key}".`,
             );
           }
+          if (mapping.zeroStub) {
+            zeroStubInputs.push({
+              component: component.display_name,
+              inputKey: rtcInput.input_key,
+            });
+          }
           const raw = agg[mapping.source];
           if (raw == null) {
             throw new SafeError(
@@ -274,6 +358,8 @@ export async function submitCreditBatch(
         `Template "${ctx.defaultTemplate.display_name}" has ${unboundFixedInputs.length} fixed input(s) without a pre-bound datapoint:\n${lines}\nBind each as a constant in the Isometric template editor before submitting.`,
       );
     }
+
+    assertNoZeroStubsInProduction(zeroStubInputs);
 
     const semanticPayload = {
       templateId: ctx.defaultTemplate.id,
