@@ -181,7 +181,8 @@ data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
 lib/isometric/              # Pure HTTP client + transformers + utils
                             #   (no DB, no auth, no ActionResult)
        ↓
-db/schema/certification.ts  # certifier_projects, certifier_sources,
+db/schema/certification.ts  # certifier_projects, certifier_ghg_statements,
+                            #   certifier_removals, certifier_sources,
                             #   certification_submissions,
                             #   certifier_document_uploads,
                             #   certifier_sync_events
