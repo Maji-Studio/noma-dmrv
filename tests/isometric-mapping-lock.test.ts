@@ -20,6 +20,7 @@ import {
   type InsertDraftSubmissionInput,
 } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 
 const USER_ID = "user-1";
 const FACILITY_ID = "fac-1";
@@ -201,7 +202,12 @@ describe("resetSubmissionToDraftWithMappingLock", () => {
     mockTransaction(stub.tx);
 
     await expect(
-      resetSubmissionToDraftWithMappingLock(USER_ID, "sub_1", baseGuard),
+      resetSubmissionToDraftWithMappingLock(
+        USER_ID,
+        "sub_1",
+        baseGuard,
+        LOCK_TTL_MS,
+      ),
     ).rejects.toBeInstanceOf(SafeError);
     expect(stub.updateCalls).toHaveLength(0);
   });
@@ -221,8 +227,33 @@ describe("resetSubmissionToDraftWithMappingLock", () => {
       USER_ID,
       "sub_1",
       baseGuard,
+      LOCK_TTL_MS,
     );
     expect(row).toEqual(updatedRow);
+    expect(stub.updateCalls).toHaveLength(1);
+  });
+
+  it("throws when a concurrent caller already claimed the row", async () => {
+    // The compare-and-swap UPDATE matches no row — another submit already
+    // reset it to a fresh draft — so the resume aborts instead of
+    // double-POSTing to the registry.
+    const stub = buildTxStub({
+      lockedRow: {
+        externalProjectId: CURRENT_PROJECT,
+        defaultRemovalTemplateId: "rvt_default",
+      },
+      // no updateReturn → returning() yields [] → zero rows updated
+    });
+    mockTransaction(stub.tx);
+
+    await expect(
+      resetSubmissionToDraftWithMappingLock(
+        USER_ID,
+        "sub_1",
+        baseGuard,
+        LOCK_TTL_MS,
+      ),
+    ).rejects.toBeInstanceOf(SafeError);
     expect(stub.updateCalls).toHaveLength(1);
   });
 });
