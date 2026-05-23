@@ -1,21 +1,18 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  certifierGhgPeriods,
   certifierProjects,
+  certifierRemovals,
   certificationSubmissions,
   certifierSyncEvents,
 } from "@/db/schema/certification";
-import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
-import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { requireAuth } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
-export type CertifierGhgPeriodRow = typeof certifierGhgPeriods.$inferSelect;
 export type DocumentRow = typeof documents.$inferSelect;
 
 export interface UpsertCertifierProjectInput {
@@ -102,7 +99,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // Statuses that still depend on the facility's certifier mapping. Terminal
 // statuses (`rejected`, `superseded`) are intentionally excluded — those rows
 // have no remote dependency that a repoint/unlink could orphan.
-const BLOCKING_SUBMISSION_STATUSES = [
+export const BLOCKING_SUBMISSION_STATUSES = [
   "draft",
   "submitted",
   "accepted",
@@ -112,48 +109,29 @@ async function hasBlockingFacilitySubmission(
   executor: Tx | typeof db,
   facilityId: string,
   provider: CertifierProvider,
-  externalProjectId: string | null,
 ): Promise<boolean> {
-  const [blockingRemoval] = await executor
+  // The Removal is the submission unit. A removal ledger row is keyed
+  // (provider, 'removal', 'removal', certifierRemovals.id); certifier_removals
+  // carries the facility directly — one hop, no lineage walk. GHG-statement
+  // rows are not checked: the GHG flow is decoupled/dormant (ADR 0003).
+  const [blocking] = await executor
     .select({ id: certificationSubmissions.id })
     .from(certificationSubmissions)
     .innerJoin(
-      creditBatches,
-      eq(certificationSubmissions.localEntityId, creditBatches.id),
+      certifierRemovals,
+      eq(certificationSubmissions.localEntityId, certifierRemovals.id),
     )
     .where(
       and(
         eq(certificationSubmissions.provider, provider),
-        eq(certificationSubmissions.localEntityType, "creditBatch"),
-        eq(creditBatches.facilityId, facilityId),
+        eq(certificationSubmissions.localEntityType, "removal"),
+        eq(certificationSubmissions.submissionType, "removal"),
+        eq(certifierRemovals.facilityId, facilityId),
         inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
       ),
     )
     .limit(1);
-  if (blockingRemoval) return true;
-  if (!externalProjectId) return false;
-
-  const [blockingGhgStatement] = await executor
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .innerJoin(
-      certifierGhgPeriods,
-      and(
-        eq(certificationSubmissions.localEntityId, certifierGhgPeriods.id),
-        eq(certificationSubmissions.provider, certifierGhgPeriods.provider),
-      ),
-    )
-    .where(
-      and(
-        eq(certificationSubmissions.provider, provider),
-        eq(certificationSubmissions.localEntityType, "ghgPeriod"),
-        eq(certificationSubmissions.submissionType, "ghg_statement"),
-        eq(certifierGhgPeriods.externalProjectId, externalProjectId),
-        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
-      ),
-    )
-    .limit(1);
-  return Boolean(blockingGhgStatement);
+  return Boolean(blocking);
 }
 
 export async function upsertCertifierProject(
@@ -189,7 +167,6 @@ export async function upsertCertifierProject(
         tx,
         input.facilityId,
         input.provider,
-        existing.externalProjectId,
       );
       if (blocked) {
         throw new SafeError(
@@ -253,7 +230,7 @@ export async function updateFacilityEmissionConfig(
     .returning();
   if (!row) {
     throw new SafeError(
-      "Link this facility to an Isometric project before setting emission estimates.",
+      `Link this facility to a ${provider} project before setting emission estimates.`,
     );
   }
   return row;
@@ -269,11 +246,8 @@ export async function deleteCertifierProject(
   await db.transaction(async (tx) => {
     // Lock the mapping row so a concurrent submission insert that depends on
     // this mapping cannot race the unlink check.
-    const [existing] = await tx
-      .select({
-        id: certifierProjects.id,
-        externalProjectId: certifierProjects.externalProjectId,
-      })
+    await tx
+      .select({ id: certifierProjects.id })
       .from(certifierProjects)
       .where(
         and(
@@ -284,14 +258,9 @@ export async function deleteCertifierProject(
       .for("update")
       .limit(1);
 
-    // Unlink guard: refuse if any facility-scoped or project-scoped certifier
+    // Unlink guard: refuse if any facility-scoped certifier removal
     // submission depends on this mapping.
-    const blocked = await hasBlockingFacilitySubmission(
-      tx,
-      facilityId,
-      provider,
-      existing?.externalProjectId ?? null,
-    );
+    const blocked = await hasBlockingFacilitySubmission(tx, facilityId, provider);
     if (blocked) {
       throw new SafeError(
         "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.",
@@ -309,49 +278,6 @@ export async function deleteCertifierProject(
   });
 }
 
-export async function getOrCreateGhgPeriod(
-  userId: string,
-  args: {
-    provider: CertifierProvider;
-    externalProjectId: string;
-    reportingPeriodEndAt: string;
-  },
-): Promise<CertifierGhgPeriodRow> {
-  requireAuth(userId);
-  const [inserted] = await db
-    .insert(certifierGhgPeriods)
-    .values({
-      provider: args.provider,
-      externalProjectId: args.externalProjectId,
-      reportingPeriodEndAt: args.reportingPeriodEndAt,
-    })
-    .onConflictDoNothing({
-      target: [
-        certifierGhgPeriods.provider,
-        certifierGhgPeriods.externalProjectId,
-        certifierGhgPeriods.reportingPeriodEndAt,
-      ],
-    })
-    .returning();
-  if (inserted) return inserted;
-
-  const [row] = await db
-    .select()
-    .from(certifierGhgPeriods)
-    .where(
-      and(
-        eq(certifierGhgPeriods.provider, args.provider),
-        eq(certifierGhgPeriods.externalProjectId, args.externalProjectId),
-        eq(certifierGhgPeriods.reportingPeriodEndAt, args.reportingPeriodEndAt),
-      ),
-    )
-    .limit(1);
-  if (!row) {
-    throw new SafeError("Could not create or load GHG statement period.");
-  }
-  return row;
-}
-
 // =====================================================================
 // Submission ledger
 // =====================================================================
@@ -359,11 +285,6 @@ export async function getOrCreateGhgPeriod(
 export type CertificationSubmissionRow =
   typeof certificationSubmissions.$inferSelect;
 export type CertifierSyncEventRow = typeof certifierSyncEvents.$inferSelect;
-
-export interface GhgSubmissionWithPeriod {
-  submission: CertificationSubmissionRow;
-  period: CertifierGhgPeriodRow;
-}
 
 export interface SubmissionKey {
   provider: CertifierProvider;
@@ -404,149 +325,6 @@ export async function getSubmissionById(
     .where(eq(certificationSubmissions.id, id))
     .limit(1);
   return row ?? null;
-}
-
-export async function getGhgPeriodById(
-  userId: string,
-  id: string,
-): Promise<CertifierGhgPeriodRow | null> {
-  requireAuth(userId);
-  const [row] = await db
-    .select()
-    .from(certifierGhgPeriods)
-    .where(eq(certifierGhgPeriods.id, id))
-    .limit(1);
-  return row ?? null;
-}
-
-export async function getLatestGhgSubmissionForPeriod(
-  userId: string,
-  ghgPeriodId: string,
-): Promise<CertificationSubmissionRow | null> {
-  return getLatestSubmission(userId, {
-    provider: "isometric",
-    submissionType: "ghg_statement",
-    localEntityType: "ghgPeriod",
-    localEntityId: ghgPeriodId,
-  });
-}
-
-export async function listSubmissionsForFacility(
-  userId: string,
-  args: { facilityId: string; submissionType?: string; limit?: number },
-): Promise<CertificationSubmissionRow[]> {
-  requireAuth(userId);
-  const limit = args.limit ?? 50;
-  const rows: CertificationSubmissionRow[] = [];
-
-  if (!args.submissionType || args.submissionType === "removal") {
-    rows.push(
-      ...(await db
-        .select({ submission: certificationSubmissions })
-        .from(certificationSubmissions)
-        .innerJoin(
-          creditBatches,
-          eq(certificationSubmissions.localEntityId, creditBatches.id),
-        )
-        .where(
-          and(
-            eq(certificationSubmissions.localEntityType, "creditBatch"),
-            eq(certificationSubmissions.submissionType, "removal"),
-            eq(creditBatches.facilityId, args.facilityId),
-          ),
-        )
-        .orderBy(desc(certificationSubmissions.createdAt))
-        .limit(limit))
-        .map((row) => row.submission),
-    );
-  }
-
-  if (!args.submissionType || args.submissionType === "ghg_statement") {
-    const mapping = await getCertifierProjectByFacility(
-      userId,
-      args.facilityId,
-      "isometric",
-    );
-    if (mapping) {
-      rows.push(
-        ...(await listSubmissionsForProject(userId, {
-          provider: mapping.provider,
-          externalProjectId: mapping.externalProjectId,
-          submissionType: "ghg_statement",
-          limit,
-        })),
-      );
-    }
-  }
-
-  return rows
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, limit);
-}
-
-export async function listSubmissionsForProject(
-  userId: string,
-  args: {
-    provider: CertifierProvider;
-    externalProjectId: string;
-    submissionType: string;
-    limit?: number;
-  },
-): Promise<CertificationSubmissionRow[]> {
-  const rows = await listGhgSubmissionsForProject(userId, args);
-  return rows.map((row) => row.submission);
-}
-
-export async function listGhgSubmissionsForProject(
-  userId: string,
-  args: {
-    provider: CertifierProvider;
-    externalProjectId: string;
-    submissionType?: string;
-    limit?: number;
-  },
-): Promise<GhgSubmissionWithPeriod[]> {
-  requireAuth(userId);
-  const [authorized] = await db
-    .select({ id: certifierProjects.id })
-    .from(certifierProjects)
-    .where(
-      and(
-        eq(certifierProjects.provider, args.provider),
-        eq(certifierProjects.externalProjectId, args.externalProjectId),
-      ),
-    )
-    .limit(1);
-  if (!authorized) {
-    throw new SafeError("No linked facility has access to this certifier project.");
-  }
-
-  return db
-    .select({
-      submission: certificationSubmissions,
-      period: certifierGhgPeriods,
-    })
-    .from(certifierGhgPeriods)
-    .innerJoin(
-      certificationSubmissions,
-      and(
-        eq(certificationSubmissions.provider, certifierGhgPeriods.provider),
-        eq(certificationSubmissions.localEntityType, "ghgPeriod"),
-        eq(certificationSubmissions.localEntityId, certifierGhgPeriods.id),
-        eq(
-          certificationSubmissions.submissionType,
-          args.submissionType ?? "ghg_statement",
-        ),
-      ),
-    )
-    .where(
-      and(
-        eq(certifierGhgPeriods.provider, args.provider),
-        eq(certifierGhgPeriods.externalProjectId, args.externalProjectId),
-      ),
-    )
-    .orderBy(desc(certifierGhgPeriods.reportingPeriodEndAt), desc(certificationSubmissions.version))
-    .limit(args.limit ?? 50);
 }
 
 export interface InsertDraftSubmissionInput extends SubmissionKey {
@@ -750,10 +528,15 @@ export async function resetSubmissionToDraftWithMappingLock(
   userId: string,
   id: string,
   guard: MappingClaimGuard,
+  lockTtlMs: number,
 ): Promise<CertificationSubmissionRow> {
   requireAuth(userId);
   return db.transaction(async (tx) => {
     await lockAndVerifyMapping(tx, guard);
+    // Compare-and-swap: only a row that is NOT a freshly-locked draft is
+    // resumable. If a concurrent caller already claimed it (flipping it to a
+    // fresh draft), this UPDATE matches zero rows — so two callers cannot
+    // both resume the same submission and double-POST to the registry.
     const [row] = await tx
       .update(certificationSubmissions)
       .set({
@@ -762,9 +545,21 @@ export async function resetSubmissionToDraftWithMappingLock(
         updatedAt: sql`now()`,
         metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
       })
-      .where(eq(certificationSubmissions.id, id))
+      .where(
+        and(
+          eq(certificationSubmissions.id, id),
+          or(
+            ne(certificationSubmissions.status, "draft"),
+            isNull(certificationSubmissions.lockedAt),
+            lt(
+              certificationSubmissions.lockedAt,
+              sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+            ),
+          ),
+        ),
+      )
       .returning();
-    if (!row) throw new SafeError("Submission not found");
+    if (!row) throw new SafeError("Submission already in progress");
     return row;
   });
 }

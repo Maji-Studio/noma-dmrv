@@ -1,29 +1,29 @@
 /**
  * Certification React Query hooks
- * Manages the facility ↔ Isometric project mapping.
+ * Manages the facility ↔ Isometric project mapping and the Removal
+ * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  createGhgStatementForFacility,
+  assignCreditBatchToRemovalAction,
   deleteFacilityCertifierMapping,
+  ensureRemovalForCreditBatchAction,
   loadCertifyContextForCreditBatch,
-  loadCreditBatchSubmissionState,
-  loadFacilityCertificationOverview,
   loadFacilityCertifierMapping,
   loadIsometricProjectTemplates,
-  refreshGhgStatementStatus,
+  loadRemovalsForFacility,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
-  submitGhgStatementForFacility,
-  submitCreditBatch,
+  submitCreditBatchRemoval,
+  submitRemovalAction,
 } from "@/fn/certification";
 import type {
-  CreateGhgStatementInput,
+  AssignCreditBatchToRemovalInput,
   FacilityEmissionConfigFormData,
   SaveMappingInput,
   SubmitCreditBatchInput,
-  SubmitGhgStatementInput,
+  SubmitRemovalInput,
 } from "@/schemas/certification";
 
 export const certificationKeys = {
@@ -39,17 +39,8 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
-  submissionStateForCreditBatch: (creditBatchId: string) =>
-    [
-      ...certificationKeys.all,
-      "submission-state",
-      "credit-batch",
-      creditBatchId,
-    ] as const,
-  facilityOverview: (facilityId: string) =>
-    [...certificationKeys.all, "facility-overview", facilityId] as const,
-  ghgStatementStatus: (submissionId: string) =>
-    [...certificationKeys.all, "ghg-statement-status", submissionId] as const,
+  removalsForFacility: (facilityId: string) =>
+    [...certificationKeys.all, "removals", facilityId] as const,
 };
 
 export function useFacilityCertifierMapping(
@@ -118,6 +109,9 @@ export function useSaveFacilityEmissionConfig() {
   });
 }
 
+// Removal-scoped Certify context for the credit-batch side-sheet panel.
+// Refetches while a submission is locked in flight so the panel reflects
+// progress without a manual refresh.
 export function useCertifyContextForCreditBatch(
   creditBatchId: string,
   enabled = true,
@@ -130,58 +124,19 @@ export function useCertifyContextForCreditBatch(
       return result.data;
     },
     enabled: enabled && !!creditBatchId,
-    staleTime: 5 * 60_000,
-  });
-}
-
-export function useCreditBatchSubmissionState(
-  creditBatchId: string,
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: certificationKeys.submissionStateForCreditBatch(creditBatchId),
-    queryFn: async () => {
-      const result = await loadCreditBatchSubmissionState(creditBatchId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    enabled: enabled && !!creditBatchId,
     staleTime: 30_000,
     refetchInterval: (query) =>
-      query.state.data?.isLockedInFlight ? 60_000 : false,
+      query.state.data?.latestSubmission?.lockedAt ? 60_000 : false,
   });
 }
 
-export function useSubmitCreditBatch() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: SubmitCreditBatchInput | string) => {
-      const result = await submitCreditBatch(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: (_data, input) => {
-      const creditBatchId =
-        typeof input === "string" ? input : input.creditBatchId;
-      queryClient.invalidateQueries({
-        queryKey:
-          certificationKeys.submissionStateForCreditBatch(creditBatchId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: certificationKeys.certifyContextForCreditBatch(creditBatchId),
-      });
-    },
-  });
-}
-
-export function useFacilityCertificationOverview(
-  facilityId: string,
-  enabled = true,
-) {
+// Removals hub listing for a facility — removals + members + status, plus
+// the pool of credit batches not yet grouped into a removal.
+export function useRemovalsForFacility(facilityId: string, enabled = true) {
   return useQuery({
-    queryKey: certificationKeys.facilityOverview(facilityId),
+    queryKey: certificationKeys.removalsForFacility(facilityId),
     queryFn: async () => {
-      const result = await loadFacilityCertificationOverview(facilityId);
+      const result = await loadRemovalsForFacility(facilityId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
@@ -190,72 +145,63 @@ export function useFacilityCertificationOverview(
   });
 }
 
-export function useCreateGhgStatementForFacility() {
+// Panel submit — ensures the credit batch's removal (lazy 1:1), then submits.
+export function useSubmitCreditBatchRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      facilityId: string;
-      data: CreateGhgStatementInput;
-    }) => {
-      const result = await createGhgStatementForFacility(
-        input.facilityId,
-        input.data,
-      );
+    mutationFn: async (input: SubmitCreditBatchInput | string) => {
+      const result = await submitCreditBatchRemoval(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: certificationKeys.facilityOverview(variables.facilityId),
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
 }
 
-export function useSubmitGhgStatementForFacility() {
+// Hub submit — submits an existing removal directly.
+export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      facilityId: string;
-      data: SubmitGhgStatementInput;
-    }) => {
-      const result = await submitGhgStatementForFacility(
-        input.facilityId,
-        input.data,
-      );
+    mutationFn: async (input: SubmitRemovalInput | string) => {
+      const result = await submitRemovalAction(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: certificationKeys.facilityOverview(variables.facilityId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: certificationKeys.ghgStatementStatus(
-          variables.data.submissionId,
-        ),
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
 }
 
-export function useRefreshGhgStatementStatus(
-  submissionId: string,
-  opts: { enabled?: boolean; isInFlight: boolean } = {
-    enabled: true,
-    isInFlight: false,
-  },
-) {
-  return useQuery({
-    queryKey: certificationKeys.ghgStatementStatus(submissionId),
-    queryFn: async () => {
-      const result = await refreshGhgStatementStatus(submissionId);
+// Starts a fresh removal for a credit batch (no submission).
+export function useEnsureRemovalForCreditBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (creditBatchId: string) => {
+      const result = await ensureRemovalForCreditBatchAction(creditBatchId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    enabled: (opts.enabled ?? true) && !!submissionId,
-    staleTime: 30_000,
-    refetchInterval: opts.isInFlight ? 60_000 : false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+// N:1 grouping — move a credit batch onto a removal, or detach with null.
+export function useAssignCreditBatchToRemoval() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AssignCreditBatchToRemovalInput) => {
+      const result = await assignCreditBatchToRemovalAction(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
   });
 }
 

@@ -17,7 +17,8 @@ _Avoid_: phase, step.
 
 **Production run**:
 One pyrolysis batch at a reactor, the unit operators log energy and
-diesel against.
+diesel against. Each production run maps to exactly one Isometric
+**Removal**.
 
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
@@ -33,17 +34,26 @@ from a measured value.
 ### Submission & registry
 
 **Credit batch**:
-noma's unit of submission — one credit batch produces exactly one
-Isometric **Removal**.
+noma's unit of submission — one month's accounting. A credit batch
+submits as exactly one Isometric **GHG Statement**.
 _Avoid_: batch, issuance.
 
+**GHG Statement**:
+The Isometric reporting-period (monthly) summary submitted for
+verification and credit issuance. One noma **credit batch** = one GHG
+Statement, which contains one **Removal** per **production run**.
+noma's `creditBatches` table is structurally a GHG Statement; the table
+keeps its name (renaming would touch ~50 files) but the integration
+maps it to a GHG Statement, not a Removal.
+
 **Reporting period**:
-The time window an LCA or GHG statement covers (≈1 year for the Sifuri
-Halisi project). A reporting period contains many **credit batches**.
+The time window an LCA covers (≈1 year for the Sifuri Halisi project).
+A reporting period contains many monthly **credit batches** / **GHG
+Statements**.
 
 **Removal**:
-The Isometric registry record of verified CO₂ removal created from one
-**credit batch**.
+The Isometric registry record of one **production run**'s verified CO₂e
+accounting. A **GHG Statement** contains many Removals — one per run.
 
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
@@ -63,8 +73,9 @@ against a production registry project.
 ## Relationships
 
 - A **Reporting period** contains many **Credit batches**
-- A **Credit batch** produces exactly one **Removal**
+- A **Credit batch** submits as exactly one **GHG Statement**
 - A **Credit batch** aggregates many **Production runs**
+- A **GHG Statement** contains one **Removal** per **Production run**
 - A **Removal** is built from **Monitored inputs** (per-submission data)
   and **Fixed constants** (registry-bound policy values)
 - An **Emission estimate** is configured per facility and supplies
@@ -74,7 +85,7 @@ against a production registry project.
 
 > **Dev:** "The template wants pyrolysis-stage electricity separately
 > from biomass-stage electricity — do operators record that?"
-> **Domain expert:** "No. On site we read one electricity meter for the
+> **Domain expert:** "No. On-site we read one electricity meter for the
 > whole operation. Splitting it across **process stages** is an
 > **emission estimate**, not a measurement."
 > **Dev:** "And staff travel — is that per **production run**?"

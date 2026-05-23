@@ -1,15 +1,5 @@
 import { z } from "zod";
 import { emptyToNull, toNumberOrUndefined } from "@/schemas/helpers";
-import { formatLocalDate, parseLocalDateString } from "@/lib/date-utils";
-
-function isValidCalendarDate(value: string): boolean {
-  try {
-    parseLocalDateString(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const httpsUrlSchema = z
   .string()
@@ -33,6 +23,12 @@ export const saveMappingSchema = z.object({
 export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 
 // --- Phase 3.7 per-facility emission-estimate config ---
+
+// The three process-stage energy percentages must total this, within a
+// small tolerance for floating-point drift / UI rounding (the columns
+// are `real`/float4).
+export const STAGE_SPLIT_TOTAL_PCT = 100;
+export const STAGE_SPLIT_SUM_TOLERANCE = 0.1;
 
 function requiredNumber(label: string) {
   return z.preprocess(
@@ -65,7 +61,7 @@ export const facilityEmissionConfigSchema = z
       value.stageSplitBiomassPct +
       value.stageSplitPyrolysisPct +
       value.stageSplitBiocharPct;
-    if (Math.abs(sum - 100) > 0.1) {
+    if (Math.abs(sum - STAGE_SPLIT_TOTAL_PCT) > STAGE_SPLIT_SUM_TOLERANCE) {
       for (const path of [
         "stageSplitBiomassPct",
         "stageSplitPyrolysisPct",
@@ -74,7 +70,7 @@ export const facilityEmissionConfigSchema = z
         ctx.addIssue({
           code: "custom",
           path: [path],
-          message: `Stage splits must sum to 100% (currently ${sum.toFixed(1)}%)`,
+          message: `Stage splits must sum to ${STAGE_SPLIT_TOTAL_PCT}% (currently ${sum.toFixed(1)}%)`,
         });
       }
     }
@@ -84,6 +80,8 @@ export type FacilityEmissionConfigFormData = z.infer<
   typeof facilityEmissionConfigSchema
 >;
 
+// Panel-facing submit: the Certify panel lives in the credit-batch side
+// sheet. Resolves (lazily creates) the batch's removal, then submits it.
 export const submitCreditBatchSchema = z.object({
   creditBatchId: z.string().uuid(),
   confirmProduction: z.boolean().optional(),
@@ -91,19 +89,22 @@ export const submitCreditBatchSchema = z.object({
 
 export type SubmitCreditBatchInput = z.infer<typeof submitCreditBatchSchema>;
 
-export const createGhgStatementSchema = z.object({
-  endOn: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Enter a valid date" })
-    .refine(isValidCalendarDate, { error: "Invalid calendar date" })
-    .refine((value) => value <= formatLocalDate(new Date()), {
-      error: "End date cannot be in the future",
-    }),
+// Hub-facing submit: submit an existing removal directly by id.
+export const submitRemovalSchema = z.object({
+  removalId: z.string().uuid(),
   confirmProduction: z.boolean().optional(),
 });
 
-export type CreateGhgStatementInput = z.infer<
-  typeof createGhgStatementSchema
+export type SubmitRemovalInput = z.infer<typeof submitRemovalSchema>;
+
+// N:1 grouping — move a credit batch onto a removal, or detach with null.
+export const assignCreditBatchToRemovalSchema = z.object({
+  creditBatchId: z.string().uuid(),
+  removalId: z.string().uuid().nullable(),
+});
+
+export type AssignCreditBatchToRemovalInput = z.infer<
+  typeof assignCreditBatchToRemovalSchema
 >;
 
 export const submitGhgStatementDialogSchema = z.object({

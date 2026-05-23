@@ -153,7 +153,7 @@ export default async function globalTeardown() {
       // still be resolved.
       await client.query(`
         DELETE FROM certifier_sync_events
-        WHERE (entity_type = 'creditBatch'
+        WHERE entity_type = 'creditBatch'
           AND entity_id IN (
             SELECT id FROM credit_batches
             WHERE code LIKE 'E2E-%'
@@ -164,25 +164,11 @@ export default async function globalTeardown() {
                        OR name LIKE 'Chain %'
                        OR name LIKE 'Duplicate Test %'
                   )
-          ))
-          OR (entity_type = 'ghgPeriod'
-          AND entity_id IN (
-            SELECT id FROM certifier_ghg_periods
-            WHERE external_project_id IN (
-              SELECT external_project_id FROM certifier_projects
-              WHERE facility_id IN (
-                SELECT id FROM facilities
-                WHERE code LIKE 'E2E-%'
-                   OR name LIKE 'UI %'
-                   OR name LIKE 'Chain %'
-                   OR name LIKE 'Duplicate Test %'
-              )
-            )
-          ))
+          )
       `);
       await client.query(`
         DELETE FROM certification_submissions
-        WHERE (local_entity_type = 'creditBatch'
+        WHERE local_entity_type = 'creditBatch'
           AND local_entity_id IN (
             SELECT id FROM credit_batches
             WHERE code LIKE 'E2E-%'
@@ -193,21 +179,7 @@ export default async function globalTeardown() {
                        OR name LIKE 'Chain %'
                        OR name LIKE 'Duplicate Test %'
                   )
-          ))
-          OR (local_entity_type = 'ghgPeriod'
-          AND local_entity_id IN (
-            SELECT id FROM certifier_ghg_periods
-            WHERE external_project_id IN (
-              SELECT external_project_id FROM certifier_projects
-              WHERE facility_id IN (
-                SELECT id FROM facilities
-                WHERE code LIKE 'E2E-%'
-                   OR name LIKE 'UI %'
-                   OR name LIKE 'Chain %'
-                   OR name LIKE 'Duplicate Test %'
-              )
-            )
-          ))
+          )
       `);
 
       // ─── Credit batches ───
