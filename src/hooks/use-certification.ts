@@ -7,24 +7,40 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   assignCreditBatchToRemovalAction,
+  createGhgStatementDraft,
   deleteFacilityCertifierMapping,
   ensureRemovalForCreditBatchAction,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
+  loadGhgStatementsForFacility,
+  loadGhgStatementState,
   loadIsometricProjectTemplates,
+  loadOpenRemovalsForFacility,
   loadRemovalsForFacility,
+  refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
   submitCreditBatchRemoval,
+  submitGhgStatementToVerifier,
   submitRemovalAction,
 } from "@/fn/certification";
 import type {
   AssignCreditBatchToRemovalInput,
+  CreateGhgStatementInput,
   FacilityEmissionConfigFormData,
   SaveMappingInput,
   SubmitCreditBatchInput,
+  SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
 } from "@/schemas/certification";
+
+// Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
+// drives the in-flight polling cadence in `useCertifyContextForCreditBatch`
+// and `useGhgStatementState`; the project-templates list is read rarely so
+// it gets its own longer stale window.
+const DEFAULT_STALE_MS = 30_000;
+const PROJECT_TEMPLATES_STALE_MS = 60_000;
+const LOCKED_REFETCH_INTERVAL_MS = 60_000;
 
 export const certificationKeys = {
   all: ["certification"] as const,
@@ -41,6 +57,12 @@ export const certificationKeys = {
     ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
+  ghgStatementsForFacility: (facilityId: string) =>
+    [...certificationKeys.all, "ghg-statements", facilityId] as const,
+  ghgStatementState: (ghgStatementId: string) =>
+    [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
+  openRemovalsForFacility: (facilityId: string) =>
+    [...certificationKeys.all, "open-removals", facilityId] as const,
 };
 
 export function useFacilityCertifierMapping(
@@ -55,7 +77,7 @@ export function useFacilityCertifierMapping(
       return result.data;
     },
     enabled: enabled && !!facilityId,
-    staleTime: 30_000,
+    staleTime: DEFAULT_STALE_MS,
   });
 }
 
@@ -71,7 +93,7 @@ export function useIsometricProjectTemplates(externalProjectId: string | null) {
       return result.data;
     },
     enabled: !!externalProjectId,
-    staleTime: 60_000,
+    staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
 }
 
@@ -124,9 +146,11 @@ export function useCertifyContextForCreditBatch(
       return result.data;
     },
     enabled: enabled && !!creditBatchId,
-    staleTime: 30_000,
+    staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
-      query.state.data?.latestSubmission?.lockedAt ? 60_000 : false,
+      query.state.data?.latestSubmission?.lockedAt
+        ? LOCKED_REFETCH_INTERVAL_MS
+        : false,
   });
 }
 
@@ -141,7 +165,7 @@ export function useRemovalsForFacility(facilityId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!facilityId,
-    staleTime: 30_000,
+    staleTime: DEFAULT_STALE_MS,
   });
 }
 
@@ -217,6 +241,112 @@ export function useDeleteFacilityCertifierMapping() {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(facilityId),
       });
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+// =====================================================================
+// GHG Statements (ADR 0003 / Phase 4.5)
+// =====================================================================
+
+// Hub listing — every GHG statement for a facility with status + counts.
+export function useGhgStatementsForFacility(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementsForFacility(facilityId),
+    queryFn: async () => {
+      const result = await loadGhgStatementsForFacility(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// One statement's detail state. Refetches while a submission is locked in
+// flight so the panel reflects progress without a manual refresh.
+export function useGhgStatementState(ghgStatementId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementState(ghgStatementId),
+    queryFn: async () => {
+      const result = await loadGhgStatementState(ghgStatementId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!ghgStatementId,
+    staleTime: DEFAULT_STALE_MS,
+    refetchInterval: (query) =>
+      query.state.data?.isLockedInFlight ? LOCKED_REFETCH_INTERVAL_MS : false,
+  });
+}
+
+// Submitted removals not yet absorbed by any statement — the stepper preview.
+export function useOpenRemovalsForFacility(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.openRemovalsForFacility(facilityId),
+    queryFn: async () => {
+      const result = await loadOpenRemovalsForFacility(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Period-first create — picks an end date; the server reconciles members.
+export function useCreateGhgStatement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateGhgStatementInput) => {
+      const result = await createGhgStatementDraft(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+// Submit (or resubmit) a statement to the verifier with a report URL.
+export function useSubmitGhgStatementToVerifier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      ghgStatementId: string;
+      input: SubmitGhgStatementDialogInput;
+    }) => {
+      const result = await submitGhgStatementToVerifier(
+        vars.ghgStatementId,
+        vars.input,
+      );
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+// Re-fetch remote status and re-reconcile removal membership.
+export function useRefreshGhgStatementStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (submissionId: string) => {
+      const result = await refreshGhgStatementStatus(submissionId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });

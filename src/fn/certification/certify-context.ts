@@ -472,34 +472,6 @@ export async function loadCertifyContextForCreditBatch(
   );
 }
 
-export interface CreditBatchRunRef {
-  id: string;
-  code: string;
-}
-
-// Lightweight production-run resolver for a credit batch — walks the
-// application lineage only (no Isometric API calls), deduplicates, sorted by
-// id. Retained for the dormant GHG-statement state loader (ADR 0003).
-export async function loadCreditBatchRunRefs(
-  userId: string,
-  creditBatchId: string,
-): Promise<CreditBatchRunRef[]> {
-  const creditBatch = await getCreditBatchById(userId, creditBatchId);
-  if (!creditBatch || creditBatch.applicationIds.length === 0) return [];
-  const lineages = await Promise.all(
-    creditBatch.applicationIds.map((id) => getChainOfCustodyData(userId, id)),
-  );
-  const byId = new Map<string, string>();
-  for (const lineage of lineages) {
-    if (lineage.productionRun) {
-      byId.set(lineage.productionRun.id, lineage.productionRun.code);
-    }
-  }
-  return Array.from(byId, ([id, code]) => ({ id, code })).sort((a, b) =>
-    a.id.localeCompare(b.id),
-  );
-}
-
 export interface RemovalHubEntry {
   removal: CertifierRemovalRow;
   memberBatches: MemberCreditBatch[];

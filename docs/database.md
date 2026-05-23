@@ -184,6 +184,8 @@ Source: `src/db/schema/certification.ts`.
 | Table | Purpose |
 |---|---|
 | `certifier_projects` | Maps a facility to an external certifier project + default removal template. |
+| `certifier_ghg_statements` | Period-anchored GHG Statement artifacts; roll up multiple Removals for a reporting period (ADR 0004). |
+| `certifier_removals` | The Isometric Removal — the submission unit; N credit batches → 1 removal; nullable `ghg_statement_id` FK. |
 | `certifier_sources` | Provider-agnostic external source mappings (e.g. feedstock-type IDs). |
 | `certification_submissions` | Versioned submission ledger with `lockedAt` + `payloadHash` + `version`. The lock + idempotency primitive for every outbound POST. |
 | `certifier_document_uploads` | Links local `documents` rows to provider-uploaded document IDs. |
