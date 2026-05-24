@@ -14,6 +14,10 @@ import type {
 } from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
+import {
+  gcRemovalIfOrphaned,
+  removalHasBlockingSubmission,
+} from "./certifier-removals";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -400,13 +404,35 @@ export async function updateCreditBatch(
 export async function deleteCreditBatch(userId: string, id: string): Promise<void> {
   requireAuth(userId);
   await db.transaction(async (tx) => {
-    // Delete junction table links first
+    // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
+    const [batch] = await tx
+      .select({ removalId: creditBatches.removalId })
+      .from(creditBatches)
+      .where(eq(creditBatches.id, id))
+      .for("update")
+      .limit(1);
+
+    // Refuse to delete a batch whose removal has been sent to the certifier —
+    // it would silently change what a live Isometric Removal represents.
+    if (
+      batch?.removalId &&
+      (await removalHasBlockingSubmission(tx, batch.removalId))
+    ) {
+      throw new SafeError(
+        "This credit batch belongs to a removal that has been submitted to the certifier. Supersede or reject that submission before deleting.",
+      );
+    }
+
+    // Delete junction table links first, then the credit batch.
     await tx
       .delete(creditBatchApplications)
       .where(eq(creditBatchApplications.creditBatchId, id));
-
-    // Delete the credit batch
     await tx.delete(creditBatches).where(eq(creditBatches.id, id));
+
+    // Drop the removal if this was its last member and it has no history.
+    if (batch?.removalId) {
+      await gcRemovalIfOrphaned(tx, batch.removalId);
+    }
   });
 }
 

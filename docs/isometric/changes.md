@@ -1,5 +1,66 @@
 # Isometric Docs Change Log
 
+## 2026-05-22 (Adapter re-leveled — the Removal is the submission unit)
+
+The Certify adapter was re-leveled again. A production run is the wrong
+submission grain (a run's biochar splits across deliveries/applications and
+run-as-Removal over-counted), and a GHG Statement is an arbitrary reporting
+period — not a synonym for a credit batch. See
+`docs/adr/0003-removal-as-submission-unit.md`.
+
+- **New mapping.** The Isometric **Removal** is the submission unit, held
+  locally by a new `certifierRemovals` row. **N credit batches map into one
+  Removal** (default 1:1 per month, lazily created on first submit;
+  multiple can be grouped). `creditBatches` gains a nullable `removalId` FK.
+- **Applied-biochar scoping.** A Removal counts only biochar applied to
+  soil — each run weighted by `appliedDryKg / runTotalBiocharOutput`
+  (linear mass allocation). `aggregateProductionRuns` takes an
+  `attributionByRunId` map.
+- **Single-phase submit.** `submitRemoval` aggregates the deduped union of
+  every member batch's runs into one Removal and POSTs it — no GHG phase.
+  The two-phase `submitCreditBatch` is removed.
+- **GHG Statements decoupled / dormant.** `ghg-statements.ts` is kept
+  un-wired for a future independent GHG-statement feature.
+- **New `/certification` Removals hub** manages removals + grouping; the
+  credit-batch Certify panel is now a compact removal status strip.
+- Supplier ref re-keyed `nm-pr-` → `nm-rmv-`. Migration `0022` is additive.
+
+## 2026-05-21 (Certify integration re-leveled — credit batch = GHG Statement)
+
+The Certify integration was mis-leveled by one tier: it mapped one
+`creditBatches` row → one Isometric **Removal** and treated a GHG
+Statement as a separate, period-anchored artifact. Isometric's model is
+the inverse — a **GHG Statement** is a monthly reporting summary that
+*contains* N **Removals**, one per production batch. (This model was
+itself superseded the next day; see
+`docs/adr/0003-removal-as-submission-unit.md`.)
+
+- **New mapping.** A noma credit batch submits as one **GHG Statement**;
+  each production run rolled up by the batch's lineage submits as one
+  **Removal**. The `creditBatches` table keeps its name (a rename would
+  touch ~50 files); the re-mapping lives in `src/fn/certification/`.
+- **Two-phase submit.** `submitCreditBatch` now POSTs every per-run
+  Removal (Phase 1 — sequential, sorted by run id, fail-fast) then the
+  GHG Statement (Phase 2), and asserts `GhgStatement.removal_ids` is a
+  superset of the Phase 1 Removal IDs. Removals link to the statement by
+  reporting-period date range, server-side.
+- **New** `src/fn/certification/submit-removal.ts` — `submitRemovalForRun`,
+  the per-run unit of idempotency (ledger row keyed
+  `localEntityType:'productionRun'`).
+- **`ghg-statements.ts` re-keyed** to the credit batch:
+  `submitGhgStatementForCreditBatch`, `submitGhgStatementToVerifier`,
+  `loadCreditBatchGhgStatementState`. Claim hash is
+  `(projectId, creditBatchId, endOn)`.
+- **Dropped:** the `certifierGhgPeriods` table (migration `0021`), the
+  `/certification` page, and `certification-page.tsx` — the
+  GHG-statement surface moved onto the credit-batch side-sheet Certify
+  panel, which renders N per-run Removal rows + the GHG Statement
+  status. Also removed the `GHG_PERIOD_ENTITY_TYPE` constant and the
+  legacy `nm-cb-` supplier-ref builder.
+- **Open question revised:** `isometric/phase-3.7-period-inputs` — the
+  per-reporting-period emission inputs now belong on the GHG Statement's
+  "Reporting period emissions" tab, not as per-run Removal zero stubs.
+
 ## 2026-05-19 (Review follow-ups — minor)
 
 - **Centralised submission-metadata keys.** Added

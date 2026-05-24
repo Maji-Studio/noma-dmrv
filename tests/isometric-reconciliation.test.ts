@@ -35,7 +35,7 @@ describe("Isometric reconciliation helpers", () => {
     >);
 
     await expect(
-      reconcileDatapoint({ supplierRefId: "nm-cb-1-dp-a-v1" }),
+      reconcileDatapoint({ supplierRefId: "nm-rmv-1-dp-a-v1" }),
     ).resolves.toEqual({ found: true, externalId: "dpt_123" });
   });
 
@@ -43,7 +43,7 @@ describe("Isometric reconciliation helpers", () => {
     mockedFindRemoval.mockResolvedValue(null);
 
     await expect(
-      reconcileRemoval({ supplierRefId: "nm-cb-1-removal-v1" }),
+      reconcileRemoval({ supplierRefId: "nm-rmv-1-removal-v1" }),
     ).resolves.toEqual({ found: false });
   });
 

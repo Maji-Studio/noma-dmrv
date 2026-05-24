@@ -44,8 +44,8 @@ export {
   type GhgStatementStatus,
 } from "./ghg-statements";
 export {
-  buildSupplierRef,
-  type BuildSupplierRefArgs,
+  buildRemovalSupplierRef,
+  type BuildRemovalSupplierRefArgs,
 } from "./utils/supplier-ref";
 export {
   reconcileRemoval,

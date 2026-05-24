@@ -16,8 +16,11 @@ import { useFacilityCertifierMapping } from "@/hooks/use-certification";
 export default function AdminEmissionEstimatesPage() {
   const { facilityId, selectedFacility } = useFacilityContext();
 
-  const { data: mappingData, isLoading: mappingLoading } =
-    useFacilityCertifierMapping(facilityId ?? "", !!facilityId);
+  const {
+    data: mappingData,
+    isLoading: mappingLoading,
+    isError: mappingError,
+  } = useFacilityCertifierMapping(facilityId ?? "", !!facilityId);
 
   return (
     <div className="container-max py-32 flex flex-col gap-24">
@@ -57,6 +60,13 @@ export default function AdminEmissionEstimatesPage() {
           facilityId={facilityId}
           mapping={mappingData.mapping}
         />
+      )}
+      {facilityId && !mappingLoading && !mappingData && (
+        <p className="body-medium text-[var(--color-text-secondary)]">
+          {mappingError
+            ? "Couldn't load this facility's Isometric configuration. Refresh the page to try again."
+            : "No Isometric configuration is available for this facility."}
+        </p>
       )}
     </div>
   );

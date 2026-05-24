@@ -1,56 +1,41 @@
 /**
- * CertifyPanel — slim status strip inside the credit-batch side sheet.
- *
- * Replaces the previous heavy accordion with a compact "what's the state of
- * this batch's submission?" view: status, last attempt, inline error, one-tap
- * resubmit. Heavy detail (blueprints, drift warnings, full audit log) lives
- * on the certification surface — accessible via the "View in certification →"
- * link below.
+ * CertifyPanel — Isometric Certify status strip inside the credit-batch
+ * side sheet. A credit batch maps into one Isometric Removal (N credit
+ * batches may share a removal — ADR 0003). The panel shows the removal's
+ * transport readiness, its member credit batches, runs the submit, and
+ * surfaces the Removal's status. Grouping is managed on the Certification
+ * hub (/certification).
  */
 "use client";
 
-import { ArrowSquareOut, ArrowsClockwise } from "@phosphor-icons/react";
+import { ArrowsClockwise } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
   useCertifyContextForCreditBatch,
-  useCreditBatchSubmissionState,
-  useSubmitCreditBatch,
+  useSubmitCreditBatchRemoval,
 } from "@/hooks/use-certification";
-import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type {
+  RemovalCertifyContext,
   TransportCategory,
   TransportCoverage,
 } from "@/fn/certification/certify-context";
-import {
-  SUBMISSION_METADATA_KEYS,
-  getMetadataValue,
-} from "@/lib/isometric/utils/submission-metadata";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
 import { Section } from "./panel-layout";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SubmitConfirmDialog } from "./submit-confirm-dialog";
-import { SyncEventLog } from "./sync-event-log";
 
-interface CertifyPanelProps {
-  creditBatchId: string;
-}
+const ICON_SIZE = 14;
 
-export function CertifyPanel({ creditBatchId }: CertifyPanelProps) {
+export function CertifyPanel({ creditBatchId }: { creditBatchId: string }) {
   return (
     <Section>
       <div className="flex flex-col gap-12">
-        <header className="flex items-baseline justify-between gap-12">
+        <header>
           <h3 className="title-chapter-title">Isometric Certify</h3>
-          <Link
-            href={`/certification?batch=${creditBatchId}`}
-            className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)] inline-flex items-center gap-4"
-          >
-            View in certification
-            <ArrowSquareOut size={ICON_SIZE_SMALL} weight="bold" />
-          </Link>
         </header>
         <PanelBody creditBatchId={creditBatchId} />
       </div>
@@ -77,16 +62,8 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
     );
   }
 
-  const {
-    mapping,
-    project,
-    defaultTemplate,
-    missingDefaultTemplateId,
-    unresolvedBlueprintKeys,
-    transportCoverage,
-    requiredTransportCategories,
-    isProduction,
-  } = ctx.data;
+  const data = ctx.data;
+  const { mapping, project, isProduction } = data;
 
   if (!mapping) {
     return (
@@ -102,25 +79,26 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
 
   const projectLabel = project?.name ?? mapping.externalProjectId;
   const templateResolved =
-    !!defaultTemplate &&
-    !missingDefaultTemplateId &&
-    unresolvedBlueprintKeys.length === 0;
-  const { missing: missingCoverageCategories, incomplete: incompleteCoverageCategories } =
-    templateResolved
-      ? splitCoverageCategories(transportCoverage, requiredTransportCategories)
-      : { missing: [], incomplete: [] };
-  const submitReady =
-    templateResolved &&
-    missingCoverageCategories.length === 0 &&
-    incompleteCoverageCategories.length === 0;
+    !!data.defaultTemplate &&
+    !data.missingDefaultTemplateId &&
+    data.unresolvedBlueprintKeys.length === 0;
 
   const blocker = !templateResolved
     ? deriveBlocker({
-        hasDefaultTemplate: !!defaultTemplate,
-        missingDefaultTemplateId,
-        unresolvedBlueprintKeys,
+        hasDefaultTemplate: !!data.defaultTemplate,
+        missingDefaultTemplateId: data.missingDefaultTemplateId,
+        unresolvedBlueprintKeys: data.unresolvedBlueprintKeys,
       })
     : null;
+
+  const coverage = analyzeCoverage(
+    data.transportCoverage,
+    data.requiredTransportCategories,
+  );
+  const submitReady =
+    templateResolved &&
+    coverage.missing.length === 0 &&
+    coverage.incomplete.length === 0;
 
   return (
     <div className="flex flex-col gap-12">
@@ -144,101 +122,108 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
         />
       )}
 
-      {templateResolved && (
+      <MemberBatchesRow data={data} currentCreditBatchId={creditBatchId} />
+
+      {templateResolved && data.requiredTransportCategories.length > 0 && (
         <TransportCoverageNotice
-          coverage={transportCoverage}
-          required={requiredTransportCategories}
+          missing={coverage.missing}
+          incomplete={coverage.incomplete}
         />
       )}
 
-      <SubmissionRow
+      <SubmissionSection
         creditBatchId={creditBatchId}
+        data={data}
         isProduction={isProduction}
         canSubmit={submitReady}
-        missingCoverageCategories={missingCoverageCategories}
-        incompleteCoverageCategories={incompleteCoverageCategories}
       />
     </div>
   );
 }
 
-function SubmissionRow({
+function MemberBatchesRow({
+  data,
+  currentCreditBatchId,
+}: {
+  data: RemovalCertifyContext;
+  currentCreditBatchId: string;
+}) {
+  const others = data.memberBatches.filter(
+    (b) => b.id !== currentCreditBatchId,
+  );
+  return (
+    <div className="flex flex-col gap-4 border-t border-[var(--color-border-secondary)] pt-12">
+      <div className="flex items-center justify-between gap-8">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Removal
+        </span>
+        <Link
+          href="/certification"
+          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+        >
+          Manage on Certification ↗
+        </Link>
+      </div>
+      {data.removalId ? (
+        <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+          {data.removalId}
+        </span>
+      ) : (
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          A removal is created for this batch on first submit.
+        </span>
+      )}
+      {others.length > 0 && (
+        <p className="body-caption text-[var(--color-text-secondary)]">
+          Grouped with {others.length} other credit batch
+          {others.length === 1 ? "" : "es"}:{" "}
+          <span className="font-mono">
+            {others.map((b) => b.code).join(", ")}
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SubmissionSection({
   creditBatchId,
+  data,
   isProduction,
   canSubmit,
-  missingCoverageCategories,
-  incompleteCoverageCategories,
 }: {
   creditBatchId: string;
+  data: RemovalCertifyContext;
   isProduction: boolean;
   canSubmit: boolean;
-  missingCoverageCategories: TransportCategory[];
-  incompleteCoverageCategories: TransportCategory[];
 }) {
-  const { data: state, isLoading, isError, error } =
-    useCreditBatchSubmissionState(creditBatchId);
-  const submitMutation = useSubmitCreditBatch();
+  const submitMutation = useSubmitCreditBatchRemoval();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  if (isLoading) {
-    return (
-      <p className="body-small text-[var(--color-text-tertiary)]">
-        Loading submission state…
-      </p>
-    );
-  }
-
-  if (isError || !state) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unable to load submission state.";
-    return (
-      <p className="body-small text-[var(--clr-red)]">{message}</p>
-    );
-  }
-
-  const { latest, recentSyncEvents, isLockedInFlight } = state;
-  const lockedAt = toDate(latest?.lockedAt);
+  const latest = data.latestSubmission;
+  const lockedInFlight = latest ? isLockedInFlight(latest) : false;
   const submitDisabled =
-    !canSubmit || isLockedInFlight || submitMutation.isPending;
+    !canSubmit || lockedInFlight || submitMutation.isPending;
 
   const buttonLabel = (() => {
     if (submitMutation.isPending) return "Submitting…";
-    if (isLockedInFlight) return "In progress";
-    if (latest?.status === "submitted" || latest?.status === "accepted") {
-      return "Resubmit";
-    }
-    return "Submit to Isometric";
-  })();
-
-  const submitTitle = (() => {
-    if (missingCoverageCategories.length > 0) {
-      return `Add transport legs for: ${missingCoverageCategories
-        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
-        .join(", ")}`;
-    }
-    if (incompleteCoverageCategories.length > 0) {
-      return `Fix incomplete legs for: ${incompleteCoverageCategories
-        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
-        .join(", ")}`;
-    }
-    return undefined;
+    if (lockedInFlight) return "In progress";
+    return latest?.externalId ? "Resubmit Removal" : "Submit Removal";
   })();
 
   const fireSubmit = (confirmProduction = false) => {
     submitMutation.mutate(
       { creditBatchId, confirmProduction },
       {
-        onSuccess: (data) => {
-          toast.success(
-            `Submitted to Isometric · Removal ${data.externalId} (v${data.version}).`,
-          );
+        onSuccess: (result) => {
+          toast.success(`Submitted Removal ${result.externalId}.`);
         },
         onError: (err) => {
           toast.error(
-            `Submission failed: ${err instanceof Error ? err.message : String(err)}`,
+            `Submission failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
           );
         },
       },
@@ -253,43 +238,43 @@ function SubmissionRow({
     fireSubmit();
   };
 
-  const errorMessage = deriveErrorMessage(latest, recentSyncEvents);
-
   return (
     <div className="flex flex-col gap-12 border-t border-[var(--color-border-secondary)] pt-12">
-      <div className="flex items-start justify-between gap-12">
-        <div className="flex flex-col gap-4 min-w-0">
-          <div className="flex items-center gap-8 flex-wrap">
-            <SubmissionStatusBadge
-              latest={latest}
-              isLockedInFlight={isLockedInFlight}
-            />
-            {isLockedInFlight && lockedAt && <ElapsedChip since={lockedAt} />}
-          </div>
-          <SubmissionMeta latest={latest} />
-        </div>
+      <div className="flex items-center justify-between gap-12">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Submission
+        </span>
         <Button
           variant="primary"
           size="default"
           onClick={handleClick}
           disabled={submitDisabled}
-          title={submitTitle}
         >
-          {!isLockedInFlight && submitMutation.isPending && (
-            <ArrowsClockwise size={ICON_SIZE_MEDIUM} className="animate-spin" />
+          {!lockedInFlight && submitMutation.isPending && (
+            <ArrowsClockwise size={ICON_SIZE} className="animate-spin" />
           )}
           {buttonLabel}
         </Button>
       </div>
 
-      {errorMessage && (
-        <p className="body-small text-[var(--clr-red)] break-words">
-          {errorMessage}
+      {latest ? (
+        <div className="flex items-center justify-between gap-8">
+          <div className="flex flex-col gap-2 min-w-0">
+            {latest.externalId && (
+              <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
+                {latest.externalId} · v{latest.version}
+              </span>
+            )}
+          </div>
+          <SubmissionStatusBadge
+            latest={latest}
+            isLockedInFlight={lockedInFlight}
+          />
+        </div>
+      ) : (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          This removal has not been submitted yet.
         </p>
-      )}
-
-      {recentSyncEvents.length > 0 && (
-        <SyncEventLog events={recentSyncEvents} compact />
       )}
 
       <SubmitConfirmDialog
@@ -307,91 +292,87 @@ function SubmissionRow({
   );
 }
 
-function SubmissionMeta({
-  latest,
+const TRANSPORT_CATEGORY_LABELS: Record<TransportCategory, string> = {
+  feedstock: "feedstock",
+  biochar: "biochar",
+  sample: "sample",
+};
+
+type CoverageStatus = "missing" | "incomplete" | "complete";
+
+function coverageStatus(
+  bucket: TransportCoverage[TransportCategory],
+): CoverageStatus {
+  if (bucket.count === 0) return "missing";
+  return bucket.aggregationWarning !== null ? "incomplete" : "complete";
+}
+
+function analyzeCoverage(
+  coverage: TransportCoverage,
+  required: TransportCategory[],
+): { missing: TransportCategory[]; incomplete: TransportCategory[] } {
+  const missing: TransportCategory[] = [];
+  const incomplete: TransportCategory[] = [];
+  for (const category of required) {
+    const status = coverageStatus(coverage[category]);
+    if (status === "missing") missing.push(category);
+    else if (status === "incomplete") incomplete.push(category);
+  }
+  return { missing, incomplete };
+}
+
+function TransportCoverageNotice({
+  missing,
+  incomplete,
 }: {
-  latest: CertificationSubmissionRow | null;
+  missing: TransportCategory[];
+  incomplete: TransportCategory[];
 }) {
-  if (!latest) {
-    return (
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        Never submitted
+  const ready = missing.length === 0 && incomplete.length === 0;
+  return (
+    <div className="border-t border-[var(--color-border-secondary)] pt-12">
+      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+        Transport coverage
       </span>
-    );
-  }
-  const submittedLabel = latest.submittedAt
-    ? new Date(latest.submittedAt).toLocaleDateString()
-    : "—";
-  return (
-    <span className="body-caption text-[var(--color-text-tertiary)]">
-      {latest.externalId ? (
-        <span className="font-mono">
-          {latest.externalId} · v{latest.version}
-        </span>
-      ) : (
-        <span>Draft · v{latest.version}</span>
-      )}
-      <span className="mx-6">·</span>
-      Last attempt {submittedLabel}
-    </span>
+      <p className="body-small mt-6">
+        {ready ? (
+          <span className="text-[var(--color-text-secondary)]">
+            <span className="text-[var(--clr-green,var(--color-text-primary))]">
+              ✓
+            </span>{" "}
+            All required transport legs present for this removal.
+          </span>
+        ) : (
+          <span className="text-[var(--color-text-primary)]">
+            <span className="text-[var(--color-signal-orange)]">!</span>{" "}
+            {describeGaps(missing, incomplete)}
+          </span>
+        )}
+      </p>
+    </div>
   );
 }
 
-function ElapsedChip({ since }: { since: Date }) {
-  const elapsed = useElapsed(since);
-  return (
-    <span className="body-caption text-[var(--color-text-tertiary)] font-mono">
-      {formatElapsed(elapsed)}
-    </span>
-  );
-}
-
-const ELAPSED_TICK_MS = 1000;
-const MS_PER_SECOND = 1000;
-const SECONDS_PER_MINUTE = 60;
-const ICON_SIZE_SMALL = 12;
-const ICON_SIZE_MEDIUM = 14;
-
-function useElapsed(since: Date): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), ELAPSED_TICK_MS);
-    return () => window.clearInterval(id);
-  }, []);
-  return Math.max(0, now - since.getTime());
-}
-
-function toDate(value: Date | string | null | undefined): Date | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
-}
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.floor(ms / MS_PER_SECOND);
-  if (totalSeconds < SECONDS_PER_MINUTE) return `${totalSeconds}s`;
-  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
-  const seconds = totalSeconds % SECONDS_PER_MINUTE;
-  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
-}
-
-function deriveErrorMessage(
-  latest: CertificationSubmissionRow | null,
-  recentSyncEvents: { status: string; errorMessage: string | null }[],
-): string | null {
-  if (!latest) return null;
-  if (latest.status === "rejected") {
-    const rejection = getMetadataValue(
-      latest.metadata,
-      SUBMISSION_METADATA_KEYS.rejectionReason,
+function describeGaps(
+  missing: TransportCategory[],
+  incomplete: TransportCategory[],
+): string {
+  const parts: string[] = [];
+  if (missing.length > 0) {
+    parts.push(
+      `missing ${missing
+        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
+        .join(", ")} legs`,
     );
-    if (typeof rejection === "string" && rejection) return rejection;
   }
-  if (latest.status === "submitted" || latest.status === "accepted") {
-    return null;
+  if (incomplete.length > 0) {
+    parts.push(
+      `incomplete ${incomplete
+        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
+        .join(", ")} legs`,
+    );
   }
-  const lastFailure = recentSyncEvents.find((e) => e.status === "failed");
-  return lastFailure?.errorMessage ?? null;
+  return parts.join("; ");
 }
 
 function BlockerNotice({
@@ -422,116 +403,6 @@ function BlockerNotice({
   );
 }
 
-const TRANSPORT_CATEGORY_LABELS: Record<TransportCategory, string> = {
-  feedstock: "Feedstock → processing",
-  biochar: "Biochar → storage",
-  sample: "Sample → lab",
-};
-
-const TRANSPORT_CATEGORY_FIX_HREF: Record<TransportCategory, string> = {
-  feedstock: "/feedstocks",
-  biochar: "/biochar-products",
-  sample: "/samples",
-};
-
-type CoverageStatus = "missing" | "incomplete" | "complete";
-
-function coverageStatus(bucket: TransportCoverage[TransportCategory]): CoverageStatus {
-  if (bucket.count === 0) return "missing";
-  return bucket.aggregationWarning !== null ? "incomplete" : "complete";
-}
-
-function splitCoverageCategories(
-  coverage: TransportCoverage,
-  required: TransportCategory[],
-): { missing: TransportCategory[]; incomplete: TransportCategory[] } {
-  const missing: TransportCategory[] = [];
-  const incomplete: TransportCategory[] = [];
-  for (const c of required) {
-    const status = coverageStatus(coverage[c]);
-    if (status === "missing") missing.push(c);
-    else if (status === "incomplete") incomplete.push(c);
-  }
-  return { missing, incomplete };
-}
-
-function CoverageRow({
-  category,
-  bucket,
-}: {
-  category: TransportCategory;
-  bucket: TransportCoverage[TransportCategory];
-}) {
-  const label = TRANSPORT_CATEGORY_LABELS[category];
-  const status = coverageStatus(bucket);
-
-  if (status === "complete") {
-    return (
-      <li className="body-small text-[var(--color-text-secondary)]">
-        <span className="text-[var(--clr-green,var(--color-text-primary))]">
-          ✓
-        </span>{" "}
-        {label} — {bucket.count} leg{bucket.count === 1 ? "" : "s"}
-      </li>
-    );
-  }
-
-  const isIncomplete = status === "incomplete";
-  const summary = isIncomplete
-    ? `${bucket.count} leg${bucket.count === 1 ? "" : "s"}, incomplete.`
-    : "no legs recorded.";
-  const linkLabel = isIncomplete ? "Fix legs →" : "Add legs →";
-
-  return (
-    <li className="body-small text-[var(--color-text-primary)]">
-      <span className="text-[var(--color-signal-orange)]">!</span> {label} —{" "}
-      {summary}{" "}
-      <Link
-        href={TRANSPORT_CATEGORY_FIX_HREF[category]}
-        className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-      >
-        {linkLabel}
-      </Link>
-      {isIncomplete && bucket.aggregationWarning && (
-        <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
-          {bucket.aggregationWarning}
-        </p>
-      )}
-    </li>
-  );
-}
-
-function TransportCoverageNotice({
-  coverage,
-  required,
-}: {
-  coverage: TransportCoverage;
-  required: TransportCategory[];
-}) {
-  return (
-    <div className="border-t border-[var(--color-border-secondary)] pt-12">
-      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        Transport coverage
-      </span>
-      {required.length === 0 ? (
-        <p className="body-small text-[var(--color-text-tertiary)] mt-6">
-          Not requested by the active removal template.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-4 mt-6">
-          {required.map((category) => (
-            <CoverageRow
-              key={category}
-              category={category}
-              bucket={coverage[category]}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function deriveBlocker({
   hasDefaultTemplate,
   missingDefaultTemplateId,
@@ -556,9 +427,11 @@ function deriveBlocker({
   if (unresolvedBlueprintKeys.length > 0) {
     const list = unresolvedBlueprintKeys.join(", ");
     return {
-      message: `Template references ${unresolvedBlueprintKeys.length} unresolved blueprint${unresolvedBlueprintKeys.length === 1 ? "" : "s"}: ${list}.`,
-      fixHint: "View blueprint detail in certification →",
+      message: `Template references ${unresolvedBlueprintKeys.length} unresolved blueprint${
+        unresolvedBlueprintKeys.length === 1 ? "" : "s"
+      }: ${list}.`,
+      fixHint: "Refresh the link in facility settings →",
     };
   }
-  return { message: "Submission blocked.", fixHint: "Check certification →" };
+  return { message: "Submission blocked.", fixHint: "Check facility settings →" };
 }
