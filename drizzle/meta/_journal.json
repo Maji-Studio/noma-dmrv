@@ -162,6 +162,27 @@
       "when": 1779454867590,
       "tag": "0022_bizarre_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779465925637,
+      "tag": "0023_ambiguous_scarlet_spider",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779467268707,
+      "tag": "0024_long_red_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779484744406,
+      "tag": "0025_lyrical_silver_sable",
+      "breakpoints": true
     }
   ]
 }

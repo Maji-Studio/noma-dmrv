@@ -1,0 +1,1 @@
+CREATE INDEX "certifier_removals_ghg_statement_id_idx" ON "certifier_removals" USING btree ("ghg_statement_id");

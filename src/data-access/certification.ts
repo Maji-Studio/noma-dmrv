@@ -94,7 +94,7 @@ export async function listAllFacilitiesLinkedByProvider(
     .where(eq(certifierProjects.provider, provider));
 }
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Statuses that still depend on the facility's certifier mapping. Terminal
 // statuses (`rejected`, `superseded`) are intentionally excluded — those rows
@@ -312,6 +312,39 @@ export async function getLatestSubmission(
     .orderBy(desc(certificationSubmissions.version))
     .limit(1);
   return row ?? null;
+}
+
+// Batched sibling of getLatestSubmission — one round-trip for N local
+// entities. DISTINCT ON keeps the highest-version row per localEntityId, the
+// same "latest" rule as getLatestSubmission. Returns a localEntityId → row
+// map; entities with no submission are simply absent.
+export async function getLatestSubmissionsForEntities(
+  userId: string,
+  key: {
+    provider: CertifierProvider;
+    submissionType: string;
+    localEntityType: string;
+    localEntityIds: string[];
+  },
+): Promise<Map<string, CertificationSubmissionRow>> {
+  requireAuth(userId);
+  if (key.localEntityIds.length === 0) return new Map();
+  const rows = await db
+    .selectDistinctOn([certificationSubmissions.localEntityId])
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, key.provider),
+        eq(certificationSubmissions.submissionType, key.submissionType),
+        eq(certificationSubmissions.localEntityType, key.localEntityType),
+        inArray(certificationSubmissions.localEntityId, key.localEntityIds),
+      ),
+    )
+    .orderBy(
+      certificationSubmissions.localEntityId,
+      desc(certificationSubmissions.version),
+    );
+  return new Map(rows.map((row) => [row.localEntityId, row]));
 }
 
 export async function getSubmissionById(
@@ -568,9 +601,10 @@ export async function updateSubmissionMetadata(
   userId: string,
   id: string,
   patch: Record<string, unknown>,
+  tx?: Tx,
 ): Promise<void> {
   requireAuth(userId);
-  await db
+  await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
@@ -586,9 +620,10 @@ export async function setSubmissionTerminalStatus(
     status: "accepted" | "rejected";
     metadataPatch?: Record<string, unknown>;
   },
+  tx?: Tx,
 ): Promise<void> {
   requireAuth(userId);
-  await db
+  await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       status: args.status,
@@ -603,9 +638,10 @@ export async function clearTerminalStatusForResubmit(
   userId: string,
   id: string,
   args: { metadataPatch?: Record<string, unknown> } = {},
+  tx?: Tx,
 ): Promise<void> {
   requireAuth(userId);
-  await db
+  await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       status: "submitted",
