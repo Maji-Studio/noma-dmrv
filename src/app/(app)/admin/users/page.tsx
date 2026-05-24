@@ -4,6 +4,7 @@
  * stubbed in this scaffold — the page renders the layout that the full feature
  * will inhabit so spacing and chrome stay consistent with the rest of admin.
  */
+import type { Icon } from "@phosphor-icons/react";
 import {
   EnvelopeSimple,
   ShieldCheck,
@@ -12,7 +13,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 interface PlannedCapability {
-  icon: typeof Users;
+  icon: Icon;
   title: string;
   description: string;
 }

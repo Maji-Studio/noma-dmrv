@@ -79,7 +79,7 @@ export function Modal({
 
   const widthClass = WIDTH_CLASSES[width];
   const baseClass =
-    "p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] overflow-auto";
+    "p-0 border border-[var(--color-border-primary)] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] overflow-auto";
 
   return (
     <dialog

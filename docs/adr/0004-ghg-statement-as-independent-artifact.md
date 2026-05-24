@@ -1,7 +1,9 @@
 # The GHG Statement is an independent, period-anchored artifact
 
-> Delivers the "future, independent GHG-statement feature" deferred by
-> ADR 0003 (`docs/adr/0003-removal-as-submission-unit.md`).
+> **Status: Accepted, delivered** (2026-05-24). Delivers the "future,
+> independent GHG-statement feature" deferred by
+> [ADR 0003](./0003-removal-as-submission-unit.md). Shipped as
+> integration-plan Phase 4.5.
 
 ## Context
 

@@ -1,7 +1,11 @@
 # The Isometric Removal is the submission unit; GHG Statements are decoupled
 
-> Supersedes the prior "credit batch = GHG Statement" integration model
-> (the short-lived ADR 0002 / 2026-05-21 re-leveling).
+> **Status: Accepted, delivered** (2026-05-22). Supersedes
+> [ADR 0002](./0002-credit-batch-as-ghg-statement.md) (the short-lived
+> "credit batch = GHG Statement" model). The "GHG Statements are
+> decoupled and dormant" clause below was lifted by
+> [ADR 0004](./0004-ghg-statement-as-independent-artifact.md) — the
+> GHG Statement is now a live, independent artifact.
 
 ## Context
 

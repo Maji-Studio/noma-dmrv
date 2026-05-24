@@ -34,6 +34,7 @@ import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventLog } from "./sync-event-log";
 
 const ICON_SIZE = 14;
+const STAT_ICON_SIZE = 24;
 
 export function GhgStatementsHub() {
   const { facilityId } = useFacilityContext();
@@ -126,19 +127,19 @@ function HubBody({ facilityId }: { facilityId: string }) {
         <StatCard
           title="Statements"
           value={statements.length}
-          icon={<ClipboardText size={24} weight="bold" />}
+          icon={<ClipboardText size={STAT_ICON_SIZE} weight="bold" />}
           description="Total GHG statements for this facility"
         />
         <StatCard
           title="Submitted"
           value={submittedCount}
-          icon={<CheckCircle size={24} weight="bold" />}
+          icon={<CheckCircle size={STAT_ICON_SIZE} weight="bold" />}
           description="Sent to the verifier at least once"
         />
         <StatCard
           title="Linked Removals"
           value={linkedRemovalsTotal}
-          icon={<LinkSimple size={24} weight="bold" />}
+          icon={<LinkSimple size={STAT_ICON_SIZE} weight="bold" />}
           description="Across all statements"
         />
       </div>
