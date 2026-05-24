@@ -101,9 +101,10 @@ POSTGRES_PASSWORD=postgres
 POSTGRES_DB=noma_dmrv_dev
 POSTGRES_PORT=5432
 
-# Optional pool tuning
-DB_POOL_MAX=20
-DB_POOL_IDLE_TIMEOUT_MS=30000
+# Optional pool tuning (values shown are the code defaults;
+# DB_POOL_MAX is a per-environment decision — keep it low on serverless)
+DB_POOL_MAX=1
+DB_POOL_IDLE_TIMEOUT_MS=10000
 DB_POOL_CONNECTION_TIMEOUT_MS=10000
 ```
 
@@ -183,7 +184,6 @@ Source: `src/db/schema/certification.ts`.
 | Table | Purpose |
 |---|---|
 | `certifier_projects` | Maps a facility to an external certifier project + default removal template. |
-| `certifier_ghg_periods` | Anchors registry reporting periods so a single Isometric project period yields one local statement row. |
 | `certifier_sources` | Provider-agnostic external source mappings (e.g. feedstock-type IDs). |
 | `certification_submissions` | Versioned submission ledger with `lockedAt` + `payloadHash` + `version`. The lock + idempotency primitive for every outbound POST. |
 | `certifier_document_uploads` | Links local `documents` rows to provider-uploaded document IDs. |

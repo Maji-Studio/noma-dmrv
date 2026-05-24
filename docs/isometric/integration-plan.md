@@ -19,149 +19,42 @@ protocol requirements; pull SOPs/docs; submit GHG statements for verification.
 **Auth:** env-level credentials only (`X-Client-Secret` + `Authorization:
 Bearer <jwt>` — both pre-issued via Isometric's UI; no programmatic refresh).
 
-## Status snapshot (2026-05-21)
+## Current status
 
-**Shipped:** Phases 0–4 read paths, plus the Phase 3 write path
-end-to-end **with full transport-leg coverage (Phase 3.6 ✅ DONE)**.
-Sandbox is wired up (`api.sandbox.isometric.com`,
-project `prj_1K9YJ33RKSBX9FFF`); read paths are sandbox-verified via
-`tests/isometric-sandbox.integration.test.ts`.
+Phases 0–4 are delivered: the read paths (project / removal-template /
+component-blueprint surfacing), the Phase 3 write path (Removal submission
+with transport-leg coverage), and the Phase 4 GHG-statement layer. The
+Isometric sandbox is wired up and the read paths are sandbox-verified.
 
-**2026-05-21 — granular template + zero-stub expansion.** The operator
-authored a new, more detailed removal template, **Dark Earth Carbon
-Template** (`rvt_1KS4S43VPSBXA26X`), in the sandbox Registry UI and bound
-all its fixed-constant Datapoints. It declares 7 monitored inputs the
-previous `INPUT_MAPPING` did not cover. Those 7 were added as **zero
-stubs** in `src/lib/isometric/transformers/datapoint.ts` so the Phase 3
-sandbox submit can run end-to-end — bringing the total to **12 zero
-stubs**. The schema work to replace all 12 with real data is now
-specified as **Phase 3.7** (below). `inspect-template` reports 0
-uncovered inputs; transformer + aggregation tests green.
+The integration was **re-leveled twice** in May 2026. The first re-level
+(2026-05-21) is superseded; the **current model is ADR 0003**
+(`docs/adr/0003-removal-as-submission-unit.md`, 2026-05-22):
 
-**Phase 3.6 completed 2026-05-13** — the UI / submission half of the
-phase that the 2026-05-11 foundation set up. Delivers:
+- The Isometric **Removal is the submission unit**, held locally by a
+  `certifierRemovals` row (facility-scoped). **N credit batches map into one
+  Removal** — default 1:1 per month, lazily created on first submit; several
+  can be grouped via the Removals hub. `creditBatches` carries a nullable
+  `removalId` FK.
+- A Removal aggregates the **deduped union of production runs** reached
+  through its member credit batches' application lineage, **applied-biochar
+  scoped** — each run weighted by `appliedDryKg / runTotalBiocharOutput`
+  (linear mass allocation).
+- Submission is **single-phase** `submitRemoval` — no GHG phase.
+- **GHG Statements are decoupled.** A GHG Statement is an arbitrary
+  supplier-chosen reporting period, not a synonym for a credit batch. It is
+  delivered as an **independent feature** — see Phase 4.5.
 
-- **Polymorphic transport-leg CRUD** — new
-  `src/data-access/transport-legs.ts` with
-  `getTransportLegsForEntity(userId, entityType, entityId)` +
-  `getTransportLegsForEntities(userId, entityType, entityIds[])`
-  (bulk) + auth-guarded create/update/delete with per-entityType
-  existence checks. `entityType='feedstock'` references
-  `feedstocks.id` (not the vestigial `feedstock_deliveries.id` —
-  users only interact with the combined `feedstocks` surface).
-- **Schemas / server actions / hooks** —
-  `src/schemas/transport-legs.ts` (Zod superRefine mirrors the DB
-  energy-usage vs distance-based check constraints),
-  `src/fn/transport-legs.ts` (`withAction`-wrapped),
-  `src/hooks/use-transport-legs.ts`.
-- **Polymorphic UI** — `TransportLegForm` (modal, method-conditional
-  required fields) + `TransportLegsPanel` (list / add / edit / delete)
-  in `src/components/transport-legs/`. Mounted via `viewModeChildren`
-  on the delivery side-sheet (replacing the read-only display),
-  sample side-sheet, and feedstock side-sheet. Legacy
-  `useTransportLegsForDelivery` / `getTransportLegsForDeliveryFn`
-  removed.
-- **Lineage walker** — new pure
-  `src/lib/isometric/utils/transport-lineage.ts` with
-  `collectTransportEntityIds(lineages, runs)` returning
-  `{feedstockIds, biocharProductIds, sampleIds}`. Shared by both
-  `submit-credit-batch.ts` and `certify-context.ts`.
-- **Submission wiring** — `submitCreditBatch` now calls
-  `collectTransportEntityIds` → `getTransportLegsForEntities`
-  (parallel per category) → `enrichWithTransportLegs(agg, …)` before
-  payload build. Submitted Removals carry real transport distances.
-- **Pre-flight coverage UX** — `<CertifyPanel>` reads new
-  `transportCoverage` field from the context loader and renders a
-  three-row checklist (`✓ Feedstock — 3 legs` /
-  `! Sample — no legs recorded. Add legs →`). Submit button is
-  disabled when any category is empty; the tooltip names the missing
-  categories.
-- **Tests** — full suite green: 28 files / 182 tests, 3 pre-existing
-  skips. New `tests/isometric-transport-lineage.test.ts` (6 cases)
-  covers the lineage walker; `tests/isometric-certify-context.test.ts`
-  extended (now 6 cases incl. populated-coverage walker assertions).
+Phase 3.7 replaced the energy zero-stubs with real per-run data and added
+the per-facility emission-estimate admin surface. The per-reporting-period
+inputs remain zero-stubbed and are tracked in `docs/open-questions.md`
+(`isometric/phase-3.7-period-inputs`); no template carrying a zero stub
+may be promoted to a production project. Webhook ingestion and the
+Phase 5+ time-series / bulk paths are deferred.
 
-**Phase 3.6 foundation landed 2026-05-11** (tailored-template path
-that unblocks `phase-3-input-coverage` / `phase-3-fixed-constants`):
-
-- `INPUT_MAPPING` refactored from flat `Record<string, …>` to
-  three-level `Record<group_key, Record<blueprint_key, Record<input_key, …>>>`
-  in `src/lib/isometric/transformers/datapoint.ts`. Disambiguation by
-  `(group_key, blueprint_key, input_key)` is required because real
-  templates re-use blueprints across groups (e.g., `transport` appears
-  twice — biomass→processing AND biochar→storage). New helper
-  `lookupInputMapping(groupKey, blueprintKey, inputKey)` exported.
-- `BuildCreateDatapointArgs` gained `groupKey` + `componentBlueprintKey`
-  fields; `submit-credit-batch.ts` orchestrator threads them through.
-- `AggregatedProductionData` extended with three optional fields:
-  `feedstockTransportAvgDistanceKm`, `biocharTransportAvgDistanceKm`,
-  `sampleTransportAvgDistanceKm`. Populated by new
-  `enrichWithTransportLegs(agg, { feedstock, biochar, sample })` pure
-  helper that calls `aggregateTransportLegs(legs)` (mass-weighted
-  average: `Σ(distance × load_mass) / Σ(load_mass)`).
-- `ResolvedTemplateInput` (in `aggregation.ts`) gained `groupKey` field;
-  `validateForTemplate` updated to use nested lookup.
-- `scripts/isometric-smoke.ts inspect-template` now reports the
-  `(group, blueprint, input)` tuple for any unmapped entries.
-- New `docs/isometric/sandbox-template-authoring.md` — step-by-step
-  walkthrough for an admin to author a noma-tailored template
-  (4 components, 7 monitored inputs, 6 fixed constants) in the
-  Registry UI so Phase 3 sandbox writes can succeed end-to-end.
-- Tests: 16 transformer tests updated + 11 new
-  `tests/isometric-transport-aggregation.test.ts` cases covering
-  mass-weighted average correctness, null/empty handling, and
-  `enrichWithTransportLegs` non-mutation. Full suite: 175 / 178
-  passing (3 pre-existing skips).
-
-**Outstanding:**
-
-- *Blocked on Isometric* — webhook contract publication; multi-org
-  credentials roadmap (Q3 below). Tracked in `docs/open-questions.md`.
-- *Tailored template authored 2026-05-21* — the operator built
-  **Dark Earth Carbon Template** (`rvt_1KS4S43VPSBXA26X`) in the sandbox
-  Registry UI with all fixed constants bound; `INPUT_MAPPING` now covers
-  every monitored input it declares (7 added as zero stubs). Phase 3
-  sandbox write E2E is no longer template-blocked.
-- *Not yet started — Phase 3.7* — replace all 12 `INPUT_MAPPING` zero
-  stubs with real monitored data (schema work). Full field-by-field
-  spec in the Phase 3.7 section below. Prerequisite for any *production*
-  Isometric project.
-- *Blocked on a noma subsystem* — `phase-3.5` source-upload
-  presigned-URL flow waits on the documents subsystem getting a real
-  S3 backend.
-- *Deferred until production signal* — `phase-4` per-Datapoint
-  sub-ledger, PATCH-vs-supersede branch, LIST inputs with multiple
-  datapoints; `phase-5` external GHG amendment claiming and
-  hash-changed partial-orphan cleanup. All in
-  `docs/open-questions.md`.
-- *Not yet started* — Phase 5 (time-series + bulk:
-  `MonitoringSubmission`, `DataUploadSubmission`,
-  `POST /biochar_applications`); Phase 6 (Protocol/SOP surfacing).
-- ~~*Carryover* — `tests/e2e/facility-certifier-mapping.spec.ts` from
-  Phase 1 verification.~~ ✅ Landed 2026-05-07. Two tests: N→1 mapping
-  through the side-sheet view-mode UI, and unlink-refused with the
-  exact `SafeError` surfaced in `UnlinkConfirmDialog`. Both run as a
-  read-only sandbox-backed E2E (gated behind
-  `ISOMETRIC_DEMO_PROJECT_ID`; `test.skip` otherwise).
-
-**Resolved this session:** Open-question Q1 (no `metadata` field on
-Datapoint/Removal/Source — `supplier_reference_id` is the round-trip
-mechanism) and Q2 (`PATCH /datapoints` accepts `source_ids`, so
-Phase 3.5 doesn't need a two-phase commit). See "Open questions"
-section at the bottom for citations.
-
-**Hardening pass (2026-05-06):** Closed the certifier-mapping race in
-`submitCreditBatch` and `createGhgStatementForFacility`. Both flows
-now route through `insertDraftSubmissionWithMappingLock` /
-`resetSubmissionToDraftWithMappingLock` (`data-access/certification.ts`),
-which lock the `certifier_projects` row and verify
-`(externalProjectId, defaultRemovalTemplateId)` before writing the
-draft submission. Concurrent `unlink`/`repoint` either blocks the
-in-flight submission or fails it cleanly. Unit-tested in
-`tests/isometric-mapping-lock.test.ts`. Same pass also gated
-`tests/isometric-sandbox.integration.test.ts` behind
-`RUN_ISOMETRIC_SANDBOX_TESTS=1` (run via `pnpm test:integration`)
-so plain `pnpm test` no longer touches the live sandbox.
+Per-phase delivery detail is in the "Phased delivery" section below. A
+point-in-time implementation log (sandbox wiring, the 2026-05 hardening
+pass, transport-leg rollout) is archived at
+`docs/archive/isometric-integration-status-2026-05-21.md`.
 
 ## Reuse what already exists
 
@@ -510,7 +403,7 @@ from `src/lib/isometric/index.ts`):**
 **Server action (`src/fn/certification.ts`, extended):**
 - ✅ `loadCertifyContextForCreditBatch(creditBatchId)` — `withAction`.
   Keys off the credit batch (not the facility) so the trust boundary
-  matches Phase 3's `submitCreditBatch`: load batch via
+  matches Phase 3's `submitRemoval`: load batch via
   `getCreditBatchById`, derive `facilityId` server-side, then resolve
   the certifier project, live project record, default removal template,
   and only the component blueprints that template's groups reference
@@ -573,10 +466,19 @@ from `src/lib/isometric/index.ts`):**
    → "N blueprint(s) … no longer in Certify's catalog" warning row
    appears. Revert.
 
-### Phase 3 — Single removal submission (end-to-end) ✅ DONE
+### Phase 3 — Removal submission (end-to-end) ✅ DONE
 
-One credit batch → one Removal, with the full idempotency ledger.
-Phases 1–2 are prerequisites; Phase 4 (GHG statements) builds on this.
+> **Re-leveled — current model is ADR 0003**
+> (`docs/adr/0003-removal-as-submission-unit.md`). The Removal is the
+> submission unit, held locally by a `certifierRemovals` row; N credit
+> batches map into one Removal; a Removal aggregates the deduped,
+> applied-mass-scoped union of production runs reached through its member
+> batches' application lineage. Submission is single-phase `submitRemoval`.
+> The transformers, idempotency ledger, and supplier-ref machinery below
+> are unchanged — only the orchestrator's grain moved.
+
+Removal submission with the full idempotency ledger. Phases 1–2 are
+prerequisites.
 
 **Transformers (`src/lib/isometric/transformers/`, NEW):**
 - ✅ `datapoint.ts` — `INPUT_MAPPING` table + numeric reading →
@@ -615,21 +517,32 @@ Phases 1–2 are prerequisites; Phase 4 (GHG statements) builds on this.
 
 **Server action — split first, then add (`src/fn/certification/`, NEW):**
 - ✅ Split `src/fn/certification.ts` into a directory module
-  (`facility-mapping.ts`, `certify-context.ts`, `submit-credit-batch.ts`,
-  `shared.ts`, `index.ts`) before Phase 4. Phase 4 added
-  `ghg-statements.ts` to the same directory.
-- ✅ `submitCreditBatch(creditBatchId)` in `submit-credit-batch.ts`:
-  - Resolves facility → looks up `certifier_projects` row → throws a
-    `SafeError` if absent.
-  - Calls `getApplicationLineage(applicationId)` — **reuses existing
-    branching** (`delivery.biocharProductId ?? order.biocharProductId`,
-    nullable `linkedProductionRunId`, possibly-empty feedstocks).
-    Refuses submission when lineage has blocking warnings.
-  - Runs aggregation, builds the payload, computes `payloadHash`.
-  - Calls `decideSubmissionClaim` and acts on the returned claim.
-    Idempotent: re-clicking Submit with the same payload returns the
-    existing externalId; mutating the batch creates a `version=2` row.
+  (`facility-mapping.ts`, `certify-context.ts`, `shared.ts`, `index.ts`).
+  The ADR 0003 re-leveling added `submit-removal.ts`, `removal-grouping.ts`,
+  and `certify-context.ts`'s removal-scoped loaders; `ghg-statements.ts`
+  is wired live by Phase 4.5.
+- ✅ `submitRemoval(...)` in `submit-removal.ts` — the submission unit
+  (one `certifierRemovals` row → one Isometric Removal):
+  - Loads the removal's full context (every member credit batch's deduped
+    run union + per-run applied-biochar attribution), aggregates ALL runs
+    together with linear mass allocation, enriches with pooled transport
+    legs + the facility emission config, builds the datapoints/removal
+    payload, computes `payloadHash`.
+  - Calls `decideSubmissionClaim` and acts on the returned claim. Ledger
+    row keyed `localEntityType:'removal'`, `localEntityId: certifierRemovals.id`.
+    Idempotent: a completed removal short-circuits via `return-existing`;
+    a changed payload supersedes to a new version. The `payloadHash`
+    covers the source run set + resolved inputs, **not** the member-batch
+    id set — a pure-membership change must not POST a duplicate Removal.
   - Each HTTP attempt appends a `certifier_sync_events` row.
+- ✅ Lineage resolution **reuses existing branching**
+  (`delivery.biocharProductId ?? order.biocharProductId`, nullable
+  `linkedProductionRunId`, possibly-empty feedstocks) and refuses
+  submission when any lineage has blocking warnings.
+- ✅ `submitCreditBatchRemoval` / `submitRemovalAction` /
+  `assignCreditBatchToRemoval` (`removal-grouping.ts`) drive the credit-batch
+  Certify panel and the Removals hub — lazy 1:1 creation, N:1 grouping,
+  direct submit.
 
 **UI (`src/components/certification/`, EXTENDED):**
 - ✅ `certify-panel.tsx` gained the "Submit to Isometric" button —
@@ -649,13 +562,15 @@ Phases 1–2 are prerequisites; Phase 4 (GHG statements) builds on this.
   under `phase-3-input-coverage` (20 monitored inputs without
   `INPUT_MAPPING` entries) and `phase-3-fixed-constants` (~12 fixed
   constants needing pre-bound datapoints in the Isometric template
-  editor). `submitCreditBatch` bails with a clear `SafeError` when
+  editor). `submitRemoval` bails with a clear `SafeError` when
   unbound constants are detected.
 
-**Acceptance (met):** one seeded credit batch produces a real Removal in
-Certify with linked Datapoints. Re-clicking Submit is a no-op (matched
-payload hash). Mutating the batch and re-submitting creates a
-`version=2` row and supersedes v1.
+**Acceptance (met):** submitting a removal produces one real Removal in
+Certify aggregating its member credit batches' applied-scoped production
+runs, with linked Datapoints. Re-clicking Submit is a no-op (matched
+payload hash). Mutating a source run and re-submitting supersedes to
+`version=2`; a pure membership change (grouping a batch in/out) does not
+POST a duplicate.
 
 **To do (carried forward):** source-upload presigned-URL flow (Phase 3.5),
 per-Datapoint sub-ledger rows (Phase 4 deferral).
@@ -719,84 +634,58 @@ This also removes the manual "link facility" step from sandbox test runs.
 **Deferred — `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`.**
 These stay zero-stubbed: pyrolyzer CH₄/CO concentration + gas mass-flow,
 lab-analysis electricity, sampling consumables mass, staff-travel
-distance, miscellaneous mass. Unresolved: tracked operational entities
-vs admin estimates, and how a per-reporting-period figure is apportioned
-across the many credit batches in that period. **No template carrying a
-zero stub may go to a production project.**
+distance, miscellaneous mass. After the re-leveling these are
+period-level and belong on the GHG Statement's "Reporting period
+emissions" tab, not on per-run Removals. Unresolved: tracked operational
+entities vs admin estimates, and how a per-reporting-period figure is
+apportioned across the ~12 monthly GHG Statements in a period. **No
+template carrying a zero stub may go to a production project.**
 
 **Critical files:** `src/db/schema/certification.ts`,
 `src/lib/isometric/utils/aggregation.ts`,
 `src/lib/isometric/transformers/datapoint.ts`,
-`src/fn/certification/{submit-credit-batch,facility-mapping}.ts`,
+`src/fn/certification/{submit-removal,facility-mapping}.ts`,
 `src/data-access/certification.ts`, `src/schemas/certification.ts`,
 `src/hooks/use-certification.ts`,
 `src/components/admin/emission-estimates-form.tsx`,
-`src/app/admin/{layout.tsx,emission-estimates/page.tsx}`,
+`src/app/(app)/admin/{layout.tsx,emission-estimates/page.tsx}`,
 `src/components/energy/energy-summary.tsx`,
 `src/app/(app)/energy/page.tsx`,
 `src/components/navigation/app-sidebar.tsx`, `src/db/seed-data.ts`.
 
-### Phase 4 — GHG statement lifecycle ✅ DONE (webhook deferred)
+### Phase 4 — GHG statement lifecycle ✅ DONE, then decoupled
 
-The lifecycle layer above Phase 3: aggregate one or more Removals into a
-`GhgStatement`, transition it through DRAFT → SUBMITTED → VERIFIED /
-REJECTED, and surface registry feedback back to operators.
+> **Superseded by ADR 0003** (`docs/adr/0003-removal-as-submission-unit.md`).
+> Phase 4 originally shipped a "credit batch = GHG Statement" lifecycle with
+> a two-phase `submitCreditBatch`. ADR 0003 (2026-05-22) established that a
+> GHG Statement is an arbitrary supplier-chosen reporting period, **not** a
+> synonym for a credit batch — so the GHG layer was **decoupled** from the
+> submit path. `submitCreditBatch` and its two-phase orchestration were
+> removed; submission is the single-phase `submitRemoval` of Phase 3. The
+> GHG layer is re-keyed and wired live as an independent feature in
+> Phase 4.5.
 
-**Schema (migration `drizzle/0017_glorious_night_thrasher.sql`):**
-- ✅ `certifier_ghg_periods` — local project-period anchor that prevents
-  duplicate statements for the same `(project, end_on)` pair.
-  Statement *state* stays in `certification_submissions`; only the
-  period anchor is new. Supplier-hosted report URLs are recorded as
-  `documents` rows with `entity_type='ghgStatement'`.
+The Isometric client and lifecycle machinery built in Phase 4 are retained
+and form the basis of Phase 4.5.
 
-**Isometric client (`src/lib/isometric/ghg-statements.ts`, NEW):**
+**Isometric client (`src/lib/isometric/ghg-statements.ts`):** retained.
 - ✅ Typed wrappers for `POST /ghg_statements`,
   `GET /ghg_statements/{id}`, and `POST /ghg_statements/{id}/submit`.
-- Note: Certify exposes `GET /ghg_statements` as pagination-only, so
-  local reconciliation client-filters by project + period end +
-  `DRAFT` status (handled in `utils/reconciliation.ts`).
+- `CreateGhgStatementRequest` carries only `{ end_on, project_id }`;
+  Removals link to the statement by reporting-period date range,
+  **server-side** — `removal_ids` is read-only, `reporting_period_start_at`
+  is server-derived.
+- `findDraftGhgStatementsByPeriod` — client-side filter by project +
+  period end + `DRAFT` (`GET /ghg_statements` is pagination-only).
 
-**Utils (`src/lib/isometric/utils/`, EXTENDED):**
+**Lifecycle utils (`src/lib/isometric/utils/`):** retained.
 - ✅ `ghg-statement-state.ts` — `chooseGhgSubmitMode` /
-  `ghgSubmitFingerprintChanged`. Decides between `POST /submit` (first
-  submission) and the resubmit endpoint (post-rejection).
-- ✅ `reconciliation.ts` — stale-lock recovery and the
-  GET-by-`supplier_reference_id` lookup that connects a stuck draft to
-  its remote row.
+  `ghgSubmitFingerprintChanged` (first submit vs resubmit).
+- ✅ `reconciliation.ts` — stale-lock recovery + GET-by-`supplier_reference_id`.
 
-**Server actions (`src/fn/certification/ghg-statements.ts`, NEW):**
-- ✅ `createGhgStatementForFacility(...)` — `POST /ghg_statements`,
-  routed through the same `decideSubmissionClaim` policy as Phase 3
-  (with `onSubmittedHashChanged: 'invalid-changed-hash'` because
-  the remote period row is unique per `(project, end_on)`).
-- ✅ `submitGhgStatementForFacility(...)` — branches on draft vs
-  rejected; calls submit or resubmit accordingly.
-- ✅ `refreshGhgStatementStatus(...)` — `GET /ghg_statements/{id}` plus
-  metadata reconciliation (caches `pending_total_co2e_removed_kg` on
-  the local row).
-- ✅ `loadFacilityCertificationOverview(...)` — read-only loader for
-  the facility-scoped GHG statement page; lists recent removals + the
-  current statement row.
-
-**Hooks (`src/hooks/use-certification.ts`, EXTENDED):**
-- ✅ Added the GHG-statement query + mutation hooks consumed by the new
-  `/certification` page.
-
-**UI:**
-- ✅ Standalone facility-scoped page `src/app/(app)/certification/page.tsx`
-  → `src/components/certification/certification-page.tsx` (~389 lines):
-  table of statements with create / submit / refresh / resubmit
-  controls.
-- ✅ `ghg-statement-create-dialog.tsx` and `ghg-statement-submit-dialog.tsx`
-  — modal forms with RHF + Zod.
-- ✅ Sidebar entry added in `src/components/navigation/app-sidebar.tsx`.
-
-**Tests:**
-- ✅ `tests/isometric-ghg-statement-flow.test.ts` — submit-mode state
-  machine (draft / rejected / pending CO2e behaviour).
-- ✅ `tests/isometric-reconciliation.test.ts` — stale-lock recovery
-  and client-side filtering of `GET /ghg_statements`.
-- ✅ `tests/e2e/certification-page.spec.ts` — page-level smoke.
+**Server actions (`src/fn/certification/ghg-statements.ts`):** kept but
+**dormant** after ADR 0003 — re-keyed from the credit batch and wired live
+by Phase 4.5.
 
 **Explicitly deferred (Phase 5+):**
 - Webhook ingestion. `certifierProjects.webhookSecret` exists in the
@@ -808,14 +697,52 @@ REJECTED, and surface registry feedback back to operators.
   authoritative event payload, signature header, or HMAC algorithm
   to verify against. Status polling via `refreshGhgStatementStatus`
   is the current reconciliation surface. Tracked in
-  `docs/open-questions.md` → `isometric-webhook-contract`; resolves
-  once Isometric publishes (or shares via support) the webhook
-  contract.
+  `docs/open-questions.md` → `isometric-webhook-contract`.
 - noma-driven PATCH orchestration for Removals — every payload change
   currently supersedes (creates a new version). PATCH branch deferred.
 - Automatic resubmission — manual button only.
 - External amendment claiming for registry-side statement-version
   drafts (admin edits made directly in the Isometric UI).
+
+### Phase 4.5 — Multi-removal GHG Statements + Certification route group 🚧 IN PROGRESS
+
+ADR 0003 left GHG Statements as "a future, independent feature." Phase 4.5
+delivers it: an operator creates an Isometric GHG Statement covering a
+chosen reporting period that rolls up multiple Removals, then submits it
+to the verifier.
+
+**Route group.** A provider-neutral `src/app/(app)/certification/` group
+(named neutrally — Verra / Gold Standard / CSI may be added later): a hub
+`page.tsx` plus `removals/page.tsx` (the existing Removals hub moves here)
+and `ghg-statements/page.tsx`. The sidebar gains a "Certification" section.
+
+**Schema.** New `certifierGhgStatements` table (facility-scoped, mirrors
+`certifierRemovals`: `reportingPeriodEndOn`, server-derived
+`reportingPeriodStartOn`). `certifierRemovals` gains a nullable
+`ghgStatementId` FK — reconciled from the statement's `removal_ids`, not
+user-assigned. Additive migration `0023`.
+
+**Period-first creation.** Isometric creates a statement from only
+`{ project_id, end_on }` and links Removals server-side by date range, so
+the create flow is period-first via a stepper dialog: pick the period end →
+preview the Removals predicted to be linked (and the open Removals outside
+the period) → confirm. After the POST, the actual `removal_ids` are
+reconciled back onto local `certifierRemovals.ghgStatementId`.
+
+**Server layer.** `ghg-statements.ts` is re-keyed from the credit batch to
+a `ghgStatement` local entity (ledger row `localEntityType:'ghgStatement'`,
+`localEntityId: certifierGhgStatements.id`): `createGhgStatementDraft`,
+`submitGhgStatementToVerifier`, `refreshGhgStatementStatus`,
+`loadGhgStatementState`. The lifecycle stays DRAFT → AWAITING_VERIFICATION
+→ VERIFIED / FAILED_VERIFICATION.
+
+**Critical files:** `src/db/schema/certification.ts`, NEW
+`src/data-access/certifier-ghg-statements.ts`,
+`src/fn/certification/ghg-statements.ts` (re-key),
+`src/hooks/use-certification.ts`, `src/schemas/certification.ts`,
+NEW `src/components/certification/{ghg-statements-hub,
+ghg-statement-create-dialog,ghg-statement-submit-dialog}.tsx`,
+`src/app/(app)/certification/**`, `src/components/navigation/app-sidebar.tsx`.
 
 ### Phase 5 — Time-series + bulk paths (not started)
 
@@ -872,7 +799,10 @@ were on the table:
 - ✅ `src/config/env.ts` — three optional vars added (Phase 0).
 - ✅ `src/db/schema/certification.ts` — `defaultRemovalTemplateId` added
   (Phase 0); `certifier_projects_provider_external_unique` dropped
-  (Phase 1); `certifier_ghg_periods` table added (Phase 4).
+  (Phase 1); `certifier_ghg_periods` added in Phase 4, dropped by the
+  first re-leveling; `certifierRemovals` table + `creditBatches.removalId`
+  added by ADR 0003; `certifierGhgStatements` table +
+  `certifierRemovals.ghgStatementId` added by Phase 4.5.
 - ✅ `src/lib/isometric/{client,index}.ts` + `generated/certify.d.ts` +
   `projects.ts` (`listProjects`, `listRemovalTemplates`,
   `listComponentBlueprints`) — Phases 0–2.
@@ -887,8 +817,10 @@ were on the table:
   Phase 4 for GHG-statement persistence.
 - ✅ `src/fn/certification/` (split from a single file in Phase 3) —
   `facility-mapping.ts` (Phase 1), `certify-context.ts` (Phase 2),
-  `submit-credit-batch.ts` (Phase 3), `ghg-statements.ts` (Phase 4),
-  `shared.ts`, `index.ts`.
+  `submit-removal.ts` + `removal-grouping.ts` (ADR 0003 Removal
+  submission), `ghg-statements.ts` (re-keyed live by Phase 4.5),
+  `shared.ts`, `index.ts`. `submit-credit-batch.ts` was removed by
+  ADR 0003.
 - ✅ `src/schemas/certification.ts` — Phase 1; extended in Phase 4.
 - ✅ `src/hooks/use-certification.ts` — Phase 1; extended in Phase 2
   with `useCertifyContextForCreditBatch`; extended in Phase 4 with
@@ -896,14 +828,17 @@ were on the table:
 - ✅ `src/components/certification/` — Phase 1
   (`facility-certifier-section.tsx`, `facility-certifier-dialog.tsx`,
   `index.ts`); Phase 2 added `certify-panel.tsx`, `blueprint-list.tsx`;
-  Phase 3 added `submission-status-badge.tsx`, `sync-event-log.tsx`
-  + Submit button on `certify-panel.tsx`; Phase 4 added
-  `certification-page.tsx`, `ghg-statement-create-dialog.tsx`,
-  `ghg-statement-submit-dialog.tsx`.
-- ✅ `src/app/(app)/certification/page.tsx` — Phase 4 facility-scoped
-  GHG-statement page.
-- ✅ `src/components/navigation/app-sidebar.tsx` — Phase 4 sidebar
-  entry.
+  Phase 3 added `submission-status-badge.tsx`, `sync-event-log.tsx`.
+  ADR 0003 added `removals-hub.tsx` and recast `certify-panel.tsx` as a
+  compact removal status strip. Phase 4.5 adds `ghg-statements-hub.tsx`,
+  `ghg-statement-create-dialog.tsx`, `ghg-statement-submit-dialog.tsx`.
+- ✅ `src/app/(app)/certification/` — a Phase 4 facility-scoped page,
+  removed by the first re-leveling, restored by ADR 0003 as the Removals
+  hub, and expanded by Phase 4.5 into a route group (`page.tsx` hub +
+  `removals/` + `ghg-statements/`).
+- ✅ `src/components/navigation/app-sidebar.tsx` — a Phase 4 sidebar
+  entry, removed then restored; Phase 4.5 gives it a "Certification"
+  section with Removals + GHG Statements.
 - ✅ `src/components/credit-batches/credit-batch-list.tsx` — mounts
   `<CertifyPanel />` via `viewModeChildren` (Phase 2; Submit button
   exposed in Phase 3).
@@ -939,34 +874,35 @@ were on the table:
   `tsc --noEmit` and `pnpm lint` pass. Not-linked empty-state E2E
   delivered as `tests/e2e/certification-submit.spec.ts` (lives next
   to the credit-batch spec rather than inside it; same coverage).
-- **Phase 3 (✅):** `submitCreditBatch` ships and produces a real Removal
-  with linked Datapoints in Certify. Idempotency verified by re-clicking
-  Submit (no-op on matched payload hash) and by mutating the batch
-  (creates `version=2` and supersedes v1). Tests delivered:
+- **Phase 3 (✅):** `submitRemoval` ships and produces one real Removal
+  in Certify aggregating its member credit batches' applied-scoped
+  production runs, with linked Datapoints. Idempotency verified by
+  re-clicking Submit (no-op on matched payload hash) and by mutating a
+  source run (supersedes to `version=2`). Tests delivered:
   `tests/isometric-payload-hash.test.ts`,
   `tests/isometric-submission-claim.test.ts` (18 cases — full claim
-  decision matrix), `tests/isometric-transformers.test.ts` (14 cases —
-  `INPUT_MAPPING` happy paths + drift / unit / null guards, removal
+  decision matrix), `tests/isometric-transformers.test.ts`
+  (`INPUT_MAPPING` happy paths + drift / unit / null guards, removal
   scalar-vs-list branching, and ISO-date formatting),
-  `tests/isometric-certify-context.test.ts` (5 cases — every branch of
-  `loadCertifyContextForCreditBatchForUser`: unlinked, no-default,
-  drift, unresolved-blueprint, fully-resolved), and
-  `tests/e2e/certification-submit.spec.ts` (Certify-panel rendering
-  smoke for the not-linked credit-batch state, no Isometric calls
-  required). *Still deferred:* a happy-path Removal-submit E2E that
-  exercises `submitCreditBatch` end-to-end. Sandbox is now reachable
-  (project `prj_1K9YJ33RKSBX9FFF`), but template input coverage gaps
-  block the write path (`docs/open-questions.md` →
-  `phase-3-input-coverage`, `phase-3-fixed-constants`).
-- **Phase 4 (✅, webhook deferred):** GHG-statement create / submit /
-  refresh / resubmit ship via the `/certification` page. Tests
-  delivered: `tests/isometric-ghg-statement-flow.test.ts` (state
-  machine), `tests/isometric-reconciliation.test.ts` (stale-lock
-  recovery + DRAFT filter), `tests/e2e/certification-page.spec.ts`
-  (page smoke). Webhook ingestion stays deferred (no published
-  Certify webhook contract); see `docs/open-questions.md` →
-  `isometric-webhook-contract`. HMAC verification + reconciliation
-  tests will land alongside the receiver once a contract exists.
+  `tests/isometric-certify-context.test.ts` (10 cases — context
+  resolution branches + per-run transport coverage). *Still deferred:*
+  a happy-path Removal-submit E2E that exercises `submitRemoval`
+  end-to-end. Sandbox is now reachable (project `prj_1K9YJ33RKSBX9FFF`),
+  but template input coverage gaps block the write path
+  (`docs/open-questions.md` → `phase-3-input-coverage`,
+  `phase-3-fixed-constants`).
+- **Phase 4 (✅, then decoupled):** the GHG-statement lifecycle shipped,
+  then ADR 0003 decoupled it from the submit path. The Isometric client
+  and lifecycle utils are retained; `ghg-statements.ts` is re-keyed and
+  wired live by Phase 4.5. The submit-mode state-machine and stale-lock
+  reconciliation tests still pass. Webhook ingestion stays deferred (no
+  published Certify webhook contract); see `docs/open-questions.md` →
+  `isometric-webhook-contract`.
+- **Phase 4.5 (🚧):** verification is detailed in the execution plan —
+  the period-first stepper creates a `certifier_ghg_statements` row + a
+  ledger row keyed `('isometric','ghg_statement','ghgStatement',<id>)`;
+  reconciliation sets `certifier_removals.ghg_statement_id`;
+  submit-to-verifier flips the ledger status.
 
 ## Open questions (not blocking Phase 0)
 

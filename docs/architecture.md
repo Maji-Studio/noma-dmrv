@@ -27,7 +27,7 @@ Rules:
 - `src/app/(auth)/*`: public auth pages.
 - `src/app/(app)/projects`: authenticated project list/CRUD.
 - `src/app/(app)/[projectId]/*`: project-scoped pages.
-- `src/app/admin/*`: admin-only pages.
+- `src/app/(app)/admin/*`: admin-only pages.
 
 Project-scoped routes use `src/app/(app)/[projectId]/layout.tsx` to enforce project membership once at layout level.
 
@@ -181,8 +181,8 @@ data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
 lib/isometric/              # Pure HTTP client + transformers + utils
                             #   (no DB, no auth, no ActionResult)
        ↓
-db/schema/certification.ts  # certifier_projects, certifier_ghg_periods,
-                            #   certifier_sources, certification_submissions,
+db/schema/certification.ts  # certifier_projects, certifier_sources,
+                            #   certification_submissions,
                             #   certifier_document_uploads,
                             #   certifier_sync_events
 ```
@@ -193,24 +193,23 @@ concurrent in-flight retries, `payloadHash` (canonical-JSON sha256)
 identifies replayable submissions, `version` tracks supersedes. The
 retry-decision gate is centralized in
 `src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`)
-and applied identically by `submitCreditBatch` and
-`createGhgStatementForFacility`. Every HTTP attempt also appends a row
-to `certifier_sync_events` (append-only audit log; never used for
-state).
+and applied identically by `submitRemovalForRun` (one ledger row per
+production run) and `submitGhgStatementForCreditBatch` (one ledger row
+per credit batch). Every HTTP attempt also appends a row to
+`certifier_sync_events` (append-only audit log; never used for state).
 
 **UI surfaces:**
 
 - Credit-batch side sheet — Certify panel mounted via the
   `viewModeChildren` slot on `EntitySideSheet`
   (`src/components/credit-batches/credit-batch-list.tsx`). Read-only
-  template/blueprint surfacing plus the "Submit to Isometric" button
-  and submission history.
+  template/blueprint surfacing, the Submit button (per-run Removals +
+  the GHG Statement), per-run Removal status rows, the GHG Statement
+  status, the "Submit/Resubmit to Verifier" action, and submission
+  history. This is the whole GHG-statement lifecycle surface — there is
+  no standalone certification route.
 - Facility list side sheet — facility ↔ Isometric project mapping
   (`src/components/certification/facility-certifier-section.tsx`).
-- `/certification` route — facility-scoped GHG statement lifecycle
-  (create / submit / refresh / resubmit) at
-  `src/app/(app)/certification/page.tsx` /
-  `src/components/certification/certification-page.tsx`.
 
 **Phase status and deferred work** — see
 `docs/isometric/integration-plan.md`. Current notable deferrals:

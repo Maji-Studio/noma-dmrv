@@ -10,7 +10,7 @@ e2e workflow (`.github/workflows/e2e.yml`) doesn't set `STORAGE_PROVIDER`, it
 defaults to `local-fs`, the env schema crashes at server boot, and the entire
 suite fails before any test runs:
 
-```
+```text
 [WebServer] Error [ZodError]: STORAGE_PROVIDER must be 's3-compatible' in
 production. 'local-fs' is rejected as a security safeguard.
 ```
