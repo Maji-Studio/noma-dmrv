@@ -8,6 +8,7 @@ import {
   integer,
   primaryKey,
   check,
+  index,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import {
@@ -190,6 +191,10 @@ export const creditBatches = pgTable(
         or ${table.totalFeedstockMassKg} is null
         or ${table.ineligibleFeedstockMassKg} <= ${table.totalFeedstockMassKg}`
     ),
+    // Indexes the Removal grouping FK — drives "find credit batches in
+    // removal X" lookups during submission. Postgres does not auto-index
+    // foreign keys.
+    index('credit_batches_removal_id_idx').on(table.removalId),
   ]
 );
 

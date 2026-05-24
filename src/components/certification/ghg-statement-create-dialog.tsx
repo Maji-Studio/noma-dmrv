@@ -15,13 +15,12 @@ import {
   type UseFormRegisterReturn,
 } from "react-hook-form";
 import { FormField, FormInput, ServerError } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
   useCreateGhgStatement,
   useOpenRemovalsForFacility,
 } from "@/hooks/use-certification";
-import { useDialog } from "@/hooks/use-dialog";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -68,17 +67,15 @@ export function GhgStatementCreateDialog({
     defaultValues: initialValues,
   });
 
-  const dialogRef = useDialog(isOpen, onClose, () => {
+  const onModalOpen = () => {
     setStep(1);
     reset(initialValues);
     mutation.reset();
-  });
+  };
 
   const endOn = watch("reportingPeriodEndOn");
   // The preview query only runs once the user reaches step 2.
   const openQuery = useOpenRemovalsForFacility(facilityId, isOpen && step >= 2);
-
-  if (!isOpen) return null;
 
   const goToPreview = async () => {
     if (await trigger("reportingPeriodEndOn")) setStep(2);
@@ -112,12 +109,14 @@ export function GhgStatementCreateDialog({
   const result = mutation.data;
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50"
-      aria-labelledby="ghg-create-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      onOpen={onModalOpen}
+      ariaLabelledBy="ghg-create-title"
+      width="md"
     >
-      <div className="flex flex-col gap-20 w-[560px] max-w-[calc(100vw-32px)] p-24">
+      <div className="flex flex-col gap-20">
         <header className="flex flex-col gap-4">
           <span
             aria-live="polite"
@@ -199,7 +198,7 @@ export function GhgStatementCreateDialog({
           </>
         )}
       </div>
-    </dialog>
+    </Modal>
   );
 }
 

@@ -1,30 +1,40 @@
 # Isometric Docs Change Log
 
+## 2026-05-24 (GHG Statement mapping-lock parity + unlink guard)
+
+Two correctness fixes on the GHG Statement flow now that it's a live
+artifact (ADR 0004). See
+`docs/adr/0004-ghg-statement-as-independent-artifact.md` (updated in the
+same change).
+
+- **`createGhgStatementDraft` uses the `…WithMappingLock` ledger
+  variants.** The `resume` and `create-new-version` branches now go
+  through `resetSubmissionToDraftWithMappingLock` /
+  `insertDraftSubmissionWithMappingLock` with a guard that pins
+  `expectedExternalProjectId` (the `expectedDefaultRemovalTemplateId`
+  arm is intentionally omitted — a GHG Statement has no template). The
+  lock serialises against a concurrent facility repoint/unlink between
+  the project read and the remote POST, preventing the registry
+  statement being created under a stale project.
+- **Unlink/repoint guard widened to include GHG-statement submissions.**
+  `hasBlockingFacilitySubmission` (`src/data-access/certification.ts`)
+  now runs two parallel probes — one over `certifier_removals`, one over
+  `certifier_ghg_statements` — and refuses the unlink/repoint when
+  either has an in-flight submission in `BLOCKING_SUBMISSION_STATUSES`.
+  Both branches keep the one-hop facility join (no lineage walk) and use
+  artifact-specific facility indexes.
+- **Stale framing corrected.** The "GHG Statements decoupled / dormant"
+  note from the 2026-05-22 entry below no longer holds — the flow is
+  live and participates in the same correctness contracts as Removals.
+
 ## 2026-05-22 (GHG Statement review follow-ups)
 
-Post-delivery review fixes for the GHG Statements feature (see the entry
-below). See `docs/adr/0004-ghg-statement-as-independent-artifact.md`.
-
-- **One statement per period — double-create dedup.** The local statement
-  id is now stable per `(provider, facility, reporting-period end)`:
-  `getOrCreateGhgStatementDraft` returns the existing row instead of
-  minting a fresh one, so a double-click / two-tab race resolves through
-  the submission-claim machinery (block in-flight, return the
-  already-created external id, resume a failed draft) instead of POSTing a
-  second Isometric registry artifact. Backed by the new
-  `certifier_ghg_statements_facility_period_unique` constraint — migration
-  `0025`, additive.
-- **N+1 queries removed.** `loadGhgStatementsForFacility` and
-  `loadGhgStatementState` now batch their per-row ledger lookups via
-  `getLatestSubmissionsForEntities` (`DISTINCT ON`) and
-  `countRemovalsByGhgStatementIds` (grouped count).
-- **`finalizeGhgStatement` made atomic.** The post-create reconciliation —
-  removal membership, server-derived reporting window and ledger state —
-  commits in one transaction; `reconcileRemovalMembership` and the ledger
-  write helpers accept an optional `tx`. The external id is still
-  persisted standalone first so a failure can never lose the registry link.
-- Deferred review findings (error boundary, report-URL host allowlist,
-  shared-component a11y) logged to `docs/open-questions.md`.
+Post-delivery review fixes for the GHG Statements feature: one
+statement per `(provider, facility, period)` (double-create dedup
+backed by migration `0025`), N+1 ledger lookups batched, and
+`finalizeGhgStatement` made atomic. See
+`docs/archive/2026-05-22-ghg-statement-review.md` for the detailed
+delivery log.
 
 ## 2026-05-22 (GHG Statements wired live — Certification route group)
 

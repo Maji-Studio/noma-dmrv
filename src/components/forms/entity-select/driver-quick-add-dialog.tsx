@@ -41,7 +41,7 @@ export function DriverQuickAddDialog({
       onClose={onClose}
       title="Add New Driver"
       error={error}
-      maxWidth="max-w-md"
+      width="sm"
       testId="driver-quick-add-dialog"
     >
       <DriverForm

@@ -38,16 +38,16 @@ const ADMIN_TILES: AdminTile[] = [
 
 export default function AdminHomePage() {
   return (
-    <div className="container-max py-32 flex flex-col gap-24">
+    <div className="container-max py-32 flex flex-col gap-32">
       <header className="flex flex-col gap-8">
-        <h1 className="title-heading-1">Admin</h1>
+        <h1 className="title-heading-2">Admin</h1>
         <p className="body-medium text-[var(--color-text-secondary)] max-w-[560px]">
           System-wide settings and the constants that feed Isometric
           submissions. Choose an area to configure.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         {ADMIN_TILES.map((tile) => {
           const Icon = tile.icon;
           return (

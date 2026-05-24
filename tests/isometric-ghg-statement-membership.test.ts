@@ -93,6 +93,29 @@ describe("decideRemovalMembership", () => {
     expect(decision.warnings).toEqual([]);
   });
 
+  it("ignores extras in externalToLocal that are not in externalRemovalIds", () => {
+    // The caller may pre-load a wider ledger window into externalToLocal;
+    // decideRemovalMembership must only act on entries Isometric actually
+    // returned for this statement.
+    const decision = decideRemovalMembership({
+      externalRemovalIds: ["rmv_present"],
+      externalToLocal: new Map([
+        ["rmv_present", "local-present"],
+        ["rmv_extra", "local-extra"],
+      ]),
+      currentMembership: new Map([
+        ["local-present", null],
+        ["local-extra", null],
+      ]),
+      ghgStatementId: "stmt-1",
+    });
+
+    // Only the present mapping is linked; the extra is silently ignored.
+    expect(decision.toLink).toEqual(["local-present"]);
+    expect(decision.linkedRemovalIds).toEqual(["local-present"]);
+    expect(decision.warnings).toEqual([]);
+  });
+
   it("returns an empty decision for an empty removal set", () => {
     expect(
       decideRemovalMembership({

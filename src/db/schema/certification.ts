@@ -1,4 +1,5 @@
 import {
+  check,
   date,
   index,
   integer,
@@ -10,6 +11,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import {
   certificationSubmissionStatus,
   certifierProvider,
@@ -133,6 +135,16 @@ export const certifierRemovals = pgTable(
     // lookups and keeps FK-constraint checks fast — Postgres does not
     // auto-index foreign keys.
     index('certifier_removals_ghg_statement_id_idx').on(table.ghgStatementId),
+    // Indexes the facility FK — drives listOpenRemovalsForFacility and the
+    // Removals hub's per-facility filter. Postgres does not auto-index FKs.
+    index('certifier_removals_facility_id_idx').on(table.facilityId),
+    // Reporting-window chronology guard. Either bound may still be null
+    // (windows are filled in lazily at first submission), but if both are
+    // present, start must precede end.
+    check(
+      'certifier_removals_reporting_window_chronology',
+      sql`${table.startedOn} is null or ${table.completedOn} is null or ${table.startedOn} <= ${table.completedOn}`
+    ),
   ]
 );
 

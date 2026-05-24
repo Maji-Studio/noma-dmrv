@@ -42,16 +42,29 @@ export function decideRemovalMembership(
   } = input;
   const warnings: string[] = [];
 
-  // Each Isometric removal id with no local ledger row → drift.
+  // Derive the candidate local-removal set strictly from the external ids
+  // requested for this reconciliation — any extras already in the
+  // externalToLocal map (e.g., a caller pre-loaded a wider ledger window)
+  // are ignored. This keeps the decision tightly anchored to
+  // `externalRemovalIds` so a stale or oversized mapping cannot accidentally
+  // link removals outside what Isometric actually returned for this
+  // statement.
+  const seen = new Set<string>();
+  const localRemovalIds: string[] = [];
   for (const externalId of externalRemovalIds) {
-    if (!externalToLocal.has(externalId)) {
+    const localId = externalToLocal.get(externalId);
+    if (localId === undefined) {
+      // No local ledger row → drift.
       warnings.push(
         `Isometric linked removal ${externalId}, which has no local record.`,
       );
+      continue;
     }
+    if (seen.has(localId)) continue;
+    seen.add(localId);
+    localRemovalIds.push(localId);
   }
 
-  const localRemovalIds = [...new Set(externalToLocal.values())];
   const toLink: string[] = [];
   const linkedRemovalIds: string[] = [];
 

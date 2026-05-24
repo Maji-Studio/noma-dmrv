@@ -6,8 +6,7 @@
  */
 "use client";
 
-import { Button } from "@/components/ui";
-import { useDialog } from "@/hooks/use-dialog";
+import { Button, Modal } from "@/components/ui";
 import { EnvBanner } from "./env-banner";
 
 export type SubmitArtifact = "removal" | "ghgStatement";
@@ -34,17 +33,16 @@ export function SubmitConfirmDialog({
   artifact = "removal",
   isProduction = false,
 }: SubmitConfirmDialogProps) {
-  const dialogRef = useDialog(isOpen, onClose);
-  if (!isOpen) return null;
   const label = ARTIFACT_LABEL[artifact];
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50"
-      aria-labelledby="submit-confirm-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="submit-confirm-title"
+      width="sm"
     >
-      <div className="flex flex-col gap-20 w-[440px] max-w-[calc(100vw-32px)] p-24">
+      <div className="flex flex-col gap-20">
         <EnvBanner isProduction={isProduction} variant="inline" />
 
         <div className="flex flex-col gap-12">
@@ -80,6 +78,6 @@ export function SubmitConfirmDialog({
           </Button>
         </div>
       </div>
-    </dialog>
+    </Modal>
   );
 }

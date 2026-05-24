@@ -36,8 +36,13 @@ server-derived. There is no way to pass an explicit removal list.
   prior ledger row and the submission-claim machinery resolves the race:
   an in-flight create blocks, an already-created one returns its external
   id, a stale or failed draft resumes. The mapping-lock ledger variants
-  (which guard a removal template) are still not used — a GHG Statement
-  has no template.
+  are used with `expectedDefaultRemovalTemplateId` omitted: a GHG
+  Statement has no template, but its create payload still pins
+  `externalProjectId`, so the lock serialises against a concurrent
+  facility repoint/unlink and prevents the registry statement being
+  created under a stale project. Live GHG-statement submissions also
+  participate in `hasBlockingFacilitySubmission`, so a repoint/unlink is
+  refused while one is open.
 - **One GHG Statement per period.** Two statements for the same
   `(provider, facility, reporting-period end)` are blocked by the
   `certifier_ghg_statements_facility_period_unique` constraint, so a

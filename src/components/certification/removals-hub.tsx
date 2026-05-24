@@ -7,9 +7,16 @@
  */
 "use client";
 
-import { ArrowsClockwise } from "@phosphor-icons/react";
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import {
+  ArrowsClockwise,
+  CheckCircle,
+  ClockCountdown,
+  SealCheck,
+  Stack,
+} from "@phosphor-icons/react/dist/ssr";
+import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -33,13 +40,13 @@ export function RemovalsHub() {
   const { facilityId } = useFacilityContext();
 
   return (
-    <div className="flex flex-col gap-24 p-24">
-      <header className="flex flex-col gap-4">
+    <div className="container-max flex flex-col gap-32 py-32">
+      <header className="flex flex-col gap-8">
         <span className="title-chapter-title text-[var(--color-text-tertiary)]">
           Isometric Certify
         </span>
         <h1 className="title-heading-2">Removals</h1>
-        <p className="body-medium text-[var(--color-text-secondary)]">
+        <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
           A Removal is the Isometric submission unit. One credit batch maps to
           one Removal by default; group several into one when they share a
           reporting period.
@@ -47,9 +54,11 @@ export function RemovalsHub() {
       </header>
 
       {!facilityId ? (
-        <p className="body-medium text-[var(--color-text-tertiary)]">
-          Select a facility to view its removals.
-        </p>
+        <EmptyState
+          icon={<SealCheck size={48} />}
+          title="Select a facility"
+          description="Choose a facility from the sidebar to view its removals."
+        />
       ) : (
         <HubBody facilityId={facilityId} />
       )}
@@ -62,36 +71,76 @@ function HubBody({ facilityId }: { facilityId: string }) {
 
   if (query.isLoading) {
     return (
-      <p className="body-medium text-[var(--color-text-tertiary)]">
-        Loading removals…
-      </p>
+      <>
+        <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
+          <StatCard title="Removals" value="—" isLoading />
+          <StatCard title="Submitted" value="—" isLoading />
+          <StatCard title="Ungrouped Batches" value="—" isLoading />
+        </div>
+        <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
+          <p className="body-medium text-[var(--color-text-tertiary)]">
+            Loading removals…
+          </p>
+        </section>
+      </>
     );
   }
   if (query.error || !query.data) {
     return (
-      <p className="body-medium text-[var(--clr-red)]">
-        Unable to load removals. Try refreshing the page.
-      </p>
+      <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
+        <p className="body-medium text-[var(--clr-red)]">
+          Unable to load removals. Try refreshing the page.
+        </p>
+      </div>
     );
   }
 
   const { removals, ungroupedBatches, isProduction } = query.data;
+  const submittedCount = removals.filter(
+    (e) => e.latestSubmission?.externalId,
+  ).length;
 
   return (
-    <div className="flex flex-col gap-32">
+    <>
+      <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          title="Removals"
+          value={removals.length}
+          icon={<SealCheck size={24} weight="bold" />}
+          description="Submission units for this facility"
+        />
+        <StatCard
+          title="Submitted"
+          value={submittedCount}
+          icon={<CheckCircle size={24} weight="bold" />}
+          description="Sent to Isometric at least once"
+        />
+        <StatCard
+          title="Ungrouped Batches"
+          value={ungroupedBatches.length}
+          icon={<Stack size={24} weight="bold" />}
+          description="Credit batches waiting to be grouped"
+        />
+      </div>
+
       <section className="flex flex-col gap-16">
-        <h2 className="title-heading-3">
-          Removals{" "}
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            ({removals.length})
-          </span>
-        </h2>
+        <div className="flex items-end justify-between gap-12">
+          <h2 className="title-heading-3">
+            Removals{" "}
+            <span className="body-small text-[var(--color-text-tertiary)]">
+              ({removals.length})
+            </span>
+          </h2>
+        </div>
         {removals.length === 0 ? (
-          <p className="body-medium text-[var(--color-text-tertiary)]">
-            No removals yet. Group a credit batch below to create one.
-          </p>
+          <EmptyState
+            icon={<SealCheck size={40} />}
+            title="No removals yet"
+            description="Group a credit batch below to create the first Removal."
+            padding="md"
+          />
         ) : (
-          <div className="flex flex-col gap-16">
+          <div className="grid grid-cols-1 gap-16 xl:grid-cols-2">
             {removals.map((entry) => (
               <RemovalCard
                 key={entry.removal.id}
@@ -107,7 +156,7 @@ function HubBody({ facilityId }: { facilityId: string }) {
         batches={ungroupedBatches}
         removals={removals}
       />
-    </div>
+    </>
   );
 }
 
@@ -165,47 +214,61 @@ function RemovalCard({
   return (
     <article
       aria-labelledby={headingId}
-      className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+      className="flex flex-col bg-[var(--color-background-white)] border border-[var(--color-border-secondary)] transition-colors hover:border-[var(--color-border-primary)]"
     >
-      <div className="flex items-start justify-between gap-12">
-        <div className="flex flex-col gap-2 min-w-0">
-          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Removal
-          </span>
-          <span
-            id={headingId}
-            className="body-small font-mono text-[var(--color-text-secondary)] truncate"
-          >
-            {removal.id}
-          </span>
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {removal.startedOn && removal.completedOn
-              ? `${removal.startedOn} → ${removal.completedOn}`
-              : "Reporting window set on submit"}
-          </span>
+      <div className="flex flex-1 flex-col gap-16 p-20">
+        <div className="flex items-start justify-between gap-12">
+          <div className="flex flex-col gap-4 min-w-0">
+            <span className="title-chapter-title text-[var(--color-text-tertiary)]">
+              Removal
+            </span>
+            <span
+              id={headingId}
+              className="body-small font-mono text-[var(--color-text-secondary)] truncate"
+            >
+              {removal.id}
+            </span>
+          </div>
+          <SubmissionStatusBadge
+            latest={latestSubmission}
+            isLockedInFlight={lockedInFlight}
+          />
         </div>
-        <SubmissionStatusBadge
-          latest={latestSubmission}
-          isLockedInFlight={lockedInFlight}
-        />
+
+        <div className="grid grid-cols-2 gap-12">
+          <div className="flex flex-col gap-4">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Reporting window
+            </span>
+            <span className="body-small text-[var(--color-text-primary)]">
+              {removal.startedOn && removal.completedOn
+                ? `${removal.startedOn} → ${removal.completedOn}`
+                : "Set on submit"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-4">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Credit batches ({memberBatches.length})
+            </span>
+            <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
+              {memberBatches.map((b) => b.code).join(", ") || "—"}
+            </span>
+          </div>
+        </div>
+
+        {latestSubmission?.externalId && (
+          <div className="flex flex-col gap-4">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              External ID
+            </span>
+            <span className="body-small font-mono text-[var(--color-text-secondary)] truncate">
+              {latestSubmission.externalId} · v{latestSubmission.version}
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col gap-4">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Credit batches ({memberBatches.length})
-        </span>
-        <span className="body-small font-mono text-[var(--color-text-secondary)]">
-          {memberBatches.map((b) => b.code).join(", ") || "—"}
-        </span>
-      </div>
-
-      {latestSubmission?.externalId && (
-        <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
-          {latestSubmission.externalId} · v{latestSubmission.version}
-        </span>
-      )}
-
-      <div className="flex items-center justify-end gap-8 border-t border-[var(--color-border-tertiary)] pt-12">
+      <div className="flex items-center justify-end gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <Button
           variant="primary"
           size="small"
@@ -250,17 +313,25 @@ function UngroupedSection({
         </span>
       </h2>
       {batches.length === 0 ? (
-        <p className="body-medium text-[var(--color-text-tertiary)]">
-          Every credit batch in this facility is assigned to a removal.
-        </p>
+        <EmptyState
+          icon={<ClockCountdown size={32} />}
+          title="Every credit batch is assigned"
+          description="No ungrouped batches in this facility right now."
+          padding="sm"
+        />
       ) : (
-        <div className="flex flex-col gap-8">
-          {batches.map((batch) => (
-            <UngroupedBatchRow
+        <div className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+          {batches.map((batch, index) => (
+            <div
               key={batch.id}
-              batch={batch}
-              removals={removals}
-            />
+              className={
+                index > 0
+                  ? "border-t border-[var(--color-border-tertiary)]"
+                  : ""
+              }
+            >
+              <UngroupedBatchRow batch={batch} removals={removals} />
+            </div>
           ))}
         </div>
       )}
@@ -309,8 +380,15 @@ function UngroupedBatchRow({
   };
 
   return (
-    <div className="flex items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-12">
-      <span className="body-small font-mono">{batch.code}</span>
+    <div className="flex items-center justify-between gap-12 px-20 py-12">
+      <div className="flex flex-col gap-2 min-w-0">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          Credit batch
+        </span>
+        <span className="body-small font-mono text-[var(--color-text-primary)]">
+          {batch.code}
+        </span>
+      </div>
       <div className="flex items-center gap-8">
         {isPending && (
           <ArrowsClockwise
@@ -320,7 +398,7 @@ function UngroupedBatchRow({
         )}
         <select
           aria-label={`Group credit batch ${batch.code} into a removal`}
-          className="body-small border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 py-8"
+          className="h-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
           value={choice}
           disabled={isPending}
           onChange={(e) => {
