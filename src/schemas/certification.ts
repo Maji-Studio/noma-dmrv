@@ -109,7 +109,10 @@ export type AssignCreditBatchToRemovalInput = z.infer<
 
 export const submitGhgStatementDialogSchema = z.object({
   reportUrl: httpsUrlSchema,
-  summaryOfChanges: z.string().optional(),
+  summaryOfChanges: z
+    .string()
+    .max(2000, "Keep the summary under 2000 characters")
+    .optional(),
   confirmProduction: z.boolean().optional(),
 });
 
@@ -142,14 +145,16 @@ export function buildSubmitGhgStatementDialogSchema(args: {
   });
 }
 
-export const submitGhgStatementSchema = z.object({
-  submissionId: z.string().uuid(),
-  reportUrl: httpsUrlSchema,
-  summaryOfChanges: emptyToNull.or(z.string().min(1)).nullable().optional(),
+// Period-first GHG-statement creation. Isometric creates a statement from
+// only { project_id, end_on }; the user picks the period end and the server
+// reconciles the linked removals afterward.
+export const createGhgStatementSchema = z.object({
+  facilityId: z.string().uuid(),
+  reportingPeriodEndOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a period end date"),
   confirmProduction: z.boolean().optional(),
 });
 
-export type SubmitGhgStatementInput = z.infer<
-  typeof submitGhgStatementSchema
->;
+export type CreateGhgStatementInput = z.infer<typeof createGhgStatementSchema>;
 

@@ -1,5 +1,53 @@
 # Isometric Docs Change Log
 
+## 2026-05-22 (GHG Statement review follow-ups)
+
+Post-delivery review fixes for the GHG Statements feature (see the entry
+below). See `docs/adr/0004-ghg-statement-as-independent-artifact.md`.
+
+- **One statement per period — double-create dedup.** The local statement
+  id is now stable per `(provider, facility, reporting-period end)`:
+  `getOrCreateGhgStatementDraft` returns the existing row instead of
+  minting a fresh one, so a double-click / two-tab race resolves through
+  the submission-claim machinery (block in-flight, return the
+  already-created external id, resume a failed draft) instead of POSTing a
+  second Isometric registry artifact. Backed by the new
+  `certifier_ghg_statements_facility_period_unique` constraint — migration
+  `0025`, additive.
+- **N+1 queries removed.** `loadGhgStatementsForFacility` and
+  `loadGhgStatementState` now batch their per-row ledger lookups via
+  `getLatestSubmissionsForEntities` (`DISTINCT ON`) and
+  `countRemovalsByGhgStatementIds` (grouped count).
+- **`finalizeGhgStatement` made atomic.** The post-create reconciliation —
+  removal membership, server-derived reporting window and ledger state —
+  commits in one transaction; `reconcileRemovalMembership` and the ledger
+  write helpers accept an optional `tx`. The external id is still
+  persisted standalone first so a failure can never lose the registry link.
+- Deferred review findings (error boundary, report-URL host allowlist,
+  shared-component a11y) logged to `docs/open-questions.md`.
+
+## 2026-05-22 (GHG Statements wired live — Certification route group)
+
+The dormant GHG-statement machinery — kept un-wired by ADR 0003 for "a
+future, independent feature" — is now live, delivering integration-plan
+Phase 4.5. See `docs/adr/0004-ghg-statement-as-independent-artifact.md`.
+
+- **Provider-neutral Certification route group.** `src/app/(app)/certification/`
+  becomes a tile hub (`page.tsx`) with `removals/` (the existing Removals
+  hub) and `ghg-statements/`. The sidebar gains a "Certification" section.
+- **Period-first creation.** Isometric creates a GHG Statement from only
+  `{ project_id, end_on }` and links Removals server-side by reporting-period
+  date range, so a 3-step stepper picks the period end → previews the
+  predicted removals → creates. After the POST the actual `removal_ids` are
+  reconciled onto local `certifierRemovals.ghgStatementId` — never stealing a
+  removal already linked to another statement.
+- **New `certifierGhgStatements` table** (facility-scoped, period-anchored)
+  + nullable `certifierRemovals.ghgStatementId` FK. Migrations `0023`
+  (table + column) and `0024` (FK index), both additive.
+- **`ghg-statements.ts` re-keyed** from a `creditBatch` to a `ghgStatement`
+  local entity; full lifecycle — create draft → submit to verifier → status
+  refresh.
+
 ## 2026-05-22 (Adapter re-leveled — the Removal is the submission unit)
 
 The Certify adapter was re-leveled again. A production run is the wrong

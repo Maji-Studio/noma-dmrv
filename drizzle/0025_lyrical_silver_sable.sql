@@ -1,0 +1,1 @@
+ALTER TABLE "certifier_ghg_statements" ADD CONSTRAINT "certifier_ghg_statements_facility_period_unique" UNIQUE("provider","facility_id","reporting_period_end_on");

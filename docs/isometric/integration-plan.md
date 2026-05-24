@@ -704,7 +704,7 @@ by Phase 4.5.
 - External amendment claiming for registry-side statement-version
   drafts (admin edits made directly in the Isometric UI).
 
-### Phase 4.5 — Multi-removal GHG Statements + Certification route group 🚧 IN PROGRESS
+### Phase 4.5 — Multi-removal GHG Statements + Certification route group ✅ DONE
 
 ADR 0003 left GHG Statements as "a future, independent feature." Phase 4.5
 delivers it: an operator creates an Isometric GHG Statement covering a
@@ -736,13 +736,17 @@ a `ghgStatement` local entity (ledger row `localEntityType:'ghgStatement'`,
 `loadGhgStatementState`. The lifecycle stays DRAFT → AWAITING_VERIFICATION
 → VERIFIED / FAILED_VERIFICATION.
 
-**Critical files:** `src/db/schema/certification.ts`, NEW
+**Delivered files:** `src/db/schema/certification.ts` (+ additive
+migrations `0023` table/column, `0024` FK index), NEW
 `src/data-access/certifier-ghg-statements.ts`,
-`src/fn/certification/ghg-statements.ts` (re-key),
-`src/hooks/use-certification.ts`, `src/schemas/certification.ts`,
-NEW `src/components/certification/{ghg-statements-hub,
+`src/fn/certification/ghg-statements.ts` (re-keyed from credit batch to
+`ghgStatement`), NEW `src/lib/isometric/utils/removal-membership.ts` (pure
+reconciliation decision), `src/hooks/use-certification.ts`,
+`src/schemas/certification.ts`, NEW `src/components/certification/{ghg-statements-hub,
 ghg-statement-create-dialog,ghg-statement-submit-dialog}.tsx`,
-`src/app/(app)/certification/**`, `src/components/navigation/app-sidebar.tsx`.
+`src/app/(app)/certification/**` (route group),
+`src/components/navigation/app-sidebar.tsx`. See
+`docs/adr/0004-ghg-statement-as-independent-artifact.md`.
 
 ### Phase 5 — Time-series + bulk paths (not started)
 

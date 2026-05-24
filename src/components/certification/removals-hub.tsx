@@ -1,6 +1,6 @@
 /**
  * RemovalsHub — the Isometric Certify Removals management page
- * (route: /certification). A Removal is the submission unit: N credit
+ * (route: /certification/removals). A Removal is the submission unit: N credit
  * batches map into one Removal (ADR 0003). Lists every removal for the
  * selected facility with its member credit batches and status, lets the
  * user group ungrouped batches into removals, and submits a removal.

@@ -11,11 +11,11 @@ export const REMOVAL_SUBMISSION_TYPE = "removal" as const;
 // The Removal ledger row is keyed localEntityType='removal', localEntityId=
 // certifierRemovals.id. N credit batches map into one removal.
 export const REMOVAL_ENTITY_TYPE = "removal" as const;
-// GHG-statement constants are retained for the dormant, decoupled GHG flow
-// (ADR 0003) — they are not used by the live Removal submit path.
+// GHG-statement constants. A GHG Statement is an independent, period-anchored
+// artifact (ADR 0003 / Phase 4.5); its ledger row is keyed
+// (provider, 'ghg_statement', 'ghgStatement', certifierGhgStatements.id).
 export const GHG_STATEMENT_SUBMISSION_TYPE = "ghg_statement" as const;
-export const CREDIT_BATCH_ENTITY_TYPE = "creditBatch" as const;
-export const PRODUCTION_RUN_ENTITY_TYPE = "productionRun" as const;
+export const GHG_STATEMENT_ENTITY_TYPE = "ghgStatement" as const;
 
 export async function safeListIfConfigured<T>(
   call: () => Promise<T[]>,

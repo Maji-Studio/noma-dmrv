@@ -122,6 +122,47 @@ Each entry follows this shape:
     The `CASCADE` keyword is unnecessary (no dependents) — harmless, left
     as-is to avoid re-hashing an already-generated migration.
 
+### GHG Statement review follow-ups (opened 2026-05-22)
+
+Findings from the Phase 4.5 GHG Statements review (ADR 0004). The
+double-create dedup, the N+1 query batching and the non-atomic
+`finalizeGhgStatement` were fixed in the same branch; the entries below
+were deferred by the operator to a follow-up PR.
+
+- **No route-level error boundary** (`certification/error-boundary`) —
+  opened 2026-05-22, deferred.
+  - There is no `error.tsx` anywhere under `src/app`. A thrown error in a
+    Certification route (loader reject, server-fn throw not caught by
+    `ActionResult`) renders a blank screen instead of a recoverable UI.
+  - Resolve via: add `src/app/(app)/certification/error.tsx` with a retry
+    affordance — a new convention for the project, so confirm placement
+    (per-route-group vs a single app-level boundary) before landing.
+
+- **Report-URL open-redirect / 2nd-party SSRF**
+  (`certification/report-url-allowlist`) — opened 2026-05-22, deferred.
+  - The operator-supplied GHG-statement report URL (`reportUrl` in
+    `submitGhgStatementToVerifier`) is stored on a `documents` row and
+    later served through the pre-existing `/api/documents/[id]` route,
+    which 302-redirects to `fileUrl` with no host allowlist. A crafted
+    URL turns the redirect into an open redirect / server-side fetch of
+    an arbitrary host.
+  - Pre-existing pattern — the `/api/documents/[id]` `fileUrl` branch
+    predates this feature and is shared by every external/legacy URL
+    column (see the `storage/phase-2` entry).
+  - Resolve via: decide an allowlist policy (e.g. restrict to known
+    object-storage / Isometric hosts) and enforce it at the
+    `/api/documents/[id]` redirect, not per-caller.
+
+- **Shared-component a11y gaps** (`forms/a11y-shared-layer`) — opened
+  2026-05-22, deferred.
+  - `FormField` / `FormError` (`src/components/forms/`) do not wire
+    `aria-describedby` from input to error message; `useDialog`
+    (`src/hooks/use-dialog.ts`) does not restore focus to the trigger on
+    close. Surfaced by the GHG Statement dialogs but the gap is in the
+    shared layer, so a fix touches every form and dialog in the app.
+  - Resolve via: a dedicated a11y pass on the shared forms/dialog
+    primitives with a regression check across existing consumers.
+
 ### Pre-coding gates (status as of 2026-05-11)
 
 - **Live-template `INPUT_MAPPING` coverage** (`isometric/phase-3`) — opened
@@ -194,34 +235,35 @@ Each entry follows this shape:
     does.
 
 - **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21, **scope
-  revised 2026-05-21 (credit-batch re-leveling, ADR 0002)**.
+  revised 2026-05-22 (ADR 0003 re-leveling)**.
   - **Question:** how should the per-reporting-period emission inputs
     be sourced — pyrolyzer CH4/CO concentration + gas mass-flow,
     lab-analysis electricity, sampling consumables mass, staff travel
     distance, miscellaneous mass?
   - **Where they belong:** these inputs are period-level, not per-run.
-    After the re-leveling, a noma credit batch submits as one Isometric
-    **GHG Statement** (one per month) and each production run is one
-    **Removal**. Per-reporting-period emissions belong on the **GHG
-    Statement's "Reporting period emissions" tab**, not as zero-stubbed
-    monitored inputs on each per-run Removal template. Moving them there
-    also removes them as a blocker for the per-run Removal payload.
+    Under ADR 0003 the **Removal** is the submission unit and **GHG
+    Statements are an independent, period-anchored artifact**. Per-
+    reporting-period emissions belong on the GHG Statement, not as
+    zero-stubbed monitored inputs on a Removal template. As of
+    2026-05-22 the GHG Statement has a real home — the
+    `/certification/ghg-statements` surface (Phase 4.5) — so these
+    inputs have a concrete place to live; what to *put* there is the
+    open part.
   - **Remaining sub-decisions:** (a) source model — tracked operational
     entities (a `staff_travel` table, per-run pyrolyzer gas measurement,
     per-sample lab electricity) vs admin-configured estimates seeded
     from the LCA; and (b) **apportionment** — the LCA measures these
-    once per ~1-year reporting period, but a GHG Statement covers one
-    month. A flat per-period figure must be split across the ~12 monthly
-    GHG Statements (e.g. by each month's share of period biochar mass),
-    not reported whole on each.
+    once per ~1-year reporting period, but a GHG Statement covers an
+    operator-chosen (often monthly) period. A flat per-period figure
+    must be split across the GHG Statements that tile the LCA window
+    (e.g. by each period's share of biochar mass), not reported whole
+    on each.
   - **Why it matters:** staff travel alone is ~59 tCO2e in the sample
     LCA; until the GHG Statement carries these, a production submission
     understates emissions.
   - **Resolve via:** decide the apportionment rule and source model,
-    then wire the GHG Statement's reporting-period-emissions fields in
-    `submitGhgStatementForCreditBatch`. The Phase 3.7 per-facility
-    config table (`certifier_projects` columns) can hold per-period
-    estimates without migration pain once the model is chosen.
+    then wire the reporting-period-emissions fields into the GHG
+    Statement create/submit flow (`src/fn/certification/ghg-statements.ts`).
 
 - **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
   path documented 2026-05-11**.
