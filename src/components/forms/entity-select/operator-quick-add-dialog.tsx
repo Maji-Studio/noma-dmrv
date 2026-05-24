@@ -41,7 +41,7 @@ export function OperatorQuickAddDialog({
       onClose={onClose}
       title="Add New Operator"
       error={error}
-      maxWidth="max-w-md"
+      width="sm"
       testId="operator-quick-add-dialog"
     >
       <OperatorForm

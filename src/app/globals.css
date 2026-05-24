@@ -304,6 +304,23 @@ body {
   padding: 0;
 }
 
+/* Restore native <dialog> centering.
+ * Tailwind v4 preflight resets `margin: 0` on every element via the
+ * universal selector (`*, ::before, ::after, ::backdrop { margin: 0 }`),
+ * which overrides the UA stylesheet rule `dialog[open] { margin: auto }`
+ * that centers modal dialogs opened with showModal(). Restore it here so
+ * every <dialog> renders centered without per-instance workarounds. */
+dialog[open] {
+  margin: auto;
+}
+
+/* Smooth, accessible backdrop for modal dialogs.
+ * The UA backdrop is transparent; tokens here keep contrast consistent
+ * across the app instead of relying on per-instance `backdrop:bg-black/50`. */
+dialog::backdrop {
+  background-color: rgb(0 0 0 / 0.5);
+}
+
 /* ===== TYPOGRAPHY CLASSES ===== */
 
 /* Headings */

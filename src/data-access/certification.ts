@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  certifierGhgStatements,
   certifierProjects,
   certifierRemovals,
   certificationSubmissions,
@@ -110,28 +111,47 @@ async function hasBlockingFacilitySubmission(
   facilityId: string,
   provider: CertifierProvider,
 ): Promise<boolean> {
-  // The Removal is the submission unit. A removal ledger row is keyed
-  // (provider, 'removal', 'removal', certifierRemovals.id); certifier_removals
-  // carries the facility directly — one hop, no lineage walk. GHG-statement
-  // rows are not checked: the GHG flow is decoupled/dormant (ADR 0003).
-  const [blocking] = await executor
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .innerJoin(
-      certifierRemovals,
-      eq(certificationSubmissions.localEntityId, certifierRemovals.id),
-    )
-    .where(
-      and(
-        eq(certificationSubmissions.provider, provider),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        eq(certificationSubmissions.submissionType, "removal"),
-        eq(certifierRemovals.facilityId, facilityId),
-        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
-      ),
-    )
-    .limit(1);
-  return Boolean(blocking);
+  // Both facility-scoped artifacts can pin a mapping: Removal (ADR 0003) and
+  // GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no
+  // lineage walk. Two small probes are clearer than a UNION/OR and let the
+  // planner use each artifact's own index.
+  const [removalHit, ghgHit] = await Promise.all([
+    executor
+      .select({ id: certificationSubmissions.id })
+      .from(certificationSubmissions)
+      .innerJoin(
+        certifierRemovals,
+        eq(certificationSubmissions.localEntityId, certifierRemovals.id),
+      )
+      .where(
+        and(
+          eq(certificationSubmissions.provider, provider),
+          eq(certificationSubmissions.localEntityType, "removal"),
+          eq(certificationSubmissions.submissionType, "removal"),
+          eq(certifierRemovals.facilityId, facilityId),
+          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+        ),
+      )
+      .limit(1),
+    executor
+      .select({ id: certificationSubmissions.id })
+      .from(certificationSubmissions)
+      .innerJoin(
+        certifierGhgStatements,
+        eq(certificationSubmissions.localEntityId, certifierGhgStatements.id),
+      )
+      .where(
+        and(
+          eq(certificationSubmissions.provider, provider),
+          eq(certificationSubmissions.localEntityType, "ghgStatement"),
+          eq(certificationSubmissions.submissionType, "ghg_statement"),
+          eq(certifierGhgStatements.facilityId, facilityId),
+          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+        ),
+      )
+      .limit(1),
+  ]);
+  return removalHit.length > 0 || ghgHit.length > 0;
 }
 
 export async function upsertCertifierProject(

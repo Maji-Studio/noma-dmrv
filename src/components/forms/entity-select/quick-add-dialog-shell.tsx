@@ -1,22 +1,22 @@
 /**
  * Quick Add Dialog Shell
- * Generic dialog wrapper for inline entity creation.
- * Renders only the <dialog> chrome (header, close, error banner).
- * The embedded form component owns fields + action buttons.
+ * Generic dialog wrapper for inline entity creation. Composes the shared
+ * `Modal` primitive (chrome, centering, focus, backdrop, ESC) and adds an
+ * inset header + error banner that the embedded form sits below.
  */
 "use client";
 
 import { useId } from "react";
-import { useDialog } from "@/hooks/use-dialog";
 import { X } from "@phosphor-icons/react";
+import { Modal, type ModalWidth } from "@/components/ui";
 
 interface QuickAddDialogShellProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   error?: string | null;
-  /** Dialog max-width class — defaults to "max-w-lg" */
-  maxWidth?: string;
+  /** Width token forwarded to Modal. Defaults to "md" (matches the previous max-w-lg ≈ 512px envelope). */
+  width?: ModalWidth;
   /** Test ID for the dialog element */
   testId?: string;
   children: React.ReactNode;
@@ -27,23 +27,24 @@ export function QuickAddDialogShell({
   onClose,
   title,
   error,
-  maxWidth = "max-w-lg",
+  width = "md",
   testId,
   children,
 }: QuickAddDialogShellProps) {
   const titleId = useId();
-  const dialogRef = useDialog(isOpen, onClose);
-
-  if (!isOpen) return null;
 
   return (
-    <dialog
-      ref={dialogRef}
-      className={`p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 ${maxWidth} w-full m-auto`}
-      aria-labelledby={titleId}
-      data-testid={testId}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy={titleId}
+      width={width}
+      // Inset header has its own padding + bottom border that must reach the
+      // dialog edges, so we opt out of Modal's default content padding and
+      // own all spacing here.
+      contentClassName=""
     >
-      <div className="flex flex-col">
+      <div className="flex flex-col" data-testid={testId}>
         {/* Header */}
         <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
           <h2 id={titleId} className="title-heading-3">
@@ -69,6 +70,6 @@ export function QuickAddDialogShell({
           {children}
         </div>
       </div>
-    </dialog>
+    </Modal>
   );
 }

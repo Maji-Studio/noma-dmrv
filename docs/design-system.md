@@ -1102,6 +1102,83 @@ All biochar entity cards (Facility, CreditBatch, StorageLocation, Application) f
 - Code badges use area accent colors (purple, orange, rose, dark-purple)
 - Metric labels use `body-caption`, primary values use `title-heading-3`
 
+### Modal Component
+
+Shared chrome for every native `<dialog>` in the app. Wraps `<dialog>` +
+`useDialog` so all modals inherit the same border, backdrop, centering,
+focus management, and width tokens.
+
+**Use Modal for every new dialog.** Don't roll your own `<dialog>` markup
+— that re-introduces the per-instance opportunity to forget the centering
+fix (see Troubleshooting → "Native `<dialog>` centering & backdrop").
+
+```tsx
+import { Modal } from "@/components/ui";
+
+<Modal
+  isOpen={isOpen}
+  onClose={() => setOpen(false)}
+  onOpen={() => reset(defaultValues)}    // optional — fires on each open
+  ariaLabelledBy="my-dialog-title"       // or `ariaLabel` for label fallback
+  width="md"                              // sm | md | lg | xl
+>
+  <div className="flex flex-col gap-24">
+    <h2 id="my-dialog-title" className="title-heading-3">…</h2>
+    {/* form / content */}
+  </div>
+</Modal>
+```
+
+**Width tokens** (consistent across the app):
+
+| Token | Width | Use for |
+|-------|-------|---------|
+| `sm`  | 400px | Confirmation prompts, simple yes/no |
+| `md`  | 560px | Default — forms, wizards |
+| `lg`  | 720px | Dense forms, multi-column layouts |
+| `xl`  | 880px | Rich content (previews, comparisons) |
+
+**Edge-to-edge headers.** When your dialog renders an inset header with a
+bottom border that must reach the dialog edges (e.g., the quick-add
+shells), pass `contentClassName=""` to opt out of Modal's default `p-24`
+content padding and own all spacing yourself.
+
+**Accessibility:** pass exactly one of `ariaLabelledBy` (preferred — points
+at a visible heading) or `ariaLabel` (fallback when no heading is
+present). A dialog with neither has no accessible name. Optionally pass
+`ariaDescribedBy` pointing at descriptive copy (e.g., a warning paragraph)
+to give screen readers context beyond the heading.
+
+### EmptyState Component
+
+Shared dashed-border empty / zero-data card. Standardises the layout
+(centered icon → heading → description → optional action) and the
+padding tiers used across list pages.
+
+```tsx
+import { EmptyState } from "@/components/ui";
+
+<EmptyState
+  icon={<ClipboardText size={48} />}
+  title="No GHG statements yet"
+  description="Create one to roll up submitted removals for a reporting period."
+  action={<Button variant="primary" onClick={onCreate}>New GHG Statement</Button>}
+  padding="lg"  // sm | md | lg — defaults to lg
+/>
+```
+
+**Padding tiers:**
+
+| Token | `py-*` | Use for |
+|-------|--------|---------|
+| `lg`  | `py-56` | Top-level "no data yet" / "select a facility" |
+| `md`  | `py-40` | Mid-tier empty sections |
+| `sm`  | `py-32` | Nested empties (inside a card body or subsection) |
+
+**Icon sizing is caller-owned** — typically 48px for `lg`, 40px for `md`,
+32px for `sm`. The container styles the icon color via inherited
+`text-[var(--color-text-tertiary)]`.
+
 ### Component Guidelines
 
 **When to Use Button:**

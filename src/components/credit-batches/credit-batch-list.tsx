@@ -241,14 +241,14 @@ export function CreditBatchList({
     <div className="container-max py-32 flex flex-col gap-32">
       {/* Header */}
       <div className="flex items-center justify-between gap-24">
-        <div>
+        <div className="flex flex-col gap-4">
           <h1 className="title-heading-2">Credit Batches</h1>
-          <p className="body-small text-[var(--color-text-secondary)] mt-1">
+          <p className="body-small text-[var(--color-text-secondary)]">
             Carbon credit batches for verification and registry
           </p>
         </div>
         <Button variant="primary" onClick={openCreate}>
-          <Plus size={18} weight="bold" />
+          <Plus size={20} weight="bold" />
           New Credit Batch
         </Button>
       </div>

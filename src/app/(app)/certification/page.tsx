@@ -43,16 +43,16 @@ const CERTIFICATION_TILES: CertificationTile[] = [
 
 export default function CertificationHomePage() {
   return (
-    <div className="container-max py-32 flex flex-col gap-24">
+    <div className="container-max py-32 flex flex-col gap-32">
       <header className="flex flex-col gap-8">
-        <h1 className="title-heading-1">Certification</h1>
+        <h1 className="title-heading-2">Certification</h1>
         <p className="body-medium text-[var(--color-text-secondary)] max-w-[560px]">
           Submit MRV data to the carbon registry for verification. Choose a
           surface to work with.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         {CERTIFICATION_TILES.map((tile) => {
           const Icon = tile.icon;
           return (

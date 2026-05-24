@@ -541,6 +541,62 @@ pnpm test:e2e
 
 If the database has been left in a partially migrated state, use your normal local reset flow first and then re-apply the schema.
 
+## UI & Styling Issues
+
+### Native `<dialog>` centering & backdrop
+
+**Symptoms**
+- A new `<dialog>` opened with `showModal()` renders top-left instead of centered.
+- Backdrop appears transparent / no dimming behind the modal.
+
+**Root Cause**
+Tailwind v4 preflight applies `margin: 0` to the universal selector (`*, ::before, ::after, ::backdrop`), which overrides the UA stylesheet's `dialog[open] { margin: auto }` that centers modals. The UA `::backdrop` is also transparent by default.
+
+**Fix**
+Both rules are restored globally in `src/app/globals.css` — do **not** re-apply `m-auto` per dialog instance.
+
+```css
+/* src/app/globals.css */
+dialog[open] {
+  margin: auto;
+}
+
+dialog::backdrop {
+  background-color: rgb(0 0 0 / 0.5);
+}
+```
+
+**Better Fix**
+Compose the shared `<Modal>` primitive (`src/components/ui/modal/`) instead of writing raw `<dialog>` markup. It inherits the global centering rule plus consistent chrome (border, backdrop, width tokens, focus management, ESC handling). See `docs/design-system.md` → Modal Component.
+
+If you must use raw `<dialog>` (e.g., wrapping a third-party component), the global rule still applies — you don't need any per-instance centering classes.
+
+### Dialog dismisses with stale form state on next open
+
+**Symptoms**
+- Opening a dialog shows the previous open's form values, error state, or wizard step.
+
+**Cause**
+The `<dialog>` element is being kept mounted between opens. React state inside it persists across the close/open cycle.
+
+**Fix**
+Use the `<Modal>` primitive (`src/components/ui/modal/`) — it returns `null` while closed, unmounting the children and discarding state. Pair with the `onOpen` callback to reset any external state (form values, mutations) that should be fresh each open:
+
+```tsx
+<Modal
+  isOpen={isOpen}
+  onClose={onClose}
+  onOpen={() => {
+    reset(defaultValues);
+    mutation.reset();
+    setStep(1);
+  }}
+  ariaLabelledBy="my-dialog-title"
+>
+  …
+</Modal>
+```
+
 ## Performance Issues
 
 ### Slow Page Loads
