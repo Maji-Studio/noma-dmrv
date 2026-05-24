@@ -34,6 +34,7 @@ import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SubmitConfirmDialog } from "./submit-confirm-dialog";
 
 const ICON_SIZE = 14;
+const STAT_ICON_SIZE = 24;
 const NEW_REMOVAL = "__new__";
 
 export function RemovalsHub() {
@@ -106,19 +107,19 @@ function HubBody({ facilityId }: { facilityId: string }) {
         <StatCard
           title="Removals"
           value={removals.length}
-          icon={<SealCheck size={24} weight="bold" />}
+          icon={<SealCheck size={STAT_ICON_SIZE} weight="bold" />}
           description="Submission units for this facility"
         />
         <StatCard
           title="Submitted"
           value={submittedCount}
-          icon={<CheckCircle size={24} weight="bold" />}
+          icon={<CheckCircle size={STAT_ICON_SIZE} weight="bold" />}
           description="Sent to Isometric at least once"
         />
         <StatCard
           title="Ungrouped Batches"
           value={ungroupedBatches.length}
-          icon={<Stack size={24} weight="bold" />}
+          icon={<Stack size={STAT_ICON_SIZE} weight="bold" />}
           description="Credit batches waiting to be grouped"
         />
       </div>

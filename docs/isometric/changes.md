@@ -1,5 +1,64 @@
 # Isometric Docs Change Log
 
+## 2026-05-24 (Period emissions + template-evolution strategy — grilling session)
+
+Resolves the `isometric/phase-3.7-period-inputs` open question
+(originally raised 2026-05-21, scope-revised 2026-05-22) and lands a
+durable template-evolution strategy. Implementation does not ship in
+this change — design-only, written up so `modify-feature` can land
+it cleanly. See
+[ADR 0005](../adr/0005-period-emissions-as-project-components.md) and
+the new "Template-evolution strategy" section of
+`docs/isometric/integration-plan.md`.
+
+- **Reframe — period emissions are Project Components, not Removal
+  datapoints.** The Certify OpenAPI surface exposes a four-value
+  `ComponentScope` enum (`REMOVAL | GHG_STATEMENT | PROJECT |
+  NET_NEGATIVITY`) and a `ProjectComponentAmortizationStrategy` enum
+  (`ESTIMATED_PROJECT_TONNAGE | MANUAL | CUSTOM_TIME_PERIOD |
+  ESTIMATED_PROJECT_LIFETIME`) that handles per-statement attribution
+  server-side. Period-level emissions (staff travel, pyrolyzer
+  CH₄/CO, lab electricity, sampling consumables, miscellaneous mass)
+  fit cleanly as `PROJECT`-scope Components — they are operator
+  overhead for an LCA measurement window, not attributable to a single
+  Removal or Statement. The client-side apportionment problem the open
+  question was structured around is mostly not noma's problem.
+- **Posture B — noma is the LCA journal, not the publisher.**
+  `/admin/emission-estimates` grows a "Period emissions (LCA-derived)"
+  section: one row per (facility, lca_window, category) with an FK to
+  the source LCA document and an `allocation_strategy_recommendation`
+  text field (default `CUSTOM_TIME_PERIOD; target_date = lca_window_end`).
+  noma **does not** POST to `/project_components`; the operator
+  publishes Project Components directly in the Isometric UI. A read-only
+  drift panel on the certify surface flags noma rows missing from
+  Isometric and Components missing from noma.
+- **`INPUT_MAPPING` cleanup.** The five `zeroStub: true` families
+  move to a new `PERIOD_INPUT_TUPLES` sentinel set; the scope-conflict
+  `SafeError` raised by `buildCreateDatapointRequest` names the tuple
+  AND the canonical scope, replacing today's silent zero-stub on
+  templates that include period-input components. The `noma-mvp`
+  template already omits these, so this is a contract enforcer for
+  templates authored later.
+- **Template-evolution strategy** (B1–B4) — answers the operator
+  meta-question on how noma stays consistent as Isometric templates
+  drift. All four checks share `isometric-health.yml`'s daily 09:17
+  UTC ping (no PR gate). B1: nightly coverage check (`pnpm
+  isometric:coverage-check`) asserts every live-template tuple is in
+  `INPUT_MAPPING` or `PERIOD_INPUT_TUPLES`, and every Isometric
+  Project Component has a matching noma row. B2: nightly
+  `openapi-typescript` regen + `git diff --exit-code` on
+  `certify.d.ts`. B3: `__mappingRevision = sha256(canonicalJson(INPUT_MAPPING))`
+  embedded in `payloadSnapshot` (no migration; reuses
+  `payload-hash.ts`) and surfaced in sync events. B4: mapping-version
+  dimension deferred until Isometric exposes a `blueprint_version`
+  field (none in current OpenAPI; tracked under
+  `isometric/mapping-version-dimension` in open-questions).
+- **Pre-deploy gate #4 rewritten.** The "no zero-stub template in
+  production" gate is replaced by a per-category check: every category
+  present in any Removal Template the facility uses must have a row in
+  `certifier_project_emissions` AND a Project Component in Isometric.
+  The nightly coverage check (B1) runs this assertion headless.
+
 ## 2026-05-24 (GHG Statement mapping-lock parity + unlink guard)
 
 Two correctness fixes on the GHG Statement flow now that it's a live
@@ -187,8 +246,8 @@ deliberate minimum:
   project ID — do not promote it to a DB table.
 - ⚠️ **`Sampling consumables / carbon_intensity = 1.0` is a
   placeholder**, flagged in the script and in
-  `docs/isometric/next-steps.md`. Must be researched before any
-  production submission.
+  `docs/isometric/sandbox-template-authoring.md` (Verifier-readiness
+  section). Must be researched before any production submission.
 
 ## 2026-05-13 (Transport v1.1 compliance fixes — review follow-up)
 

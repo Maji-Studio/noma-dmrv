@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { useId } from "react";
 import { Button, Modal } from "@/components/ui";
 
 interface DeleteConfirmDialogProps {
@@ -26,21 +27,24 @@ export function DeleteConfirmDialog({
   onCancel,
   isPending = false,
 }: DeleteConfirmDialogProps) {
+  const id = useId();
+  const titleId = `${id}-delete-dialog-title`;
+  const descId = `${id}-delete-dialog-desc`;
   return (
     <Modal
       isOpen={isOpen}
       onClose={onCancel}
-      ariaLabelledBy="delete-dialog-title"
-      ariaDescribedBy="delete-dialog-description"
+      ariaLabelledBy={titleId}
+      ariaDescribedBy={descId}
       width="sm"
     >
       <div className="flex flex-col gap-24">
         <div className="flex flex-col gap-12">
-          <h2 id="delete-dialog-title" className="title-heading-3">
+          <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>
           <p
-            id="delete-dialog-description"
+            id={descId}
             className="body-medium text-[var(--color-text-secondary)]"
           >
             {message}
