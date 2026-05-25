@@ -1,14 +1,13 @@
 /**
  * Customer Location Quick Add Dialog
  * Dialog for quickly adding new customer locations from the customer edit form.
- * Uses native <dialog> with showModal() — same pattern as operator/driver quick-add dialogs.
+ * Composes the shared `Modal` primitive with an inset header.
  */
 "use client";
 
 import { useState, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
-import { useDialog } from "@/hooks/use-dialog";
+import { Modal } from "@/components/ui";
 import { useCreateCustomerLocation } from "@/hooks/use-customers";
 
 // ============================================
@@ -46,8 +45,6 @@ export function CustomerLocationQuickAddDialog({
     setFormData({ name: "", country: "", stateRegion: "", city: "", address: "", gpsLatitude: "", gpsLongitude: "" });
     setError(null);
   }, []);
-
-  const dialogRef = useDialog(isOpen, onClose, resetForm);
 
   const handleSubmit = async () => {
     setError(null);
@@ -100,19 +97,21 @@ export function CustomerLocationQuickAddDialog({
     }
   };
 
-  if (!isOpen) return null;
-
   const inputClass =
     "flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
-  return createPortal(
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-lg w-full m-auto"
-      data-testid="location-quick-add-dialog"
-      aria-labelledby="location-quick-add-dialog-title"
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      onOpen={resetForm}
+      ariaLabelledBy="location-quick-add-dialog-title"
+      width="md"
+      // Inset header has its own padding + bottom border that must reach the
+      // dialog edges, so we opt out of Modal's default content padding.
+      contentClassName=""
     >
-      <div className="flex flex-col">
+      <div className="flex flex-col" data-testid="location-quick-add-dialog">
         <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
           <h2
             id="location-quick-add-dialog-title"
@@ -298,7 +297,6 @@ export function CustomerLocationQuickAddDialog({
           </div>
         </div>
       </div>
-    </dialog>,
-    document.body
+    </Modal>
   );
 }

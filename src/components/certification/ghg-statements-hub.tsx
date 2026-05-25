@@ -8,8 +8,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowsClockwise } from "@phosphor-icons/react";
-import { Button } from "@/components/ui";
+import {
+  ArrowsClockwise,
+  CheckCircle,
+  ClipboardText,
+  LinkSimple,
+  Plus,
+} from "@phosphor-icons/react/dist/ssr";
+import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -27,27 +34,30 @@ import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventLog } from "./sync-event-log";
 
 const ICON_SIZE = 14;
+const STAT_ICON_SIZE = 24;
 
 export function GhgStatementsHub() {
   const { facilityId } = useFacilityContext();
 
   return (
-    <div className="flex flex-col gap-24 p-24">
-      <header className="flex flex-col gap-4">
+    <div className="container-max flex flex-col gap-32 py-32">
+      <header className="flex flex-col gap-8">
         <span className="title-chapter-title text-[var(--color-text-tertiary)]">
           Isometric Certify
         </span>
         <h1 className="title-heading-2">GHG Statements</h1>
-        <p className="body-medium text-[var(--color-text-secondary)]">
+        <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
           A GHG Statement covers a reporting period and rolls up every Removal
           Isometric links to it. Create one by picking the period end.
         </p>
       </header>
 
       {!facilityId ? (
-        <p className="body-medium text-[var(--color-text-tertiary)]">
-          Select a facility to view its GHG statements.
-        </p>
+        <EmptyState
+          icon={<ClipboardText size={48} />}
+          title="Select a facility"
+          description="Choose a facility from the sidebar to view its GHG statements."
+        />
       ) : (
         <HubBody facilityId={facilityId} />
       )}
@@ -66,70 +76,124 @@ function HubBody({ facilityId }: { facilityId: string }) {
 
   if (query.isLoading) {
     return (
-      <p className="body-medium text-[var(--color-text-tertiary)]">
-        Loading GHG statements…
-      </p>
+      <>
+        <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
+          <StatCard title="Statements" value="—" isLoading />
+          <StatCard title="Submitted" value="—" isLoading />
+          <StatCard title="Linked Removals" value="—" isLoading />
+        </div>
+        <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
+          <p className="body-medium text-[var(--color-text-tertiary)]">
+            Loading GHG statements…
+          </p>
+        </section>
+      </>
     );
   }
   if (query.error || !query.data) {
     return (
-      <p className="body-medium text-[var(--clr-red)]">
-        Unable to load GHG statements. Try refreshing the page.
-      </p>
+      <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
+        <p className="body-medium text-[var(--clr-red)]">
+          Unable to load GHG statements. Try refreshing the page.
+        </p>
+      </div>
     );
   }
 
   const statements = query.data;
+  const submittedCount = statements.filter(
+    (s) => s.latestSubmission?.externalId,
+  ).length;
+  const linkedRemovalsTotal = statements.reduce(
+    (sum, s) => sum + s.linkedRemovalCount,
+    0,
+  );
 
   return (
-    <div className="flex flex-col gap-16">
-      <div className="flex items-center justify-between gap-12">
+    <>
+      <div className="flex items-center justify-between gap-24">
+        <h2 className="title-heading-3">Overview</h2>
+        <Button
+          variant="primary"
+          onClick={() => setCreateOpen(true)}
+          disabled={!isLinked}
+        >
+          <Plus size={20} weight="bold" />
+          New GHG Statement
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          title="Statements"
+          value={statements.length}
+          icon={<ClipboardText size={STAT_ICON_SIZE} weight="bold" />}
+          description="Total GHG statements for this facility"
+        />
+        <StatCard
+          title="Submitted"
+          value={submittedCount}
+          icon={<CheckCircle size={STAT_ICON_SIZE} weight="bold" />}
+          description="Sent to the verifier at least once"
+        />
+        <StatCard
+          title="Linked Removals"
+          value={linkedRemovalsTotal}
+          icon={<LinkSimple size={STAT_ICON_SIZE} weight="bold" />}
+          description="Across all statements"
+        />
+      </div>
+
+      {(mappingFailed || !isLinked) && (
+        <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
+          {mappingFailed ? (
+            <p className="body-small text-[var(--clr-red)]">
+              Couldn&apos;t verify the Isometric project link. Refresh the page
+              to retry.
+            </p>
+          ) : (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Link this facility to an Isometric project before creating a GHG
+              statement.
+            </p>
+          )}
+        </div>
+      )}
+
+      <section className="flex flex-col gap-16">
         <h2 className="title-heading-3">
           Statements{" "}
           <span className="body-small text-[var(--color-text-tertiary)]">
             ({statements.length})
           </span>
         </h2>
-        <Button
-          variant="primary"
-          size="small"
-          onClick={() => setCreateOpen(true)}
-          disabled={!isLinked}
-        >
-          New GHG Statement
-        </Button>
-      </div>
 
-      {mappingFailed ? (
-        <p className="body-small text-[var(--clr-red)]">
-          Couldn&apos;t verify the Isometric project link. Refresh the page to
-          retry.
-        </p>
-      ) : (
-        !isLinked && (
-          <p className="body-small text-[var(--color-text-tertiary)]">
-            Link this facility to an Isometric project before creating a GHG
-            statement.
-          </p>
-        )
-      )}
-
-      {statements.length === 0 ? (
-        <p className="body-medium text-[var(--color-text-tertiary)]">
-          No GHG statements yet. Create one to roll up submitted removals for a
-          reporting period.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-16">
-          {statements.map((item) => (
-            <GhgStatementCard
-              key={item.statement.id}
-              item={item}
-              isProduction={isProduction}
-            />
-          ))}
-        </div>
-      )}
+        {statements.length === 0 ? (
+          <EmptyState
+            icon={<ClipboardText size={48} />}
+            title="No GHG statements yet"
+            description="Create one to roll up submitted removals for a reporting period."
+            action={
+              isLinked ? (
+                <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                  <Plus size={20} weight="bold" />
+                  New GHG Statement
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-16">
+            {statements.map((item) => (
+              <GhgStatementCard
+                key={item.statement.id}
+                item={item}
+                isProduction={isProduction}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       {isLinked && (
         <GhgStatementCreateDialog
@@ -139,7 +203,7 @@ function HubBody({ facilityId }: { facilityId: string }) {
           onClose={() => setCreateOpen(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -161,36 +225,50 @@ function GhgStatementCard({
   return (
     <article
       aria-labelledby={headingId}
-      className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+      className="flex flex-col bg-[var(--color-background-white)] border border-[var(--color-border-secondary)] transition-colors hover:border-[var(--color-border-primary)]"
     >
-      <div className="flex items-start justify-between gap-12">
-        <div className="flex flex-col gap-2 min-w-0">
-          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            GHG Statement
-          </span>
-          <span
-            id={headingId}
-            className="body-small font-medium text-[var(--color-text-primary)]"
-          >
-            {period}
-          </span>
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {linkedRemovalCount} linked removal(s)
-          </span>
+      <div className="flex flex-1 flex-col gap-16 p-20">
+        <div className="flex items-start justify-between gap-12">
+          <div className="flex flex-col gap-4 min-w-0">
+            <span className="title-chapter-title text-[var(--color-text-tertiary)]">
+              GHG Statement
+            </span>
+            <span
+              id={headingId}
+              className="title-heading-3 text-[var(--color-text-primary)]"
+            >
+              {period}
+            </span>
+          </div>
+          <SubmissionStatusBadge
+            latest={latestSubmission}
+            isLockedInFlight={locked}
+          />
         </div>
-        <SubmissionStatusBadge
-          latest={latestSubmission}
-          isLockedInFlight={locked}
-        />
+
+        <div className="grid grid-cols-2 gap-12">
+          <div className="flex flex-col gap-4">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Linked removals
+            </span>
+            <span className="body-small text-[var(--color-text-primary)]">
+              {linkedRemovalCount}
+            </span>
+          </div>
+          {latestSubmission?.externalId && (
+            <div className="flex flex-col gap-4">
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                External ID
+              </span>
+              <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
+                {latestSubmission.externalId} · v{latestSubmission.version}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {latestSubmission?.externalId && (
-        <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
-          {latestSubmission.externalId} · v{latestSubmission.version}
-        </span>
-      )}
-
-      <div className="flex items-center justify-end border-t border-[var(--color-border-tertiary)] pt-12">
+      <div className="flex items-center justify-end border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <Button
           variant="default"
           size="small"
@@ -225,19 +303,23 @@ function StatementDetail({
 
   if (query.isLoading) {
     return (
-      <p
-        aria-busy="true"
-        className="body-small text-[var(--color-text-tertiary)]"
-      >
-        Loading details…
-      </p>
+      <div className="border-t border-[var(--color-border-tertiary)] px-20 py-16">
+        <p
+          aria-busy="true"
+          className="body-small text-[var(--color-text-tertiary)]"
+        >
+          Loading details…
+        </p>
+      </div>
     );
   }
   if (query.error || !query.data) {
     return (
-      <p className="body-small text-[var(--clr-red)]">
-        Unable to load statement details.
-      </p>
+      <div className="border-t border-[var(--color-border-tertiary)] px-20 py-16">
+        <p className="body-small text-[var(--clr-red)]">
+          Unable to load statement details.
+        </p>
+      </div>
     );
   }
 
@@ -265,49 +347,50 @@ function StatementDetail({
   };
 
   return (
-    <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-12">
-      <div className="flex flex-col gap-2">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Remote status
-        </span>
-        <span className="body-small text-[var(--color-text-secondary)]">
-          {remote ? remote.status : "Not yet created in Isometric"}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Linked removals ({linkedRemovals.length})
-        </span>
-        {linkedRemovals.length === 0 ? (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            No removals linked yet.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-4">
-            {linkedRemovals.map(({ removal, submission }) => (
-              <li
-                key={removal.id}
-                className="flex items-center justify-between gap-8 border border-[var(--color-border-secondary)] px-12 py-8"
-              >
-                <span className="body-caption font-mono text-[var(--color-text-secondary)] truncate">
-                  {submission?.externalId ?? removal.id}
-                </span>
-                <SubmissionStatusBadge
-                  latest={submission}
-                  isLockedInFlight={
-                    submission ? isLockedInFlight(submission) : false
-                  }
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+    <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-20 py-16">
+      <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
+        <div className="flex flex-col gap-4">
+          <span className="title-chapter-title text-[var(--color-text-tertiary)]">
+            Remote status
+          </span>
+          <span className="body-small text-[var(--color-text-primary)]">
+            {remote ? remote.status : "Not yet created in Isometric"}
+          </span>
+        </div>
+        <div className="flex flex-col gap-4">
+          <span className="title-chapter-title text-[var(--color-text-tertiary)]">
+            Linked removals ({linkedRemovals.length})
+          </span>
+          {linkedRemovals.length === 0 ? (
+            <span className="body-small text-[var(--color-text-tertiary)]">
+              No removals linked yet.
+            </span>
+          ) : (
+            <ul className="flex flex-col gap-4 mt-4">
+              {linkedRemovals.map(({ removal, submission }) => (
+                <li
+                  key={removal.id}
+                  className="flex items-center justify-between gap-8 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8"
+                >
+                  <span className="body-caption font-mono text-[var(--color-text-secondary)] truncate">
+                    {submission?.externalId ?? removal.id}
+                  </span>
+                  <SubmissionStatusBadge
+                    latest={submission}
+                    isLockedInFlight={
+                      submission ? isLockedInFlight(submission) : false
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       <SyncEventLog events={recentSyncEvents} compact />
 
-      <div className="flex items-center justify-end gap-8">
+      <div className="flex items-center justify-end gap-8 border-t border-[var(--color-border-tertiary)] pt-12">
         {blockedNote && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {blockedNote}

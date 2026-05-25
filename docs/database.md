@@ -101,8 +101,13 @@ POSTGRES_PASSWORD=postgres
 POSTGRES_DB=noma_dmrv_dev
 POSTGRES_PORT=5432
 
-# Optional pool tuning (values shown are the code defaults;
-# DB_POOL_MAX is a per-environment decision — keep it low on serverless)
+# Optional pool tuning for the main app pool (values shown are the code
+# defaults; DB_POOL_MAX is a per-environment decision — keep it low on
+# serverless). These env vars are read only by the main pool created in
+# `src/db/index.ts`. CLI/maintenance scripts (`src/lib/cli/*`) and the
+# `src/db/seed-data.ts` seeder build their own short-lived pools via
+# `getPgPoolConfig(...)` and do not honor DB_POOL_* — they use pg's
+# built-in defaults instead.
 DB_POOL_MAX=1
 DB_POOL_IDLE_TIMEOUT_MS=10000
 DB_POOL_CONNECTION_TIMEOUT_MS=10000

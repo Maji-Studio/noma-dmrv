@@ -1,11 +1,14 @@
 /**
  * Delete Confirmation Dialog
- * Accessible confirmation dialog for delete actions
+ * Accessible confirmation dialog for delete actions.
+ *
+ * Composes the shared `Modal` primitive so chrome, centering, backdrop, and
+ * width tokens stay consistent with every other modal in the app.
  */
 "use client";
 
-import { useDialog } from "@/hooks/use-dialog";
-import { Button } from "@/components/ui";
+import { useId } from "react";
+import { Button, Modal } from "@/components/ui";
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -24,24 +27,29 @@ export function DeleteConfirmDialog({
   onCancel,
   isPending = false,
 }: DeleteConfirmDialogProps) {
-  const dialogRef = useDialog(isOpen, onCancel);
-
-  if (!isOpen) return null;
-
+  const id = useId();
+  const titleId = `${id}-delete-dialog-title`;
+  const descId = `${id}-delete-dialog-desc`;
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-32 border border-[var(--color-border-primary)] backdrop:bg-black/50"
-      aria-labelledby="dialog-title"
-      aria-describedby="dialog-description"
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      ariaLabelledBy={titleId}
+      ariaDescribedBy={descId}
+      width="sm"
     >
-      <div className="flex flex-col gap-24 min-w-[300px]">
-        <h2 id="dialog-title" className="title-heading-3">
-          {title}
-        </h2>
-        <p id="dialog-description" className="body-medium text-[var(--color-text-secondary)]">
-          {message}
-        </p>
+      <div className="flex flex-col gap-24">
+        <div className="flex flex-col gap-12">
+          <h2 id={titleId} className="title-heading-3">
+            {title}
+          </h2>
+          <p
+            id={descId}
+            className="body-medium text-[var(--color-text-secondary)]"
+          >
+            {message}
+          </p>
+        </div>
         <div className="flex gap-16 justify-end">
           <Button
             size="large"
@@ -62,6 +70,6 @@ export function DeleteConfirmDialog({
           </Button>
         </div>
       </div>
-    </dialog>
+    </Modal>
   );
 }
