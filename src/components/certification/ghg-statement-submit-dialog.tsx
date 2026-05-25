@@ -13,10 +13,9 @@ import {
   FormTextarea,
   ServerError,
 } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitGhgStatementToVerifier } from "@/hooks/use-certification";
-import { useDialog } from "@/hooks/use-dialog";
 import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogInput,
@@ -38,28 +37,37 @@ export function GhgStatementSubmitDialog({
   isProduction,
   isResubmit,
 }: GhgStatementSubmitDialogProps) {
-  const dialogRef = useDialog(isOpen, onClose);
   const mutation = useSubmitGhgStatementToVerifier();
   const toast = useToast();
   const schema = buildSubmitGhgStatementDialogSchema({
     isResubmit,
     isProduction,
   });
+  // The dialog stays mounted across open/close (it's rendered unconditionally
+  // by the hub), so react-hook-form and react-query mutation state would
+  // persist between sessions without an explicit reset. Match the
+  // create-dialog pattern: reset both via the Modal's onOpen callback so the
+  // form starts blank and any prior server error is cleared every open.
+  const initialValues: SubmitGhgStatementDialogInput = {
+    reportUrl: "",
+    summaryOfChanges: isResubmit ? "" : undefined,
+    confirmProduction: false,
+  };
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
     setError,
   } = useForm<SubmitGhgStatementDialogInput>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      reportUrl: "",
-      summaryOfChanges: isResubmit ? "" : undefined,
-      confirmProduction: false,
-    },
+    defaultValues: initialValues,
   });
 
-  if (!isOpen) return null;
+  const onModalOpen = () => {
+    reset(initialValues);
+    mutation.reset();
+  };
 
   const onSubmit = handleSubmit(async (data) => {
     try {
@@ -83,15 +91,14 @@ export function GhgStatementSubmitDialog({
   });
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50"
-      aria-labelledby="ghg-submit-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      onOpen={onModalOpen}
+      ariaLabelledBy="ghg-submit-title"
+      width="md"
     >
-      <form
-        onSubmit={onSubmit}
-        className="w-[520px] max-w-[calc(100vw-32px)] p-24"
-      >
+      <form onSubmit={onSubmit}>
         <div className="flex flex-col gap-20">
           <header>
             <h2 id="ghg-submit-title" className="title-heading-3">
@@ -168,6 +175,6 @@ export function GhgStatementSubmitDialog({
           </div>
         </div>
       </form>
-    </dialog>
+    </Modal>
   );
 }

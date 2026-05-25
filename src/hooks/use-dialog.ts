@@ -37,18 +37,31 @@ export function useDialog(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Pin onClose via a ref so the cancel-listener effect doesn't churn on
+  // every parent render. Every consumer passes `onClose` as an inline arrow,
+  // so without the ref each parent re-render (typing in a form, sibling
+  // state churn) would tear down and re-add the listener.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  // Depend on `isOpen` (not `[]`) because `Modal` returns null while closed,
+  // so the <dialog> element doesn't exist on the hook's first mount. Without
+  // re-running on open, the cancel listener never attaches and ESC closes
+  // the native dialog without notifying React state.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
 
     const handleCancel = (e: Event) => {
       e.preventDefault();
-      onClose();
+      onCloseRef.current();
     };
 
     dialog.addEventListener("cancel", handleCancel);
     return () => dialog.removeEventListener("cancel", handleCancel);
-  }, [onClose]);
+  }, [isOpen]);
 
   return dialogRef;
 }

@@ -8,11 +8,11 @@ import {
   getLatestSubmission,
   getLatestSubmissionsForEntities,
   getSubmissionById,
-  insertDraftSubmission,
+  insertDraftSubmissionWithMappingLock,
   listRecentSyncEvents,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraft,
+  resetSubmissionToDraftWithMappingLock,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
@@ -159,6 +159,17 @@ export async function createGhgStatementDraft(
       );
     }
 
+    // expectedDefaultRemovalTemplateId is intentionally undefined: a GHG
+    // Statement has no template, so we only need the externalProjectId arm of
+    // the guard. The mapping row is locked FOR UPDATE before the draft row is
+    // written, so a concurrent repoint/unlink either runs first (and we fail
+    // with "Facility was repointed…") or waits behind us.
+    const mappingGuard = {
+      facilityId: parsed.facilityId,
+      provider: ISOMETRIC_PROVIDER,
+      expectedExternalProjectId: project.externalProjectId,
+    };
+
     // Get-or-create the local statement row. Its id is stable per
     // (facility, period) and anchors the ledger localEntityId, so a repeat
     // create (double-click, two tabs) resolves through the submission-claim
@@ -215,20 +226,33 @@ export async function createGhgStatementDraft(
           warnings: [],
         };
       case "resume":
-        row = await resetSubmissionToDraft(userId, claim.resumeRowId);
+        // …WithMappingLock locks certifier_projects and verifies the
+        // externalProjectId still matches what we read above. Without it, a
+        // concurrent repoint between the project read and the remote POST
+        // would create the registry statement under the old project while
+        // the facility now points elsewhere. The defaultRemovalTemplateId
+        // arm of the guard is skipped — a GHG Statement has no template.
+        row = await resetSubmissionToDraftWithMappingLock(
+          userId,
+          claim.resumeRowId,
+          mappingGuard,
+          LOCK_TTL_MS,
+        );
         break;
       case "create-new-version":
-        // Plain insert — not the …WithMappingLock variant. The mapping lock
-        // guards a removal template; a GHG Statement has none.
-        row = await insertDraftSubmission(userId, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-          localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-          localEntityId: statement.id,
-          version: claim.nextVersion,
-          payloadSnapshot: { semantic: semanticPayload },
-          payloadHash: semanticHash,
-        });
+        row = await insertDraftSubmissionWithMappingLock(
+          userId,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+            localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+            localEntityId: statement.id,
+            version: claim.nextVersion,
+            payloadSnapshot: { semantic: semanticPayload },
+            payloadHash: semanticHash,
+          },
+          mappingGuard,
+        );
         break;
     }
 

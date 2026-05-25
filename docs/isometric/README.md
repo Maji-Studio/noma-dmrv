@@ -10,21 +10,33 @@
 
 ## Files
 
+### Requirements knowledge base
+
 | File | Purpose |
 |---|---|
 | `versions.json` | Protocol/module version pins, status, dates, authoritative URLs |
 | `requirements-shortlist.md` | Concise requirement shortlist by domain with source links |
 | `schema-mapping.md` | Requirement-to-schema coverage map and prioritized gaps |
 | `p0-compliance-checklist.md` | Execution checklist for highest-priority implementation gaps |
-| `simple-implementation-guide.md` | Plain-language implementation notes, derived-vs-stored decisions, and glossary |
+| `simple-implementation-guide.md` | Plain-language implementation notes, derived-vs-stored decisions, glossary |
 | `condition-registry.md` | Canonical trigger map for `conditional_required` fields |
 | `update-playbook.md` | Repeatable refresh workflow for version bumps |
-| `integration-plan.md` | Phased plan + as-shipped status for the Certify API integration (separate from the requirements KB) |
-| `sandbox-template-authoring.md` | Step-by-step walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI (unblocks Phase 3 sandbox writes) |
+
+### Certify API integration
+
+| File | Purpose |
+|---|---|
+| `integration-plan.md` | Forward-looking plan, phase status table, pre-deploy gates, architecture, idempotency design, migration ledger |
+| `changes.md` | Append-only changelog of every shipped change |
+| `sandbox-template-authoring.md` | Walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI + fixed-constant bootstrap |
 | `openapi-index.md` | Annotated index of every Certify + Registry OpenAPI operation/schema with current noma integration status |
-| `changes.md` | Local changelog for documentation updates |
+
+Decisions live in `docs/adr/0001`–`0004`. Open design questions and
+deferred work live in `docs/open-questions.md`.
 
 ## How To Use
+
+### For requirements / compliance work
 
 1. Check `versions.json` to confirm pinned versions.
 2. Read `requirements-shortlist.md` for product/engineering decisions.
@@ -33,6 +45,13 @@
 5. Read `simple-implementation-guide.md` for plain-language context and abbreviations.
 6. Use `condition-registry.md` to understand conditional field enforcement.
 7. Follow `update-playbook.md` when protocol/module versions change.
+
+### For integration work
+
+1. Read `integration-plan.md` for the current model, phase status, and pre-deploy gates.
+2. Skim the ADRs (`docs/adr/0001`–`0004`) for the design decisions.
+3. Check `docs/open-questions.md` for active deferrals.
+4. When changing the Certify surface, follow `update-playbook.md` and append to `changes.md`.
 
 ## Update Rules
 
@@ -43,5 +62,6 @@
 
 ## Freshness
 
-- Last refreshed: 2026-05-11
+- Requirements KB last refreshed: 2026-05-11
+- Integration plan last refreshed: 2026-05-24
 - Source of truth: Isometric Registry URLs in `versions.json`

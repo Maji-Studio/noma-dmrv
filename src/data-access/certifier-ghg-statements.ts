@@ -243,6 +243,22 @@ export async function reconcileRemovalMembership(
   }
 
   const run = async (tx: Tx): Promise<ReconcileResult> => {
+    // 0. Resolve the target statement's facility so every subsequent step
+    //    refuses to stamp a removal that lives in a different facility.
+    //    Defence in depth — Isometric's `removal_ids` should already be
+    //    facility-scoped (its project owns a single noma facility), but a
+    //    registry bug, misconfiguration, or external_id collision must
+    //    never let the stamp cross facility boundaries.
+    const [target] = await tx
+      .select({ facilityId: certifierGhgStatements.facilityId })
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.id, ghgStatementId))
+      .limit(1);
+    if (!target) {
+      throw new SafeError("GHG statement not found for reconciliation.");
+    }
+    const targetFacilityId = target.facilityId;
+
     // 1. Map each Isometric removal id → its local removal id via the
     //    ledger. externalId is unique per (provider, submissionType).
     const ledgerRows = await tx
@@ -267,20 +283,34 @@ export async function reconcileRemovalMembership(
       }
     }
 
-    // 2. Lock the candidate removal rows and read their current membership,
-    //    so the link decision and the write are atomic (no steal, no race).
-    const localRemovalIds = [...new Set(externalToLocal.values())];
+    // 2. Lock the candidate removal rows and read their current membership +
+    //    facility, so the link decision and the write are atomic (no steal,
+    //    no race) and we can drop any removal whose facility doesn't match
+    //    the target statement.
+    const candidateIds = [...new Set(externalToLocal.values())];
     const currentMembership = new Map<string, string | null>();
-    if (localRemovalIds.length > 0) {
+    if (candidateIds.length > 0) {
       const current = await tx
         .select({
           id: certifierRemovals.id,
+          facilityId: certifierRemovals.facilityId,
           ghgStatementId: certifierRemovals.ghgStatementId,
         })
         .from(certifierRemovals)
-        .where(inArray(certifierRemovals.id, localRemovalIds))
+        .where(inArray(certifierRemovals.id, candidateIds))
         .for("update");
-      for (const r of current) currentMembership.set(r.id, r.ghgStatementId);
+      for (const r of current) {
+        if (r.facilityId !== targetFacilityId) {
+          // Drop the mapping so decideRemovalMembership never sees an
+          // out-of-facility candidate. The corresponding external id falls
+          // through to the "no local record" warning path.
+          for (const [extId, localId] of externalToLocal) {
+            if (localId === r.id) externalToLocal.delete(extId);
+          }
+          continue;
+        }
+        currentMembership.set(r.id, r.ghgStatementId);
+      }
     }
 
     // 3. Pure decision — what to link, what to warn about. No steal.
@@ -293,6 +323,8 @@ export async function reconcileRemovalMembership(
 
     // 4. Stamp ghg_statement_id on the unlinked removals. The IS NULL guard
     //    is redundant under the FOR UPDATE lock but kept as belt-and-braces.
+    //    The facilityId predicate mirrors step 0 so the write itself cannot
+    //    cross facility boundaries even if the in-memory filter slipped.
     if (decision.toLink.length > 0) {
       await tx
         .update(certifierRemovals)
@@ -300,6 +332,7 @@ export async function reconcileRemovalMembership(
         .where(
           and(
             inArray(certifierRemovals.id, decision.toLink),
+            eq(certifierRemovals.facilityId, targetFacilityId),
             isNull(certifierRemovals.ghgStatementId),
           ),
         );

@@ -1,5 +1,9 @@
 # Energy submission data uses per-facility admin-configured estimates
 
+> **Status: Accepted, delivered.** Shipped as integration-plan Phase 3.7
+> (2026-05-21). The `/admin/emission-estimates` page is live and seeded
+> for the Moshi facility.
+
 ## Context
 
 The Isometric removal template splits energy into three process stages

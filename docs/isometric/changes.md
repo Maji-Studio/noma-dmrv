@@ -1,30 +1,99 @@
 # Isometric Docs Change Log
 
+## 2026-05-24 (Period emissions + template-evolution strategy — grilling session)
+
+Resolves the `isometric/phase-3.7-period-inputs` open question
+(originally raised 2026-05-21, scope-revised 2026-05-22) and lands a
+durable template-evolution strategy. Implementation does not ship in
+this change — design-only, written up so `modify-feature` can land
+it cleanly. See
+[ADR 0005](../adr/0005-period-emissions-as-project-components.md) and
+the new "Template-evolution strategy" section of
+`docs/isometric/integration-plan.md`.
+
+- **Reframe — period emissions are Project Components, not Removal
+  datapoints.** The Certify OpenAPI surface exposes a four-value
+  `ComponentScope` enum (`REMOVAL | GHG_STATEMENT | PROJECT |
+  NET_NEGATIVITY`) and a `ProjectComponentAmortizationStrategy` enum
+  (`ESTIMATED_PROJECT_TONNAGE | MANUAL | CUSTOM_TIME_PERIOD |
+  ESTIMATED_PROJECT_LIFETIME`) that handles per-statement attribution
+  server-side. Period-level emissions (staff travel, pyrolyzer
+  CH₄/CO, lab electricity, sampling consumables, miscellaneous mass)
+  fit cleanly as `PROJECT`-scope Components — they are operator
+  overhead for an LCA measurement window, not attributable to a single
+  Removal or Statement. The client-side apportionment problem the open
+  question was structured around is mostly not noma's problem.
+- **Posture B — noma is the LCA journal, not the publisher.**
+  `/admin/emission-estimates` grows a "Period emissions (LCA-derived)"
+  section: one row per (facility, lca_window, category) with an FK to
+  the source LCA document and an `allocation_strategy_recommendation`
+  text field (default `CUSTOM_TIME_PERIOD; target_date = lca_window_end`).
+  noma **does not** POST to `/project_components`; the operator
+  publishes Project Components directly in the Isometric UI. A read-only
+  drift panel on the certify surface flags noma rows missing from
+  Isometric and Components missing from noma.
+- **`INPUT_MAPPING` cleanup.** The five `zeroStub: true` families
+  move to a new `PERIOD_INPUT_TUPLES` sentinel set; the scope-conflict
+  `SafeError` raised by `buildCreateDatapointRequest` names the tuple
+  AND the canonical scope, replacing today's silent zero-stub on
+  templates that include period-input components. The `noma-mvp`
+  template already omits these, so this is a contract enforcer for
+  templates authored later.
+- **Template-evolution strategy** (B1–B4) — answers the operator
+  meta-question on how noma stays consistent as Isometric templates
+  drift. All four checks share `isometric-health.yml`'s daily 09:17
+  UTC ping (no PR gate). B1: nightly coverage check (`pnpm
+  isometric:coverage-check`) asserts every live-template tuple is in
+  `INPUT_MAPPING` or `PERIOD_INPUT_TUPLES`, and every Isometric
+  Project Component has a matching noma row. B2: nightly
+  `openapi-typescript` regen + `git diff --exit-code` on
+  `certify.d.ts`. B3: `__mappingRevision = sha256(canonicalJson(INPUT_MAPPING))`
+  embedded in `payloadSnapshot` (no migration; reuses
+  `payload-hash.ts`) and surfaced in sync events. B4: mapping-version
+  dimension deferred until Isometric exposes a `blueprint_version`
+  field (none in current OpenAPI; tracked under
+  `isometric/mapping-version-dimension` in open-questions).
+- **Pre-deploy gate #4 rewritten.** The "no zero-stub template in
+  production" gate is replaced by a per-category check: every category
+  present in any Removal Template the facility uses must have a row in
+  `certifier_project_emissions` AND a Project Component in Isometric.
+  The nightly coverage check (B1) runs this assertion headless.
+
+## 2026-05-24 (GHG Statement mapping-lock parity + unlink guard)
+
+Two correctness fixes on the GHG Statement flow now that it's a live
+artifact (ADR 0004). See
+`docs/adr/0004-ghg-statement-as-independent-artifact.md` (updated in the
+same change).
+
+- **`createGhgStatementDraft` uses the `…WithMappingLock` ledger
+  variants.** The `resume` and `create-new-version` branches now go
+  through `resetSubmissionToDraftWithMappingLock` /
+  `insertDraftSubmissionWithMappingLock` with a guard that pins
+  `expectedExternalProjectId` (the `expectedDefaultRemovalTemplateId`
+  arm is intentionally omitted — a GHG Statement has no template). The
+  lock serialises against a concurrent facility repoint/unlink between
+  the project read and the remote POST, preventing the registry
+  statement being created under a stale project.
+- **Unlink/repoint guard widened to include GHG-statement submissions.**
+  `hasBlockingFacilitySubmission` (`src/data-access/certification.ts`)
+  now runs two parallel probes — one over `certifier_removals`, one over
+  `certifier_ghg_statements` — and refuses the unlink/repoint when
+  either has an in-flight submission in `BLOCKING_SUBMISSION_STATUSES`.
+  Both branches keep the one-hop facility join (no lineage walk) and use
+  artifact-specific facility indexes.
+- **Stale framing corrected.** The "GHG Statements decoupled / dormant"
+  note from the 2026-05-22 entry below no longer holds — the flow is
+  live and participates in the same correctness contracts as Removals.
+
 ## 2026-05-22 (GHG Statement review follow-ups)
 
-Post-delivery review fixes for the GHG Statements feature (see the entry
-below). See `docs/adr/0004-ghg-statement-as-independent-artifact.md`.
-
-- **One statement per period — double-create dedup.** The local statement
-  id is now stable per `(provider, facility, reporting-period end)`:
-  `getOrCreateGhgStatementDraft` returns the existing row instead of
-  minting a fresh one, so a double-click / two-tab race resolves through
-  the submission-claim machinery (block in-flight, return the
-  already-created external id, resume a failed draft) instead of POSTing a
-  second Isometric registry artifact. Backed by the new
-  `certifier_ghg_statements_facility_period_unique` constraint — migration
-  `0025`, additive.
-- **N+1 queries removed.** `loadGhgStatementsForFacility` and
-  `loadGhgStatementState` now batch their per-row ledger lookups via
-  `getLatestSubmissionsForEntities` (`DISTINCT ON`) and
-  `countRemovalsByGhgStatementIds` (grouped count).
-- **`finalizeGhgStatement` made atomic.** The post-create reconciliation —
-  removal membership, server-derived reporting window and ledger state —
-  commits in one transaction; `reconcileRemovalMembership` and the ledger
-  write helpers accept an optional `tx`. The external id is still
-  persisted standalone first so a failure can never lose the registry link.
-- Deferred review findings (error boundary, report-URL host allowlist,
-  shared-component a11y) logged to `docs/open-questions.md`.
+Post-delivery review fixes for the GHG Statements feature: one
+statement per `(provider, facility, period)` (double-create dedup
+backed by migration `0025`), N+1 ledger lookups batched, and
+`finalizeGhgStatement` made atomic. See
+`docs/archive/2026-05-22-ghg-statement-review.md` for the detailed
+delivery log.
 
 ## 2026-05-22 (GHG Statements wired live — Certification route group)
 
@@ -177,8 +246,8 @@ deliberate minimum:
   project ID — do not promote it to a DB table.
 - ⚠️ **`Sampling consumables / carbon_intensity = 1.0` is a
   placeholder**, flagged in the script and in
-  `docs/isometric/next-steps.md`. Must be researched before any
-  production submission.
+  `docs/isometric/sandbox-template-authoring.md` (Verifier-readiness
+  section). Must be researched before any production submission.
 
 ## 2026-05-13 (Transport v1.1 compliance fixes — review follow-up)
 
