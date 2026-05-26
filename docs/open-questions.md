@@ -90,153 +90,136 @@ Each entry follows this shape:
   - Migration tracked separately; verify via
     `mcp__claude_ai_isometric__me` after switching.
 
-### ADR 0003 removal-as-submission-unit — pre-deploy gates (opened 2026-05-22)
+> **Note:** ADR 0003 / ADR 0004 pre-deploy gates (legacy ledger cutover,
+> destructive migration `0021`, wide id-addressable removal/GHG-statement
+> surface, no-zero-stub-in-prod) live in
+> `docs/isometric/integration-plan.md` → **Pre-deploy gates**. They are
+> actions before deploy, not open questions.
 
-- **Legacy certifier-submission ledger rows** (`isometric/adr-0003-ledger-cutover`) —
-  opened 2026-05-22.
-  - ADR 0003 assumes the prior model's `certification_submissions` rows
-    (`localEntityType IN ('creditBatch','ghgPeriod')`) are **sandbox-only**
-    and can be abandoned in a clean cutover. The new submit path only looks
-    up submissions by `localEntityType='removal'`; if any *real* (non-sandbox)
-    `creditBatch`-keyed submitted row exists in a target environment, that
-    credit batch will appear ungrouped, spawn a fresh removal, and can POST a
-    **duplicate Isometric Removal** instead of reconciling. The unlink guard
-    also stops seeing those legacy rows.
-  - Why it matters: blocks deploy to any environment that ran the ADR-0002
-    model against real registry data.
-  - Resolve before deploy: run
-    `SELECT count(*) FROM certification_submissions WHERE local_entity_type IN ('creditBatch','ghgPeriod')`
-    against staging/production. If 0 → the ADR's assumption holds, no action.
-    If > 0 → author a forward data migration to purge or remap them, and
-    note that `cert_submissions_external_unique` is **not** scoped by
-    `localEntityType`, so a stale `creditBatch` row sharing an `externalId`
-    with a new removal would raise a unique-constraint violation.
+### GHG Statement review follow-ups (opened 2026-05-22)
 
-- **Migration `0021` is destructive and irreversible**
-  (`isometric/adr-0003-migration-0021`) — opened 2026-05-22.
-  - `drizzle/0021_careless_prism.sql` runs `DROP TABLE
-    "certifier_ghg_periods" CASCADE` with no down-migration. `migrate.yml`
-    auto-applies it on push to `main`/`staging`.
-  - Resolve before deploy: confirm a database backup exists and that
-    `certifier_ghg_periods` is genuinely empty in every target environment.
-    The `CASCADE` keyword is unnecessary (no dependents) — harmless, left
-    as-is to avoid re-hashing an already-generated migration.
+Findings from the Phase 4.5 GHG Statements review (ADR 0004). The
+double-create dedup, the N+1 query batching and the non-atomic
+`finalizeGhgStatement` were fixed in the same branch; the entries below
+were deferred by the operator to a follow-up PR.
 
-### Pre-coding gates (status as of 2026-05-11)
+- **No route-level error boundary** (`certification/error-boundary`) —
+  opened 2026-05-22, deferred.
+  - There is no `error.tsx` anywhere under `src/app`. A thrown error in a
+    Certification route (loader reject, server-fn throw not caught by
+    `ActionResult`) renders a blank screen instead of a recoverable UI.
+  - Resolve via: add `src/app/(app)/certification/error.tsx` with a retry
+    affordance — a new convention for the project, so confirm placement
+    (per-route-group vs a single app-level boundary) before landing.
 
-- **Live-template `INPUT_MAPPING` coverage** (`isometric/phase-3`) — opened
-  2026-05-05, **resolution path chosen** (Phase 3.6).
-  - Resolution path: author a noma-tailored `noma-mvp` Removal Template in
-    the sandbox Registry UI (walkthrough at
-    `docs/isometric/sandbox-template-authoring.md`). Phase 3.6 foundation
-    landed 2026-05-11 — `INPUT_MAPPING` refactored to three-level
-    `(group, blueprint, input)`, transport-leg aggregation utilities added,
-    smoke script updated. Once the template ships, the transport portion of
-    `phase-3-input-coverage` and all of `phase-3-fixed-constants` close.
+- **Report-URL open-redirect / 2nd-party SSRF**
+  (`certification/report-url-allowlist`) — opened 2026-05-22, deferred.
+  - The operator-supplied GHG-statement report URL (`reportUrl` in
+    `submitGhgStatementToVerifier`) is stored on a `documents` row and
+    later served through the pre-existing `/api/documents/[id]` route,
+    which 302-redirects to `fileUrl` with no host allowlist. A crafted
+    URL turns the redirect into an open redirect / server-side fetch of
+    an arbitrary host.
+  - Pre-existing pattern — the `/api/documents/[id]` `fileUrl` branch
+    predates this feature and is shared by every external/legacy URL
+    column (see the `storage/phase-2` entry).
+  - Resolve via: decide an allowlist policy (e.g. restrict to known
+    object-storage / Isometric hosts) and enforce it at the
+    `/api/documents/[id]` redirect, not per-caller.
 
-### Phase 3 blockers found in template inspection
+- **Shared-component a11y gaps** (`forms/a11y-shared-layer`) — opened
+  2026-05-22, deferred.
+  - `FormField` / `FormError` (`src/components/forms/`) do not wire
+    `aria-describedby` from input to error message; `useDialog`
+    (`src/hooks/use-dialog.ts`) does not restore focus to the trigger on
+    close. Surfaced by the GHG Statement dialogs but the gap is in the
+    shared layer, so a fix touches every form and dialog in the app.
+  - Resolve via: a dedicated a11y pass on the shared forms/dialog
+    primitives with a regression check across existing consumers.
 
-- **`isometric/phase-3-input-coverage`** — opened 2026-05-05, **transport
-  portion closed 2026-05-13**. Status now:
-  - `distance` (km) — used by 3 transport components (biomass→processing,
-    biochar→storage, sample→lab). **Closed 2026-05-13.** Phase 3.6
-    completion shipped polymorphic transport-leg CRUD (data-access,
-    schemas, server actions, hooks), `<TransportLegsPanel>` mounted on
-    delivery / sample / feedstock side sheets, shared
-    `collectTransportEntityIds` lineage walker, `submitCreditBatch`
-    wiring via `enrichWithTransportLegs`, and a pre-flight transport-
-    coverage checklist on `<CertifyPanel>` that gates the Submit button.
-    Staff travel intentionally omitted from the MVP template (no
-    corresponding noma entity).
-  - `final_readout` / `initial_readout` (kWh) — pyrolyzer electricity
-    meter pre/post readings. noma stores `production_runs.electricityKwh`
-    as a delta only; pre/post readouts are not captured. **Interim
-    synthesis shipped 2026-05-13** (see `INPUT_MAPPING` under
-    `pyrolysis / metered_energy_based_ci_emissions` in
-    `src/lib/isometric/transformers/datapoint.ts`):
-    `initial_readout = 0`, `final_readout = totalElectricityKwh`. The
-    difference equals the real consumption, which is the only quantity
-    Certify uses downstream. Replace with real per-run pre/post readouts
-    when the `production_runs` schema gains the columns.
-  - `concentration` (mg/kg) + `mass_flow` (kg) — pyrolyzer GHG direct
-    emissions (CH4, CO). noma has `credit_batches.ch4Ppm` /
-    `ch4CompositionPercent` but at credit-batch level, not run level.
-    Unit-shape mismatch (concentration is mg/kg; ppm is by mass at trace
-    level). **Sandbox zero stub shipped 2026-05-13** in `INPUT_MAPPING`
-    under `direct-emissions / ghg_direct_emissions` — emits 0 with the
-    correct quantity_kind so end-to-end sandbox submission proceeds. Must
-    be replaced with a real per-run source before the template moves to
-    production. Tracked under `isometric/sandbox-zero-stubs`.
-  - `biochar-storage / fuel_usage_by_volume / volume_of_fuel` (L) —
-    biochar application via tractor. noma has `applications` rows but no
-    per-application fuel volume. **Sandbox zero stub shipped 2026-05-13.**
-  - `sampling-required-for-mrv / grid_electricity_use / electricity_use`
-    (kWh) — lab analysis electricity. noma does not capture lab-side
-    electricity. **Sandbox zero stub shipped 2026-05-13.**
-  - `staff-travel / distance_based_ci_emissions / distance` (km) — noma
-    has no staff-travel entity. **Sandbox zero stub shipped 2026-05-13.**
+### Remaining template-coverage gaps
 
-- **`isometric/sandbox-zero-stubs`** — opened 2026-05-13, **energy
-  portion closed 2026-05-21 (Phase 3.7)**.
-  - Phase 3.7 closed the **energy** stubs: biomass metered electricity
-    (initial + final readout) and the biomass / pyrolysis / biochar
-    diesel-genset energy now carry real per-run data routed via
-    `enrichWithFacilityConfig`. Sample transport `mass_distance` is also
-    real now (derived from transport legs).
-  - Still zero-stubbed — the **per-reporting-period inputs**: pyrolyzer
-    CH4/CO `concentration` + gas `mass_flow`, lab-analysis
-    `electricity_use`, sampling consumables `mass`, staff-travel
-    `distance`, miscellaneous `mass`. Tracked in the dedicated entry
-    `isometric/phase-3.7-period-inputs` below.
-  - Quantity_kind is still enforced against the blueprint. Do NOT
-    promote the active template to a production project while any zero
-    stub is in use. This entry resolves once the period-inputs entry
-    does.
+The Phase 3 / 3.6 / 3.7 template inspection found ~10 input coverage gaps;
+all but the period-level ones are closed. The full breakdown is in
+`docs/isometric/changes.md` (2026-05-11, 2026-05-13, 2026-05-21 entries).
+Two items remain:
 
-- **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21, **scope
-  revised 2026-05-21 (credit-batch re-leveling, ADR 0002)**.
-  - **Question:** how should the per-reporting-period emission inputs
-    be sourced — pyrolyzer CH4/CO concentration + gas mass-flow,
-    lab-analysis electricity, sampling consumables mass, staff travel
-    distance, miscellaneous mass?
-  - **Where they belong:** these inputs are period-level, not per-run.
-    After the re-leveling, a noma credit batch submits as one Isometric
-    **GHG Statement** (one per month) and each production run is one
-    **Removal**. Per-reporting-period emissions belong on the **GHG
-    Statement's "Reporting period emissions" tab**, not as zero-stubbed
-    monitored inputs on each per-run Removal template. Moving them there
-    also removes them as a blocker for the per-run Removal payload.
-  - **Remaining sub-decisions:** (a) source model — tracked operational
-    entities (a `staff_travel` table, per-run pyrolyzer gas measurement,
-    per-sample lab electricity) vs admin-configured estimates seeded
-    from the LCA; and (b) **apportionment** — the LCA measures these
-    once per ~1-year reporting period, but a GHG Statement covers one
-    month. A flat per-period figure must be split across the ~12 monthly
-    GHG Statements (e.g. by each month's share of period biochar mass),
-    not reported whole on each.
-  - **Why it matters:** staff travel alone is ~59 tCO2e in the sample
-    LCA; until the GHG Statement carries these, a production submission
-    understates emissions.
-  - **Resolve via:** decide the apportionment rule and source model,
-    then wire the GHG Statement's reporting-period-emissions fields in
-    `submitGhgStatementForCreditBatch`. The Phase 3.7 per-facility
-    config table (`certifier_projects` columns) can hold per-period
-    estimates without migration pain once the model is chosen.
+- **Pyrolyzer pre/post electricity readout** (`isometric/phase-3-readouts`)
+  — opened 2026-05-13. `INPUT_MAPPING` under
+  `pyrolysis / metered_energy_based_ci_emissions` synthesises
+  `initial_readout = 0`, `final_readout = totalElectricityKwh`. The
+  difference equals real consumption, which is the only quantity Certify
+  uses downstream — verifier-acceptable today, but replace with real
+  per-run pre/post readouts when `production_runs` gains the columns.
+- **Period-level inputs zero-stubbed** — **resolved 2026-05-24** by
+  [ADR 0005](../adr/0005-period-emissions-as-project-components.md).
+  Period inputs no longer flow through `INPUT_MAPPING` at all; they're
+  `PROJECT`-scope Components managed in the Isometric UI from a noma
+  LCA-journal row. The "no template carrying these stubs in production"
+  gate is replaced by integration-plan pre-deploy gate #4 (every
+  category present in any used Removal Template must have a matching
+  noma row AND a Project Component in Isometric).
 
-- **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **resolution
-  path documented 2026-05-11**.
-  - The default sandbox templates (`Protocol default`,
-    `Dark Earth removal template`) have ~12 `type=fixed` constants without
+- **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21,
+  **resolved 2026-05-24 by [ADR 0005](../adr/0005-period-emissions-as-project-components.md)**.
+  - **Resolution:** the agenda's premise (client-side apportionment
+    across GHG Statements) was invalidated by re-reading the Certify
+    OpenAPI surface. Period-level emissions live as `PROJECT`-scope
+    Components in Isometric; the
+    `ProjectComponentAmortizationStrategy` enum
+    (`ESTIMATED_PROJECT_TONNAGE / MANUAL / CUSTOM_TIME_PERIOD /
+    ESTIMATED_PROJECT_LIFETIME`) handles per-statement and per-removal
+    attribution server-side.
+  - **Posture B** — noma is the LCA journal, not the publisher.
+    `/admin/emission-estimates` carries the transcribed LCA values
+    (per facility × LCA window × category) plus an FK to the source
+    document; a read-only drift panel on `/certification/` flags rows
+    missing from Isometric or Components missing from noma. The
+    operator publishes Project Components in the Isometric UI.
+  - **Allocation strategy default:** `CUSTOM_TIME_PERIOD` with
+    `target_date = lca_window_end` surfaced as a copy-paste hint;
+    per-category overrides are an admin-edit on each row.
+  - **INPUT_MAPPING cleanup:** the five `zeroStub: true` families move
+    to a new `PERIOD_INPUT_TUPLES` sentinel set; the scope-conflict
+    `SafeError` names the canonical scope when a Removal Template
+    declares a period-input component (see ADR 0005 §3).
+  - Implementation tracked under integration-plan **Phase 3.7-period**
+    row; status moves from `🔨 Designed` to `✅` when the admin
+    surface, drift panel, sentinel set, and `SafeError` ship.
+
+- **`isometric/mapping-version-dimension`** — opened 2026-05-24,
+  **deferred**.
+  - **Question:** when Isometric introduces blueprint versioning (e.g.
+    `pyrolysis@v1` → `pyrolysis@v2` where `carbon_content` moves from
+    `dimensionless` to `mass_fraction`), how should `INPUT_MAPPING`
+    represent the version dimension — a 4-tuple
+    `(group, blueprint, blueprintVersion, input)`, an
+    `N`-entries-per-input branch-on-`compatible_unit` model, or
+    something else?
+  - **Why deferred:** the Certify OpenAPI surface today does not expose
+    any `blueprint_version` field — verified by grep across
+    `src/lib/isometric/generated/certify.d.ts`. There are no concrete
+    versioning examples to model the table against, so any 4-tuple
+    decision would be speculative. Submit-time guards
+    (`datapoint.ts:394-404`) + the nightly coverage check (B1) catch
+    type/unit mismatches; no near-term integrity risk.
+  - **Resolve via:** re-read the OpenAPI on any spec bump; reopen this
+    entry the first time Isometric ships a versioned blueprint. The
+    decision then has a concrete example to anchor against.
+
+- **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **bootstrap
+  shipped 2026-05-13**.
+  - The default sandbox templates have ~12 `type=fixed` constants without
     pre-bound datapoints. Phase 3's orchestrator bails with `SafeError`
     directing the admin to Isometric's template editor.
-  - Why: constants are policy-level decisions (which emission factor to
-    use for which fuel, which IPCC GWP value to use) — Isometric maintains
-    these via supplier-managed Datapoints bound to the template, not
-    noma-managed values. Phase 3 explicitly does not auto-create them.
-  - Resolve via the `noma-mvp` template authoring walkthrough
+  - Resolved by the `noma-mvp` template authoring walkthrough
     (`docs/isometric/sandbox-template-authoring.md`, Step 3 —
-    "Pre-bind fixed constants"). MVP scope = 3 `carbon_intensity`
-    bindings (one per transport leg) using DEFRA/IPCC defaults.
+    "Pre-bind fixed constants" / "Alternative — Bootstrap fixed constants")
+    and the `bootstrap-fixed-constants` mode of
+    `scripts/isometric-smoke.ts`. Operational follow-ups (replacing the
+    `1.0` placeholder for sampling consumables; validating
+    region-specific factors before production) tracked in the
+    walkthrough's "Verifier-readiness" section.
 
 ### Phase 4 deferrals
 
@@ -332,16 +315,6 @@ Each entry follows this shape:
     with aggregated values; per-run is overkill but may be required for
     some templates.
   - Resolve only when a template surfaces that needs per-run breakdown.
-
-### Sandbox Removal Template lacks pre-bound fixed constant
-
-- **`isometric/sandbox-template-binding`** — **resolved 2026-05-13**.
-  Bootstrap script + walkthrough shipped; see
-  `docs/isometric/changes.md` (2026-05-13 Dark Earth bootstrap entry)
-  and `docs/isometric/sandbox-template-authoring.md` →
-  "Alternative — Bootstrap fixed constants". Operational follow-ups
-  (sampling-consumables value research, production gate) tracked in
-  `docs/isometric/next-steps.md`.
 
 ## Documentation hygiene
 

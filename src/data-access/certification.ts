@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  certifierGhgStatements,
   certifierProjects,
   certifierRemovals,
   certificationSubmissions,
@@ -94,7 +95,7 @@ export async function listAllFacilitiesLinkedByProvider(
     .where(eq(certifierProjects.provider, provider));
 }
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Statuses that still depend on the facility's certifier mapping. Terminal
 // statuses (`rejected`, `superseded`) are intentionally excluded — those rows
@@ -110,28 +111,47 @@ async function hasBlockingFacilitySubmission(
   facilityId: string,
   provider: CertifierProvider,
 ): Promise<boolean> {
-  // The Removal is the submission unit. A removal ledger row is keyed
-  // (provider, 'removal', 'removal', certifierRemovals.id); certifier_removals
-  // carries the facility directly — one hop, no lineage walk. GHG-statement
-  // rows are not checked: the GHG flow is decoupled/dormant (ADR 0003).
-  const [blocking] = await executor
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .innerJoin(
-      certifierRemovals,
-      eq(certificationSubmissions.localEntityId, certifierRemovals.id),
-    )
-    .where(
-      and(
-        eq(certificationSubmissions.provider, provider),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        eq(certificationSubmissions.submissionType, "removal"),
-        eq(certifierRemovals.facilityId, facilityId),
-        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
-      ),
-    )
-    .limit(1);
-  return Boolean(blocking);
+  // Both facility-scoped artifacts can pin a mapping: Removal (ADR 0003) and
+  // GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no
+  // lineage walk. Two small probes are clearer than a UNION/OR and let the
+  // planner use each artifact's own index.
+  const [removalHit, ghgHit] = await Promise.all([
+    executor
+      .select({ id: certificationSubmissions.id })
+      .from(certificationSubmissions)
+      .innerJoin(
+        certifierRemovals,
+        eq(certificationSubmissions.localEntityId, certifierRemovals.id),
+      )
+      .where(
+        and(
+          eq(certificationSubmissions.provider, provider),
+          eq(certificationSubmissions.localEntityType, "removal"),
+          eq(certificationSubmissions.submissionType, "removal"),
+          eq(certifierRemovals.facilityId, facilityId),
+          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+        ),
+      )
+      .limit(1),
+    executor
+      .select({ id: certificationSubmissions.id })
+      .from(certificationSubmissions)
+      .innerJoin(
+        certifierGhgStatements,
+        eq(certificationSubmissions.localEntityId, certifierGhgStatements.id),
+      )
+      .where(
+        and(
+          eq(certificationSubmissions.provider, provider),
+          eq(certificationSubmissions.localEntityType, "ghgStatement"),
+          eq(certificationSubmissions.submissionType, "ghg_statement"),
+          eq(certifierGhgStatements.facilityId, facilityId),
+          inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+        ),
+      )
+      .limit(1),
+  ]);
+  return removalHit.length > 0 || ghgHit.length > 0;
 }
 
 export async function upsertCertifierProject(
@@ -312,6 +332,39 @@ export async function getLatestSubmission(
     .orderBy(desc(certificationSubmissions.version))
     .limit(1);
   return row ?? null;
+}
+
+// Batched sibling of getLatestSubmission — one round-trip for N local
+// entities. DISTINCT ON keeps the highest-version row per localEntityId, the
+// same "latest" rule as getLatestSubmission. Returns a localEntityId → row
+// map; entities with no submission are simply absent.
+export async function getLatestSubmissionsForEntities(
+  userId: string,
+  key: {
+    provider: CertifierProvider;
+    submissionType: string;
+    localEntityType: string;
+    localEntityIds: string[];
+  },
+): Promise<Map<string, CertificationSubmissionRow>> {
+  requireAuth(userId);
+  if (key.localEntityIds.length === 0) return new Map();
+  const rows = await db
+    .selectDistinctOn([certificationSubmissions.localEntityId])
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, key.provider),
+        eq(certificationSubmissions.submissionType, key.submissionType),
+        eq(certificationSubmissions.localEntityType, key.localEntityType),
+        inArray(certificationSubmissions.localEntityId, key.localEntityIds),
+      ),
+    )
+    .orderBy(
+      certificationSubmissions.localEntityId,
+      desc(certificationSubmissions.version),
+    );
+  return new Map(rows.map((row) => [row.localEntityId, row]));
 }
 
 export async function getSubmissionById(
@@ -568,9 +621,10 @@ export async function updateSubmissionMetadata(
   userId: string,
   id: string,
   patch: Record<string, unknown>,
+  tx?: Tx,
 ): Promise<void> {
   requireAuth(userId);
-  await db
+  await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
@@ -586,9 +640,10 @@ export async function setSubmissionTerminalStatus(
     status: "accepted" | "rejected";
     metadataPatch?: Record<string, unknown>;
   },
+  tx?: Tx,
 ): Promise<void> {
   requireAuth(userId);
-  await db
+  await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       status: args.status,
@@ -603,9 +658,10 @@ export async function clearTerminalStatusForResubmit(
   userId: string,
   id: string,
   args: { metadataPatch?: Record<string, unknown> } = {},
+  tx?: Tx,
 ): Promise<void> {
   requireAuth(userId);
-  await db
+  await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       status: "submitted",

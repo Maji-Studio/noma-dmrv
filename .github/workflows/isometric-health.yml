@@ -1,0 +1,54 @@
+name: Isometric API health
+
+# Daily read-only ping of the Isometric Certify sandbox to catch upstream
+# breakage (auth regressions, schema drift, downtime) before it surfaces as a
+# user-facing submit failure. Reuses the existing opt-in vitest in
+# tests/isometric-sandbox.integration.test.ts — three GET endpoints
+# (projects, removal templates for the demo project, component blueprints).
+# No writes. No noma DB. No app boot.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   ISOMETRIC_CLIENT_SECRET
+#   ISOMETRIC_ACCESS_TOKEN
+#   ISOMETRIC_DEMO_PROJECT_ID
+# When any are missing the workflow falls through (the test self-skips); set
+# them in the same Isometric organisation that owns the sandbox demo project.
+
+on:
+  schedule:
+    # Once a day at 09:17 UTC — early enough that EU operators see a red
+    # check before lunch, late enough that a US morning fix still ships
+    # same day. Minute 17 avoids the :00 cron pile-up on GH Actions.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RUN_ISOMETRIC_SANDBOX_TESTS: "1"
+      ISOMETRIC_ENVIRONMENT: sandbox
+      ISOMETRIC_CLIENT_SECRET: ${{ secrets.ISOMETRIC_CLIENT_SECRET }}
+      ISOMETRIC_ACCESS_TOKEN: ${{ secrets.ISOMETRIC_ACCESS_TOKEN }}
+      ISOMETRIC_DEMO_PROJECT_ID: ${{ secrets.ISOMETRIC_DEMO_PROJECT_ID }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ping Isometric sandbox (read paths)
+        run: pnpm test:integration

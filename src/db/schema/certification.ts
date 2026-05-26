@@ -1,5 +1,7 @@
 import {
+  check,
   date,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -9,6 +11,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import {
   certificationSubmissionStatus,
   certifierProvider,
@@ -62,25 +65,88 @@ export const certifierProjects = pgTable(
   ]
 );
 
+// One Isometric GHG Statement — an independent, period-anchored artifact
+// that rolls up multiple Removals for a supplier-chosen reporting period
+// (ADR 0003 / Phase 4.5). Facility-scoped. The remote statement id, status
+// and payload live on the certification_submissions ledger row keyed
+// (provider, 'ghg_statement', 'ghgStatement', certifierGhgStatements.id).
+export const certifierGhgStatements = pgTable(
+  'certifier_ghg_statements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    provider: certifierProvider('provider').notNull().default('isometric'),
+    // Operator-chosen reporting-period end — the only date Isometric's create
+    // API accepts. YYYY-MM-DD.
+    reportingPeriodEndOn: date('reporting_period_end_on').notNull(),
+    // Server-derived reporting-period start, reconciled back from Isometric
+    // after the statement is created. Null until then.
+    reportingPeriodStartOn: date('reporting_period_start_on'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // One GHG statement per facility + reporting-period end. The local
+    // statement id anchors the submission-claim machinery, so a stable id
+    // per (provider, facility, period) lets a double-click / two-tab race
+    // resolve to the in-flight or already-created statement instead of
+    // minting a second Isometric registry artifact (ADR 0004). Provider is
+    // included for parity with every other certifier uniqueness constraint.
+    unique('certifier_ghg_statements_facility_period_unique').on(
+      table.provider,
+      table.facilityId,
+      table.reportingPeriodEndOn
+    ),
+  ]
+);
+
 // One Isometric Removal — the submission unit. N credit batches map into a
 // single removal (default 1:1 per month; multiple supported). Facility-scoped:
 // every member credit batch shares one Isometric project. The remote Removal
 // id, status and payload live on the certification_submissions ledger row
 // keyed (provider, 'removal', 'removal', certifierRemovals.id).
-export const certifierRemovals = pgTable('certifier_removals', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  facilityId: uuid('facility_id')
-    .notNull()
-    .references(() => facilities.id),
-  provider: certifierProvider('provider').notNull().default('isometric'),
-  // Reporting window, derived from the aggregated member production runs at
-  // submit time. Null until the first submission writes them.
-  startedOn: date('started_on'),
-  completedOn: date('completed_on'),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const certifierRemovals = pgTable(
+  'certifier_removals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    provider: certifierProvider('provider').notNull().default('isometric'),
+    // Reporting window, derived from the aggregated member production runs at
+    // submit time. Null until the first submission writes them.
+    startedOn: date('started_on'),
+    completedOn: date('completed_on'),
+    // The GHG Statement this removal was reconciled into, set from the
+    // statement's server-side `removal_ids` after create/refresh — never
+    // user-assigned. Null until a statement absorbs this removal.
+    ghgStatementId: uuid('ghg_statement_id').references(
+      () => certifierGhgStatements.id
+    ),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // Indexes the FK for getRemovalsByGhgStatementId / listOpenRemovalsForFacility
+    // lookups and keeps FK-constraint checks fast — Postgres does not
+    // auto-index foreign keys.
+    index('certifier_removals_ghg_statement_id_idx').on(table.ghgStatementId),
+    // Indexes the facility FK — drives listOpenRemovalsForFacility and the
+    // Removals hub's per-facility filter. Postgres does not auto-index FKs.
+    index('certifier_removals_facility_id_idx').on(table.facilityId),
+    // Reporting-window chronology guard. Either bound may still be null
+    // (windows are filled in lazily at first submission), but if both are
+    // present, start must precede end.
+    check(
+      'certifier_removals_reporting_window_chronology',
+      sql`${table.startedOn} is null or ${table.completedOn} is null or ${table.startedOn} <= ${table.completedOn}`
+    ),
+  ]
+);
 
 export const certifierSources = pgTable(
   'certifier_sources',
