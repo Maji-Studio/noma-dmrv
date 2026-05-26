@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import {
   FormActions,
   FormField,
@@ -15,7 +15,6 @@ import {
   FormSelect,
   ServerError,
 } from "@/components/forms";
-import { useDialog } from "@/hooks/use-dialog";
 import { useToast } from "@/components/ui/toast";
 import {
   saveMappingSchema,
@@ -65,7 +64,6 @@ export function FacilityCertifierDialog({
     defaultValues,
   });
 
-  const dialogRef = useDialog(isOpen, onClose, () => reset(defaultValues));
   const toast = useToast();
   const saveMutation = useSaveFacilityCertifierMapping();
 
@@ -131,17 +129,17 @@ export function FacilityCertifierDialog({
     return "Used as the default when submitting credit batches.";
   })();
 
-  if (!isOpen) return null;
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 w-[560px] max-w-[90vw]"
-      aria-labelledby="facility-certifier-dialog-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      onOpen={() => reset(defaultValues)}
+      ariaLabelledBy="facility-certifier-dialog-title"
+      width="md"
     >
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-col gap-24 p-32"
+        className="flex flex-col gap-24"
       >
         <header className="flex flex-col gap-4">
           <h2
@@ -229,7 +227,7 @@ export function FacilityCertifierDialog({
           submitLabel={mapping ? "Save changes" : "Link project"}
         />
       </form>
-    </dialog>
+    </Modal>
   );
 }
 
@@ -248,17 +246,14 @@ export function UnlinkConfirmDialog({
   isPending,
   errorMessage,
 }: UnlinkConfirmDialogProps) {
-  const dialogRef = useDialog(isOpen, onClose);
-
-  if (!isOpen) return null;
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-32 border border-[var(--color-border-primary)] backdrop:bg-black/50"
-      aria-labelledby="unlink-dialog-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="unlink-dialog-title"
+      width="sm"
     >
-      <div className="flex flex-col gap-24 min-w-[360px]">
+      <div className="flex flex-col gap-24">
         <h2 id="unlink-dialog-title" className="title-heading-3">
           Unlink Isometric project
         </h2>
@@ -287,6 +282,6 @@ export function UnlinkConfirmDialog({
           </Button>
         </div>
       </div>
-    </dialog>
+    </Modal>
   );
 }

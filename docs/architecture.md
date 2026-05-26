@@ -181,7 +181,8 @@ data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
 lib/isometric/              # Pure HTTP client + transformers + utils
                             #   (no DB, no auth, no ActionResult)
        ↓
-db/schema/certification.ts  # certifier_projects, certifier_sources,
+db/schema/certification.ts  # certifier_projects, certifier_ghg_statements,
+                            #   certifier_removals, certifier_sources,
                             #   certification_submissions,
                             #   certifier_document_uploads,
                             #   certifier_sync_events
@@ -193,21 +194,32 @@ concurrent in-flight retries, `payloadHash` (canonical-JSON sha256)
 identifies replayable submissions, `version` tracks supersedes. The
 retry-decision gate is centralized in
 `src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`)
-and applied identically by `submitRemovalForRun` (one ledger row per
-production run) and `submitGhgStatementForCreditBatch` (one ledger row
-per credit batch). Every HTTP attempt also appends a row to
-`certifier_sync_events` (append-only audit log; never used for state).
+and applied identically by `submitRemoval` (one ledger row per Removal,
+keyed `localEntityType:'removal'`, `localEntityId: certifierRemovals.id`
+— a facility-scoped row aggregating its member credit batches) and
+`submitGhgStatementToVerifier` (one ledger row per GHG Statement, keyed
+`localEntityType:'ghgStatement'`). Every HTTP attempt also appends a row
+to `certifier_sync_events` (append-only audit log; never used for
+state). See ADR 0003 for the Removal submission model.
 
 **UI surfaces:**
 
 - Credit-batch side sheet — Certify panel mounted via the
   `viewModeChildren` slot on `EntitySideSheet`
-  (`src/components/credit-batches/credit-batch-list.tsx`). Read-only
-  template/blueprint surfacing, the Submit button (per-run Removals +
-  the GHG Statement), per-run Removal status rows, the GHG Statement
-  status, the "Submit/Resubmit to Verifier" action, and submission
-  history. This is the whole GHG-statement lifecycle surface — there is
-  no standalone certification route.
+  (`src/components/credit-batches/credit-batch-list.tsx`). Surfaces the
+  removal-scoped (facility-level) submission state: the credit batch's
+  removal membership, the `submitRemoval` action, and submission history
+  tied to the removal. The GHG Statement lifecycle (create, submit,
+  status) is decoupled and lives on the Certification route group below
+  — not here.
+- `/certification` route group (`src/app/(app)/certification/`) — the
+  standalone certification surface added in Phase 4.5. Tile hub
+  (`page.tsx`) linking to `removals/` (per-facility Removals hub) and
+  `ghg-statements/` (period-anchored GHG Statements hub: create draft,
+  preview predicted removals, submit/resubmit to verifier, refresh
+  remote status). Provider-neutral by design — Verra / Gold Standard /
+  CSI surfaces may be added later; today every tile is
+  Isometric-specific.
 - Facility list side sheet — facility ↔ Isometric project mapping
   (`src/components/certification/facility-certifier-section.tsx`).
 

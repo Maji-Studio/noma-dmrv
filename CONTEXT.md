@@ -17,8 +17,9 @@ _Avoid_: phase, step.
 
 **Production run**:
 One pyrolysis batch at a reactor, the unit operators log energy and
-diesel against. Each production run maps to exactly one Isometric
-**Removal**.
+diesel against. Production runs roll up (applied-biochar scoped) into
+an Isometric **Removal**, reached from a credit batch through
+application lineage — a run is *not* 1:1 with a Removal.
 
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
@@ -34,26 +35,36 @@ from a measured value.
 ### Submission & registry
 
 **Credit batch**:
-noma's unit of submission — one month's accounting. A credit batch
-submits as exactly one Isometric **GHG Statement**.
+noma's unit of monthly carbon accounting — one month's aggregated
+biochar production and application. On submission, one or more credit
+batches are grouped into a single Isometric **Removal** (default 1:1
+per month). `creditBatches` carries a nullable `removalId` FK.
 _Avoid_: batch, issuance.
 
+**Removal**:
+The Isometric **submission unit** — a facility-scoped registry record
+of verified, applied-biochar CO₂e accounting, held locally by a
+`certifierRemovals` row. **N credit batches map into one Removal.** A
+Removal aggregates the deduped union of **production runs** reached
+through its member credit batches' application lineage, **applied-biochar
+scoped** — each run weighted by `appliedDryKg / runTotalBiocharOutput`.
+Submission is single-phase (`submitRemoval`). See ADR 0003.
+
 **GHG Statement**:
-The Isometric reporting-period (monthly) summary submitted for
-verification and credit issuance. One noma **credit batch** = one GHG
-Statement, which contains one **Removal** per **production run**.
-noma's `creditBatches` table is structurally a GHG Statement; the table
-keeps its name (renaming would touch ~50 files) but the integration
-maps it to a GHG Statement, not a Removal.
+An **independent, period-anchored Isometric artifact** that rolls up
+multiple **Removals** for a supplier-chosen reporting period. It is
+**not** a synonym for a credit batch. Isometric creates a GHG Statement
+from only `{ project_id, end_on }` and links Removals to it server-side
+by reporting-period date range; local membership is reconciled back from
+the statement's `removal_ids`. A GHG Statement is submitted to a verifier
+for credit issuance.
+_Avoid_: equating a GHG Statement with one credit batch.
 
 **Reporting period**:
-The time window an LCA covers (≈1 year for the Sifuri Halisi project).
-A reporting period contains many monthly **credit batches** / **GHG
-Statements**.
-
-**Removal**:
-The Isometric registry record of one **production run**'s verified CO₂e
-accounting. A **GHG Statement** contains many Removals — one per run.
+The time window a **GHG Statement** covers — the supplier chooses the
+end date, Isometric derives the start. Distinct from the LCA window
+(≈1 year for the Sifuri Halisi project), within which many monthly
+credit batches and several GHG Statements fall.
 
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
@@ -72,10 +83,14 @@ against a production registry project.
 
 ## Relationships
 
-- A **Reporting period** contains many **Credit batches**
-- A **Credit batch** submits as exactly one **GHG Statement**
+- The LCA window contains many monthly **Credit batches**
+- **N Credit batches** group into one **Removal** (default 1:1 per month)
 - A **Credit batch** aggregates many **Production runs**
-- A **GHG Statement** contains one **Removal** per **Production run**
+- A **Removal** is the Isometric submission unit — it aggregates the
+  deduped union of **Production runs** reached through its member credit
+  batches' application lineage, applied-biochar scoped
+- A **GHG Statement** rolls up many **Removals** by reporting-period
+  date range
 - A **Removal** is built from **Monitored inputs** (per-submission data)
   and **Fixed constants** (registry-bound policy values)
 - An **Emission estimate** is configured per facility and supplies

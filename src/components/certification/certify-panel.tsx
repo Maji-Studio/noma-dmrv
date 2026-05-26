@@ -158,10 +158,10 @@ function MemberBatchesRow({
           Removal
         </span>
         <Link
-          href="/certification"
+          href="/certification/removals"
           className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
         >
-          Manage on Certification ↗
+          Manage on Removals ↗
         </Link>
       </div>
       {data.removalId ? (

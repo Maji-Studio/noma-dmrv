@@ -1,0 +1,3 @@
+CREATE INDEX "certifier_removals_facility_id_idx" ON "certifier_removals" USING btree ("facility_id");--> statement-breakpoint
+CREATE INDEX "credit_batches_removal_id_idx" ON "credit_batches" USING btree ("removal_id");--> statement-breakpoint
+ALTER TABLE "certifier_removals" ADD CONSTRAINT "certifier_removals_reporting_window_chronology" CHECK ("certifier_removals"."started_on" is null or "certifier_removals"."completed_on" is null or "certifier_removals"."started_on" <= "certifier_removals"."completed_on");

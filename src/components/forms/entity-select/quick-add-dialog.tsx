@@ -5,7 +5,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useDialog } from "@/hooks/use-dialog";
+import { Modal } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { QuickAddDialogProps, EntityOption, EntityType } from "./types";
 
@@ -113,8 +113,6 @@ export function QuickAddDialog({
     setError(null);
   }, []);
 
-  const dialogRef = useDialog(isOpen, onClose, resetForm);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -136,13 +134,16 @@ export function QuickAddDialog({
 
   const entityLabel = ENTITY_TYPE_LABELS[entityType] || entityType;
 
-  if (!isOpen) return null;
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="p-0 border border-[var(--color-border-primary)] backdrop:bg-black/50 max-w-md w-full"
-      aria-labelledby="quick-add-dialog-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      onOpen={resetForm}
+      ariaLabelledBy="quick-add-dialog-title"
+      width="sm"
+      // Inset header has its own padding + bottom border that must reach the
+      // dialog edges, so we opt out of Modal's default content padding.
+      contentClassName=""
     >
       <div className="flex flex-col">
         {/* Header */}
@@ -222,7 +223,7 @@ export function QuickAddDialog({
           </div>
         </form>
       </div>
-    </dialog>
+    </Modal>
   );
 }
 

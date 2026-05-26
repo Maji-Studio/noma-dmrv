@@ -216,5 +216,31 @@ of truth and override guidance:
 
 Override path: edit each Datapoint's magnitude directly in the Registry
 UI — the template binding survives. Do **not** add a `fixed_constants`
-DB table or admin UI; see `docs/isometric/next-steps.md` for the
-rationale.
+DB table or admin UI — the Registry UI already provides this, and
+fixed constants are policy-level reference data, not noma-specific
+operational data. See "What to deliberately NOT do" in
+`docs/isometric/integration-plan.md` for the full rationale.
+
+## Verifier-readiness (before production submission)
+
+Three follow-ups gate any non-sandbox use of this template:
+
+1. **Replace the sampling-consumables placeholder.**
+   `Sampling consumables / carbon_intensity = 1.0` is a deliberate stub.
+   Before production: source a real LCA value (vendor data, peer-reviewed
+   study, or recognised registry industry-average), edit the bound
+   Datapoint's magnitude in the Registry UI (template binding is
+   preserved), and update the row in
+   `scripts/isometric-bootstrap-constants.ts` so future bootstraps emit
+   the right value.
+2. **Validate region-specific factors.** Defaults are UK DEFRA 2024. If
+   operations run elsewhere (Kenya, US, EU non-UK), expect the verifier
+   to flag: grid carbon intensity (swap for host-country grid factor —
+   IEA, IFI, or national agency), diesel combustion factor (generally
+   close across jurisdictions but a national source is preferred),
+   HGV freight factor (depends on local vehicle fleet mix). Same edit
+   path as above.
+3. **Resolve all zero-stubbed monitored inputs** — see
+   `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`. No
+   template carrying a zero stub may be promoted to a production
+   project.
