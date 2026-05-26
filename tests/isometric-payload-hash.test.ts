@@ -8,4 +8,22 @@ describe("Isometric payload hash", () => {
 
     expect(a).toBe(b);
   });
+
+  // Regression: functions inside INPUT_MAPPING (transforms like (v) => v / 100)
+  // used to be silently dropped by JSON.stringify, so MAPPING_REVISION never
+  // changed when a transform body did. canonicalize must fingerprint them.
+  it("changes hash when a nested function body changes", () => {
+    const a = payloadHash({ transform: (v: number) => v / 100 });
+    const b = payloadHash({ transform: (v: number) => v / 1000 });
+
+    expect(a).not.toBe(b);
+  });
+
+  it("keeps hash stable when an equivalent function appears in two payloads", () => {
+    const fn = (v: number) => v / 100;
+    const a = payloadHash({ transform: fn });
+    const b = payloadHash({ transform: (v: number) => v / 100 });
+
+    expect(a).toBe(b);
+  });
 });
