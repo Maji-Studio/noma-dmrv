@@ -12,9 +12,13 @@ export {
   listProjects,
   listRemovalTemplates,
   listComponentBlueprints,
+  listComponents,
   type IsometricProject,
   type IsometricRemovalTemplate,
   type IsometricComponentBlueprint,
+  type IsometricComponent,
+  type IsometricComponentScope,
+  type ListComponentsArgs,
 } from "./projects";
 export {
   createDatapoint,
@@ -23,6 +27,7 @@ export {
   createComponent,
   findRemovalBySupplierRef,
   findDatapointBySupplierRef,
+  listDatapoints,
   type CreateDatapointRequest,
   type PatchDatapointRequest,
   type Datapoint,
@@ -30,6 +35,7 @@ export {
   type Removal,
   type CreateComponentRequest,
   type Component,
+  type ListDatapointsArgs,
 } from "./submissions";
 export {
   createGhgStatement,

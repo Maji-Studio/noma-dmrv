@@ -75,10 +75,15 @@ export async function loadFacilityCertifierMapping(
   });
 }
 
+// Admin-only: this action rewires which Isometric project every future
+// Removal / GHG-statement submission for the facility targets. The admin-
+// area UI redirect is a render-time guard only; the action itself must
+// reject non-admin callers.
 export async function saveFacilityCertifierMapping(
   input: SaveMappingInput,
 ): Promise<ActionResult<CertifierProjectRow>> {
   return withAction(async (userId) => {
+    await requireAdminAction();
     const parsed = saveMappingSchema.parse(input);
 
     if (
@@ -114,10 +119,13 @@ export async function saveFacilityCertifierMapping(
   });
 }
 
+// Admin-only: unlinking strands every in-flight submission's audit trail
+// against an external project the operator can no longer reach.
 export async function deleteFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<void>> {
   return withAction(async (userId) => {
+    await requireAdminAction();
     await deleteCertifierProject(userId, facilityId, ISOMETRIC_PROVIDER);
   });
 }

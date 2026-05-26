@@ -14,6 +14,23 @@ Refresh local Isometric requirements docs with minimal tokens while preserving s
    - authoritative URL
 3. If repo policy pins a specific minor version, keep that minor and only move patch if allowed.
 
+### Regenerate the Certify TypeScript surface
+
+If the OpenAPI spec changed (the daily `isometric-health.yml` workflow
+fails on its `Detect Certify OpenAPI drift` step), run the regen
+locally and commit the diff:
+
+```bash
+ISOMETRIC_OPENAPI_URL=https://api.isometric.com/openapi.json pnpm regenerate-certify-types
+git diff src/lib/isometric/generated/certify.d.ts
+git add src/lib/isometric/generated/certify.d.ts && git commit -m "chore: regenerate Certify OpenAPI types"
+```
+
+The URL is pinned in `package.json`'s `regenerate-certify-types` script
+(default `https://api.isometric.com/openapi.json`) and in the workflow
+env (`ISOMETRIC_OPENAPI_URL`). Override locally only if testing against
+a non-default spec.
+
 ## 2) Re-run Requirement Extraction
 1. Use `protocols_analyze` per protocol/module with targeted prompts by domain:
    - feedstock

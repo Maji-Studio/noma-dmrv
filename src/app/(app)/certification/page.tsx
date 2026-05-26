@@ -11,6 +11,7 @@ import {
   ClipboardText,
   SealCheck,
 } from "@phosphor-icons/react/dist/ssr";
+import { ProjectEmissionsDriftPanel } from "@/components/certification/project-emissions-drift-panel";
 import { Card } from "@/components/ui/card";
 
 interface CertificationTile {
@@ -51,6 +52,8 @@ export default function CertificationHomePage() {
           surface to work with.
         </p>
       </header>
+
+      <ProjectEmissionsDriftPanel />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         {CERTIFICATION_TILES.map((tile) => {
