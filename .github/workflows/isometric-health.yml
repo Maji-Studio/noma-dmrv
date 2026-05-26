@@ -38,6 +38,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Don't persist GITHUB_TOKEN into the workspace — read-only ping,
+          # no commits or pushes; keeping the token out of .git/config
+          # avoids leaking it to later steps or artifacts.
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -69,4 +74,8 @@ jobs:
       - name: Detect Certify OpenAPI drift
         run: |
           pnpm regenerate-certify-types
-          git diff --exit-code src/lib/isometric/generated/certify.d.ts
+          if ! git diff --exit-code src/lib/isometric/generated/certify.d.ts; then
+            echo "::error::Certify OpenAPI drift detected. Run 'pnpm regenerate-certify-types' locally and commit src/lib/isometric/generated/certify.d.ts."
+            git --no-pager diff src/lib/isometric/generated/certify.d.ts
+            exit 1
+          fi

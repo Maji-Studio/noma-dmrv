@@ -31,7 +31,7 @@
 | `sandbox-template-authoring.md` | Walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI + fixed-constant bootstrap |
 | `openapi-index.md` | Annotated index of every Certify + Registry OpenAPI operation/schema with current noma integration status |
 
-Decisions live in `docs/adr/0001`–`0004`. Open design questions and
+Decisions live in `docs/adr/0001`–`0005`. Open design questions and
 deferred work live in `docs/open-questions.md`.
 
 ## How To Use

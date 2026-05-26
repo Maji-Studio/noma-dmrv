@@ -107,13 +107,13 @@ Title: *Isometric Certify Data Ingestion API* · Version: `v0`
 
 | Method | Path | Status | Notes |
 |---|---|---|---|
-| GET | `/sources` | ⬜ | Phase 3.5 |
-| POST | `/sources` | 🟡 | Phase 3.5 — blocked on documents subsystem S3 backend (`open-questions.md` `isometric/phase-3.5`) |
-| GET | `/sources/{id}` | ⬜ | Phase 3.5 |
-| PATCH | `/sources/{id}` | ⬜ | Phase 3.5 |
-| DELETE | `/sources/{id}` | ⬜ | Phase 3.5 |
-| GET | `/sources/{id}/private_url` | ⬜ | Phase 3.5 |
-| POST | `/sources/{id}/signed_upload_url` | 🟡 | Phase 3.5 — paired with `POST /sources` |
+| GET | `/sources` | ✅ | Used as `findSourceBySupplierRef` reconciliation lookup |
+| POST | `/sources` | ✅ | Phase 3.5 — fresh-mirror branch in `mirrorDocumentToSource` |
+| GET | `/sources/{id}` | ⬜ | Not used; reconciliation goes through supplier_reference_id |
+| PATCH | `/sources/{id}` | ✅ | Phase 3.5 — `setDocumentSourceVisibility` toggles `is_public` |
+| DELETE | `/sources/{id}` | 🚫 | Intentionally not used in Phase 3.5 (source_ids land in `payloadSnapshot` — remote delete would break submission audit/resume) |
+| GET | `/sources/{id}/private_url` | ⬜ | Buyer/verifier-side; out of scope for noma |
+| POST | `/sources/{id}/signed_upload_url` | ✅ | Phase 3.5 — recovery path for orphan Sources (200 → re-PUT; 409 → already uploaded) |
 | POST | `/file-uploads` | ⬜ | Phase 5 |
 
 #### Feedstock & production batches
@@ -329,12 +329,7 @@ Same as Certify — `HTTPBearer` plus `X-Client-Secret` on every request.
 
 Cross-reference these tables against the canonical phase docs:
 
-- **Phase 3.5** — source-upload presigned URLs (`POST /sources`,
-  `POST /sources/{id}/signed_upload_url` and the rest of the
-  `/sources` surface). Blocked on the documents subsystem getting a
-  real S3-equivalent backend.
-  See [`integration-plan.md`](./integration-plan.md) §Phase 3.5 and
-  [`open-questions.md`](../open-questions.md) `isometric/phase-3.5`.
+- ~~**Phase 3.5**~~ — ✅ Shipped 2026-05-26. `POST /sources`, `GET /sources?supplier_reference_id=…`, `POST /sources/{id}/signed_upload_url`, `PATCH /sources/{id}` are wired in `src/lib/isometric/sources.ts` + `src/fn/certification/sources.ts`. See [`integration-plan.md`](./integration-plan.md) Phase status row and [`changes.md`](./changes.md) 2026-05-26.
 - **Phase 4** — `PATCH /removals/{id}`, `PATCH /components/{id}`,
   `POST /project_components`, `POST /ghg_statement_components`,
   component-attribution endpoints. Deferred until a production signal

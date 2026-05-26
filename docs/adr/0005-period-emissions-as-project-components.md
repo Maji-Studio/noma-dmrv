@@ -87,7 +87,7 @@ tuples once surfaced) move to a new `PERIOD_INPUT_TUPLES` set.
 generic missing-entry error and raises a custom `SafeError` that names
 the tuple AND the canonical scope:
 
-```
+```text
 This input belongs to a Project-scope Component (`PROJECT` scope).
 Remove `staff-travel/distance_based_ci_emissions` from your Removal
 Template; the staff-travel emission is tracked separately via a Project

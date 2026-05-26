@@ -25,6 +25,7 @@ import type {
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
 import { Section } from "./panel-layout";
+import { SourcesPanel } from "./sources-panel";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SubmitConfirmDialog } from "./submit-confirm-dialog";
 
@@ -32,15 +33,24 @@ const ICON_SIZE = 14;
 
 export function CertifyPanel({ creditBatchId }: { creditBatchId: string }) {
   return (
-    <Section>
-      <div className="flex flex-col gap-12">
-        <header>
-          <h3 className="title-chapter-title">Isometric Certify</h3>
-        </header>
-        <PanelBody creditBatchId={creditBatchId} />
-      </div>
-    </Section>
+    <>
+      <Section>
+        <div className="flex flex-col gap-12">
+          <header>
+            <h3 className="title-chapter-title">Isometric Certify</h3>
+          </header>
+          <PanelBody creditBatchId={creditBatchId} />
+        </div>
+      </Section>
+      <CertifyPanelSources creditBatchId={creditBatchId} />
+    </>
   );
+}
+
+function CertifyPanelSources({ creditBatchId }: { creditBatchId: string }) {
+  const ctx = useCertifyContextForCreditBatch(creditBatchId);
+  if (!ctx.data?.mapping) return null;
+  return <SourcesPanel removalId={ctx.data.removalId} />;
 }
 
 function PanelBody({ creditBatchId }: { creditBatchId: string }) {

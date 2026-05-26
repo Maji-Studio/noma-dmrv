@@ -42,6 +42,16 @@ import type {
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/fn/certification/certify-context");
+// Phase 3.5: submitRemoval now resolves mirrored Source IDs before
+// hashing. The default-empty mock keeps the pre-Phase-3.5 assertions
+// (`source_ids: []` on every Datapoint) valid; specific Phase 3.5 tests
+// override the mock to inject sources and assert hash supersede.
+vi.mock("@/fn/certification/sources", async () => {
+  return {
+    collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
+    resolveSourceIdsForRemoval: vi.fn(async () => []),
+  };
+});
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
@@ -295,6 +305,18 @@ beforeEach(() => {
       return row;
     },
   );
+  // Phase 3.5: locked variant — the prepare callback runs to recompute
+  // source IDs under the per-document lock. In tests there's no real tx;
+  // pass `undefined as never` because the callback only forwards it to
+  // `resolveSourceIdsForRemoval`, which is mocked.
+  vi.mocked(ledger.insertDraftSubmissionWithMappingLockAndLocks).mockImplementation(
+    async (_userId, _guard, prepare) => {
+      const input = await prepare(undefined as never);
+      const row = newLedgerRow(input);
+      storedRows.push(row);
+      return row;
+    },
+  );
   vi.mocked(ledger.resetSubmissionToDraftWithMappingLock).mockImplementation(
     async (_userId, rowId) => {
       const row = storedRows.find((r) => r.id === rowId);
@@ -440,6 +462,10 @@ describe("submitRemoval — happy path", () => {
     // Reset the HTTP spies — the second submit must not call them.
     vi.mocked(isometric.createDatapoint).mockClear();
     vi.mocked(isometric.createRemoval).mockClear();
+    // Also clear the local-persistence spies so we can assert that
+    // return-existing skips them outright on the second submit.
+    vi.mocked(ledger.markSubmissionSubmitted).mockClear();
+    vi.mocked(removalsDA.updateRemovalDates).mockClear();
     // The fresh context now carries the latest submitted row from the first
     // call, which is what `decideSubmissionClaim` reads to recognise the
     // already-submitted state.
@@ -456,6 +482,10 @@ describe("submitRemoval — happy path", () => {
     expect(second.version).toBe(1);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createRemoval).not.toHaveBeenCalled();
+    // return-existing must also skip local persistence — no ledger
+    // transition, no removal-date rewrite.
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+    expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
     // No new ledger row.
     expect(storedRows).toHaveLength(1);
   });

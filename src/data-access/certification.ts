@@ -392,38 +392,13 @@ export async function insertDraftSubmission(
   input: InsertDraftSubmissionInput,
 ): Promise<CertificationSubmissionRow> {
   requireAuth(userId);
-  try {
-    const [row] = await db
-      .insert(certificationSubmissions)
-      .values({
-        provider: input.provider,
-        submissionType: input.submissionType,
-        localEntityType: input.localEntityType,
-        localEntityId: input.localEntityId,
-        version: input.version,
-        status: "draft",
-        payloadSnapshot: input.payloadSnapshot as Record<string, unknown>,
-        payloadHash: input.payloadHash,
-        lockedAt: sql`now()`,
-        metadata: (input.metadata ?? null) as Record<string, unknown> | null,
-      })
-      .returning();
-    return row;
-  } catch (err) {
-    // Postgres unique-violation (23505): another draft is already in flight
-    // for this (provider, submissionType, localEntityType, localEntityId,
-    // version) tuple. Surface as a SafeError so the orchestrator's branch-b
-    // path is consistent with concurrent inserts losing the race.
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505"
-    ) {
-      throw new SafeError("Submission already in progress");
-    }
-    throw err;
-  }
+  // Unique-violation (23505) on (provider, submissionType, localEntityType,
+  // localEntityId, version) means another draft is already in flight for
+  // this tuple; the guard surfaces it as a SafeError so the orchestrator's
+  // branch-b path is consistent with concurrent inserts losing the race.
+  return withUniqueViolationGuard(() =>
+    db.transaction(async (tx) => insertDraftSubmissionRow(tx, input)),
+  );
 }
 
 export interface MappingClaimGuard {
@@ -472,32 +447,37 @@ async function lockAndVerifyMapping(
   }
 }
 
-export async function insertDraftSubmissionWithMappingLock(
-  userId: string,
+// Single source of truth for the draft-insert row shape. Every public
+// submit-path inserts through here, so a future column change touches one
+// site, not three.
+async function insertDraftSubmissionRow(
+  tx: Tx,
   input: InsertDraftSubmissionInput,
-  guard: MappingClaimGuard,
 ): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
+  const [row] = await tx
+    .insert(certificationSubmissions)
+    .values({
+      provider: input.provider,
+      submissionType: input.submissionType,
+      localEntityType: input.localEntityType,
+      localEntityId: input.localEntityId,
+      version: input.version,
+      status: "draft",
+      payloadSnapshot: input.payloadSnapshot as Record<string, unknown>,
+      payloadHash: input.payloadHash,
+      lockedAt: sql`now()`,
+      metadata: (input.metadata ?? null) as Record<string, unknown> | null,
+    })
+    .returning();
+  return row;
+}
+
+// Maps the Postgres unique-violation (23505) on (provider, submissionType,
+// localEntityType, localEntityId, version) into a SafeError. Centralized so
+// every public submit entry point reports the same user-facing message.
+async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
   try {
-    return await db.transaction(async (tx) => {
-      await lockAndVerifyMapping(tx, guard);
-      const [row] = await tx
-        .insert(certificationSubmissions)
-        .values({
-          provider: input.provider,
-          submissionType: input.submissionType,
-          localEntityType: input.localEntityType,
-          localEntityId: input.localEntityId,
-          version: input.version,
-          status: "draft",
-          payloadSnapshot: input.payloadSnapshot as Record<string, unknown>,
-          payloadHash: input.payloadHash,
-          lockedAt: sql`now()`,
-          metadata: (input.metadata ?? null) as Record<string, unknown> | null,
-        })
-        .returning();
-      return row;
-    });
+    return await fn();
   } catch (err) {
     if (
       typeof err === "object" &&
@@ -509,6 +489,44 @@ export async function insertDraftSubmissionWithMappingLock(
     }
     throw err;
   }
+}
+
+// Composable variant: caller provides a `prepare` callback that runs inside
+// the transaction after the mapping lock is held, so it can acquire
+// additional advisory locks and recompute hash-covered fields (Phase 3.5:
+// per-document mirror locks bracketing source-id resolution). The callback
+// returns the finalized InsertDraftSubmissionInput which is then inserted in
+// the same transaction.
+//
+// The mapping lock is always acquired FIRST so every submit path shares one
+// lock order (`mapping → caller-supplied locks`), preventing an ABBA
+// deadlock with admin flows that touch certifier_projects and
+// certifier_document_uploads in the opposite order.
+export async function insertDraftSubmissionWithMappingLockAndLocks(
+  userId: string,
+  guard: MappingClaimGuard,
+  prepare: (tx: Tx) => Promise<InsertDraftSubmissionInput>,
+): Promise<CertificationSubmissionRow> {
+  requireAuth(userId);
+  return withUniqueViolationGuard(() =>
+    db.transaction(async (tx) => {
+      await lockAndVerifyMapping(tx, guard);
+      const input = await prepare(tx);
+      return insertDraftSubmissionRow(tx, input);
+    }),
+  );
+}
+
+export async function insertDraftSubmissionWithMappingLock(
+  userId: string,
+  input: InsertDraftSubmissionInput,
+  guard: MappingClaimGuard,
+): Promise<CertificationSubmissionRow> {
+  return insertDraftSubmissionWithMappingLockAndLocks(
+    userId,
+    guard,
+    async () => input,
+  );
 }
 
 export async function markSubmissionSubmitted(
