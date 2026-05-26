@@ -53,6 +53,19 @@ export {
   buildRemovalSupplierRef,
   type BuildRemovalSupplierRefArgs,
 } from "./utils/supplier-ref";
+export { buildSourceSupplierRef } from "./utils/source-ref";
+export {
+  createSource,
+  requestSignedUploadUrl,
+  findSourceBySupplierRef,
+  patchSource,
+  type CreateDocumentSourceRequest,
+  type CreateSourceResponse,
+  type Source,
+  type SignedUploadUrlRequest,
+  type SignedUploadUrlResult,
+  type PatchSourceRequest,
+} from "./sources";
 export {
   reconcileRemoval,
   reconcileDatapoint,

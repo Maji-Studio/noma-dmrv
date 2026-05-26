@@ -397,6 +397,9 @@ describe("createGhgStatementDraft — happy path", () => {
     });
 
     vi.mocked(isometric.createGhgStatement).mockClear();
+    vi.mocked(isometric.getGhgStatement).mockClear();
+    vi.mocked(ghgDA.reconcileRemovalMembership).mockClear();
+    vi.mocked(ghgDA.updateGhgStatementReportingWindow).mockClear();
 
     const second = await createGhgStatementDraft({
       facilityId: FACILITY_ID,
@@ -407,6 +410,11 @@ describe("createGhgStatementDraft — happy path", () => {
     if (!second.success) return;
     expect(second.data.externalId).toBe(EXTERNAL_STATEMENT_ID);
     expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    // Idempotent return-existing must not trigger any remote read or local
+    // membership/window reconciliation — only the externalId is replayed.
+    expect(isometric.getGhgStatement).not.toHaveBeenCalled();
+    expect(ghgDA.reconcileRemovalMembership).not.toHaveBeenCalled();
+    expect(ghgDA.updateGhgStatementReportingWindow).not.toHaveBeenCalled();
     // No new ledger row — the existing v=1 row was returned.
     expect(storedLedger).toHaveLength(1);
   });

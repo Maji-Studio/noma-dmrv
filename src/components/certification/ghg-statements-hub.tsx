@@ -71,8 +71,14 @@ function HubBody({ facilityId }: { facilityId: string }) {
   const [createOpen, setCreateOpen] = useState(false);
 
   const isProduction = mappingQuery.data?.isProduction ?? false;
-  const isLinked = Boolean(mappingQuery.data?.mapping);
-  const mappingFailed = mappingQuery.isError;
+  // Keep isLinked indeterminate (null) while the mapping lookup is in flight
+  // so we don't briefly render the "not linked" warning or disable the create
+  // button on every initial mount before the query settles. Downstream checks
+  // gate on `isLinked === true` / `isLinked === false` rather than truthiness.
+  const isLinked = mappingQuery.isLoading
+    ? null
+    : Boolean(mappingQuery.data?.mapping);
+  const mappingFailed = mappingQuery.isError && !mappingQuery.isLoading;
 
   if (query.isLoading) {
     return (
@@ -116,7 +122,7 @@ function HubBody({ facilityId }: { facilityId: string }) {
         <Button
           variant="primary"
           onClick={() => setCreateOpen(true)}
-          disabled={!isLinked}
+          disabled={isLinked !== true}
         >
           <Plus size={20} weight="bold" />
           New GHG Statement
@@ -144,7 +150,7 @@ function HubBody({ facilityId }: { facilityId: string }) {
         />
       </div>
 
-      {(mappingFailed || !isLinked) && (
+      {(mappingFailed || isLinked === false) && (
         <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
           {mappingFailed ? (
             <p className="body-small text-[var(--clr-red)]">
@@ -174,7 +180,7 @@ function HubBody({ facilityId }: { facilityId: string }) {
             title="No GHG statements yet"
             description="Create one to roll up submitted removals for a reporting period."
             action={
-              isLinked ? (
+              isLinked === true ? (
                 <Button variant="primary" onClick={() => setCreateOpen(true)}>
                   <Plus size={20} weight="bold" />
                   New GHG Statement
@@ -195,7 +201,7 @@ function HubBody({ facilityId }: { facilityId: string }) {
         )}
       </section>
 
-      {isLinked && (
+      {isLinked === true && (
         <GhgStatementCreateDialog
           facilityId={facilityId}
           isProduction={isProduction}
