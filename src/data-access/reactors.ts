@@ -139,7 +139,7 @@ export async function getReactors(
   // Get Method B eligibility for each reactor
   const items: ReactorWithRelations[] = await Promise.all(
     reactorList.map(async (reactor) => {
-      const methodBEligibility = await getMethodBEligibilityByReactor({
+      const methodBEligibility = await getMethodBEligibilityByReactor(userId, {
         reactorId: reactor.id,
         asOfDate: new Date().toISOString(),
       });
@@ -204,7 +204,7 @@ export async function getReactorById(
     throw new SafeError("Reactor not found");
   }
 
-  const methodBEligibility = await getMethodBEligibilityByReactor({
+  const methodBEligibility = await getMethodBEligibilityByReactor(userId, {
     reactorId: reactor.id,
     asOfDate: new Date().toISOString(),
   });
@@ -470,7 +470,7 @@ export async function getReactorMethodBEligibility(
     throw new SafeError("Reactor not found");
   }
 
-  return getMethodBEligibilityByReactor({
+  return getMethodBEligibilityByReactor(userId, {
     reactorId,
     asOfDate: new Date().toISOString(),
   });

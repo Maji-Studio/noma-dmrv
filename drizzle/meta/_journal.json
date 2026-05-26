@@ -190,6 +190,20 @@
       "when": 1779627210444,
       "tag": "0026_spicy_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1779641293490,
+      "tag": "0027_fluffy_chamber",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1779657467254,
+      "tag": "0028_demonic_harpoon",
+      "breakpoints": true
     }
   ]
 }
