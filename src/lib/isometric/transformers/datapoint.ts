@@ -1,6 +1,7 @@
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
 import type { AggregatedProductionData } from "../utils/aggregation";
+import { payloadHash } from "../utils/payload-hash";
 
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
@@ -14,16 +15,6 @@ export interface InputMappingEntry {
   datapointType: DatapointType;
   expectedQuantityKind: QuantityKindType;
   transform?: (value: number) => number;
-  /**
-   * Marks a deferred per-reporting-period input that currently emits a
-   * hardcoded placeholder 0 because noma has no data model for it yet.
-   * `submitCreditBatch` blocks submission to a production Isometric
-   * project when any resolved monitored input carries this flag. Do NOT
-   * set it on legitimate zeros (e.g. the `initial_readout` of a metered
-   * consumption delta) — only on genuine placeholders. Tracked in
-   * docs/open-questions.md → isometric/phase-3.7-period-inputs.
-   */
-  zeroStub?: true;
 }
 
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
@@ -41,10 +32,12 @@ export type InputMappingTable = Record<
   Record<string, Record<string, InputMappingEntry>>
 >;
 
-// Shared zero-magnitude transform. Used by deferred per-reporting-period
-// zero stubs (paired with `zeroStub: true`) and by metered `initial_readout`
-// inputs whose consumption delta starts from 0 — centralised so the intent
-// is named once rather than re-spelled inline.
+// Shared zero-magnitude transform for metered `initial_readout` inputs whose
+// consumption delta starts from 0 (Certify's
+// `metered_energy_based_ci_emissions` computes consumption as
+// `final − initial`; noma has only the delta, so initial_readout = 0).
+// Previously also paired with `zeroStub: true` on deferred per-period inputs;
+// those families moved to PROJECT scope under ADR 0005.
 const zeroTransform = () => 0;
 
 export const INPUT_MAPPING: InputMappingTable = {
@@ -131,30 +124,11 @@ export const INPUT_MAPPING: InputMappingTable = {
         expectedQuantityKind: "distance",
       },
     },
-    // Zero stub — sampling consumables mass. noma has no per-period
-    // consumables figure; deferred per-period input (see Phase 3.7 +
-    // `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`).
-    mass_based_ci_emissions: {
-      mass: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-    },
-    // Zero stub — lab-analysis electricity. Deferred per-period input.
-    grid_electricity_use: {
-      electricity_use: {
-        source: "totalBiocharDryMassKg",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-    },
+    // Sampling consumables (`mass_based_ci_emissions`) and lab electricity
+    // (`grid_electricity_use`) used to live here as zero stubs. Both moved
+    // to PROJECT scope as Project Components per ADR 0005. If a template
+    // declares either as a REMOVAL-scope component the scope-conflict
+    // SafeError fires from PERIOD_INPUT_TUPLES below.
     // Real (Phase 3.7) — sample shipment to the lab as mass-distance
     // (tonne·km), derived from the sample transport legs by
     // `enrichWithTransportLegs`. 0 when no sample legs.
@@ -223,66 +197,15 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // ─── Remaining zero stubs — deferred per-period inputs ───
-  // Phase 3.7 closed the energy stubs (electricity + genset, now real
-  // per-run data routed via `enrichWithFacilityConfig`). What remains
-  // below are *per-reporting-period* inputs noma has no model for yet —
-  // pyrolyzer gas (CH4/CO concentration + mass flow), staff travel, lab
-  // electricity, sampling consumables, miscellaneous mass. They still
-  // emit a `0` datapoint with the unit + quantity_kind the blueprint
-  // declares. EACH must be replaced before the template moves to a
-  // production project. Tracked in `docs/open-questions.md` →
-  // `isometric/phase-3.7-period-inputs` (placement + apportionment
-  // unresolved).
-  //
-  // Convention: reuse `totalBiocharDryMassKg` as the source (always a
-  // finite non-null number after aggregation) and override with
-  // `transform: zeroTransform`. The `expectedQuantityKind` still gates against
-  // blueprint drift.
-  "direct-emissions": {
-    ghg_direct_emissions: {
-      concentration: {
-        source: "totalBiocharDryMassKg",
-        unit: "mg / kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass_fraction",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-      mass_flow: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-    },
-  },
-  "biochar-storage": {
-    fuel_usage_by_volume: {
-      volume_of_fuel: {
-        source: "totalBiocharDryMassKg",
-        unit: "L",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "volume",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-    },
-  },
-  "staff-travel": {
-    distance_based_ci_emissions: {
-      distance: {
-        source: "totalBiocharDryMassKg",
-        unit: "km",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-    },
-  },
+  // Five blueprint families that used to live here as zero stubs
+  // (`staff-travel/distance_based_ci_emissions`,
+  // `direct-emissions/ghg_direct_emissions` × 2 inputs,
+  // `biochar-storage/fuel_usage_by_volume`,
+  // `miscellaneous/mass_based_ci_emissions`) and two more under
+  // `sampling-required-for-mrv` moved to PROJECT scope as Project
+  // Components per ADR 0005. They are listed in PERIOD_INPUT_TUPLES below;
+  // a Removal Template that declares any of them as REMOVAL-scope trips
+  // the scope-conflict SafeError in buildCreateDatapointRequest.
 
   // Startup / plant diesel — volume-based. `totalStartupDieselLitres`
   // excludes genset diesel (that flows through the energy-based genset
@@ -337,20 +260,8 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Zero stub — generic miscellaneous mass-based CI. noma has no
-  // corresponding entity; emits 0. Deferred per-period input (Phase 3.7).
-  miscellaneous: {
-    mass_based_ci_emissions: {
-      mass: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        transform: zeroTransform,
-        zeroStub: true,
-      },
-    },
-  },
+  // (The previous `miscellaneous` zero-stub family moved to PROJECT scope
+  // per ADR 0005.)
 };
 
 export function lookupInputMapping(
@@ -360,6 +271,69 @@ export function lookupInputMapping(
 ): InputMappingEntry | undefined {
   return INPUT_MAPPING[groupKey]?.[blueprintKey]?.[inputKey];
 }
+
+// Tuples that used to live in INPUT_MAPPING as `zeroStub: true` families
+// before ADR 0005. Their data now lives as `PROJECT`-scope Components in
+// Isometric (authored by the operator from a noma `/admin/emission-estimates`
+// row); a Removal Template that declares any of them as REMOVAL-scope is
+// wrong by construction. `buildCreateDatapointRequest` consults this set
+// before the generic missing-entry error so the resulting `SafeError`
+// names the canonical scope rather than just "missing mapping".
+//
+// Keys mirror the deleted entries exactly. Keep in sync with
+// `CATEGORY_TO_BLUEPRINT` in
+// `src/lib/isometric/utils/project-emission-match.ts` and the
+// `projectEmissionCategory` pgEnum in `src/db/schema/common.ts`.
+const PERIOD_INPUT_TUPLES: Record<
+  string,
+  Record<string, Record<string, { category: string }>>
+> = {
+  "staff-travel": {
+    distance_based_ci_emissions: {
+      distance: { category: "staff_travel" },
+    },
+  },
+  "direct-emissions": {
+    ghg_direct_emissions: {
+      concentration: { category: "pyrolyzer_direct" },
+      mass_flow: { category: "pyrolyzer_direct" },
+    },
+  },
+  "biochar-storage": {
+    fuel_usage_by_volume: {
+      volume_of_fuel: { category: "biochar_storage_fuel" },
+    },
+  },
+  miscellaneous: {
+    mass_based_ci_emissions: {
+      mass: { category: "miscellaneous" },
+    },
+  },
+  "sampling-required-for-mrv": {
+    mass_based_ci_emissions: {
+      mass: { category: "sampling_consumables" },
+    },
+    grid_electricity_use: {
+      electricity_use: { category: "lab_electricity" },
+    },
+  },
+};
+
+export function lookupPeriodInputTuple(
+  groupKey: string,
+  blueprintKey: string,
+  inputKey: string,
+): { category: string } | undefined {
+  return PERIOD_INPUT_TUPLES[groupKey]?.[blueprintKey]?.[inputKey];
+}
+
+// Sha256 hex of the canonical-JSON serialisation of INPUT_MAPPING. Computed
+// once at module load and embedded in every submitRemoval-emitted
+// payloadSnapshot + sync event so an Isometric-side issue correlates to a
+// specific noma mapping revision (Plan §6 / B3). PROJECT-scope is omitted
+// from this hash by design — those values don't flow through this table
+// under Posture B (ADR 0005).
+export const MAPPING_REVISION: string = payloadHash(INPUT_MAPPING);
 
 export interface BuildCreateDatapointArgs {
   groupKey: string;
@@ -387,6 +361,22 @@ export function buildCreateDatapointRequest(
 
   const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey);
   if (!mapping) {
+    // ADR 0005 §3 — scope-conflict check fires BEFORE the generic
+    // missing-entry error. If a template declares a period-input tuple
+    // as REMOVAL-scope, the error names the canonical scope (PROJECT)
+    // and points the operator at /admin/emission-estimates rather than
+    // leaving them with a generic "missing mapping" message.
+    const periodTuple = lookupPeriodInputTuple(
+      groupKey,
+      componentBlueprintKey,
+      inputKey,
+    );
+    if (periodTuple) {
+      throw new SafeError(
+        `This input belongs to a Project-scope Component (PROJECT scope, category="${periodTuple.category}"). ` +
+          `Remove "${groupKey}/${componentBlueprintKey}/${inputKey}" from the Removal Template; the corresponding emission is tracked as a Project Component published in the Isometric UI from a row in /admin/emission-estimates (ADR 0005).`,
+      );
+    }
     throw new SafeError(
       `No INPUT_MAPPING entry for group="${groupKey}" blueprint="${componentBlueprintKey}" input="${inputKey}" — update transformers/datapoint.ts before submitting.`,
     );

@@ -1,5 +1,6 @@
-import { isometric } from "./client";
+import { isometric, paginateAll } from "./client";
 import type { components } from "./generated/certify";
+import type { IsometricComponentScope } from "./projects";
 
 // Reconciliation lookups stop after the first hit, so request the smallest
 // page the API allows.
@@ -64,4 +65,28 @@ export function findDatapointBySupplierRef(
   ref: string,
 ): Promise<Datapoint | null> {
   return findBySupplierRef<Datapoint>("/datapoints", ref);
+}
+
+// Lists every Datapoint referenced by Components in the given scope (default
+// PROJECT). Used by the drift panel + coverage check to resolve magnitudes
+// for PROJECT-scope Components — ComponentScalarInput only carries
+// `datapoint_id`, so the drift matcher needs this lookup. The
+// `used_in_scope` filter is supported by `GET /datapoints` directly, so one
+// paged list returns the full inventory.
+export interface ListDatapointsArgs {
+  projectId?: string;
+  usedInScope?: IsometricComponentScope;
+  supplierReferenceId?: string;
+}
+
+export function listDatapoints(
+  args: ListDatapointsArgs = {},
+): Promise<Datapoint[]> {
+  return paginateAll<Datapoint>("/datapoints", {
+    query: {
+      project_id: args.projectId,
+      used_in_scope: args.usedInScope,
+      supplier_reference_id: args.supplierReferenceId,
+    },
+  });
 }

@@ -1,0 +1,4 @@
+{
+  "_doc": "Sandbox inventory for `pnpm isometric:coverage-check --source=fixture` (ADR 0005 / Plan §7). One `facilities[]` entry per sandbox project we want CI to assert against. `expectedCategories` lists the PROJECT-scope inputs the drift panel + coverage check should find — author the matching Project Components in the Isometric UI from the LCA. Refresh this file when the sandbox project's template or LCA changes (see `docs/isometric/sandbox-template-authoring.md`).",
+  "facilities": []
+}
