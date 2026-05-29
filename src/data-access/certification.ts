@@ -23,6 +23,9 @@ export interface UpsertCertifierProjectInput {
   protocolSlug?: string;
   protocolVersion?: string | null;
   defaultRemovalTemplateId?: string | null;
+  // Phase 5 Slice A — operator-pasted Isometric facility id (fcl_…).
+  // Optional; required only for telemetry submission.
+  externalFacilityId?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -166,6 +169,7 @@ export async function upsertCertifierProject(
     protocolSlug: input.protocolSlug ?? "biochar",
     protocolVersion: input.protocolVersion ?? null,
     defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
+    externalFacilityId: input.externalFacilityId ?? null,
     metadata: input.metadata ?? null,
   };
 
@@ -205,6 +209,7 @@ export async function upsertCertifierProject(
           protocolSlug: values.protocolSlug,
           protocolVersion: values.protocolVersion,
           defaultRemovalTemplateId: values.defaultRemovalTemplateId,
+          externalFacilityId: values.externalFacilityId,
           metadata: values.metadata,
           updatedAt: sql`now()`,
         },

@@ -646,6 +646,12 @@ export async function submitRemoval(
         resumed: false,
       });
     }
+    case "resume-poll-existing":
+    case "resume-re-put":
+      // Phase 5 Slice A claim kinds; only reachable when callers pass
+      // `dataUploadResume`. Removal submission does not — kept here for
+      // exhaustiveness so TS narrows the union end-to-end.
+      throw new SafeError("Unexpected resume kind for removal submission.");
   }
 }
 
