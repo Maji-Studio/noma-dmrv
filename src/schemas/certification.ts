@@ -39,6 +39,23 @@ export const saveMappingSchema = z.object({
     .or(z.string().min(1))
     .nullable()
     .optional(),
+  // Phase 5 Slice A — Isometric facility id (fcl_…). Optional because
+  // it's only required for the telemetry pipeline; mapping was usable
+  // without it before Slice A and remains so for Removal/GHG flows.
+  // Enforced shape on the truthy path so an operator can't paste a
+  // project or sensor id by mistake.
+  externalFacilityId: emptyToNull
+    .or(
+      z
+        .string()
+        .startsWith("fcl_", {
+          error:
+            "Isometric facility ID must start with 'fcl_' — copy it from the Certify UI.",
+        })
+        .min(5),
+    )
+    .nullable()
+    .optional(),
   confirmProduction: z.boolean().optional(),
 });
 

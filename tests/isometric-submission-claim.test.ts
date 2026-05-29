@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   decideSubmissionClaim,
+  UPLOAD_URL_SAFETY_MS,
+  type DataUploadResumeSnapshot,
   type SubmissionClaimPolicy,
   type SubmissionClaimRow,
   type SubmissionClaimStatus,
@@ -364,6 +366,146 @@ describe("decideSubmissionClaim", () => {
       policy: SUPERSEDE,
     };
     expect(decideSubmissionClaim(input)).toEqual(decideSubmissionClaim(input));
+  });
+
+  // ADR 0006 §4 — DataUploadSubmission resume branch. Stored-ID
+  // reconciliation, not supplier-reference. Each test pairs a stale-lock
+  // draft with a different journaled-step snapshot.
+  describe("dataUpload resume (ADR 0006)", () => {
+    const STALE_LOCK = new Date(NOW - LOCK_TTL_MS);
+
+    function staleDraft(overrides: Partial<SubmissionClaimRow> = {}): SubmissionClaimRow {
+      return row({
+        status: "draft",
+        lockedAt: STALE_LOCK,
+        version: 2,
+        ...overrides,
+      });
+    }
+
+    function snapshot(
+      overrides: Partial<DataUploadResumeSnapshot> = {},
+    ): DataUploadResumeSnapshot {
+      return {
+        dataUploadSubmissionId: null,
+        fileUploadId: null,
+        uploadUrlExpiresAt: null,
+        ...overrides,
+      };
+    }
+
+    it("polls existing submission when dataUploadSubmissionId is journaled", () => {
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft(),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot({ dataUploadSubmissionId: "dus_42" }),
+        }),
+      ).toEqual({
+        kind: "resume-poll-existing",
+        resumeRowId: "sub_1",
+        resumeVersion: 2,
+        dataUploadSubmissionId: "dus_42",
+      });
+    });
+
+    it("falls back to externalId when dataUploadSubmissionId is missing but row carries an externalId", () => {
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft({ externalId: "dus_99" }),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot(),
+        }),
+      ).toEqual({
+        kind: "resume-poll-existing",
+        resumeRowId: "sub_1",
+        resumeVersion: 2,
+        dataUploadSubmissionId: "dus_99",
+      });
+    });
+
+    it("re-PUTs the existing fileUpload when the signed URL is comfortably fresh", () => {
+      const fresh = new Date(NOW + UPLOAD_URL_SAFETY_MS + 60_000);
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft(),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot({
+            fileUploadId: "tfu_1",
+            uploadUrlExpiresAt: fresh,
+          }),
+        }),
+      ).toEqual({
+        kind: "resume-re-put",
+        resumeRowId: "sub_1",
+        resumeVersion: 2,
+        fileUploadId: "tfu_1",
+      });
+    });
+
+    it("treats the FileUpload as an orphan when the URL has expired", () => {
+      const expired = new Date(NOW - 1);
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft(),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot({
+            fileUploadId: "tfu_2",
+            uploadUrlExpiresAt: expired,
+          }),
+        }),
+      ).toEqual({
+        kind: "create-new-version",
+        nextVersion: 3,
+        supersedePreviousId: null,
+        reason: "dataupload-orphan-restart",
+      });
+    });
+
+    it("treats sub-threshold URL freshness as expired (avoids racing a 403 mid-PUT)", () => {
+      const subThreshold = new Date(NOW + UPLOAD_URL_SAFETY_MS - 1);
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft(),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot({
+            fileUploadId: "tfu_3",
+            uploadUrlExpiresAt: subThreshold,
+          }),
+        }),
+      ).toMatchObject({
+        kind: "create-new-version",
+        reason: "dataupload-orphan-restart",
+      });
+    });
+
+    it("falls through to plain resume when nothing has been journaled", () => {
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft(),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot(),
+        }),
+      ).toEqual({ kind: "resume", resumeRowId: "sub_1", resumeVersion: 2 });
+    });
   });
 
   it("rejects an unknown status at runtime (assertNever guard)", () => {

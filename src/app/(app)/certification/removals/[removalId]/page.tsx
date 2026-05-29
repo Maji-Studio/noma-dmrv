@@ -8,7 +8,8 @@
  * side sheet.
  */
 import Link from "next/link";
-import { SourcesPanel } from "@/components/certification";
+import { SourcesPanel } from "@/components/certification/sources-panel";
+import { TelemetryPanel } from "@/components/certification/telemetry-panel";
 
 export default async function RemovalSourcesPage({
   params,
@@ -40,6 +41,7 @@ export default async function RemovalSourcesPage({
       </header>
 
       <SourcesPanel removalId={removalId} />
+      <TelemetryPanel removalId={removalId} />
     </div>
   );
 }

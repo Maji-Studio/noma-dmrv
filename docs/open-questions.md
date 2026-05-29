@@ -253,6 +253,101 @@ Two items remain:
     region-specific factors before production) tracked in the
     walkthrough's "Verifier-readiness" section.
 
+### Phase 5 Slice B / C deferrals (opened 2026-05-29)
+
+Scoped out of the Phase 5 Slice A design (biochar reactor time-series via
+Parquet — see [ADR 0006](./adr/0006-data-upload-submission-idempotency.md))
+during the 2026-05-28 grilling session. Each is independently shippable
+once Slice A is in production and operator demand surfaces.
+
+- **Slice B — `POST /biochar_applications`** (`isometric/phase-5-slice-b`)
+  - Per-spread-event JSON submission (`application_date`,
+    `truck_mass_on_arrival/departure`, `average_application_rate`) that
+    Isometric verifiers use to inspect individual delivery records.
+  - Why deferred: requires two upstream primitives that noma does not
+    currently post — `POST /production_batches` and
+    `POST /projects/{id}/storage_locations`. Resolving the upstream
+    dependency chain doubles the scope vs. Slice A.
+  - Resolve via: a focused PR that wires the two upstream primitives,
+    then layers `biochar_applications` on top. Likely opens around the
+    same time soil-storage requirements push Isometric to add
+    `storage_locations`-aware endpoints. Per-application
+    `supplier_reference_id` IS supported by the create request
+    (`certify.d.ts:1527`), so the standard reconciliation pattern
+    applies — no ADR 0006-style departure needed.
+
+- **Slice C — `MonitoringSubmission`** (`isometric/phase-5-slice-c`)
+  - `POST /projects/{project_id}/monitoring_requirements/{id}/submissions`
+    — structured-by-requirement submissions, parallel surface to the
+    bulk Parquet path Slice A targets.
+  - Why deferred: overlaps with Slice A's purpose for biochar reactor
+    telemetry. Without operator demand we don't know whether
+    `MonitoringSubmission` or `DataUploadSubmission` is the canonical
+    home for which protocol-mandated measurements.
+  - Resolve via: ask Isometric directly, "for biochar reactor
+    temperature/pressure, do you prefer MonitoringSubmission or
+    DataUploadSubmission?" If MonitoringSubmission, consider whether
+    Slice A's hourly aggregator becomes a `MonitoringSubmission`
+    feeder rather than a Parquet writer.
+
+### Isometric Certify docs — UPPERCASE vs lowercase enum mismatch (opened 2026-05-29, filed 2026-05-29)
+
+- **Status:** filed with Isometric via `mcp__isometric__submit_feedback`
+  on 2026-05-29. Remains open here until the docs page is updated.
+- The "Uploading time series data" docs page
+  (`docs.isometric.com/user-guides/certify/time-series-data-upload`)
+  shows measurement-property quantity_kind and qualifier values in
+  UPPERCASE (`TEMPERATURE`, `PRESSURE`, `MASS_FRACTION`, `COMPOUND_CO2`).
+  The actual API requires **lowercase** — confirmed against sandbox on
+  2026-05-29 with `POST /sensors`:
+  - UPPERCASE → 422 enum violation listing the canonical lowercase set.
+  - lowercase (`temperature`, `pressure`, `mass_fraction`,
+    `compound_co2`) → accepted.
+- Why it matters: future readers (including us) following the docs to
+  build a Parquet writer will produce rejected requests until they
+  discover the case mismatch by trial.
+- Resolve via: re-check the docs page in the next update-playbook
+  pass; close this entry when the prose matches the live API.
+
+### Isometric Certify docs — 60-second cap on aggregation-period is undocumented (opened 2026-05-29, filed 2026-05-29)
+
+- **Status:** filed with Isometric via `mcp__isometric__submit_feedback`
+  on 2026-05-29. Remains open here until the docs page is updated.
+- The end-to-end sandbox smoke on 2026-05-29 (the parquet smoke probe,
+  since deleted — its pattern lives in
+  `tests/isometric-sandbox.integration.test.ts`) showed Isometric
+  rejects DataUploadSubmissions where
+  `aggregation_period_end - aggregation_period_start > 60 s` with
+  `AggregationPeriodDurationInvalidError: Aggregation period of N
+  seconds exceeds maximum allowed of 60 seconds`. The public docs page
+  (`docs.isometric.com/user-guides/certify/time-series-data-upload`)
+  describes the Parquet column shape but does not state this cap, so a
+  reader following the docs alone will choose any window size and only
+  discover the limit at submit time.
+- Why it matters: noma's first integration design (2026-05-29 morning)
+  picked 1-hour windows on verifier-readability grounds; the smoke
+  forced a revision to 60-second windows after the docs gave no
+  warning. Future integrations will hit the same wall.
+- Resolve via: re-check the docs page in the next update-playbook
+  pass; close this entry when the prose names the cap.
+
+### Isometric Certify docs — biochar pyrolysis reactor declared DAC-only (opened 2026-05-29, filed 2026-05-29)
+
+- **Status:** filed with Isometric via `mcp__isometric__submit_feedback`
+  on 2026-05-29. Remains open here until the docs page is updated.
+- The same docs page opens with: *"Time series data can currently be
+  associated with either a Direct Air Capture (DAC) capture facility
+  or a DAC storage location (saline aquifer),"* but then lists
+  Biochar Pyrolysis Reactor measurement properties and the OpenAPI
+  enum includes `biochar_pyrolysis_reactor_facility_time_series`.
+  Sandbox probe on 2026-05-29 confirmed the API accepts the biochar
+  submission_type; the prose intro is stale.
+- Why it matters: anyone evaluating "does Isometric support biochar
+  time-series?" via the docs prose will incorrectly conclude no.
+- Resolve via: re-check the docs page in the next update-playbook
+  pass; close this entry when the intro enumerates biochar alongside
+  DAC.
+
 ### Phase 4 deferrals
 
 - **Isometric webhook contract availability** (`isometric/phase-5`) — opened 2026-05-06
@@ -322,32 +417,105 @@ Two items remain:
     `Content-Length` handling.
   - Defer until a real LCA PDF or video evidence exceeds the cap.
 
-- **Sources mirror-flow integration tests** (`isometric/sources-integration-tests`)
-  — opened 2026-05-26
-  - Phase 3.5 ships pure-logic tests (`tests/isometric-sources.test.ts`)
-    but the mirror flow's full decision matrix (happy path, recovery
-    GET-found → signed-upload-url 200 → PUT → insert, recovery GET-found
-    → signed-upload-url 409 → insert, mid-PUT failure with retry, race
-    detection / orphan-source sync_event) needs DB + Isometric client
-    integration tests.
-  - Resolve by: adding `tests/isometric-sources-mirror.integration.test.ts`
-    using the same mocking pattern as `tests/isometric-submit-removal.test.ts`.
+- ~~**Sources mirror-flow integration tests**~~ (`isometric/sources-integration-tests`)
+  — opened 2026-05-26, **resolved 2026-05-26**. Shipped as
+  `tests/isometric-sources-mirror-flow.test.ts` (4 tests covering GET-found
+  → 200 PUT → insert, GET-found → 409 → insert, reconciled-`isPublic`
+  authoritative path, rejection of out-of-lineage documents). See
+  `docs/isometric/changes.md`.
 
-- **Cross-process source advisory lock in submitRemoval** (`isometric/sources-submit-lock`)
-  — opened 2026-05-26
-  - Unlink uses an advisory lock keyed on `source:{provider}:{externalDocumentId}`,
-    but `submitRemoval` does NOT take a matching lock when resolving
-    `sourceIds` for the semantic hash. A narrow TOCTOU window exists:
-    between submit-removal's `resolveSourceIdsForRemoval` and the
-    `insertDraftSubmissionWithMappingLock`, an unlink that grabs the
-    source-level lock can delete the row our submit just snapshotted.
-    The post-delete recheck in unlink catches the snapshot-after-delete
-    case; the converse (snapshot lands AFTER unlink check but BEFORE
-    delete) is mitigated by the second snapshot check inside the unlink
-    transaction.
-  - Resolve by: have `submitRemoval` acquire the per-source advisory
-    locks before computing `payloadHash`, hold them until the draft row
-    is INSERTed. Deferred until operator feedback shows the race fires.
+- ~~**Cross-process source advisory lock in submitRemoval**~~
+  (`isometric/sources-submit-lock`) — opened 2026-05-26,
+  **resolved 2026-05-26**. `submitRemoval` now acquires per-document
+  mirror locks (key: `mirror:{provider}:{documentId}`) sorted to prevent
+  ABBA, re-resolves source IDs inside the locked transaction, and inserts
+  the draft snapshot atomically via the new composable
+  `insertDraftSubmissionWithMappingLockAndLocks` data-access helper.
+  mirror, unlink, and submit now interlock on the same lock key. See
+  `src/lib/isometric/utils/source-lock.ts`,
+  `src/fn/certification/submit-removal.ts` (create-new-version branch),
+  and `src/data-access/certification.ts`.
+
+- **Mirror lock held across Isometric HTTP round-trips**
+  (`isometric/sources-lock-hold-time`) — opened 2026-05-26
+  - `mirrorDocumentToSource` holds the per-document mirror advisory lock
+    across three Isometric calls (`findSourceBySupplierRef`,
+    `createSource` / `requestSignedUploadUrl`, `putBlobToSignedUrl`) plus
+    the storage download. Now that `submitRemoval` and
+    `setDocumentSourceVisibility` also acquire the same lock, a slow
+    upload of a `SOURCES_MAX_BYTES` blob (50 MB cap) stalls every
+    concurrent submit + visibility flip on the same document for the
+    full upload duration. Acceptable for single-tenant v1; logged as the
+    main scalability tradeoff to revisit before multi-operator workloads.
+  - Resolve by: split mirror into a `reserve` phase (lock, look-up
+    remote, request upload URL, persist a `pending` mapping, release
+    lock) and an `upload` phase (PUT without holding the lock,
+    re-acquire briefly to flip `pending → ready`). Adds one
+    `upload_status` column to `certifier_document_uploads` and one extra
+    DB round-trip per mirror, but unblocks parallel work on neighbouring
+    documents.
+
+- **Per-input source attribution (was: removal-wide attribution)**
+  see `isometric/sources-per-input-attribution` above — unchanged by the
+  Phase 3.5 hardening; still removal-wide.
+
+### Phase 3.5 source-mutation hardening — deferred simplifications (opened 2026-05-26)
+
+Surfaced by the `/simplify` pass that followed the P1/P2 fix set (tx
+threading, removalId scoping with `assertDocumentIsCandidateForRemoval`,
+locked source-id resolution in submit, `isPublic` reconciliation). All
+below the threshold for the same PR; revisit next time the area is
+touched.
+
+- **Extract `finalizeSnapshotInputs` from `submitRemoval`'s create-new-version
+  closure** (`code/submit-removal-finalize-helper`)
+  - The `prepare` callback passed to
+    `insertDraftSubmissionWithMappingLockAndLocks` in
+    `src/fn/certification/submit-removal.ts` is ~80 lines mixing lock
+    acquisition, conditional source-id reconciliation, hash
+    recomputation, template-input rebuild, and final
+    `InsertDraftSubmissionInput` assembly. Readable today (linear,
+    rare-path clearly marked) but a third caller would force extraction.
+  - Resolve via: pull `finalizeSnapshotInputs({candidateDocumentIds,
+    tentativeSourceIds, semanticPayload, semanticHash, monitored,
+    datapointBodyByKey, …})` into a sibling module; the closure shrinks
+    to "acquire locks → call helper → return input".
+
+- **Extract `assertDocumentReadyForMirror` pre-flight from
+  `mirrorDocumentToSource`** (`code/mirror-preflight-helper`)
+  - 10 sequential `SafeError` throws on document nullability fields
+    (`storageKey`, `fileSizeBytes`, `mimeType`, head size match, …) plus
+    the post-validation `: number` / `: string` narrowing tricks.
+    Pre-existing pattern, not introduced by the hardening, but the
+    extraction would also delete the `!` non-null assertions in
+    `buildSourceRequestBody`.
+  - Resolve via: lift to a helper returning narrowed locals
+    `{fileSizeBytes, mimeType}` so the function signature carries the
+    invariant.
+
+- **Export `DbClient = DbTransaction | typeof db` from `@/db`**
+  (`code/dbclient-alias`)
+  - `src/data-access/certifier-document-uploads.ts` defines the alias
+    locally; `src/data-access/applications.ts` writes the union inline at
+    3 sites. As more data-access modules accept optional `tx`, the
+    duplication compounds.
+  - Resolve via: add one export in `src/db/index.ts`, migrate the
+    inline unions in `applications.ts`, swap the local alias.
+
+- **Shared test fixture builder for Isometric submission tests**
+  (`tests/isometric-submission-fixtures`)
+  - `tests/isometric-submit-removal.test.ts`,
+    `tests/isometric-sources-mirror-flow.test.ts`, and
+    `tests/isometric-ghg-statement-submit.test.ts` each repeat ~8
+    `vi.mock(...)` declarations and a similar `beforeEach`
+    `mockResolvedValue` block. They evolve together — a new data-access
+    dependency in `submit-removal.ts` typically breaks all three.
+  - Resolve via: `tests/fixtures/isometric-submission-mocks.ts` exporting
+    `applyIsometricSubmissionMocks()` (the `vi.mock` list) and
+    `setDefaultSubmissionMockData(overrides?)` (the `beforeEach`
+    defaults). Note `vi.mock` factories are hoisted, so each test file
+    still calls them in its hoisted section — the shared module exposes
+    the path list and the per-test default data.
 
 - **Per-column upload-URL field migration** (`storage/phase-2`) — opened 2026-05-19
   - `production.plc_data_file_url`, `samples.r0_histogram_file_url`,
@@ -391,6 +559,84 @@ Two items remain:
     with aggregated values; per-run is overkill but may be required for
     some templates.
   - Resolve only when a template surfaces that needs per-run breakdown.
+
+### Phase 3.5 Sources panel test-pass follow-ups (opened 2026-05-27)
+
+Surfaced while manually exercising the Sources panel against the
+Isometric sandbox (Cases A–H). Cases A–E and the precondition guards
+(Cases G/H) all passed; the three items below were either band-aided in
+this PR or are clean UX deferrals.
+
+- **`storage/sources-storage-loopback` — replace the HTTP loopback in
+  `downloadDocumentBlob` with a `getObjectStream(key)` on
+  `StorageProvider`.**
+  - `src/fn/certification/sources.ts:368-387` issues a presigned URL,
+    then `fetch`es it back from the same server. In dev that flows
+    through `/api/storage/...` and requires `STORAGE_SIGNING_SECRET`;
+    the round trip duplicates network and signing work that an internal
+    stream would avoid entirely.
+  - Resolve via: add `getObjectStream(key): Promise<{ stream, contentType, contentLength }>`
+    to the `StorageProvider` interface (local-fs + S3 + GCS
+    implementations), then have `downloadDocumentBlob` call it
+    directly. Browser→storage signed URLs stay for genuine browser
+    use; the server→storage path stops self-fetching.
+  - Why: removes one HTTP hop per mirror, makes the loopback-host
+    allowlist surface area smaller, and kills the dev-only
+    `STORAGE_SIGNING_SECRET` dependency for this code path.
+
+- **`storage/sources-sync-events-tx` — move `certifier_sync_events`
+  writes out of the mirror business transaction.**
+  - `safeAppendSyncEvent` (called inside `db.transaction` in
+    `mirrorDocumentToSource`) currently calls `appendSyncEvent` on the
+    root `db`. With a single-connection pool the audit write deadlocks
+    waiting for a connection held by the open business transaction.
+  - Band-aided this PR by setting `DB_POOL_MAX=10` in `.env.local`
+    (audit writes go to a different connection). That's
+    pool-size-dependent and shouldn't be the long-term invariant.
+  - Resolve via: accumulate event payloads in a closure and flush them
+    after the transaction settles (success or rollback). Audit always
+    lands; no pool-size assumption. Touch points:
+    `src/fn/certification/sources.ts` (`withSyncEventOnFailure`,
+    `safeAppendSyncEvent`), `src/data-access/certification.ts`
+    (`appendSyncEvent`).
+
+- **`ux/sources-panel-row-layout` — buttons clip on narrow viewports.**
+  - The Mirror / Unlink / visibility-toggle button row in
+    `SourcesPanel` (`src/components/certification/sources-panel/`)
+    clips below ~640px when filenames are long; reliably forced
+    `javascript_tool` `btn.click()` over `computer.left_click` during
+    manual testing.
+  - Pure UX follow-up. Resolve via: wrap the action row, switch to
+    icon-only on narrow viewports, or move buttons to a per-row
+    overflow menu.
+
+### Submit-removal — `pyrolyzer_direct` PROJECT-scope conflict in default template (opened 2026-05-27)
+
+Encountered while running Sources-panel Case F (post-submit unlink
+should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
+
+> `This input belongs to a Project-scope Component (PROJECT scope,
+> category="pyrolyzer_direct"). Remove
+> "direct-emissions/ghg_direct_emissions/concentration" from the Removal
+> Template; the corresponding emission is tracked as a Project Component
+> published in the Isometric UI from a row in
+> /admin/emission-estimates (ADR 0005)`
+
+- **Question:** the seeded default Removal Template still references the
+  `direct-emissions/ghg_direct_emissions/concentration` input. Under
+  ADR 0005 the `pyrolyzer_direct` magnitude lives in
+  `certifier_project_emissions` and is published in Isometric as a
+  PROJECT-scope Component — the Removal payload must not carry that
+  input. The check at submit time fails-closed correctly; the seed /
+  default template carries a category that ADR 0005 said to remove.
+- **Why it matters:** blocks Case F end-to-end test pass for the
+  Sources panel, and any operator who tries to submit using the seeded
+  default template hits the same error.
+- **Resolve via:** update the default Removal Template seed (and any
+  fixture template references) to drop
+  `direct-emissions/ghg_direct_emissions/concentration` per ADR 0005,
+  then re-run Case F. Track in the submit-removal phase; not a
+  Sources-panel concern.
 
 ## Audit follow-ups (opened 2026-05-25)
 

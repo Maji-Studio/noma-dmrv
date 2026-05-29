@@ -172,6 +172,10 @@ export async function isExternalSourceReferencedInSnapshots(
   // structurally prevents two providers from generating the same source_id
   // string. Without this filter, unlink on provider A could refuse because
   // provider B's payload mentioned the same id.
+  // The explicit ::text cast on $val is required: without it, Postgres
+  // raises `42P18 — could not determine data type of parameter` because
+  // jsonb_build_object accepts any, and the planner can't infer the type
+  // from context.
   const result = await txOrDb.execute<{ found: number }>(sql`
     SELECT 1 AS found
     FROM ${certificationSubmissions}
@@ -179,7 +183,7 @@ export async function isExternalSourceReferencedInSnapshots(
       AND jsonb_path_exists(
         payload_snapshot,
         '$.transport.datapointBodies[*].body.source_ids[*] ? (@ == $val)',
-        jsonb_build_object('val', ${externalDocumentId})
+        jsonb_build_object('val', ${externalDocumentId}::text)
       )
     LIMIT 1
   `);
