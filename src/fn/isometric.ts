@@ -13,36 +13,18 @@ import {
   sampleConditionSchema,
   transportLegConditionSchema,
 } from "@/schemas/isometric";
-
-function mapValidationError(error: unknown): string {
-  if (!(error instanceof z.ZodError)) {
-    return error instanceof Error ? error.message : "Validation failed";
-  }
-
-  return error.issues
-    .map((issue) => issue.message)
-    .filter(Boolean)
-    .join("; ");
-}
+import { withAction } from "./with-action";
 
 export async function validateTransportLegFn(
   data: z.infer<typeof transportLegConditionSchema>
 ): Promise<ActionResult<z.infer<typeof transportLegConditionSchema>>> {
-  try {
-    return { success: true, data: transportLegConditionSchema.parse(data) };
-  } catch (error) {
-    return { success: false, error: mapValidationError(error) };
-  }
+  return withAction(async () => transportLegConditionSchema.parse(data));
 }
 
 export async function validateCreditBatchFn(
   data: z.infer<typeof creditBatchConditionSchema>
 ): Promise<ActionResult<z.infer<typeof creditBatchConditionSchema>>> {
-  try {
-    return { success: true, data: creditBatchConditionSchema.parse(data) };
-  } catch (error) {
-    return { success: false, error: mapValidationError(error) };
-  }
+  return withAction(async () => creditBatchConditionSchema.parse(data));
 }
 
 export type ReactorSamplingEligibilityResult = {
@@ -54,10 +36,10 @@ export type ReactorSamplingEligibilityResult = {
 export async function validateReactorSamplingMethodFn(
   data: z.infer<typeof reactorSamplingMethodSchema>
 ): Promise<ActionResult<ReactorSamplingEligibilityResult>> {
-  try {
+  return withAction(async (userId) => {
     const validated = reactorSamplingMethodSchema.parse(data);
 
-    const eligibility = await getMethodBEligibilityByReactor({
+    const eligibility = await getMethodBEligibilityByReactor(userId, {
       reactorId: validated.reactor_id,
     });
 
@@ -67,22 +49,17 @@ export async function validateReactorSamplingMethodFn(
     });
 
     return {
-      success: true,
-      data: {
-        reactor_id: parsedWithEligibility.reactor_id,
-        sampling_method: parsedWithEligibility.sampling_method,
-        method_b_eligibility: {
-          ...eligibility,
-          isEligible:
-            parsedWithEligibility.sampling_method === "method_a"
-              ? true
-              : eligibility.isEligible,
-        },
+      reactor_id: parsedWithEligibility.reactor_id,
+      sampling_method: parsedWithEligibility.sampling_method,
+      method_b_eligibility: {
+        ...eligibility,
+        isEligible:
+          parsedWithEligibility.sampling_method === "method_a"
+            ? true
+            : eligibility.isEligible,
       },
     };
-  } catch (error) {
-    return { success: false, error: mapValidationError(error) };
-  }
+  });
 }
 
 // Backward-compatible alias while callers migrate to reactor-level naming.
@@ -95,19 +72,11 @@ export async function validateCreditBatchSamplingMethodFn(
 export async function validateSampleConditionsFn(
   data: z.infer<typeof sampleConditionSchema>
 ): Promise<ActionResult<z.infer<typeof sampleConditionSchema>>> {
-  try {
-    return { success: true, data: sampleConditionSchema.parse(data) };
-  } catch (error) {
-    return { success: false, error: mapValidationError(error) };
-  }
+  return withAction(async () => sampleConditionSchema.parse(data));
 }
 
 export async function validateDeliveryDryMassFn(
   data: z.infer<typeof deliveryDryMassSchema>
 ): Promise<ActionResult<z.infer<typeof deliveryDryMassSchema>>> {
-  try {
-    return { success: true, data: deliveryDryMassSchema.parse(data) };
-  } catch (error) {
-    return { success: false, error: mapValidationError(error) };
-  }
+  return withAction(async () => deliveryDryMassSchema.parse(data));
 }

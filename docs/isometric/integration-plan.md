@@ -61,7 +61,7 @@ requirements can be pulled programmatically.
 | **3.5** — Sources upload | ⏸ Deferred | Storage prerequisite is in place (`useFileUpload` + `documents` v2). Remaining: wire `certifierDocumentUploads`, plumb `source_ids` into Datapoint payloads, UI hook. Tracked: `isometric/phase-3.5`. |
 | **3.6** — Tailored sandbox template | ✅ | `noma-mvp` Removal Template walkthrough + bootstrap script for fixed constants. Polymorphic transport-leg CRUD on delivery/sample/feedstock. |
 | **3.7** — Real energy data | ✅ | Per-facility emission-estimate config replaces energy zero stubs. `/admin/emission-estimates` + `/energy` summary route. |
-| **3.7-period** — Period emissions | 🔨 Designed (ADR 0005) | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) move to `PROJECT`-scope Components in Isometric. noma extends `/admin/emission-estimates` with an LCA-journal section + read-only drift panel on `/certification/`. **noma does not POST** Project Components; operator publishes in the Isometric UI. INPUT_MAPPING loses the five `zeroStub: true` families; the scope-conflict `SafeError` named in ADR 0005 takes their place. |
+| **3.7-period** — Period emissions | ✅ | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005). noma extends `/admin/emission-estimates` with an LCA-journal section + read-only drift panel on `/certification/`; **noma does not POST** Project Components. The seven `zeroStub: true` families are deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Coverage check + OpenAPI regen gate land in `isometric-health.yml`. |
 | **4** — GHG statement lifecycle | ❎ Superseded | Original two-phase `submitCreditBatch` removed by ADR 0003; lifecycle utilities retained and re-used by Phase 4.5. |
 | **4.5** — Multi-removal GHG Statements | ✅ | Provider-neutral `/certification/` route group (hub + Removals + GHG Statements). Period-first stepper. Membership reconciliation never steals. Unlink/repoint guard widened. |
 | **5** — Time-series + bulk | ⏭ Not started | `MonitoringSubmission`, `DataUploadSubmission`, `POST /biochar_applications`. Includes the webhook receiver once Isometric publishes a contract. |
@@ -225,6 +225,7 @@ ISOMETRIC_ENVIRONMENT:   z.enum(['sandbox', 'production']).optional()
 | 0024 | `long_red_skull` | 4.5 | index | `certifier_removals(ghg_statement_id)` |
 | 0025 | `lyrical_silver_sable` | 4.5 | unique | `certifier_ghg_statements_facility_period_unique(provider,facility_id,reporting_period_end_on)` |
 | 0026 | `spicy_nextwave` | 4.5 | index + check | `certifier_removals(facility_id)`, `credit_batches(removal_id)`, removal date chronology |
+| 0027 | `fluffy_chamber` | 3.7-period | additive | `certifier_project_emissions` table + `project_emission_category` pgEnum (ADR 0005) |
 
 ## Operational health
 

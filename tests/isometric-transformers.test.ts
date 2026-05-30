@@ -26,11 +26,6 @@ const BIOCHAR_PROCESSING = {
   groupKey: "biochar-processing",
   blueprintKey: "grid_electricity_use",
 } as const;
-const SAMPLING_MASS = {
-  groupKey: "sampling-required-for-mrv",
-  blueprintKey: "mass_based_ci_emissions",
-} as const;
-
 const baseAgg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
   weightedHToCorgRatio: 0.4,
@@ -295,7 +290,9 @@ describe("buildCreateDatapointRequest", () => {
   it("INPUT_MAPPING covers the MVP demo-template (group, blueprint, input) tuples", () => {
     // Sanity: any deletion here is a real schema change, not a refactor.
     // Anchors the contract with the noma-mvp tailored template authored in
-    // `docs/isometric/sandbox-template-authoring.md`.
+    // `docs/isometric/sandbox-template-authoring.md`. The seven previously-
+    // zero-stubbed families moved to PROJECT scope under ADR 0005; their
+    // coverage lives in `tests/period-input-tuples.test.ts`.
     const expected: Array<[string, string, string]> = [
       ["co2-stored", "carbon_rich_substance_sequestration", "carbon_content"],
       ["co2-stored", "carbon_rich_substance_sequestration", "product_mass"],
@@ -304,8 +301,6 @@ describe("buildCreateDatapointRequest", () => {
       ["biochar-transport", "transport", "distance"],
       ["biochar-transport", "transport", "mass"],
       ["sampling-required-for-mrv", "distance_based_ci_emissions", "distance"],
-      // Granular "Dark Earth Carbon Template" (rvt_1KS4S43VPSBXA26X)
-      // inputs — zero stubs pending Phase 3.7 schema work.
       [
         "biomass-feedstock-processing",
         "metered_energy_based_ci_emissions",
@@ -328,21 +323,12 @@ describe("buildCreateDatapointRequest", () => {
         "mass_distance_based_ci_emissions",
         "mass_distance",
       ],
-      ["miscellaneous", "mass_based_ci_emissions", "mass"],
     ];
     for (const [groupKey, blueprintKey, inputKey] of expected) {
       expect(
         lookupInputMapping(groupKey, blueprintKey, inputKey),
       ).toBeDefined();
     }
-    // SAMPLING_MASS placeholder exists for follow-on test cases.
-    expect(
-      lookupInputMapping(
-        SAMPLING_MASS.groupKey,
-        SAMPLING_MASS.blueprintKey,
-        "mass",
-      ),
-    ).toBeDefined();
   });
 });
 

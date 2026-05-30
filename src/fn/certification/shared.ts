@@ -38,29 +38,6 @@ export function assertProductionConfirmed(confirmProduction?: boolean): void {
   }
 }
 
-// Blocks submission to a production Isometric project while the resolved
-// template still contains `zeroStub` monitored inputs — placeholder 0
-// datapoints for deferred per-reporting-period data noma cannot yet
-// supply. Allowed in the sandbox environment, where zero stubs are the
-// whole point of end-to-end testing. See docs/open-questions.md →
-// isometric/phase-3.7-period-inputs.
-export function assertNoZeroStubsInProduction(
-  zeroStubInputs: { component: string; inputKey: string }[],
-): void {
-  if (
-    env.ISOMETRIC_ENVIRONMENT !== "production" ||
-    zeroStubInputs.length === 0
-  ) {
-    return;
-  }
-  const lines = zeroStubInputs
-    .map((s) => `  • ${s.component} → ${s.inputKey}`)
-    .join("\n");
-  throw new SafeError(
-    `Cannot submit to a production Isometric project: ${zeroStubInputs.length} template input(s) still emit a placeholder 0 (deferred per-reporting-period data):\n${lines}\nReplace these with real data before submitting to production.`,
-  );
-}
-
 export async function loadTransportLegsByCategory(
   userId: string,
   entityIds: TransportEntityIdsByCategory,
