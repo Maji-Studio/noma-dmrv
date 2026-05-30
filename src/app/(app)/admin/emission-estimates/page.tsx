@@ -11,6 +11,7 @@
 
 import { Factory, Gauge } from "@phosphor-icons/react/dist/ssr";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
+import { PeriodEmissionsSection } from "@/components/admin/period-emissions-section";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierMapping } from "@/hooks/use-certification";
 
@@ -102,6 +103,10 @@ export default function AdminEmissionEstimatesPage() {
               : "No Isometric configuration is available for this facility."}
           </p>
         </div>
+      )}
+
+      {facilityId && (
+        <PeriodEmissionsSection key={facilityId} facilityId={facilityId} />
       )}
     </div>
   );

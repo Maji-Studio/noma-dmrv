@@ -15,6 +15,13 @@ export function payloadHash(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
+// Marker prefix used when fingerprinting functions inside hashed payloads.
+// Plain JSON.stringify silently drops function values, which would let
+// transform fns inside INPUT_MAPPING change without bumping MAPPING_REVISION.
+// We serialise functions via their .toString() so any source-level change
+// (including arrow-body or whitespace) flips the hash.
+const FUNCTION_FINGERPRINT_PREFIX = "[Function]";
+
 function canonicalize(value: unknown): unknown {
   if (value === null) return null;
   if (typeof value === "number") {
@@ -22,6 +29,9 @@ function canonicalize(value: unknown): unknown {
       throw new Error("canonicalJson: non-finite number");
     }
     return Object.is(value, -0) ? 0 : value;
+  }
+  if (typeof value === "function") {
+    return `${FUNCTION_FINGERPRINT_PREFIX}${(value as () => unknown).toString()}`;
   }
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value instanceof Date) return value.toISOString();

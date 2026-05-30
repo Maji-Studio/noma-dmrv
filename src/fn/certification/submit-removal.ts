@@ -14,6 +14,7 @@ import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SafeError } from "@/lib/errors";
+import { z } from "zod";
 import {
   STAGE_SPLIT_SUM_TOLERANCE,
   STAGE_SPLIT_TOTAL_PCT,
@@ -36,12 +37,11 @@ import {
 } from "@/lib/isometric";
 import {
   buildCreateDatapointRequest,
-  lookupInputMapping,
+  MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateRemovalRequest } from "@/lib/isometric/transformers/removal";
 import { loadRemovalSubmissionContext } from "./certify-context";
 import {
-  assertNoZeroStubsInProduction,
   assertProductionConfirmed,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
@@ -139,6 +139,22 @@ interface RemovalTransportSnapshot {
   datapointBodies: DatapointTransport[];
 }
 
+// Runtime guard for the JSONB payload_snapshot.transport read-back. The
+// snapshot was written by an earlier deploy and may not match this deploy's
+// in-memory shape — fail loud rather than post malformed datapoints when the
+// schema has drifted (e.g. a body field renamed or removed).
+const datapointTransportSchema = z.object({
+  rtcId: z.string().min(1),
+  inputKey: z.string().min(1),
+  body: z
+    .object({ supplier_reference_id: z.string().min(1) })
+    .passthrough(),
+});
+const removalTransportSnapshotSchema = z.object({
+  removalSupplierRef: z.string().min(1),
+  datapointBodies: z.array(datapointTransportSchema),
+});
+
 export interface SubmitRemovalArgs {
   userId: string;
   removalId: string;
@@ -174,7 +190,6 @@ function resolveTemplateInputs(args: {
   const fixed: ResolvedFixedInput[] = [];
   const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
   const unboundFixedInputs: { component: string; inputKey: string }[] = [];
-  const zeroStubInputs: { component: string; inputKey: string }[] = [];
 
   for (const group of template.groups) {
     for (const component of group.components) {
@@ -209,28 +224,11 @@ function resolveTemplateInputs(args: {
             `Blueprint "${blueprint.key}" missing input "${rtcInput.input_key}".`,
           );
         }
-        const mapping = lookupInputMapping(
-          group.key,
-          component.blueprint_key,
-          rtcInput.input_key,
-        );
-        if (!mapping) {
-          throw new SafeError(
-            `No INPUT_MAPPING entry for group="${group.key}" blueprint="${component.blueprint_key}" input="${rtcInput.input_key}".`,
-          );
-        }
-        if (mapping.zeroStub) {
-          zeroStubInputs.push({
-            component: component.display_name,
-            inputKey: rtcInput.input_key,
-          });
-        }
-        const raw = agg[mapping.source];
-        if (raw == null) {
-          throw new SafeError(
-            `Aggregated source ${String(mapping.source)} for input "${rtcInput.input_key}" (group="${group.key}") is null.`,
-          );
-        }
+        // Don't pre-check the mapping here — buildCreateDatapointRequest
+        // already runs the missing-mapping check AND the period-input
+        // scope-conflict variant (ADR 0005 §3). A pre-check here would
+        // throw the generic missing-mapping error first and swallow the
+        // actionable scope-conflict guidance.
         const draft = buildCreateDatapointRequest({
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
@@ -264,7 +262,11 @@ function resolveTemplateInputs(args: {
     );
   }
 
-  assertNoZeroStubsInProduction(zeroStubInputs);
+  // ADR 0005 deletes the legacy zero-stub plumbing — period-input families
+  // moved to PROJECT scope and the scope-conflict SafeError in
+  // buildCreateDatapointRequest catches templates that still declare them
+  // here. No production-promotion gate at this layer; pre-deploy gate #4
+  // in integration-plan.md now lives in the nightly coverage check.
 
   return { monitored, fixed, datapointBodyByKey };
 }
@@ -506,6 +508,12 @@ export async function submitRemoval(
           localEntityId: removalId,
           version: claim.nextVersion,
           payloadSnapshot: {
+            // ADR 0005 / B3 — content hash of INPUT_MAPPING that produced
+            // this payload, surfaced at the top level so an audit query
+            // (`WHERE payload_snapshot->>'__mappingRevision' = ?`) can
+            // correlate a registry-side issue back to a specific noma
+            // mapping revision in git.
+            __mappingRevision: MAPPING_REVISION,
             semantic: semanticPayload,
             memberCreditBatchIds,
             transport: {
@@ -637,7 +645,10 @@ async function runRemovalSubmission({
         entityId: removalId,
         operation: "removal:create:resumed",
         status: "succeeded",
-        responsePayload: { id: externalRemovalId },
+        responsePayload: {
+          id: externalRemovalId,
+          mapping_revision: MAPPING_REVISION,
+        },
       },
       row.id,
     );
@@ -676,7 +687,11 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
         operation: `${args.operation}:reconciled`,
         status: "succeeded",
         requestPayload: args.requestPayload,
-        responsePayload: { id: externalId, source: "reconciliation" },
+        responsePayload: {
+          id: externalId,
+          source: "reconciliation",
+          mapping_revision: MAPPING_REVISION,
+        },
       },
       args.row.id,
     );
@@ -702,6 +717,7 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
         responsePayload: {
           id: externalId,
           supplier_reference_id: args.supplierRefId,
+          mapping_revision: MAPPING_REVISION,
         },
       },
       args.row.id,
@@ -715,6 +731,10 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
     }
 
     const message = err instanceof Error ? err.message : String(err);
+    // ADR 0005 / B3 — failure events historically carried only
+    // `errorMessage`; embed `mapping_revision` in `responsePayload` so the
+    // audit trail still names which mapping revision produced the failed
+    // payload.
     await appendSyncEventBestEffort(
       args.userId,
       {
@@ -722,6 +742,7 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
         operation: args.operation,
         status: "failed",
         requestPayload: args.requestPayload,
+        responsePayload: { mapping_revision: MAPPING_REVISION },
         errorMessage: message,
       },
       args.row.id,
@@ -752,20 +773,15 @@ async function appendSyncEventBestEffort(
 function readRemovalTransport(
   row: CertificationSubmissionRow,
 ): RemovalTransportSnapshot {
-  const snapshot = row.payloadSnapshot as
-    | { transport?: Partial<RemovalTransportSnapshot> }
-    | null;
-  const transport = snapshot?.transport;
-  if (
-    !transport?.removalSupplierRef ||
-    !Array.isArray(transport.datapointBodies)
-  ) {
+  const snapshot = row.payloadSnapshot as { transport?: unknown } | null;
+  const parsed = removalTransportSnapshotSchema.safeParse(snapshot?.transport);
+  if (!parsed.success) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its transport snapshot is missing.",
+      "Stale submission cannot be resumed because its transport snapshot does not match the current payload schema.",
     );
   }
   return {
-    removalSupplierRef: transport.removalSupplierRef,
-    datapointBodies: transport.datapointBodies as DatapointTransport[],
+    removalSupplierRef: parsed.data.removalSupplierRef,
+    datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
   };
 }

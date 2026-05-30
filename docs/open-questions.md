@@ -14,6 +14,65 @@ Each entry follows this shape:
 
 ## Isometric Certify integration
 
+### Project-emission category disambiguator for `mass_based_ci_emissions` (opened 2026-05-24)
+
+- **`miscellaneous` and `sampling_consumables` collide on the same Isometric blueprint**
+  (`mass_based_ci_emissions` / `mass` / `kg`). The matcher in
+  `src/lib/isometric/utils/project-emission-match.ts` distinguishes them by
+  magnitude only; when both Components have similar magnitudes (<±0.5%) the
+  matcher returns `kind: "ambiguous"` and surfaces a reason naming the two
+  Component `display_name`s.
+- Today this is a documented operational requirement on the Isometric operator
+  ("give the two Components distinct display_names"). It works but is fragile.
+- Resolve via: pick a disambiguator strategy — either (a) match by
+  Component `display_name` regex per category (operator naming becomes part of
+  the contract), or (b) attach a noma-side `supplierRefIdPrefix` to
+  `CATEGORY_TO_BLUEPRINT` and only consider Components whose latest Datapoint
+  carries that prefix. Decision needed before the next operator-facing release.
+
+### Project-emissions tracking strategy — journal vs. measured actuals (opened 2026-05-26)
+
+- **Current state (ADR 0005, Posture B):** `/admin/emission-estimates`
+  carries a "Period emissions" section that journals five LCA-derived
+  categories (`staff_travel`, `pyrolyzer_direct`, `biochar_storage_fuel`,
+  `miscellaneous`, `lab_electricity`, `sampling_consumables`) into
+  `certifier_project_emissions`. Operator re-publishes the same numbers
+  in the Isometric UI as `PROJECT`-scope Components; drift panel on
+  `/certification/` reconciles. **noma stores the numbers but does not
+  consume them in any calculation.**
+- **Question:** is the journal the right long-term home, or should noma
+  capture **measured actuals** for the three categories that are
+  measurable inside the dMRV (`pyrolyzer_direct`, `biochar_storage_fuel`,
+  `lab_electricity` + `sampling_consumables`), keeping the journal only
+  for genuinely admin-overhead categories (`staff_travel`,
+  `miscellaneous`)?
+- **Why it matters:** the LCA produces forecasts. Investors and
+  verifiers will eventually want forecast-vs-actual variance. Three of
+  five categories have measurement potential in the dMRV today
+  (pyrolyzer gas composition lives on `production_run_readings` /
+  `production_samples`; fuel + lab utilities would be small additive
+  entities). Until the strategy is set we are storing forecasts in
+  a place that pretends to be a measurement system.
+- **Decision needed:**
+  1. Confirm GHG Statement cadence (annual vs. quarterly vs.
+     per-removal). Annual + `GHG_STATEMENT`-scope is the simplest
+     posture; sub-annual forces `PROJECT`-scope + Isometric
+     amortization (ADR 0005 default).
+  2. Decide whether noma should track measured actuals for the three
+     measurable categories. If yes: scope the new entities
+     (`facility_fuel_log`, `lab_utility_log`) and confirm
+     `production_run_readings` captures gas mass flow + CH₄/CO
+     concentration end-to-end.
+  3. Decide year-end reconciliation behaviour — does noma feed the
+     next LCA, or does the LCA remain externally authored and noma
+     supplies variance evidence only?
+- **Resolve via:** stakeholder conversation on reporting cadence +
+  investor narrative requirements; once cadence is set, the
+  measurement-vs-journal split becomes a mechanical follow-up. Until
+  then, ship the journal as-is and treat it as Phase 1 of a larger
+  project-emissions story (see ADR 0005 "Posture C remains an upgrade
+  path").
+
 ### Transport-leg compliance follow-ups (opened 2026-05-13)
 
 - **Per-leg evidence model deferred** (`isometric/transport-v1.1-evidence`) —
@@ -160,33 +219,6 @@ Two items remain:
   category present in any used Removal Template must have a matching
   noma row AND a Project Component in Isometric).
 
-- **`isometric/phase-3.7-period-inputs`** — opened 2026-05-21,
-  **resolved 2026-05-24 by [ADR 0005](../adr/0005-period-emissions-as-project-components.md)**.
-  - **Resolution:** the agenda's premise (client-side apportionment
-    across GHG Statements) was invalidated by re-reading the Certify
-    OpenAPI surface. Period-level emissions live as `PROJECT`-scope
-    Components in Isometric; the
-    `ProjectComponentAmortizationStrategy` enum
-    (`ESTIMATED_PROJECT_TONNAGE / MANUAL / CUSTOM_TIME_PERIOD /
-    ESTIMATED_PROJECT_LIFETIME`) handles per-statement and per-removal
-    attribution server-side.
-  - **Posture B** — noma is the LCA journal, not the publisher.
-    `/admin/emission-estimates` carries the transcribed LCA values
-    (per facility × LCA window × category) plus an FK to the source
-    document; a read-only drift panel on `/certification/` flags rows
-    missing from Isometric or Components missing from noma. The
-    operator publishes Project Components in the Isometric UI.
-  - **Allocation strategy default:** `CUSTOM_TIME_PERIOD` with
-    `target_date = lca_window_end` surfaced as a copy-paste hint;
-    per-category overrides are an admin-edit on each row.
-  - **INPUT_MAPPING cleanup:** the five `zeroStub: true` families move
-    to a new `PERIOD_INPUT_TUPLES` sentinel set; the scope-conflict
-    `SafeError` names the canonical scope when a Removal Template
-    declares a period-input component (see ADR 0005 §3).
-  - Implementation tracked under integration-plan **Phase 3.7-period**
-    row; status moves from `🔨 Designed` to `✅` when the admin
-    surface, drift panel, sentinel set, and `SafeError` ship.
-
 - **`isometric/mapping-version-dimension`** — opened 2026-05-24,
   **deferred**.
   - **Question:** when Isometric introduces blueprint versioning (e.g.
@@ -315,6 +347,156 @@ Two items remain:
     with aggregated values; per-run is overkill but may be required for
     some templates.
   - Resolve only when a template surfaces that needs per-run breakdown.
+
+## Audit follow-ups (opened 2026-05-25)
+
+Batch of deferrals from the whole-codebase tech-debt audit run on
+`feature/isometric-api` (CRITICAL + HIGH fixes landed in-PR; entries below
+are the items that were flagged but kept out of that scope). Roughly
+ordered by leverage.
+
+### Structural / cross-cutting
+
+- **File-size hard-rule violations** (`code/file-size-rule`)
+  - `src/data-access/entities.ts` is 1323 lines, `src/data-access/production-runs.ts`
+    is 1076. CLAUDE.md sets a 1000-line hard limit. `entities.ts` is 14
+    near-identical `getX` / `getXById` factories — collapse via a
+    `buildSearchableEntityFinder({table, codeCol, nameCol, ...})` factory
+    plus per-entity files under `src/data-access/entities/`. `production-runs.ts`
+    splits cleanly into `{queries, mutations, readings, stats, codes}.ts`.
+    Same pattern unblocks a separate `createEntityHooks` factory for the
+    `src/hooks/use-*.ts` family (~4–5k duplicate lines).
+  - Resolve via: dedicated refactor PR — should not stack on top of
+    in-flight feature work.
+
+- **Structured logger + Isometric API boundary logging** (`code/logger-introduction`)
+  - Project has zero structured logging — only `console.warn` / `console.error`.
+    Critical-path entries (`submitRemoval`, `createGhgStatementDraft`,
+    `submitGhgStatementToVerifier`, `isometricRequest` boundary) emit
+    operational signal only via the in-DB `certifierSyncEvents` ledger,
+    which is not searchable in any aggregator and carries no latency.
+  - Resolve via: pick a logger (pino likely), wire it through
+    `src/lib/log/`, replace `console.*` in `src/fn/certification/*` +
+    `src/lib/isometric/*`, attach `{op, removalId, externalProjectId,
+    mappingRevision, attempt, duration_ms}`. Also mint a per-submission
+    `submissionAttemptId = randomUUID()` for cross-event correlation.
+
+- **Rate limiting on submission actions** (`security/rate-limit-submissions`)
+  - `submitRemovalAction`, `submitCreditBatchRemoval`,
+    `submitGhgStatementToVerifier` drive external POSTs that consume
+    Isometric quota and burn `ISOMETRIC_CLIENT_SECRET`. The in-flight
+    lock in `decideSubmissionClaim` blocks duplicate submissions of the
+    same removal but not sweep-all-removals abuse by an authenticated
+    user. Better Auth rate-limits only `/sign-in/email` and friends.
+  - Resolve via: per-user (or per-facility) rate limit inside
+    `withAction` — token bucket, e.g. 10 submissions/hour/user, 30/hour/facility.
+    Design call on the bucket strategy first.
+
+- **Single-tenant authorization → facility-membership model**
+  (`security/facility-membership-authz`)
+  - Acknowledged in `docs/isometric/integration-plan.md` pre-deploy
+    gate #3. Every `data-access/{certification,project-emissions,
+    certifier-removals,certifier-ghg-statements}.ts` accessor guards only
+    with `requireAuth(userId)` — no facility-membership check. On a
+    multi-tenant deployment, any authenticated user could enumerate or
+    mutate any facility's rows by id. The new `project_emissions.ts`
+    inherits this posture explicitly (file header comment lines 11–15).
+  - Resolve via: introduce `requireFacilityAccess(userId, facilityId)`,
+    update every data-access chokepoint, audit all `localEntityId`
+    accessors in `certifier_sync_events` for the same shape.
+
+### Performance / scalability
+
+- **Drift loader `AbortSignal`** (`perf/isometric-drift-abort`)
+  - `loadProjectEmissionDrift` issues two paginated Isometric fetches.
+    On rapid facility-toggle the in-flight server invocation continues
+    against Isometric's API, wasting quota and occasionally surfacing
+    older facility's drift during the transition. React Query auto-injects
+    `signal` into `queryFn` — wire it through `loadProjectEmissionDrift
+    → listComponents → paginateAll → isometric.get`.
+
+- **Sequential datapoint POSTs in `submitRemoval`** (`perf/datapoint-fanout`)
+  - `src/fn/certification/submit-removal.ts:576` iterates
+    `transport.datapointBodies` and awaits each `createOrReconcile`
+    sequentially — N × Isometric RTT per submission. With 5–15 monitored
+    inputs per template this is 1–9s of avoidable wait per submission.
+    `Promise.all` with `p-limit(4)` cuts wall-time ~Nx without
+    overwhelming Isometric's per-second budget. Sync-event ordering
+    becomes interleaved — trade-off the owner should call.
+
+- **Missing composite indexes** (`perf/missing-indexes`)
+  - `certifier_project_emissions` list query filters `(provider,
+    facility_id)` and orders `(lca_window_end_on DESC, created_at DESC)`
+    but the migration ships only a single-column FK index — Postgres
+    sorts in memory per request.
+  - `certifier_sync_events(entity_type, entity_id, attempted_at DESC)`
+    has no index. Table grows ~2–3 rows per submission × ~20 submissions
+    per facility per month; every detail page does a seq scan.
+  - Resolve via: one migration adding both composite indexes.
+
+- **CI coverage script serial per-facility loop** (`perf/coverage-check-fanout`)
+  - The N+1 DB query is fixed (batched `inArray`), but the outer
+    `for (const facility of facilities)` in `scripts/isometric-coverage-check.ts`
+    still iterates facilities one at a time. Each facility runs 1×
+    `listRemovalTemplates` + `Promise.all([listComponents, listDatapoints])`.
+    `p-limit(4)` over the facility array cuts CI wall-time linearly.
+
+### Correctness / observability
+
+- **Mapping-revision ambiguity on resume path** (`isometric/mapping-revision-resume`)
+  - `submit-removal.ts:645,715` stamps the current `MAPPING_REVISION` on
+    sync events emitted during the resume branch, but the actual
+    datapoint bodies were built from `payloadSnapshot.__mappingRevision`
+    (a potentially older deploy's mapping). An auditor querying
+    `response_payload->>'mapping_revision'` cannot tell which mapping
+    authored the bytes.
+  - Resolve via: stamp both `snapshot_mapping_revision` (from
+    `row.payloadSnapshot.__mappingRevision`) AND
+    `runtime_mapping_revision` (current module constant) on every resume
+    sync event. Minor JSONB shape addition, no migration.
+
+- **CATEGORY_REGISTRY consolidation** (`code/category-registry`)
+  - Four parallel sources of truth for project-emission categories:
+    `project_emission_category` pgEnum, `projectEmissionCategoryValues`
+    Zod tuple, `CATEGORY_TO_BLUEPRINT` in
+    `src/lib/isometric/utils/project-emission-match.ts`, and the
+    `PERIOD_INPUT_TUPLES` category strings in
+    `src/lib/isometric/transformers/datapoint.ts`. Comments warn
+    contributors to keep them in sync; nothing enforces it.
+  - Resolve via: one `CATEGORY_REGISTRY` in
+    `src/lib/isometric/categories.ts` keyed by `ProjectEmissionCategory`
+    with `{pgValue, blueprintKey, primaryInputKey, expectedUnit,
+    groupKeys[], inputKeys[]}`. Derive the other three from it; add a
+    build-time test asserting registry keys match the pgEnum array.
+
+- **Lossy `IsometricApiError` in submission catch paths** (`obs/preserve-error-context`)
+  - `createOrReconcile` (`submit-removal.ts:721-749`) and
+    `createGhgStatementRemote` (`ghg-statements.ts:287-326`) catch
+    failures, write a `failed` sync event carrying only
+    `errorMessage: message`, and throw a wrapped `SafeError`. The
+    original `err.body`, `err.status`, `err.code` from
+    `IsometricApiError` are dropped — neither the audit ledger nor any
+    future logger receives them.
+  - Resolve via: include `err.body`, `err.status`, `err.code` in
+    `responsePayload` alongside `mapping_revision`; pair with the logger
+    work above so the developer-facing stack and the operator-facing
+    `SafeError` live in different channels.
+
+### Accessibility
+
+- **Color-only severity convention in drift panel** (`a11y/wcag-1.4.1`)
+  - The drift-panel warn variant now carries an SR-only "Warning:"
+    prefix and `<ul>/<li>` list semantics — but the visual severity is
+    still encoded only by `--color-signal-orange` left border + a
+    decorative `!` glyph. WCAG 1.4.1 (use of color) requires a
+    non-color cue; the SR-only text satisfies AT users but the sighted-
+    low-vision case still needs a non-color visual signal (e.g.,
+    "Warning" inline text, an icon with sufficient contrast).
+  - Resolve via: dedicated `audit-a11y` pass that also runs a runtime
+    contrast check on `--color-signal-orange` against the white
+    background, and that picks the project's house style for severity
+    badges (consider promoting `DriftRow` into a project-wide notice
+    primitive if a sibling appears).
 
 ## Documentation hygiene
 

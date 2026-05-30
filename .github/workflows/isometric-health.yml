@@ -32,6 +32,9 @@ jobs:
       ISOMETRIC_CLIENT_SECRET: ${{ secrets.ISOMETRIC_CLIENT_SECRET }}
       ISOMETRIC_ACCESS_TOKEN: ${{ secrets.ISOMETRIC_ACCESS_TOKEN }}
       ISOMETRIC_DEMO_PROJECT_ID: ${{ secrets.ISOMETRIC_DEMO_PROJECT_ID }}
+      # Pinned Certify OpenAPI spec URL — used by the regenerate-certify-types
+      # step below to detect upstream schema drift.
+      ISOMETRIC_OPENAPI_URL: "https://api.isometric.com/openapi.json"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,3 +55,18 @@ jobs:
 
       - name: Ping Isometric sandbox (read paths)
         run: pnpm test:integration
+
+      # ADR 0005 / Plan §7 (Thread B1). Asserts every (group, blueprint,
+      # input) tuple in the live template is covered by INPUT_MAPPING or
+      # PERIOD_INPUT_TUPLES, and every expected PROJECT-scope category has
+      # a matching Component in Isometric. Fixture mode — no DB required.
+      - name: Isometric template + Project-Component coverage
+        run: pnpm isometric:coverage-check -- --source=fixture
+
+      # Plan §8 (Thread B2). Regenerates `certify.d.ts` from the pinned
+      # spec URL and fails if the working tree differs — surfaces upstream
+      # OpenAPI changes the day they ship. Fix is local regen + commit.
+      - name: Detect Certify OpenAPI drift
+        run: |
+          pnpm regenerate-certify-types
+          git diff --exit-code src/lib/isometric/generated/certify.d.ts

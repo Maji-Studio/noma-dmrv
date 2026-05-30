@@ -27,14 +27,41 @@ The MVP template contains **4 components across 4 groups**, covering
 
 Omitted from MVP (incremental follow-ups):
 
-- `grid_electricity_use` (biochar processing electricity, lab electricity)
-- `fuel_usage_by_volume` (biomass handling, processing fuel)
-- `mass_based_ci_emissions` (sampling consumables)
 - `metered_energy_based_ci_emissions` (pyrolyzer electricity — blocked by
   electricity-readout schema work, see `phase-3-input-coverage`)
-- `ghg_direct_emissions` (CH₄ / CO direct emissions — blocked by per-run
-  GHG-concentration schema work)
-- `staff-travel` group (noma has no data for this category)
+- `fuel_usage_by_volume` (biomass handling, processing fuel)
+
+**Do NOT add these as REMOVAL-scope components** — they live as
+`PROJECT`-scope Components per
+[ADR 0005](../adr/0005-period-emissions-as-project-components.md). A
+Removal Template that declares any of them as REMOVAL-scope trips a
+scope-conflict `SafeError` from `lookupPeriodInputTuple` in
+`src/lib/isometric/transformers/datapoint.ts` at submit time, naming the
+canonical scope:
+
+- `staff-travel/distance_based_ci_emissions/distance` → category `staff_travel`
+- `direct-emissions/ghg_direct_emissions/{concentration,mass_flow}` → category `pyrolyzer_direct`
+- `biochar-storage/fuel_usage_by_volume/volume_of_fuel` → category `biochar_storage_fuel`
+- `miscellaneous/mass_based_ci_emissions/mass` → category `miscellaneous`
+- `sampling-required-for-mrv/mass_based_ci_emissions/mass` → category `sampling_consumables`
+- `sampling-required-for-mrv/grid_electricity_use/electricity_use` → category `lab_electricity`
+
+The operator publishes the matching Project Component in the Isometric
+UI from a row in `/admin/emission-estimates` (LCA journal); the
+read-only drift panel on `/certification/` reconciles. The nightly
+`pnpm isometric:coverage-check` step in `isometric-health.yml` reads
+`tests/fixtures/isometric-coverage.json` and asserts:
+
+1. Every monitored tuple in the live template is in `INPUT_MAPPING` and
+   not in `PERIOD_INPUT_TUPLES`.
+2. Every `expectedCategories` entry has a matching PROJECT-scope
+   Component (within ±0.5% magnitude tolerance).
+3. Every PROJECT-scope Component has a matching expected entry.
+
+**Refresh the fixture** whenever a new sandbox project ships, a
+template gains a component, or an LCA window rolls — add or update the
+`facilities[]` entry in `tests/fixtures/isometric-coverage.json` in the
+same PR that authors the Isometric-side change.
 
 ## Prerequisites
 

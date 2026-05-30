@@ -1,6 +1,7 @@
 import { and, count, eq, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, samples } from "@/db/schema";
+import { requireAuth } from "./utils";
 
 const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
 
@@ -11,10 +12,15 @@ export type MethodBEligibilitySummary = {
   isEligible: boolean;
 };
 
-export async function getMethodBEligibilityByReactor(params: {
-  reactorId: string;
-  asOfDate?: string;
-}): Promise<MethodBEligibilitySummary> {
+export async function getMethodBEligibilityByReactor(
+  userId: string,
+  params: {
+    reactorId: string;
+    asOfDate?: string;
+  }
+): Promise<MethodBEligibilitySummary> {
+  requireAuth(userId);
+
   const whereClause = params.asOfDate
     ? and(
         eq(productionRuns.reactorId, params.reactorId),
