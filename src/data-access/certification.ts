@@ -109,15 +109,23 @@ export const BLOCKING_SUBMISSION_STATUSES = [
   "accepted",
 ] as const;
 
+// Submission types that pin a facility's certifier mapping through a Removal.
+// Both the Removal itself (ADR 0003) and its telemetry data-upload (ADR 0006)
+// are keyed to `certifierRemovals.id` with `localEntityType='removal'`; a
+// repoint/unlink that orphaned the mapping would strand either one's remote
+// resource, so both must block.
+const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
+
 async function hasBlockingFacilitySubmission(
   executor: Tx | typeof db,
   facilityId: string,
   provider: CertifierProvider,
 ): Promise<boolean> {
-  // Both facility-scoped artifacts can pin a mapping: Removal (ADR 0003) and
-  // GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no
-  // lineage walk. Two small probes are clearer than a UNION/OR and let the
-  // planner use each artifact's own index.
+  // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003,
+  // which also covers its telemetry data-upload per ADR 0006 — both join
+  // through certifierRemovals) and a GHG Statement (ADR 0004). Each carries
+  // facilityId directly — one hop, no lineage walk. Two small probes are
+  // clearer than a UNION/OR and let the planner use each artifact's own index.
   const [removalHit, ghgHit] = await Promise.all([
     executor
       .select({ id: certificationSubmissions.id })
@@ -130,7 +138,10 @@ async function hasBlockingFacilitySubmission(
         and(
           eq(certificationSubmissions.provider, provider),
           eq(certificationSubmissions.localEntityType, "removal"),
-          eq(certificationSubmissions.submissionType, "removal"),
+          inArray(
+            certificationSubmissions.submissionType,
+            REMOVAL_SCOPED_SUBMISSION_TYPES,
+          ),
           eq(certifierRemovals.facilityId, facilityId),
           inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
         ),
@@ -649,6 +660,35 @@ export async function resetSubmissionToDraftWithMappingLock(
     if (!row) throw new SafeError("Submission already in progress");
     return row;
   });
+}
+
+// Accumulates per-step recovery IDs into `payload_snapshot.journaled`
+// (ADR 0006 §3). The data-upload resume reader (`readResumeSnapshot`) consults
+// `payloadSnapshot.journaled`, so the journal MUST live there, not in
+// `metadata`. Each step deep-merges into the journaled sub-object — a plain
+// top-level `payload_snapshot || {journaled: patch}` would replace the whole
+// journaled object and drop earlier steps' IDs (e.g. step 2 erasing step 1's
+// fileUploadId/uploadUrl), defeating recovery.
+export async function appendSubmissionJournal(
+  userId: string,
+  id: string,
+  patch: Record<string, unknown>,
+  tx?: Tx,
+): Promise<void> {
+  requireAuth(userId);
+  await (tx ?? db)
+    .update(certificationSubmissions)
+    .set({
+      payloadSnapshot: sql`jsonb_set(
+        coalesce(${certificationSubmissions.payloadSnapshot}, '{}'::jsonb),
+        '{journaled}',
+        coalesce(${certificationSubmissions.payloadSnapshot} -> 'journaled', '{}'::jsonb)
+          || ${JSON.stringify(patch)}::jsonb,
+        true
+      )`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(certificationSubmissions.id, id));
 }
 
 export async function updateSubmissionMetadata(
