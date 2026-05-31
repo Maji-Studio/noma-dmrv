@@ -15,7 +15,6 @@
  */
 "use client";
 
-import { useState } from "react";
 import {
   ArrowsClockwise,
   CloudArrowUp,
@@ -38,10 +37,8 @@ export function TelemetryPanel({ removalId }: TelemetryPanelProps) {
   const state = useTelemetrySubmissionState(removalId);
   const submit = useSubmitTelemetry(removalId);
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
 
   const onSubmit = async () => {
-    setBusy(true);
     try {
       const result = await submit.mutateAsync({});
       if (result.status === "failed") {
@@ -58,8 +55,6 @@ export function TelemetryPanel({ removalId }: TelemetryPanelProps) {
       toast.error(
         err instanceof Error ? err.message : "Telemetry submission failed.",
       );
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -79,10 +74,10 @@ export function TelemetryPanel({ removalId }: TelemetryPanelProps) {
           <Button
             variant="primary"
             onClick={onSubmit}
-            disabled={busy || submit.isPending}
+            disabled={submit.isPending}
           >
             <CloudArrowUp size={14} weight="bold" />
-            {busy || submit.isPending ? "Submitting..." : "Submit telemetry"}
+            {submit.isPending ? "Submitting..." : "Submit telemetry"}
           </Button>
           <Button
             variant="noOutline"

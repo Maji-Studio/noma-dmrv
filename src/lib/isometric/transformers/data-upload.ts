@@ -82,7 +82,7 @@ export interface AggregateDataUploadArgs {
 }
 
 const MS_PER_SECOND = 1_000;
-const DEFAULT_BUCKET_SECONDS = 60;
+export const DEFAULT_BUCKET_SECONDS = 60;
 
 interface BucketAccumulator {
   start: number;

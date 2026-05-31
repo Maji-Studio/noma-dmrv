@@ -591,9 +591,17 @@ export async function submitRemoval(
               version: claim.nextVersion,
               inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
             });
-            const draft = finalDatapointBodyByKey.get(
-              `${m.removalTemplateComponentId}::${m.inputKey}`,
-            )!;
+            const draftKey = `${m.removalTemplateComponentId}::${m.inputKey}`;
+            const draft = finalDatapointBodyByKey.get(draftKey);
+            if (!draft) {
+              // finalMonitored and finalDatapointBodyByKey are produced by the
+              // same resolveTemplateInputs pass, so a miss means the two fell
+              // out of sync — fail loudly rather than emit a Datapoint body
+              // missing its resolved fields.
+              throw new SafeError(
+                `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
+              );
+            }
             return {
               rtcId: m.removalTemplateComponentId,
               inputKey: m.inputKey,

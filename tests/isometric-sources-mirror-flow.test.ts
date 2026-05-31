@@ -271,11 +271,9 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       recovered: true,
     });
     expect(isometric.createSource).not.toHaveBeenCalled();
-    // No PUT — the registry already has the bytes.
-    const putCalls = fetchSpy.mock.calls.filter(
-      ([, init]) => init?.method === "PUT",
-    );
-    expect(putCalls).toHaveLength(0);
+    // No network I/O at all — the registry already has the bytes, so the
+    // already_uploaded path skips both the storage GET and the registry PUT.
+    expect(fetchSpy).not.toHaveBeenCalled();
     // Local mapping persisted against the existing remote source.
     expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
       USER_ID,
@@ -299,7 +297,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
       kind: "already_uploaded",
     });
-    vi.spyOn(globalThis, "fetch");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const result = await mirrorDocumentToSource({
       removalId: REMOVAL_ID,
@@ -318,6 +316,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       }),
       expect.anything(),
     );
+    fetchSpy.mockRestore();
   });
 
   it("rejects mutations for a document outside the removal's lineage", async () => {
