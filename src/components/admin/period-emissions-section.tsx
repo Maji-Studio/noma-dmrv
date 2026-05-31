@@ -162,7 +162,7 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
                     <Button
                       variant="noOutline"
                       size="small"
-                      aria-label="Edit"
+                      aria-label={`Edit ${CATEGORY_LABELS[row.category]} (${row.lcaWindowStartOn} → ${row.lcaWindowEndOn})`}
                       onClick={() => setOpenForm({ mode: "edit", row })}
                     >
                       <Pencil size={14} weight="bold" />
@@ -170,7 +170,7 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
                     <Button
                       variant="noOutline"
                       size="small"
-                      aria-label="Delete"
+                      aria-label={`Delete ${CATEGORY_LABELS[row.category]} (${row.lcaWindowStartOn} → ${row.lcaWindowEndOn})`}
                       onClick={() => setConfirmDelete(row)}
                     >
                       <Trash size={14} weight="bold" />
