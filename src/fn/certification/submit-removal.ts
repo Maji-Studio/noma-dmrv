@@ -2,7 +2,7 @@ import {
   appendSyncEvent,
   type AppendSyncEventInput,
   getLatestSubmission,
-  insertDraftSubmissionWithMappingLock,
+  insertDraftSubmissionWithMappingLockAndLocks,
   markSubmissionRejected,
   markSubmissionSubmitted,
   resetSubmissionToDraftWithMappingLock,
@@ -10,6 +10,7 @@ import {
   type CertifierProjectRow,
   type MappingClaimGuard,
 } from "@/data-access/certification";
+import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -41,6 +42,10 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateRemovalRequest } from "@/lib/isometric/transformers/removal";
 import { loadRemovalSubmissionContext } from "./certify-context";
+import {
+  collectCandidateDocumentIdsForRemoval,
+  resolveSourceIdsForRemoval,
+} from "./sources";
 import {
   assertProductionConfirmed,
   ISOMETRIC_PROVIDER,
@@ -147,7 +152,13 @@ const datapointTransportSchema = z.object({
   rtcId: z.string().min(1),
   inputKey: z.string().min(1),
   body: z
-    .object({ supplier_reference_id: z.string().min(1) })
+    .object({
+      supplier_reference_id: z.string().min(1),
+      // Phase 3.5: source_ids must be present in every snapshot. A
+      // pre-Phase-3.5 draft (without this field) is "stale" — fail loud
+      // locally rather than ship a malformed Datapoint to Isometric.
+      source_ids: z.array(z.string()),
+    })
     .passthrough(),
 });
 const removalTransportSnapshotSchema = z.object({
@@ -183,8 +194,12 @@ function resolveTemplateInputs(args: {
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: ReturnType<typeof enrichWithFacilityConfig>;
   externalProjectId: string;
+  // Removal-wide Isometric Source IDs (Phase 3.5). Threaded into every
+  // monitored Datapoint's `source_ids` so the audit trail attaches evidence
+  // to each datapoint posted to Isometric.
+  sourceIds: string[];
 }): ResolvedTemplateInputs {
-  const { template, blueprintsByKey, agg, externalProjectId } = args;
+  const { template, blueprintsByKey, agg, externalProjectId, sourceIds } = args;
 
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
@@ -237,6 +252,7 @@ function resolveTemplateInputs(args: {
           agg,
           projectId: externalProjectId,
           supplierRefId: "__placeholder__",
+          sourceIds,
         });
         monitored.push({
           removalTemplateComponentId: component.id,
@@ -295,12 +311,17 @@ export async function submitRemoval(
   if (!ctx.defaultTemplate) {
     throw new SafeError("Set a default removal template before submitting.");
   }
+  // Pin the narrowed (non-null) template into a const so closures created
+  // below see the narrowed type without re-checking — TS loses narrowing of
+  // a property access (`ctx.defaultTemplate`) when it crosses into an
+  // async callback.
+  const defaultTemplate = ctx.defaultTemplate;
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     throw new SafeError(
       `Cannot submit: blueprints out of sync with Certify (${ctx.unresolvedBlueprintKeys.join(", ")}). Refresh in facility settings.`,
     );
   }
-  if (ctx.defaultTemplate.groups.length === 0) {
+  if (defaultTemplate.groups.length === 0) {
     throw new SafeError(
       "Default removal template has no components - nothing to submit.",
     );
@@ -373,11 +394,37 @@ export async function submitRemoval(
 
   const agg = enrichWithFacilityConfig(transportAgg, emissionConfig);
 
+  // Phase 3.5: mirrored Isometric Source IDs ride into every monitored
+  // Datapoint (removal-wide attribution). They are part of the semantic
+  // hash so a sources change supersedes the previous Removal version. The
+  // resolution is read-only and idempotent; submitRemoval is the canonical
+  // place to snapshot the source set because that's when the payload is
+  // locked.
+  //
+  // The candidate-document set is derived deterministically from the chain
+  // ctx so it can be re-walked inside the locked transaction below. The
+  // first resolution here is the "tentative" set used for the claim
+  // decision; the locked re-resolution inside the snapshot insert is the
+  // authoritative set, and if it differs we recompute the hash before
+  // writing.
+  const candidateDocumentIds = await collectCandidateDocumentIdsForRemoval(
+    userId,
+    {
+      lineages: ctx.lineages,
+      runs: ctx.runs,
+      memberBatchIds: ctx.memberBatches.map((b) => b.id),
+    },
+  );
+  const sourceIds = await resolveSourceIdsForRemoval(userId, {
+    candidateDocumentIds,
+  });
+
   const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
-    template: ctx.defaultTemplate,
+    template: defaultTemplate,
     blueprintsByKey,
     agg,
     externalProjectId,
+    sourceIds,
   });
 
   // The hash is a function of what gets sent to Isometric — the run set and
@@ -386,10 +433,13 @@ export async function submitRemoval(
   // POST a duplicate Isometric Removal (the supplier ref carries the version).
   const semanticPayload = {
     removalId,
-    templateId: ctx.defaultTemplate.id,
+    templateId: defaultTemplate.id,
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
     startedOn: agg.earliestStartTime.toISOString(),
     completedOn: agg.latestEndTime.toISOString(),
+    // Phase 3.5: sorted, deduped Isometric Source IDs. Hash-covered so
+    // mirroring or unmirroring a source forces a new version (supersede).
+    sourceIds,
     inputs: [
       ...monitored.map((m) => ({
         rtcId: m.removalTemplateComponentId,
@@ -462,7 +512,7 @@ export async function submitRemoval(
         row,
         transport,
         fixed,
-        template: ctx.defaultTemplate,
+        template: defaultTemplate,
         blueprintsByKey,
         agg,
         externalProjectId,
@@ -482,57 +532,113 @@ export async function submitRemoval(
         role: "removal",
         version: claim.nextVersion,
       });
-      const datapointBodies = monitored.map((m) => {
-        const supplierRefId = buildRemovalSupplierRef({
-          removalId,
-          role: "datapoint",
-          version: claim.nextVersion,
-          inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
-        });
-        const draft = datapointBodyByKey.get(
-          `${m.removalTemplateComponentId}::${m.inputKey}`,
-        )!;
-        return {
-          rtcId: m.removalTemplateComponentId,
-          inputKey: m.inputKey,
-          body: { ...draft, supplier_reference_id: supplierRefId },
-        };
-      });
 
-      const draftRow = await insertDraftSubmissionWithMappingLock(
+      // Build the draft snapshot inside a transaction that holds per-
+      // document mirror locks. Inside the lock we re-resolve source IDs,
+      // and if they shifted vs. the tentative set the hash gets recomputed
+      // before insert. This is the interlock with unlinkDocumentSource and
+      // mirrorDocumentToSource — those acquire the same per-(provider,
+      // documentId) advisory locks, so they block while submit is
+      // resolving + inserting, and submit blocks while they're mutating.
+      // Without this, a concurrent unlink could delete the mapping between
+      // the unlocked source-id read above and the snapshot insert,
+      // orphaning the audit-trail reference.
+      const draftRow = await insertDraftSubmissionWithMappingLockAndLocks(
         userId,
-        {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: REMOVAL_SUBMISSION_TYPE,
-          localEntityType: REMOVAL_ENTITY_TYPE,
-          localEntityId: removalId,
-          version: claim.nextVersion,
-          payloadSnapshot: {
-            // ADR 0005 / B3 — content hash of INPUT_MAPPING that produced
-            // this payload, surfaced at the top level so an audit query
-            // (`WHERE payload_snapshot->>'__mappingRevision' = ?`) can
-            // correlate a registry-side issue back to a specific noma
-            // mapping revision in git.
-            __mappingRevision: MAPPING_REVISION,
-            semantic: semanticPayload,
-            memberCreditBatchIds,
-            transport: {
-              removalSupplierRef,
-              datapointBodies,
-            },
-          },
-          payloadHash: semanticHash,
-        },
         mappingGuard,
+        async (tx) => {
+          await acquireMirrorLocksSorted(tx, candidateDocumentIds);
+
+          // Re-resolve inside the lock. mirror and unlink are now serialized
+          // against us, so this result is the authoritative source set.
+          const lockedSourceIds = await resolveSourceIdsForRemoval(
+            userId,
+            { candidateDocumentIds },
+            tx,
+          );
+
+          // Common case: the locked re-read matches the tentative set;
+          // semanticPayload / hash / datapointBodies built above remain
+          // valid. The rare path rebuilds the template inputs once with
+          // the locked source set.
+          const sourceIdsChanged =
+            lockedSourceIds.length !== sourceIds.length ||
+            lockedSourceIds.some((id, i) => id !== sourceIds[i]);
+
+          const finalSemanticPayload = sourceIdsChanged
+            ? { ...semanticPayload, sourceIds: lockedSourceIds }
+            : semanticPayload;
+          const finalHash = sourceIdsChanged
+            ? payloadHash(finalSemanticPayload)
+            : semanticHash;
+          const finalResolved = sourceIdsChanged
+            ? resolveTemplateInputs({
+                template: defaultTemplate,
+                blueprintsByKey,
+                agg,
+                externalProjectId,
+                sourceIds: lockedSourceIds,
+              })
+            : null;
+          const finalMonitored = finalResolved?.monitored ?? monitored;
+          const finalDatapointBodyByKey =
+            finalResolved?.datapointBodyByKey ?? datapointBodyByKey;
+
+          const finalDatapointBodies = finalMonitored.map((m) => {
+            const supplierRefId = buildRemovalSupplierRef({
+              removalId,
+              role: "datapoint",
+              version: claim.nextVersion,
+              inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
+            });
+            const draft = finalDatapointBodyByKey.get(
+              `${m.removalTemplateComponentId}::${m.inputKey}`,
+            )!;
+            return {
+              rtcId: m.removalTemplateComponentId,
+              inputKey: m.inputKey,
+              body: { ...draft, supplier_reference_id: supplierRefId },
+            };
+          });
+
+          return {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: removalId,
+            version: claim.nextVersion,
+            payloadSnapshot: {
+              // ADR 0005 / B3 — content hash of INPUT_MAPPING that
+              // produced this payload, surfaced at the top level so an
+              // audit query (`WHERE payload_snapshot->>'__mappingRevision'
+              // = ?`) can correlate a registry-side issue back to a
+              // specific noma mapping revision in git.
+              __mappingRevision: MAPPING_REVISION,
+              semantic: finalSemanticPayload,
+              memberCreditBatchIds,
+              transport: {
+                removalSupplierRef,
+                datapointBodies: finalDatapointBodies,
+              },
+            },
+            payloadHash: finalHash,
+          };
+        },
       );
 
+      // Pull the transport snapshot back from the row we just inserted —
+      // it carries the locked-source-id version of the datapoint bodies
+      // (which may differ from the tentative `datapointBodyByKey` if a
+      // concurrent mirror/unlink shifted the source set during the lock
+      // acquisition).
+      const transport = readRemovalTransport(draftRow);
       return runRemovalSubmission({
         userId,
         removalId,
         row: draftRow,
-        transport: { removalSupplierRef, datapointBodies },
+        transport,
         fixed,
-        template: ctx.defaultTemplate,
+        template: defaultTemplate,
         blueprintsByKey,
         agg,
         externalProjectId,

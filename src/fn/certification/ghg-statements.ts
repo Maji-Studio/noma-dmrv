@@ -570,6 +570,22 @@ export async function refreshGhgStatementStatus(
     if (!submission.externalId) {
       throw new SafeError("GHG statement submission has no remote ID.");
     }
+    // Only mirror remote state onto the latest version of the (provider,
+    // submissionType, localEntityType, localEntityId) row. Superseded rows
+    // stay frozen so the audit trail keeps showing the snapshot from when
+    // they were submitted; refreshing a stale row would silently rewrite
+    // history with whatever the new version's remote state happens to be.
+    const latest = await getLatestSubmission(userId, {
+      provider: submission.provider,
+      submissionType: submission.submissionType,
+      localEntityType: submission.localEntityType,
+      localEntityId: submission.localEntityId,
+    });
+    if (!latest || latest.id !== submission.id) {
+      throw new SafeError(
+        "This GHG statement version has been superseded. Refresh the page to see the latest one.",
+      );
+    }
     const remote = await getGhgStatement(submission.externalId);
     await applyGhgRemoteState(userId, submission, remote);
     await reconcileRemovalMembership(

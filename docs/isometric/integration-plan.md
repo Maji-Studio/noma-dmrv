@@ -4,7 +4,7 @@ This doc is the **forward-looking** plan and status surface. It owns
 roadmap, current architecture contracts, pre-deploy gates, and what
 still has to be built. It does **not** narrate per-PR history — that
 lives in `docs/isometric/changes.md`. Design decisions live in
-`docs/adr/0001`–`0004`; open questions live in
+`docs/adr/0001`–`0005`; open questions live in
 `docs/open-questions.md`.
 
 ## Scope
@@ -58,7 +58,7 @@ requirements can be pulled programmatically.
 | **1** — Facility ↔ project mapping UI | ✅ | `/facilities` side-sheet adds Certify mapping section; N→1 facility/project allowed; production-confirm gate. |
 | **2** — Template/blueprint read surfacing | ✅ | Credit-batch side-sheet Certify accordion with drift detection for stale template IDs and missing blueprint keys. |
 | **3** — Removal submission | ✅ | `submitRemoval` with full idempotency ledger; supplier-ref reconciliation; pre-flight transport coverage check. Lineage via `getApplicationLineage()`. |
-| **3.5** — Sources upload | ⏸ Deferred | Storage prerequisite is in place (`useFileUpload` + `documents` v2). Remaining: wire `certifierDocumentUploads`, plumb `source_ids` into Datapoint payloads, UI hook. Tracked: `isometric/phase-3.5`. |
+| **3.5** — Sources upload | ✅ | Mirrors noma documents to Isometric Sources via server-side proxy (POST `/sources` → fetch from noma storage → PUT to signed URL → INSERT `certifier_document_uploads`). Source IDs ride into every monitored Datapoint's `source_ids` and are part of the semantic hash (mirror/unmirror supersedes the Removal version). Reconciliation covers the orphan paths: `GET /sources?supplier_reference_id=…` → either `POST /sources/{id}/signed_upload_url` 200 (re-PUT) or 409 (already uploaded, insert local row only). SSRF host allowlist, advisory locks around POST+INSERT, transaction + double-check around unlink, sync-event coverage on every outbound failure. **Known compromise (v1):** removal-wide source attribution — every Datapoint receives the same `source_ids`. Per-input refinement deferred to Phase 5 (tracked `isometric/sources-per-input-attribution`). 50 MB cap per source; streaming larger files tracked `isometric/sources-stream-large-files`. |
 | **3.6** — Tailored sandbox template | ✅ | `noma-mvp` Removal Template walkthrough + bootstrap script for fixed constants. Polymorphic transport-leg CRUD on delivery/sample/feedstock. |
 | **3.7** — Real energy data | ✅ | Per-facility emission-estimate config replaces energy zero stubs. `/admin/emission-estimates` + `/energy` summary route. |
 | **3.7-period** — Period emissions | ✅ | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005). noma extends `/admin/emission-estimates` with an LCA-journal section + read-only drift panel on `/certification/`; **noma does not POST** Project Components. The seven `zeroStub: true` families are deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Coverage check + OpenAPI regen gate land in `isometric-health.yml`. |
@@ -370,9 +370,7 @@ exist before adding a parallel surface:
 
 ## Deferred / next phases
 
-- **Phase 3.5 — sources upload.** Storage prerequisite landed; wire
-  `certifierDocumentUploads`, plumb `source_ids` into Datapoint
-  payloads, build the upload UI. Tracked: `isometric/phase-3.5`.
+- ~~**Phase 3.5 — sources upload.**~~ ✅ Shipped (see Phase status row).
 - **Phase 5 — time-series + bulk.** `MonitoringSubmission`,
   `DataUploadSubmission`, `POST /biochar_applications`. Skip until 3/4.5
   has run in production. Also owns the carryover items in

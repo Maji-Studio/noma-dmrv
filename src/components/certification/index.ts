@@ -4,6 +4,7 @@ export {
   UnlinkConfirmDialog,
 } from "./facility-certifier-dialog";
 export { CertifyPanel } from "./certify-panel";
+export { SourcesPanel } from "./sources-panel";
 export { RemovalsHub } from "./removals-hub";
 export { BlueprintList } from "./blueprint-list";
 export { SubmissionStatusBadge } from "./submission-status-badge";

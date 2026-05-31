@@ -5,10 +5,12 @@
  * the parent (app) layout. This boundary exists so future per-provider
  * guards (Verra / Gold Standard / CSI) have a place to live.
  */
+import type { ReactNode } from "react";
+
 export default function CertificationLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return <>{children}</>;
 }

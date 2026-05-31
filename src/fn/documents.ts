@@ -20,6 +20,7 @@ import {
   updateDocument,
   type DocumentRow,
 } from "@/data-access/documents";
+import { getDocumentUploadByDocument } from "@/data-access/certifier-document-uploads";
 import type { ActionResult } from "@/types/actions";
 
 export interface RequestUploadResult {
@@ -185,6 +186,23 @@ export async function deleteDocument(
 
   const row = await getDocumentById(user.id, parsed.data.documentId);
   if (!row) return failure("Document not found");
+
+  // Reject deletion when the document is mirrored as an Isometric Source.
+  // The certifier_document_uploads FK is ON DELETE NO ACTION, so a raw
+  // deletion would fail with a Postgres 23503 AFTER we'd already deleted
+  // the storage object (out-of-sync). Pre-check both providers we know
+  // about — currently only `isometric`, but the explicit check documents
+  // the invariant.
+  const isometricMirror = await getDocumentUploadByDocument(
+    user.id,
+    "isometric",
+    row.id,
+  );
+  if (isometricMirror) {
+    return failure(
+      "This document is mirrored to Isometric as a Source. Unlink it from the Removal's Sources panel before deleting.",
+    );
+  }
 
   if (row.storageKey) {
     const provider = getStorageProvider();
