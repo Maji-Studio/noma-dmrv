@@ -3,15 +3,17 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import {
+  appendSubmissionJournal,
   appendSyncEvent,
   getLatestSubmission,
-  insertDraftSubmission,
+  insertDraftSubmissionWithMappingLock,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraft,
+  resetSubmissionToDraftWithMappingLock,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
+  type MappingClaimGuard,
 } from "@/data-access/certification";
 import {
   ensureSensorForReactor,
@@ -30,6 +32,10 @@ import {
   type DataUploadResumeSnapshot,
 } from "@/lib/isometric/utils/submission-claim";
 import { decodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
+import {
+  assertUploadHostAllowed,
+  fetchSignedUploadWithTimeout,
+} from "@/lib/isometric/utils/signed-upload";
 import {
   aggregateForDataUpload,
   DEFAULT_BUCKET_SECONDS,
@@ -97,6 +103,18 @@ export async function submitTelemetry(
     throw new SafeError("This removal has no production runs to publish.");
   }
 
+  // Mirrors submitRemoval / GHG-statement: every draft insert and stale-draft
+  // resume runs under the mapping lock so a concurrent repoint/unlink cannot
+  // orphan this submission's remote facility, and two callers cannot both
+  // resume the same expired draft and double-POST. Telemetry pins
+  // externalProjectId (the data-upload depends on the facility's mapping); it
+  // has no removal-template dependency, so that guard field stays undefined.
+  const mappingGuard: MappingClaimGuard = {
+    facilityId: ctx.facilityId,
+    provider: ISOMETRIC_PROVIDER,
+    expectedExternalProjectId: ctx.mapping.externalProjectId,
+  };
+
   // ADR 0006 - pure clock window on production_run_readings.timestamp;
   // derived from the runs the removal aggregates.
   const windowStart = minDate(ctx.runs.map((r) => r.startTime));
@@ -144,7 +162,30 @@ export async function submitTelemetry(
     );
   }
 
-  // ADR 0006 - hash covers source-data inputs, not Parquet bytes.
+  // ADR 0006 §2 - hash covers source-data inputs, not Parquet bytes. The
+  // digest fingerprints every reading's identity AND values (run, reactor,
+  // timestamp, channel readings), so editing a reading in place — same runs,
+  // same window, same bucket count — still flips the hash and supersedes the
+  // prior submission. Hashing only run ids/counts (the previous bug) left
+  // in-place value edits invisible, returning a stale submission. Pre-digested
+  // to one hex string so the snapshot stays lean regardless of reading count.
+  const sourceReadingsDigest = payloadHash(
+    readings
+      .map((r) => ({
+        runId: r.productionRunId,
+        reactorId: r.reactorId,
+        t: r.timestamp.toISOString(),
+        tempC: r.temperatureC,
+        pBar: r.pressureBar,
+        gas: r.gasFlowRate,
+      }))
+      .sort(
+        (a, b) =>
+          a.runId.localeCompare(b.runId) ||
+          a.t.localeCompare(b.t) ||
+          a.reactorId.localeCompare(b.reactorId),
+      ),
+  );
   const semanticPayload = {
     facilityId: ctx.facilityId,
     externalFacilityId,
@@ -161,7 +202,10 @@ export async function submitTelemetry(
         sensorReference: row.sensorReference,
       }))
       .sort((a, b) => a.sensorReference.localeCompare(b.sensorReference)),
-    sourceReadingIds: readings.map((r) => r.productionRunId).sort(),
+    // Distinct run ids kept for human-auditable snapshots; the digest below
+    // is what actually guards reading-level content changes.
+    sourceProductionRunIds: unique(readings.map((r) => r.productionRunId)).sort(),
+    sourceReadingsDigest,
     aggregatedRowCount: aggregated.length,
   };
   const semanticHash = payloadHash(semanticPayload);
@@ -231,7 +275,12 @@ export async function submitTelemetry(
       };
     }
     case "resume-re-put": {
-      const row = await resetSubmissionToDraft(userId, claim.resumeRowId);
+      const row = await resetSubmissionToDraftWithMappingLock(
+        userId,
+        claim.resumeRowId,
+        mappingGuard,
+        LOCK_TTL_MS,
+      );
       const parquetBytes = writeDataUploadParquet(aggregated);
       await putParquetToSignedUrl({
         uploadUrl: requireUploadUrl(row),
@@ -267,19 +316,28 @@ export async function submitTelemetry(
     case "create-new-version": {
       const row =
         claim.kind === "resume"
-          ? await resetSubmissionToDraft(userId, claim.resumeRowId)
-          : await insertDraftSubmission(userId, {
-              provider: ISOMETRIC_PROVIDER,
-              submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
-              localEntityType: DATA_UPLOAD_ENTITY_TYPE,
-              localEntityId: args.removalId,
-              version: claim.nextVersion,
-              payloadSnapshot: {
-                semantic: semanticPayload,
-                parquetSchemaVersion: PARQUET_SCHEMA_VERSION,
+          ? await resetSubmissionToDraftWithMappingLock(
+              userId,
+              claim.resumeRowId,
+              mappingGuard,
+              LOCK_TTL_MS,
+            )
+          : await insertDraftSubmissionWithMappingLock(
+              userId,
+              {
+                provider: ISOMETRIC_PROVIDER,
+                submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
+                localEntityType: DATA_UPLOAD_ENTITY_TYPE,
+                localEntityId: args.removalId,
+                version: claim.nextVersion,
+                payloadSnapshot: {
+                  semantic: semanticPayload,
+                  parquetSchemaVersion: PARQUET_SCHEMA_VERSION,
+                },
+                payloadHash: semanticHash,
               },
-              payloadHash: semanticHash,
-            });
+              mappingGuard,
+            );
 
       try {
         const parquetBytes = writeDataUploadParquet(aggregated);
@@ -393,14 +451,18 @@ function readResumeSnapshot(
   };
 }
 
+// Persists per-step recovery IDs to `payloadSnapshot.journaled` — the exact
+// location `readResumeSnapshot` reads on the next attempt (ADR 0006 §3). Must
+// NOT write to `metadata`: that column is invisible to the resume reader, so a
+// crash between the remote POST and local finalization would lose the journaled
+// id and mint a duplicate. `appendSubmissionJournal` deep-merges, so each step
+// adds its keys without clobbering earlier ones.
 async function journalStep(
   userId: string,
   submissionId: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  await updateSubmissionMetadata(userId, submissionId, {
-    journaled: patch,
-  });
+  await appendSubmissionJournal(userId, submissionId, patch);
 }
 
 async function refreshStatus(
@@ -433,14 +495,20 @@ async function putParquetToSignedUrl(args: {
   uploadUrl: string;
   bytes: Uint8Array;
 }): Promise<void> {
+  // SSRF guard: Isometric returns a GCS-presigned URL; constrain the host,
+  // refuse non-HTTPS/redirects, and bound the request so a rerouted or hung
+  // upload can't exfiltrate bytes or pin the Fluid Compute instance. Same
+  // policy the Sources mirror uses (shared in signed-upload.ts).
+  assertUploadHostAllowed(args.uploadUrl);
   // The runtime accepts Uint8Array; lib.dom's `BodyInit` (TS ES2017) does
   // not enumerate it. Wrap in a Blob — the smallest cross-version
   // canonical form that satisfies BodyInit.
   const body = new Blob([args.bytes as BlobPart], {
     type: DATA_UPLOAD_PARQUET_CONTENT_TYPE,
   });
-  const res = await fetch(args.uploadUrl, {
+  const res = await fetchSignedUploadWithTimeout(args.uploadUrl, {
     method: "PUT",
+    redirect: "error",
     headers: {
       "content-type": DATA_UPLOAD_PARQUET_CONTENT_TYPE,
       "content-length": String(args.bytes.byteLength),
