@@ -477,9 +477,18 @@ async function insertDraftSubmissionRow(
   return row;
 }
 
-// Maps the Postgres unique-violation (23505) on (provider, submissionType,
-// localEntityType, localEntityId, version) into a SafeError. Centralized so
-// every public submit entry point reports the same user-facing message.
+// The (provider, submissionType, localEntityType, localEntityId, version)
+// unique constraint — a 23505 on THIS index means a concurrent submit already
+// claimed the same version. The table carries a second unique index
+// (`cert_submissions_external_unique`); a violation there is a different bug
+// and must not be relabeled as "already in progress".
+const SUBMISSION_ENTITY_VERSION_CONSTRAINT =
+  "cert_submissions_entity_version_unique";
+
+// Maps the Postgres unique-violation (23505) on the entity-version constraint
+// into a SafeError. Centralized so every public submit entry point reports the
+// same user-facing message. Any other 23505 (or non-23505 error) propagates
+// unchanged so genuinely different failures aren't masked.
 async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -488,7 +497,9 @@ async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
       typeof err === "object" &&
       err !== null &&
       "code" in err &&
-      (err as { code?: string }).code === "23505"
+      (err as { code?: string }).code === "23505" &&
+      (err as { constraint?: string }).constraint ===
+        SUBMISSION_ENTITY_VERSION_CONSTRAINT
     ) {
       throw new SafeError("Submission already in progress");
     }

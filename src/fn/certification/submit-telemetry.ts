@@ -32,6 +32,7 @@ import {
 import { decodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import {
   aggregateForDataUpload,
+  DEFAULT_BUCKET_SECONDS,
   DEFAULT_DATA_UPLOAD_CHANNELS,
 } from "@/lib/isometric/transformers/data-upload";
 import {
@@ -149,7 +150,10 @@ export async function submitTelemetry(
     externalFacilityId,
     windowStart: windowStart.toISOString(),
     windowEnd: windowEnd.toISOString(),
-    bucketSeconds: 60,
+    // Must track the aggregator's bucketing (called above without an explicit
+    // bucketSeconds, so it uses this default). A literal here would silently
+    // drift from the actual aggregation if the default ever changes.
+    bucketSeconds: DEFAULT_BUCKET_SECONDS,
     sensorRefs: sensorRows
       .map((row) => ({
         reactorId: row.reactorId,
