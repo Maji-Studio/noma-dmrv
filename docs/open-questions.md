@@ -162,16 +162,12 @@ double-create dedup, the N+1 query batching and the non-atomic
 `finalizeGhgStatement` were fixed in the same branch; the entries below
 were deferred by the operator to a follow-up PR.
 
-- **Shared-component a11y gaps** (`forms/a11y-shared-layer`) — opened
-  2026-05-22, partially resolved 2026-06-02 (commit `33920f5`).
-  - **Resolved:** `FormField` / `FormError` (`src/components/forms/`) now wire
-    `aria-describedby` from input to error/helper text; `Modal` warns in dev
-    when rendered without an accessible name.
-  - **Still open:** `useDialog` (`src/hooks/use-dialog.ts`) does not restore
-    focus to the trigger on close. The gap is in the shared layer, so a fix
-    touches every dialog in the app.
-  - Resolve via: a focus-restore pass on `useDialog` with a regression check
-    across existing consumers.
+  (Resolved & removed 2026-06-02 — `forms/a11y-shared-layer`: `FormField` /
+  `FormError` wire `aria-describedby` and `Modal` dev-warns on a missing
+  accessible name (commit `33920f5`); `useDialog` now captures the trigger on
+  open and restores focus to it on close (`src/hooks/use-dialog.ts`).
+  Regression check on focus-restore deferred to an e2e assertion — the e2e
+  tree was under concurrent edit at the time.)
 
   (Resolved & removed 2026-06-02 — see `docs/isometric/changes.md`:
   `certification/error-boundary` shipped as `(app)/certification/error.tsx`;
