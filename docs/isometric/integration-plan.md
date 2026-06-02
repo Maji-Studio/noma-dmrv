@@ -64,7 +64,7 @@ requirements can be pulled programmatically.
 | **3.7-period** — Period emissions | ✅ | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005). noma extends `/admin/emission-estimates` with an LCA-journal section + read-only drift panel on `/certification/`; **noma does not POST** Project Components. The seven `zeroStub: true` families are deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Coverage check + OpenAPI regen gate land in `isometric-health.yml`. |
 | **4** — GHG statement lifecycle | ❎ Superseded | Original two-phase `submitCreditBatch` removed by ADR 0003; lifecycle utilities retained and re-used by Phase 4.5. |
 | **4.5** — Multi-removal GHG Statements | ✅ | Provider-neutral `/certification/` route group (hub + Removals + GHG Statements). Period-first stepper. Membership reconciliation never steals. Unlink/repoint guard widened. |
-| **5** — Time-series + bulk | ⏭ Not started | `MonitoringSubmission`, `DataUploadSubmission`, `POST /biochar_applications`. Includes the webhook receiver once Isometric publishes a contract. |
+| **5** — Time-series + bulk | 🟢 Slice A shipped (2026-05-29 scoped → built), B + C deferred | **Slice A** — `DataUploadSubmission` of `biochar_pyrolysis_reactor_facility_time_series` (Parquet bulk upload of **60-second clock-aligned** aggregations of `production_run_readings`, one file per facility per Removal-window — hard cap surfaced by sandbox smoke 2026-05-29 with `AggregationPeriodDurationInvalidError: ... exceeds maximum allowed of 60 seconds`). New `certifier_sensors` table maps `(reactor × measurement_property) → externalSensorId + sensorReference`. New `certifier_projects.externalFacilityId` column (operator-pasted from Certify UI; no `POST /facilities` exists). Manual "Submit Telemetry" button on the Removal page; status badge surfaces the latest `GET /data-upload-submissions/{id}` poll. Idempotency uses journaled-step IDs in `payloadSnapshot` (no supplier-reference reconciliation path — see [ADR 0006](../adr/0006-data-upload-submission-idempotency.md)). Parquet writer locked to **`hyparquet-writer`** (validated end-to-end against sandbox 2026-05-29; explicit `SchemaElement[]` with `logical_type: { type: 'TIMESTAMP', isAdjustedToUTC: true, unit: 'NANOS' }` for the four timestamp columns; INT64 bigint values written directly without Date conversion). **Slice B** (`POST /biochar_applications`) and **Slice C** (`MonitoringSubmission`) tracked under `docs/open-questions.md`. Webhook receiver still pending Isometric publishing a contract. |
 | **6** — Protocol/SOP surfacing | ⏭ Deferred | Resolved as outbound links to `registry.isometric.com` / `docs.isometric.com`. Reopen only if operators report tab-switching friction. |
 
 ## Pre-deploy gates
@@ -226,6 +226,8 @@ ISOMETRIC_ENVIRONMENT:   z.enum(['sandbox', 'production']).optional()
 | 0025 | `lyrical_silver_sable` | 4.5 | unique | `certifier_ghg_statements_facility_period_unique(provider,facility_id,reporting_period_end_on)` |
 | 0026 | `spicy_nextwave` | 4.5 | index + check | `certifier_removals(facility_id)`, `credit_batches(removal_id)`, removal date chronology |
 | 0027 | `fluffy_chamber` | 3.7-period | additive | `certifier_project_emissions` table + `project_emission_category` pgEnum (ADR 0005) |
+| 0028 | `demonic_harpoon` | docs upload onDelete | constraint change | `certifier_project_emissions.source_document_id` FK `ON DELETE SET NULL` (no schema-shape change) |
+| 0029 | `heavy_umar` | 5 (Slice A) | additive | `certifier_sensors` table + `certifier_projects.external_facility_id` column (ADR 0006); no destructive ops |
 
 ## Operational health
 
@@ -371,12 +373,15 @@ exist before adding a parallel surface:
 ## Deferred / next phases
 
 - ~~**Phase 3.5 — sources upload.**~~ ✅ Shipped (see Phase status row).
-- **Phase 5 — time-series + bulk.** `MonitoringSubmission`,
-  `DataUploadSubmission`, `POST /biochar_applications`. Skip until 3/4.5
-  has run in production. Also owns the carryover items in
-  `docs/open-questions.md` (webhook receiver once Isometric publishes
-  a contract, external GHG amendment claiming, hash-changed
-  partial-orphan cleanup).
+- **Phase 5 Slice A — biochar reactor time-series via Parquet** (scoped
+  2026-05-29). DataUploadSubmission of
+  `biochar_pyrolysis_reactor_facility_time_series`. Design locked; see
+  Phase 5 row above and [ADR 0006](../adr/0006-data-upload-submission-idempotency.md).
+  Slices B (biochar_applications) and C (MonitoringSubmission) remain
+  open in `docs/open-questions.md`. The webhook receiver is still
+  pending Isometric publishing a contract. Carryover items in
+  `docs/open-questions.md` continue to belong to Phase 5 broadly:
+  external GHG amendment claiming, hash-changed partial-orphan cleanup.
 - **Phase 6 — protocol/SOP surfacing.** Resolved as outbound links to
   authoritative pages; revisit only if operators report tab-switching
   friction.

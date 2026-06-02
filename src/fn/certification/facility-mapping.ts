@@ -115,6 +115,7 @@ export async function saveFacilityCertifierMapping(
       protocolSlug: parsed.protocolSlug,
       protocolVersion: parsed.protocolVersion ?? null,
       defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
+      externalFacilityId: parsed.externalFacilityId ?? null,
     });
   });
 }

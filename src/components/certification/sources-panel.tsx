@@ -13,7 +13,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowsClockwise,
   CheckCircle,
@@ -167,12 +167,10 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
     unlinkMutation.isPending ||
     visibilityMutation.isPending;
 
-  const description = useMemo(() => {
-    const parts: string[] = [];
-    parts.push(document.documentType.replace(/_/g, " "));
-    parts.push(lineageEntity.entityLabel);
-    return parts.join(" · ");
-  }, [document.documentType, lineageEntity.entityLabel]);
+  const description = [
+    document.documentType.replace(/_/g, " "),
+    lineageEntity.entityLabel,
+  ].join(" · ");
 
   const handleMirror = () => {
     mirrorMutation.mutate(
