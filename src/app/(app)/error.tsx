@@ -20,7 +20,9 @@ export default function AppErrorBoundary({
     // console is the only sink (see audit finding H9 — structured logger
     // is a separate follow-up). Log the digest so server-side traces can
     // be correlated by Vercel.
-    console.error("[app/error-boundary]", { digest: error.digest, message: error.message });
+    // Avoid logging error.message — it may carry PII (operator emails,
+    // form values) per CLAUDE.md. digest + name are safe correlators.
+    console.error("[app/error-boundary]", { digest: error.digest, name: error.name });
   }, [error]);
 
   return (

@@ -32,9 +32,22 @@ export const projectEmissionAllocationStrategies = [
 export type ProjectEmissionAllocationStrategy =
   (typeof projectEmissionAllocationStrategies)[number];
 
+// Rejects shapes that pass the regex but are not real calendar dates
+// (e.g. 2026-02-31). The Date round-trip ensures month/day in range and
+// catches non-leap Feb-29 — otherwise superRefine could compare two
+// "valid-looking" strings that don't denote actual days.
 const dateString = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+  .refine((s) => {
+    const [y, m, d] = s.split("-").map(Number) as [number, number, number];
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() === m - 1 &&
+      dt.getUTCDate() === d
+    );
+  }, "Not a valid calendar date");
 
 function requiredNumber(label: string) {
   return z.preprocess(
