@@ -18,7 +18,7 @@ import {
   projectEmissionCategory,
   syncStatus,
 } from './common';
-import { facilities } from './facilities';
+import { facilities, reactors } from './facilities';
 import { documents } from './documentation';
 import { users } from './auth';
 
@@ -51,6 +51,13 @@ export const certifierProjects = pgTable(
     stageSplitBiocharPct: real('stage_split_biochar_pct'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
+    // Phase 5 Slice A — operator-pasted Isometric facility ID
+    // (e.g. `fcl_…`). Isometric exposes no `POST /facilities`, so the
+    // operator creates the facility in the Certify UI and pastes the ID
+    // here. Required before telemetry submission can run; null disables
+    // the "Submit Telemetry" button. See ADR 0006 + integration-plan
+    // Phase 5 row.
+    externalFacilityId: text('external_facility_id'),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -63,6 +70,47 @@ export const certifierProjects = pgTable(
     unique('certifier_projects_facility_provider_unique').on(
       table.facilityId,
       table.provider
+    ),
+  ]
+);
+
+// Phase 5 Slice A — maps a noma reactor + measurement property to the
+// Isometric Sensor that receives its telemetry. One row per
+// `(reactor, measurement_property)` — a single reactor publishes one
+// sensor per quantity (temperature, pressure, …). `externalSensorId` is
+// the `sns_…` returned by `POST /sensors`; `sensorReference` is the
+// stable, noma-controlled reference used by `GET /sensors?reference=…`
+// reconciliation when the persistence write lost a race against a sandbox
+// reset. `measurementProperty` is a deterministic encoding of the
+// Isometric `MeasurementProperty` object: `<quantity_kind>` when
+// `qualifier` is null, otherwise `<quantity_kind>|<qualifier>`. Encoding
+// it as a single text column lets the unique constraint cover the
+// "qualifier null" case (Postgres unique permits multiple NULLs in a
+// nullable column, so a (kind, qualifier) shape would silently allow
+// duplicates for the common temperature/pressure pair).
+export const certifierSensors = pgTable(
+  'certifier_sensors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    provider: certifierProvider('provider').notNull().default('isometric'),
+    reactorId: uuid('reactor_id')
+      .notNull()
+      .references(() => reactors.id),
+    measurementProperty: text('measurement_property').notNull(),
+    externalSensorId: text('external_sensor_id').notNull(),
+    sensorReference: text('sensor_reference').notNull(),
+    units: text('units').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('certifier_sensors_reactor_property_unique').on(
+      table.reactorId,
+      table.measurementProperty
+    ),
+    unique('certifier_sensors_provider_reference_unique').on(
+      table.provider,
+      table.sensorReference
     ),
   ]
 );

@@ -48,6 +48,7 @@ export function FacilityCertifierDialog({
     protocolSlug: mapping?.protocolSlug ?? "biochar",
     protocolVersion: mapping?.protocolVersion ?? "",
     defaultRemovalTemplateId: mapping?.defaultRemovalTemplateId ?? "",
+    externalFacilityId: mapping?.externalFacilityId ?? "",
     confirmProduction: false,
   };
 
@@ -205,6 +206,20 @@ export function FacilityCertifierDialog({
             error={!!errors.protocolVersion}
             placeholder="1.2"
             {...register("protocolVersion")}
+          />
+        </FormField>
+
+        <FormField
+          id="externalFacilityId"
+          label="Isometric facility ID"
+          error={errors.externalFacilityId?.message}
+          helperText="Required for the telemetry pipeline only. Create the facility in the Certify UI (Isometric exposes no POST /facilities), then paste the fcl_… id here."
+        >
+          <FormInput
+            id="externalFacilityId"
+            error={!!errors.externalFacilityId}
+            placeholder="fcl_1K9YJQNA7SBXAG15"
+            {...register("externalFacilityId")}
           />
         </FormField>
 

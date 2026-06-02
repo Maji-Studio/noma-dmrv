@@ -175,6 +175,17 @@ export function FacilityCertifierSection({
                 {new Date(mapping.createdAt).toLocaleDateString()}
               </span>
             </Field>
+            <Field label="Isometric facility (telemetry)">
+              {mapping.externalFacilityId ? (
+                <span className="body-small font-mono">
+                  {mapping.externalFacilityId}
+                </span>
+              ) : (
+                <span className="body-small text-[var(--color-text-tertiary)]">
+                  Not set — telemetry submission disabled
+                </span>
+              )}
+            </Field>
           </dl>
         )}
 
