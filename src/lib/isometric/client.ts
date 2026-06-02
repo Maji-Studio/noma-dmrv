@@ -1,5 +1,11 @@
 import { env } from "@/config/env";
+import { logger } from "@/lib/log";
 import type { components } from "./generated/certify";
+
+// Boundary logger for the Isometric API. Logs method/path/status/attempt/
+// duration_ms only — never headers, body, or credentials (the X-Client-Secret /
+// Authorization headers must not reach a log line).
+const log = logger.child({ mod: "isometric" });
 
 export class IsometricApiError extends Error {
   constructor(
@@ -139,6 +145,7 @@ export async function isometricRequest<T = unknown>(
     headers["Content-Type"] = "application/json";
   }
 
+  const startedAt = Date.now();
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (options.signal?.aborted) {
       throw options.signal.reason ?? new Error("Isometric request aborted");
@@ -167,6 +174,10 @@ export async function isometricRequest<T = unknown>(
       const canRetry =
         isIdempotentMethod(method) || options.allowUnsafeRetries === true;
       if (!canRetry || attempt === MAX_ATTEMPTS) {
+        log.error(
+          { method, path, attempt, code: "network", duration_ms: Date.now() - startedAt },
+          "isometric request failed (network)"
+        );
         throw new IsometricApiError(
           `Isometric ${method} ${path}: ${(err as Error).message ?? "network error"}`,
           undefined,
@@ -174,6 +185,7 @@ export async function isometricRequest<T = unknown>(
           "network"
         );
       }
+      log.warn({ method, path, attempt, code: "network" }, "isometric request retrying");
       await sleep(jitterDelayMs(attempt), options.signal);
       continue;
     }
@@ -181,6 +193,10 @@ export async function isometricRequest<T = unknown>(
     options.signal?.removeEventListener("abort", onExternalAbort);
 
     if (response.ok) {
+      log.debug(
+        { method, path, status: response.status, attempt, duration_ms: Date.now() - startedAt },
+        "isometric request ok"
+      );
       if (response.status === 204) return undefined as T;
       const text = await response.text();
       if (!text) return undefined as T;
@@ -220,10 +236,18 @@ export async function isometricRequest<T = unknown>(
         retryAfterRaw !== undefined
           ? Math.min(retryAfterRaw, MAX_RETRY_WAIT_MS)
           : undefined;
+      log.warn(
+        { method, path, status: response.status, attempt },
+        "isometric request retrying"
+      );
       await sleep(retryAfter ?? jitterDelayMs(attempt), options.signal);
       continue;
     }
 
+    log.error(
+      { method, path, status: response.status, attempt, code: "http", duration_ms: Date.now() - startedAt },
+      "isometric request failed (http)"
+    );
     throw new IsometricApiError(
       `Isometric ${method} ${path} → ${response.status}`,
       response.status,
@@ -233,6 +257,10 @@ export async function isometricRequest<T = unknown>(
   }
 
   // Unreachable: the loop always returns or throws.
+  log.error(
+    { method, path, attempt: MAX_ATTEMPTS, code: "network", duration_ms: Date.now() - startedAt },
+    "isometric request exhausted retries"
+  );
   throw new IsometricApiError(
     `Isometric ${method} ${path}: exhausted retries`,
     undefined,

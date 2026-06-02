@@ -31,7 +31,11 @@ const envSchema = z.object({
     .default("false")
     .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
+  // Logging level (pino). Optional; the logger defaults to "info" in
+  // production and "debug" otherwise when this is unset.
+  LOG_LEVEL: z
+    .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
+    .optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
