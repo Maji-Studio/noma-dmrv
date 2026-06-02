@@ -72,14 +72,13 @@ export function FacilityCertifierDialog({
   const { data: liveTemplates, isLoading: templatesLoading } =
     useIsometricProjectTemplates(watchedProjectId || null);
 
-  // When the project changes, clear the template (a stale template ID would
-  // belong to the previous project and fail server-side validation).
+  // When the project changes, clear project-scoped registry identifiers.
+  // A stale template or facility id from the previous Isometric project would
+  // fail validation or send telemetry to the wrong facility.
   useEffect(() => {
-    if (
-      watchedProjectId &&
-      mapping?.externalProjectId !== watchedProjectId
-    ) {
+    if (!watchedProjectId || mapping?.externalProjectId !== watchedProjectId) {
       setValue("defaultRemovalTemplateId", "");
+      setValue("externalFacilityId", "");
     }
   }, [watchedProjectId, mapping?.externalProjectId, setValue]);
 

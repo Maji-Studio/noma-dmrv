@@ -494,6 +494,32 @@ describe("decideSubmissionClaim", () => {
       });
     });
 
+    it("abandons journaled work and starts a new version when the source hash changed", () => {
+      // A fileUpload + fresh URL are journaled, but the readings changed since
+      // (payloadHash differs from the draft's). Reusing the orphaned upload
+      // would PUT new bytes to a URL presigned for the old length, so the
+      // claim must restart instead of resume-re-put.
+      const fresh = new Date(NOW + UPLOAD_URL_SAFETY_MS + 60_000);
+      expect(
+        decideSubmissionClaim({
+          latest: staleDraft(),
+          payloadHash: OTHER_HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+          dataUploadResume: snapshot({
+            fileUploadId: "tfu_stale",
+            uploadUrlExpiresAt: fresh,
+          }),
+        }),
+      ).toEqual({
+        kind: "create-new-version",
+        nextVersion: 3,
+        supersedePreviousId: null,
+        reason: "dataupload-orphan-restart",
+      });
+    });
+
     it("falls through to plain resume when nothing has been journaled", () => {
       expect(
         decideSubmissionClaim({
