@@ -17,6 +17,7 @@ const PUBLIC_ROUTES = [
   "/verify-email",
   "/unauthorized",
   "/api/auth",
+  "/api/storage-local",
 ];
 
 const AUTH_ROUTES = ["/login", "/forgot-password"];

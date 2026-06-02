@@ -1,5 +1,243 @@
 # Isometric Docs Change Log
 
+## 2026-05-29 (Phase 5 Slice A shipped — telemetry pipeline end-to-end)
+
+Builds on the same-day scoping entry below. Implements the design ADR 0006
+locked, with no behaviour change to existing flows.
+
+- **Migration 0029 `heavy_umar`** — additive. New `certifier_sensors`
+  table (`reactor_id` FK, `measurement_property` text, `external_sensor_id`,
+  `sensor_reference`, `units`) with `unique (reactor_id, measurement_property)`
+  and `unique (provider, sensor_reference)`. `measurement_property` is the
+  pipe-encoded `MeasurementProperty` (`<kind>` or `<kind>|<qualifier>`) so
+  the unique constraint correctly dedups the null-qualifier case Postgres
+  unique permits multiple of. New `certifier_projects.external_facility_id`
+  text column — operator pastes the `fcl_…` from the Certify UI before
+  submitting telemetry (Isometric exposes no `POST /facilities`).
+  - **Note on numbering:** the integration-plan stub said "0028 pending";
+    by the time this shipped, an unrelated FK-on-delete migration had
+    already taken 0028 (`demonic_harpoon`), so the Slice A migration is
+    0029. Ledger updated.
+- **`src/lib/isometric/transformers/data-upload.ts`** — pure aggregator.
+  Buckets `production_run_readings` rows into clock-aligned 60-second
+  windows per `(reactor × channel)`; computes min, max, mean, median,
+  count, population stddev, first_ts, last_ts per bucket; drops buckets
+  with `count = 0`; sorts deterministically by `(start, sensorRef)` so
+  the downstream Parquet bytes are stable. Slice A channels: temperature
+  + pressure (matches the smoke probe).
+- **`src/lib/isometric/parquet/writer.ts`** — thin `hyparquet-writer`
+  wrapper that builds an explicit `SchemaElement[]` with `INT64 +
+  logical_type TIMESTAMP NANOS` on the four timestamp columns. Column
+  order + tags match `scripts/probe-parquet-smoke.mts` exactly (the
+  contract validated against the sandbox on 2026-05-29). `bigint` values
+  are constructed via `BigInt(…)` instead of the `1_000_000n` literal so
+  the project's ES2017 `target` does not reject the file.
+- **`src/lib/isometric/sensors.ts`** — typed `POST /sensors`,
+  `GET /sensors/{id}`, `findSensorByReference` (claims an orphan remote
+  sensor on a sandbox-reset path). Includes a stable
+  `buildSensorReference` (`nm-snr-<reactor-short-hash>-<property-slug>`)
+  so reconciliation is deterministic.
+- **`src/data-access/certifier-sensors.ts`** — `ensureSensorForReactor`
+  reconciles by sensor reference before POSTing, so a partial run that
+  lost the local row does not mint a duplicate Isometric sensor; uses
+  `onConflictDoUpdate` against the unique constraint to absorb a
+  concurrent race winner's external ids.
+- **`src/lib/isometric/utils/submission-claim.ts`** — extended with the
+  `dataUploadResume` branch per ADR 0006 §4. New claim kinds
+  (`resume-poll-existing` / `resume-re-put`) and a
+  `dataupload-orphan-restart` `create-new-version` reason. Picks the
+  right step-specific recovery action from the journaled
+  `payloadSnapshot.journaled` state on a stale lock; falls through to
+  the existing `resume` kind when nothing has been journaled. Test
+  matrix extended from 18 → 24 cases covering every new branch + a
+  sub-threshold URL-freshness case (race-safe expiry handling).
+- **`src/fn/certification/submit-telemetry.ts`** —
+  `withAction`-wrapped server action. Loads the removal context, ensures
+  a sensor per `(reactor × channel)`, pulls readings clipped to the
+  derived clock window, aggregates, builds Parquet, then runs the three
+  POSTs (`/file-uploads` → `PUT signed_upload_url` →
+  `/data-upload-submissions`) inline with `journalStep` after each step
+  so the journaled state is current for any resume. Hash covers
+  source-data inputs (sensorRefs, sourceReadingIds, window), not Parquet
+  bytes — ADR 0006 §2 rationale. Single ledger row per
+  `(removal, submissionType='dataUpload')`. Surfaces a `SafeError` when
+  `certifier_projects.external_facility_id` is empty.
+- **`src/components/certification/telemetry-panel.tsx`** + the
+  `useTelemetrySubmissionState` / `useSubmitTelemetry` hooks. Mounted on
+  `/certification/removals/[removalId]` below the existing SourcesPanel.
+  Submit button + status badge (maps remote `pending|completed|failed`
+  to verified/running/rejected) + an Isometric-error display.
+- **Integration test** — `tests/isometric-sandbox.integration.test.ts`
+  gains a write-path case that exercises the byte path through the real
+  `lib/isometric` + `transformers/data-upload` + `parquet/writer`
+  modules end-to-end against sandbox. Gated by `ISOMETRIC_DEMO_FACILITY_ID`
+  in addition to the existing `RUN_ISOMETRIC_SANDBOX_TESTS=1` gate, so
+  CI without facility credentials skips cleanly.
+- **`scripts/probe-*`** kept as reference (the parquet-smoke pattern is
+  the implementation blueprint); tsconfig now excludes
+  `scripts/probe-*` so the throwaway `.mts` extension import does not
+  break `tsc`.
+- **Typecheck + tests green** — 300 unit tests passing (24 from the
+  extended submission-claim matrix); typecheck clean; lint clean of new
+  errors (36 pre-existing warnings unchanged).
+
+## 2026-05-29 (Phase 5 Slice A scoped — biochar reactor time-series)
+
+Design-only update. No code changes; no schema migration; the noma
+codebase is unchanged outside throwaway sandbox probes under
+`scripts/probe-*`. The 2026-05-28 grilling session resolved every
+design fork for the Parquet-bulk upload slice of Phase 5; this entry
+records the conclusions so the integration plan reads as a buildable
+spec.
+
+- **Phase 5 row rewritten** (`integration-plan.md` §Phase status) — was
+  "Not started"; now **Slice A scoped**, Slices B (`POST
+  /biochar_applications`) and C (`MonitoringSubmission`) deferred to
+  `open-questions.md`.
+- **[ADR 0006](../adr/0006-data-upload-submission-idempotency.md) —
+  DataUploadSubmission idempotency uses journaled-step IDs.** The
+  `CreateDataUploadSubmissionRequest` schema has no
+  `supplier_reference_id` field, breaking the reconciliation pattern
+  every other outbound POST in the integration uses. The decision:
+  carry `{ fileUploadId, uploadUrl, uploadUrlExpiresAt,
+  dataUploadSubmissionId, parquetBytesSha256 }` in
+  `certificationSubmissions.payloadSnapshot` step-by-step within a
+  single short-lived server action, and reconcile by stored Isometric
+  IDs on a stale lock. Orphan FileUpload records (POST sent, response
+  lost) are tolerated — verifier-invisible.
+- **Migration 0028 stubbed** — additive: `certifier_sensors` table +
+  `certifier_projects.external_facility_id` column. No destructive
+  ops, no constraint drops.
+- **Per-facility bootstrap step added** — operator must create the
+  biochar facility in Certify UI (no `POST /facilities` endpoint
+  exposed) and paste the resulting `fac_…` ID into noma. Same pattern
+  as `externalProjectId` today. Until pasted, the "Submit Telemetry"
+  button stays disabled on the Removal page.
+- **Parquet writer choice: `hyparquet-writer`** (most recently
+  maintained pure-JS option, last published 2026-05-25), with the
+  `INT64 + TIMESTAMP_NANOS` logical-type override to match Isometric's
+  `timestamp[ns]` spec. De-risk step: write 10 rows + post to sandbox
+  end-to-end before any schema migration; fall back to `parquet-wasm`
+  only if nanos override fails to clear sandbox ingest.
+- **Aggregation window: 60-second clock-aligned** (corrected from the
+  1-hour decision made earlier the same day). The sandbox smoke
+  surfaced an undocumented hard cap on `aggregation_period_end -
+  aggregation_period_start`:
+  `AggregationPeriodDurationInvalidError: Aggregation period of 3600.0
+  seconds exceeds maximum allowed of 60 seconds`. Buckets are clock-
+  aligned per facility; only buckets with `count > 0` are emitted.
+  Source-of-truth filter is pure clock window on
+  `production_run_readings.timestamp` against the Removal's reporting
+  period (no whole-run inclusion, no lineage scoping — see ADR 0006
+  §Decision for rationale). File-size impact: 30-day window × 2
+  sensors at 1-min cadence ≈ 86 k rows max, ~1–2 MB Parquet
+  (compressed), well under the 100 MB per-upload cap.
+- **Sandbox probes lodged in `scripts/probe-*.{ts,mts}`** (`THROWAWAY`
+  headers) — confirmed: biochar submission_type accepted; sensor
+  measurement_property enums accepted with lowercase only;
+  `application/vnd.apache.parquet` file uploads work; signed upload
+  URL TTL is **5 minutes** (`X-Goog-Expires=300`), not the 24h I
+  assumed in early scoping — pipeline must run in one server action.
+  Full end-to-end smoke (`probe-parquet-smoke.mts`) creates 2 sensors,
+  generates a 10-row Parquet via hyparquet-writer, PUTs to signed URL,
+  POSTs the DataUploadSubmission, polls to terminal — succeeded
+  through step 6 and surfaced the 60-second cap on step 7's failure
+  response, validating both the Parquet bytes layer and the
+  journaled-step idempotency model end-to-end.
+- **Two doc bugs filed under `open-questions.md`** for Isometric MCP
+  `submit_feedback`: (1) UPPERCASE enum values in the docs prose vs.
+  lowercase in the live API; (2) DAC-only intro paragraph on a page
+  that lists biochar measurement properties.
+
+## 2026-05-26 (Phase 3.5 hardening — source-mutation correctness)
+
+Follow-up to the Phase 3.5 ship, addressing five findings from a
+post-ship audit (two P1 concurrency / authorization, one P1 race, two
+P2 reconciliation + tests). No data migration; behaviour change is
+strictly stricter (mutations that previously succeeded under the gaps
+below now refuse).
+
+- **Transactions actually scope the work** — `mirrorDocumentToSource`,
+  `unlinkDocumentSource`, and (new) `setDocumentSourceVisibility` open
+  a transaction and thread `tx` through every data-access read/write
+  inside. The six functions in
+  `src/data-access/certifier-document-uploads.ts` now accept an
+  optional trailing `txOrDb: DbClient` (default `db`), matching the
+  existing pattern in `applications.ts` / `credit-batches.ts` /
+  `production-runs.ts`. The advisory locks now bracket real work
+  instead of a no-op closure.
+- **Source mutations scoped to the removal's lineage** —
+  `unlinkDocumentSourceSchema` and `setDocumentSourceVisibilitySchema`
+  now require `removalId` in addition to `documentId`. The new
+  `assertDocumentIsCandidateForRemoval(userId, removalId, documentId)`
+  helper walks the same lineage `loadCandidateDocumentsForRemoval`
+  shows the panel, and refuses if the document isn't in the candidate
+  set. Closes the IDOR where any authenticated user who learned a
+  document UUID could unlink or flip visibility on a Source mirrored
+  under another removal / facility.
+  `src/hooks/use-certification-sources.ts` stamps `removalId` onto the
+  hook input so UI callers don't change.
+- **Submit / unlink / mirror interlock on one lock key** —
+  `src/lib/isometric/utils/source-lock.ts` (new) defines
+  `mirrorLockKey(documentId) = "mirror:isometric:{documentId}"` plus
+  `acquireMirrorLock(tx, id)` and `acquireMirrorLocksSorted(tx, ids)`.
+  mirror, unlink, and submit (per-document, sorted to prevent ABBA)
+  all serialize on the same key. `submitRemoval`'s create-new-version
+  branch now uses the new composable
+  `insertDraftSubmissionWithMappingLockAndLocks(userId, guard, prepare)`
+  data-access helper: it opens the tx, takes the mapping lock FIRST
+  (consistent lock order: `mapping → mirror[sorted]`), invokes a
+  caller-supplied `prepare(tx)` that acquires the per-document locks
+  and re-resolves source IDs inside the lock, then inserts the draft
+  snapshot in the same transaction. If the locked re-resolution
+  differs from the tentative set (concurrent mirror/unlink committed
+  during lock acquisition), the hash and `datapointBodies` are rebuilt
+  once before insert. Closes the snapshot-orphan race.
+- **`isPublic` reconciliation trusts the registry** — when
+  `findSourceBySupplierRef` returns an existing remote Source on the
+  recovery path, the persisted local metadata uses
+  `remoteExisting.is_public` instead of the caller's requested value.
+  Closes the case where two attempts with different `isPublic`
+  intentions could leave local + Isometric disagreeing.
+- **Recovery-flow integration tests** —
+  `tests/isometric-sources-mirror-flow.test.ts` (new, 4 tests) covers
+  the two approval-gate paths (GET found → `signed_upload_url` 200 →
+  PUT → insert, and GET found → 409 → insert), the reconciled
+  `isPublic` contract, and rejection of out-of-lineage documents.
+  Mocks the Isometric client, storage provider, and data-access
+  layer; runs against the real server action.
+- **Three insert variants in `src/data-access/certification.ts`
+  collapsed** — extracted `insertDraftSubmissionRow(tx, input)` (single
+  source of truth for the row shape) and
+  `withUniqueViolationGuard(fn)` (centralizes the 23505 →
+  `SafeError("Submission already in progress")` mapping).
+  `insertDraftSubmissionWithMappingLock` now delegates to
+  `…AndLocks`; `insertDraftSubmission` shares the same guard.
+- **Provider literals moved to non-server module** —
+  `src/lib/isometric/utils/constants.ts` (new) holds
+  `ISOMETRIC_PROVIDER`, `REMOVAL_SUBMISSION_TYPE`,
+  `REMOVAL_ENTITY_TYPE`, `GHG_STATEMENT_SUBMISSION_TYPE`,
+  `GHG_STATEMENT_ENTITY_TYPE`. `src/fn/certification/shared.ts`
+  re-exports them so the existing import surface keeps working, but
+  utils that can't cross the `"use server"` boundary
+  (`source-lock.ts`) import directly.
+- **Cross-provider scoping on snapshot reference check** —
+  `isExternalSourceReferencedInSnapshots` now filters by `provider`
+  (forward-compat: only `isometric` issues source_ids today, but the
+  enum permits `puro_earth` and `verra` and nothing structurally
+  prevents two providers from generating the same id string).
+- **Sources panel syncs local visibility with refetched data** —
+  `src/components/certification/sources-panel.tsx` adds a `useEffect`
+  resetting the `isPublic` toggle from `mirror?.isPublic` so a
+  cross-tab visibility flip doesn't leave a stale UI value.
+
+Open-questions trail: closes `isometric/sources-integration-tests` and
+`isometric/sources-submit-lock`; opens
+`isometric/sources-lock-hold-time` (mirror lock held across HTTP) and
+four `code/*` deferred-simplification entries.
+
+Tests: 294 passing, typecheck clean.
+
 ## 2026-05-26 (Phase 3.5 — Sources upload landed)
 
 Ships Phase 3.5 end-to-end. noma `documents` rows mirror to Isometric
