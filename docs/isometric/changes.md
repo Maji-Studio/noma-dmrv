@@ -1,5 +1,37 @@
 # Isometric Docs Change Log
 
+## 2026-06-02 (audit remediation — focus-restore a11y, constraint-guard fix, parse cleanup)
+
+Follow-up to a deeper review of the telemetry/submission branch. Behaviour fixes
+plus small consistency wins; no schema or API-surface change.
+
+- **`useDialog` focus-restore now actually fires (a11y merge-bar fix).** The
+  earlier cut (recorded in the section below, and previously marked resolved in
+  `docs/open-questions.md`) was dead on the dominant close path: `Modal` returns
+  null on close, unmounting the `<dialog>`, so the effect's top-level
+  `if (!dialog) return` short-circuited before the focus-restore branch —
+  keyboard/screen-reader users were stranded at document start. Fixed in
+  `src/hooks/use-dialog.ts` by scoping the early return to the open branch and
+  restoring focus via the surviving `triggerRef` regardless of whether the dialog
+  node still exists. Regression-covered by `tests/e2e/dialog-focus-restore.spec.ts`.
+
+- **`project-emissions` unique-violation guard corrected.**
+  `data-access/project-emissions.ts` read `.constraint_name` (a postgres-js field)
+  while this project uses node-postgres (`.constraint`). The field was always
+  `undefined`, so the guard relabeled *any* 23505 as the facility/period/category
+  conflict, masking unrelated unique violations. Now matches
+  `.constraint === certifier_project_emissions_facility_period_category_unique`
+  exactly, mirroring the sibling guard in `data-access/certification.ts`.
+
+- **`documents.ts` validation simplified.** The three simple actions
+  (`confirmUpload`, `setDocumentVisibility`, `deleteDocument`) now use
+  `schema.parse(input)` and let `withAction` format the `ZodError` (accepting its
+  `"Validation error: …"` prefix), replacing the hand-rolled `issues[0].message`
+  throw and its inconsistency. `requestUpload` keeps `safeParse` as the one
+  exception (its joined, prefix-free copy is intentional). `ISOMETRIC_PROVIDER` now
+  imports from the neutral `@/lib/isometric/utils/constants` rather than the
+  certification feature barrel.
+
 ## 2026-06-02 (consistency cleanup — `documents.ts` migration + shared helpers)
 
 Internal-only refactor following code review of the last six commits. No

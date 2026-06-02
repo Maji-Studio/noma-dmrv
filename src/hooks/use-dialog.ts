@@ -26,9 +26,11 @@ export function useDialog(
 
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) return;
 
     if (isOpen) {
+      // Can't show a dialog that isn't mounted yet; the open transition
+      // re-runs this effect once the ref attaches.
+      if (!dialog) return;
       if (!dialog.open) {
         // Capture before showModal() moves focus into the dialog.
         triggerRef.current = document.activeElement as HTMLElement | null;
@@ -36,9 +38,13 @@ export function useDialog(
       }
       onOpen?.();
     } else {
-      if (dialog.open) {
-        dialog.close();
-      }
+      // On close `Modal` returns null, so the <dialog> (and `dialogRef.current`)
+      // is already gone by the time this runs — `dialog?.close()` is null-safe.
+      // `triggerRef` is a ref, so it survives the unmount; restore focus
+      // regardless of whether the dialog node still exists. Without this, the
+      // earlier top-level `if (!dialog) return` skipped the restore on every
+      // state-driven close, stranding keyboard/SR users at document start.
+      dialog?.close();
       // Restore focus only if the trigger is still in the document and
       // focusable; guards against returning focus to a since-unmounted node.
       const trigger = triggerRef.current;

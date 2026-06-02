@@ -164,10 +164,9 @@ were deferred by the operator to a follow-up PR.
 
   (Resolved & removed 2026-06-02 — `forms/a11y-shared-layer`: `FormField` /
   `FormError` wire `aria-describedby` and `Modal` dev-warns on a missing
-  accessible name (commit `33920f5`); `useDialog` now captures the trigger on
-  open and restores focus to it on close (`src/hooks/use-dialog.ts`).
-  Regression check on focus-restore deferred to an e2e assertion — the e2e
-  tree was under concurrent edit at the time.)
+  accessible name (commit `33920f5`). The `useDialog` focus-restore half was
+  only genuinely completed later — its first cut was dead on the state-driven
+  close path — and is now fixed and e2e-covered; see `docs/isometric/changes.md`.)
 
   (Resolved & removed 2026-06-02 — see `docs/isometric/changes.md`:
   `certification/error-boundary` shipped as `(app)/certification/error.tsx`;
