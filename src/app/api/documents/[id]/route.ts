@@ -6,6 +6,7 @@ import {
 } from "@/data-access/documents";
 import { getUser } from "@/lib/auth/server";
 import { getStorageProvider } from "@/lib/storage";
+import { isAllowedRedirectHost } from "@/lib/documents/redirect-allowlist";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,24 @@ export async function GET(
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return new NextResponse("Invalid document URL", { status: 500 });
+    }
+    // Embedded credentials (user:pass@host) are never legitimate for a
+    // document link and are a classic phishing/SSRF dressing — refuse them.
+    if (parsed.username || parsed.password) {
+      console.error("Refusing document redirect with embedded credentials", {
+        id: row.id,
+      });
+      return new NextResponse("Invalid document URL", { status: 500 });
+    }
+    // Fail closed: only redirect to our origin, the storage endpoint, or the
+    // registry/cloud-storage families (see redirect-allowlist). This stops the
+    // route being used as an open redirect that borrows the app's domain trust.
+    if (!isAllowedRedirectHost(parsed.hostname)) {
+      console.error("Refusing document redirect to non-allowlisted host", {
+        id: row.id,
+        host: parsed.hostname,
+      });
+      return new NextResponse("Document URL host not allowed", { status: 502 });
     }
     return NextResponse.redirect(parsed.toString(), { status: 302 });
   }
