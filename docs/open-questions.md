@@ -625,17 +625,24 @@ ordered by leverage.
 
 ### Structural / cross-cutting
 
-- **File-size hard-rule violations** (`code/file-size-rule`)
-  - `src/data-access/entities.ts` is 1323 lines, `src/data-access/production-runs.ts`
-    is 1076. CLAUDE.md sets a 1000-line hard limit. `entities.ts` is 14
-    near-identical `getX` / `getXById` factories — collapse via a
-    `buildSearchableEntityFinder({table, codeCol, nameCol, ...})` factory
-    plus per-entity files under `src/data-access/entities/`. `production-runs.ts`
-    splits cleanly into `{queries, mutations, readings, stats, codes}.ts`.
-    Same pattern unblocks a separate `createEntityHooks` factory for the
-    `src/hooks/use-*.ts` family (~4–5k duplicate lines).
+- **Duplicate-hooks factory** (`code/hooks-factory`) — opened 2026-05-25.
+  - The `src/hooks/use-*.ts` family is ~4–5k lines of near-identical
+    query/mutation wiring per entity. A `createEntityHooks(...)` factory
+    would collapse most of it. (Carved out of the original `code/file-size-rule`
+    entry, whose data-access file-size half is now resolved — see below.)
   - Resolve via: dedicated refactor PR — should not stack on top of
     in-flight feature work.
+
+  (Resolved & removed 2026-06-02 — `code/file-size-rule`: both files exceeding
+  the 1000-line limit were split. `src/data-access/entities.ts` (1323 LOC) →
+  one module per entity under `src/data-access/entities/` + an `index.ts`
+  dispatcher barrel (commit `a03d486`); chose explicit per-entity files over a
+  `buildSearchableEntityFinder` factory — the 14 query shapes diverge enough
+  (joins, aggregates, subtitle formatting) that a factory would obscure more
+  than it saves. `src/data-access/production-runs.ts` (1076 LOC) → split by
+  concern into `queries`/`mutations`/`readings`/`types` + barrel (commit
+  `7e640d1`). Both are pure extraction, public API unchanged, full suite green.
+  The hooks-factory dedup above is the separable remainder.)
 
 - **Structured logger + Isometric API boundary logging** (`code/logger-introduction`)
   - Project has zero structured logging — only `console.warn` / `console.error`.
@@ -648,6 +655,14 @@ ordered by leverage.
     `src/lib/isometric/*`, attach `{op, removalId, externalProjectId,
     mappingRevision, attempt, duration_ms}`. Also mint a per-submission
     `submissionAttemptId = randomUUID()` for cross-event correlation.
+  - **Status 2026-06-02:** this is the last open item from the robustness
+    pass (the a11y / error-boundary / redirect-allowlist / rate-limit / file-split
+    work all landed; commits `33920f5`, `22c0d6e`, `6aafe2c`, `c16c569`,
+    `a03d486`, `7e640d1`). Deferred deliberately: the ~111 `console.*` calls span
+    `src/fn/certification/*`, which was under concurrent uncommitted edit at the
+    time — a repo-wide console→pino sweep would conflict. Start once that cert
+    work has landed. pino gives levels, structured JSON fields, and built-in
+    `redact` for the no-PII rule (CLAUDE.md).
 
   (Resolved & removed 2026-06-02 — `security/rate-limit-submissions`: opt-in
   `rateLimit` on `withAction`, 5/min/user per submit pipeline, in-memory
