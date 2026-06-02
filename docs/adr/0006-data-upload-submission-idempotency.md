@@ -55,8 +55,8 @@ Reuses the existing table — no new persistence primitives.
 ### 2. `payloadHash` covers source-data inputs, not Parquet bytes
 
 `payloadHash = sha256(canonicalJson({ facilityId, externalFacilityId,
-  windowStart, windowEnd, sensorRefs, sourceReadingIds,
-  __mappingRevision }))`
+  windowStart, windowEnd, bucketSeconds, sensorRefs,
+  sourceProductionRunIds, sourceReadingsDigest, aggregatedRowCount }))`
 
 Why not the Parquet bytes themselves: Parquet binary output is
 non-deterministic across `hyparquet-writer` versions (compression

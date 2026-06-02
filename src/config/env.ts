@@ -59,9 +59,10 @@ const envSchema = z.object({
     .optional()
     .default("sandbox"),
   // Comma-separated allowlist of host suffixes the Sources mirror flow will
-  // PUT bytes to. Default covers Isometric's documented S3-compatible
-  // storage hosts. An empty list keeps the default. Compared with a suffix
-  // match (`hostname.endsWith(allowed)` after a leading-dot normalization).
+  // PUT bytes to. Default covers Isometric's documented object-storage hosts,
+  // including S3 regional upload host patterns. An empty list keeps the
+  // default. Env-provided entries use suffix matching (`hostname.endsWith` after
+  // leading-dot normalization).
   ISOMETRIC_UPLOAD_HOST_ALLOWLIST: z.preprocess(
     emptyToUndefined,
     z.string().min(1).optional(),

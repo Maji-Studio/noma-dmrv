@@ -187,12 +187,8 @@ export async function deleteDocument(
   const row = await getDocumentById(user.id, parsed.data.documentId);
   if (!row) return failure("Document not found");
 
-  // Reject deletion when the document is mirrored as an Isometric Source.
-  // The certifier_document_uploads FK is ON DELETE NO ACTION, so a raw
-  // deletion would fail with a Postgres 23503 AFTER we'd already deleted
-  // the storage object (out-of-sync). Pre-check both providers we know
-  // about — currently only `isometric`, but the explicit check documents
-  // the invariant.
+  // Fast user-facing path; the FK-backed delete below remains the real race
+  // guard in case a mirror appears after this check.
   const isometricMirror = await getDocumentUploadByDocument(
     user.id,
     "isometric",
@@ -204,6 +200,24 @@ export async function deleteDocument(
     );
   }
 
+  let deleted: DocumentRow | null;
+  try {
+    deleted = await deleteDocumentRow(user.id, row.id);
+  } catch (err) {
+    const mirror = await getDocumentUploadByDocument(
+      user.id,
+      "isometric",
+      row.id,
+    );
+    if (mirror) {
+      return failure(
+        "This document is mirrored to Isometric as a Source. Unlink it from the Removal's Sources panel before deleting.",
+      );
+    }
+    throw err;
+  }
+  if (!deleted) return failure("Document not found");
+
   if (row.storageKey) {
     const provider = getStorageProvider();
     try {
@@ -213,10 +227,27 @@ export async function deleteDocument(
         documentId: row.id,
         error: err instanceof Error ? err.message : String(err),
       });
+      let restored = false;
+      try {
+        await insertDocument(user.id, deleted);
+        restored = true;
+      } catch (restoreErr) {
+        console.error("Failed to restore document row after storage error", {
+          documentId: row.id,
+          error:
+            restoreErr instanceof Error
+              ? restoreErr.message
+              : String(restoreErr),
+        });
+      }
+      return failure(
+        restored
+          ? "Failed to delete storage object. The document row was restored; try again."
+          : "Failed to delete storage object and restore the document row. Contact support before retrying.",
+      );
     }
   }
 
-  await deleteDocumentRow(user.id, row.id);
   return { success: true, data: { id: row.id } };
 }
 

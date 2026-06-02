@@ -13,6 +13,7 @@ import {
 } from "@/fn/certification";
 
 const TELEMETRY_STALE_MS = 30_000;
+const TELEMETRY_PENDING_REFETCH_MS = 5_000;
 
 export const telemetryKeys = {
   all: ["telemetry"] as const,
@@ -30,6 +31,10 @@ export function useTelemetrySubmissionState(removalId: string) {
     },
     enabled: !!removalId,
     staleTime: TELEMETRY_STALE_MS,
+    refetchInterval: (query) =>
+      query.state.data?.latestStatus?.status === "pending"
+        ? TELEMETRY_PENDING_REFETCH_MS
+        : false,
   });
 }
 

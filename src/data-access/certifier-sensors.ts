@@ -2,7 +2,7 @@
  * Persistence + reconciliation for `certifier_sensors` (Phase 5 Slice A,
  * ADR 0006). The Isometric Sensor catalog is the source of truth for
  * `externalSensorId`; the local row is the index that lets a
- * DataUploadSubmission join `(reactor, measurement_property) →
+ * DataUploadSubmission join `(provider, reactor, measurement_property) →
  * sensor_reference` without an HTTP fan-out per submission.
  *
  * Reconciliation: `POST /sensors` is non-idempotent, so a local-row
@@ -66,6 +66,7 @@ export async function ensureSensorForReactor(
     .from(certifierSensors)
     .where(
       and(
+        eq(certifierSensors.provider, provider),
         eq(certifierSensors.reactorId, input.reactorId),
         eq(certifierSensors.measurementProperty, measurementKey),
       ),
@@ -124,12 +125,13 @@ export async function ensureSensorForReactor(
     })
     .onConflictDoUpdate({
       target: [
+        certifierSensors.provider,
         certifierSensors.reactorId,
         certifierSensors.measurementProperty,
       ],
       // A concurrent insert won the race. Adopt the winner's external
       // ids — the unique constraint guarantees one row per
-      // (reactor, property), and the remote Sensor catalog is the
+      // (provider, reactor, property), and the remote Sensor catalog is the
       // source of truth.
       set: {
         externalSensorId: sql`excluded.external_sensor_id`,

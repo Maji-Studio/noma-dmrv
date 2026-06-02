@@ -25,21 +25,36 @@ export const UPLOAD_TRANSFER_TIMEOUT_MS = 30_000;
 // families are allowlisted by default.
 const DEFAULT_UPLOAD_HOST_SUFFIXES = [
   ".s3.amazonaws.com",
-  ".amazonaws.com",
   ".isometric.com",
   ".digitaloceanspaces.com",
   ".storage.googleapis.com",
   ".googleapis.com",
 ] as const;
 
-function uploadHostSuffixes(): string[] {
+const S3_REGIONAL_HOST_PATTERN =
+  /(^|\.)s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/;
+const S3_DUALSTACK_HOST_PATTERN =
+  /(^|\.)s3\.dualstack\.[a-z0-9-]+\.amazonaws\.com$/;
+
+function uploadHostAllowlist(): {
+  suffixes: string[];
+  includeDefaultS3Patterns: boolean;
+} {
   const raw = env.ISOMETRIC_UPLOAD_HOST_ALLOWLIST;
-  if (!raw) return [...DEFAULT_UPLOAD_HOST_SUFFIXES];
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`));
+  if (!raw) {
+    return {
+      suffixes: [...DEFAULT_UPLOAD_HOST_SUFFIXES],
+      includeDefaultS3Patterns: true,
+    };
+  }
+  return {
+    suffixes: raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+      .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`)),
+    includeDefaultS3Patterns: false,
+  };
 }
 
 export function assertUploadHostAllowed(uploadUrl: string): void {
@@ -55,8 +70,15 @@ export function assertUploadHostAllowed(uploadUrl: string): void {
     );
   }
   const hostname = `.${parsed.hostname.toLowerCase()}`;
-  const allowed = uploadHostSuffixes();
-  if (!allowed.some((suffix) => hostname.endsWith(suffix.toLowerCase()))) {
+  const allowed = uploadHostAllowlist();
+  const defaultAllowed =
+    allowed.suffixes.some((suffix) =>
+      hostname.endsWith(suffix.toLowerCase()),
+    ) ||
+    (allowed.includeDefaultS3Patterns &&
+      (S3_REGIONAL_HOST_PATTERN.test(parsed.hostname.toLowerCase()) ||
+        S3_DUALSTACK_HOST_PATTERN.test(parsed.hostname.toLowerCase())));
+  if (!defaultAllowed) {
     throw new SafeError(
       `Refusing PUT to upload URL with host "${parsed.hostname}" — not in ISOMETRIC_UPLOAD_HOST_ALLOWLIST.`,
     );

@@ -1,0 +1,2 @@
+ALTER TABLE "certifier_sensors" DROP CONSTRAINT "certifier_sensors_reactor_property_unique";--> statement-breakpoint
+ALTER TABLE "certifier_sensors" ADD CONSTRAINT "certifier_sensors_provider_reactor_property_unique" UNIQUE("provider","reactor_id","measurement_property");
