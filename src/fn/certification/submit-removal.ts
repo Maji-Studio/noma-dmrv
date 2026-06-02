@@ -13,6 +13,7 @@ import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import { z } from "zod";
 import {
   STAGE_SPLIT_SUM_TOLERANCE,
@@ -298,6 +299,16 @@ export async function submitRemoval(
 ): Promise<RemovalSubmissionResult> {
   const { userId, removalId, confirmProduction } = args;
 
+  // Per-attempt correlation id so the start breadcrumb, boundary logs, and any
+  // best-effort warnings for one submit can be tied together in an aggregator.
+  const submissionAttemptId = crypto.randomUUID();
+  const log = logger.child({
+    op: "removal:submit",
+    removalId,
+    submissionAttemptId,
+  });
+  log.info("removal submit started");
+
   const ctx = await loadRemovalSubmissionContext(userId, removalId);
   if (!ctx.mapping) {
     throw new SafeError("Link a facility to an Isometric project first.");
@@ -521,9 +532,9 @@ export async function submitRemoval(
     }
     case "create-new-version": {
       if (claim.reason === "rejected-hash-changed") {
-        console.warn(
-          "Removal retry will create a new version after rejected row with changed hash",
+        log.warn(
           { submissionId: latest!.id },
+          "removal retry will create a new version after rejected row with changed hash",
         );
       }
       const removalSupplierRef = buildRemovalSupplierRef({
@@ -749,10 +760,14 @@ async function runRemovalSubmission({
       completedOn: formatUtcDate(agg.latestEndTime),
     });
   } catch (err) {
-    console.warn("Failed to persist removal reporting window", {
-      removalId,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn(
+      {
+        op: "removal:submit",
+        removalId,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "failed to persist removal reporting window",
+    );
   }
 
   if (resumed) {

@@ -1,5 +1,34 @@
 # Isometric Docs Change Log
 
+## 2026-06-02 (structured logger + isometric API boundary logging)
+
+Closes the `code/logger-introduction` open question — the last item from the
+robustness pass. No behaviour change to user-facing flows.
+
+- **New `src/lib/log/`** — a minimal in-house structured logger (newline-delimited
+  JSON to stdout/stderr, level filtering via `LOG_LEVEL`, `child()` bindings, and
+  key-based redaction of PII/secrets per the CLAUDE.md no-PII rule). Built
+  in-house rather than pino **deliberately**: Next.js 16 Turbopack has an open,
+  unresolved bug (vercel/next.js#93849) where a `serverExternalPackages` package's
+  hashed alias isn't resolvable at Vercel's serverless runtime — independent of
+  transport config and not catchable by local testing. The logger covers our
+  needs (levels, child bindings, redact) with no external-package/bundler risk;
+  revisit pino if that bug is fixed. Covered by `tests/log.test.ts`.
+
+- **Isometric API boundary instrumented** (`src/lib/isometric/client.ts`) — the
+  previously-silent `isometricRequest` now logs `{method, path, status, attempt,
+  duration_ms}` on success (debug), retry (warn), and terminal network/http
+  failure (error). Never logs headers, body, or the `X-Client-Secret` /
+  `Authorization` credentials.
+
+- **Submit correlation** — `submitRemoval`, `createGhgStatementDraft`, and
+  `submitGhgStatementToVerifier` mint a per-attempt `submissionAttemptId` and emit
+  a start breadcrumb; the three cert-fn `console.warn`s are replaced with the
+  structured logger. `LOG_LEVEL` widened to the full level set. **Follow-ups
+  (tracked in open-questions):** the other ~110 repo-wide `console.*` are a
+  separate sweep; threading `submissionAttemptId` into the request boundary for
+  full per-attempt correlation is not yet wired.
+
 ## 2026-06-02 (audit remediation — focus-restore a11y, constraint-guard fix, parse cleanup)
 
 Follow-up to a deeper review of the telemetry/submission branch. Behaviour fixes
