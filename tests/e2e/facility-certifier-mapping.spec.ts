@@ -135,7 +135,7 @@ test.describe("Facility ↔ Isometric project mapping", () => {
   }) => {
     const sandboxProjectId = SANDBOX_PROJECT_ID!;
     const facility = seededData.facility;
-    const batchId = crypto.randomUUID();
+    const removalId = crypto.randomUUID();
     const submissionId = crypto.randomUUID();
 
     const { db, pool } = createDbConnection();
@@ -149,22 +149,24 @@ test.describe("Facility ↔ Isometric project mapping", () => {
           protocolVersion: "1.2",
           defaultRemovalTemplateId: null,
         });
-        await tx.insert(schema.creditBatches).values({
-          id: batchId,
-          code: `E2E-CB-UNLINK-${RUN_ID}`,
+        // The unlink guard (hasBlockingFacilitySubmission) matches a
+        // facility-scoped Removal: a certifierRemovals row carrying facilityId
+        // joined to a removal-scoped, non-terminal submission. The legacy
+        // creditBatch-keyed shape no longer blocks (ADR 0003/0004), so seed
+        // the current shape directly.
+        await tx.insert(schema.certifierRemovals).values({
+          id: removalId,
           facilityId: facility.id,
-          startDate: "2024-01-01",
-          endDate: "2024-12-31",
-          hToCorgRatio: 0.4,
+          provider: "isometric",
         });
         await tx.insert(schema.certificationSubmissions).values({
           id: submissionId,
           provider: "isometric",
           submissionType: "removal",
-          localEntityType: "creditBatch",
-          localEntityId: batchId,
+          localEntityType: "removal",
+          localEntityId: removalId,
           version: 1,
-          status: "draft",
+          status: "submitted",
           payloadSnapshot: {},
           payloadHash: "fake-hash-unlink-guard",
         });
@@ -206,8 +208,8 @@ test.describe("Facility ↔ Isometric project mapping", () => {
           .delete(schema.certificationSubmissions)
           .where(eq(schema.certificationSubmissions.id, submissionId));
         await db
-          .delete(schema.creditBatches)
-          .where(eq(schema.creditBatches.id, batchId));
+          .delete(schema.certifierRemovals)
+          .where(eq(schema.certifierRemovals.id, removalId));
         await db
           .delete(schema.certifierProjects)
           .where(eq(schema.certifierProjects.facilityId, facility.id));
