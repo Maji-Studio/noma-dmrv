@@ -18,6 +18,26 @@ export {
   GHG_STATEMENT_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 
+// Per-user abuse cap shared by the three registry submit actions
+// (removal / GHG statement / telemetry). Generous enough that no legitimate
+// operator hits it — ADR 0006 idempotency already makes a fast double-submit
+// a no-op, so this only blunts runaway/scripted bursts. `key` is passed
+// per-action so each pipeline is limited independently.
+const SUBMIT_RATE_LIMIT_MAX = 5;
+const SUBMIT_RATE_LIMIT_WINDOW_MS = 60_000;
+
+export function submitRateLimit(key: string): {
+  key: string;
+  max: number;
+  windowMs: number;
+} {
+  return {
+    key,
+    max: SUBMIT_RATE_LIMIT_MAX,
+    windowMs: SUBMIT_RATE_LIMIT_WINDOW_MS,
+  };
+}
+
 export async function safeListIfConfigured<T>(
   call: () => Promise<T[]>,
 ): Promise<T[]> {
