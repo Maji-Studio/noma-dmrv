@@ -210,39 +210,42 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
         throw new Error(`Unexpected fetch URL: ${url}`);
       });
 
-    const result = await mirrorDocumentToSource({
-      removalId: REMOVAL_ID,
-      documentId: DOCUMENT_ID,
-      isPublic: false,
-    });
+    try {
+      const result = await mirrorDocumentToSource({
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+        isPublic: false,
+      });
 
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data).toEqual({
-      externalDocumentId: EXISTING_SOURCE_ID,
-      isPublic: false,
-      recovered: true,
-    });
-    // We never POSTed a fresh `/sources` — reconciliation reused the remote.
-    expect(isometric.createSource).not.toHaveBeenCalled();
-    // We DID upload the bytes (200 path).
-    const putCalls = fetchSpy.mock.calls.filter(
-      ([, init]) => init?.method === "PUT",
-    );
-    expect(putCalls).toHaveLength(1);
-    // We persisted the local mapping with the remote source id.
-    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
-      USER_ID,
-      expect.objectContaining({
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error(result.error);
+      expect(result.data).toEqual({
         externalDocumentId: EXISTING_SOURCE_ID,
-        metadata: expect.objectContaining({
-          supplierRefId: SUPPLIER_REF,
-          isPublic: false,
+        isPublic: false,
+        recovered: true,
+      });
+      // We never POSTed a fresh `/sources` — reconciliation reused the remote.
+      expect(isometric.createSource).not.toHaveBeenCalled();
+      // We DID upload the bytes (200 path).
+      const putCalls = fetchSpy.mock.calls.filter(
+        ([, init]) => init?.method === "PUT",
+      );
+      expect(putCalls).toHaveLength(1);
+      // We persisted the local mapping with the remote source id.
+      expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({
+          externalDocumentId: EXISTING_SOURCE_ID,
+          metadata: expect.objectContaining({
+            supplierRefId: SUPPLIER_REF,
+            isPublic: false,
+          }),
         }),
-      }),
-      expect.anything(),
-    );
-    fetchSpy.mockRestore();
+        expect.anything(),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("GET found → signed_upload_url 409 → insert (no PUT)", async () => {
@@ -255,34 +258,41 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
       kind: "already_uploaded",
     });
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() => {
+        throw new Error("unexpected global fetch call");
+      });
 
-    const result = await mirrorDocumentToSource({
-      removalId: REMOVAL_ID,
-      documentId: DOCUMENT_ID,
-      isPublic: false,
-    });
+    try {
+      const result = await mirrorDocumentToSource({
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+        isPublic: false,
+      });
 
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data).toEqual({
-      externalDocumentId: EXISTING_SOURCE_ID,
-      isPublic: false,
-      recovered: true,
-    });
-    expect(isometric.createSource).not.toHaveBeenCalled();
-    // No network I/O at all — the registry already has the bytes, so the
-    // already_uploaded path skips both the storage GET and the registry PUT.
-    expect(fetchSpy).not.toHaveBeenCalled();
-    // Local mapping persisted against the existing remote source.
-    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
-      USER_ID,
-      expect.objectContaining({
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error(result.error);
+      expect(result.data).toEqual({
         externalDocumentId: EXISTING_SOURCE_ID,
-      }),
-      expect.anything(),
-    );
-    fetchSpy.mockRestore();
+        isPublic: false,
+        recovered: true,
+      });
+      expect(isometric.createSource).not.toHaveBeenCalled();
+      // No network I/O at all — the registry already has the bytes, so the
+      // already_uploaded path skips both the storage GET and the registry PUT.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      // Local mapping persisted against the existing remote source.
+      expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({
+          externalDocumentId: EXISTING_SOURCE_ID,
+        }),
+        expect.anything(),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("reconciled metadata mirrors remote is_public (not caller's request)", async () => {
@@ -297,26 +307,33 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
       kind: "already_uploaded",
     });
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() => {
+        throw new Error("unexpected global fetch call");
+      });
 
-    const result = await mirrorDocumentToSource({
-      removalId: REMOVAL_ID,
-      documentId: DOCUMENT_ID,
-      isPublic: false,
-    });
+    try {
+      const result = await mirrorDocumentToSource({
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+        isPublic: false,
+      });
 
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    // Result echoes the remote, not the request.
-    expect(result.data.isPublic).toBe(true);
-    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
-      USER_ID,
-      expect.objectContaining({
-        metadata: expect.objectContaining({ isPublic: true }),
-      }),
-      expect.anything(),
-    );
-    fetchSpy.mockRestore();
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error(result.error);
+      // Result echoes the remote, not the request.
+      expect(result.data.isPublic).toBe(true);
+      expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({
+          metadata: expect.objectContaining({ isPublic: true }),
+        }),
+        expect.anything(),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("rejects mutations for a document outside the removal's lineage", async () => {

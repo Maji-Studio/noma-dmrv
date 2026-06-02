@@ -273,6 +273,7 @@ function RemovalCard({
       <div className="flex items-center justify-end gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <Link
           href={`/certification/removals/${removal.id}`}
+          aria-label={`Sources for removal ${removal.id}`}
           className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
         >
           Sources →

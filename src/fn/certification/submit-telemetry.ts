@@ -55,6 +55,7 @@ const DATA_UPLOAD_SUBMISSION_TYPE = "dataUpload" as const;
 const DATA_UPLOAD_ENTITY_TYPE = "removal" as const;
 const DATA_UPLOAD_OPERATION = "removal:data-upload" as const;
 const PARQUET_SCHEMA_VERSION = 1 as const;
+const UPLOAD_ERROR_TRUNCATION_LIMIT = 1000;
 
 type FileUploadResponse = { id: string; upload_url: string };
 type DataUploadSubmission = components["schemas"]["DataUploadSubmission"];
@@ -107,12 +108,13 @@ export async function submitTelemetry(
   // resume runs under the mapping lock so a concurrent repoint/unlink cannot
   // orphan this submission's remote facility, and two callers cannot both
   // resume the same expired draft and double-POST. Telemetry pins
-  // externalProjectId (the data-upload depends on the facility's mapping); it
-  // has no removal-template dependency, so that guard field stays undefined.
+  // externalProjectId + externalFacilityId; it has no removal-template
+  // dependency, so that guard field stays undefined.
   const mappingGuard: MappingClaimGuard = {
     facilityId: ctx.facilityId,
     provider: ISOMETRIC_PROVIDER,
     expectedExternalProjectId: ctx.mapping.externalProjectId,
+    expectedExternalFacilityId: externalFacilityId,
   };
 
   // ADR 0006 - pure clock window on production_run_readings.timestamp;
@@ -520,7 +522,7 @@ async function putParquetToSignedUrl(args: {
     throw new IsometricApiError(
       `PUT signed upload URL -> ${res.status}`,
       res.status,
-      body.slice(0, 1000),
+      body.slice(0, UPLOAD_ERROR_TRUNCATION_LIMIT),
       "http",
     );
   }

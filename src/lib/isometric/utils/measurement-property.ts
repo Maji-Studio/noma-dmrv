@@ -3,7 +3,7 @@
  * (`{ quantity_kind, qualifier }`) for use as a DB key.
  *
  * The wire shape is a two-field object; we encode it as a single text
- * column so the `(reactorId, measurementProperty)` unique constraint on
+ * column so the `(provider, reactorId, measurementProperty)` unique constraint on
  * `certifier_sensors` correctly dedups the common case where
  * `qualifier` is null (Postgres unique permits multiple NULLs in
  * nullable columns, so a `(kind, qualifier)` shape would silently
@@ -24,7 +24,7 @@ const SEPARATOR = "|";
 export function encodeMeasurementProperty(
   prop: IsometricMeasurementProperty,
 ): string {
-  return prop.qualifier
+  return prop.qualifier !== null
     ? `${prop.quantity_kind}${SEPARATOR}${prop.qualifier}`
     : prop.quantity_kind;
 }

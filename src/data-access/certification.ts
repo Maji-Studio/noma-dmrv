@@ -197,7 +197,11 @@ export async function upsertCertifierProject(
       .for("update")
       .limit(1);
 
-    if (existing && existing.externalProjectId !== values.externalProjectId) {
+    const mappingIdentifiersChanged =
+      existing &&
+      (existing.externalProjectId !== values.externalProjectId ||
+        existing.externalFacilityId !== values.externalFacilityId);
+    if (mappingIdentifiersChanged) {
       const blocked = await hasBlockingFacilitySubmission(
         tx,
         input.facilityId,
@@ -205,7 +209,7 @@ export async function upsertCertifierProject(
       );
       if (blocked) {
         throw new SafeError(
-          "Cannot repoint: this facility has certifier submissions. Supersede or reject them first.",
+          "Cannot change certifier project or facility ID: this facility has certifier submissions. Supersede or reject them first.",
         );
       }
     }
@@ -421,6 +425,7 @@ export interface MappingClaimGuard {
   facilityId: string;
   provider: CertifierProvider;
   expectedExternalProjectId: string;
+  expectedExternalFacilityId?: string | null;
   expectedDefaultRemovalTemplateId?: string | null;
 }
 
@@ -431,6 +436,7 @@ async function lockAndVerifyMapping(
   const [current] = await executor
     .select({
       externalProjectId: certifierProjects.externalProjectId,
+      externalFacilityId: certifierProjects.externalFacilityId,
       defaultRemovalTemplateId: certifierProjects.defaultRemovalTemplateId,
     })
     .from(certifierProjects)
@@ -451,6 +457,14 @@ async function lockAndVerifyMapping(
   if (current.externalProjectId !== guard.expectedExternalProjectId) {
     throw new SafeError(
       "Facility was repointed to a different certifier project mid-submission. Refresh and retry.",
+    );
+  }
+  if (
+    guard.expectedExternalFacilityId !== undefined &&
+    current.externalFacilityId !== guard.expectedExternalFacilityId
+  ) {
+    throw new SafeError(
+      "Facility was repointed to a different certifier facility mid-submission. Refresh and retry.",
     );
   }
   if (
@@ -535,13 +549,11 @@ export async function insertDraftSubmissionWithMappingLockAndLocks(
   prepare: (tx: Tx) => Promise<InsertDraftSubmissionInput>,
 ): Promise<CertificationSubmissionRow> {
   requireAuth(userId);
-  return withUniqueViolationGuard(() =>
-    db.transaction(async (tx) => {
-      await lockAndVerifyMapping(tx, guard);
-      const input = await prepare(tx);
-      return insertDraftSubmissionRow(tx, input);
-    }),
-  );
+  return db.transaction(async (tx) => {
+    await lockAndVerifyMapping(tx, guard);
+    const input = await prepare(tx);
+    return withUniqueViolationGuard(() => insertDraftSubmissionRow(tx, input));
+  });
 }
 
 export async function insertDraftSubmissionWithMappingLock(

@@ -288,7 +288,9 @@ async function loadCandidateDocumentsForRemovalInternal(
     removalId,
     facilityId: removal.facilityId,
     candidates,
-    mirroredExternalIds: mirrorRows.map((r) => r.externalDocumentId),
+    mirroredExternalIds: Array.from(
+      new Set(mirrorRows.map((r) => r.externalDocumentId)),
+    ).sort(),
     hasMapping: !!mapping,
   };
 }
