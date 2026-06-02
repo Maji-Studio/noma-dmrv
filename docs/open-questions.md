@@ -162,39 +162,21 @@ double-create dedup, the N+1 query batching and the non-atomic
 `finalizeGhgStatement` were fixed in the same branch; the entries below
 were deferred by the operator to a follow-up PR.
 
-- **No route-level error boundary** (`certification/error-boundary`) —
-  opened 2026-05-22, deferred.
-  - There is no `error.tsx` anywhere under `src/app`. A thrown error in a
-    Certification route (loader reject, server-fn throw not caught by
-    `ActionResult`) renders a blank screen instead of a recoverable UI.
-  - Resolve via: add `src/app/(app)/certification/error.tsx` with a retry
-    affordance — a new convention for the project, so confirm placement
-    (per-route-group vs a single app-level boundary) before landing.
-
-- **Report-URL open-redirect / 2nd-party SSRF**
-  (`certification/report-url-allowlist`) — opened 2026-05-22, deferred.
-  - The operator-supplied GHG-statement report URL (`reportUrl` in
-    `submitGhgStatementToVerifier`) is stored on a `documents` row and
-    later served through the pre-existing `/api/documents/[id]` route,
-    which 302-redirects to `fileUrl` with no host allowlist. A crafted
-    URL turns the redirect into an open redirect / server-side fetch of
-    an arbitrary host.
-  - Pre-existing pattern — the `/api/documents/[id]` `fileUrl` branch
-    predates this feature and is shared by every external/legacy URL
-    column (see the `storage/phase-2` entry).
-  - Resolve via: decide an allowlist policy (e.g. restrict to known
-    object-storage / Isometric hosts) and enforce it at the
-    `/api/documents/[id]` redirect, not per-caller.
-
 - **Shared-component a11y gaps** (`forms/a11y-shared-layer`) — opened
-  2026-05-22, deferred.
-  - `FormField` / `FormError` (`src/components/forms/`) do not wire
-    `aria-describedby` from input to error message; `useDialog`
-    (`src/hooks/use-dialog.ts`) does not restore focus to the trigger on
-    close. Surfaced by the GHG Statement dialogs but the gap is in the
-    shared layer, so a fix touches every form and dialog in the app.
-  - Resolve via: a dedicated a11y pass on the shared forms/dialog
-    primitives with a regression check across existing consumers.
+  2026-05-22, partially resolved 2026-06-02 (commit `33920f5`).
+  - **Resolved:** `FormField` / `FormError` (`src/components/forms/`) now wire
+    `aria-describedby` from input to error/helper text; `Modal` warns in dev
+    when rendered without an accessible name.
+  - **Still open:** `useDialog` (`src/hooks/use-dialog.ts`) does not restore
+    focus to the trigger on close. The gap is in the shared layer, so a fix
+    touches every dialog in the app.
+  - Resolve via: a focus-restore pass on `useDialog` with a regression check
+    across existing consumers.
+
+  (Resolved & removed 2026-06-02 — see `docs/isometric/changes.md`:
+  `certification/error-boundary` shipped as `(app)/certification/error.tsx`;
+  `certification/report-url-allowlist` shipped as the `/api/documents/[id]`
+  host gate via `src/lib/documents/redirect-allowlist.ts`.)
 
 ### Remaining template-coverage gaps
 
@@ -671,16 +653,11 @@ ordered by leverage.
     mappingRevision, attempt, duration_ms}`. Also mint a per-submission
     `submissionAttemptId = randomUUID()` for cross-event correlation.
 
-- **Rate limiting on submission actions** (`security/rate-limit-submissions`)
-  - `submitRemovalAction`, `submitCreditBatchRemoval`,
-    `submitGhgStatementToVerifier` drive external POSTs that consume
-    Isometric quota and burn `ISOMETRIC_CLIENT_SECRET`. The in-flight
-    lock in `decideSubmissionClaim` blocks duplicate submissions of the
-    same removal but not sweep-all-removals abuse by an authenticated
-    user. Better Auth rate-limits only `/sign-in/email` and friends.
-  - Resolve via: per-user (or per-facility) rate limit inside
-    `withAction` — token bucket, e.g. 10 submissions/hour/user, 30/hour/facility.
-    Design call on the bucket strategy first.
+  (Resolved & removed 2026-06-02 — `security/rate-limit-submissions`: opt-in
+  `rateLimit` on `withAction`, 5/min/user per submit pipeline, in-memory
+  sliding window. See `docs/isometric/changes.md`. NOTE: this resolved the
+  abuse-defense concern only; a per-facility limit and the exact cross-instance
+  ceiling were explicitly out of scope — reopen if either is needed.)
 
 - **Single-tenant authorization → facility-membership model**
   (`security/facility-membership-authz`)

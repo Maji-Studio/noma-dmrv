@@ -1,5 +1,44 @@
 # Isometric Docs Change Log
 
+## 2026-06-02 (robustness pass — redirect allowlist + submit rate limit)
+
+Resolves three deferred items from `docs/open-questions.md`. No schema/migration
+changes; behaviour-affecting where noted.
+
+- **Document-redirect open-redirect closed** (`certification/report-url-allowlist`).
+  The `/api/documents/[id]` route's `fileUrl` 302 branch now host-gates the
+  target via `src/lib/documents/redirect-allowlist.ts`: allowed = our own origin
+  (`NEXT_PUBLIC_APP_URL`) + the configured `STORAGE_ENDPOINT` host + the registry
+  / cloud-storage families (`.isometric.com`, `.amazonaws.com`, `.googleapis.com`,
+  `.digitaloceanspaces.com`). Embedded credentials (`user:pass@host`) are refused
+  outright. Off-allowlist hosts fail closed (502) and are logged (id + host only,
+  no PII). **Behaviour change:** operator-pasted GHG-statement report URLs on
+  arbitrary hosts now fail closed — Isometric-synced report URLs and same-origin
+  links continue to resolve. Decision: "allowlist + cloud hosts" (operator
+  2026-06-02) over a strict same-origin-only lock that would have broken the
+  Isometric-synced report path. Sibling guard to the upload-host allowlist in
+  `@/lib/isometric/utils/signed-upload`.
+
+- **Submit-action rate limiting added** (`security/rate-limit-submissions`).
+  `withAction` gained an opt-in `rateLimit` option; the three registry submit
+  actions (`submitRemovalAction` + `submitCreditBatchRemoval`,
+  `submitGhgStatementToVerifier`, `submitTelemetryAction`) pass it — 5/min/user
+  per pipeline, keyed `cert:submit-*:<userId>`. Backed by a process-local
+  sliding-window limiter (`src/lib/rate-limit/in-memory.ts`). This is
+  defense-in-depth only — ADR 0006 idempotency already makes a fast double-submit
+  a no-op; the limiter blunts scripted/runaway bursts. **Known limitation:** the
+  store is per-instance, so on Fluid Compute the effective ceiling is
+  `5 × instanceCount`. Decision: in-memory over DB-backed (operator 2026-06-02),
+  proportionate to a non-correctness guard; swap to a DB/Redis bucket if an exact
+  cross-instance limit is ever needed.
+
+- **Form a11y + cert error boundary** (landed earlier this session, commit
+  `33920f5`): `FormField`/`FormError` now wire `aria-describedby`; `Modal` warns
+  in dev when it has no accessible name; `(app)/certification/error.tsx` segment
+  error boundary added. Closes `certification/error-boundary` and the
+  `FormField`/`FormError` half of `forms/a11y-shared-layer` (the `useDialog`
+  focus-restore half remains open).
+
 ## 2026-05-29 (Phase 5 Slice A shipped — telemetry pipeline end-to-end)
 
 Builds on the same-day scoping entry below. Implements the design ADR 0006
