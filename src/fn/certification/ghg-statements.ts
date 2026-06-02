@@ -254,6 +254,14 @@ export async function createGhgStatementDraft(
           mappingGuard,
         );
         break;
+      case "resume-poll-existing":
+      case "resume-re-put":
+        // Phase 5 Slice A claim kinds; only reachable when callers pass
+        // `dataUploadResume`. GHG-statement creation does not — kept here
+        // for exhaustiveness so TS narrows the union end-to-end.
+        throw new SafeError(
+          "Unexpected resume kind for GHG statement creation.",
+        );
     }
 
     return createGhgStatementRemote({

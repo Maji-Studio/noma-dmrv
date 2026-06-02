@@ -23,6 +23,9 @@ export interface UpsertCertifierProjectInput {
   protocolSlug?: string;
   protocolVersion?: string | null;
   defaultRemovalTemplateId?: string | null;
+  // Phase 5 Slice A — operator-pasted Isometric facility id (fcl_…).
+  // Optional; required only for telemetry submission.
+  externalFacilityId?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -106,15 +109,23 @@ export const BLOCKING_SUBMISSION_STATUSES = [
   "accepted",
 ] as const;
 
+// Submission types that pin a facility's certifier mapping through a Removal.
+// Both the Removal itself (ADR 0003) and its telemetry data-upload (ADR 0006)
+// are keyed to `certifierRemovals.id` with `localEntityType='removal'`; a
+// repoint/unlink that orphaned the mapping would strand either one's remote
+// resource, so both must block.
+const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
+
 async function hasBlockingFacilitySubmission(
   executor: Tx | typeof db,
   facilityId: string,
   provider: CertifierProvider,
 ): Promise<boolean> {
-  // Both facility-scoped artifacts can pin a mapping: Removal (ADR 0003) and
-  // GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no
-  // lineage walk. Two small probes are clearer than a UNION/OR and let the
-  // planner use each artifact's own index.
+  // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003,
+  // which also covers its telemetry data-upload per ADR 0006 — both join
+  // through certifierRemovals) and a GHG Statement (ADR 0004). Each carries
+  // facilityId directly — one hop, no lineage walk. Two small probes are
+  // clearer than a UNION/OR and let the planner use each artifact's own index.
   const [removalHit, ghgHit] = await Promise.all([
     executor
       .select({ id: certificationSubmissions.id })
@@ -127,7 +138,10 @@ async function hasBlockingFacilitySubmission(
         and(
           eq(certificationSubmissions.provider, provider),
           eq(certificationSubmissions.localEntityType, "removal"),
-          eq(certificationSubmissions.submissionType, "removal"),
+          inArray(
+            certificationSubmissions.submissionType,
+            REMOVAL_SCOPED_SUBMISSION_TYPES,
+          ),
           eq(certifierRemovals.facilityId, facilityId),
           inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
         ),
@@ -166,6 +180,7 @@ export async function upsertCertifierProject(
     protocolSlug: input.protocolSlug ?? "biochar",
     protocolVersion: input.protocolVersion ?? null,
     defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
+    externalFacilityId: input.externalFacilityId ?? null,
     metadata: input.metadata ?? null,
   };
 
@@ -205,6 +220,7 @@ export async function upsertCertifierProject(
           protocolSlug: values.protocolSlug,
           protocolVersion: values.protocolVersion,
           defaultRemovalTemplateId: values.defaultRemovalTemplateId,
+          externalFacilityId: values.externalFacilityId,
           metadata: values.metadata,
           updatedAt: sql`now()`,
         },
@@ -472,9 +488,18 @@ async function insertDraftSubmissionRow(
   return row;
 }
 
-// Maps the Postgres unique-violation (23505) on (provider, submissionType,
-// localEntityType, localEntityId, version) into a SafeError. Centralized so
-// every public submit entry point reports the same user-facing message.
+// The (provider, submissionType, localEntityType, localEntityId, version)
+// unique constraint — a 23505 on THIS index means a concurrent submit already
+// claimed the same version. The table carries a second unique index
+// (`cert_submissions_external_unique`); a violation there is a different bug
+// and must not be relabeled as "already in progress".
+const SUBMISSION_ENTITY_VERSION_CONSTRAINT =
+  "cert_submissions_entity_version_unique";
+
+// Maps the Postgres unique-violation (23505) on the entity-version constraint
+// into a SafeError. Centralized so every public submit entry point reports the
+// same user-facing message. Any other 23505 (or non-23505 error) propagates
+// unchanged so genuinely different failures aren't masked.
 async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -483,7 +508,9 @@ async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
       typeof err === "object" &&
       err !== null &&
       "code" in err &&
-      (err as { code?: string }).code === "23505"
+      (err as { code?: string }).code === "23505" &&
+      (err as { constraint?: string }).constraint ===
+        SUBMISSION_ENTITY_VERSION_CONSTRAINT
     ) {
       throw new SafeError("Submission already in progress");
     }
@@ -633,6 +660,35 @@ export async function resetSubmissionToDraftWithMappingLock(
     if (!row) throw new SafeError("Submission already in progress");
     return row;
   });
+}
+
+// Accumulates per-step recovery IDs into `payload_snapshot.journaled`
+// (ADR 0006 §3). The data-upload resume reader (`readResumeSnapshot`) consults
+// `payloadSnapshot.journaled`, so the journal MUST live there, not in
+// `metadata`. Each step deep-merges into the journaled sub-object — a plain
+// top-level `payload_snapshot || {journaled: patch}` would replace the whole
+// journaled object and drop earlier steps' IDs (e.g. step 2 erasing step 1's
+// fileUploadId/uploadUrl), defeating recovery.
+export async function appendSubmissionJournal(
+  userId: string,
+  id: string,
+  patch: Record<string, unknown>,
+  tx?: Tx,
+): Promise<void> {
+  requireAuth(userId);
+  await (tx ?? db)
+    .update(certificationSubmissions)
+    .set({
+      payloadSnapshot: sql`jsonb_set(
+        coalesce(${certificationSubmissions.payloadSnapshot}, '{}'::jsonb),
+        '{journaled}',
+        coalesce(${certificationSubmissions.payloadSnapshot} -> 'journaled', '{}'::jsonb)
+          || ${JSON.stringify(patch)}::jsonb,
+        true
+      )`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(certificationSubmissions.id, id));
 }
 
 export async function updateSubmissionMetadata(

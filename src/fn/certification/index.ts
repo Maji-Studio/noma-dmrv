@@ -40,6 +40,16 @@ export {
   type CandidateLineageEntity,
   type MirrorResult,
 } from "./sources";
+// Phase 5 Slice A — telemetry pipeline (ADR 0006). Single short-lived
+// server action runs the 3 sequential POSTs (FileUpload -> PUT bytes ->
+// DataUploadSubmission) and journals per-step state in payload_snapshot
+// for resume.
+export {
+  submitTelemetryAction,
+  loadTelemetrySubmissionState,
+  type SubmitTelemetryArgs,
+  type SubmitTelemetryResult,
+} from "./submit-telemetry";
 // LCA-journal CRUD for per-period emission rows. ADR 0005 / Posture B —
 // no outbound POST; the operator publishes Project Components in the
 // Isometric UI and the drift panel reconciles.
