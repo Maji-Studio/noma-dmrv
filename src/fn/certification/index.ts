@@ -27,6 +27,19 @@ export {
   refreshGhgStatementStatus,
   submitGhgStatementToVerifier,
 } from "./ghg-statements";
+// Phase 3.5 — mirror noma documents to Isometric Sources + attach
+// source_ids to Datapoint payloads. Server-side proxy, no client blob
+// handling.
+export {
+  loadCandidateDocumentsForRemoval,
+  mirrorDocumentToSource,
+  unlinkDocumentSource,
+  setDocumentSourceVisibility,
+  type CandidateDocument,
+  type CandidateDocumentsForRemoval,
+  type CandidateLineageEntity,
+  type MirrorResult,
+} from "./sources";
 // LCA-journal CRUD for per-period emission rows. ADR 0005 / Posture B —
 // no outbound POST; the operator publishes Project Components in the
 // Isometric UI and the drift panel reconciles.

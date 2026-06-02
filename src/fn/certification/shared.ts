@@ -6,16 +6,17 @@ import type { TransportEntityIdsByCategory } from "@/lib/isometric/utils/transpo
 
 export type { TransportLegsByCategory };
 
-export const ISOMETRIC_PROVIDER = "isometric" as const;
-export const REMOVAL_SUBMISSION_TYPE = "removal" as const;
-// The Removal ledger row is keyed localEntityType='removal', localEntityId=
-// certifierRemovals.id. N credit batches map into one removal.
-export const REMOVAL_ENTITY_TYPE = "removal" as const;
-// GHG-statement constants. A GHG Statement is an independent, period-anchored
-// artifact (ADR 0003 / Phase 4.5); its ledger row is keyed
-// (provider, 'ghg_statement', 'ghgStatement', certifierGhgStatements.id).
-export const GHG_STATEMENT_SUBMISSION_TYPE = "ghg_statement" as const;
-export const GHG_STATEMENT_ENTITY_TYPE = "ghgStatement" as const;
+// Re-exported from the non-server constants module so the existing
+// `@/fn/certification/shared` import surface keeps working for the fn/
+// layer, while utils that can't cross the "use server" boundary import
+// directly from `@/lib/isometric/utils/constants`.
+export {
+  ISOMETRIC_PROVIDER,
+  REMOVAL_SUBMISSION_TYPE,
+  REMOVAL_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
+  GHG_STATEMENT_ENTITY_TYPE,
+} from "@/lib/isometric/utils/constants";
 
 export async function safeListIfConfigured<T>(
   call: () => Promise<T[]>,

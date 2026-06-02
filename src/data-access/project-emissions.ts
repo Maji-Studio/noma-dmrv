@@ -90,7 +90,12 @@ export async function getProjectEmissionById(
   const [row] = await db
     .select()
     .from(certifierProjectEmissions)
-    .where(eq(certifierProjectEmissions.id, id))
+    .where(
+      and(
+        eq(certifierProjectEmissions.id, id),
+        eq(certifierProjectEmissions.provider, ISOMETRIC),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
@@ -151,7 +156,10 @@ export async function updateProjectEmission(
     // second update finds zero matching rows and we tell the user to refresh
     // instead of silently overwriting the first edit. Falls back to id-only
     // matching when no precondition is supplied (legacy callers).
-    const conditions = [eq(certifierProjectEmissions.id, input.id)];
+    const conditions = [
+      eq(certifierProjectEmissions.id, input.id),
+      eq(certifierProjectEmissions.provider, ISOMETRIC),
+    ];
     if (input.expectedUpdatedAt) {
       conditions.push(
         eq(certifierProjectEmissions.updatedAt, input.expectedUpdatedAt),
@@ -186,7 +194,12 @@ export async function updateProjectEmission(
         const [current] = await db
           .select({ id: certifierProjectEmissions.id })
           .from(certifierProjectEmissions)
-          .where(eq(certifierProjectEmissions.id, input.id))
+          .where(
+            and(
+              eq(certifierProjectEmissions.id, input.id),
+              eq(certifierProjectEmissions.provider, ISOMETRIC),
+            ),
+          )
           .limit(1);
         if (current) {
           throw new SafeError(
@@ -239,6 +252,11 @@ export async function deleteProjectEmission(
       );
     await tx
       .delete(certifierProjectEmissions)
-      .where(eq(certifierProjectEmissions.id, id));
+      .where(
+        and(
+          eq(certifierProjectEmissions.id, id),
+          eq(certifierProjectEmissions.provider, ISOMETRIC),
+        ),
+      );
   });
 }

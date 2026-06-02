@@ -293,17 +293,61 @@ Two items remain:
   - Resolve only if production traffic shows this failure mode often enough
     to justify per-Datapoint sub-ledger bookkeeping.
 
-- **Source upload flow** (`isometric/phase-3.5`) — opened 2026-05-05,
-  storage prerequisite resolved 2026-05-19
-  - Storage prerequisite is now in place: see `docs/storage.md` and the
-    `useFileUpload` hook (`src/hooks/use-file-upload.ts`). The same
-    request → PUT → confirm orchestration can be pointed at Isometric's
-    `/sources/{id}/signed_upload_url` instead of our own `requestUpload`
-    server action.
-  - Remaining work: wire `certifierDocumentUploads` table writes, plumb
-    `source_ids` into Datapoint payloads, and add the UI hook for
-    selecting which existing noma documents to upload as Isometric
-    sources.
+- ~~**Source upload flow**~~ (`isometric/phase-3.5`) — opened 2026-05-05,
+  resolved 2026-05-26. Shipped end-to-end via server-side proxy mirror
+  (see `docs/isometric/changes.md`). Follow-up items below.
+
+- **Per-input source attribution** (`isometric/sources-per-input-attribution`)
+  — opened 2026-05-26
+  - Phase 3.5 ships removal-wide attribution: every monitored Datapoint
+    receives the same `source_ids` list. Verifiers see complete evidence
+    per Datapoint but lose the per-input narrowing that "this lab report
+    supports carbon_content + product_mass, not transport distance"
+    would convey.
+  - Why: a verification-quality concern, not an API correctness one. The
+    Isometric API accepts removal-wide source attribution today.
+  - Resolve by: extending `loadCandidateDocumentsForRemovalAction` to
+    return per-input bindings (or a per-blueprint heuristic) and threading
+    them through `buildCreateDatapointRequest`'s `sourceIds` arg, which is
+    already per-input. Defer until Phase 5 or operator feedback signals
+    it's needed.
+
+- **Stream large source files** (`isometric/sources-stream-large-files`)
+  — opened 2026-05-26
+  - Phase 3.5 caps mirror size at 50 MB via `arrayBuffer()` for code
+    simplicity. Larger documents fail loud with a `SafeError`.
+  - Resolve by: piping `response.body` (ReadableStream) from the noma
+    storage download directly into the Isometric PUT body with
+    `duplex: "half"`. Modern Node fetch supports this; needs careful
+    `Content-Length` handling.
+  - Defer until a real LCA PDF or video evidence exceeds the cap.
+
+- **Sources mirror-flow integration tests** (`isometric/sources-integration-tests`)
+  — opened 2026-05-26
+  - Phase 3.5 ships pure-logic tests (`tests/isometric-sources.test.ts`)
+    but the mirror flow's full decision matrix (happy path, recovery
+    GET-found → signed-upload-url 200 → PUT → insert, recovery GET-found
+    → signed-upload-url 409 → insert, mid-PUT failure with retry, race
+    detection / orphan-source sync_event) needs DB + Isometric client
+    integration tests.
+  - Resolve by: adding `tests/isometric-sources-mirror.integration.test.ts`
+    using the same mocking pattern as `tests/isometric-submit-removal.test.ts`.
+
+- **Cross-process source advisory lock in submitRemoval** (`isometric/sources-submit-lock`)
+  — opened 2026-05-26
+  - Unlink uses an advisory lock keyed on `source:{provider}:{externalDocumentId}`,
+    but `submitRemoval` does NOT take a matching lock when resolving
+    `sourceIds` for the semantic hash. A narrow TOCTOU window exists:
+    between submit-removal's `resolveSourceIdsForRemoval` and the
+    `insertDraftSubmissionWithMappingLock`, an unlink that grabs the
+    source-level lock can delete the row our submit just snapshotted.
+    The post-delete recheck in unlink catches the snapshot-after-delete
+    case; the converse (snapshot lands AFTER unlink check but BEFORE
+    delete) is mitigated by the second snapshot check inside the unlink
+    transaction.
+  - Resolve by: have `submitRemoval` acquire the per-source advisory
+    locks before computing `payloadHash`, hold them until the draft row
+    is INSERTed. Deferred until operator feedback shows the race fires.
 
 - **Per-column upload-URL field migration** (`storage/phase-2`) — opened 2026-05-19
   - `production.plc_data_file_url`, `samples.r0_histogram_file_url`,

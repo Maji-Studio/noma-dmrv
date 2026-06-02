@@ -1,5 +1,79 @@
 # Isometric Docs Change Log
 
+## 2026-05-26 (Phase 3.5 — Sources upload landed)
+
+Ships Phase 3.5 end-to-end. noma `documents` rows mirror to Isometric
+Sources via server-side proxy, the resulting `source_ids` ride into
+every monitored Datapoint payload, and the resolved set is part of the
+semantic hash so a mirror or unmirror supersedes the Removal version.
+No DB migration — `certifier_document_uploads` (created in migration
+0000) gets its first writers.
+
+- **Server-side mirror flow** —
+  `src/fn/certification/sources.ts` (`mirrorDocumentToSource`):
+  pre-flight (storage key + size ≤ 50 MB + recorded MIME +
+  `headObject` size match) → advisory lock keyed on
+  `mirror:isometric:{documentId}` → reconciliation
+  (`GET /sources?supplier_reference_id=…` → if found,
+  `POST /sources/{id}/signed_upload_url` → 200 re-PUT or 409 already
+  uploaded) or fresh (`POST /sources`) → host-allowlist-validated
+  `PUT` with `redirect: "error"` → `INSERT certifier_document_uploads`
+  with `(provider, document_id)` uniqueness as the idempotency lock.
+  Every outbound HTTP call wraps `withSyncEventOnFailure` so failures
+  land in `certifier_sync_events` before throwing.
+- **Hash-covered source attribution** —
+  `src/lib/isometric/transformers/datapoint.ts` plumbs `sourceIds`
+  into every monitored Datapoint's `source_ids` (no INPUT_MAPPING
+  change → `MAPPING_REVISION` unchanged).
+  `src/fn/certification/submit-removal.ts` resolves source IDs from
+  the lineage already loaded in `RemovalSubmissionContext`, adds them
+  to `semanticPayload.sourceIds` and to
+  `payloadSnapshot.transport.datapointBodies[].body.source_ids`. The
+  `datapointTransportSchema` now requires `source_ids` so resumed
+  pre-Phase-3.5 snapshots fail loud locally rather than POST a
+  malformed Datapoint.
+- **UI** — `src/components/certification/sources-panel.tsx` lists
+  every document attached to entities along the Removal's
+  chain-of-custody (application, delivery, order, biochar product,
+  production run, samples, feedstocks, reactor, credit batch) with
+  per-row Mirror / Unlink / public-private toggle. Mounted under the
+  credit-batch side sheet's `CertifyPanel` and at the new dynamic
+  route `/certification/removals/[removalId]`. The Removals hub adds
+  a "Sources →" link on each card. UI handles its own
+  loading/empty/error states matching sibling certification panels.
+- **Authorization model on unlink** —
+  `certifier_document_uploads` rows referenced by any persisted
+  submission snapshot cannot be deleted: `unlinkDocumentSource`
+  guards via `isExternalSourceReferencedInSnapshots`
+  (jsonb_path_exists over `payload_snapshot`), wrapped in a
+  transaction + post-delete recheck. The Source remains on Isometric
+  in all unlink cases; the user can re-mirror to restore the link.
+- **Document deletion compatibility** — `deleteDocument`
+  (`src/fn/documents.ts`) now pre-checks `certifier_document_uploads`
+  before deleting storage bytes; FK violations are surfaced as a
+  user-friendly `SafeError` instead of a 500.
+- **New env var** — `ISOMETRIC_UPLOAD_HOST_ALLOWLIST` (optional;
+  comma-separated host suffixes; defaults to `.s3.amazonaws.com,
+  .amazonaws.com, .isometric.com, .digitaloceanspaces.com`). The
+  mirror flow's PUT refuses to ship bytes to any URL outside this
+  list (SSRF defense-in-depth).
+- **Known v1 compromise** — removal-wide source attribution; every
+  monitored Datapoint receives the same `source_ids` list. Per-input
+  refinement is a Phase 5 follow-up tracked under
+  `isometric/sources-per-input-attribution`. 50 MB hard cap on
+  mirrored bytes tracked under
+  `isometric/sources-stream-large-files`.
+- **Tests** — `tests/isometric-sources.test.ts` (13 cases): supplier-
+  ref determinism, transformer `source_ids` plumbing, supersede
+  contract on hash sensitivity. Existing
+  `tests/isometric-submit-removal.test.ts` mocks the new source
+  resolver to keep the pre-Phase-3.5 contract pinned. Mirror-flow
+  integration tests (POST 200 → PUT, recovery 200 → PUT → insert,
+  recovery 409 → insert, mid-PUT failure → retry, race detection)
+  tracked under `isometric/sources-integration-tests`.
+
+Open question closed: `isometric/phase-3.5`.
+
 ## 2026-05-24 (Period emissions + template-evolution strategy — grilling session)
 
 Resolves the `isometric/phase-3.7-period-inputs` open question

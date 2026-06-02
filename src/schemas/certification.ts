@@ -1,6 +1,28 @@
 import { z } from "zod";
 import { emptyToNull, toNumberOrUndefined } from "@/schemas/helpers";
 
+// Hard cap on the free-text "summary of changes" the operator writes when
+// resubmitting a GHG statement. 2 kB is enough for the audit-trail context
+// we ask for (what changed and why) without letting an oversized blob hit
+// the registry; keep this in sync with any column length on the persisted
+// side if/when one is added.
+const SUMMARY_OF_CHANGES_MAX_LENGTH = 2000;
+
+// Rejects shapes that pass the YYYY-MM-DD regex but aren't real calendar
+// dates (e.g. 2026-02-31, 2023-02-29). Same Date.UTC round-trip used in
+// `src/schemas/project-emissions.ts` so the two surfaces validate dates
+// identically — diverging would surprise an operator who hits one of them.
+function isValidCalendarDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
+
 const httpsUrlSchema = z
   .string()
   .url({ error: "Enter a valid report URL" })
@@ -111,7 +133,10 @@ export const submitGhgStatementDialogSchema = z.object({
   reportUrl: httpsUrlSchema,
   summaryOfChanges: z
     .string()
-    .max(2000, "Keep the summary under 2000 characters")
+    .max(
+      SUMMARY_OF_CHANGES_MAX_LENGTH,
+      `Keep the summary under ${SUMMARY_OF_CHANGES_MAX_LENGTH} characters`,
+    )
     .optional(),
   confirmProduction: z.boolean().optional(),
 });
@@ -152,7 +177,7 @@ export const createGhgStatementSchema = z.object({
   facilityId: z.string().uuid(),
   reportingPeriodEndOn: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a period end date"),
+    .refine(isValidCalendarDate, "Pick a valid period end date"),
   confirmProduction: z.boolean().optional(),
 });
 
