@@ -138,11 +138,25 @@ export function decideSubmissionClaim(
         return { kind: "blocked-in-flight" };
       }
       if (dataUploadResume) {
-        return decideDataUploadResume({
-          latest,
-          dataUploadResume,
-          now,
-        });
+        // The journaled remote IDs (fileUpload, dataUploadSubmission) and the
+        // signed upload URL were produced for `latest.payloadHash`. If the
+        // source readings changed since (different hash), resuming would
+        // re-PUT fresh bytes to a URL presigned for the old content length and
+        // poll a submission built from stale data. Abandon the orphaned upload
+        // and start a new version instead of reusing those IDs.
+        if (latest.payloadHash === payloadHash) {
+          return decideDataUploadResume({
+            latest,
+            dataUploadResume,
+            now,
+          });
+        }
+        return {
+          kind: "create-new-version",
+          nextVersion: latest.version + 1,
+          supersedePreviousId: null,
+          reason: "dataupload-orphan-restart",
+        };
       }
       return {
         kind: "resume",

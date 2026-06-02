@@ -60,9 +60,11 @@ export async function withAction<T>(
         error: `${zodErrorPrefix}: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
-    if (process.env.NODE_ENV === "development" && error instanceof Error) {
-      console.error("[withAction]", error.name, error.constructor.name);
-    }
+    // Deliberately no debug log here — `error.message` may carry PII per
+    // CLAUDE.md, and `error.name` alone duplicates what dev tooling already
+    // shows on the thrown error. Callers that need richer diagnostics should
+    // throw a `SafeError` (message is then exposed to the client) or rely on
+    // the framework's server error reporting.
     return {
       success: false,
       error:

@@ -42,12 +42,10 @@ export async function GET(
   }
 
   if (row.fileUrl) {
-    let parsed: URL;
-    try {
-      parsed = new URL(row.fileUrl);
-    } catch {
+    if (!URL.canParse(row.fileUrl)) {
       return new NextResponse("Invalid document URL", { status: 500 });
     }
+    const parsed = new URL(row.fileUrl);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return new NextResponse("Invalid document URL", { status: 500 });
     }

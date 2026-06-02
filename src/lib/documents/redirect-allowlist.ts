@@ -29,12 +29,8 @@ const CLOUD_HOST_SUFFIXES = [
 ] as const;
 
 function hostOf(url: string | undefined): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
+  if (!url || !URL.canParse(url)) return null;
+  return new URL(url).hostname.toLowerCase();
 }
 
 /**
