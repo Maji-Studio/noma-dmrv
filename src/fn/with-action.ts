@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { getUser } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
 
 interface WithActionOptions {
@@ -10,6 +11,12 @@ interface WithActionOptions {
   zodErrorPrefix?: string;
   /** Fallback message when error is not an Error instance. Default: "An unexpected error occurred" */
   fallbackMessage?: string;
+  /**
+   * Opt-in per-user abuse limit, scoped by `key`. Only expensive actions (e.g.
+   * the certification submit pipeline) pass this; CRUD actions leave it unset.
+   * Checked after auth so the limiter keys on the resolved user id.
+   */
+  rateLimit?: { key: string; max: number; windowMs: number };
 }
 
 /**
@@ -23,12 +30,26 @@ export async function withAction<T>(
   const {
     zodErrorPrefix = "Validation error",
     fallbackMessage = "An unexpected error occurred",
+    rateLimit,
   } = options ?? {};
 
   try {
     const user = await getUser();
     if (!user?.id) {
       return { success: false, error: "Unauthorized" };
+    }
+    if (rateLimit) {
+      const verdict = checkRateLimit({
+        key: `${rateLimit.key}:${user.id}`,
+        max: rateLimit.max,
+        windowMs: rateLimit.windowMs,
+      });
+      if (!verdict.allowed) {
+        return {
+          success: false,
+          error: `Too many attempts. Try again in ${verdict.retryAfterSeconds}s.`,
+        };
+      }
     }
     const data = await fn(user.id);
     return { success: true, data };

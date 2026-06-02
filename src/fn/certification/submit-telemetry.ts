@@ -48,7 +48,11 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context";
-import { ISOMETRIC_PROVIDER, assertProductionConfirmed } from "./shared";
+import {
+  ISOMETRIC_PROVIDER,
+  assertProductionConfirmed,
+  submitRateLimit,
+} from "./shared";
 import type { components } from "@/lib/isometric/generated/certify";
 
 const DATA_UPLOAD_SUBMISSION_TYPE = "dataUpload" as const;
@@ -76,7 +80,9 @@ export interface SubmitTelemetryResult {
 export async function submitTelemetryAction(
   args: SubmitTelemetryArgs,
 ): Promise<ActionResult<SubmitTelemetryResult>> {
-  return withAction((userId) => submitTelemetry(userId, args));
+  return withAction((userId) => submitTelemetry(userId, args), {
+    rateLimit: submitRateLimit("cert:submit-telemetry"),
+  });
 }
 
 // Runs the full DataUploadSubmission pipeline inside one short-lived
