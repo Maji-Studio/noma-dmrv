@@ -50,13 +50,13 @@ const PROJECT_EMISSION_UNIQUE_CONSTRAINT =
 
 function isUniqueViolation(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;
-  const e = err as { code?: unknown; constraint_name?: unknown };
+  const e = err as { code?: unknown; constraint?: unknown };
   if (e.code !== PG_UNIQUE_VIOLATION) return false;
-  // postgres-js surfaces the constraint name on `.constraint_name`.
-  return (
-    typeof e.constraint_name !== "string" ||
-    e.constraint_name === PROJECT_EMISSION_UNIQUE_CONSTRAINT
-  );
+  // node-postgres surfaces the constraint name on `.constraint` (matching the
+  // sibling guard in data-access/certification.ts). Match it exactly — the
+  // previous `.constraint_name` read was always undefined here, so the guard
+  // relabeled *any* 23505 as this conflict and masked unrelated violations.
+  return e.constraint === PROJECT_EMISSION_UNIQUE_CONSTRAINT;
 }
 
 const PROJECT_EMISSION_CONFLICT_MESSAGE =
