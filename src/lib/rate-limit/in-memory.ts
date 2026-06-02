@@ -13,8 +13,13 @@
  * limit is ever required, swap this for a DB/Redis-backed bucket.
  */
 
-// Window timestamps per key. Pruned lazily on access, so a key that stops being
-// hit simply ages out the next time anything touches it (no background timer).
+// Window timestamps per key. Each key's own entries are pruned to the current
+// window on access; other keys are NOT touched, so a key that stops being hit
+// will linger in the map indefinitely. Acceptable for the only current use
+// (cert submits keyed by `cert:submit-*:<userId>` — bounded by active operators
+// × 3 actions). If the keyspace ever grows unbounded, add a size-triggered
+// sweep here; we deliberately avoid a background timer so the module stays
+// dependency-free.
 const hits = new Map<string, number[]>();
 
 export interface RateLimitOptions {

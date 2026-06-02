@@ -855,11 +855,10 @@ export async function listRecentSyncEvents(
 }
 
 function deriveFileName(reportUrl: string): string {
-  try {
-    const url = new URL(reportUrl);
-    const lastSegment = url.pathname.split("/").filter(Boolean).at(-1);
-    return lastSegment || "ghg-statement-report.pdf";
-  } catch {
-    return "ghg-statement-report.pdf";
-  }
+  if (!URL.canParse(reportUrl)) return "ghg-statement-report.pdf";
+  const lastSegment = new URL(reportUrl).pathname
+    .split("/")
+    .filter(Boolean)
+    .at(-1);
+  return lastSegment || "ghg-statement-report.pdf";
 }

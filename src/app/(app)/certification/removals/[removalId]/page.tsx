@@ -29,11 +29,12 @@ export default async function RemovalSourcesPage({
         <span className="title-chapter-title text-[var(--color-text-tertiary)]">
           Isometric Certify
         </span>
-        <h1 className="title-heading-2">Sources for this Removal</h1>
+        <h1 className="title-heading-2">Sources &amp; telemetry for this Removal</h1>
         <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
           Mirror supporting documents from the chain-of-custody to Isometric
-          as Sources. They attach to every Datapoint in this Removal at
-          submit time.
+          as Sources — they attach to every Datapoint in this Removal at
+          submit time — and publish the reactor telemetry that backs this
+          Removal as a DataUploadSubmission.
         </p>
         <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
           {removalId}

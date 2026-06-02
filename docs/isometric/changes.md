@@ -1,5 +1,69 @@
 # Isometric Docs Change Log
 
+## 2026-06-02 (consistency cleanup — `documents.ts` migration + shared helpers)
+
+Internal-only refactor following code review of the last six commits. No
+behaviour change to user-facing flows; touches consistency, reuse, and
+native-API adoption.
+
+- **`src/fn/documents.ts` migrated to `withAction`.** Previously hand-rolled
+  `getUser()` + `failure()`/`unauthorized()` wrappers across `requestUpload`,
+  `confirmUpload`, `setDocumentVisibility`, `deleteDocument`, and
+  `getDocumentsForEntity`; now matches every other `fn/` entry point. User-
+  facing validation copy is preserved by parsing with `safeParse` and throwing
+  `SafeError(parsed.error.issues[…].message)` rather than relying on the
+  wrapper's default `"Validation error: …"` prefix. Hard-coded `"isometric"`
+  provider strings replaced with `ISOMETRIC_PROVIDER` from
+  `@/fn/certification/shared`.
+
+- **Sync-event best-effort helper consolidated.** Three near-identical
+  helpers (`appendSyncEventBestEffort` in `submit-removal.ts` and
+  `submit-telemetry.ts`; `safeAppendSyncEvent` in `sources.ts`) collapsed to
+  one in `@/fn/certification/shared`. Signature:
+  `appendSyncEventBestEffort(userId, AppendSyncEventInput, logContext?)`.
+  Call sites that previously passed `submissionId` as a positional argument
+  now pass it via `{ submissionId: row.id }`. Behaviour identical: failed
+  audit-trail inserts still console.warn and do not unwind the submission.
+
+- **Native `URL.canParse` replaces five `try { new URL(x) } catch {}`
+  parseability checks** (Node 24 LTS). Sites: `redirect-allowlist.hostOf`,
+  `signed-upload.assertUploadHostAllowed`, the `/api/documents/[id]` legacy
+  `fileUrl` branch, `parseSignedUrlExpiry` in `submit-telemetry.ts`, and
+  `deriveFileName` in `data-access/certification.ts`. Route-relative `new
+  URL("/path", request.url)` uses are deliberately untouched (they cannot
+  fail-fast via `URL.canParse`).
+
+- **Native one-liners replace `unique`/`minDate`/`maxDate` helpers** in
+  `submit-telemetry.ts`. `unique<T>(xs)` → `[...new Set(xs)]`;
+  `min/maxDate(dates)` →
+  `new Date(Math.min/max(...dates.map((d) => d.getTime())))`. Removes the
+  "two ways to dedupe in the same file" smell — the file already used the
+  native form in `sourceProductionRunIds`.
+
+- **Rate-limiter comment corrected.** `src/lib/rate-limit/in-memory.ts`
+  previously said keys "age out when anything touches it" — only the touched
+  key is pruned. Comment now describes the actual behaviour (per-key prune,
+  no cross-key sweep) and the accepted bound (active operators × 3 cert
+  submit actions), with a note that a size-triggered sweep is the right
+  follow-up if the keyspace ever grows.
+
+- **Sources mirror orphan-check comment reworded.** The branch in
+  `mirrorDocumentToSource` that records an `source:create:orphaned` event is
+  unreachable while `acquireMirrorLock` is held across the insert. Comment
+  now frames it as defense-in-depth against a future entry point that
+  mints a Source without first taking the lock, instead of describing it as
+  a normal race outcome.
+
+- **`withAction` dev-only `console.error` removed.** Logged
+  `error.name, error.constructor.name` — identical for plain `Error`
+  instances; logging `error.message` would carry PII per CLAUDE.md. Callers
+  that need diagnostics should throw `SafeError` (message is then exposed
+  to the client) or rely on the framework's server error reporter. Inline
+  comment in `with-action.ts` records the rationale.
+
+Verification: `pnpm tsc --noEmit` clean; `pnpm vitest run` 312 pass / 5
+skipped (same baseline); `pnpm lint` no new warnings.
+
 ## 2026-06-02 (robustness pass — redirect allowlist + submit rate limit)
 
 Resolves three deferred items from `docs/open-questions.md`. No schema/migration

@@ -3,7 +3,6 @@
 import { db, type DbTransaction } from "@/db";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import {
-  appendSyncEvent,
   getCertifierProjectByFacility,
   type DocumentRow,
 } from "@/data-access/certification";
@@ -51,7 +50,7 @@ import {
 } from "@/schemas/certification-sources";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { ISOMETRIC_PROVIDER } from "./shared";
+import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Candidate-document discovery
@@ -360,7 +359,7 @@ async function withSyncEventOnFailure<T>(
   try {
     return await fn();
   } catch (err) {
-    await safeAppendSyncEvent(userId, {
+    await appendSyncEventBestEffort(userId, {
       provider: ISOMETRIC_PROVIDER,
       entityType: "document",
       entityId: args.documentId,
@@ -576,11 +575,15 @@ export async function mirrorDocumentToSource(
         tx,
       );
 
-      // Orphan-detection: if we POSTed a fresh Source but lost the local
-      // insert race, the externalDocumentId we created is now an orphan on
-      // Isometric. Emit a sync_event so an out-of-band sweep can clean up.
+      // Defense-in-depth orphan check. With `acquireMirrorLock(tx, documentId)`
+      // held across the whole block, two callers cannot reach the insert
+      // concurrently for the same documentId — so this branch is expected to
+      // be unreachable. Kept because a future entry point that mints a Source
+      // without first acquiring the lock would silently orphan the
+      // externalDocumentId we just created; the sync_event lets an out-of-
+      // band sweep reconcile rather than swallowing the leak.
       if (!inserted && row.externalDocumentId !== sourceExternalId) {
-        await safeAppendSyncEvent(userId, {
+        await appendSyncEventBestEffort(userId, {
           provider: ISOMETRIC_PROVIDER,
           entityType: "document",
           entityId: documentId,
@@ -595,7 +598,7 @@ export async function mirrorDocumentToSource(
             "Lost the mirror race; the Source created by this attempt is unreferenced on Isometric.",
         });
       } else {
-        await safeAppendSyncEvent(userId, {
+        await appendSyncEventBestEffort(userId, {
           provider: ISOMETRIC_PROVIDER,
           entityType: "document",
           entityId: documentId,
@@ -695,7 +698,7 @@ export async function unlinkDocumentSource(
         );
       }
 
-      await safeAppendSyncEvent(userId, {
+      await appendSyncEventBestEffort(userId, {
         provider: ISOMETRIC_PROVIDER,
         entityType: "document",
         entityId: parsed.documentId,
@@ -788,7 +791,7 @@ export async function setDocumentSourceVisibility(
       };
       await updateDocumentUploadMetadata(userId, existing.id, nextMeta, tx);
 
-      await safeAppendSyncEvent(userId, {
+      await appendSyncEventBestEffort(userId, {
         provider: ISOMETRIC_PROVIDER,
         entityType: "document",
         entityId: parsed.documentId,
@@ -809,20 +812,6 @@ export async function setDocumentSourceVisibility(
 // ───────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ───────────────────────────────────────────────────────────────────────────
-
-async function safeAppendSyncEvent(
-  userId: string,
-  input: Parameters<typeof appendSyncEvent>[1],
-): Promise<void> {
-  try {
-    await appendSyncEvent(userId, input);
-  } catch (err) {
-    console.warn("Failed to record certifier sync event", {
-      operation: input.operation,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
 
 // Walks the lineage and returns the deduped, sorted set of candidate
 // noma documentIds — the IDs every submit-path needs to acquire per-document
