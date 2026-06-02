@@ -83,6 +83,10 @@ export interface AggregateDataUploadArgs {
 
 const MS_PER_SECOND = 1_000;
 export const DEFAULT_BUCKET_SECONDS = 60;
+// Isometric's hard server-side cap on the aggregation window (2026-05-29
+// sandbox smoke). Buckets wider than this are rejected remotely, so fail
+// fast here rather than generating Parquet that can't be ingested.
+export const MAX_BUCKET_SECONDS = 60;
 
 interface BucketAccumulator {
   start: number;
@@ -96,9 +100,15 @@ interface BucketAccumulator {
 export function aggregateForDataUpload(
   args: AggregateDataUploadArgs,
 ): AggregatedDataUploadRow[] {
-  const bucketMs = (args.bucketSeconds ?? DEFAULT_BUCKET_SECONDS) * MS_PER_SECOND;
+  const bucketSeconds = args.bucketSeconds ?? DEFAULT_BUCKET_SECONDS;
+  const bucketMs = bucketSeconds * MS_PER_SECOND;
   if (!Number.isFinite(bucketMs) || bucketMs <= 0) {
     throw new Error("bucketSeconds must be a positive number");
+  }
+  if (bucketSeconds > MAX_BUCKET_SECONDS) {
+    throw new Error(
+      `bucketSeconds must be between 0 and ${MAX_BUCKET_SECONDS}`,
+    );
   }
   const channels = args.channels ?? DEFAULT_DATA_UPLOAD_CHANNELS;
 

@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { type ElementType } from "react";
+import { type ElementType, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -137,6 +137,14 @@ const adminSection: NavSection = {
   ],
 };
 
+// Stable references for the hydration-detection `useSyncExternalStore` in
+// AppSidebar. The store never changes, so `subscribe` is a no-op; the snapshots
+// differ between server (false) and client (true) so the hook flips to `true`
+// only after hydration.
+const subscribeNoop = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
 function NavLink({
   item,
   isActive,
@@ -213,13 +221,29 @@ export function AppSidebar() {
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
 
+  // The session resolves synchronously on the client (cookie cache) but is
+  // unresolved during SSR, so gating the Admin section on it directly adds a
+  // nav subtree on the client that the server never rendered — a hydration
+  // mismatch. `useSyncExternalStore` returns the server snapshot (false) during
+  // SSR and the first client render, then the client snapshot (true) once
+  // hydrated — so the admin section only appears after hydration, matching the
+  // server on the first paint. This is React's hydration-safe primitive and
+  // avoids the cascading setState-in-effect pattern.
+  const hydrated = useSyncExternalStore(
+    subscribeNoop,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
+
   // Append the Admin section only for admin users. Server-side `requireAdmin()`
   // in src/app/admin/layout.tsx remains the actual access boundary.
   // `role` is a Better Auth additionalField absent from the inferred client
   // user type — assert it as the auth provider layer does.
   const userRole = (session?.user as { role?: string } | undefined)?.role;
   const sections =
-    userRole === "admin" ? [...navSections, adminSection] : navSections;
+    hydrated && userRole === "admin"
+      ? [...navSections, adminSection]
+      : navSections;
 
   return (
     <aside

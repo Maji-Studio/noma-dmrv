@@ -162,39 +162,17 @@ double-create dedup, the N+1 query batching and the non-atomic
 `finalizeGhgStatement` were fixed in the same branch; the entries below
 were deferred by the operator to a follow-up PR.
 
-- **No route-level error boundary** (`certification/error-boundary`) —
-  opened 2026-05-22, deferred.
-  - There is no `error.tsx` anywhere under `src/app`. A thrown error in a
-    Certification route (loader reject, server-fn throw not caught by
-    `ActionResult`) renders a blank screen instead of a recoverable UI.
-  - Resolve via: add `src/app/(app)/certification/error.tsx` with a retry
-    affordance — a new convention for the project, so confirm placement
-    (per-route-group vs a single app-level boundary) before landing.
+  (Resolved & removed 2026-06-02 — `forms/a11y-shared-layer`: `FormField` /
+  `FormError` wire `aria-describedby` and `Modal` dev-warns on a missing
+  accessible name (commit `33920f5`); `useDialog` now captures the trigger on
+  open and restores focus to it on close (`src/hooks/use-dialog.ts`).
+  Regression check on focus-restore deferred to an e2e assertion — the e2e
+  tree was under concurrent edit at the time.)
 
-- **Report-URL open-redirect / 2nd-party SSRF**
-  (`certification/report-url-allowlist`) — opened 2026-05-22, deferred.
-  - The operator-supplied GHG-statement report URL (`reportUrl` in
-    `submitGhgStatementToVerifier`) is stored on a `documents` row and
-    later served through the pre-existing `/api/documents/[id]` route,
-    which 302-redirects to `fileUrl` with no host allowlist. A crafted
-    URL turns the redirect into an open redirect / server-side fetch of
-    an arbitrary host.
-  - Pre-existing pattern — the `/api/documents/[id]` `fileUrl` branch
-    predates this feature and is shared by every external/legacy URL
-    column (see the `storage/phase-2` entry).
-  - Resolve via: decide an allowlist policy (e.g. restrict to known
-    object-storage / Isometric hosts) and enforce it at the
-    `/api/documents/[id]` redirect, not per-caller.
-
-- **Shared-component a11y gaps** (`forms/a11y-shared-layer`) — opened
-  2026-05-22, deferred.
-  - `FormField` / `FormError` (`src/components/forms/`) do not wire
-    `aria-describedby` from input to error message; `useDialog`
-    (`src/hooks/use-dialog.ts`) does not restore focus to the trigger on
-    close. Surfaced by the GHG Statement dialogs but the gap is in the
-    shared layer, so a fix touches every form and dialog in the app.
-  - Resolve via: a dedicated a11y pass on the shared forms/dialog
-    primitives with a regression check across existing consumers.
+  (Resolved & removed 2026-06-02 — see `docs/isometric/changes.md`:
+  `certification/error-boundary` shipped as `(app)/certification/error.tsx`;
+  `certification/report-url-allowlist` shipped as the `/api/documents/[id]`
+  host gate via `src/lib/documents/redirect-allowlist.ts`.)
 
 ### Remaining template-coverage gaps
 
@@ -647,17 +625,24 @@ ordered by leverage.
 
 ### Structural / cross-cutting
 
-- **File-size hard-rule violations** (`code/file-size-rule`)
-  - `src/data-access/entities.ts` is 1323 lines, `src/data-access/production-runs.ts`
-    is 1076. CLAUDE.md sets a 1000-line hard limit. `entities.ts` is 14
-    near-identical `getX` / `getXById` factories — collapse via a
-    `buildSearchableEntityFinder({table, codeCol, nameCol, ...})` factory
-    plus per-entity files under `src/data-access/entities/`. `production-runs.ts`
-    splits cleanly into `{queries, mutations, readings, stats, codes}.ts`.
-    Same pattern unblocks a separate `createEntityHooks` factory for the
-    `src/hooks/use-*.ts` family (~4–5k duplicate lines).
+- **Duplicate-hooks factory** (`code/hooks-factory`) — opened 2026-05-25.
+  - The `src/hooks/use-*.ts` family is ~4–5k lines of near-identical
+    query/mutation wiring per entity. A `createEntityHooks(...)` factory
+    would collapse most of it. (Carved out of the original `code/file-size-rule`
+    entry, whose data-access file-size half is now resolved — see below.)
   - Resolve via: dedicated refactor PR — should not stack on top of
     in-flight feature work.
+
+  (Resolved & removed 2026-06-02 — `code/file-size-rule`: both files exceeding
+  the 1000-line limit were split. `src/data-access/entities.ts` (1323 LOC) →
+  one module per entity under `src/data-access/entities/` + an `index.ts`
+  dispatcher barrel (commit `a03d486`); chose explicit per-entity files over a
+  `buildSearchableEntityFinder` factory — the 14 query shapes diverge enough
+  (joins, aggregates, subtitle formatting) that a factory would obscure more
+  than it saves. `src/data-access/production-runs.ts` (1076 LOC) → split by
+  concern into `queries`/`mutations`/`readings`/`types` + barrel (commit
+  `7e640d1`). Both are pure extraction, public API unchanged, full suite green.
+  The hooks-factory dedup above is the separable remainder.)
 
 - **Structured logger + Isometric API boundary logging** (`code/logger-introduction`)
   - Project has zero structured logging — only `console.warn` / `console.error`.
@@ -670,17 +655,20 @@ ordered by leverage.
     `src/lib/isometric/*`, attach `{op, removalId, externalProjectId,
     mappingRevision, attempt, duration_ms}`. Also mint a per-submission
     `submissionAttemptId = randomUUID()` for cross-event correlation.
+  - **Status 2026-06-02:** this is the last open item from the robustness
+    pass (the a11y / error-boundary / redirect-allowlist / rate-limit / file-split
+    work all landed; commits `33920f5`, `22c0d6e`, `6aafe2c`, `c16c569`,
+    `a03d486`, `7e640d1`). Deferred deliberately: the ~111 `console.*` calls span
+    `src/fn/certification/*`, which was under concurrent uncommitted edit at the
+    time — a repo-wide console→pino sweep would conflict. Start once that cert
+    work has landed. pino gives levels, structured JSON fields, and built-in
+    `redact` for the no-PII rule (CLAUDE.md).
 
-- **Rate limiting on submission actions** (`security/rate-limit-submissions`)
-  - `submitRemovalAction`, `submitCreditBatchRemoval`,
-    `submitGhgStatementToVerifier` drive external POSTs that consume
-    Isometric quota and burn `ISOMETRIC_CLIENT_SECRET`. The in-flight
-    lock in `decideSubmissionClaim` blocks duplicate submissions of the
-    same removal but not sweep-all-removals abuse by an authenticated
-    user. Better Auth rate-limits only `/sign-in/email` and friends.
-  - Resolve via: per-user (or per-facility) rate limit inside
-    `withAction` — token bucket, e.g. 10 submissions/hour/user, 30/hour/facility.
-    Design call on the bucket strategy first.
+  (Resolved & removed 2026-06-02 — `security/rate-limit-submissions`: opt-in
+  `rateLimit` on `withAction`, 5/min/user per submit pipeline, in-memory
+  sliding window. See `docs/isometric/changes.md`. NOTE: this resolved the
+  abuse-defense concern only; a per-facility limit and the exact cross-instance
+  ceiling were explicitly out of scope — reopen if either is needed.)
 
 - **Single-tenant authorization → facility-membership model**
   (`security/facility-membership-authz`)

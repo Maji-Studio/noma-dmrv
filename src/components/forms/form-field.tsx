@@ -3,6 +3,7 @@
  * Wrapper component that provides label, children (input/textarea), and error display
  */
 
+import { cloneElement, isValidElement, type ReactNode } from "react";
 import { FormError } from "./form-error";
 
 interface FormFieldProps {
@@ -11,7 +12,32 @@ interface FormFieldProps {
   error?: string;
   helperText?: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
+}
+
+/**
+ * Wire the error/helper text to the control via `aria-describedby` so screen
+ * readers announce them when the field is focused. FormField owns the `id`
+ * and renders both the control and its messages, so it is the only place that
+ * can establish the association without every call site repeating it.
+ *
+ * The control is expected to be a single element whose own `id` matches the
+ * FormField `id` (the established pattern — see FormInput/FormSelect usage).
+ * When that holds, clone it to merge in `aria-describedby`; otherwise render
+ * children untouched so atypical layouts don't break.
+ */
+function describeChild(
+  children: ReactNode,
+  describedBy: string | undefined
+): ReactNode {
+  if (!describedBy || !isValidElement(children)) return children;
+  const childProps = children.props as { "aria-describedby"?: string };
+  const merged = [childProps["aria-describedby"], describedBy]
+    .filter(Boolean)
+    .join(" ");
+  return cloneElement(children, { "aria-describedby": merged } as Partial<
+    typeof childProps
+  >);
 }
 
 export function FormField({
@@ -22,6 +48,13 @@ export function FormField({
   required,
   children,
 }: FormFieldProps) {
+  const errorId = `${id}-error`;
+  const helperId = `${id}-helper`;
+  const showHelper = Boolean(helperText) && !error;
+
+  // Point the control at whichever message is actually rendered below it.
+  const describedBy = error ? errorId : showHelper ? helperId : undefined;
+
   return (
     <div>
       <label
@@ -36,13 +69,16 @@ export function FormField({
           </>
         )}
       </label>
-      {children}
-      {helperText && !error && (
-        <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
+      {describeChild(children, describedBy)}
+      {showHelper && (
+        <p
+          id={helperId}
+          className="body-caption text-[var(--color-text-tertiary)] mt-6"
+        >
           {helperText}
         </p>
       )}
-      <FormError message={error} />
+      <FormError id={errorId} message={error} />
     </div>
   );
 }

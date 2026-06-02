@@ -21,42 +21,62 @@ export const UPLOAD_TRANSFER_TIMEOUT_MS = 30_000;
 // Hosts the upload flows are allowed to PUT bytes to. Isometric presigns
 // against object storage; the sandbox returns S3-style URLs for source uploads
 // (2026-05-29) and Google Cloud Storage URLs (`X-Goog-*`) for the telemetry
-// file-upload step (ADR 0006). Both backends are documented, so both host
-// families are allowlisted by default.
+// file-upload step (ADR 0006). Scoped to the specific storage host families —
+// `.storage.googleapis.com` (the GCS object endpoint), not the broad
+// `.googleapis.com` (which would also allow every other Google API host).
 const DEFAULT_UPLOAD_HOST_SUFFIXES = [
   ".s3.amazonaws.com",
-  ".amazonaws.com",
   ".isometric.com",
   ".digitaloceanspaces.com",
   ".storage.googleapis.com",
-  ".googleapis.com",
 ] as const;
 
-function uploadHostSuffixes(): string[] {
+const S3_REGIONAL_HOST_PATTERN =
+  /(^|\.)s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/;
+const S3_DUALSTACK_HOST_PATTERN =
+  /(^|\.)s3\.dualstack\.[a-z0-9-]+\.amazonaws\.com$/;
+
+function uploadHostAllowlist(): {
+  suffixes: string[];
+  includeDefaultS3Patterns: boolean;
+} {
   const raw = env.ISOMETRIC_UPLOAD_HOST_ALLOWLIST;
-  if (!raw) return [...DEFAULT_UPLOAD_HOST_SUFFIXES];
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`));
+  if (!raw) {
+    return {
+      suffixes: [...DEFAULT_UPLOAD_HOST_SUFFIXES],
+      includeDefaultS3Patterns: true,
+    };
+  }
+  return {
+    suffixes: raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+      .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`)),
+    includeDefaultS3Patterns: false,
+  };
 }
 
 export function assertUploadHostAllowed(uploadUrl: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(uploadUrl);
-  } catch {
+  if (!URL.canParse(uploadUrl)) {
     throw new SafeError("Isometric returned a malformed upload URL.");
   }
+  const parsed = new URL(uploadUrl);
   if (parsed.protocol !== "https:") {
     throw new SafeError(
       `Refusing PUT to non-HTTPS upload URL (protocol=${parsed.protocol}).`,
     );
   }
   const hostname = `.${parsed.hostname.toLowerCase()}`;
-  const allowed = uploadHostSuffixes();
-  if (!allowed.some((suffix) => hostname.endsWith(suffix.toLowerCase()))) {
+  const allowed = uploadHostAllowlist();
+  const defaultAllowed =
+    allowed.suffixes.some((suffix) =>
+      hostname.endsWith(suffix.toLowerCase()),
+    ) ||
+    (allowed.includeDefaultS3Patterns &&
+      (S3_REGIONAL_HOST_PATTERN.test(parsed.hostname.toLowerCase()) ||
+        S3_DUALSTACK_HOST_PATTERN.test(parsed.hostname.toLowerCase())));
+  if (!defaultAllowed) {
     throw new SafeError(
       `Refusing PUT to upload URL with host "${parsed.hostname}" — not in ISOMETRIC_UPLOAD_HOST_ALLOWLIST.`,
     );
@@ -76,7 +96,15 @@ export async function fetchSignedUploadWithTimeout(
     UPLOAD_TRANSFER_TIMEOUT_MS,
   );
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    // `redirect: "error"` is applied last so it can't be overridden by a
+    // caller's `init` — every signed-URL transfer (PUT bytes AND the storage
+    // GET in downloadDocumentBlob) must refuse a redirect, since a rerouted
+    // hop is the SSRF vector this module exists to close.
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      redirect: "error",
+    });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new SafeError(

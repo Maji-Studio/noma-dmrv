@@ -76,8 +76,9 @@ export const certifierProjects = pgTable(
 
 // Phase 5 Slice A — maps a noma reactor + measurement property to the
 // Isometric Sensor that receives its telemetry. One row per
-// `(reactor, measurement_property)` — a single reactor publishes one
-// sensor per quantity (temperature, pressure, …). `externalSensorId` is
+// `(provider, reactor, measurement_property)` — a single reactor publishes
+// one sensor per quantity (temperature, pressure, …) for each certifier.
+// `externalSensorId` is
 // the `sns_…` returned by `POST /sensors`; `sensorReference` is the
 // stable, noma-controlled reference used by `GET /sensors?reference=…`
 // reconciliation when the persistence write lost a race against a sandbox
@@ -104,7 +105,8 @@ export const certifierSensors = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    unique('certifier_sensors_reactor_property_unique').on(
+    unique('certifier_sensors_provider_reactor_property_unique').on(
+      table.provider,
       table.reactorId,
       table.measurementProperty
     ),
