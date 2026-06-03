@@ -1,5 +1,12 @@
 # E2E: run document uploads against real Spaces in CI
 
+> **ARCHIVED 2026-06-03 — not started, deprioritized.** No code from this plan
+> landed: `.github/workflows/e2e.yml` still defaults to `local-fs` (no
+> `STORAGE_PROVIDER=s3-compatible`), and neither
+> `tests/e2e/fixtures/storage-fixtures.ts` nor `tests/e2e/storage-upload.spec.ts`
+> exist. The plan is self-contained and can be executed as-written if/when CI
+> integration coverage for object storage is prioritized.
+
 ## Context
 
 PR #111 (`feature/s3-storage`) introduced object storage with a fail-closed
