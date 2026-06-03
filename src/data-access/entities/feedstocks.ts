@@ -43,7 +43,8 @@ export async function getFeedstocks(params: {
     id: r.id,
     code: r.code,
     name: r.feedstockTypeName ?? r.code,
-    subtitle: r.massDryKg ? `${r.massDryKg.toFixed(1)} kg dry` : undefined,
+    subtitle:
+      r.massDryKg != null ? `${r.massDryKg.toFixed(1)} kg dry` : undefined,
   }));
 }
 
@@ -66,6 +67,9 @@ export async function getFeedstockById(id: string): Promise<EntityOption | null>
     id: result.id,
     code: result.code,
     name: result.feedstockTypeName ?? result.code,
-    subtitle: result.massDryKg ? `${result.massDryKg.toFixed(1)} kg dry` : undefined,
+    subtitle:
+      result.massDryKg != null
+        ? `${result.massDryKg.toFixed(1)} kg dry`
+        : undefined,
   };
 }

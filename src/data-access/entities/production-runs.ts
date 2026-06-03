@@ -7,6 +7,21 @@ import { db } from "@/db";
 import { productionRuns, facilities, storageLocations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
+// Deterministic integer formatting. Bare `Number.prototype.toLocaleString()`
+// follows the server's locale (thousands separator), so the label could differ
+// between environments — pin the locale.
+const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
+
+// `r.date` is a 'YYYY-MM-DD' date-column string. `new Date(str)` parses it as
+// UTC midnight and `toLocaleDateString()` then renders it in the server's
+// timezone/locale, which can shift the day by one and vary the format. The
+// stored ISO string is already unambiguous, so display it verbatim.
+function formatRunDate(date: string | null, fallback: string): string {
+  return date ?? fallback;
+}
+
 export async function getProductionRunsEntity(params: {
   search?: string;
   facilityId?: string;
@@ -51,10 +66,10 @@ export async function getProductionRunsEntity(params: {
   return results.map((r) => ({
     id: r.id,
     code: r.code,
-    name: r.date ? new Date(r.date).toLocaleDateString() : r.code,
+    name: formatRunDate(r.date, r.code),
     subtitle: [
       r.facilityName ? `${r.facilityName} · ${r.status}` : r.status,
-      r.biocharOutputKg !== null ? `${Math.round(r.biocharOutputKg).toLocaleString()} kg biochar` : undefined,
+      r.biocharOutputKg !== null ? `${INTEGER_FORMATTER.format(Math.round(r.biocharOutputKg))} kg biochar` : undefined,
       r.biocharStorageName ? `→ ${r.biocharStorageName}` : undefined,
     ].filter(Boolean).join(" · "),
   }));
@@ -82,10 +97,10 @@ export async function getProductionRunEntityById(id: string): Promise<EntityOpti
   return {
     id: result.id,
     code: result.code,
-    name: result.date ? new Date(result.date).toLocaleDateString() : result.code,
+    name: formatRunDate(result.date, result.code),
     subtitle: [
       result.facilityName ? `${result.facilityName} · ${result.status}` : result.status,
-      result.biocharOutputKg !== null ? `${Math.round(result.biocharOutputKg).toLocaleString()} kg biochar` : undefined,
+      result.biocharOutputKg !== null ? `${INTEGER_FORMATTER.format(Math.round(result.biocharOutputKg))} kg biochar` : undefined,
       result.biocharStorageName ? `→ ${result.biocharStorageName}` : undefined,
     ].filter(Boolean).join(" · "),
   };
