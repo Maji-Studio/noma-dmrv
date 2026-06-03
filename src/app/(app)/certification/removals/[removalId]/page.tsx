@@ -1,48 +1,24 @@
 /**
- * Per-removal sources management surface.
+ * Legacy per-removal Sources detail route → redirect.
  *
- * Phase 3.5 added the operator action of mirroring noma documents into
- * Isometric Sources. This page hosts the SourcesPanel for a specific
- * Removal, reachable from the Removals hub via the "Sources" link on each
- * RemovalCard. Submission still happens on the hub or the credit-batch
- * side sheet.
+ * The standalone Sources/telemetry page was absorbed into the guided Review
+ * flow's Evidence step (Stage 4). This route now redirects old Sources links
+ * straight there, preserving the `?facility=` scope so the workspace tab band
+ * and facility selector stay consistent.
  */
-import Link from "next/link";
-import { SourcesPanel } from "@/components/certification/sources-panel";
-import { TelemetryPanel } from "@/components/certification/telemetry-panel";
+import { redirect } from "next/navigation";
 
-export default async function RemovalSourcesPage({
+export default async function RemovalSourcesRedirect({
   params,
+  searchParams,
 }: {
   params: Promise<{ removalId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { removalId } = await params;
-  return (
-    <div className="container-max flex flex-col gap-32 py-32">
-      <header className="flex flex-col gap-8">
-        <Link
-          href="/certification/removals"
-          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-        >
-          ← Removals
-        </Link>
-        <span className="title-chapter-title text-[var(--color-text-tertiary)]">
-          Isometric Certify
-        </span>
-        <h1 className="title-heading-2">Sources &amp; telemetry for this Removal</h1>
-        <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
-          Mirror supporting documents from the chain-of-custody to Isometric
-          as Sources — they attach to every Datapoint in this Removal at
-          submit time — and publish the reactor telemetry that backs this
-          Removal as a DataUploadSubmission.
-        </p>
-        <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
-          {removalId}
-        </span>
-      </header>
+  const sp = await searchParams;
+  const facility = typeof sp.facility === "string" ? sp.facility : undefined;
 
-      <SourcesPanel removalId={removalId} />
-      <TelemetryPanel removalId={removalId} />
-    </div>
-  );
+  const base = `/certification/removals/${removalId}/review?step=evidence`;
+  redirect(facility ? `${base}&facility=${facility}` : base);
 }

@@ -1,11 +1,11 @@
 /**
- * Certification — Isometric Removals hub
- * Lists every Removal for the selected facility, its member credit batches
- * and submission status, and lets the user group batches and submit.
- * Protected by the requireAuth guard in the (app) layout.
+ * Certification → Removals tab
+ * Lists every Removal for the selected facility in the app-native DataTable
+ * idiom, with a `?removal=<id>` side-sheet quick view and ungrouped-batch
+ * grouping. Protected by the requireAuth guard in the (app) layout.
  */
-import { RemovalsHub } from "@/components/certification/removals-hub";
+import { RemovalsList } from "@/components/certification/removals-list";
 
 export default function CertificationRemovalsPage() {
-  return <RemovalsHub />;
+  return <RemovalsList />;
 }

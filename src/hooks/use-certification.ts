@@ -19,6 +19,7 @@ import {
   loadGhgStatementState,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRemovalCertifyContext,
   loadRemovalsForFacility,
   refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
@@ -59,6 +60,13 @@ export const certificationKeys = {
       "certify-context",
       "credit-batch",
       creditBatchId,
+    ] as const,
+  certifyContextForRemoval: (removalId: string) =>
+    [
+      ...certificationKeys.all,
+      "certify-context",
+      "removal",
+      removalId,
     ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
@@ -204,6 +212,26 @@ export function useCertifyContextForCreditBatch(
       return result.data;
     },
     enabled: enabled && !!creditBatchId,
+    staleTime: DEFAULT_STALE_MS,
+    refetchInterval: (query) =>
+      query.state.data?.latestSubmission?.lockedAt
+        ? LOCKED_REFETCH_INTERVAL_MS
+        : false,
+  });
+}
+
+// Removal-keyed Certify context for the guided Review flow. Like the
+// credit-batch variant it refetches while a submission is locked in flight so
+// the pre-flight reflects progress without a manual refresh.
+export function useRemovalCertifyContext(removalId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.certifyContextForRemoval(removalId),
+    queryFn: async () => {
+      const result = await loadRemovalCertifyContext(removalId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       query.state.data?.latestSubmission?.lockedAt

@@ -584,6 +584,30 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     guard.** That reverts ADR 0005 and re-introduces the over-claim.
     The unblock path is template-field removal, not a fake datapoint.
 
+### Certification remodel — Stage 4 deferrals (opened 2026-06-03)
+
+- **Review step shows composition, not full run aggregation**
+  (`certification/review-step-run-aggregation`) — opened 2026-06-03 (remodel Stage 4).
+  - The guided Review flow's Review step
+    (`src/components/certification/removal-review/review-step.tsx`) shows the
+    registry project, resolved template, member credit batches, and transport-leg
+    coverage — the facts already on the lean `RemovalCertifyContext`. It does
+    **not** render the plan's "aggregated deduped runs, applied-mass scoping
+    (appliedDryKg / runTotalBiocharOutput), resolved monitored inputs + emission
+    estimates" (plan step 2): that data lives only on the heavy server-internal
+    `RemovalSubmissionContext` (`runs`, `attributionByRunId`), intentionally not
+    projected to the client.
+  - Why deferred: projecting per-run aggregation widens the cached UI payload
+    and duplicates the submit pipeline's aggregation; the plan explicitly allows
+    adjusting review-step granularity, and the operator-critical facts (what's
+    being submitted, transport coverage, blockers) are all present — the run-level
+    breakdown is verifier detail.
+  - Resolve via: add a focused `runSummary` (run count, total biochar output,
+    applied dry kg) to the removal UI context — derivable from the already-loaded
+    submission context — and render it as a Review-step table. Lands naturally
+    alongside the `perf/overview-facility-refetch` facility/per-removal split,
+    which touches the same `buildRemovalContext`.
+
 ## Audit follow-ups (opened 2026-05-25)
 
 Batch of deferrals from the whole-codebase tech-debt audit run on

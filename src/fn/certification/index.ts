@@ -16,6 +16,7 @@ export {
 export {
   loadCertifyContextForCreditBatch,
   loadCertifyContextForCreditBatchForUser,
+  loadRemovalCertifyContext,
   loadRemovalsForFacility,
 } from "./certify-context";
 // Server-owned per-removal readiness for the Overview work queue (reuses the

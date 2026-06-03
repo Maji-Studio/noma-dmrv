@@ -247,6 +247,7 @@ function makeContext(
       sample: { count: 0, entityIds: [], aggregationWarning: null },
     },
     requiredTransportCategories: [],
+    hasSubmittableRuns: true,
     latestSubmission: latest,
     isProduction: false,
     lineages: [
