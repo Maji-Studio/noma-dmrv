@@ -11,8 +11,10 @@ import {
   deleteFacilityCertifierMapping,
   ensureRemovalForCreditBatchAction,
   loadCertificationHealth,
+  loadCertificationOverview,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
+  loadFacilityCertifierSummary,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
   loadIsometricProjectTemplates,
@@ -47,6 +49,8 @@ export const certificationKeys = {
   all: ["certification"] as const,
   facilityMapping: (facilityId: string) =>
     [...certificationKeys.all, "facility-mapping", facilityId] as const,
+  facilitySummary: (facilityId: string) =>
+    [...certificationKeys.all, "facility-summary", facilityId] as const,
   projectTemplates: (externalProjectId: string) =>
     [...certificationKeys.all, "project-templates", externalProjectId] as const,
   certifyContextForCreditBatch: (creditBatchId: string) =>
@@ -64,8 +68,26 @@ export const certificationKeys = {
     [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
   openRemovalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "open-removals", facilityId] as const,
+  overview: (facilityId: string) =>
+    [...certificationKeys.all, "overview", facilityId] as const,
   health: () => [...certificationKeys.all, "health"] as const,
 };
+
+// Server-owned readiness work queue for the Overview. Heavier than the other
+// reads (walks lineage/coverage per removal), so it leans on React Query
+// caching; mutations invalidate `certificationKeys.all`, refreshing it.
+export function useCertificationOverview(facilityId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.overview(facilityId),
+    queryFn: async () => {
+      const result = await loadCertificationOverview(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
 
 // Read-only integration status for the Settings → Health panel. Admin-gated
 // server-side; read rarely, so it gets the longer stale window.
@@ -89,6 +111,26 @@ export function useFacilityCertifierMapping(
     queryKey: certificationKeys.facilityMapping(facilityId),
     queryFn: async () => {
       const result = await loadFacilityCertifierMapping(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Read-only registry-link summary (DB-only, no Isometric API). For viewers who
+// can't manage the link — keeps the management payload (available projects,
+// templates, link hints) off the wire. Mutations invalidate
+// `certificationKeys.all`, which covers this key too.
+export function useFacilityCertifierSummary(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.facilitySummary(facilityId),
+    queryFn: async () => {
+      const result = await loadFacilityCertifierSummary(facilityId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

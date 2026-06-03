@@ -1,9 +1,11 @@
 export {
   deleteFacilityCertifierMapping,
   loadFacilityCertifierMapping,
+  loadFacilityCertifierSummary,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
+  type FacilityCertifierSummary,
 } from "./facility-mapping";
 // Read-only integration status for Settings → Health (admin-gated, no secrets).
 export {
@@ -16,6 +18,13 @@ export {
   loadCertifyContextForCreditBatchForUser,
   loadRemovalsForFacility,
 } from "./certify-context";
+// Server-owned per-removal readiness for the Overview work queue (reuses the
+// submit pipeline's context; classifier shared with table hint + pre-flight).
+export {
+  loadCertificationOverview,
+  type CertificationOverviewData,
+  type RemovalPreflightSummary,
+} from "./overview";
 export {
   assignCreditBatchToRemovalAction,
   ensureRemovalForCreditBatchAction,
