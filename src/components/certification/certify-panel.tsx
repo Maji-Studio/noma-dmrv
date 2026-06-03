@@ -1,56 +1,45 @@
 /**
- * CertifyPanel — Isometric Certify status strip inside the credit-batch
- * side sheet. A credit batch maps into one Isometric Removal (N credit
- * batches may share a removal — ADR 0003). The panel shows the removal's
- * transport readiness, its member credit batches, runs the submit, and
- * surfaces the Removal's status. Grouping is managed on the Certification
- * hub (/certification).
+ * CertifyPanel — read-only certification *bridge* inside the credit-batch side
+ * sheet (Stage 6 / ADR 0007). It used to be a second submission entry point
+ * (the dual-entry of ADR 0003): it computed blockers, transport coverage, and
+ * ran the submit. That muddied the flow — submission now lives entirely in the
+ * Certification workspace, so this panel is demoted to a status bridge:
+ *
+ *   - shows the removal's **own local** status only — never a verifier status
+ *     attributed to the removal (P1-b). A removal's lifecycle ends at
+ *     "Submitted"; the verifier lifecycle belongs to the GHG Statement, which
+ *     is one tab away in the workspace.
+ *   - lists the member credit batches (read-only — grouping happens in the
+ *     workspace).
+ *   - deep-links into Certification (the removal's guided Review flow, or the
+ *     Removals tab when the batch isn't grouped yet).
+ *
+ * The blocker / coverage / submit logic that used to live here is canonical in
+ * `lib/certification/readiness.ts` + the guided Review flow; it is intentionally
+ * not duplicated here anymore.
  */
 "use client";
 
-import { ArrowsClockwise } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useState } from "react";
 import { Button } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
-import {
-  useCertifyContextForCreditBatch,
-  useSubmitCreditBatchRemoval,
-} from "@/hooks/use-certification";
-import type {
-  RemovalCertifyContext,
-  TransportCategory,
-  TransportCoverage,
-} from "@/fn/certification/certify-context";
+import { useCertifyContextForCreditBatch } from "@/hooks/use-certification";
+import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
 import { Section } from "./panel-layout";
-import { SourcesPanel } from "./sources-panel";
 import { SubmissionStatusBadge } from "./submission-status-badge";
-import { SubmitConfirmDialog } from "./submit-confirm-dialog";
-
-const ICON_SIZE = 14;
 
 export function CertifyPanel({ creditBatchId }: { creditBatchId: string }) {
   return (
-    <>
-      <Section>
-        <div className="flex flex-col gap-12">
-          <header>
-            <h3 className="title-chapter-title">Isometric Certify</h3>
-          </header>
-          <PanelBody creditBatchId={creditBatchId} />
-        </div>
-      </Section>
-      <CertifyPanelSources creditBatchId={creditBatchId} />
-    </>
+    <Section>
+      <div className="flex flex-col gap-12">
+        <header>
+          <h3 className="title-chapter-title">Isometric Certify</h3>
+        </header>
+        <PanelBody creditBatchId={creditBatchId} />
+      </div>
+    </Section>
   );
-}
-
-function CertifyPanelSources({ creditBatchId }: { creditBatchId: string }) {
-  const ctx = useCertifyContextForCreditBatch(creditBatchId);
-  if (!ctx.data?.mapping) return null;
-  return <SourcesPanel removalId={ctx.data.removalId} />;
 }
 
 function PanelBody({ creditBatchId }: { creditBatchId: string }) {
@@ -66,7 +55,7 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
 
   if (ctx.error || !ctx.data) {
     return (
-      <p className="body-small text-[var(--clr-red)]">
+      <p className="body-small text-[var(--clr-red)]" role="alert">
         Unable to load certification state. Try refreshing the page.
       </p>
     );
@@ -80,35 +69,20 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
       <div className="flex flex-col gap-8">
         <EnvBanner isProduction={isProduction} variant="inline" />
         <p className="body-small text-[var(--color-text-secondary)]">
-          This facility isn&apos;t linked to an Isometric project. Open the
-          facility settings to set up registry submission.
+          This facility isn&apos;t linked to an Isometric project. Link it in{" "}
+          <Link
+            href="/certification/settings"
+            className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"
+          >
+            Certification → Settings
+          </Link>{" "}
+          to enable registry submission.
         </p>
       </div>
     );
   }
 
   const projectLabel = project?.name ?? mapping.externalProjectId;
-  const templateResolved =
-    !!data.defaultTemplate &&
-    !data.missingDefaultTemplateId &&
-    data.unresolvedBlueprintKeys.length === 0;
-
-  const blocker = !templateResolved
-    ? deriveBlocker({
-        hasDefaultTemplate: !!data.defaultTemplate,
-        missingDefaultTemplateId: data.missingDefaultTemplateId,
-        unresolvedBlueprintKeys: data.unresolvedBlueprintKeys,
-      })
-    : null;
-
-  const coverage = analyzeCoverage(
-    data.transportCoverage,
-    data.requiredTransportCategories,
-  );
-  const submitReady =
-    templateResolved &&
-    coverage.missing.length === 0 &&
-    coverage.incomplete.length === 0;
 
   return (
     <div className="flex flex-col gap-12">
@@ -124,29 +98,47 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
         </span>
       </div>
 
-      {blocker && (
-        <BlockerNotice
-          message={blocker.message}
-          fixHint={blocker.fixHint}
-          fixHref={blocker.fixHref}
-        />
-      )}
+      <RemovalStatusRow data={data} />
 
       <MemberBatchesRow data={data} currentCreditBatchId={creditBatchId} />
 
-      {templateResolved && data.requiredTransportCategories.length > 0 && (
-        <TransportCoverageNotice
-          missing={coverage.missing}
-          incomplete={coverage.incomplete}
-        />
-      )}
+      <OpenInCertification data={data} />
+    </div>
+  );
+}
 
-      <SubmissionSection
-        creditBatchId={creditBatchId}
-        data={data}
-        isProduction={isProduction}
-        canSubmit={submitReady}
-      />
+function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
+  const latest = data.latestSubmission;
+  const lockedInFlight = latest ? isLockedInFlight(latest) : false;
+
+  return (
+    <div className="flex flex-col gap-6 border-t border-[var(--color-border-secondary)] pt-12">
+      <div className="flex items-center justify-between gap-8">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Removal status
+        </span>
+        {latest ? (
+          <SubmissionStatusBadge
+            latest={latest}
+            isLockedInFlight={lockedInFlight}
+            artifact="removal"
+          />
+        ) : (
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            Not submitted
+          </span>
+        )}
+      </div>
+      {latest?.externalId && (
+        <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
+          {latest.externalId} · v{latest.version}
+        </span>
+      )}
+      <p className="body-caption text-[var(--color-text-tertiary)]">
+        A removal is done at &ldquo;Submitted&rdquo;. If it&apos;s rolled into a
+        GHG Statement, the verifier status lives in Certification → GHG
+        Statements.
+      </p>
     </div>
   );
 }
@@ -163,24 +155,16 @@ function MemberBatchesRow({
   );
   return (
     <div className="flex flex-col gap-4 border-t border-[var(--color-border-secondary)] pt-12">
-      <div className="flex items-center justify-between gap-8">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Removal
-        </span>
-        <Link
-          href="/certification/removals"
-          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-        >
-          Manage on Removals ↗
-        </Link>
-      </div>
+      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+        Removal
+      </span>
       {data.removalId ? (
         <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
           {data.removalId}
         </span>
       ) : (
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          A removal is created for this batch on first submit.
+          Not grouped yet — a removal is created on first submit.
         </span>
       )}
       {others.length > 0 && (
@@ -196,252 +180,20 @@ function MemberBatchesRow({
   );
 }
 
-function SubmissionSection({
-  creditBatchId,
-  data,
-  isProduction,
-  canSubmit,
-}: {
-  creditBatchId: string;
-  data: RemovalCertifyContext;
-  isProduction: boolean;
-  canSubmit: boolean;
-}) {
-  const submitMutation = useSubmitCreditBatchRemoval();
-  const toast = useToast();
-  const [confirmOpen, setConfirmOpen] = useState(false);
+function OpenInCertification({ data }: { data: RemovalCertifyContext }) {
+  // A grouped removal deep-links to its guided Review flow; an ungrouped batch
+  // goes to the Removals tab, where it can be grouped and submitted.
+  const href = data.removalId
+    ? `/certification/removals/${data.removalId}/review?facility=${data.facilityId}`
+    : `/certification/removals?facility=${data.facilityId}`;
 
-  const latest = data.latestSubmission;
-  const lockedInFlight = latest ? isLockedInFlight(latest) : false;
-  const submitDisabled =
-    !canSubmit || lockedInFlight || submitMutation.isPending;
-
-  const buttonLabel = (() => {
-    if (submitMutation.isPending) return "Submitting…";
-    if (lockedInFlight) return "In progress";
-    return latest?.externalId ? "Resubmit Removal" : "Submit Removal";
-  })();
-
-  const fireSubmit = (confirmProduction = false) => {
-    submitMutation.mutate(
-      { creditBatchId, confirmProduction },
-      {
-        onSuccess: (result) => {
-          toast.success(`Submitted Removal ${result.externalId}.`);
-        },
-        onError: (err) => {
-          toast.error(
-            `Submission failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        },
-      },
-    );
-  };
-
-  const handleClick = () => {
-    if (isProduction) {
-      setConfirmOpen(true);
-      return;
-    }
-    fireSubmit();
-  };
-
-  return (
-    <div className="flex flex-col gap-12 border-t border-[var(--color-border-secondary)] pt-12">
-      <div className="flex items-center justify-between gap-12">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Submission
-        </span>
-        <Button
-          variant="primary"
-          size="default"
-          onClick={handleClick}
-          disabled={submitDisabled}
-        >
-          {!lockedInFlight && submitMutation.isPending && (
-            <ArrowsClockwise size={ICON_SIZE} className="animate-spin" />
-          )}
-          {buttonLabel}
-        </Button>
-      </div>
-
-      {latest ? (
-        <div className="flex items-center justify-between gap-8">
-          <div className="flex flex-col gap-2 min-w-0">
-            {latest.externalId && (
-              <span className="body-caption font-mono text-[var(--color-text-tertiary)] truncate">
-                {latest.externalId} · v{latest.version}
-              </span>
-            )}
-          </div>
-          <SubmissionStatusBadge
-            latest={latest}
-            isLockedInFlight={lockedInFlight}
-          />
-        </div>
-      ) : (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          This removal has not been submitted yet.
-        </p>
-      )}
-
-      <SubmitConfirmDialog
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          fireSubmit(true);
-        }}
-        isPending={submitMutation.isPending}
-        artifact="removal"
-        isProduction={isProduction}
-      />
-    </div>
-  );
-}
-
-const TRANSPORT_CATEGORY_LABELS: Record<TransportCategory, string> = {
-  feedstock: "feedstock",
-  biochar: "biochar",
-  sample: "sample",
-};
-
-type CoverageStatus = "missing" | "incomplete" | "complete";
-
-function coverageStatus(
-  bucket: TransportCoverage[TransportCategory],
-): CoverageStatus {
-  if (bucket.count === 0) return "missing";
-  return bucket.aggregationWarning !== null ? "incomplete" : "complete";
-}
-
-function analyzeCoverage(
-  coverage: TransportCoverage,
-  required: TransportCategory[],
-): { missing: TransportCategory[]; incomplete: TransportCategory[] } {
-  const missing: TransportCategory[] = [];
-  const incomplete: TransportCategory[] = [];
-  for (const category of required) {
-    const status = coverageStatus(coverage[category]);
-    if (status === "missing") missing.push(category);
-    else if (status === "incomplete") incomplete.push(category);
-  }
-  return { missing, incomplete };
-}
-
-function TransportCoverageNotice({
-  missing,
-  incomplete,
-}: {
-  missing: TransportCategory[];
-  incomplete: TransportCategory[];
-}) {
-  const ready = missing.length === 0 && incomplete.length === 0;
   return (
     <div className="border-t border-[var(--color-border-secondary)] pt-12">
-      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        Transport coverage
-      </span>
-      <p className="body-small mt-6">
-        {ready ? (
-          <span className="text-[var(--color-text-secondary)]">
-            <span className="text-[var(--clr-green,var(--color-text-primary))]">
-              ✓
-            </span>{" "}
-            All required transport legs present for this removal.
-          </span>
-        ) : (
-          <span className="text-[var(--color-text-primary)]">
-            <span className="text-[var(--color-signal-orange)]">!</span>{" "}
-            {describeGaps(missing, incomplete)}
-          </span>
-        )}
-      </p>
+      <Link href={href} className="block">
+        <Button variant="primary" width="full">
+          Open in Certification →
+        </Button>
+      </Link>
     </div>
   );
-}
-
-function describeGaps(
-  missing: TransportCategory[],
-  incomplete: TransportCategory[],
-): string {
-  const parts: string[] = [];
-  if (missing.length > 0) {
-    parts.push(
-      `missing ${missing
-        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
-        .join(", ")} legs`,
-    );
-  }
-  if (incomplete.length > 0) {
-    parts.push(
-      `incomplete ${incomplete
-        .map((c) => TRANSPORT_CATEGORY_LABELS[c])
-        .join(", ")} legs`,
-    );
-  }
-  return parts.join("; ");
-}
-
-function BlockerNotice({
-  message,
-  fixHint,
-  fixHref,
-}: {
-  message: string;
-  fixHint: string;
-  fixHref?: string;
-}) {
-  return (
-    <div className="border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-      <p className="body-small text-[var(--color-text-primary)]">{message}</p>
-      {fixHref ? (
-        <Link
-          href={fixHref}
-          className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-        >
-          {fixHint}
-        </Link>
-      ) : (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          {fixHint}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function deriveBlocker({
-  hasDefaultTemplate,
-  missingDefaultTemplateId,
-  unresolvedBlueprintKeys,
-}: {
-  hasDefaultTemplate: boolean;
-  missingDefaultTemplateId: string | null;
-  unresolvedBlueprintKeys: string[];
-}): { message: string; fixHint: string; fixHref?: string } {
-  if (missingDefaultTemplateId) {
-    return {
-      message: `Default removal template ${missingDefaultTemplateId} is no longer available in Certify.`,
-      fixHint: "Pick a new template in facility settings →",
-    };
-  }
-  if (!hasDefaultTemplate) {
-    return {
-      message: "No default removal template selected for this facility.",
-      fixHint: "Set one in facility settings →",
-    };
-  }
-  if (unresolvedBlueprintKeys.length > 0) {
-    const list = unresolvedBlueprintKeys.join(", ");
-    return {
-      message: `Template references ${unresolvedBlueprintKeys.length} unresolved blueprint${
-        unresolvedBlueprintKeys.length === 1 ? "" : "s"
-      }: ${list}.`,
-      fixHint: "Refresh the link in facility settings →",
-    };
-  }
-  return { message: "Submission blocked.", fixHint: "Check facility settings →" };
 }
