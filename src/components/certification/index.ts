@@ -5,7 +5,9 @@ export {
 } from "./facility-certifier-dialog";
 export { CertifyPanel } from "./certify-panel";
 export { SourcesPanel } from "./sources-panel";
-export { RemovalsHub } from "./removals-hub";
+export { RemovalsList } from "./removals-list";
+export { RemovalDetailSheet } from "./removal-detail-sheet";
+export { RemovalReview } from "./removal-review";
 export { BlueprintList } from "./blueprint-list";
 export { SubmissionStatusBadge } from "./submission-status-badge";
 export { SyncEventLog } from "./sync-event-log";

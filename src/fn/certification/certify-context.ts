@@ -93,6 +93,12 @@ export interface RemovalCertifyContext {
   // Removal-level transport coverage — one aggregate set across all members.
   transportCoverage: TransportCoverage;
   requiredTransportCategories: TransportCategory[];
+  // True once member-batch lineage resolves at least one production run —
+  // i.e. there is something to submit. Surfaced on the UI context so the
+  // client-side readiness classifier (review pre-flight) sees the same
+  // `hasSubmittableRuns` fact the server-owned Overview loader does, without
+  // shipping the heavy `runs` array to the client.
+  hasSubmittableRuns: boolean;
   latestSubmission: CertificationSubmissionRow | null;
   isProduction: boolean;
 }
@@ -291,6 +297,8 @@ async function buildRemovalContext(
     } as TransportLegsByCategory,
     transportCoverage: EMPTY_COVERAGE,
     requiredTransportCategories: [] as TransportCategory[],
+    // No runs resolved on any early-return path (no mapping / template / runs).
+    hasSubmittableRuns: false,
   };
 
   const mapping = await getCertifierProjectByFacility(
@@ -414,6 +422,7 @@ async function buildRemovalContext(
     memberBatches,
     transportCoverage,
     requiredTransportCategories,
+    hasSubmittableRuns: runs.length > 0,
     latestSubmission,
     isProduction,
     lineages,
@@ -449,9 +458,22 @@ function projectUiContext(
     memberBatches: ctx.memberBatches,
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,
+    hasSubmittableRuns: ctx.hasSubmittableRuns,
     latestSubmission: ctx.latestSubmission,
     isProduction: ctx.isProduction,
   };
+}
+
+// UI context keyed by removal id — the guided Review flow's source of truth
+// (Assemble / Review / Pre-flight read it; the pre-flight runs the shared
+// `deriveRemovalReadiness` classifier against it). Mirrors
+// `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
+export async function loadRemovalCertifyContext(
+  removalId: string,
+): Promise<ActionResult<RemovalCertifyContext>> {
+  return withAction(async (userId) =>
+    projectUiContext(await loadRemovalSubmissionContext(userId, removalId)),
+  );
 }
 
 // UI context for the credit-batch Certify panel. Resolves the removal the

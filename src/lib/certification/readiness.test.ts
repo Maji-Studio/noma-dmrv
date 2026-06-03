@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRemovalPreflightChecklist,
+  canRegroupRemoval,
   deriveRemovalReadiness,
+  type PreflightCheck,
   type RemovalReadinessFacts,
   type TransportCoverageFact,
 } from "./readiness";
+
+function checkFor(
+  checks: PreflightCheck[],
+  key: PreflightCheck["key"],
+): PreflightCheck {
+  const found = checks.find((c) => c.key === key);
+  if (!found) throw new Error(`no preflight check for ${key}`);
+  return found;
+}
 
 // A fully-ready removal: linked, template clean, runs present, all required
 // transport covered. Individual tests override one axis at a time.
@@ -203,5 +215,113 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.reasons).toContain(
       "No production data linked yet — nothing to submit",
     );
+  });
+});
+
+describe("buildRemovalPreflightChecklist", () => {
+  it("returns the four checks in a stable order", () => {
+    const checks = buildRemovalPreflightChecklist(ready());
+    expect(checks.map((c) => c.key)).toEqual([
+      "mapping",
+      "template",
+      "transport",
+      "production",
+    ]);
+  });
+
+  it("marks every check met for a fully-ready removal", () => {
+    const checks = buildRemovalPreflightChecklist(ready());
+    expect(checks.every((c) => c.status === "met")).toBe(true);
+    expect(checkFor(checks, "mapping").detail).toBeUndefined();
+  });
+
+  it("skips downstream checks when the facility is not linked", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ hasMapping: false, hasDefaultTemplate: false }),
+    );
+    expect(checkFor(checks, "mapping").status).toBe("unmet");
+    expect(checkFor(checks, "mapping").detail).toBe(
+      "Facility not linked to an Isometric project",
+    );
+    // Template/transport are not yet evaluable without a link.
+    expect(checkFor(checks, "template").status).toBe("skipped");
+    expect(checkFor(checks, "transport").status).toBe("skipped");
+    // Production data is independent of the link, so it is still judged.
+    expect(checkFor(checks, "production").status).toBe("met");
+  });
+
+  it("skips transport while the template is unresolved", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({
+        hasDefaultTemplate: false,
+        requiredTransport: [
+          { category: "feedstock", count: 0, hasAggregationWarning: false },
+        ],
+      }),
+    );
+    expect(checkFor(checks, "template").status).toBe("unmet");
+    expect(checkFor(checks, "transport").status).toBe("skipped");
+  });
+
+  it("surfaces the missing-template detail using the shared phrasing", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ hasDefaultTemplate: false, missingDefaultTemplateId: "tmpl_9" }),
+    );
+    expect(checkFor(checks, "template").detail).toBe(
+      "Default removal template tmpl_9 is no longer available",
+    );
+  });
+
+  it("marks transport met-with-context when the template needs no legs", () => {
+    const checks = buildRemovalPreflightChecklist(ready({ requiredTransport: [] }));
+    const transport = checkFor(checks, "transport");
+    expect(transport.status).toBe("met");
+    expect(transport.detail).toBe("This template requires no transport legs.");
+  });
+
+  it("joins missing + incomplete transport gaps into one detail", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({
+        requiredTransport: [
+          { category: "feedstock", count: 0, hasAggregationWarning: false },
+          { category: "biochar", count: 2, hasAggregationWarning: true },
+        ],
+      }),
+    );
+    const transport = checkFor(checks, "transport");
+    expect(transport.status).toBe("unmet");
+    expect(transport.detail).toBe(
+      "Missing feedstock transport legs · Incomplete biochar transport legs",
+    );
+  });
+
+  it("flags missing production data", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ hasSubmittableRuns: false }),
+    );
+    expect(checkFor(checks, "production").status).toBe("unmet");
+    expect(checkFor(checks, "production").detail).toContain("nothing to submit");
+  });
+});
+
+describe("canRegroupRemoval", () => {
+  it("allows regrouping a removal with no submission yet", () => {
+    expect(canRegroupRemoval({ local: null, lockInFlight: false })).toBe(true);
+  });
+
+  it("blocks regrouping while a submission lock is live", () => {
+    expect(canRegroupRemoval({ local: "draft", lockInFlight: true })).toBe(false);
+  });
+
+  it("blocks regrouping for live ledger statuses (draft/submitted/accepted)", () => {
+    for (const local of ["draft", "submitted", "accepted"] as const) {
+      expect(canRegroupRemoval({ local, lockInFlight: false })).toBe(false);
+    }
+  });
+
+  it("allows regrouping once terminal-but-non-blocking (rejected/superseded)", () => {
+    for (const local of ["rejected", "superseded"] as const) {
+      expect(canRegroupRemoval({ local, lockInFlight: false })).toBe(true);
+    }
   });
 });
