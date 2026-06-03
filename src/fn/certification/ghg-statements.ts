@@ -74,6 +74,7 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
+  submitRateLimit,
 } from "./shared";
 
 // =====================================================================
@@ -553,7 +554,7 @@ export async function submitGhgStatementToVerifier(
     });
 
     return { externalId: submission.externalId, remoteStatus: remoteAfter.status };
-  });
+  }, { rateLimit: submitRateLimit("cert:submit-ghg-statement") });
 }
 
 // =====================================================================

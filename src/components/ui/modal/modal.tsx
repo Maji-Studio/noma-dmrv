@@ -77,6 +77,17 @@ export function Modal({
 
   if (!isOpen) return null;
 
+  // A modal dialog with no accessible name is announced as just "dialog" by
+  // screen readers. The props exist to prevent that, but nothing enforced
+  // them — flag the omission at dev time so it's caught before review rather
+  // than shipping silently. Stripped from production bundles by the guard.
+  if (process.env.NODE_ENV !== "production" && !ariaLabelledBy && !ariaLabel) {
+    console.warn(
+      "[Modal] Rendered without an accessible name. Pass `ariaLabelledBy` " +
+        "(id of the heading) or `ariaLabel` so screen readers can announce it."
+    );
+  }
+
   const widthClass = WIDTH_CLASSES[width];
   const baseClass =
     "p-0 border border-[var(--color-border-primary)] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] overflow-auto";

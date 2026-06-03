@@ -4,7 +4,6 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import {
   appendSubmissionJournal,
-  appendSyncEvent,
   getLatestSubmission,
   insertDraftSubmissionWithMappingLock,
   markSubmissionRejected,
@@ -48,13 +47,19 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context";
-import { ISOMETRIC_PROVIDER, assertProductionConfirmed } from "./shared";
+import {
+  appendSyncEventBestEffort,
+  ISOMETRIC_PROVIDER,
+  assertProductionConfirmed,
+  submitRateLimit,
+} from "./shared";
 import type { components } from "@/lib/isometric/generated/certify";
 
 const DATA_UPLOAD_SUBMISSION_TYPE = "dataUpload" as const;
 const DATA_UPLOAD_ENTITY_TYPE = "removal" as const;
 const DATA_UPLOAD_OPERATION = "removal:data-upload" as const;
 const PARQUET_SCHEMA_VERSION = 1 as const;
+const UPLOAD_ERROR_TRUNCATION_LIMIT = 1000;
 
 type FileUploadResponse = { id: string; upload_url: string };
 type DataUploadSubmission = components["schemas"]["DataUploadSubmission"];
@@ -75,7 +80,9 @@ export interface SubmitTelemetryResult {
 export async function submitTelemetryAction(
   args: SubmitTelemetryArgs,
 ): Promise<ActionResult<SubmitTelemetryResult>> {
-  return withAction((userId) => submitTelemetry(userId, args));
+  return withAction((userId) => submitTelemetry(userId, args), {
+    rateLimit: submitRateLimit("cert:submit-telemetry"),
+  });
 }
 
 // Runs the full DataUploadSubmission pipeline inside one short-lived
@@ -107,21 +114,26 @@ export async function submitTelemetry(
   // resume runs under the mapping lock so a concurrent repoint/unlink cannot
   // orphan this submission's remote facility, and two callers cannot both
   // resume the same expired draft and double-POST. Telemetry pins
-  // externalProjectId (the data-upload depends on the facility's mapping); it
-  // has no removal-template dependency, so that guard field stays undefined.
+  // externalProjectId + externalFacilityId; it has no removal-template
+  // dependency, so that guard field stays undefined.
   const mappingGuard: MappingClaimGuard = {
     facilityId: ctx.facilityId,
     provider: ISOMETRIC_PROVIDER,
     expectedExternalProjectId: ctx.mapping.externalProjectId,
+    expectedExternalFacilityId: externalFacilityId,
   };
 
   // ADR 0006 - pure clock window on production_run_readings.timestamp;
   // derived from the runs the removal aggregates.
-  const windowStart = minDate(ctx.runs.map((r) => r.startTime));
-  const windowEnd = maxDate(ctx.runs.map((r) => r.endTime));
+  const windowStart = new Date(
+    Math.min(...ctx.runs.map((r) => r.startTime.getTime())),
+  );
+  const windowEnd = new Date(
+    Math.max(...ctx.runs.map((r) => r.endTime.getTime())),
+  );
 
   // Ensure a sensor mapping exists per (reactor x channel).
-  const reactorIds = unique(ctx.runs.map((r) => r.reactorId));
+  const reactorIds = [...new Set(ctx.runs.map((r) => r.reactorId))];
   for (const reactorId of reactorIds) {
     for (const channel of DEFAULT_DATA_UPLOAD_CHANNELS) {
       await ensureSensorForReactor(userId, {
@@ -204,7 +216,9 @@ export async function submitTelemetry(
       .sort((a, b) => a.sensorReference.localeCompare(b.sensorReference)),
     // Distinct run ids kept for human-auditable snapshots; the digest below
     // is what actually guards reading-level content changes.
-    sourceProductionRunIds: unique(readings.map((r) => r.productionRunId)).sort(),
+    sourceProductionRunIds: [
+      ...new Set(readings.map((r) => r.productionRunId)),
+    ].sort(),
     sourceReadingsDigest,
     aggregatedRowCount: aggregated.length,
   };
@@ -299,9 +313,11 @@ export async function submitTelemetry(
         externalId: submissionId.id,
       });
       await appendSyncEventBestEffort(userId, {
+        provider: ISOMETRIC_PROVIDER,
+        entityType: DATA_UPLOAD_ENTITY_TYPE,
+        entityId: args.removalId,
         operation: `${DATA_UPLOAD_OPERATION}:resume-re-put`,
         status: "succeeded",
-        entityId: args.removalId,
         responsePayload: { id: submissionId.id, status: submissionId.status },
       });
       return {
@@ -384,9 +400,11 @@ export async function submitTelemetry(
               : null,
         });
         await appendSyncEventBestEffort(userId, {
+          provider: ISOMETRIC_PROVIDER,
+          entityType: DATA_UPLOAD_ENTITY_TYPE,
+          entityId: args.removalId,
           operation: DATA_UPLOAD_OPERATION,
           status: "succeeded",
-          entityId: args.removalId,
           requestPayload: { semantic: semanticPayload },
           responsePayload: {
             id: submission.id,
@@ -404,9 +422,11 @@ export async function submitTelemetry(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         await appendSyncEventBestEffort(userId, {
+          provider: ISOMETRIC_PROVIDER,
+          entityType: DATA_UPLOAD_ENTITY_TYPE,
+          entityId: args.removalId,
           operation: DATA_UPLOAD_OPERATION,
           status: "failed",
-          entityId: args.removalId,
           errorMessage: message,
         });
         await markSubmissionRejected(userId, row.id, { errorMessage: message });
@@ -520,7 +540,7 @@ async function putParquetToSignedUrl(args: {
     throw new IsometricApiError(
       `PUT signed upload URL -> ${res.status}`,
       res.status,
-      body.slice(0, 1000),
+      body.slice(0, UPLOAD_ERROR_TRUNCATION_LIMIT),
       "http",
     );
   }
@@ -541,24 +561,19 @@ function requireUploadUrl(row: CertificationSubmissionRow): string {
 }
 
 function parseSignedUrlExpiry(url: string): Date | null {
-  try {
-    const parsed = new URL(url);
-    const expiresSecondsRaw =
-      parsed.searchParams.get("X-Goog-Expires") ??
-      parsed.searchParams.get("X-Amz-Expires");
-    const signedAtRaw =
-      parsed.searchParams.get("X-Goog-Date") ??
-      parsed.searchParams.get("X-Amz-Date");
-    const expiresSeconds = expiresSecondsRaw
-      ? Number(expiresSecondsRaw)
-      : null;
-    if (!expiresSeconds || !Number.isFinite(expiresSeconds)) return null;
-    const signedAt = signedAtRaw ? parseAmzDate(signedAtRaw) : new Date();
-    if (!signedAt) return null;
-    return new Date(signedAt.getTime() + expiresSeconds * 1000);
-  } catch {
-    return null;
-  }
+  if (!URL.canParse(url)) return null;
+  const parsed = new URL(url);
+  const expiresSecondsRaw =
+    parsed.searchParams.get("X-Goog-Expires") ??
+    parsed.searchParams.get("X-Amz-Expires");
+  const signedAtRaw =
+    parsed.searchParams.get("X-Goog-Date") ??
+    parsed.searchParams.get("X-Amz-Date");
+  const expiresSeconds = expiresSecondsRaw ? Number(expiresSecondsRaw) : null;
+  if (!expiresSeconds || !Number.isFinite(expiresSeconds)) return null;
+  const signedAt = signedAtRaw ? parseAmzDate(signedAtRaw) : new Date();
+  if (!signedAt) return null;
+  return new Date(signedAt.getTime() + expiresSeconds * 1000);
 }
 
 function parseAmzDate(raw: string): Date | null {
@@ -578,53 +593,6 @@ function parseAmzDate(raw: string): Date | null {
 
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
-}
-
-function minDate(dates: Date[]): Date {
-  let min = dates[0]!.getTime();
-  for (const d of dates) if (d.getTime() < min) min = d.getTime();
-  return new Date(min);
-}
-
-function maxDate(dates: Date[]): Date {
-  let max = dates[0]!.getTime();
-  for (const d of dates) if (d.getTime() > max) max = d.getTime();
-  return new Date(max);
-}
-
-function unique<T>(xs: T[]): T[] {
-  return [...new Set(xs)];
-}
-
-async function appendSyncEventBestEffort(
-  userId: string,
-  args: {
-    operation: string;
-    status: "succeeded" | "failed";
-    entityId: string;
-    requestPayload?: unknown;
-    responsePayload?: unknown;
-    errorMessage?: string;
-  },
-): Promise<void> {
-  try {
-    await appendSyncEvent(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: DATA_UPLOAD_ENTITY_TYPE,
-      entityId: args.entityId,
-      operation: args.operation,
-      status: args.status,
-      requestPayload: args.requestPayload,
-      responsePayload: args.responsePayload,
-      errorMessage: args.errorMessage,
-    });
-  } catch (err) {
-    console.warn("Failed to record telemetry sync event", {
-      operation: args.operation,
-      entityId: args.entityId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
 }
 
 export async function loadTelemetrySubmissionState(

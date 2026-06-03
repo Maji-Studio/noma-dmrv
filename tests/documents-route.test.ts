@@ -5,7 +5,8 @@
  * 1. Not-found 404
  * 2. Visibility/auth gate (private + anon = 401)
  * 3. storageKey branch (signed GET redirect; pending → 404)
- * 4. fileUrl branch (direct redirect; gate still applies)
+ * 4. fileUrl branch (redirect gated by host allowlist: same-origin + storage
+ *    endpoint + registry/cloud-storage families; embedded creds refused)
  * 5. Invariant violation → 500
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -155,7 +156,37 @@ describe("GET /api/documents/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("public legacy fileUrl row + authed → 302 to external URL", async () => {
+  it("legacy fileUrl on an allowlisted cloud host → 302 to that URL", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getDocumentById).mockResolvedValueOnce({
+      ...baseRow,
+      storageKey: null,
+      fileUrl: "https://files.isometric.com/report.pdf",
+      visibility: "public",
+    } as never);
+    const res = await GET(makeRequest(), makeCtx());
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      "https://files.isometric.com/report.pdf"
+    );
+  });
+
+  it("legacy fileUrl on our own origin → 302 (same-origin allowed)", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getDocumentById).mockResolvedValueOnce({
+      ...baseRow,
+      storageKey: null,
+      fileUrl: "http://localhost:3100/uploads/report.pdf",
+      visibility: "public",
+    } as never);
+    const res = await GET(makeRequest(), makeCtx());
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      "http://localhost:3100/uploads/report.pdf"
+    );
+  });
+
+  it("legacy fileUrl on a non-allowlisted host → 502 (fail-closed)", async () => {
     vi.mocked(getUser).mockResolvedValueOnce(mockUser);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
@@ -164,8 +195,19 @@ describe("GET /api/documents/[id]", () => {
       visibility: "public",
     } as never);
     const res = await GET(makeRequest(), makeCtx());
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("https://example.com/external.pdf");
+    expect(res.status).toBe(502);
+  });
+
+  it("legacy fileUrl with embedded credentials → 500 (refused)", async () => {
+    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getDocumentById).mockResolvedValueOnce({
+      ...baseRow,
+      storageKey: null,
+      fileUrl: "https://user:pass@files.isometric.com/report.pdf",
+      visibility: "public",
+    } as never);
+    const res = await GET(makeRequest(), makeCtx());
+    expect(res.status).toBe(500);
   });
 
   it("private legacy fileUrl + anon → 401 (gate applies to external URLs)", async () => {

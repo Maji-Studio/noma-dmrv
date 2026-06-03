@@ -1,6 +1,4 @@
 import {
-  appendSyncEvent,
-  type AppendSyncEventInput,
   getLatestSubmission,
   insertDraftSubmissionWithMappingLockAndLocks,
   markSubmissionRejected,
@@ -47,6 +45,7 @@ import {
   resolveSourceIdsForRemoval,
 } from "./sources";
 import {
+  appendSyncEventBestEffort,
   assertProductionConfirmed,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
@@ -770,7 +769,7 @@ async function runRemovalSubmission({
           mapping_revision: MAPPING_REVISION,
         },
       },
-      row.id,
+      { submissionId: row.id },
     );
   }
 
@@ -813,7 +812,7 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
           mapping_revision: MAPPING_REVISION,
         },
       },
-      args.row.id,
+      { submissionId: args.row.id },
     );
   };
 
@@ -840,7 +839,7 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
           mapping_revision: MAPPING_REVISION,
         },
       },
-      args.row.id,
+      { submissionId: args.row.id },
     );
     return externalId;
   } catch (err) {
@@ -865,28 +864,12 @@ async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
         responsePayload: { mapping_revision: MAPPING_REVISION },
         errorMessage: message,
       },
-      args.row.id,
+      { submissionId: args.row.id },
     );
     await markSubmissionRejected(args.userId, args.row.id, {
       errorMessage: message,
     });
     throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
-  }
-}
-
-async function appendSyncEventBestEffort(
-  userId: string,
-  input: AppendSyncEventInput,
-  submissionId: string,
-): Promise<void> {
-  try {
-    await appendSyncEvent(userId, input);
-  } catch (err) {
-    console.warn("Failed to record certifier sync event", {
-      operation: input.operation,
-      submissionId,
-      error: err instanceof Error ? err.message : String(err),
-    });
   }
 }
 
