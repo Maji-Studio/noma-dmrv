@@ -155,30 +155,14 @@ Each entry follows this shape:
 > `docs/isometric/integration-plan.md` → **Pre-deploy gates**. They are
 > actions before deploy, not open questions.
 
-### GHG Statement review follow-ups (opened 2026-05-22)
-
-Findings from the Phase 4.5 GHG Statements review (ADR 0004). The
-double-create dedup, the N+1 query batching and the non-atomic
-`finalizeGhgStatement` were fixed in the same branch; the entries below
-were deferred by the operator to a follow-up PR.
-
-  (Resolved & removed 2026-06-02 — `forms/a11y-shared-layer`: `FormField` /
-  `FormError` wire `aria-describedby` and `Modal` dev-warns on a missing
-  accessible name (commit `33920f5`). The `useDialog` focus-restore half was
-  only genuinely completed later — its first cut was dead on the state-driven
-  close path — and is now fixed and e2e-covered; see `docs/isometric/changes.md`.)
-
-  (Resolved & removed 2026-06-02 — see `docs/isometric/changes.md`:
-  `certification/error-boundary` shipped as `(app)/certification/error.tsx`;
-  `certification/report-url-allowlist` shipped as the `/api/documents/[id]`
-  host gate via `src/lib/documents/redirect-allowlist.ts`.)
-
 ### Remaining template-coverage gaps
 
 The Phase 3 / 3.6 / 3.7 template inspection found ~10 input coverage gaps;
-all but the period-level ones are closed. The full breakdown is in
-`docs/isometric/changes.md` (2026-05-11, 2026-05-13, 2026-05-21 entries).
-Two items remain:
+all are now closed (the period-level inputs were resolved 2026-05-24 by
+[ADR 0005](../adr/0005-period-emissions-as-project-components.md) — they're
+now `PROJECT`-scope Components managed in the Isometric UI). The full
+breakdown is in `docs/isometric/changes.md` (2026-05-11, 2026-05-13,
+2026-05-21 entries). Two forward-looking items remain:
 
 - **Pyrolyzer pre/post electricity readout** (`isometric/phase-3-readouts`)
   — opened 2026-05-13. `INPUT_MAPPING` under
@@ -187,14 +171,6 @@ Two items remain:
   difference equals real consumption, which is the only quantity Certify
   uses downstream — verifier-acceptable today, but replace with real
   per-run pre/post readouts when `production_runs` gains the columns.
-- **Period-level inputs zero-stubbed** — **resolved 2026-05-24** by
-  [ADR 0005](../adr/0005-period-emissions-as-project-components.md).
-  Period inputs no longer flow through `INPUT_MAPPING` at all; they're
-  `PROJECT`-scope Components managed in the Isometric UI from a noma
-  LCA-journal row. The "no template carrying these stubs in production"
-  gate is replaced by integration-plan pre-deploy gate #4 (every
-  category present in any used Removal Template must have a matching
-  noma row AND a Project Component in Isometric).
 
 - **`isometric/mapping-version-dimension`** — opened 2026-05-24,
   **deferred**.
@@ -215,20 +191,6 @@ Two items remain:
   - **Resolve via:** re-read the OpenAPI on any spec bump; reopen this
     entry the first time Isometric ships a versioned blueprint. The
     decision then has a concrete example to anchor against.
-
-- **`isometric/phase-3-fixed-constants`** — opened 2026-05-05, **bootstrap
-  shipped 2026-05-13**.
-  - The default sandbox templates have ~12 `type=fixed` constants without
-    pre-bound datapoints. Phase 3's orchestrator bails with `SafeError`
-    directing the admin to Isometric's template editor.
-  - Resolved by the `noma-mvp` template authoring walkthrough
-    (`docs/isometric/sandbox-template-authoring.md`, Step 3 —
-    "Pre-bind fixed constants" / "Alternative — Bootstrap fixed constants")
-    and the `bootstrap-fixed-constants` mode of
-    `scripts/isometric-smoke.ts`. Operational follow-ups (replacing the
-    `1.0` placeholder for sampling consumables; validating
-    region-specific factors before production) tracked in the
-    walkthrough's "Verifier-readiness" section.
 
 ### Phase 5 Slice B / C deferrals (opened 2026-05-29)
 
@@ -365,10 +327,6 @@ once Slice A is in production and operator demand surfaces.
   - Resolve only if production traffic shows this failure mode often enough
     to justify per-Datapoint sub-ledger bookkeeping.
 
-- ~~**Source upload flow**~~ (`isometric/phase-3.5`) — opened 2026-05-05,
-  resolved 2026-05-26. Shipped end-to-end via server-side proxy mirror
-  (see `docs/isometric/changes.md`). Follow-up items below.
-
 - **Per-input source attribution** (`isometric/sources-per-input-attribution`)
   — opened 2026-05-26
   - Phase 3.5 ships removal-wide attribution: every monitored Datapoint
@@ -393,25 +351,6 @@ once Slice A is in production and operator demand surfaces.
     `duplex: "half"`. Modern Node fetch supports this; needs careful
     `Content-Length` handling.
   - Defer until a real LCA PDF or video evidence exceeds the cap.
-
-- ~~**Sources mirror-flow integration tests**~~ (`isometric/sources-integration-tests`)
-  — opened 2026-05-26, **resolved 2026-05-26**. Shipped as
-  `tests/isometric-sources-mirror-flow.test.ts` (4 tests covering GET-found
-  → 200 PUT → insert, GET-found → 409 → insert, reconciled-`isPublic`
-  authoritative path, rejection of out-of-lineage documents). See
-  `docs/isometric/changes.md`.
-
-- ~~**Cross-process source advisory lock in submitRemoval**~~
-  (`isometric/sources-submit-lock`) — opened 2026-05-26,
-  **resolved 2026-05-26**. `submitRemoval` now acquires per-document
-  mirror locks (key: `mirror:{provider}:{documentId}`) sorted to prevent
-  ABBA, re-resolves source IDs inside the locked transaction, and inserts
-  the draft snapshot atomically via the new composable
-  `insertDraftSubmissionWithMappingLockAndLocks` data-access helper.
-  mirror, unlink, and submit now interlock on the same lock key. See
-  `src/lib/isometric/utils/source-lock.ts`,
-  `src/fn/certification/submit-removal.ts` (create-new-version branch),
-  and `src/data-access/certification.ts`.
 
 - **Mirror lock held across Isometric HTTP round-trips**
   (`isometric/sources-lock-hold-time`) — opened 2026-05-26
@@ -622,6 +561,33 @@ Batch of deferrals from the whole-codebase tech-debt audit run on
 are the items that were flagged but kept out of that scope). Roughly
 ordered by leverage.
 
+### Architecture audit — remaining phases (opened 2026-05-21, plan archived 2026-06-03)
+
+The 2026-05-21 `/ship AUDIT` plan
+(`docs/archive/2026-05-21-architecture-audit-scalability-tech-debt.md`) was
+partially executed: Phase 0 (PII log line, doc-query cap, parallel FK checks,
+`max-lines` lint, `DB_POOL_MAX` docs, CI prod approval gate) and the
+observability half of Phase 2 (structured logger) are done; Phase 4 split the
+two oversized data-access files. The remainder is still open:
+
+- **Phase 1 — schema-wide indexes.** Add `index()` for unindexed FK columns
+  across the schema, time-series indexes (`productionRunReadings.timestamp`,
+  `soilTemperatureMeasurements.measurement_date`), and the composite
+  `transportLegs (entity_type, entity_id)`. One `pnpm db:generate` migration.
+  (Superset of the narrower isometric-table composites in `perf/missing-indexes`
+  below — fold those into the same migration.)
+- **Phase 3 — read-path + correctness.** `creditBatches` aggregate-drift (T2)
+  is the priority: stored CO₂e/mass aggregates have nothing keeping them in sync
+  with linked applications — a reported-number correctness risk for a carbon
+  registry; prefer deriving over storing. Plus H5 explicit column selection on
+  wide-table reads, full document pagination, a central `query-config.ts`,
+  narrowed React Query invalidation, and `revalidatePath` on key mutations.
+- **Phase 4 (remainder) — file size.** `seed-data.ts` (1165 LOC) and ~11
+  oversized forms still exceed the 1000-line cap; then flip the `max-lines` lint
+  from `warn` to `error`.
+- **Phase 5 — CRUD/hooks de-duplication.** Same scope as `code/hooks-factory`
+  below; optional, only worth it if the entity set keeps growing.
+
 ### Structural / cross-cutting
 
 - **Duplicate-hooks factory** (`code/hooks-factory`) — opened 2026-05-25.
@@ -631,36 +597,6 @@ ordered by leverage.
     entry, whose data-access file-size half is now resolved — see below.)
   - Resolve via: dedicated refactor PR — should not stack on top of
     in-flight feature work.
-
-  (Resolved & removed 2026-06-02 — `code/file-size-rule`: both files exceeding
-  the 1000-line limit were split. `src/data-access/entities.ts` (1323 LOC) →
-  one module per entity under `src/data-access/entities/` + an `index.ts`
-  dispatcher barrel (commit `a03d486`); chose explicit per-entity files over a
-  `buildSearchableEntityFinder` factory — the 14 query shapes diverge enough
-  (joins, aggregates, subtitle formatting) that a factory would obscure more
-  than it saves. `src/data-access/production-runs.ts` (1076 LOC) → split by
-  concern into `queries`/`mutations`/`readings`/`types` + barrel (commit
-  `7e640d1`). Both are pure extraction, public API unchanged, full suite green.
-  The hooks-factory dedup above is the separable remainder.)
-
-  (Resolved & removed 2026-06-02 — `code/logger-introduction`: a structured
-  server logger landed at `src/lib/log/` and the previously-silent
-  `isometricRequest` boundary is now instrumented (method/path/status/attempt/
-  duration_ms); `submissionAttemptId` correlation + start breadcrumbs added to
-  `submitRemoval` / `createGhgStatementDraft` / `submitGhgStatementToVerifier`;
-  the cert-fn `console.*` replaced. Built **in-house** rather than pino: Next.js
-  16 Turbopack has an open bug (vercel/next.js#93849) where a
-  `serverExternalPackages` package's hashed alias is unresolvable at Vercel's
-  serverless runtime. See `docs/isometric/changes.md`. **Deferred follow-ups:**
-  the other ~110 repo-wide `console.*` calls (outside the cert/isometric critical
-  path) are a separate sweep; threading `submissionAttemptId` through to the
-  isometric request boundary for full per-attempt correlation is not yet wired.)
-
-  (Resolved & removed 2026-06-02 — `security/rate-limit-submissions`: opt-in
-  `rateLimit` on `withAction`, 5/min/user per submit pipeline, in-memory
-  sliding window. See `docs/isometric/changes.md`. NOTE: this resolved the
-  abuse-defense concern only; a per-facility limit and the exact cross-instance
-  ceiling were explicitly out of scope — reopen if either is needed.)
 
 - **Single-tenant authorization → facility-membership model**
   (`security/facility-membership-authz`)

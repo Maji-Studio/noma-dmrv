@@ -1,551 +1,239 @@
-# CLAUDE.md - Next.js App Template
+# CLAUDE.md — noma-dmrv
 
-This file provides guidance to Claude Code when working with this Next.js template.
+Guidance for Claude Code. **These instructions OVERRIDE default behavior — follow them exactly.**
 
-## DO NOT - Critical Rules
+## DO NOT — Critical Rules
 
-**Read this first! These rules must NEVER be violated:**
-
-- ❌ **NEVER use npm or yarn** - Always use `pnpm`
-- ❌ **NEVER skip auth guards** - Always check user permissions in data-access layer
-- ❌ **NEVER let a file exceed 1000 lines** - Split into smaller modular files
-- ❌ **NEVER hard-code magic numbers** - Use constants at top of file or in `@/config`
-- ❌ **NEVER commit `.env` files**
-- ❌ **NEVER commit secrets, API keys, or credentials** - Not even in documentation or test files
-- ❌ **NEVER log PII (emails, names)** - Use user IDs instead for debugging
-- ❌ **NEVER create messy documentation** - Follow documentation standards below
-
-## Security Best Practices
-
-**Critical security lessons learned:**
-
-### API Keys and Secrets
-- **NEVER include actual API keys** in code, comments, or documentation (including test reports)
-- Always use placeholders like `<REDACTED_API_KEY>` or `***REDACTED***`
-- If a key is accidentally committed:
-  1. **Rotate the key immediately** (create new, revoke old)
-  2. **Scrub git history** using `git-filter-repo`:
-     ```bash
-     pip3 install git-filter-repo
-     git filter-repo --replace-text <(echo 'EXPOSED_KEY==>***REDACTED***')
-     git remote add origin <url>
-     git push --force --all
-     ```
-  3. Update environment variables with new keys
-
-### Logging Best Practices
-- **Never log PII** (personally identifiable information)
-- Log `userId` instead of `email` in error messages
-- Example:
-  ```typescript
-  // ❌ BAD
-  console.error("Failed for user:", { email: user.email });
-
-  // ✅ GOOD
-  console.error("Failed for user:", { userId: user.id });
-  ```
-
-### Code Review Reminders
-- Check for exposed secrets before committing
-- Review PR diffs carefully for accidental key exposure
-- Use tools like CodeRabbit to catch security issues
-
-## Documentation Standards
-
-**Keep `/docs` clean and organized!** Only core, evergreen documentation belongs in the main docs folder.
-
-### Core Documentation (Lives in `/docs`)
-- **Product/Project Requirements** - Feature specifications and flows
-- **Architecture** - System design and implementation patterns
-- **Design System** - UI tokens, typography, component patterns
-- **Database** - Schema, migrations, setup
-- **Authentication** - Auth system configuration
-- **Troubleshooting** - Consolidated common issues and solutions
-
-### Archive Documentation (Belongs in `/docs/archive`)
-**Move these to `/docs/archive` immediately:**
-- ✅ **Implementation logs** - Step-by-step feature implementation notes
-- ✅ **Quick fixes** - Temporary troubleshooting for specific issues
-- ✅ **Dated documentation** - Time-specific debugging sessions
-- ✅ **Completed feature requests** - Now-implemented features
-- ✅ **Superseded docs** - Documentation replaced by core docs
-
-### Creating New Documentation
-**Before creating a new doc file, ask:**
-1. Is this evergreen documentation that will remain relevant?
-   - ✅ YES → Put in `/docs`
-   - ❌ NO → Put in `/docs/archive` or skip it
-2. Does this duplicate existing documentation?
-   - ✅ YES → Update the existing doc instead
-   - ❌ NO → Proceed with creating new doc
-
-### Logging Deferred Work
-
-When work is intentionally deferred or depends on an external answer
-(sandbox confirmation, stakeholder decision, missing capability), add a
-dated entry to `docs/open-questions.md` rather than leaving a `TODO` in
-code or burying it in a PR description. Resolve entries by removing them
-and recording the decision in the relevant feature doc (e.g.
-`docs/isometric/changes.md`).
+- ❌ **NEVER use npm or yarn** — always `pnpm`
+- ❌ **NEVER skip auth guards** — every data-access function checks permissions
+- ❌ **NEVER let a file exceed 1000 lines** — split into modular files
+- ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`
+- ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests
+- ❌ **NEVER log PII (emails, names)** — log IDs (`userId`, `removalId`) instead; the server logger redacts as a backstop, not a license
+- ❌ **NEVER create messy docs** — follow Documentation Standards below
 
 ## Project Overview
 
-**noma-dmrv** is a biochar carbon credit MRV (Monitoring, Reporting, Verification) system built on a Next.js 16 App Router template. It uses Better Auth for authentication, PostgreSQL with Drizzle ORM (60+ tables across 15 domain schema files), and implements 16 entity CRUD workflows plus a Chain of Custody visualization covering the full traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
+**noma-dmrv** is a biochar carbon-credit MRV (Monitoring, Reporting, Verification) system on a Next.js 16 App Router stack: Better Auth, PostgreSQL + Drizzle ORM (60+ tables across 19 schema files), 16 core biochar-entity CRUD workflows, a Chain-of-Custody DAG, plus energy/emissions accounting and an **Isometric Certify** registry integration.
+
+Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
 
 ## Essential Commands
 
-### Development
-- `pnpm dev` - Start development server (port 3100)
-- `pnpm build` - Build for production
-- `pnpm start` - Run production server
-- `pnpm lint` - Run ESLint checks
-
-### Database Operations
-- `pnpm db:generate` - Generate new migrations from schema changes (SAFE)
-- `pnpm db:push` - Push schema changes directly (review first)
-- `pnpm db:reset` - Drop all tables, push schema, and ensure admin user (DESTRUCTIVE)
-- `pnpm db:studio` - Open Drizzle Studio for database exploration (SAFE)
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Dev server (port 3100) |
+| `pnpm build` / `pnpm start` | Production build / serve |
+| `pnpm lint` | ESLint |
+| `pnpm db:generate` | Generate migrations from schema changes (SAFE) |
+| `pnpm db:push` | Push schema directly (review first) |
+| `pnpm db:reset` | Drop all tables, push, ensure admin user (DESTRUCTIVE) |
+| `pnpm db:studio` | Drizzle Studio (SAFE) |
+| `pnpm test:e2e` | Playwright E2E (requires dev server running) |
 
 ## Architecture
 
-### Layered Architecture
+### Layered flow — each layer imports only from the layer below
 
 ```
 Component (UI)
-    ↓
-hooks/ (React Query - client state)
-    ↓
-fn/ (Server actions - validation & orchestration)
-    ↓
-data-access/ (Database queries + auth guards)
-    ↓
-db/ (Database connection & schema)
+  ↓ hooks/        React Query — client state
+  ↓ fn/           Server actions — "use server", Zod validation, orchestration
+  ↓ data-access/  DB queries + auth guards
+  ↓ db/           Connection & schema
 ```
 
-**Key Principles**:
-1. Each layer only imports from the layer below it
-2. Server functions (`fn/`) ALWAYS use `"use server"` directive
-3. All server functions validate input with Zod schemas
-4. All data-access functions check authentication
-5. Never skip layers - follow the flow
+Rules: never skip layers · `fn/` always has `"use server"` and validates input with Zod · every `data-access/` function calls an auth guard.
 
-### Project Structure
+### Project structure
 
 ```
-├── src/
-│   ├── app/               # Next.js App Router
-│   │   ├── (auth)/        # Auth routes
-│   │   ├── (app)/         # Protected app routes
-│   │   │   ├── [projectId]/ # Project-scoped routes (items example)
-│   │   │   ├── facilities/  # Flat entity routes (biochar entities)
-│   │   │   ├── production-runs/
-│   │   │   ├── chain-of-custody/ # React Flow DAG visualization
-│   │   │   └── ...          # 16 entity routes + chain-of-custody
-│   │   ├── admin/         # Admin panel
-│   │   └── api/           # API routes
-│   ├── components/        # React components (per-entity folders)
-│   ├── config/            # Configuration
-│   ├── data-access/       # Database queries + auth guards
-│   ├── db/                # Database & schema (60+ tables, 15 domain files)
-│   ├── fn/                # Server actions
-│   ├── hooks/             # React Query hooks
-│   ├── lib/               # Utilities (format-utils, form-utils, calculations/)
-│   ├── schemas/           # Zod form + action schemas
-│   └── types/             # TypeScript types
-├── tests/e2e/             # Playwright E2E tests
-│   ├── fixtures/          # Auth fixtures, seed data, helpers
-│   └── *.spec.ts          # Per-entity and chain tests
+src/
+├── app/                # App Router
+│   ├── (auth)/         # Auth routes
+│   ├── (app)/          # Protected routes: facilities, production-runs,
+│   │                   #   credit-batches, certification, energy, dashboard,
+│   │                   #   chain-of-custody, customers, suppliers, … + [projectId]/
+│   ├── admin/          # Admin panel
+│   └── api/            # API routes (incl. /api/storage-local, /api/documents)
+├── components/         # Per-entity component folders
+├── config/             # env.ts (Zod-validated), constants
+├── data-access/        # DB queries + auth guards
+├── db/                 # Connection & 19 domain schema files
+├── fn/                 # Server actions
+├── hooks/              # React Query hooks
+├── lib/                # format/form/date utils, calculations/, log/, storage/,
+│                       #   isometric/, rate-limit/, errors.ts
+├── schemas/            # Zod form + action schemas
+└── types/
+tests/e2e/              # Playwright (fixtures/ + *.spec.ts)
 ```
-
-## Code Quality Rules
-
-### File Naming
-- **All files use kebab-case**: `item-form.tsx`, `use-items.ts`, `create-project-dialog.tsx`
-- **Component exports use PascalCase**: `export function ItemForm() { ... }`
-- **Hook/function exports use camelCase**: `export function useItems() { ... }`
-- **Avoid abbreviations** unless widely understood (e.g., `btn` → `button`)
-- See `docs/organization.md` for complete organization patterns
-
-### File Organization
-- **File Size Limit**: Never exceed 1000 lines - split into smaller files
-- **Barrel Exports**: Use `index.ts` for clean imports
-- **Simple features** (< 500 lines, < 3 components): Flat folder structure
-- **Complex features** (500+ lines, 3+ components, multiple dialogs): Subfolder structure with `components/`, `dialogs/`, `hooks/`
-
-### Code Style
-- **TypeScript Strict Mode**: Enabled - avoid `any` types
-- **Magic Numbers**: Always use constants
-- **Design Tokens**: Always use design system tokens, never hardcoded values
-- **Responsive Design**: Mobile-first with design system breakpoints
-
-### React Patterns
-
-**⚠️ This project uses the React Compiler - leverage automatic optimizations!**
-
-- **React Compiler**: Automatically memoizes components and values - don't add manual `useMemo`/`useCallback` unless profiling shows it's needed
-- **Avoid useEffect**: Prefer React Query, server actions, and derived state over useEffect
-
-  ```typescript
-  // ❌ BAD - Using useEffect for data fetching
-  useEffect(() => {
-    fetch('/api/items').then(setItems)
-  }, [])
-
-  // ✅ GOOD - Use React Query for data fetching
-  const { data: items } = useItems(projectId)
-
-  // ❌ BAD - Using useEffect for derived state
-  useEffect(() => {
-    setFullName(firstName + ' ' + lastName)
-  }, [firstName, lastName])
-
-  // ✅ GOOD - Calculate derived state directly
-  const fullName = firstName + ' ' + lastName
-  ```
-
-- **When useEffect IS appropriate**:
-  - Synchronizing with external systems (non-React libraries, browser APIs)
-  - Setting up subscriptions or event listeners
-  - Imperative DOM manipulation (very rare with React 19)
-
-- **React Compiler Benefits**:
-  - Auto-memoization of components (no need for `React.memo`)
-  - Auto-memoization of values (no need for `useMemo`)
-  - Auto-memoization of callbacks (no need for `useCallback`)
-  - Only add manual optimizations if performance profiling shows they're necessary
-
-### React Hook Form Integration
-
-**All forms use React Hook Form with Zod validation:**
-
-```typescript
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { myFormSchema, type MyFormData } from "@/schemas/my-feature";
-import { FormField, FormInput, ServerError } from "@/components/forms";
-
-const {
-  register,
-  handleSubmit,
-  formState: { errors, isSubmitting },
-} = useForm<MyFormData>({
-  resolver: zodResolver(myFormSchema),
-  defaultValues: { title: "", description: "" },
-});
-```
-
-**Key Points:**
-- Schemas live in `src/schemas/` directory
-- Use `FormField`, `FormInput`, `FormTextarea` components
-- Use `ServerError` for server-side errors (use `setError('root.serverError', {...})`)
-- Use `FormError` for field-level errors (handled by FormField)
-- Client-side validation happens before server calls
-- For numeric inputs use helpers from `@/schemas/helpers`: `toNumberOrNull`, `toNumberOrUndefined`, `optionalNumber`, `optionalPercent`, `toIntOrNull`
-- Use `toNumberOrUndefined` (→ `undefined`) for **required** fields — supply a custom message via Zod 4's unified `error` parameter (e.g., `z.number({ error: (iss) => iss.input === undefined ? "Field is required" : "Invalid number" })`); use `toNumberOrNull` (→ `null`) for **optional** fields
-- Never use `valueAsNumber: true` — it converts `""` to `NaN` which breaks Zod validation
-- For optional UUID fields (EntitySelect), use `emptyToNull` from `@/schemas/helpers` first in the union: `emptyToNull.or(z.string().uuid())`
-- For optional GPS fields, use `latitudeSchema`/`longitudeSchema` from `@/schemas/helpers`; for required GPS fields, use `requiredLatitudeSchema`/`requiredLongitudeSchema` with `toNumberOrUndefined`
-- Use `<SectionLabel>` from `@/components/forms/section-label` for form section headers
-- Use `<FormFileUpload>` from `@/components/forms/form-file-upload` for file upload UI (mockup — no S3 backend yet)
-- See `docs/forms.md` for complete guide, `docs/troubleshooting.md` for gotchas
-
-### Accessibility
-- Touch targets: Minimum 44x44px
-- Color contrast: Minimum 4.5:1 for text
-- Keyboard navigation: All interactive elements accessible
-- ARIA labels: Present where visual context insufficient
-
-## Git Conventions
-
-### Branch Naming
-
-Format: `<type>/<short-description>` using kebab-case.
-
-| Type | When to use | Example |
-|------|-------------|---------|
-| `feat/` | New feature or significant enhancement | `feat/application-inventory-lineage` |
-| `fix/` | Bug fix | `fix/delivery-capacity-overflow` |
-| `chore/` | Maintenance, dependencies, CI, tooling | `chore/update-drizzle-orm` |
-| `refactor/` | Code restructuring without behavior change | `refactor/split-chain-constants` |
-| `docs/` | Documentation-only changes | `docs/add-forms-guide` |
-| `test/` | Test-only additions or fixes | `test/e2e-applications-coverage` |
-
-### Commit Messages
-
-Use imperative mood. Start with a **lowercase verb** that describes the change category:
-
-```
-<type>: <concise description of what changed and why>
-```
-
-| Prefix | Use for | Example |
-|--------|---------|---------|
-| `feat:` | New functionality | `feat: add delivery inventory validation on application create/update` |
-| `fix:` | Bug fix | `fix: prevent deletion of applications linked to verified credit batches` |
-| `refactor:` | Restructure without behavior change | `refactor: replace facility-level DAG with per-application lineage graph` |
-| `chore:` | Tooling, deps, CI, config | `chore: upgrade playwright to v1.50` |
-| `docs:` | Documentation only | `docs: update chain-of-custody architecture section` |
-| `test:` | Test additions/fixes only | `test: add unit tests for delivery capacity checks` |
-
-For multi-line commits, add a blank line then a body explaining **why**, not what:
-
-```
-feat: add delivery inventory validation on application create/update
-
-Prevents over-applying biochar from a single delivery by checking
-remaining capacity against the delivery's wet mass.
-```
-
-### PR Titles
-
-Same format as commit messages: `<type>: <short description>` (under 70 characters). Use the description/body for details, not the title.
-
-## Reference Features
-
-### Biochar Entities (primary pattern)
-
-Each of the 16 biochar entities follows the same layered structure. Use **facilities** as a representative example:
-
-- `src/schemas/facilities.ts` - Zod form + action schemas
-- `src/data-access/facilities.ts` - CRUD queries + auth guards
-- `src/fn/facilities.ts` - Server actions
-- `src/hooks/use-facilities.ts` - React Query hooks
-- `src/components/facilities/` - List + Form + barrel export
-- `src/app/(app)/facilities/page.tsx` - Flat route (no `[projectId]`)
-- `tests/e2e/facilities.spec.ts` - Playwright CRUD test
-
-### Items CRUD (template example)
-
-The original template example in `/[projectId]/items` demonstrates project-scoped routes:
-
-- `src/db/schema/items.ts`, `src/data-access/items.ts`, `src/fn/items.ts`
-- `src/hooks/use-items.ts`, `src/components/items/`, `src/app/(app)/[projectId]/items/page.tsx`
 
 ## Key Patterns
 
-### ActionResult Pattern
-
-All server functions return:
+### ActionResult — every server function returns this
 
 ```typescript
-type ActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string };
+type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 ```
 
-### Facility Context
-
-All pages in `(app)` are scoped to a selected facility via `useFacilityContext()`:
+### Auth guards — never skip
 
 ```typescript
-import { useFacilityContext } from "@/hooks/use-facility-context";
+export async function createItem(userId: string, data: CreateItem) {
+  await requireAuth();          // or requireProjectMember()
+  // safe to proceed
+}
+```
 
+### Facility context — pages in `(app)` are facility-scoped
+
+```typescript
 const { facilityId, selectedFacility, setFacilityId } = useFacilityContext();
 ```
+Persisted via `?facility=<id>` (nuqs `useQueryState`) + localStorage. `FacilityProvider` wraps the layout; `FacilitySelector` lives in the sidebar. **Forms receive `facilityId` from context — never ask users to pick a facility in a form.**
 
-- Persisted via URL query param (`?facility=<id>`) + localStorage using `nuqs` (`useQueryState`)
-- `FacilityProvider` wraps the app layout; `FacilitySelector` is in the sidebar
-- Forms receive `facilityId` from context — don't ask users to select facility in forms
+### React Query
 
-### Authentication Guards
+- Query keys: `["resource", projectId, ...specifics]`; invalidate related queries after mutations
+- Stale time: 30s current data, 5m historical
+- **Always check `src/hooks/` first** — every entity has a hook file (`use-facilities.ts`, …). Never write an inline `useQuery` when a hook already covers the server action (duplicates keys, risks staleTime drift).
 
-**NEVER skip authentication checks!**
+### Quick-Add — inline creation of prerequisite entities
 
-```typescript
-// ❌ WRONG
-export function createItem(data: any) {
-  // No auth check
-}
-
-// ✅ CORRECT
-export async function createItem(userId: string, data: any) {
-  await requireAuth(); // Always check first
-  // Safe to proceed
-}
-```
-
-### Quick-Add Pattern
-
-Quick-add dialogs let users create prerequisite entities inline (e.g., add a driver while filling a delivery form):
-
-- Quick-add schemas live in `src/schemas/quick-add.ts` with minimal required fields
-- After creation, call `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to populate the EntitySelect dropdown immediately
-- `useOpenCreateIntent()` hook (`@/hooks/use-open-create-intent`) detects `?create=true` URL param to auto-open create dialogs via deep-linking
+- Schemas in `src/schemas/quick-add.ts` (minimal required fields)
+- After create, call `seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to populate the dropdown
+- `useOpenCreateIntent()` opens create dialogs from `?create=true` deep links
 
 ### Cascading / Dependent Selects
 
-When one `FormEntitySelect` depends on another field (e.g., bins filtered by feedstock type), use `dependsOn` to auto-clear the selection when parent value(s) change. Accepts a single value or array:
+`FormEntitySelect` auto-clears when parent values change via `dependsOn` (single value or array):
+```typescript
+<FormEntitySelect filterBy={{ feedstockTypeId, facilityId }} dependsOn={[feedstockTypeId, facilityId]} />
+```
+Underlying `useClearOnDependencyChange` is standalone. See `docs/forms.md`.
+
+### Structured Logging — `@/lib/log` (server-only)
 
 ```typescript
-<FormEntitySelect
-  filterBy={{ feedstockTypeId: ..., facilityId: ... }}
-  dependsOn={[watchedFeedstockTypeId, watchedFacilityId]}
-/>
+import { logger } from "@/lib/log";
+logger.info({ userId, removalId }, "submission accepted");
+const log = logger.child({ requestId });   // bindings merged into every record
 ```
+- **Server-only by contract** — import only from `fn/`, `data-access/`, and the isometric client boundary. Never from a client component.
+- Emits newline-delimited JSON; level via `LOG_LEVEL`. Redacts `email`/`token`/`secret`/`authorization`-type keys at any depth — but still pass IDs, not PII.
+- In-house (~50 lines) instead of pino due to a Turbopack/Vercel runtime bug; see the file header.
 
-The underlying `useClearOnDependencyChange` hook (`@/hooks/use-clear-on-dependency-change`) is standalone — usable in any component, not just EntitySelect. See `docs/forms.md` → "Cascading / Dependent Selects".
+### Object Storage — `@/lib/storage`
 
-### React Query Integration
+File uploads (lab reports, COAs, photos, calibration certs) use **real S3-compatible storage** with a presigned PUT/GET flow.
+- `STORAGE_PROVIDER=s3-compatible` (prod — DO Spaces / AWS S3) or `local-fs` (dev/test, served by `/api/storage-local/[...key]`)
+- Production rejects `local-fs` at env-validation time. Use `<FormFileUpload>` (`@/components/forms/form-file-upload`) for upload UI. See `docs/storage.md`.
 
-- **Query Keys**: `["resource", projectId, ...specifics]`
-- **Mutations**: Invalidate related queries after success
-- **Stale Time**: 30s for current data, 5m for historical
-- **Always check `src/hooks/` first**: Every entity has a dedicated hook file (e.g., `use-formulations.ts`, `use-facilities.ts`). Never write an inline `useQuery` when an existing hook covers the same server action — it duplicates query keys and risks staleTime drift
+## Forms (React Hook Form + Zod)
 
-## Adding New Features
+Schemas in `src/schemas/`. Use `FormField`, `FormInput`, `FormTextarea`, `ServerError` (server errors via `setError('root.serverError', …)`), `<SectionLabel>`, `<FormFileUpload>`. Client validation runs before server calls.
 
-Follow this checklist when creating new features:
+**Numeric / special-field helpers from `@/schemas/helpers` (never write inline preprocess lambdas):**
+- `toNumberOrUndefined` → `undefined` for **required** numbers; give a Zod 4 message: `z.number({ error: (iss) => iss.input === undefined ? "Required" : "Invalid number" })`
+- `toNumberOrNull` → `null` for **optional** numbers; also `optionalNumber`, `optionalPercent`, `toIntOrNull`
+- **Never** `valueAsNumber: true` (turns `""` into `NaN`, breaks Zod)
+- Optional UUID (EntitySelect): `emptyToNull.or(z.string().uuid())`
+- GPS: `latitudeSchema`/`longitudeSchema` (optional), `requiredLatitudeSchema`/`requiredLongitudeSchema` + `toNumberOrUndefined` (required)
 
-1. **Zod Schemas** (`src/schemas/your-feature.ts`)
-   - Create form schemas with validation messages
-   - Create server action schemas (may extend form schemas)
-   - Export type inference: `export type MyFormData = z.infer<typeof myFormSchema>`
-   - When form and update schemas share a sub-object shape, extract a shared base schema (e.g., `const ingredientBinBaseSchema = z.object({...})`) and extend it for each variant
-   - Prefer `z.infer<typeof schema>` over inline type definitions to keep types in sync with validation
-   - Use preprocessor helpers from `@/schemas/helpers` — never write inline `(v) => ...` preprocess lambdas
+See `docs/forms.md` and `docs/troubleshooting.md`.
 
-2. **Database Schema** (`src/db/schema/your-feature.ts`)
-   - Define table with Drizzle
-   - Export types
-   - Add to `schema/index.ts`
-   - Run `pnpm db:generate`
+## Code Quality
 
-3. **Data Access** (`src/data-access/your-feature.ts`)
-   - ALWAYS include auth guards
-   - Use `requireAuth()` or `requireProjectMember()`
-   - Export functions for CRUD operations
+### Naming & files
+- All files **kebab-case** (`item-form.tsx`, `use-items.ts`)
+- Component exports **PascalCase**; hook/function exports **camelCase**
+- 1000-line hard cap; barrel `index.ts` exports
+- Simple feature (<500 lines, <3 components) → flat folder; complex → `components/`, `dialogs/`, `hooks/` subfolders
+- UI primitives live under lowercase `@/components/ui/*` (e.g. `@/components/ui/button` exports `Button` + `buttonVariants`)
 
-4. **Server Actions** (`src/fn/your-feature.ts`)
-   - Mark with `"use server"`
-   - Import schemas from `@/schemas`
-   - Validate input with Zod schemas
-   - Return `ActionResult<T>`
-   - For JSONB columns, keep create and update defaults consistent (e.g., both use `{}` for empty, not `{}` in create and `undefined` in update) — check the DB schema's `.default()` value
+### Style
+- TypeScript strict — avoid `any`; prefer `z.infer<typeof schema>` over hand-written types
+- Magic numbers → constants; use design-system tokens (`docs/design-system.md`), never hardcoded values
+- For JSONB columns keep create/update defaults identical (match the schema's `.default()`)
 
-5. **React Query Hooks** (`src/hooks/use-your-feature.ts`)
-   - Query hooks for data fetching
-   - Mutation hooks with query invalidation
+### React (this project uses the React Compiler)
+- Auto-memoizes components/values/callbacks — **don't add `useMemo`/`useCallback`/`React.memo`** unless profiling demands it
+- **Avoid `useEffect`** — prefer React Query, server actions, derived state. `useEffect` only for external-system sync, subscriptions, or imperative DOM.
 
-6. **Components** (`src/components/your-feature/`)
-   - List, Card, Form components (use React Hook Form)
-   - Use design system tokens
-   - Barrel export from `index.ts`
+### Accessibility
+- 44×44px touch targets · 4.5:1 contrast · full keyboard nav · ARIA labels where visual context is insufficient
 
-7. **Routes** (`src/app/(app)/your-feature/page.tsx`)
-   - Biochar entities use flat routes: `/facilities`, `/production-runs`
-   - Project-scoped features use: `/[projectId]/your-feature`
-   - Use async params for Next.js 16
+## Adding a Feature — checklist
 
-8. **E2E Tests** (`tests/e2e/your-feature.spec.ts`)
-   - Use `adminPage` and `seededData` fixtures
-   - Test create via side sheet form + verify in list
+1. **Zod schemas** (`src/schemas/`) — form + action schemas, `export type X = z.infer<…>`; share a base schema between form/update variants; use `@/schemas/helpers`
+2. **DB schema** (`src/db/schema/`) — define table, export types, add to `schema/index.ts`, `pnpm db:generate`
+3. **Data access** (`src/data-access/`) — CRUD + `requireAuth()` / `requireProjectMember()`
+4. **Server actions** (`src/fn/`) — `"use server"`, validate with Zod, return `ActionResult<T>`
+5. **Hooks** (`src/hooks/`) — query + mutation hooks with invalidation
+6. **Components** (`src/components/your-feature/`) — RHF forms, design tokens, barrel export
+7. **Route** — biochar entities use flat routes (`/facilities`); project-scoped use `/[projectId]/…`; async params (Next.js 16)
+8. **E2E** (`tests/e2e/your-feature.spec.ts`) — `adminPage` + `seededData` fixtures
 
-See `TEMPLATE_USAGE.md` for detailed examples.
+See `TEMPLATE_USAGE.md`. Reference entity pattern = **facilities** (schemas / data-access / fn / hooks / components / route / spec).
 
-## Chain of Custody Visualization
+## Chain of Custody
 
-Application-first lineage graph that traces the upstream rollback path from a selected application back to feedstock batches:
-
-- **7 node types**: Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application
-- **Color groups**: Production (orange), Infrastructure (purple), Distribution (rose)
-- **Selection**: Users search for an application via `EntitySelect`; facility is resolved from the selected application
-- **Layout**: Dagre automatic DAG layout (LR), minimap, zoom controls
-- **Data**: Each node shows record-level details (dates, masses, codes) rather than aggregate counts
-- **Architecture**: Standard layered pattern — `data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`
-- **Docs**: `docs/chain-of-custody.md`
+Application-first lineage graph tracing the upstream rollback from a selected application to feedstock batches. 7 node types (Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application); color groups Production (orange) / Infrastructure (purple) / Distribution (rose); Dagre LR layout, minimap, zoom. Standard layered pattern (`data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`). Docs: `docs/chain-of-custody.md`.
 
 ## Production Run Extensions
 
-Production runs have three child entity types managed via inline tables/forms on the run detail page:
+Child entities on the run detail page: **Readings** (time-series telemetry), **Samples** (in-process measurements + file upload), **Incidents** (exceptions with severity + corrective actions). See `src/components/production-run-readings/` and `src/components/production-runs/`.
 
-- **Production Run Readings** (`src/components/production-run-readings/`) — Time-series telemetry (temperature, pressure, gas composition)
-- **Production Samples** (`src/components/production-runs/production-sample-form.tsx`) — In-process field measurements with file upload
-- **Production Incidents** (`src/components/production-runs/production-incident-form.tsx`) — Exception records with severity and corrective actions
+## Isometric Certify Integration
 
-## Design System Compliance
+Submits removals / GHG statements / sensor data to the Isometric registry via `src/lib/isometric/` (client, submissions, ghg-statements, sensors, sources, links). Server-side only, instrumented with the structured logger. UI in `src/components/certification/`.
 
-All UI MUST follow the design system in `docs/design-system.md`:
+**Always consult before requirements/integration work:**
+- `docs/isometric/README.md` — scope, file index, usage
+- `docs/isometric/versions.json` — single source of pinned protocol/module versions
+- `requirements-shortlist.md`, `schema-mapping.md`, `p0-compliance-checklist.md`, `simple-implementation-guide.md`, `condition-registry.md` (conditional-field triggers), `update-playbook.md`
+- `integration-plan.md`, `openapi-index.md`, `changes.md` (append-only changelog)
+- Decisions: `docs/adr/0001`–`0006`. Deferred work / sandbox checks: `docs/open-questions.md`.
 
-- **Typography**: Use classes (`.title-heading-1`, `.body-large`)
-- **Spacing**: Use utilities (`gap-m`, `pt-l`) or CSS variables
-- **Colors**: Use tokens (`var(--color-text-primary)`)
-- **Components**: Prefer Base UI for accessibility
+All local summaries are **non-authoritative interpretations** — verify against linked Isometric Registry URLs before implementing logic or making credit claims. There's an `isometric` MCP server (call its `how_to` tool first) for authoritative protocol content.
 
-## Authentication System
+## Authentication
 
-- **Admin-invite only** by default (`ALLOW_SELF_SIGNUP=false`)
-- Admin defined by `ADMIN_EMAIL` environment variable
-- Email-based invitations via Resend
-- Password resets via email tokens
-- Session cookies via Better Auth (auto-set with `nextCookies` plugin)
-- Middleware uses `getSessionCookie()` for auth checks (see `src/middleware.ts`)
+- Admin-invite only by default (`ALLOW_SELF_SIGNUP=false`); admin set by `ADMIN_EMAIL`
+- Email invitations + password resets via Resend; Better Auth session cookies (`nextCookies` plugin)
+- Middleware uses `getSessionCookie()` (`src/middleware.ts`). See `docs/auth.md`.
 
 ## Environment Variables
 
-All env vars validated via Zod in `src/config/env.ts`:
+All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field rules). **Document NAMES only, never values.**
 
-**Required:**
-- `DATABASE_URL` - PostgreSQL connection
-- `NEXT_PUBLIC_APP_URL` - App URL (used by Better Auth and other services)
-- `BETTER_AUTH_SECRET` - 32+ character secret
-- `RESEND_API_KEY` - Email API key
-- `RESEND_FROM_EMAIL` - Sender email
-- `ADMIN_EMAIL` - Admin email address
-- `ADMIN_PASSWORD` - Admin user password (used by `pnpm db:reset`)
-- `ALLOW_SELF_SIGNUP` - `false` for invite-only
+- **Core:** `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET` (32+ chars), `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ALLOW_SELF_SIGNUP`, `NODE_ENV`
+- **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`
+- **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod), `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`, `STORAGE_LOCAL_FS_ROOT`
+- **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET` (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
 
-**CRITICAL:** Never document secret VALUES, only variable NAMES.
+## Security
 
-## Isometric Requirements Docs
+- Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>`. If a key leaks: rotate immediately, then scrub history with `git-filter-repo` (see `docs/security.md`).
+- Log `userId`, never `email`. Review PR diffs for accidental secret exposure.
 
-For Biochar + Soil Storage requirements work, always consult:
-- `docs/isometric/README.md` (scope, file index, and usage guide)
-- `docs/isometric/versions.json` (single source of pinned protocol/module versions)
-- `docs/isometric/requirements-shortlist.md` (source-linked requirement summaries)
-- `docs/isometric/schema-mapping.md` (40-row requirement-to-schema coverage map with priority/gap notes)
-- `docs/isometric/p0-compliance-checklist.md` (15 P0-priority compliance gaps for execution tracking)
-- `docs/isometric/simple-implementation-guide.md` (plain-language implementation notes, derived-vs-stored decisions, glossary)
-- `docs/isometric/condition-registry.md` (conditional field enforcement triggers)
-- `docs/isometric/update-playbook.md` (refresh workflow)
-- `docs/isometric/changes.md` (local changelog for documentation updates)
+## Documentation Standards
 
-All local summaries are non-authoritative interpretations (last refreshed: 2026-02-11). Verify against linked Isometric Registry URLs when implementing logic or making claims.
+Keep `/docs` clean — only **evergreen** docs (product/architecture/design-system/database/auth/troubleshooting) live there. Move implementation logs, quick fixes, dated debugging, and superseded docs to `/docs/archive`. Before creating a doc: is it evergreen? does it duplicate an existing doc? (update instead). **Deferred work** → dated entry in `docs/open-questions.md`, not a code `TODO`; resolve by removing it and recording the decision in the feature doc (e.g. `docs/isometric/changes.md`).
 
-## Important Documentation Files
+## Git Conventions
 
-- **Modern Patterns** - `docs/modern-patterns.md` (current library patterns vs outdated LLM knowledge, includes Next.js 16 caching)
-- **Template Usage** - `TEMPLATE_USAGE.md` (how to extend this template)
-- **Architecture** - `docs/architecture.md` (system design, caching strategy, and implementation patterns)
-- **Organization** - `docs/organization.md` (folder structure and organization patterns)
-- **Design System** - `docs/design-system.md` (UI tokens and component patterns)
-- **Database** - `docs/database.md` (Drizzle ORM setup and migrations)
-- **Authentication** - `docs/auth.md` (Better Auth configuration and flows)
-- **Forms** - `docs/forms.md` (React Hook Form integration guide)
-- **Security** - `docs/security.md` (security best practices and guidelines)
-- **Mail Setup** - `docs/mail-setup.md` (email configuration with Resend)
-- **Chain of Custody** - `docs/chain-of-custody.md` (application-first lineage graph architecture)
-- **Schema Overview** - `docs/schema-overview.md` (all 60+ tables with descriptions and source links)
-- **Isometric Requirements KB** - `docs/isometric/README.md` (Biochar + Soil Storage requirements, version pins, mapping)
-- **Open Questions** - `docs/open-questions.md` (living tracker of deferred decisions, sandbox checks needed, and cross-cutting unfinished work)
-- **Troubleshooting** - `docs/troubleshooting.md` (common issues and fixes)
+Branch `<type>/<kebab-desc>`; commit/PR title `<type>: <imperative, lowercase verb>` (PR title < 70 chars). Types: `feat` · `fix` · `refactor` · `chore` · `docs` · `test`. Multi-line commits: blank line then a body explaining **why**, not what.
 
 ## E2E Testing
 
-Playwright tests cover entities plus full-chain smoke tests:
+Playwright per-entity specs + full-chain smoke tests. Fixtures (`tests/e2e/fixtures/auth-fixtures.ts`): `adminPage`, `seededData`, `cleanupTestData`. Seed (`seed-chain-data.ts`) creates 13 prerequisite entities; `full-chain-ui.spec.ts` builds all 8 core entities in one session. **Auth uses the HTTP API** (`createDirectAuthContext`), not UI login — requires `DISABLE_RATE_LIMIT=true` in `.env.local` and an `Origin` header on sign-in. Run `pnpm db:reset` first if you hit duplicate-key errors.
 
-- **Fixtures**: `tests/e2e/fixtures/auth-fixtures.ts` provides `adminPage`, `seededData`, `cleanupTestData`
-- **Seed data**: `tests/e2e/fixtures/seed-chain-data.ts` seeds 13 prerequisite entities
-- **Chain test**: `tests/e2e/full-chain-ui.spec.ts` creates all 8 core entities in one session
-- **Per-entity tests**: `facilities.spec.ts`, `production-runs.spec.ts`, `distribution.spec.ts`, `applications.spec.ts`, `feedstocks.spec.ts`, `samples.spec.ts`, `products.spec.ts`, `credit-batches.spec.ts`
-- **Visualization tests**: `chain-of-custody.spec.ts`
-- **Other tests**: `layout.spec.ts`, `security.spec.ts`, `full-workflow.spec.ts`
-- **Global teardown**: `tests/e2e/global-teardown.ts` cleans up test data
+## Key Docs Index
 
-Run: `pnpm test:e2e` (requires dev server running)
+`docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
 
-## CI/CD Workflows
+## CI/CD
 
-- **Database management** (`.github/workflows/migrate.yml`) — Auto-migrates on schema changes pushed to `main`/`staging`; supports manual `reset-seed-staging` and `reset-production` actions via `workflow_dispatch`
-- **Claude PR Assistant** (`.github/workflows/claude.yml`) — AI-assisted PR review
-- **E2E Tests** (`.github/workflows/e2e.yml`) — Playwright end-to-end tests
-- **CodeRabbit** (`.coderabbit.yaml`) — Auto-reviews on `main` and `staging` branches
+`migrate.yml` (auto-migrate on schema push to `main`/`staging`; manual reset/seed via `workflow_dispatch`) · `claude.yml` (AI PR review) · `e2e.yml` (Playwright) · `.coderabbit.yaml` (auto-review on `main`/`staging`).

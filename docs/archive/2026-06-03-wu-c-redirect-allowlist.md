@@ -1,5 +1,13 @@
 # WU-C — Tighten the document redirect allowlist (config-backed, mirror the sibling)
 
+> **ARCHIVED 2026-06-03 — DONE.** Shipped the same day: shared matcher extracted
+> to `src/lib/net/host-allowlist.ts`, `redirect-allowlist.ts` narrowed to
+> `.s3.amazonaws.com` / `.storage.googleapis.com` / `.digitaloceanspaces.com` /
+> `.isometric.com` (broad families dropped), `ISOMETRIC_STORAGE_REDIRECT_HOSTS`
+> env override added, covered by `tests/redirect-allowlist.test.ts` +
+> `tests/documents-route.test.ts`. Recorded in `docs/isometric/changes.md`
+> (2026-06-03 entry). Kept for the rationale/grounding it captured.
+
 > Self-contained execution plan. Picks up the deferred WU-C item from the
 > 2026-06-02 audit-remediation pass (see `docs/isometric/changes.md`). Safe to
 > execute in a fresh context — all grounding is inline.
