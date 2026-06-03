@@ -249,6 +249,7 @@ function GhgStatementCard({
           <SubmissionStatusBadge
             latest={latestSubmission}
             isLockedInFlight={locked}
+            artifact="ghgStatement"
           />
         </div>
 

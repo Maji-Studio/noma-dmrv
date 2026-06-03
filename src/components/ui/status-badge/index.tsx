@@ -25,6 +25,9 @@ const statusBadgeVariants = cva(
         // Neutral / Draft states - gray
         draft: "bg-[var(--color-background-medium)] text-[var(--color-text-secondary)] border-[var(--color-border-secondary)]",
 
+        // Superseded / replaced states - muted with strikethrough, distinct from draft
+        superseded: "bg-[var(--color-background-light)] text-[var(--color-text-tertiary)] border-[var(--color-border-tertiary)] line-through",
+
         // In-progress / Active states - purple/brand
         running: "bg-[var(--clr-purple-10)] text-[var(--clr-purple)] border-[var(--clr-purple-40)]",
 
@@ -68,6 +71,7 @@ const statusBadgeVariants = cva(
 export type StatusValue =
   // Production run status
   | "draft"
+  | "superseded"
   | "running"
   | "complete"
   | "void"
@@ -89,6 +93,7 @@ export type StatusValue =
 // Status display labels (maps status value to human-readable text)
 const statusLabels: Record<StatusValue, string> = {
   draft: "Draft",
+  superseded: "Superseded",
   running: "Running",
   complete: "Complete",
   void: "Void",

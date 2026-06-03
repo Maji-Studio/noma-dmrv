@@ -5,6 +5,12 @@ export {
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
 } from "./facility-mapping";
+// Read-only integration status for Settings → Health (admin-gated, no secrets).
+export {
+  loadCertificationHealth,
+  type AllowlistStatus,
+  type CertificationHealth,
+} from "./health";
 export {
   loadCertifyContextForCreditBatch,
   loadCertifyContextForCreditBatchForUser,
