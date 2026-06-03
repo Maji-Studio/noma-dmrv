@@ -75,6 +75,17 @@ const envSchema = z.object({
     z.string().min(1).optional(),
   ),
 
+  // Allowlist for the /api/documents/[id] legacy-`fileUrl` redirect
+  // (`src/lib/documents/redirect-allowlist.ts`). Same shape/semantics as
+  // ISOMETRIC_UPLOAD_HOST_ALLOWLIST: empty → safe narrow default families
+  // (.s3.amazonaws.com + regional/dualstack S3, .isometric.com,
+  // .digitaloceanspaces.com, .storage.googleapis.com); a NON-EMPTY value
+  // REPLACES the defaults (use it to pin the exact Isometric report bucket).
+  ISOMETRIC_STORAGE_REDIRECT_HOSTS: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional(),
+  ),
+
   // Object storage (Digital Ocean Spaces / AWS S3 / local-fs fallback)
   STORAGE_PROVIDER: z
     .preprocess(emptyToUndefined, z.enum(["s3-compatible", "local-fs"]).optional())
