@@ -553,6 +553,36 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
   `direct-emissions/ghg_direct_emissions/concentration` per ADR 0005,
   then re-run Case F. Track in the submit-removal phase; not a
   Sources-panel concern.
+- **2026-06-03 update — stakeholder ask: why do we not have this data,
+  and is an interim `0` acceptable?** Surfaced again hitting SUBMIT on
+  `/certification/removals`. The root cause is upstream of the template:
+  noma has **no source for the `pyrolyzer_direct` magnitude** (exhaust
+  CH₄/CO concentration + gas mass flow). It is not operational
+  production-run data — it comes from the annual external LCA, and the
+  `certifier_project_emissions` rows are still Moshi-LCA **placeholders**,
+  not real extracted values (ADR 0005 "no production promotion until the
+  seed is replaced").
+  - **The interim-`0` temptation is the exact integrity bug ADR 0005
+    removed.** Pyrolyzer direct emissions are *positive* emissions that
+    *reduce* net removal. Sending `0` (the old zero-stub behaviour)
+    **inflates** the credit and is anti-conservative — the wrong
+    direction for a registry. So `0` is not a neutral placeholder; it is
+    an over-claim until the real LCA value lands.
+  - **Stakeholder questions to resolve:**
+    1. Who owns the LCA report, and what is the real `pyrolyzer_direct`
+       value (kg CO₂e for the window) we should transcribe into
+       `/admin/emission-estimates`?
+    2. Until that value exists, is the agreed interim posture (a) **omit
+       the component from the template** so the Removal simply doesn't
+       carry it (data absent, not a false `0`), or (b) a deliberately
+       **conservative over-estimate** transcribed as a PROJECT-scope
+       Component? Both are defensible; `0` is not.
+    3. Does this block only sandbox exploration, or a real
+       production submission? (Sandbox: unblock by editing the sandbox
+       template only — no registry consequence.)
+  - **Do NOT re-add a zero-stub `INPUT_MAPPING` entry to bypass the
+    guard.** That reverts ADR 0005 and re-introduces the over-claim.
+    The unblock path is template-field removal, not a fake datapoint.
 
 ## Audit follow-ups (opened 2026-05-25)
 

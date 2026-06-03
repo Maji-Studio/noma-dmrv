@@ -411,23 +411,26 @@ export async function deleteProductionRun(
     throw new SafeError("Production run not found");
   }
 
-  // Delete feedstock relationships first
-  await db
-    .delete(productionRunFeedstocks)
-    .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+  // Run all four deletes in one transaction so the child-row deletes roll back
+  // if the final productionRuns delete fails. Foreign-key constraints prevent
+  // the run delete when dependent samples or credit batches exist; without the
+  // transaction the children would already be gone, leaving a half-deleted run.
+  // The FK violation propagates out and is caught by the server action.
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(productionRunFeedstocks)
+      .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
 
-  // Delete readings
-  await db
-    .delete(productionRunReadings)
-    .where(eq(productionRunReadings.productionRunId, productionRunId));
+    await tx
+      .delete(productionRunReadings)
+      .where(eq(productionRunReadings.productionRunId, productionRunId));
 
-  // Delete incident reports
-  await db
-    .delete(incidentReports)
-    .where(eq(incidentReports.productionRunId, productionRunId));
+    await tx
+      .delete(incidentReports)
+      .where(eq(incidentReports.productionRunId, productionRunId));
 
-  // Note: Foreign key constraints will prevent deletion if there are
-  // dependent samples or credit batches. The error will be caught by the server action.
-
-  await db.delete(productionRuns).where(eq(productionRuns.id, productionRunId));
+    await tx
+      .delete(productionRuns)
+      .where(eq(productionRuns.id, productionRunId));
+  });
 }

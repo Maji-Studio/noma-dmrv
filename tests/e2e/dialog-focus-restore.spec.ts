@@ -23,11 +23,11 @@ test.describe("Dialog focus restore", () => {
     });
 
     // The trash button on a facility card opens a Modal-based
-    // DeleteConfirmDialog. It is icon-only, so capture it by locator (Edit then
-    // Delete — the last button in the card's action group).
+    // DeleteConfirmDialog. It is icon-only but carries an aria-label
+    // ("Delete facility <code>"), so locate it by accessible name.
     const firstCard = page.locator("article").first();
     await expect(firstCard).toBeVisible();
-    const deleteTrigger = firstCard.getByRole("button").last();
+    const deleteTrigger = firstCard.getByRole("button", { name: /delete/i });
     await deleteTrigger.click();
 
     const dialog = page.getByRole("dialog");
