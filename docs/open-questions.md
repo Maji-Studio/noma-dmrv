@@ -675,6 +675,20 @@ ordered by leverage.
     update every data-access chokepoint, audit all `localEntityId`
     accessors in `certifier_sync_events` for the same shape.
 
+- **Pin the document-redirect allowlist to the exact Isometric report bucket**
+  (`security/redirect-host-pinning`)
+  - The `/api/documents/[id]` redirect guard was narrowed (2026-06-03, see
+    `docs/isometric/changes.md`) to `.s3.amazonaws.com` (+ regional/dualstack),
+    `.storage.googleapis.com`, `.digitaloceanspaces.com`, `.isometric.com`. The
+    S3/Spaces families still match **any** bucket on those providers, so an authed
+    user could still store a `fileUrl` on an arbitrary bucket host. Low risk
+    (browser 302; not request-attacker-controlled), accepted for now.
+  - Resolve via: discover the exact host(s) Isometric presigns GHG-statement
+    report URLs against (Isometric MCP `how_to` → certify OpenAPI report object,
+    or inspect `documents.file_url` in a real environment) and set
+    `ISOMETRIC_STORAGE_REDIRECT_HOSTS` to that explicit host per environment — it
+    replaces the default families. No code change needed.
+
 ### Performance / scalability
 
 - **Drift loader `AbortSignal`** (`perf/isometric-drift-abort`)
