@@ -88,16 +88,23 @@ function shortId(id: string): string {
   return id.slice(0, 8);
 }
 
-// Config blockers are fixed in Settings; everything else is worked on the
-// Removals hub.
-function blockedHref(reasons: string[], facilityId: string): string {
-  const isConfig = reasons.some((r) =>
-    /linked|template|blueprint/i.test(r),
-  );
-  return withFacility(
-    isConfig ? "/certification/settings" : "/certification/removals",
-    facilityId,
-  );
+// A ready removal deep-links to its quick-view sheet (`?removal=`), where a 1:1
+// removal one-click-submits. Config blockers are fixed in Settings; coverage /
+// lineage blockers are worked in the removal's guided Review (the Pre-flight
+// step lists them).
+function removalSheetHref(removalId: string, facilityId: string): string {
+  return `/certification/removals?facility=${facilityId}&removal=${removalId}`;
+}
+
+function blockedHref(
+  removalId: string,
+  reasons: string[],
+  facilityId: string,
+): string {
+  const isConfig = reasons.some((r) => /linked|template|blueprint/i.test(r));
+  return isConfig
+    ? withFacility("/certification/settings", facilityId)
+    : `/certification/removals/${removalId}/review?facility=${facilityId}&step=preflight`;
 }
 
 function removalAttention(
@@ -113,7 +120,7 @@ function removalAttention(
         tone: "ready",
         title: `Removal ${shortId(removal.removalId)}`,
         detail: "Ready to submit",
-        href: withFacility("/certification/removals", facilityId),
+        href: removalSheetHref(removal.removalId, facilityId),
       });
     } else if (state === "blocked") {
       items.push({
@@ -121,7 +128,7 @@ function removalAttention(
         tone: "blocked",
         title: `Removal ${shortId(removal.removalId)}`,
         detail: reasons.join(" · "),
-        href: blockedHref(reasons, facilityId),
+        href: blockedHref(removal.removalId, reasons, facilityId),
       });
     }
   }
@@ -148,7 +155,7 @@ function statementAttention(
       locked,
       "ghgStatement",
     );
-    const href = withFacility("/certification/ghg-statements", facilityId);
+    const href = `/certification/ghg-statements?facility=${facilityId}&statement=${item.statement.id}`;
     const period = statementPeriodLabel(item.statement);
     if (status.value === "pending") {
       items.push({

@@ -23,7 +23,6 @@ import {
   ShoppingCart,
   MapPin,
   Certificate,
-  ClipboardText,
   SealCheck,
   TestTube,
   ListChecks,
@@ -56,6 +55,9 @@ const SECTION_ACCENTS = {
   infrastructure: "var(--clr-purple)",
   distribution: "var(--clr-rose)",
   verification: "var(--clr-pink)",
+  // Certification is its own first-class section (ADR 0007); it gets a distinct
+  // accent key rather than reusing `verification`, even though both read pink.
+  certification: "var(--clr-pink)",
   admin: "var(--clr-red)",
   default: "var(--clr-rose)",
 } as const;
@@ -107,15 +109,13 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    title: "Certification",
-    accent: SECTION_ACCENTS.verification,
+    // Single first-class entry (ADR 0007); the in-page CertificationTabBar
+    // handles Overview / Removals / GHG Statements / Settings sub-nav. Landing
+    // on `/certification` opens the Overview work queue. Titleless — it's a
+    // top-level destination, not a group of links.
+    accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification/removals", label: "Removals", icon: SealCheck },
-      {
-        href: "/certification/ghg-statements",
-        label: "GHG Statements",
-        icon: ClipboardText,
-      },
+      { href: "/certification", label: "Certification", icon: SealCheck },
     ],
   },
 ];

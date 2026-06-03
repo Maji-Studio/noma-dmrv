@@ -608,6 +608,40 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     alongside the `perf/overview-facility-refetch` facility/per-removal split,
     which touches the same `buildRemovalContext`.
 
+### Certification remodel — Stage 6 deferrals (opened 2026-06-03)
+
+- **Demoted Certify panel doesn't inline the linked GHG Statement's status**
+  (`certification/bridge-linked-statement-status`) — opened 2026-06-03 (remodel Stage 6).
+  - ADR 0007 decision 2 wanted the read-only credit-batch bridge to *separately*
+    show the linked GHG Statement's verifier status when one exists ("GHG
+    Statement: Awaiting verifier"). The shipped bridge
+    (`src/components/certification/certify-panel.tsx`) shows the removal's own
+    local status and points to the GHG Statements tab instead.
+  - Why deferred: `RemovalCertifyContext` carries the removal's own
+    `latestSubmission`, not the linked statement. Threading the statement +
+    its `metadata.remoteStatus` through `buildRemovalContext` touches every
+    early-return path of the submission-context loader — the exact loader the
+    remodel plan flags as a Stage-6 regression risk ("demote carefully;
+    regression-check the credit-batch sheet"). P1-b (never attribute a verifier
+    status to the removal) is satisfied regardless: the bridge shows local only.
+  - Resolve via: add `linkedGhgStatement: { id, remoteStatus } | null` to the
+    removal UI context (the `certifierRemovals` row already has `ghgStatementId`),
+    derive `remoteStatus` from the statement's latest submission, and render it as
+    a separate status line in the bridge. Cheap once the loader is touched for
+    `certification/review-step-run-aggregation`.
+
+- **Orphaned `submitCreditBatchRemoval` server action**
+  (`certification/orphaned-creditbatch-submit-action`) — opened 2026-06-03 (remodel Stage 6).
+  - The lazy ensure-then-submit hook `useSubmitCreditBatchRemoval` was the
+    credit-batch panel's submit path; it's retired with the panel's demotion. The
+    underlying server action `submitCreditBatchRemoval`
+    (`src/fn/certification/removal-grouping.ts`, exported from
+    `fn/certification/index.ts`) is now caller-less but left in place.
+  - Why deferred: removing a layered `fn/` action mid-stage is exactly the
+    regression surface the demotion was warned to avoid; it's harmless dead code.
+  - Resolve via: delete the action + its barrel export once the Stage-6 changes
+    have soaked (or in the next certification cleanup pass).
+
 ## Audit follow-ups (opened 2026-05-25)
 
 Batch of deferrals from the whole-codebase tech-debt audit run on

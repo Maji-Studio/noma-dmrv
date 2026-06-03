@@ -24,7 +24,6 @@ import {
   refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
-  submitCreditBatchRemoval,
   submitGhgStatementToVerifier,
   submitRemovalAction,
 } from "@/fn/certification";
@@ -33,7 +32,6 @@ import type {
   CreateGhgStatementInput,
   FacilityEmissionConfigFormData,
   SaveMappingInput,
-  SubmitCreditBatchInput,
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
 } from "@/schemas/certification";
@@ -255,22 +253,7 @@ export function useRemovalsForFacility(facilityId: string, enabled = true) {
   });
 }
 
-// Panel submit — ensures the credit batch's removal (lazy 1:1), then submits.
-export function useSubmitCreditBatchRemoval() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: SubmitCreditBatchInput | string) => {
-      const result = await submitCreditBatchRemoval(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
-  });
-}
-
-// Hub submit — submits an existing removal directly.
+// Submits an existing removal directly (the workspace's single submit entry).
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
