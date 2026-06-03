@@ -52,11 +52,13 @@ test.describe("Certify panel — credit-batch side sheet", () => {
       sideSheet.getByRole("button", { name: /submit to isometric/i }),
     ).toHaveCount(0);
 
-    // Deep-link out to the certification surface should always be reachable
-    // from the slim panel.
+    // The not-linked slim panel intentionally has no deep-link out: the panel
+    // re-leveling replaced it with the "open facility settings" guidance copy
+    // (certify-panel.tsx not-linked branch). Assert the link is absent so a
+    // regression that re-adds an unintended link is caught.
     await expect(
       sideSheet.getByRole("link", { name: /view in certification/i }),
-    ).toBeVisible();
+    ).toHaveCount(0);
 
     const databaseUrl =
       process.env.DATABASE_URL ||

@@ -18,6 +18,11 @@ export function useDialog(
   onOpen?: () => void
 ) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // The element that held focus when the dialog opened, so focus can return
+  // there on close. Native <dialog> restores focus for method="dialog" closes
+  // but NOT when close() is driven by React state (our path), leaving keyboard
+  // and screen-reader users stranded at the document start. We restore it.
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -25,6 +30,8 @@ export function useDialog(
 
     if (isOpen) {
       if (!dialog.open) {
+        // Capture before showModal() moves focus into the dialog.
+        triggerRef.current = document.activeElement as HTMLElement | null;
         dialog.showModal();
       }
       onOpen?.();
@@ -32,6 +39,17 @@ export function useDialog(
       if (dialog.open) {
         dialog.close();
       }
+      // Restore focus only if the trigger is still in the document and
+      // focusable; guards against returning focus to a since-unmounted node.
+      const trigger = triggerRef.current;
+      if (
+        trigger &&
+        typeof trigger.focus === "function" &&
+        document.contains(trigger)
+      ) {
+        trigger.focus();
+      }
+      triggerRef.current = null;
     }
     // onOpen intentionally excluded — only react to isOpen changes
     // eslint-disable-next-line react-hooks/exhaustive-deps

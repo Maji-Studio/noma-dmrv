@@ -15,6 +15,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { submitRemoval, type RemovalSubmissionResult } from "./submit-removal";
+import { submitRateLimit } from "./shared";
 
 // Panel-facing action — the Certify panel lives in the credit-batch side
 // sheet. Ensures the batch has a removal (lazy 1:1; creates one if the batch
@@ -36,7 +37,7 @@ export async function submitCreditBatchRemoval(
       removalId,
       confirmProduction: parsed.confirmProduction,
     });
-  });
+  }, { rateLimit: submitRateLimit("cert:submit-removal") });
 }
 
 // Hub-facing action — submit an existing removal directly by id.
@@ -52,7 +53,7 @@ export async function submitRemovalAction(
       removalId: parsed.removalId,
       confirmProduction: parsed.confirmProduction,
     });
-  });
+  }, { rateLimit: submitRateLimit("cert:submit-removal") });
 }
 
 // Creates (or returns) the removal for a credit batch without submitting —

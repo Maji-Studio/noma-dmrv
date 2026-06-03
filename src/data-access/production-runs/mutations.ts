@@ -1,0 +1,433 @@
+/**
+ * Production-run create / update / delete operations, including bin-based
+ * feedstock allocation and storage-location validation.
+ */
+
+import { eq } from "drizzle-orm";
+import { db, type DbTransaction } from "@/db";
+import {
+  productionRuns,
+  productionRunFeedstocks,
+  productionRunReadings,
+  incidentReports,
+  facilities,
+  reactors,
+  storageLocations,
+  feedstocks,
+} from "@/db/schema";
+import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { requireAuth } from "../utils";
+import { SafeError } from "@/lib/errors";
+import { getProductionRunById } from "./queries";
+import type { ProductionRunWithRelations } from "./types";
+
+/**
+ * Proportionally allocate total mass across feedstock batches stored in a bin.
+ * Mass is split by each batch's massDryKg relative to the bin total.
+ * Returns array of { feedstockId, massUsedKg } for M:M insertion.
+ */
+async function allocateFeedstockMass(
+  storageLocationId: string,
+  totalMassKg: number,
+  trx: Pick<typeof db, "select">
+): Promise<Array<{ feedstockId: string; massUsedKg: number }>> {
+  const batchesInBin = await trx
+    .select({
+      id: feedstocks.id,
+      massDryKg: feedstocks.massDryKg,
+    })
+    .from(feedstocks)
+    .where(eq(feedstocks.storageLocationId, storageLocationId));
+
+  if (batchesInBin.length === 0) {
+    throw new SafeError("Selected feedstock bin has no feedstock batches");
+  }
+
+  const totalDryMass = batchesInBin.reduce((s, b) => s + (b.massDryKg ?? 0), 0);
+
+  if (totalDryMass === 0) {
+    throw new SafeError(
+      "Cannot allocate feedstock: batches in this bin have no recorded dry mass. Please update feedstock batch weights first."
+    );
+  }
+
+  return batchesInBin.map((b) => ({
+    feedstockId: b.id,
+    massUsedKg: ((b.massDryKg ?? 0) / totalDryMass) * totalMassKg,
+  }));
+}
+
+/**
+ * Validate that a storage location exists, belongs to the facility, and is the expected type.
+ */
+async function validateStorageLocation(
+  tx: DbTransaction,
+  locationId: string,
+  facilityId: string,
+  expectedType: "feedstock_bin" | "biochar_bin",
+  label: string,
+) {
+  const [loc] = await tx
+    .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
+    .from(storageLocations)
+    .where(eq(storageLocations.id, locationId));
+
+  if (!loc) throw new SafeError(`${label} storage location not found`);
+  if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
+  if (loc.type !== expectedType) throw new SafeError(`Selected storage location is not a ${expectedType.replace("_", " ")}`);
+}
+
+/**
+ * Create a new production run with bin-based feedstock allocation
+ */
+export async function createProductionRun(
+  userId: string,
+  data: {
+    code: string;
+    facilityId: string;
+    date: Date;
+    reactorId: string;
+    status?: "draft" | "running" | "complete" | "void";
+    startTime: Date;
+    endTime: Date;
+    operatorId?: string | null;
+    feedstockWetMassKg?: number | null;
+    feedstockMoisturePercent?: number | null;
+    feedingRateKgHr?: number | null;
+    residenceTimeMinutes?: number | null;
+    dieselOperationLiters?: number | null;
+    dieselGensetLiters?: number | null;
+    preprocessingFuelLiters?: number | null;
+    electricityKwh?: number | null;
+    biocharOutputKg?: number | null;
+    biocharMoisturePercent?: number | null;
+    biocharStorageLocationId?: string | null;
+    feedstockStorageLocationId?: string | null;
+    plcDataFileUrl?: string | null;
+  }
+): Promise<ProductionRunWithRelations> {
+  requireAuth(userId);
+
+  // Check for duplicate code
+  const [existing] = await db
+    .select({ id: productionRuns.id })
+    .from(productionRuns)
+    .where(eq(productionRuns.code, data.code));
+
+  if (existing) {
+    throw new SafeError("A production run with this code already exists");
+  }
+
+  // Verify facility exists
+  const [facility] = await db
+    .select({ id: facilities.id })
+    .from(facilities)
+    .where(eq(facilities.id, data.facilityId));
+
+  if (!facility) {
+    throw new SafeError("Facility not found");
+  }
+
+  // Verify reactor exists and belongs to facility
+  const [reactor] = await db
+    .select({ id: reactors.id, facilityId: reactors.facilityId })
+    .from(reactors)
+    .where(eq(reactors.id, data.reactorId));
+
+  if (!reactor) {
+    throw new SafeError("Reactor not found");
+  }
+
+  if (reactor.facilityId !== data.facilityId) {
+    throw new SafeError("Reactor does not belong to the selected facility");
+  }
+
+  // Compute dry mass from wet mass + moisture
+  const computedDryMass =
+    data.feedstockWetMassKg != null && data.feedstockMoisturePercent != null
+      ? deriveMassDryKg(data.feedstockWetMassKg, data.feedstockMoisturePercent)
+      : null;
+
+  // Compute biochar dry mass from wet output + moisture, clamped to wet mass
+  const biocharDryMass = computeClampedDryMass(data.biocharOutputKg, data.biocharMoisturePercent);
+
+  // Create production run + M:M allocation in a transaction
+  const run = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(productionRuns)
+      .values({
+        code: data.code,
+        facilityId: data.facilityId,
+        date: data.date.toISOString().split('T')[0],
+        status: data.status ?? "draft",
+        startTime: data.startTime,
+        endTime: data.endTime,
+        reactorId: data.reactorId,
+        operatorId: data.operatorId ?? null,
+        feedstockWetMassKg: data.feedstockWetMassKg ?? null,
+        feedstockMoisturePercent: data.feedstockMoisturePercent ?? null,
+        feedstockMassDryKg: computedDryMass,
+        feedingRateKgHr: data.feedingRateKgHr ?? null,
+        residenceTimeMinutes: data.residenceTimeMinutes ?? null,
+        dieselOperationLiters: data.dieselOperationLiters ?? null,
+        dieselGensetLiters: data.dieselGensetLiters ?? null,
+        preprocessingFuelLiters: data.preprocessingFuelLiters ?? null,
+        electricityKwh: data.electricityKwh ?? null,
+        biocharOutputKg: data.biocharOutputKg ?? null,
+        biocharMoisturePercent: data.biocharMoisturePercent ?? null,
+        biocharDryMassKg: biocharDryMass,
+        biocharStorageLocationId: data.biocharStorageLocationId ?? null,
+        feedstockStorageLocationId: data.feedstockStorageLocationId ?? null,
+        plcDataFileUrl: data.plcDataFileUrl ?? null,
+      })
+      .returning();
+
+    // Validate storage locations belong to facility and are correct type
+    if (data.feedstockStorageLocationId) {
+      await validateStorageLocation(tx, data.feedstockStorageLocationId, data.facilityId, "feedstock_bin", "Feedstock");
+    }
+    if (data.biocharStorageLocationId) {
+      await validateStorageLocation(tx, data.biocharStorageLocationId, data.facilityId, "biochar_bin", "Biochar");
+    }
+
+    // Auto-populate M:M feedstock relationships from bin contents
+    if (data.feedstockStorageLocationId && computedDryMass) {
+      const allocated = await allocateFeedstockMass(
+        data.feedstockStorageLocationId,
+        computedDryMass,
+        tx
+      );
+      await tx.insert(productionRunFeedstocks).values(
+        allocated.map((a) => ({
+          productionRunId: created.id,
+          feedstockId: a.feedstockId,
+          massUsedKg: a.massUsedKg,
+        }))
+      );
+    }
+
+    return created;
+  });
+
+  return getProductionRunById(userId, run.id);
+}
+
+/**
+ * Update an existing production run
+ */
+export async function updateProductionRun(
+  userId: string,
+  productionRunId: string,
+  data: {
+    code?: string;
+    facilityId?: string;
+    date?: Date;
+    reactorId?: string;
+    status?: "draft" | "running" | "complete" | "void";
+    startTime?: Date;
+    endTime?: Date;
+    operatorId?: string | null;
+    feedstockWetMassKg?: number | null;
+    feedstockMoisturePercent?: number | null;
+    feedingRateKgHr?: number | null;
+    residenceTimeMinutes?: number | null;
+    dieselOperationLiters?: number | null;
+    dieselGensetLiters?: number | null;
+    preprocessingFuelLiters?: number | null;
+    electricityKwh?: number | null;
+    biocharOutputKg?: number | null;
+    biocharMoisturePercent?: number | null;
+    biocharStorageLocationId?: string | null;
+    feedstockStorageLocationId?: string | null;
+    plcDataFileUrl?: string | null;
+  }
+): Promise<ProductionRunWithRelations> {
+  requireAuth(userId);
+
+  // Verify run exists
+  const [existing] = await db
+    .select()
+    .from(productionRuns)
+    .where(eq(productionRuns.id, productionRunId));
+
+  if (!existing) {
+    throw new SafeError("Production run not found");
+  }
+
+  // If code is being changed, check for duplicates
+  if (data.code && data.code !== existing.code) {
+    const [duplicate] = await db
+      .select({ id: productionRuns.id })
+      .from(productionRuns)
+      .where(eq(productionRuns.code, data.code));
+
+    if (duplicate) {
+      throw new SafeError("A production run with this code already exists");
+    }
+  }
+
+  // Compute effective facility once — used for reactor + storage location validation
+  const targetFacilityId = data.facilityId ?? existing.facilityId;
+
+  // Verify reactor belongs to the facility when reactor or facility changes
+  const effectiveReactorId = data.reactorId !== undefined ? data.reactorId : existing.reactorId;
+  if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
+    const [reactor] = await db
+      .select({ facilityId: reactors.facilityId })
+      .from(reactors)
+      .where(eq(reactors.id, effectiveReactorId));
+
+    if (!reactor) {
+      throw new SafeError("Reactor not found");
+    }
+
+    if (reactor.facilityId !== targetFacilityId) {
+      throw new SafeError("Reactor does not belong to the selected facility");
+    }
+  }
+
+  // Update production run + M:M re-allocation in a transaction
+  const updateData: Record<string, unknown> = {
+    updatedAt: new Date(),
+  };
+
+  if (data.code !== undefined) updateData.code = data.code;
+  if (data.facilityId !== undefined) updateData.facilityId = data.facilityId;
+  if (data.date !== undefined) updateData.date = data.date.toISOString().split('T')[0];
+  if (data.reactorId !== undefined) updateData.reactorId = data.reactorId;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.startTime !== undefined) updateData.startTime = data.startTime;
+  if (data.endTime !== undefined) updateData.endTime = data.endTime;
+  if (data.operatorId !== undefined) updateData.operatorId = data.operatorId;
+  if (data.feedstockWetMassKg !== undefined) updateData.feedstockWetMassKg = data.feedstockWetMassKg;
+  if (data.feedstockMoisturePercent !== undefined) updateData.feedstockMoisturePercent = data.feedstockMoisturePercent;
+
+  // Recompute dry mass when either wet mass or moisture changes
+  const effectiveWetMass = data.feedstockWetMassKg !== undefined ? data.feedstockWetMassKg : existing.feedstockWetMassKg;
+  const effectiveMoisture = data.feedstockMoisturePercent !== undefined ? data.feedstockMoisturePercent : existing.feedstockMoisturePercent;
+  if (data.feedstockWetMassKg !== undefined || data.feedstockMoisturePercent !== undefined) {
+    updateData.feedstockMassDryKg =
+      effectiveWetMass != null && effectiveMoisture != null
+        ? deriveMassDryKg(effectiveWetMass, effectiveMoisture)
+        : null;
+  }
+
+  if (data.feedingRateKgHr !== undefined) updateData.feedingRateKgHr = data.feedingRateKgHr;
+  if (data.residenceTimeMinutes !== undefined) updateData.residenceTimeMinutes = data.residenceTimeMinutes;
+  if (data.dieselOperationLiters !== undefined) updateData.dieselOperationLiters = data.dieselOperationLiters;
+  if (data.dieselGensetLiters !== undefined) updateData.dieselGensetLiters = data.dieselGensetLiters;
+  if (data.preprocessingFuelLiters !== undefined) updateData.preprocessingFuelLiters = data.preprocessingFuelLiters;
+  if (data.electricityKwh !== undefined) updateData.electricityKwh = data.electricityKwh;
+  if (data.biocharOutputKg !== undefined) updateData.biocharOutputKg = data.biocharOutputKg;
+  if (data.biocharMoisturePercent !== undefined) updateData.biocharMoisturePercent = data.biocharMoisturePercent;
+
+  // Recompute biochar dry mass when either output or moisture changes
+  if (data.biocharOutputKg !== undefined || data.biocharMoisturePercent !== undefined) {
+    const effectiveBiocharWet = data.biocharOutputKg !== undefined ? data.biocharOutputKg : existing.biocharOutputKg;
+    const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
+    updateData.biocharDryMassKg = computeClampedDryMass(effectiveBiocharWet, effectiveBiocharMoisture);
+  }
+
+  if (data.biocharStorageLocationId !== undefined) updateData.biocharStorageLocationId = data.biocharStorageLocationId;
+  if (data.feedstockStorageLocationId !== undefined) updateData.feedstockStorageLocationId = data.feedstockStorageLocationId;
+  if (data.plcDataFileUrl !== undefined) updateData.plcDataFileUrl = data.plcDataFileUrl;
+
+  const feedstockFieldsChanged =
+    data.feedstockStorageLocationId !== undefined ||
+    data.feedstockWetMassKg !== undefined ||
+    data.feedstockMoisturePercent !== undefined;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(productionRuns)
+      .set(updateData)
+      .where(eq(productionRuns.id, productionRunId));
+
+    const effectiveFeedstockStorageId =
+      data.feedstockStorageLocationId !== undefined
+        ? data.feedstockStorageLocationId
+        : existing.feedstockStorageLocationId;
+
+    if (
+      effectiveFeedstockStorageId &&
+      (data.feedstockStorageLocationId !== undefined || data.facilityId !== undefined)
+    ) {
+      await validateStorageLocation(tx, effectiveFeedstockStorageId, targetFacilityId, "feedstock_bin", "Feedstock");
+    }
+
+    const effectiveBiocharStorageId =
+      data.biocharStorageLocationId !== undefined
+        ? data.biocharStorageLocationId
+        : existing.biocharStorageLocationId;
+
+    if (
+      effectiveBiocharStorageId &&
+      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
+    ) {
+      await validateStorageLocation(tx, effectiveBiocharStorageId, targetFacilityId, "biochar_bin", "Biochar");
+    }
+
+    // Re-allocate feedstock M:M when feedstock fields change
+    if (feedstockFieldsChanged) {
+      await tx
+        .delete(productionRunFeedstocks)
+        .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+
+      const dryMassKg = (updateData.feedstockMassDryKg as number | null) ?? existing.feedstockMassDryKg;
+
+      if (effectiveFeedstockStorageId && dryMassKg) {
+        const allocated = await allocateFeedstockMass(effectiveFeedstockStorageId, dryMassKg, tx);
+        await tx.insert(productionRunFeedstocks).values(
+          allocated.map((a) => ({
+            productionRunId,
+            feedstockId: a.feedstockId,
+            massUsedKg: a.massUsedKg,
+          }))
+        );
+      }
+    }
+  });
+
+  return getProductionRunById(userId, productionRunId);
+}
+
+/**
+ * Delete a production run
+ * Will fail if run has associated samples or credit batches
+ */
+export async function deleteProductionRun(
+  userId: string,
+  productionRunId: string
+): Promise<void> {
+  requireAuth(userId);
+
+  // Verify run exists
+  const [existing] = await db
+    .select({ id: productionRuns.id })
+    .from(productionRuns)
+    .where(eq(productionRuns.id, productionRunId));
+
+  if (!existing) {
+    throw new SafeError("Production run not found");
+  }
+
+  // Delete feedstock relationships first
+  await db
+    .delete(productionRunFeedstocks)
+    .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+
+  // Delete readings
+  await db
+    .delete(productionRunReadings)
+    .where(eq(productionRunReadings.productionRunId, productionRunId));
+
+  // Delete incident reports
+  await db
+    .delete(incidentReports)
+    .where(eq(incidentReports.productionRunId, productionRunId));
+
+  // Note: Foreign key constraints will prevent deletion if there are
+  // dependent samples or credit batches. The error will be caught by the server action.
+
+  await db.delete(productionRuns).where(eq(productionRuns.id, productionRunId));
+}
