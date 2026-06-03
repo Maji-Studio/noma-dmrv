@@ -5,6 +5,7 @@ import {
 } from "@/data-access/certification";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import { IsometricApiError, type TransportLegsByCategory } from "@/lib/isometric";
 import type { TransportEntityIdsByCategory } from "@/lib/isometric/utils/transport-lineage";
 
@@ -76,12 +77,15 @@ export async function appendSyncEventBestEffort(
   try {
     await appendSyncEvent(userId, input);
   } catch (err) {
-    console.warn("Failed to record certifier sync event", {
-      operation: input.operation,
-      entityId: input.entityId,
-      ...logContext,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn(
+      {
+        op: input.operation,
+        entityId: input.entityId,
+        ...logContext,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "failed to record certifier sync event",
+    );
   }
 }
 

@@ -164,10 +164,9 @@ were deferred by the operator to a follow-up PR.
 
   (Resolved & removed 2026-06-02 — `forms/a11y-shared-layer`: `FormField` /
   `FormError` wire `aria-describedby` and `Modal` dev-warns on a missing
-  accessible name (commit `33920f5`); `useDialog` now captures the trigger on
-  open and restores focus to it on close (`src/hooks/use-dialog.ts`).
-  Regression check on focus-restore deferred to an e2e assertion — the e2e
-  tree was under concurrent edit at the time.)
+  accessible name (commit `33920f5`). The `useDialog` focus-restore half was
+  only genuinely completed later — its first cut was dead on the state-driven
+  close path — and is now fixed and e2e-covered; see `docs/isometric/changes.md`.)
 
   (Resolved & removed 2026-06-02 — see `docs/isometric/changes.md`:
   `certification/error-boundary` shipped as `(app)/certification/error.tsx`;
@@ -644,25 +643,18 @@ ordered by leverage.
   `7e640d1`). Both are pure extraction, public API unchanged, full suite green.
   The hooks-factory dedup above is the separable remainder.)
 
-- **Structured logger + Isometric API boundary logging** (`code/logger-introduction`)
-  - Project has zero structured logging — only `console.warn` / `console.error`.
-    Critical-path entries (`submitRemoval`, `createGhgStatementDraft`,
-    `submitGhgStatementToVerifier`, `isometricRequest` boundary) emit
-    operational signal only via the in-DB `certifierSyncEvents` ledger,
-    which is not searchable in any aggregator and carries no latency.
-  - Resolve via: pick a logger (pino likely), wire it through
-    `src/lib/log/`, replace `console.*` in `src/fn/certification/*` +
-    `src/lib/isometric/*`, attach `{op, removalId, externalProjectId,
-    mappingRevision, attempt, duration_ms}`. Also mint a per-submission
-    `submissionAttemptId = randomUUID()` for cross-event correlation.
-  - **Status 2026-06-02:** this is the last open item from the robustness
-    pass (the a11y / error-boundary / redirect-allowlist / rate-limit / file-split
-    work all landed; commits `33920f5`, `22c0d6e`, `6aafe2c`, `c16c569`,
-    `a03d486`, `7e640d1`). Deferred deliberately: the ~111 `console.*` calls span
-    `src/fn/certification/*`, which was under concurrent uncommitted edit at the
-    time — a repo-wide console→pino sweep would conflict. Start once that cert
-    work has landed. pino gives levels, structured JSON fields, and built-in
-    `redact` for the no-PII rule (CLAUDE.md).
+  (Resolved & removed 2026-06-02 — `code/logger-introduction`: a structured
+  server logger landed at `src/lib/log/` and the previously-silent
+  `isometricRequest` boundary is now instrumented (method/path/status/attempt/
+  duration_ms); `submissionAttemptId` correlation + start breadcrumbs added to
+  `submitRemoval` / `createGhgStatementDraft` / `submitGhgStatementToVerifier`;
+  the cert-fn `console.*` replaced. Built **in-house** rather than pino: Next.js
+  16 Turbopack has an open bug (vercel/next.js#93849) where a
+  `serverExternalPackages` package's hashed alias is unresolvable at Vercel's
+  serverless runtime. See `docs/isometric/changes.md`. **Deferred follow-ups:**
+  the other ~110 repo-wide `console.*` calls (outside the cert/isometric critical
+  path) are a separate sweep; threading `submissionAttemptId` through to the
+  isometric request boundary for full per-attempt correlation is not yet wired.)
 
   (Resolved & removed 2026-06-02 — `security/rate-limit-submissions`: opt-in
   `rateLimit` on `withAction`, 5/min/user per submit pipeline, in-memory

@@ -1,5 +1,66 @@
 # Isometric Docs Change Log
 
+## 2026-06-02 (structured logger + isometric API boundary logging)
+
+Closes the `code/logger-introduction` open question — the last item from the
+robustness pass. No behaviour change to user-facing flows.
+
+- **New `src/lib/log/`** — a minimal in-house structured logger (newline-delimited
+  JSON to stdout/stderr, level filtering via `LOG_LEVEL`, `child()` bindings, and
+  key-based redaction of PII/secrets per the CLAUDE.md no-PII rule). Built
+  in-house rather than pino **deliberately**: Next.js 16 Turbopack has an open,
+  unresolved bug (vercel/next.js#93849) where a `serverExternalPackages` package's
+  hashed alias isn't resolvable at Vercel's serverless runtime — independent of
+  transport config and not catchable by local testing. The logger covers our
+  needs (levels, child bindings, redact) with no external-package/bundler risk;
+  revisit pino if that bug is fixed. Covered by `tests/log.test.ts`.
+
+- **Isometric API boundary instrumented** (`src/lib/isometric/client.ts`) — the
+  previously-silent `isometricRequest` now logs `{method, path, status, attempt,
+  duration_ms}` on success (debug), retry (warn), and terminal network/http
+  failure (error). Never logs headers, body, or the `X-Client-Secret` /
+  `Authorization` credentials.
+
+- **Submit correlation** — `submitRemoval`, `createGhgStatementDraft`, and
+  `submitGhgStatementToVerifier` mint a per-attempt `submissionAttemptId` and emit
+  a start breadcrumb; the three cert-fn `console.warn`s are replaced with the
+  structured logger. `LOG_LEVEL` widened to the full level set. **Follow-ups
+  (tracked in open-questions):** the other ~110 repo-wide `console.*` are a
+  separate sweep; threading `submissionAttemptId` into the request boundary for
+  full per-attempt correlation is not yet wired.
+
+## 2026-06-02 (audit remediation — focus-restore a11y, constraint-guard fix, parse cleanup)
+
+Follow-up to a deeper review of the telemetry/submission branch. Behaviour fixes
+plus small consistency wins; no schema or API-surface change.
+
+- **`useDialog` focus-restore now actually fires (a11y merge-bar fix).** The
+  earlier cut (recorded in the section below, and previously marked resolved in
+  `docs/open-questions.md`) was dead on the dominant close path: `Modal` returns
+  null on close, unmounting the `<dialog>`, so the effect's top-level
+  `if (!dialog) return` short-circuited before the focus-restore branch —
+  keyboard/screen-reader users were stranded at document start. Fixed in
+  `src/hooks/use-dialog.ts` by scoping the early return to the open branch and
+  restoring focus via the surviving `triggerRef` regardless of whether the dialog
+  node still exists. Regression-covered by `tests/e2e/dialog-focus-restore.spec.ts`.
+
+- **`project-emissions` unique-violation guard corrected.**
+  `data-access/project-emissions.ts` read `.constraint_name` (a postgres-js field)
+  while this project uses node-postgres (`.constraint`). The field was always
+  `undefined`, so the guard relabeled *any* 23505 as the facility/period/category
+  conflict, masking unrelated unique violations. Now matches
+  `.constraint === certifier_project_emissions_facility_period_category_unique`
+  exactly, mirroring the sibling guard in `data-access/certification.ts`.
+
+- **`documents.ts` validation simplified.** The three simple actions
+  (`confirmUpload`, `setDocumentVisibility`, `deleteDocument`) now use
+  `schema.parse(input)` and let `withAction` format the `ZodError` (accepting its
+  `"Validation error: …"` prefix), replacing the hand-rolled `issues[0].message`
+  throw and its inconsistency. `requestUpload` keeps `safeParse` as the one
+  exception (its joined, prefix-free copy is intentional). `ISOMETRIC_PROVIDER` now
+  imports from the neutral `@/lib/isometric/utils/constants` rather than the
+  certification feature barrel.
+
 ## 2026-06-02 (consistency cleanup — `documents.ts` migration + shared helpers)
 
 Internal-only refactor following code review of the last six commits. No
