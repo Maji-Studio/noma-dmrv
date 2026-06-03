@@ -691,6 +691,23 @@ two oversized data-access files. The remainder is still open:
     `listRemovalTemplates` + `Promise.all([listComponents, listDatapoints])`.
     `p-limit(4)` over the facility array cuts CI wall-time linearly.
 
+- **Overview readiness loader re-resolves facility data per removal**
+  (`perf/overview-facility-refetch`) — opened 2026-06-03 (remodel Stage 3)
+  - `loadCertificationOverview` (`src/fn/certification/overview.ts`) builds the
+    full submission context per removal via `loadRemovalSubmissionContext`,
+    which re-fetches the *facility-level* Isometric data (`listProjects`,
+    `listRemovalTemplates`, `listComponentBlueprints`) once **per removal** —
+    yet every removal in a facility shares the same mapping/template/blueprints.
+    The per-removal builds run in parallel, and facilities carry few removals
+    (ADR 0003: ~1/month), so it's acceptable today.
+  - Resolve via: split `buildRemovalContext` into a facility-level resolver
+    (mapping → project → template → blueprints → required transport categories,
+    fetched once) and a per-removal computation (member batches → lineage →
+    runs → transport coverage). The Overview loader then fetches facility data
+    once and maps it across removals. Touches the submit pipeline's shared
+    context builder, so do it as a focused refactor with the removal-submit
+    tests as the safety net.
+
 ### Correctness / observability
 
 - **Mapping-revision ambiguity on resume path** (`isometric/mapping-revision-resume`)

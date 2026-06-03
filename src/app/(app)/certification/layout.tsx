@@ -1,16 +1,28 @@
 /**
  * Certification layout
- * Thin boundary for the /certification route subtree. The app shell
- * (sidebar, FacilityProvider) and the requireAuth guard are inherited from
- * the parent (app) layout. This boundary exists so future per-provider
- * guards (Verra / Gold Standard / CSI) have a place to live.
+ * Workspace shell for the /certification subtree: a shared tab band over the
+ * active tab's content. The app shell (sidebar, FacilityProvider) and the
+ * requireAuth guard are inherited from the parent (app) layout. The layout is
+ * intentionally NOT admin-gated — operators use the hubs; Settings gates its
+ * own admin-only sections. Provider-neutral by design: a future registry slots
+ * in as sibling tabs here.
  */
 import type { ReactNode } from "react";
+import { CertificationTabBar } from "@/components/certification/certification-tab-bar";
 
 export default function CertificationLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <>
+      <div className="bg-[var(--color-background-white)]">
+        <div className="container-max">
+          <CertificationTabBar />
+        </div>
+      </div>
+      {children}
+    </>
+  );
 }
