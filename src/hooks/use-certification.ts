@@ -10,6 +10,7 @@ import {
   createGhgStatementDraft,
   deleteFacilityCertifierMapping,
   ensureRemovalForCreditBatchAction,
+  loadCertificationHealth,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
   loadGhgStatementsForFacility,
@@ -63,7 +64,22 @@ export const certificationKeys = {
     [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
   openRemovalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "open-removals", facilityId] as const,
+  health: () => [...certificationKeys.all, "health"] as const,
 };
+
+// Read-only integration status for the Settings → Health panel. Admin-gated
+// server-side; read rarely, so it gets the longer stale window.
+export function useCertificationHealth() {
+  return useQuery({
+    queryKey: certificationKeys.health(),
+    queryFn: async () => {
+      const result = await loadCertificationHealth();
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    staleTime: PROJECT_TEMPLATES_STALE_MS,
+  });
+}
 
 export function useFacilityCertifierMapping(
   facilityId: string,

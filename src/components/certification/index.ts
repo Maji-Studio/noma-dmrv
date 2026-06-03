@@ -12,6 +12,7 @@ export { SyncEventLog } from "./sync-event-log";
 export { EnvBanner } from "./env-banner";
 export { ProductionConfirmation } from "./production-confirmation";
 export { SubmitConfirmDialog } from "./submit-confirm-dialog";
+export { ConfirmActionDialog } from "./confirm-action-dialog";
 // GHG Statement flow — wired live by Phase 4.5 (ADR 0003): an independent,
 // period-anchored artifact rolling up multiple Removals.
 export { GhgStatementsHub } from "./ghg-statements-hub";

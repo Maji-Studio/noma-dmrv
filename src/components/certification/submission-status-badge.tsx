@@ -1,49 +1,69 @@
 /**
  * SubmissionStatusBadge
- * Pill rendering the latest credit-batch → Removal submission state.
- * "In progress" derives from the lock-flight check, not from the row's
- * status alone.
+ * Thin renderer over the canonical status mappers in `@/lib/certification/status`.
+ * A Removal is local-only (no remote status exists in this integration); a GHG
+ * Statement folds in the persisted remote overlay (`metadata.remoteStatus`) so
+ * operators see "Awaiting verifier" / "Credits issued" rather than a flat
+ * "Submitted". "In progress" derives from the lock-flight check.
  */
 import type { CertificationSubmissionRow } from "@/data-access/certification";
-import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  deriveRemovalStatus,
+  deriveStatementStatus,
+  type LocalSubmissionStatus,
+  type RemoteGhgStatus,
+} from "@/lib/certification/status";
+import {
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
+} from "@/lib/isometric/utils/submission-metadata";
 
 interface SubmissionStatusBadgeProps {
   latest: CertificationSubmissionRow | null;
   isLockedInFlight: boolean;
+  /**
+   * Which lifecycle to render. Removals are local-only; statements add the
+   * verifier overlay. Defaults to "removal" for backward compatibility.
+   */
+  artifact?: "removal" | "ghgStatement";
+}
+
+const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
+  "DRAFT",
+  "AWAITING_VERIFICATION",
+  "VERIFIED",
+  "CREDITS_ISSUED",
+  "FAILED_VERIFICATION",
+];
+
+function readRemoteStatus(
+  latest: CertificationSubmissionRow,
+): RemoteGhgStatus | null {
+  const raw = getMetadataValue(
+    latest.metadata,
+    SUBMISSION_METADATA_KEYS.remoteStatus,
+  );
+  return REMOTE_GHG_STATUSES.includes(raw as RemoteGhgStatus)
+    ? (raw as RemoteGhgStatus)
+    : null;
 }
 
 export function SubmissionStatusBadge({
   latest,
   isLockedInFlight,
+  artifact = "removal",
 }: SubmissionStatusBadgeProps) {
-  if (isLockedInFlight) {
-    return <StatusBadge status="running" label="In progress" />;
-  }
-  if (!latest) {
-    return <StatusBadge status="draft" label="Not submitted" />;
-  }
-  const { status, value, label } = mapStatus(latest.status);
-  return <StatusBadge status={value} label={label} title={status} />;
-}
+  const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
 
-function mapStatus(s: CertificationSubmissionRow["status"]): {
-  status: string;
-  value: StatusValue;
-  label: string;
-} {
-  switch (s) {
-    case "draft":
-      // Stale-locked or rejected-cleared: caller treats as actionable.
-      return { status: s, value: "draft", label: "Draft" };
-    case "submitted":
-      return { status: s, value: "issued", label: "Submitted" };
-    case "accepted":
-      return { status: s, value: "verified", label: "Accepted" };
-    case "rejected":
-      return { status: s, value: "rejected", label: "Rejected" };
-    case "superseded":
-      return { status: s, value: "draft", label: "Superseded" };
-    default:
-      return { status: s, value: "draft", label: s };
-  }
+  const derived =
+    artifact === "ghgStatement"
+      ? deriveStatementStatus({
+          local,
+          lockInFlight: isLockedInFlight,
+          remoteStatus: latest ? readRemoteStatus(latest) : null,
+        })
+      : deriveRemovalStatus({ local, lockInFlight: isLockedInFlight });
+
+  return <StatusBadge status={derived.value} label={derived.label} />;
 }
