@@ -90,10 +90,14 @@ function emit(
   if (LEVEL_ORDER[level] < threshold) return;
   const obj = typeof a === "object" && a !== null ? a : {};
   const msg = typeof a === "string" ? a : b;
+  // Redact child bindings too — a `logger.child({...})` caller could pass a
+  // sensitive key by accident, and the backstop must cover that path as well
+  // as the per-call payload.
+  const redactedBindings = redact(bindings) as Record<string, unknown>;
   const record = {
     level,
     time: new Date().toISOString(),
-    ...bindings,
+    ...redactedBindings,
     ...(redact(obj) as Record<string, unknown>),
     ...(msg !== undefined ? { msg } : {}),
   };

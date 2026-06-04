@@ -165,7 +165,10 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     warnings: [],
   };
 
-  function callWith(tuple: typeof PERIOD_INPUT_TUPLE_CANON[number]) {
+  function callWith(
+    tuple: typeof PERIOD_INPUT_TUPLE_CANON[number],
+    opts?: { allowPeriodInputStub?: boolean },
+  ) {
     const blueprintInput: ComponentBlueprintInput = {
       compatible_unit: "kg",
       data_shape: "SCALAR",
@@ -189,6 +192,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
         agg: minimalAgg,
         projectId: "prj_TEST",
         supplierRefId: "nm-test",
+        allowPeriodInputStub: opts?.allowPeriodInputStub,
       });
   }
 
@@ -208,6 +212,20 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       // The generic missing-entry message must NOT fire — that would mean the
       // scope-conflict guard didn't run first.
       expect(message).not.toMatch(/No INPUT_MAPPING entry/);
+    }
+  });
+
+  it("emits a 0-magnitude REPORTED stub when allowPeriodInputStub is set (sandbox)", () => {
+    // ADR 0005 sandbox escape hatch: the same tuples that fail closed by
+    // default emit a 0 datapoint (in the blueprint's compatible_unit) when the
+    // caller opts in. submitRemoval only opts in for ISOMETRIC_ENVIRONMENT
+    // === "sandbox", so production keeps failing closed (asserted above).
+    for (const t of PERIOD_INPUT_TUPLE_CANON) {
+      const dp = callWith(t, { allowPeriodInputStub: true })();
+      expect(dp.quantity.magnitude).toBe(0);
+      expect(dp.quantity.unit).toBe("kg"); // blueprintInput.compatible_unit
+      expect(dp.type).toBe("REPORTED");
+      expect(dp.display_name).toBe(t.input);
     }
   });
 });

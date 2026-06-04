@@ -1,6 +1,28 @@
 # Architecture Audit — Scalability & Tech Debt
 
-_Date: 2026-05-21 · Status: Phase 0 in progress · Source: `/ship AUDIT`_
+_Date: 2026-05-21 · Source: `/ship AUDIT`_
+
+> **ARCHIVED 2026-06-03 — partially executed; remaining phases tracked in
+> `docs/open-questions.md` ("Architecture audit — remaining phases").**
+>
+> - **Phase 0 — done.** T1 (PII log line), H2 guardrail (`MAX_DOCUMENTS_PER_ENTITY`),
+>   M5 (parallel FK checks, deterministic order), ESLint `max-lines` warn,
+>   T3 `DB_POOL_MAX` docs. Phase 0b T5 (CI prod approval gate) done via the
+>   GitHub `production` environment required reviewers.
+> - **Phase 2 — done (observability half).** Structured logger shipped at
+>   `src/lib/log/`; isometric API boundary + cert submit pipeline instrumented
+>   (commit `c0c4f57`, see `docs/isometric/changes.md` 2026-06-02). ~110 other
+>   repo-wide `console.*` calls remain a separate sweep.
+> - **Phase 4 — partial.** `entities.ts` (1323 LOC) split into per-entity modules
+>   under `src/data-access/entities/` + barrel (commit `a03d486`);
+>   `production-runs.ts` (1076 LOC) split by concern (commit `7e640d1`). Both pure
+>   extraction, public API unchanged, suite green. **Still open:** `seed-data.ts`
+>   (1165 LOC) and ~11 oversized forms; flip the lint rule to `error`.
+> - **Still open:** Phase 1 (schema-wide FK + time-series indexes), Phase 3
+>   (T2 `creditBatches` aggregate-drift — a carbon-registry correctness risk —
+>   plus H5 over-fetching, full document pagination, query-config, narrow
+>   invalidation, `revalidatePath`), Phase 5 (CRUD/hooks de-duplication —
+>   tracked as `code/hooks-factory`).
 
 ## Context
 

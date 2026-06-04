@@ -31,10 +31,19 @@ export function useTelemetrySubmissionState(removalId: string) {
     },
     enabled: !!removalId,
     staleTime: TELEMETRY_STALE_MS,
-    refetchInterval: (query) =>
-      query.state.data?.latestStatus?.status === "pending"
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      // Poll while the remote status is pending, OR while the local row is
+      // "submitted" (POSTed) but the remote status isn't readable yet — no
+      // externalId, or the remote fetch failed and returned null. Without the
+      // second clause polling would stop mid-flight and the badge would stall.
+      const remotePending = data?.latestStatus?.status === "pending";
+      const localInFlight =
+        !data?.latestStatus && data?.submission?.status === "submitted";
+      return remotePending || localInFlight
         ? TELEMETRY_PENDING_REFETCH_MS
-        : false,
+        : false;
+    },
   });
 }
 

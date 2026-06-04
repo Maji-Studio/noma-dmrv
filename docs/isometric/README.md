@@ -31,7 +31,7 @@
 | `sandbox-template-authoring.md` | Walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI + fixed-constant bootstrap |
 | `openapi-index.md` | Annotated index of every Certify + Registry OpenAPI operation/schema with current noma integration status |
 
-Decisions live in `docs/adr/0001`–`0005`. Open design questions and
+Decisions live in `docs/adr/0001`–`0006`. Open design questions and
 deferred work live in `docs/open-questions.md`.
 
 ## How To Use
@@ -49,7 +49,7 @@ deferred work live in `docs/open-questions.md`.
 ### For integration work
 
 1. Read `integration-plan.md` for the current model, phase status, and pre-deploy gates.
-2. Skim the ADRs (`docs/adr/0001`–`0004`) for the design decisions.
+2. Skim the ADRs (`docs/adr/0001`–`0006`) for the design decisions.
 3. Check `docs/open-questions.md` for active deferrals.
 4. When changing the Certify surface, follow `update-playbook.md` and append to `changes.md`.
 
