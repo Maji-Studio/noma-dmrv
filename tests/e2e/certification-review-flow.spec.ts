@@ -105,8 +105,13 @@ test.describe("Certification — removal guided Review flow", () => {
         page.getByText(/A removal counts only the biochar that reached soil/i),
       ).toBeVisible();
     } finally {
-      await removal.cleanup();
-      await mapping.cleanup();
+      // Run both cleanups even if the first throws, so a failed removal
+      // teardown can't leak the seeded certifier mapping.
+      try {
+        await removal.cleanup();
+      } finally {
+        await mapping.cleanup();
+      }
     }
   });
 });

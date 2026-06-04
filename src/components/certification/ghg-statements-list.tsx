@@ -26,7 +26,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
-  useFacilityCertifierMapping,
+  useFacilityCertifierSummary,
   useGhgStatementsForFacility,
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
@@ -152,7 +152,10 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
 ];
 
 function ListBody({ facilityId }: { facilityId: string }) {
-  const mappingQuery = useFacilityCertifierMapping(facilityId);
+  // DB-only summary — this page only needs link-presence + env. It must NOT pull
+  // the management payload (available projects/templates, cross-facility link
+  // hints, live Isometric API calls) that `useFacilityCertifierMapping` fetches.
+  const summaryQuery = useFacilityCertifierSummary(facilityId);
   const query = useGhgStatementsForFacility(facilityId);
   const [createOpen, setCreateOpen] = useState(false);
   const [statementId, setStatementId] = useQueryState(
@@ -160,14 +163,14 @@ function ListBody({ facilityId }: { facilityId: string }) {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  const isProduction = mappingQuery.data?.isProduction ?? false;
+  const isProduction = summaryQuery.data?.isProduction ?? false;
   // Keep `isLinked` indeterminate (null) while the mapping lookup is in flight
   // so we don't flash the "not linked" notice or disable Create on first mount
   // before the query settles. Downstream gates on `=== true` / `=== false`.
-  const isLinked = mappingQuery.isLoading
+  const isLinked = summaryQuery.isLoading
     ? null
-    : Boolean(mappingQuery.data?.mapping);
-  const mappingFailed = mappingQuery.isError && !mappingQuery.isLoading;
+    : Boolean(summaryQuery.data?.mapping);
+  const mappingFailed = summaryQuery.isError && !summaryQuery.isLoading;
 
   if (query.error) {
     return (

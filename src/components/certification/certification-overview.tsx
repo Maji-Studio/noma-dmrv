@@ -101,7 +101,11 @@ function blockedHref(
   reasons: string[],
   facilityId: string,
 ): string {
-  const isConfig = reasons.some((r) => /linked|template|blueprint/i.test(r));
+  // Config blockers (project link / template / blueprint) are fixed in
+  // Settings; everything else is worked in the removal's Pre-flight. Match
+  // "not linked" — not a bare "linked" — so the production blocker
+  // ("No production data linked yet …") routes to Pre-flight, not Settings.
+  const isConfig = reasons.some((r) => /not linked|template|blueprint/i.test(r));
   return isConfig
     ? withFacility("/certification/settings", facilityId)
     : `/certification/removals/${removalId}/review?facility=${facilityId}&step=preflight`;
@@ -210,6 +214,17 @@ function OverviewBody({ facilityId }: { facilityId: string }) {
     ...removalAttention(data.removals, facilityId),
     ...statementAttention(statements.data ?? [], facilityId),
   ];
+  // A failed statements fetch must not read as "all caught up" — surface it as
+  // its own attention item rather than silently dropping to an empty list.
+  if (statements.error) {
+    attention.push({
+      key: "statements-error",
+      tone: "blocked",
+      title: "GHG statements",
+      detail: "Couldn't load statements — refresh to retry",
+      href: withFacility("/certification/ghg-statements", facilityId),
+    });
+  }
 
   return (
     <>
