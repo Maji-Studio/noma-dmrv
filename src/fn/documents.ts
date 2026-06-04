@@ -21,7 +21,7 @@ import {
   type DocumentRow,
 } from "@/data-access/documents";
 import { getDocumentUploadByDocument } from "@/data-access/certifier-document-uploads";
-import { ISOMETRIC_PROVIDER } from "@/fn/certification/shared";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
@@ -108,10 +108,9 @@ export async function confirmUpload(
   input: unknown
 ): Promise<ActionResult<DocumentRow>> {
   return withAction(async (userId) => {
-    const parsed = confirmUploadSchema.safeParse(input);
-    if (!parsed.success) throw new SafeError(parsed.error.issues[0].message);
+    const { documentId } = confirmUploadSchema.parse(input);
 
-    const row = await getDocumentById(userId, parsed.data.documentId);
+    const row = await getDocumentById(userId, documentId);
     if (!row) throw new SafeError("Document not found");
     if (!row.storageKey) throw new SafeError("Document has no storage key");
     if (row.uploadStatus !== "pending") {
@@ -160,11 +159,10 @@ export async function setDocumentVisibility(
   input: unknown
 ): Promise<ActionResult<DocumentRow>> {
   return withAction(async (userId) => {
-    const parsed = setVisibilitySchema.safeParse(input);
-    if (!parsed.success) throw new SafeError(parsed.error.issues[0].message);
+    const data = setVisibilitySchema.parse(input);
 
-    const updated = await updateDocument(userId, parsed.data.documentId, {
-      visibility: parsed.data.visibility,
+    const updated = await updateDocument(userId, data.documentId, {
+      visibility: data.visibility,
     });
     if (!updated) throw new SafeError("Document not found");
     return updated;
@@ -175,10 +173,9 @@ export async function deleteDocument(
   input: unknown
 ): Promise<ActionResult<{ id: string }>> {
   return withAction(async (userId) => {
-    const parsed = deleteDocumentSchema.safeParse(input);
-    if (!parsed.success) throw new SafeError(parsed.error.issues[0].message);
+    const { documentId } = deleteDocumentSchema.parse(input);
 
-    const row = await getDocumentById(userId, parsed.data.documentId);
+    const row = await getDocumentById(userId, documentId);
     if (!row) throw new SafeError("Document not found");
 
     // Fast user-facing path; the FK-backed delete below remains the real race

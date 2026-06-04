@@ -329,34 +329,42 @@ const onSubmit = async (data: ProjectFormData) => {
 
 ## Better Auth (Latest)
 
-### ✅ Current Pattern: Middleware with `getSessionCookie()`
+### ✅ Current Pattern: Next.js 16 `proxy.ts` → `updateSession()`
 
-Better Auth in Next.js middleware uses `getSessionCookie()` instead of manual cookie parsing.
+Next.js 16 replaces the traditional `middleware.ts` with a Node.js-runtime
+`proxy.ts`. The entry file is thin and delegates to `updateSession()`, which
+resolves the session through Better Auth's server API (`auth.api.getSession`).
+The `nextCookies()` plugin handles cookie serialization in the Better Auth
+config (`src/lib/auth/better-auth.ts`).
 
-**Example from this codebase** (`src/middleware.ts`):
+**Example from this codebase** (`src/proxy.ts`):
 ```typescript
-import { betterAuth } from "better-auth/server";
-import { nextCookies } from "better-auth/next-js";
+import { NextRequest } from "next/server";
+import { updateSession } from "@/lib/auth/middleware";
 
-const auth = betterAuth({
-  // ... config
-  plugins: [nextCookies()],
-});
+export default async function proxy(request: NextRequest) {
+  return await updateSession(request);
+}
 
-export async function middleware(request: NextRequest) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg)$).*)"],
+};
+```
 
-  if (!session) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
-  }
-
-  return NextResponse.next();
+`updateSession()` (`src/lib/auth/middleware.ts`) does the session lookup and
+route protection:
+```typescript
+export async function updateSession(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  const isAuthenticated = !!session?.user;
+  // redirect unauthenticated users → /login, authenticated users off auth pages, etc.
 }
 ```
 
-**Why**: The `nextCookies` plugin automatically handles cookie serialization and session management.
+**Why**: a Node.js-runtime proxy lets Better Auth use the Node `crypto` module
+and other server-side libraries that the Edge runtime can't. See
+[`docs/auth.md`](./auth.md) for the full route-protection logic and the
+public-route list.
 
 ---
 

@@ -349,6 +349,18 @@ export interface BuildCreateDatapointArgs {
   // per-input narrowing. Per-input attribution is a Phase 5 follow-up tracked
   // in docs/open-questions.md `isometric/sources-per-input-attribution`.
   sourceIds?: string[];
+  // Sandbox escape hatch (default false). When a Removal Template still
+  // declares a PERIOD_INPUT_TUPLES input — which ADR 0005 says belongs to a
+  // PROJECT-scope Component, not a Removal datapoint — the default behaviour
+  // is to fail closed with the scope-conflict SafeError below. When this flag
+  // is set, the builder instead emits a 0-magnitude REPORTED stub so the
+  // submit pipeline can be exercised before the real LCA value exists.
+  // `submitRemoval` only sets it for the SANDBOX environment, so a false `0`
+  // can never reach a production credit. Tracked in docs/open-questions.md
+  // ("stakeholder ask: why do we not have this data, and is an interim 0
+  // acceptable?"). Remove once the real LCA value lands in
+  // /admin/emission-estimates and the template drops the input per ADR 0005.
+  allowPeriodInputStub?: boolean;
 }
 
 export function buildCreateDatapointRequest(
@@ -363,6 +375,7 @@ export function buildCreateDatapointRequest(
     projectId,
     supplierRefId,
     sourceIds,
+    allowPeriodInputStub,
   } = args;
   const inputKey = rtcInput.input_key;
 
@@ -379,6 +392,26 @@ export function buildCreateDatapointRequest(
       inputKey,
     );
     if (periodTuple) {
+      // Sandbox-only escape hatch. The real fix is removing this input from
+      // the Removal Template (ADR 0005); until the LCA value exists we let
+      // sandbox submit a 0-magnitude stub so the pipeline can be exercised.
+      // NOTE: 0 is an *over-claim* for these positive emissions — it is NOT a
+      // neutral placeholder — which is exactly why production fails closed.
+      if (allowPeriodInputStub) {
+        return {
+          description:
+            `Sandbox 0-stub for project-scope period input ` +
+            `"${groupKey}/${componentBlueprintKey}/${inputKey}" ` +
+            `(category="${periodTuple.category}") — pending real LCA value. ` +
+            `See ADR 0005 + docs/open-questions.md. Production fails closed.`,
+          display_name: blueprintInput.input_key,
+          project_id: projectId,
+          quantity: { magnitude: 0, unit: blueprintInput.compatible_unit },
+          source_ids: sourceIds ?? [],
+          supplier_reference_id: supplierRefId,
+          type: "REPORTED",
+        };
+      }
       throw new SafeError(
         `This input belongs to a Project-scope Component (PROJECT scope, category="${periodTuple.category}"). ` +
           `Remove "${groupKey}/${componentBlueprintKey}/${inputKey}" from the Removal Template; the corresponding emission is tracked as a Project Component published in the Isometric UI from a row in /admin/emission-estimates (ADR 0005).`,

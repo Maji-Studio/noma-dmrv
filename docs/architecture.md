@@ -48,7 +48,7 @@ This template uses **Next.js 16's `proxy.ts`** instead of traditional `middlewar
 - Same authentication logic as middleware
 - Better compatibility with server-side libraries
 
-**Location**: `/proxy.ts` (project root)
+**Location**: `src/proxy.ts` (delegates to `updateSession()` in `src/lib/auth/middleware.ts`)
 
 **Route Protection Logic**:
 ```typescript
