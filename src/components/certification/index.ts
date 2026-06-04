@@ -14,7 +14,6 @@ export { SubmissionStatusBadge } from "./submission-status-badge";
 export { SyncEventLog } from "./sync-event-log";
 export { EnvBanner } from "./env-banner";
 export { CertificationOverview } from "./certification-overview";
-export { CertificationTabBar } from "./certification-tab-bar";
 export { CertificationSettings } from "./certification-settings";
 export { CertificationHealthPanel } from "./certification-health-panel";
 export { ProductionConfirmation } from "./production-confirmation";

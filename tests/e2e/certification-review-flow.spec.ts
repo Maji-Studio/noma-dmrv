@@ -15,7 +15,7 @@
  * is gated on sandbox creds + project id (skips on CI without secrets), and it
  * live-resolves a template id at setup — skipping cleanly if the project has
  * none. The `runSummary` arithmetic itself is unit-tested in
- * `tests/certification-run-summary.test.ts`; this proves the wiring.
+ * `tests/certification-mass-accounting.test.ts`; this proves the wiring.
  */
 import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });

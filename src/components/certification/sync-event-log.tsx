@@ -8,7 +8,7 @@
  *
  * Terminal events only (no `pending` rows are written).
  */
-import { CaretDown } from "@phosphor-icons/react";
+import { CaretDown } from "@phosphor-icons/react/dist/ssr";
 import type { CertifierSyncEventRow } from "@/data-access/certification";
 
 const COMPACT_DEFAULT_LIMIT = 5;
