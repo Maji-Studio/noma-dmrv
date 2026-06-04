@@ -247,6 +247,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     // No applications on the stub batch -> transport coverage is empty.
     expect(result.transportCoverage.feedstock.count).toBe(0);
     expect(mockedGetLegs).not.toHaveBeenCalled();
+    // An ungrouped batch (no removal) has no linked GHG Statement and an empty
+    // run summary — the up-front loads short-circuit to null/zero.
+    expect(result.linkedGhgStatement).toBeNull();
+    expect(result.runSummary.runCount).toBe(0);
   });
 
   it("populates removal-level transportCoverage by walking the application lineage", async () => {

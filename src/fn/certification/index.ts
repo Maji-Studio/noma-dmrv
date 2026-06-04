@@ -1,19 +1,34 @@
 export {
   deleteFacilityCertifierMapping,
   loadFacilityCertifierMapping,
+  loadFacilityCertifierSummary,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
+  type FacilityCertifierSummary,
 } from "./facility-mapping";
+// Read-only integration status for Settings → Health (admin-gated, no secrets).
+export {
+  loadCertificationHealth,
+  type AllowlistStatus,
+  type CertificationHealth,
+} from "./health";
 export {
   loadCertifyContextForCreditBatch,
   loadCertifyContextForCreditBatchForUser,
+  loadRemovalCertifyContext,
   loadRemovalsForFacility,
 } from "./certify-context";
+// Server-owned per-removal readiness for the Overview work queue (reuses the
+// submit pipeline's context; classifier shared with table hint + pre-flight).
+export {
+  loadCertificationOverview,
+  type CertificationOverviewData,
+  type RemovalPreflightSummary,
+} from "./overview";
 export {
   assignCreditBatchToRemovalAction,
   ensureRemovalForCreditBatchAction,
-  submitCreditBatchRemoval,
   submitRemovalAction,
 } from "./removal-grouping";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an

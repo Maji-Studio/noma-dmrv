@@ -8,9 +8,13 @@
  *     302 a browser to a legacy `fileUrl`.
  *
  * They keep their own *host sets* but share this matching algorithm so the two
- * policies can't silently drift (a maintainability trap flagged in review). All
- * suffix matching uses a leading-dot normalization so `evilamazonaws.com` can't
- * slip past `.amazonaws.com`.
+ * policies can't silently drift (a maintainability trap flagged in review).
+ *
+ * An entry's leading dot decides how it matches: a leading-dot entry
+ * (`.amazonaws.com`) is a *suffix* — and the dot-normalized compare means
+ * `evilamazonaws.com` can't slip past it — while a dotless entry
+ * (`bucket.s3.eu-west-1.amazonaws.com`) is an *exact* host pin that does NOT
+ * admit subdomains.
  */
 
 // Isometric presigns object-storage URLs against regional / dualstack S3 hosts
@@ -28,39 +32,59 @@ export function isDefaultS3Host(host: string): boolean {
 }
 
 export interface HostAllowlist {
-  /** Leading-dot host suffixes, e.g. `.s3.amazonaws.com`. */
+  /** Exact host pins (no leading dot, lower-cased), e.g. `bucket.s3.amazonaws.com`. Subdomains are NOT admitted. */
+  exactHosts: string[];
+  /** Leading-dot host suffixes (lower-cased), e.g. `.s3.amazonaws.com`. */
   suffixes: string[];
   /** Whether the built-in regional/dualstack S3 patterns also apply (defaults only). */
   includeDefaultS3Patterns: boolean;
 }
 
 /**
+ * Partition comma-/list-separated entries: a leading-dot entry is a suffix; any
+ * other entry is an exact host pin. Both are trimmed, lower-cased, and emptied
+ * out so comparisons in `hostAllowed` are reliable.
+ */
+function partitionEntries(entries: Iterable<string>): {
+  exactHosts: string[];
+  suffixes: string[];
+} {
+  const exactHosts: string[] = [];
+  const suffixes: string[] = [];
+  for (const raw of entries) {
+    const entry = raw.trim().toLowerCase();
+    if (entry.length === 0) continue;
+    if (entry.startsWith(".")) suffixes.push(entry);
+    else exactHosts.push(entry);
+  }
+  return { exactHosts, suffixes };
+}
+
+/**
  * Resolve an allowlist from an optional comma-separated env override. When the
  * env value is set it **replaces** the defaults (explicit, tightest — e.g. a
- * single known bucket host); when unset the caller's `defaults` apply along with
- * the built-in S3 regional/dualstack patterns.
+ * single known bucket host pinned exactly); when unset the caller's `defaults`
+ * apply along with the built-in S3 regional/dualstack patterns.
  */
 export function resolveHostAllowlist(
   envRaw: string | undefined,
   defaults: readonly string[],
 ): HostAllowlist {
   if (!envRaw) {
-    return { suffixes: [...defaults], includeDefaultS3Patterns: true };
+    return { ...partitionEntries(defaults), includeDefaultS3Patterns: true };
   }
   return {
-    suffixes: envRaw
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0)
-      .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`)),
+    ...partitionEntries(envRaw.split(",")),
     includeDefaultS3Patterns: false,
   };
 }
 
-/** True if `host` is permitted by `allowlist` (suffix match or default S3 pattern). */
+/** True if `host` is permitted by `allowlist` (exact pin, suffix match, or default S3 pattern). */
 export function hostAllowed(host: string, allowlist: HostAllowlist): boolean {
-  const dotted = `.${host.toLowerCase()}`;
-  if (allowlist.suffixes.some((suffix) => dotted.endsWith(suffix.toLowerCase()))) {
+  const h = host.toLowerCase();
+  if (allowlist.exactHosts.includes(h)) return true;
+  const dotted = `.${h}`;
+  if (allowlist.suffixes.some((suffix) => dotted.endsWith(suffix))) {
     return true;
   }
   return allowlist.includeDefaultS3Patterns && isDefaultS3Host(host);

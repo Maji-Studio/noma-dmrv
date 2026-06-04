@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { type ElementType, useSyncExternalStore } from "react";
+import { type ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -23,8 +23,9 @@ import {
   ShoppingCart,
   MapPin,
   Certificate,
-  ClipboardText,
   SealCheck,
+  Stack,
+  FileText,
   TestTube,
   ListChecks,
   Lightning,
@@ -33,6 +34,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { useAuth, authClient } from "@/lib/auth/client";
+import { useIsAdmin } from "@/hooks/use-is-admin";
 import { FacilitySelector } from "./facility-selector";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -42,6 +44,13 @@ interface NavItem {
   icon: ElementType;
   /** Skip appending the `?facility=` query param (e.g. admin pages with their own selectors). */
   skipFacilityParam?: boolean;
+  /**
+   * Match the active state on the exact path only, not the `href/` prefix.
+   * Needed for section-root items whose href is a prefix of their siblings
+   * (e.g. Certification → Overview at `/certification`, a prefix of
+   * `/certification/removals`), so the root doesn't stay highlighted on them.
+   */
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -55,6 +64,9 @@ const SECTION_ACCENTS = {
   infrastructure: "var(--clr-purple)",
   distribution: "var(--clr-rose)",
   verification: "var(--clr-pink)",
+  // Certification is its own first-class section (ADR 0007); it gets a distinct
+  // accent key rather than reusing `verification`, even though both read pink.
+  certification: "var(--clr-pink)",
   admin: "var(--clr-red)",
   default: "var(--clr-rose)",
 } as const;
@@ -106,15 +118,17 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    // First-class section (ADR 0007, amended 2026-06-04): the four sub-routes
+    // are surfaced directly in the sidebar — mirroring the Verification group —
+    // rather than behind an in-page tab bar. Overview is `exact` because its
+    // href (`/certification`) is a prefix of every sibling.
     title: "Certification",
-    accent: SECTION_ACCENTS.verification,
+    accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification/removals", label: "Removals", icon: SealCheck },
-      {
-        href: "/certification/ghg-statements",
-        label: "GHG Statements",
-        icon: ClipboardText,
-      },
+      { href: "/certification", label: "Overview", icon: SealCheck, exact: true },
+      { href: "/certification/removals", label: "Removals", icon: Stack },
+      { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileText },
+      { href: "/certification/settings", label: "Settings", icon: GearSix },
     ],
   },
 ];
@@ -136,14 +150,6 @@ const adminSection: NavSection = {
     },
   ],
 };
-
-// Stable references for the hydration-detection `useSyncExternalStore` in
-// AppSidebar. The store never changes, so `subscribe` is a no-op; the snapshots
-// differ between server (false) and client (true) so the hook flips to `true`
-// only after hydration.
-const subscribeNoop = () => () => {};
-const getClientSnapshot = () => true;
-const getServerSnapshot = () => false;
 
 function NavLink({
   item,
@@ -221,29 +227,12 @@ export function AppSidebar() {
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
 
-  // The session resolves synchronously on the client (cookie cache) but is
-  // unresolved during SSR, so gating the Admin section on it directly adds a
-  // nav subtree on the client that the server never rendered — a hydration
-  // mismatch. `useSyncExternalStore` returns the server snapshot (false) during
-  // SSR and the first client render, then the client snapshot (true) once
-  // hydrated — so the admin section only appears after hydration, matching the
-  // server on the first paint. This is React's hydration-safe primitive and
-  // avoids the cascading setState-in-effect pattern.
-  const hydrated = useSyncExternalStore(
-    subscribeNoop,
-    getClientSnapshot,
-    getServerSnapshot,
-  );
-
-  // Append the Admin section only for admin users. Server-side `requireAdmin()`
-  // in src/app/admin/layout.tsx remains the actual access boundary.
-  // `role` is a Better Auth additionalField absent from the inferred client
-  // user type — assert it as the auth provider layer does.
-  const userRole = (session?.user as { role?: string } | undefined)?.role;
-  const sections =
-    hydrated && userRole === "admin"
-      ? [...navSections, adminSection]
-      : navSections;
+  // Append the Admin section only for admin users. `useIsAdmin()` is
+  // hydration-safe (server snapshot is `false`, so the admin subtree only
+  // mounts after hydration). Server-side `requireAdmin()` in
+  // src/app/admin/layout.tsx remains the actual access boundary.
+  const isAdmin = useIsAdmin();
+  const sections = isAdmin ? [...navSections, adminSection] : navSections;
 
   return (
     <aside
@@ -284,9 +273,10 @@ export function AppSidebar() {
                   <SectionLabel title={section.title} accent={accent} />
                 )}
                 {section.items.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`);
                   return (
                     <NavLink
                       key={item.href + item.label}

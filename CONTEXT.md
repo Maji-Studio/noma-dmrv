@@ -48,7 +48,11 @@ of verified, applied-biochar CO₂e accounting, held locally by a
 Removal aggregates the deduped union of **production runs** reached
 through its member credit batches' application lineage, **applied-biochar
 scoped** — each run weighted by `appliedDryKg / runTotalBiocharOutput`.
-Submission is single-phase (`submitRemoval`). See ADR 0003.
+Submission is single-phase (`submitRemoval`) **to the registry**. There is
+**no remote Removal status** in this integration, so a Removal's lifecycle
+ends at *Submitted* (+ *Superseded* on a re-version) — never *Accepted* /
+*Rejected*; that verifier lifecycle belongs to the GHG Statement. See
+ADR 0003.
 
 **GHG Statement**:
 An **independent, period-anchored Isometric artifact** that rolls up
@@ -56,9 +60,12 @@ multiple **Removals** for a supplier-chosen reporting period. It is
 **not** a synonym for a credit batch. Isometric creates a GHG Statement
 from only `{ project_id, end_on }` and links Removals to it server-side
 by reporting-period date range; local membership is reconciled back from
-the statement's `removal_ids`. A GHG Statement is submitted to a verifier
-for credit issuance.
-_Avoid_: equating a GHG Statement with one credit batch.
+the statement's `removal_ids` (and stays **read-only** in noma — ADR 0004).
+A GHG Statement is submitted to a **verifier** (not the registry directly);
+its remote lifecycle runs *Awaiting verifier → Verified → Credits issued /
+Verification failed*, read from `latestSubmission.metadata.remoteStatus`.
+_Avoid_: equating a GHG Statement with one credit batch; attributing a
+verifier status to a Removal.
 
 **Reporting period**:
 The time window a **GHG Statement** covers — the supplier chooses the

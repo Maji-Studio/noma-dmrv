@@ -9,6 +9,7 @@ import {
 } from "@/db/schema/certification";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
+import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { requireAuth } from "./utils";
 
@@ -99,15 +100,6 @@ export async function listAllFacilitiesLinkedByProvider(
 }
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-// Statuses that still depend on the facility's certifier mapping. Terminal
-// statuses (`rejected`, `superseded`) are intentionally excluded — those rows
-// have no remote dependency that a repoint/unlink could orphan.
-export const BLOCKING_SUBMISSION_STATUSES = [
-  "draft",
-  "submitted",
-  "accepted",
-] as const;
 
 // Submission types that pin a facility's certifier mapping through a Removal.
 // Both the Removal itself (ADR 0003) and its telemetry data-upload (ADR 0006)
