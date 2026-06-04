@@ -5,7 +5,6 @@
 > ADR 0004 (GHG Statement as an independent, period-anchored artifact) and
 > ADR 0006 (telemetry as its own sub-status). Does **not** change the submission
 > domain model — only where submission lives in the UI and how status is read.
->
 > **Amendment (2026-06-04) — sidebar nav, no in-page tabs.** The in-page
 > `CertificationTabBar` was removed; the four sub-routes (Overview · Removals ·
 > GHG Statements · Settings) are promoted back to a titled **Certification**
@@ -44,12 +43,12 @@ Make certification a **first-class section** alongside `facilities` /
 `production-runs`, using the same primitives, and consolidate **all submission
 into that workspace**.
 
-1. **Tabbed workspace at `/certification`** — route-segment tabs (Overview ·
-   Removals · GHG Statements · Settings) under a shared `CertificationTabBar` in
-   the layout. The Overview is a **work queue** ("needs attention"), not a
-   dashboard. Lists are **DataTables** (the `production-runs` idiom); quick view
-   is a **read-only side-sheet** (`?removal=` / `?statement=`). The complex
-   removal path is a **guided full-width Review flow**
+1. **Sidebar workspace at `/certification`** — a persistent Certification
+   sidebar group exposes four routes (Overview · Removals · GHG Statements ·
+   Settings), with no in-page tabs. The Overview is a **work queue** ("needs
+   attention"), not a dashboard. Lists are **DataTables** (the `production-runs`
+   idiom); quick view is a **read-only side-sheet** (`?removal=` /
+   `?statement=`). The complex removal path is a **guided full-width Review flow**
    (`/certification/removals/[id]/review`: Assemble → Review → Evidence →
    Pre-flight → Submit) — Sources + telemetry become the **Evidence** step, so
    the old removal detail page goes away (it redirects to `?step=evidence`).
@@ -58,7 +57,7 @@ into that workspace**.
    read-only bridge**: it shows the removal's **own local** status only — never a
    verifier status attributed to the removal (P1-b) — lists member batches
    read-only, and deep-links **"Open in Certification →"** (the removal's Review
-   flow, or the Removals tab when ungrouped). The inline blocker / coverage /
+   flow, or the Removals route when ungrouped). The inline blocker / coverage /
    submit logic it carried is deleted; that logic is canonical in
    `lib/certification/readiness.ts` + the Review flow. This **reverses ADR 0003's
    dual-entry**.
@@ -81,15 +80,15 @@ into that workspace**.
    read-only **Environment & health** panel surfaces non-secret integration
    status.
 
-5. **Single sidebar entry.** The two Certification nav items collapse into one
-   `/certification` entry (icon `SealCheck`, its own `--clr-pink` accent key);
-   the tab bar handles sub-nav.
+5. **Four-item sidebar group.** Certification is a titled sidebar group with
+   Overview (`/certification`), Removals, GHG Statements, and Settings entries
+   under the same section; there is no `CertificationTabBar`.
 
 ## Consequences
 
-- **Provider-neutral shell.** Section + tabs are neutral; the Isometric
-  connector is labeled inside Settings. A future registry slots in as sibling
-  tabs (consistent with ADR 0004).
+- **Provider-neutral shell.** The sidebar workspace is neutral; the Isometric
+  connector is labeled inside Settings. A future registry slots in as another
+  route under the Certification group (consistent with ADR 0004).
 - **No domain-model change.** Removal-as-submission-unit (ADR 0003) and
   GHG-Statement-as-independent-artifact (ADR 0004) stand. Membership stays
   Isometric-owned and read-only (ADR 0004); telemetry stays its own sub-status
@@ -100,12 +99,12 @@ into that workspace**.
   the underlying `submitCreditBatchRemoval` server action is left in place but
   orphaned (flagged for later removal).
 - **Deferred:** the demoted panel does not yet inline the linked GHG Statement's
-  verifier status (it points to the GHG Statements tab instead) — threading that
+  verifier status (it points to the GHG Statements route instead) — threading that
   through the submission-context loader is tracked in `docs/open-questions.md`.
 - **Verification:** the pure status mappers + readiness classifier are unit
-  tested (too many surfaces depend on them for E2E alone); tab nav, settings
+  tested (too many surfaces depend on them for E2E alone); sidebar nav, settings
   round-trip, and the removal Review happy path are covered by E2E.
 
-Rollout was staged (status foundation → settings → tabbed shell + Overview →
+Rollout was staged (status foundation → settings → sidebar workspace + Overview →
 Removals → GHG Statements → this bridge + nav + cleanup); each stage was
 independently shippable and never broke the old routes.
