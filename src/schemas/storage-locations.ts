@@ -48,6 +48,8 @@ export const storageLocationFormSchema = z.object({
     .optional()
     .nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
+  // Product bins only — restricts the bin to one formulation (empty = pure biochar)
+  formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
   storageMethod: z
     .string()
     .max(255, "Storage method must be less than 255 characters")
@@ -87,6 +89,7 @@ export const updateStorageLocationSchema = z.object({
   facilityId: z.string().uuid().optional(),
   capacityKg: z.number().positive().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
   supplierReferenceId: z.string().max(100).optional().nullable(),

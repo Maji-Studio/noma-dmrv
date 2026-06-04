@@ -51,6 +51,15 @@ export interface TestFormulation {
   description: string | null;
 }
 
+export interface TestStorageLocation {
+  id: string;
+  code: string;
+  name: string;
+  type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
+  facilityId: string;
+  formulationId: string | null;
+}
+
 export interface TestBiocharProduct {
   id: string;
   code: string;
@@ -264,6 +273,57 @@ export async function deleteTestFacility(facilityId: string): Promise<void> {
 
   try {
     await db.delete(schema.facilities).where(eq(schema.facilities.id, facilityId));
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Create a test storage location (bin). For product bins, pass `formulationId`
+ * to reserve the bin for a formulation (null = unassigned / pure-biochar bin).
+ */
+export async function createTestStorageLocation(
+  facilityId: string,
+  overrides: Partial<Omit<TestStorageLocation, "id" | "facilityId">> = {}
+): Promise<TestStorageLocation> {
+  const { db, pool } = createDbConnection();
+
+  try {
+    const testId = generateTestId();
+    const location: TestStorageLocation = {
+      id: crypto.randomUUID(),
+      code: overrides.code || `E2E-BIN-${testId.toUpperCase()}`,
+      name: overrides.name || `E2E Test Bin ${testId}`,
+      type: overrides.type ?? "product_bin",
+      facilityId,
+      formulationId: overrides.formulationId ?? null,
+    };
+
+    await db.insert(schema.storageLocations).values({
+      id: location.id,
+      code: location.code,
+      name: location.name,
+      type: location.type,
+      facilityId: location.facilityId,
+      formulationId: location.formulationId,
+    });
+
+    return location;
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Delete a test storage location
+ */
+export async function deleteTestStorageLocation(storageLocationId: string): Promise<void> {
+  const { db, pool } = createDbConnection();
+
+  try {
+    await db
+      .delete(schema.storageLocations)
+      .where(eq(schema.storageLocations.id, storageLocationId));
   } finally {
     await pool.end();
   }

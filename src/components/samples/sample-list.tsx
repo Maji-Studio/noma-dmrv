@@ -7,9 +7,11 @@
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate, PencilSimple, Trash } from "@phosphor-icons/react/dist/ssr";
+import { parseAsString, useQueryState } from "nuqs";
 import {
   useCreateSample,
   useDeleteSample,
+  useSample,
   useSamples,
   useUpdateSample,
   useSampleStats,
@@ -153,6 +155,10 @@ type SideSheetState =
 
 export function SampleList() {
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const [focusedSampleId, setFocusedSampleId] = useQueryState(
+    "sample",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [productionRunFilter, setProductionRunFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -185,6 +191,7 @@ export function SampleList() {
     contextFacilityId ? { pageSize: 100, facilityId: contextFacilityId } : { pageSize: 100 },
     { enabled: !!contextFacilityId },
   );
+  const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
 
   const createSample = useCreateSample();
   const updateSample = useUpdateSample();
@@ -193,6 +200,11 @@ export function SampleList() {
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
+  const deepLinkedSideSheet =
+    focusedSampleId && focusedSample.data
+      ? ({ mode: "view", entity: focusedSample.data } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
   const handleCreate = async (data: SampleFormData) => {
     setFormError(null);
@@ -230,25 +242,38 @@ export function SampleList() {
     }
   };
 
-  const openCreate = () => { setFormError(null); setSideSheet({ mode: "create", entity: null }); };
-  const openView = (sample: SampleWithRelations) => { setFormError(null); setSideSheet({ mode: "view", entity: sample }); };
+  const openCreate = () => {
+    setFocusedSampleId(null);
+    setFormError(null);
+    setSideSheet({ mode: "create", entity: null });
+  };
+  const openView = (sample: SampleWithRelations) => {
+    setFocusedSampleId(sample.id);
+    setFormError(null);
+    setSideSheet({ mode: "view", entity: sample });
+  };
   const openEdit = (sample: SampleWithRelations) => { setFormError(null); setSideSheet({ mode: "edit", entity: sample }); };
-  const closeSideSheet = () => { setSideSheet(null); setFormError(null); };
+  const closeSideSheet = () => {
+    setFocusedSampleId(null);
+    setSideSheet(null);
+    setFormError(null);
+  };
 
   const handleModeChange = (mode: SideSheetMode) => {
-    if (!sideSheet) return;
+    if (!displaySideSheet?.entity) return;
     setFormError(null);
-    if (mode === "edit" && sideSheet.entity) {
-      setSideSheet({ mode: "edit", entity: sideSheet.entity });
-    } else if (mode === "view" && sideSheet.entity) {
-      setSideSheet({ mode: "view", entity: sideSheet.entity });
+    if (mode === "edit") {
+      setSideSheet({ mode: "edit", entity: displaySideSheet.entity });
+    } else if (mode === "view") {
+      setSideSheet({ mode: "view", entity: displaySideSheet.entity });
     }
   };
 
   const clearFilters = () => { setSearchQuery(""); setProductionRunFilter(""); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || productionRunFilter;
 
-  const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
+  const editingEntity =
+    displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const isSubmitting = createSample.isPending || updateSample.isPending;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
@@ -257,7 +282,8 @@ export function SampleList() {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load samples"} /></div>;
   }
 
-  const viewingEntity = sideSheet?.mode === "view" ? sideSheet.entity : null;
+  const viewingEntity =
+    displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const viewSubtitle = viewingEntity
     ? [viewingEntity.productionRunCode, viewingEntity.facilityName].filter(Boolean).join(" \u2014 ") || undefined
     : undefined;
@@ -365,64 +391,64 @@ export function SampleList() {
       />
 
       <EntitySideSheet
-        open={!!sideSheet}
+        open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
-        mode={sideSheet?.mode ?? "create"}
+        mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
-        title={sideSheet?.mode === "create" ? "Create Sample" : (sideSheet?.entity?.sampleCode ?? "")}
-        subtitle={sideSheet?.mode === "create" ? "Fill in the form to create a new lab sample." : viewSubtitle}
+        title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
+        subtitle={displaySideSheet?.mode === "create" ? "Fill in the form to create a new lab sample." : viewSubtitle}
         editLabel="Edit Sample"
-        sections={sideSheet?.mode === "view" && sideSheet.entity ? [
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
             title: "General",
             fields: [
-              { label: "Sample Code", value: sideSheet.entity.sampleCode },
-              { label: "Sampling Time", value: new Date(sideSheet.entity.samplingTime).toLocaleString() },
-              { label: "Production Run", value: sideSheet.entity.productionRunCode },
-              { label: "Facility", value: sideSheet.entity.facilityName },
+              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
+              { label: "Sampling Time", value: new Date(displaySideSheet.entity.samplingTime).toLocaleString() },
+              { label: "Production Run", value: displaySideSheet.entity.productionRunCode },
+              { label: "Facility", value: displaySideSheet.entity.facilityName },
             ],
           },
           {
             title: "Carbon Analysis",
             fields: [
-              { label: "Total Carbon", value: sideSheet.entity.totalCarbonPercent != null ? `${sideSheet.entity.totalCarbonPercent.toFixed(1)}%` : null },
-              { label: "Organic Carbon", value: sideSheet.entity.organicCarbonPercent != null ? `${sideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
-              { label: "Inorganic Carbon", value: sideSheet.entity.inorganicCarbonPercent != null ? `${sideSheet.entity.inorganicCarbonPercent.toFixed(1)}%` : null },
-              { label: "H:Corg Ratio", value: sideSheet.entity.hToCOrgRatio != null ? sideSheet.entity.hToCOrgRatio.toFixed(3) : null },
+              { label: "Total Carbon", value: displaySideSheet.entity.totalCarbonPercent != null ? `${displaySideSheet.entity.totalCarbonPercent.toFixed(1)}%` : null },
+              { label: "Organic Carbon", value: displaySideSheet.entity.organicCarbonPercent != null ? `${displaySideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
+              { label: "Inorganic Carbon", value: displaySideSheet.entity.inorganicCarbonPercent != null ? `${displaySideSheet.entity.inorganicCarbonPercent.toFixed(1)}%` : null },
+              { label: "H:Corg Ratio", value: displaySideSheet.entity.hToCOrgRatio != null ? displaySideSheet.entity.hToCOrgRatio.toFixed(3) : null },
             ],
           },
           {
             title: "Durability",
             fields: [
-              { label: "Durability Option", value: formatDurabilityOption(sideSheet.entity.durabilityOption) },
-              { label: "Random Reflectance R0", value: sideSheet.entity.randomReflectanceR0Percent != null ? `${sideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
+              { label: "Durability Option", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
+              { label: "Random Reflectance R0", value: displaySideSheet.entity.randomReflectanceR0Percent != null ? `${displaySideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
             ],
           },
           {
             title: "Physical Properties",
             fields: [
-              { label: "Bulk Density", value: sideSheet.entity.bulkDensityKgPerM3 != null ? `${sideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
-              { label: "pH", value: sideSheet.entity.ph != null ? String(sideSheet.entity.ph) : null },
-              { label: "Surface Area", value: sideSheet.entity.surfaceAreaM2PerG != null ? `${sideSheet.entity.surfaceAreaM2PerG} m\u00B2/g` : null },
+              { label: "Bulk Density", value: displaySideSheet.entity.bulkDensityKgPerM3 != null ? `${displaySideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
+              { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
+              { label: "Surface Area", value: displaySideSheet.entity.surfaceAreaM2PerG != null ? `${displaySideSheet.entity.surfaceAreaM2PerG} m\u00B2/g` : null },
             ],
           },
           {
             title: "Lab Information",
             fields: [
-              { label: "Lab Name", value: sideSheet.entity.labName },
-              { label: "Lab Accreditation", value: sideSheet.entity.labAccreditation },
-              { label: "Analysis Date", value: sideSheet.entity.analysisDate },
+              { label: "Lab Name", value: displaySideSheet.entity.labName },
+              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
+              { label: "Analysis Date", value: displaySideSheet.entity.analysisDate },
             ],
           },
         ] : undefined}
         viewModeChildren={
-          sideSheet?.mode === "view" && sideSheet.entity ? (
+          displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
             <div className="flex flex-col gap-24">
               <TransportLegsPanel
                 entityType="sample"
-                entityId={sideSheet.entity.id}
+                entityId={displaySideSheet.entity.id}
               />
-              <SampleDocumentsPanel sampleId={sideSheet.entity.id} />
+              <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} />
             </div>
           ) : null
         }
@@ -431,10 +457,10 @@ export function SampleList() {
         <SampleForm
           key={editingEntity?.id ?? "create"}
           sample={editingEntity ?? undefined}
-          onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
+          submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
         />
       </EntitySideSheet>
     </div>

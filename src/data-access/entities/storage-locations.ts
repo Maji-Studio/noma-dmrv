@@ -31,6 +31,7 @@ function formatStorageLocationSubtitle(
   totalAllocatedKg: number,
   totalProductKg: number,
   biocharEquivalentKg: number,
+  formulationName: string | null,
 ): string {
   switch (type) {
     case "feedstock_bin": {
@@ -57,11 +58,17 @@ function formatStorageLocationSubtitle(
     }
     case "product_bin": {
       const typeLabel = formatStorageLocationType(type);
+      // A product bin is bound to one formulation (or pure biochar when unset).
+      const blendLabel = formulationName ?? "Pure biochar";
       if (totalProductKg === 0) {
-        return `${typeLabel} · Empty`;
+        return `${typeLabel} · ${blendLabel} · Empty`;
       }
 
-      const parts = [typeLabel, `${Math.round(totalProductKg).toLocaleString()} kg products`];
+      const parts = [
+        typeLabel,
+        blendLabel,
+        `${Math.round(totalProductKg).toLocaleString()} kg products`,
+      ];
       if (biocharEquivalentKg > 0) {
         parts.push(`${Math.round(biocharEquivalentKg).toLocaleString()} kg biochar eq`);
       }
@@ -163,9 +170,14 @@ export async function getStorageLocations(params: {
   facilityId?: string;
   type?: StorageLocationType | StorageLocationType[];
   feedstockTypeId?: string;
+  /** Show product bins reserved for this formulation, plus unassigned (empty) bins. */
+  formulationId?: string;
+  /** Show only pure-biochar product bins (formulation unset). For pure-biochar products. */
+  pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, type, feedstockTypeId, limit } = params;
+  const { search, facilityId, type, feedstockTypeId, formulationId, pureProductOnly, limit } =
+    params;
 
   const conditions: SQL[] = [];
 
@@ -191,6 +203,20 @@ export async function getStorageLocations(params: {
     );
   }
 
+  // Keep product bins clean: a pure-biochar product can only land in an unassigned
+  // bin; a formulated product can land in a matching bin or an unassigned one (which
+  // then gets claimed for that formulation on first intake).
+  if (pureProductOnly) {
+    conditions.push(sql`${storageLocations.formulationId} IS NULL`);
+  } else if (formulationId) {
+    conditions.push(
+      or(
+        sql`${storageLocations.formulationId} IS NULL`,
+        eq(storageLocations.formulationId, formulationId)
+      )!
+    );
+  }
+
   if (search) {
     const searchPattern = `%${search}%`;
     conditions.push(
@@ -210,6 +236,7 @@ export async function getStorageLocations(params: {
       name: storageLocations.name,
       type: storageLocations.type,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
+      formulationName: formulations.name,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
       totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
@@ -218,6 +245,7 @@ export async function getStorageLocations(params: {
       biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
+    .leftJoin(formulations, eq(storageLocations.formulationId, formulations.id))
     .leftJoin(
       feedstockInventoryAggregate,
       eq(storageLocations.id, feedstockInventoryAggregate.storageLocationId)
@@ -253,7 +281,8 @@ export async function getStorageLocations(params: {
       r.totalProducedKg,
       r.totalAllocatedKg,
       r.totalProductKg,
-      r.biocharEquivalentKg
+      r.biocharEquivalentKg,
+      r.formulationName
     ),
   }));
 }
@@ -268,6 +297,7 @@ export async function getStorageLocationById(
       name: storageLocations.name,
       type: storageLocations.type,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
+      formulationName: formulations.name,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
       totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
@@ -276,6 +306,7 @@ export async function getStorageLocationById(
       biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
+    .leftJoin(formulations, eq(storageLocations.formulationId, formulations.id))
     .leftJoin(
       feedstockInventoryAggregate,
       eq(storageLocations.id, feedstockInventoryAggregate.storageLocationId)
@@ -313,7 +344,8 @@ export async function getStorageLocationById(
       result.totalProducedKg,
       result.totalAllocatedKg,
       result.totalProductKg,
-      result.biocharEquivalentKg
+      result.biocharEquivalentKg,
+      result.formulationName
     ),
   };
 }

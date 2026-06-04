@@ -23,6 +23,7 @@ loadEnv({ path: ".env.local", override: false });
 import { expect, test } from "./fixtures";
 import {
   SANDBOX_PROJECT_ID,
+  type SeededGroupedRemoval,
   fetchSandboxRemovalTemplateId,
   seedCertifierMapping,
   seedGroupedRemovalWithChain,
@@ -54,22 +55,25 @@ test.describe("Certification — removal guided Review flow", () => {
       externalProjectId,
       defaultRemovalTemplateId: templateId,
     });
-    const removal = await seedGroupedRemovalWithChain(
-      {
-        facilityId,
-        reactorId: seededData.reactor.id,
-        formulationId: seededData.formulation.id,
-        feedstockId: seededData.feedstock.id,
-        feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
-        biocharStorageLocationId: seededData.biocharStorageLocation.id,
-        customerId: seededData.customer.id,
-        customerLocationId: seededData.customerLocation.id,
-        vehicleId: seededData.vehicle.id,
-      },
-      testRunId,
-    );
-
+    let removal: SeededGroupedRemoval | undefined;
     try {
+      // Seed inside the try so a thrown seed still runs the mapping cleanup in
+      // `finally` — otherwise it would leak the seeded certifier mapping.
+      removal = await seedGroupedRemovalWithChain(
+        {
+          facilityId,
+          reactorId: seededData.reactor.id,
+          formulationId: seededData.formulation.id,
+          feedstockId: seededData.feedstock.id,
+          feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
+          biocharStorageLocationId: seededData.biocharStorageLocation.id,
+          customerId: seededData.customer.id,
+          customerLocationId: seededData.customerLocation.id,
+          vehicleId: seededData.vehicle.id,
+        },
+        testRunId,
+      );
+
       await page.goto(
         `/certification/removals/${removal.removalId}/review?facility=${facilityId}`,
       );
@@ -105,10 +109,10 @@ test.describe("Certification — removal guided Review flow", () => {
         page.getByText(/A removal counts only the biochar that reached soil/i),
       ).toBeVisible();
     } finally {
-      // Run both cleanups even if the first throws, so a failed removal
-      // teardown can't leak the seeded certifier mapping.
+      // Run both cleanups even if seeding or the test throws, so a failed
+      // removal seed/teardown can't leak the seeded certifier mapping.
       try {
-        await removal.cleanup();
+        await removal?.cleanup();
       } finally {
         await mapping.cleanup();
       }

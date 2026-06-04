@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
@@ -33,6 +34,9 @@ export function TransportLegsPanel({
   entityId,
   title,
 }: TransportLegsPanelProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
     entityId,
@@ -42,9 +46,26 @@ export function TransportLegsPanel({
 
   const [formState, setFormState] = useState<
     { mode: "create" } | { mode: "edit"; leg: TransportLeg } | null
-  >(null);
+  >(() => {
+    const intent = searchParams.get("transportLeg");
+    return intent === "create" || intent === "add" ? { mode: "create" } : null;
+  });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const intent = searchParams.get("transportLeg");
+    const shouldOpen = intent === "create" || intent === "add";
+    if (!shouldOpen) return;
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("transportLeg");
+    const nextQuery = nextParams.toString();
+
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [pathname, router, searchParams]);
 
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;

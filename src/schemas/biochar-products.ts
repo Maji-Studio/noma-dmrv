@@ -34,6 +34,15 @@ const requiredPercent = z.preprocess(
 export const biocharProductStatusValues = ["draft", "testing", "ready", "sold"] as const;
 export type BiocharProductStatus = typeof biocharProductStatusValues[number];
 
+/**
+ * Sentinel passed as `filterBy.formulationId` on the product-bin EntitySelect when
+ * NO formulation is selected (pure-biochar product). The storage-location entity
+ * query maps this to "only pure/unassigned bins". A real formulation id instead
+ * maps to "matching OR unassigned bins". Shared by the form (client) and the
+ * entity dispatcher (server) so the magic value lives in one place.
+ */
+export const PURE_PRODUCT_BIN_FILTER = "pure" as const;
+
 // ============================================
 // Ingredient Bin Schema (shared between form and update)
 // ============================================
@@ -68,7 +77,8 @@ export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 export const biocharProductFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
-  formulationId: z.string().min(1, "Please select a formulation").uuid("Please select a valid formulation"),
+  // Optional: empty = pure-biochar product (no amendment blend)
+  formulationId: emptyToNull.or(z.string().uuid("Please select a valid formulation")).nullable().optional(),
 
   // Optional date field
   productionDate: z.union([
@@ -126,7 +136,7 @@ export const updateBiocharProductSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   facilityId: z.string().uuid().optional(),
-  formulationId: z.string().uuid().optional(),
+  formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   productionDate: z.union([
     z.date(),
     z.string().transform((val) => {

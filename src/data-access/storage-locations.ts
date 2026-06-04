@@ -85,6 +85,7 @@ type BaseStorageLocationRow = {
   storageDescription: string | null;
   supplierReferenceId: string | null;
   feedstockTypeId: string | null;
+  formulationId: string | null;
   facilityId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -474,6 +475,7 @@ export async function getStorageLocations(
       storageDescription: storageLocations.storageDescription,
       supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
+      formulationId: storageLocations.formulationId,
       facilityId: storageLocations.facilityId,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
@@ -540,6 +542,7 @@ export async function getStorageLocationWithFacility(
       storageDescription: storageLocations.storageDescription,
       supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
+      formulationId: storageLocations.formulationId,
       facilityId: storageLocations.facilityId,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
@@ -601,6 +604,7 @@ export async function createStorageLocation(
     facilityId: string;
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
+    formulationId?: string | null;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -639,6 +643,19 @@ export async function createStorageLocation(
     }
   }
 
+  // A formulation only makes sense on a product bin; ignore it for other types.
+  const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
+  if (formulationId) {
+    const [formulation] = await db
+      .select({ id: formulations.id })
+      .from(formulations)
+      .where(eq(formulations.id, formulationId));
+
+    if (!formulation) {
+      throw new SafeError("Formulation not found");
+    }
+  }
+
   const [storageLocation] = await db
     .insert(storageLocations)
     .values({
@@ -648,6 +665,7 @@ export async function createStorageLocation(
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
       feedstockTypeId: data.feedstockTypeId ?? null,
+      formulationId,
       storageMethod: data.storageMethod ?? null,
       storageDescription: data.storageDescription ?? null,
       supplierReferenceId: data.supplierReferenceId ?? null,
@@ -674,6 +692,7 @@ export async function updateStorageLocation(
     facilityId?: string;
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
+    formulationId?: string | null;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -723,6 +742,41 @@ export async function updateStorageLocation(
 
     if (!feedstockType) {
       throw new SafeError("Feedstock type not found");
+    }
+  }
+
+  if (data.formulationId) {
+    const [formulation] = await db
+      .select({ id: formulations.id })
+      .from(formulations)
+      .where(eq(formulations.id, data.formulationId));
+
+    if (!formulation) {
+      throw new SafeError("Formulation not found");
+    }
+  }
+
+  // Don't let a product bin's formulation be re-pointed while it still holds
+  // product of a different formulation — that would dirty the bin. `IS DISTINCT
+  // FROM` handles NULL correctly (a pure-biochar product vs a named formulation
+  // counts as a mismatch, and vice versa).
+  const effectiveType = data.type ?? existing.type;
+  if (data.formulationId !== undefined && effectiveType === "product_bin") {
+    const [conflicting] = await db
+      .select({ id: biocharProducts.id })
+      .from(biocharProducts)
+      .where(
+        and(
+          eq(biocharProducts.storageLocationId, storageLocationId),
+          sql`${biocharProducts.formulationId} IS DISTINCT FROM ${data.formulationId}`
+        )
+      )
+      .limit(1);
+
+    if (conflicting) {
+      throw new SafeError(
+        "This bin already holds product with a different formulation — move or remove it before changing the bin's formulation."
+      );
     }
   }
 

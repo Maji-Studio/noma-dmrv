@@ -7,6 +7,7 @@
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Calendar, Package, Plus } from "@phosphor-icons/react";
+import { parseAsString, useQueryState } from "nuqs";
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -21,6 +22,7 @@ import { FeedstockForm } from "./feedstock-form";
 import { TransportLegsPanel } from "@/components/transport-legs";
 import {
   useFeedstocks,
+  useFeedstock,
   useCreateFeedstock,
   useUpdateFeedstock,
   useDeleteFeedstock,
@@ -147,6 +149,10 @@ function createColumns(
 
 export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const [focusedFeedstockId, setFocusedFeedstockId] = useQueryState(
+    "feedstock",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
@@ -164,6 +170,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks(
     contextFacilityId ? { facilityId: contextFacilityId } : undefined,
     { enabled: !!contextFacilityId },
+  );
+  const focusedFeedstock = useFeedstock(
+    focusedFeedstockId ?? "",
+    !!focusedFeedstockId,
   );
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
@@ -228,15 +238,33 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     }
   };
 
-  const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
-  const openView = (feedstock: FeedstockWithRelations) => setSideSheet({ entity: feedstock, mode: "view" });
+  const openCreate = () => {
+    setFocusedFeedstockId(null);
+    setCreateError(null);
+    setUpdateError(null);
+    setSideSheet({ entity: null, mode: "create" });
+  };
+  const openView = (feedstock: FeedstockWithRelations) => {
+    setFocusedFeedstockId(feedstock.id);
+    setSideSheet({ entity: feedstock, mode: "view" });
+  };
   const openEdit = (feedstock: FeedstockWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: feedstock, mode: "edit" }); };
-  const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => {
+    setFocusedFeedstockId(null);
+    setSideSheet(null);
+    setCreateError(null);
+    setUpdateError(null);
+  };
   useOpenCreateIntent(openCreate);
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const feedstockItems = feedstocksData?.items ?? [];
+  const deepLinkedSideSheet =
+    focusedFeedstockId && focusedFeedstock.data
+      ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
   if (fetchError) {
     return (
@@ -312,82 +340,86 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       />
 
       {/* Side Sheet */}
-      {sideSheet && (
+      {displaySideSheet && (
         <EntitySideSheet
           open
           onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-          title={sideSheet.mode === "create" ? "Create Feedstock" : sideSheet.entity?.code ?? ""}
+          mode={displaySideSheet.mode}
+          onModeChange={(mode) =>
+            displaySideSheet.entity
+              ? setSideSheet({ entity: displaySideSheet.entity, mode })
+              : setSideSheet((prev) => (prev ? { ...prev, mode } : null))
+          }
+          title={displaySideSheet.mode === "create" ? "Create Feedstock" : displaySideSheet.entity?.code ?? ""}
           subtitle={
-            sideSheet.mode === "create"
+            displaySideSheet.mode === "create"
               ? "Add a new biomass delivery with bin allocation"
-              : sideSheet.entity
+              : displaySideSheet.entity
                 ? [
-                    sideSheet.entity.feedstockTypeName,
-                    formatMass(sideSheet.entity.massDryKg),
-                    sideSheet.entity.storageLocationCode,
+                    displaySideSheet.entity.feedstockTypeName,
+                    formatMass(displaySideSheet.entity.massDryKg),
+                    displaySideSheet.entity.storageLocationCode,
                   ].filter(Boolean).join(" \u00B7 ") || "Feedstock"
                 : undefined
           }
           editLabel="Edit Feedstock"
-          sections={sideSheet.entity ? [
+          sections={displaySideSheet.entity ? [
             {
               title: "Delivery Information",
               fields: [
-                { label: "Facility", value: sideSheet.entity.facilityName },
-                { label: "Delivery Date", value: formatSafeDate(sideSheet.entity.deliveryDate) },
-                { label: "Supplier", value: sideSheet.entity.supplierName },
-                { label: "Supplier Code", value: sideSheet.entity.supplierCode },
-                { label: "Vehicle", value: sideSheet.entity.vehiclePlateNumber },
+                { label: "Facility", value: displaySideSheet.entity.facilityName },
+                { label: "Delivery Date", value: formatSafeDate(displaySideSheet.entity.deliveryDate) },
+                { label: "Supplier", value: displaySideSheet.entity.supplierName },
+                { label: "Supplier Code", value: displaySideSheet.entity.supplierCode },
+                { label: "Vehicle", value: displaySideSheet.entity.vehiclePlateNumber },
               ],
             },
             {
               title: "Material",
               fields: [
-                { label: "Feedstock Type", value: sideSheet.entity.feedstockTypeName },
-                { label: "Category", value: sideSheet.entity.feedstockTypeCategory ? <span className="capitalize">{sideSheet.entity.feedstockTypeCategory}</span> : null },
+                { label: "Feedstock Type", value: displaySideSheet.entity.feedstockTypeName },
+                { label: "Category", value: displaySideSheet.entity.feedstockTypeCategory ? <span className="capitalize">{displaySideSheet.entity.feedstockTypeCategory}</span> : null },
                 {
                   label: "Wet Mass",
-                  value: sideSheet.entity.massWetKg !== null
-                    ? formatMass(sideSheet.entity.massWetKg)
+                  value: displaySideSheet.entity.massWetKg !== null
+                    ? formatMass(displaySideSheet.entity.massWetKg)
                     : <StatusBadge status="pending" label="Missing" size="small" />,
                 },
-                { label: "Moisture", value: sideSheet.entity.moistureContentPercent !== null ? `${sideSheet.entity.moistureContentPercent}%` : null },
-                { label: "Dry Mass", value: formatMass(sideSheet.entity.massDryKg) },
+                { label: "Moisture", value: displaySideSheet.entity.moistureContentPercent !== null ? `${displaySideSheet.entity.moistureContentPercent}%` : null },
+                { label: "Dry Mass", value: formatMass(displaySideSheet.entity.massDryKg) },
               ],
             },
             {
               title: "Storage",
               fields: [
-                { label: "Storage Bin", value: sideSheet.entity.storageLocationCode ?? sideSheet.entity.storageLocationName },
+                { label: "Storage Bin", value: displaySideSheet.entity.storageLocationCode ?? displaySideSheet.entity.storageLocationName },
               ],
             },
-            ...(sideSheet.entity.overrideJustification ? [{
+            ...(displaySideSheet.entity.overrideJustification ? [{
               title: "Override",
-              fields: [{ label: "Justification", value: sideSheet.entity.overrideJustification }],
+              fields: [{ label: "Justification", value: displaySideSheet.entity.overrideJustification }],
             }] : []),
-            ...(sideSheet.entity.notes ? [{
+            ...(displaySideSheet.entity.notes ? [{
               title: "Notes",
-              fields: [{ label: "Notes", value: sideSheet.entity.notes }],
+              fields: [{ label: "Notes", value: displaySideSheet.entity.notes }],
             }] : []),
           ] : undefined}
           viewModeChildren={
-            sideSheet.mode === "view" && sideSheet.entity ? (
+            displaySideSheet.mode === "view" && displaySideSheet.entity ? (
               <TransportLegsPanel
                 entityType="feedstock"
-                entityId={sideSheet.entity.id}
+                entityId={displaySideSheet.entity.id}
               />
             ) : null
           }
         >
           <FeedstockForm
-            key={sideSheet.entity?.id ?? "create"}
-            feedstock={sideSheet.entity ?? undefined}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
+            key={displaySideSheet.entity?.id ?? "create"}
+            feedstock={displaySideSheet.entity ?? undefined}
+            onSubmit={displaySideSheet.entity && displaySideSheet.mode === "edit" ? handleUpdate : handleCreate}
             onCancel={closeSideSheet}
             isSubmitting={createFeedstock.isPending || updateFeedstock.isPending}
-            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Feedstock"}
+            submitLabel={displaySideSheet.entity && displaySideSheet.mode === "edit" ? "Save Changes" : "Create Feedstock"}
             serverError={createError || updateError || undefined}
           />
         </EntitySideSheet>

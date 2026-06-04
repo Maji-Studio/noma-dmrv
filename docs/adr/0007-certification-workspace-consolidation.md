@@ -5,7 +5,7 @@
 > ADR 0004 (GHG Statement as an independent, period-anchored artifact) and
 > ADR 0006 (telemetry as its own sub-status). Does **not** change the submission
 > domain model — only where submission lives in the UI and how status is read.
-
+>
 > **Amendment (2026-06-04) — sidebar nav, no in-page tabs.** The in-page
 > `CertificationTabBar` was removed; the four sub-routes (Overview · Removals ·
 > GHG Statements · Settings) are promoted back to a titled **Certification**
