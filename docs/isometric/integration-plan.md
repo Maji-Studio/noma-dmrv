@@ -145,11 +145,14 @@ src/fn/certification/                  # withAction-wrapped server actions
 src/hooks/use-certification.ts         # all React Query hooks
 src/schemas/certification.ts           # all Zod schemas
 src/components/certification/          # all UI: facility section + dialog,
-                                       #   certify-panel, blueprint-list,
+                                       #   certify-panel (read-only bridge),
+                                       #   certification-overview/-settings,
                                        #   submission-status-badge, sync-event-log,
-                                       #   removals-hub, ghg-statements-hub,
-                                       #   ghg-statement-{create,submit}-dialog
-src/app/(app)/certification/           # route group: page + removals + ghg-statements
+                                       #   removals-list, ghg-statements-list,
+                                       #   ghg-statement-create-drawer + submit-dialog,
+                                       #   removal-review/ (guided Review flow)
+src/app/(app)/certification/           # route group: overview + removals +
+                                       #   ghg-statements + settings + removals/[id]/review
 ```
 
 **Reused, do not touch:** `src/data-access/isometric.ts` +
