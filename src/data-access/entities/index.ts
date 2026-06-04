@@ -14,7 +14,10 @@ import type {
   EntityOption,
   EntityType,
 } from "@/components/forms/entity-select/types";
-import type { StorageLocationType } from "@/schemas/storage-locations";
+import {
+  storageLocationTypes,
+  type StorageLocationType,
+} from "@/schemas/storage-locations";
 
 import { getFacilities, getFacilityById } from "./facilities";
 import { getReactors, getReactorById } from "./reactors";
@@ -43,6 +46,9 @@ import {
   getCreditBatchEntityById,
 } from "./credit-batches";
 
+/** Default page size for searchable entity-select queries. */
+const DEFAULT_ENTITY_LIMIT = 50;
+
 interface GetEntitiesParams {
   entityType: EntityType;
   search?: string;
@@ -55,7 +61,7 @@ export async function getEntities(
   params: GetEntitiesParams
 ): Promise<EntityOption[]> {
   requireAuth(userId);
-  const { entityType, search, filterBy, limit = 50 } = params;
+  const { entityType, search, filterBy, limit = DEFAULT_ENTITY_LIMIT } = params;
 
   switch (entityType) {
     case "facility":
@@ -71,14 +77,25 @@ export async function getEntities(
     case "operator":
       return getOperators({ search, limit });
     case "storageLocation": {
-      const typeFilter = filterBy?.type;
-      const types = typeFilter?.includes(",")
-        ? typeFilter.split(",").map((t) => t.trim()) as StorageLocationType[]
-        : typeFilter as StorageLocationType | undefined;
+      // Validate every token against the allowed set before passing it down —
+      // an unknown `filterBy.type` would otherwise be cast straight into a SQL
+      // equality and silently match nothing (or, with future schema changes,
+      // the wrong rows). Mirrors the productionRun status guard below.
+      const allowed = new Set<string>(storageLocationTypes);
+      const validTypes = (filterBy?.type ?? "")
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t): t is StorageLocationType => allowed.has(t));
+      const type =
+        validTypes.length === 0
+          ? undefined
+          : validTypes.length === 1
+            ? validTypes[0]
+            : validTypes;
       return getStorageLocations({
         search,
         facilityId: filterBy?.facilityId,
-        type: types,
+        type,
         feedstockTypeId: filterBy?.feedstockTypeId,
         limit,
       });

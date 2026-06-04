@@ -4,7 +4,7 @@ This doc is the **forward-looking** plan and status surface. It owns
 roadmap, current architecture contracts, pre-deploy gates, and what
 still has to be built. It does **not** narrate per-PR history — that
 lives in `docs/isometric/changes.md`. Design decisions live in
-`docs/adr/0001`–`0005`; open questions live in
+`docs/adr/0001`–`0006`; open questions live in
 `docs/open-questions.md`.
 
 ## Scope

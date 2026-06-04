@@ -198,6 +198,20 @@ describe("GET /api/documents/[id]", () => {
     expect(res.status).toBe(502);
   });
 
+  it("legacy fileUrl on a broad provider host → 502 (narrowed from wildcard)", async () => {
+    // maps.googleapis.com was allowed under the old broad `.googleapis.com`
+    // family; the narrowed allowlist only permits `.storage.googleapis.com`.
+    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getDocumentById).mockResolvedValueOnce({
+      ...baseRow,
+      storageKey: null,
+      fileUrl: "https://maps.googleapis.com/maps/api/staticmap",
+      visibility: "public",
+    } as never);
+    const res = await GET(makeRequest(), makeCtx());
+    expect(res.status).toBe(502);
+  });
+
   it("legacy fileUrl with embedded credentials → 500 (refused)", async () => {
     vi.mocked(getUser).mockResolvedValueOnce(mockUser);
     vi.mocked(getDocumentById).mockResolvedValueOnce({

@@ -11,6 +11,7 @@
  */
 import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
+import { hostAllowed, resolveHostAllowlist } from "@/lib/net/host-allowlist";
 
 // Cap on how long a single registry PUT may take before we abort and surface a
 // timeout. Without it a hung connection would pin the server action
@@ -24,38 +25,16 @@ export const UPLOAD_TRANSFER_TIMEOUT_MS = 30_000;
 // file-upload step (ADR 0006). Scoped to the specific storage host families —
 // `.storage.googleapis.com` (the GCS object endpoint), not the broad
 // `.googleapis.com` (which would also allow every other Google API host).
+// Host set this guard PUTs bytes to. The matching algorithm (suffix +
+// regional/dualstack S3 patterns + env override) is shared with the document
+// redirect guard via `@/lib/net/host-allowlist`; only the host SET and the
+// override env var differ between the two.
 const DEFAULT_UPLOAD_HOST_SUFFIXES = [
   ".s3.amazonaws.com",
   ".isometric.com",
   ".digitaloceanspaces.com",
   ".storage.googleapis.com",
 ] as const;
-
-const S3_REGIONAL_HOST_PATTERN =
-  /(^|\.)s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/;
-const S3_DUALSTACK_HOST_PATTERN =
-  /(^|\.)s3\.dualstack\.[a-z0-9-]+\.amazonaws\.com$/;
-
-function uploadHostAllowlist(): {
-  suffixes: string[];
-  includeDefaultS3Patterns: boolean;
-} {
-  const raw = env.ISOMETRIC_UPLOAD_HOST_ALLOWLIST;
-  if (!raw) {
-    return {
-      suffixes: [...DEFAULT_UPLOAD_HOST_SUFFIXES],
-      includeDefaultS3Patterns: true,
-    };
-  }
-  return {
-    suffixes: raw
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0)
-      .map((entry) => (entry.startsWith(".") ? entry : `.${entry}`)),
-    includeDefaultS3Patterns: false,
-  };
-}
 
 export function assertUploadHostAllowed(uploadUrl: string): void {
   if (!URL.canParse(uploadUrl)) {
@@ -67,16 +46,11 @@ export function assertUploadHostAllowed(uploadUrl: string): void {
       `Refusing PUT to non-HTTPS upload URL (protocol=${parsed.protocol}).`,
     );
   }
-  const hostname = `.${parsed.hostname.toLowerCase()}`;
-  const allowed = uploadHostAllowlist();
-  const defaultAllowed =
-    allowed.suffixes.some((suffix) =>
-      hostname.endsWith(suffix.toLowerCase()),
-    ) ||
-    (allowed.includeDefaultS3Patterns &&
-      (S3_REGIONAL_HOST_PATTERN.test(parsed.hostname.toLowerCase()) ||
-        S3_DUALSTACK_HOST_PATTERN.test(parsed.hostname.toLowerCase())));
-  if (!defaultAllowed) {
+  const allowlist = resolveHostAllowlist(
+    env.ISOMETRIC_UPLOAD_HOST_ALLOWLIST,
+    DEFAULT_UPLOAD_HOST_SUFFIXES,
+  );
+  if (!hostAllowed(parsed.hostname, allowlist)) {
     throw new SafeError(
       `Refusing PUT to upload URL with host "${parsed.hostname}" — not in ISOMETRIC_UPLOAD_HOST_ALLOWLIST.`,
     );
