@@ -161,19 +161,6 @@ export const creditBatches = pgTable(
   },
   (table) => [
     check(
-      'credit_batches_200_year_requires_h_to_corg',
-      sql`${table.durabilityOption} <> '200_year'::durability_option or (
-        ${table.hToCorgRatio} is not null
-      )`
-    ),
-    check(
-      'credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon',
-      sql`${table.durabilityOption} <> '1000_year'::durability_option or (
-        ${table.meanRandomReflectancePercent} is not null and
-        ${table.meanNonReactiveCarbonPercent} is not null
-      )`
-    ),
-    check(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} = 'isometric'`
     ),

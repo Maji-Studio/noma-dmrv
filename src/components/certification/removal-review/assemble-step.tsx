@@ -18,6 +18,16 @@ import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 
 const ICON_SIZE = 14;
 
+function formatCo2eStored(
+  preview: RemovalCertifyContext["memberBatches"][number]["co2eStoredPreview"],
+) {
+  if (!preview) return "CO2e pending";
+  if (preview.co2eStoredTonnes != null) {
+    return `${preview.co2eStoredTonnes.toFixed(2)} t CO2e stored`;
+  }
+  return "CO2e pending";
+}
+
 interface AssembleStepProps {
   ctx: RemovalCertifyContext;
   removalId: string;
@@ -97,9 +107,14 @@ export function AssembleStep({ ctx, removalId, canRegroup }: AssembleStepProps) 
                     : ""
                 }`}
               >
-                <span className="body-small font-mono text-[var(--color-text-primary)]">
-                  {batch.code}
-                </span>
+                <div className="flex flex-col gap-2">
+                  <span className="body-small font-mono text-[var(--color-text-primary)]">
+                    {batch.code}
+                  </span>
+                  <span className="body-caption text-[var(--color-text-tertiary)]">
+                    {formatCo2eStored(batch.co2eStoredPreview)}
+                  </span>
+                </div>
                 {canRegroup && (
                   <Button
                     variant="default"
