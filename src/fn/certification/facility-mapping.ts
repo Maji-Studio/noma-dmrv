@@ -39,6 +39,35 @@ export interface FacilityCertifierMapping {
   isProduction: boolean;
 }
 
+// Read-only registry-link summary for non-managing viewers. DB-only — it
+// deliberately does NOT hit the Isometric API (`listProjects` /
+// `listRemovalTemplates`) or the cross-facility link query that
+// `loadFacilityCertifierMapping` does. A non-admin reading the current mapping
+// must not pull the management payload (available project list, link hints,
+// template options). The trade-off: the read-only view shows the persisted
+// identifiers + protocol on the row, not the human-friendly project/template
+// names (those are only resolvable from the management list).
+export interface FacilityCertifierSummary {
+  mapping: CertifierProjectRow | null;
+  isProduction: boolean;
+}
+
+export async function loadFacilityCertifierSummary(
+  facilityId: string,
+): Promise<ActionResult<FacilityCertifierSummary>> {
+  return withAction(async (userId) => {
+    const mapping = await getCertifierProjectByFacility(
+      userId,
+      facilityId,
+      ISOMETRIC_PROVIDER,
+    );
+    return {
+      mapping,
+      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+    };
+  });
+}
+
 export async function loadFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierMapping>> {

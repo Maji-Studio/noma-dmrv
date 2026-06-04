@@ -173,8 +173,8 @@ hooks/use-certification.ts  # React Query hooks
        ↓
 fn/certification/           # Server actions (split module):
                             #   facility-mapping, certify-context,
-                            #   submit-credit-batch, ghg-statements,
-                            #   shared, index
+                            #   submit-removal, ghg-statements, overview,
+                            #   sources, health, shared, index
        ↓
 data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
        ↓
@@ -206,20 +206,27 @@ state). See ADR 0003 for the Removal submission model.
 
 - Credit-batch side sheet — Certify panel mounted via the
   `viewModeChildren` slot on `EntitySideSheet`
-  (`src/components/credit-batches/credit-batch-list.tsx`). Surfaces the
-  removal-scoped (facility-level) submission state: the credit batch's
-  removal membership, the `submitRemoval` action, and submission history
-  tied to the removal. The GHG Statement lifecycle (create, submit,
-  status) is decoupled and lives on the Certification route group below
-  — not here.
-- `/certification` route group (`src/app/(app)/certification/`) — the
-  standalone certification surface added in Phase 4.5. Tile hub
-  (`page.tsx`) linking to `removals/` (per-facility Removals hub) and
-  `ghg-statements/` (period-anchored GHG Statements hub: create draft,
-  preview predicted removals, submit/resubmit to verifier, refresh
-  remote status). Provider-neutral by design — Verra / Gold Standard /
-  CSI surfaces may be added later; today every tile is
-  Isometric-specific.
+  (`src/components/credit-batches/credit-batch-list.tsx`). A **read-only
+  status bridge** (ADR 0007): it shows the credit batch's removal
+  membership and the removal's own local status, lists member batches
+  read-only, and deep-links **"Open in Certification →"** (the removal's
+  guided Review flow, or the Removals tab when ungrouped). It no longer
+  submits — submission consolidated into the Certification workspace
+  below. The GHG Statement lifecycle (create, submit, status) is
+  decoupled and lives there too — not here.
+- `/certification` route group (`src/app/(app)/certification/`) — a
+  first-class certification **workspace** (ADR 0007), reached from its own
+  titled **Certification** group in the sidebar with four routes: Overview ·
+  Removals · GHG Statements · Settings. Overview (`page.tsx` →
+  `CertificationOverview`) is an operator **work queue** ("needs attention"),
+  not a dashboard; Removals and GHG Statements are DataTables with read-only
+  side-sheets (`?removal=` / `?statement=`); the complex removal path is a
+  guided full-width **Review flow** (`removals/[id]/review`: Assemble → Review
+  → Evidence → Pre-flight → Submit). Settings consolidates the
+  facility↔project link and emission/LCA config (the old
+  `/admin/emission-estimates` redirects here). Provider-neutral by design —
+  Verra / Gold Standard / CSI surfaces may be added as sibling routes later;
+  today every surface is Isometric-specific.
 - Facility list side sheet — facility ↔ Isometric project mapping
   (`src/components/certification/facility-certifier-section.tsx`).
 

@@ -10,17 +10,20 @@ import {
   createGhgStatementDraft,
   deleteFacilityCertifierMapping,
   ensureRemovalForCreditBatchAction,
+  loadCertificationHealth,
+  loadCertificationOverview,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
+  loadFacilityCertifierSummary,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRemovalCertifyContext,
   loadRemovalsForFacility,
   refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
-  submitCreditBatchRemoval,
   submitGhgStatementToVerifier,
   submitRemovalAction,
 } from "@/fn/certification";
@@ -29,7 +32,6 @@ import type {
   CreateGhgStatementInput,
   FacilityEmissionConfigFormData,
   SaveMappingInput,
-  SubmitCreditBatchInput,
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
 } from "@/schemas/certification";
@@ -46,6 +48,8 @@ export const certificationKeys = {
   all: ["certification"] as const,
   facilityMapping: (facilityId: string) =>
     [...certificationKeys.all, "facility-mapping", facilityId] as const,
+  facilitySummary: (facilityId: string) =>
+    [...certificationKeys.all, "facility-summary", facilityId] as const,
   projectTemplates: (externalProjectId: string) =>
     [...certificationKeys.all, "project-templates", externalProjectId] as const,
   certifyContextForCreditBatch: (creditBatchId: string) =>
@@ -55,6 +59,13 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
+  certifyContextForRemoval: (removalId: string) =>
+    [
+      ...certificationKeys.all,
+      "certify-context",
+      "removal",
+      removalId,
+    ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
   ghgStatementsForFacility: (facilityId: string) =>
@@ -63,7 +74,40 @@ export const certificationKeys = {
     [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
   openRemovalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "open-removals", facilityId] as const,
+  overview: (facilityId: string) =>
+    [...certificationKeys.all, "overview", facilityId] as const,
+  health: () => [...certificationKeys.all, "health"] as const,
 };
+
+// Server-owned readiness work queue for the Overview. Heavier than the other
+// reads (walks lineage/coverage per removal), so it leans on React Query
+// caching; mutations invalidate `certificationKeys.all`, refreshing it.
+export function useCertificationOverview(facilityId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.overview(facilityId),
+    queryFn: async () => {
+      const result = await loadCertificationOverview(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Read-only integration status for the Settings → Health panel. Admin-gated
+// server-side; read rarely, so it gets the longer stale window.
+export function useCertificationHealth() {
+  return useQuery({
+    queryKey: certificationKeys.health(),
+    queryFn: async () => {
+      const result = await loadCertificationHealth();
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    staleTime: PROJECT_TEMPLATES_STALE_MS,
+  });
+}
 
 export function useFacilityCertifierMapping(
   facilityId: string,
@@ -73,6 +117,26 @@ export function useFacilityCertifierMapping(
     queryKey: certificationKeys.facilityMapping(facilityId),
     queryFn: async () => {
       const result = await loadFacilityCertifierMapping(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Read-only registry-link summary (DB-only, no Isometric API). For viewers who
+// can't manage the link — keeps the management payload (available projects,
+// templates, link hints) off the wire. Mutations invalidate
+// `certificationKeys.all`, which covers this key too.
+export function useFacilityCertifierSummary(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.facilitySummary(facilityId),
+    queryFn: async () => {
+      const result = await loadFacilityCertifierSummary(facilityId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
@@ -154,6 +218,26 @@ export function useCertifyContextForCreditBatch(
   });
 }
 
+// Removal-keyed Certify context for the guided Review flow. Like the
+// credit-batch variant it refetches while a submission is locked in flight so
+// the pre-flight reflects progress without a manual refresh.
+export function useRemovalCertifyContext(removalId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.certifyContextForRemoval(removalId),
+    queryFn: async () => {
+      const result = await loadRemovalCertifyContext(removalId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!removalId,
+    staleTime: DEFAULT_STALE_MS,
+    refetchInterval: (query) =>
+      query.state.data?.latestSubmission?.lockedAt
+        ? LOCKED_REFETCH_INTERVAL_MS
+        : false,
+  });
+}
+
 // Removals hub listing for a facility — removals + members + status, plus
 // the pool of credit batches not yet grouped into a removal.
 export function useRemovalsForFacility(facilityId: string, enabled = true) {
@@ -169,22 +253,7 @@ export function useRemovalsForFacility(facilityId: string, enabled = true) {
   });
 }
 
-// Panel submit — ensures the credit batch's removal (lazy 1:1), then submits.
-export function useSubmitCreditBatchRemoval() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: SubmitCreditBatchInput | string) => {
-      const result = await submitCreditBatchRemoval(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
-  });
-}
-
-// Hub submit — submits an existing removal directly.
+// Submits an existing removal directly (the workspace's single submit entry).
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1149,6 +1149,14 @@ present). A dialog with neither has no accessible name. Optionally pass
 `ariaDescribedBy` pointing at descriptive copy (e.g., a warning paragraph)
 to give screen readers context beyond the heading.
 
+**Confirmation gates.** The certification area's single "are you sure?" gate
+is `ConfirmActionDialog`
+(`src/components/certification/confirm-action-dialog.tsx`) — a `width="sm"`
+Modal composition with `title` / `body`, a `default` or `destructive`
+primary, a `busy` pending state, an optional inline production `EnvBanner`,
+and `ServerError`. Reuse it for confirm gates in that area instead of
+hand-rolling a Modal.
+
 ### EmptyState Component
 
 Shared dashed-border empty / zero-data card. Standardises the layout
@@ -1178,6 +1186,46 @@ import { EmptyState } from "@/components/ui";
 **Icon sizing is caller-owned** — typically 48px for `lg`, 40px for `md`,
 32px for `sm`. The container styles the icon color via inherited
 `text-[var(--color-text-tertiary)]`.
+
+### StepFlow Component
+
+Minimal stepped-flow chrome — a step rail + content slot + pinned footer
+action bar. Deliberately "dumb": the parent owns the active index, per-step
+validation (gate your own Next button), and the step content. StepFlow only
+renders the rail, the current step's body, and the footer.
+
+```tsx
+import { StepFlow } from "@/components/ui";
+
+<StepFlow
+  steps={[
+    { key: "assemble", label: "Assemble" },
+    { key: "review", label: "Review", description: "Check the rollup" },
+    { key: "submit", label: "Submit" },
+  ]}
+  current={step}              // zero-based active index
+  furthest={furthest}         // visited steps (index ≤ this) are clickable
+  onNavigate={setStep}        // omit to make the rail display-only
+  orientation="horizontal"    // horizontal (default) | vertical
+  footer={/* Back / Next / Submit action row */}
+>
+  {/* the active step's content */}
+</StepFlow>
+```
+
+**Orientations:**
+
+| Orientation | Use for |
+|---|---|
+| `horizontal` (default) | Numbered rail across the top — full-width routes (the removal Review flow) |
+| `vertical` | Compact rail down the side; `description` shows under each label — narrow surfaces (the GHG statement create drawer) |
+
+**Navigation.** Visited steps (index ≤ `furthest`, which defaults to
+`current`) are clickable when `onNavigate` is given, so an operator can jump
+back without losing progress; omit `onNavigate` for a display-only rail.
+Steps render `done` (✓) / `active` / `upcoming` states and carry the
+`--clr-pink` certification accent. StepFlow never validates — the parent
+gates forward progress by disabling its own Next button.
 
 ### Component Guidelines
 

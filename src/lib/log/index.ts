@@ -48,6 +48,27 @@ const REDACT_KEYS = new Set([
   "secret",
   "authorization",
   "x-client-secret",
+  // Name-like PII (CLAUDE.md: log IDs, never names). `redact` lowercases keys
+  // but does not strip separators, so each camelCase-collapsed and snake_case
+  // spelling is listed explicitly.
+  "name",
+  "fullname",
+  "full_name",
+  "firstname",
+  "first_name",
+  "lastname",
+  "last_name",
+  "givenname",
+  "given_name",
+  "familyname",
+  "family_name",
+  "middlename",
+  "middle_name",
+  "displayname",
+  "display_name",
+  "username",
+  "user_name",
+  "nickname",
 ]);
 const REDACTED = "[REDACTED]";
 
