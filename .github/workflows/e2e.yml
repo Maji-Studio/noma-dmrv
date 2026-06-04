@@ -29,6 +29,20 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
+      # Isometric sandbox — OPTIONAL. When these repo secrets are configured, the
+      # gated certification specs (workspace Settings round-trip + removal Review
+      # happy path) run against the live sandbox; when absent (e.g. fork PRs,
+      # which cannot read secrets) the specs `test.skip` cleanly. Token + secret
+      # flow through @/config/env, which treats empty as unset and enforces
+      # both-or-neither — so leaving them unconfigured stays valid. The
+      # environment is pinned to `sandbox` (never empty) so the env-schema enum
+      # does not reject an empty string. Both the Playwright process (raw
+      # template fetch) and the webServer (loadFacilityCertifierMapping /
+      # buildRemovalContext live calls) inherit these from the job env.
+      ISOMETRIC_ENVIRONMENT: sandbox
+      ISOMETRIC_ACCESS_TOKEN: ${{ secrets.ISOMETRIC_ACCESS_TOKEN }}
+      ISOMETRIC_CLIENT_SECRET: ${{ secrets.ISOMETRIC_CLIENT_SECRET }}
+      ISOMETRIC_DEMO_PROJECT_ID: ${{ secrets.ISOMETRIC_DEMO_PROJECT_ID }}
 
     steps:
       - name: Generate ephemeral auth secret
