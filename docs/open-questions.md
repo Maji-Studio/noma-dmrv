@@ -800,3 +800,30 @@ two oversized data-access files. The remainder is still open:
     visible. Per `CLAUDE.md` ("Don't add abstractions beyond what the
     task requires"), this is below the threshold for extraction.
     Revisit if a third variant is added.
+
+## Product bins & formulations
+
+### Product-bin formulation claim-release policy (`product-bins/formulation`) — opened 2026-06-04, **deferred**
+
+- A product bin (`storage_locations` of type `product_bin`) carries an
+  optional `formulationId` enforcing "one formulation per bin" so bins stay
+  clean (mirrors the existing `feedstockTypeId` "one feedstock type per bin"
+  pattern). It is set at bin setup, or **claimed on first use**: the first
+  formulated product placed into an unassigned bin sets the bin's
+  `formulationId` (`createBiocharProduct` / `updateBiocharProduct` in
+  `src/data-access/biochar-products.ts`).
+- **Decision deferred:** the claim is currently a *persistent* reservation —
+  nothing auto-releases it when the bin's last product is applied/removed or
+  has its formulation changed. To re-purpose an emptied bin, an operator edits
+  the bin and clears the formulation. `updateStorageLocation` guards that edit:
+  it rejects clearing/re-pointing while the bin still holds product of a
+  different formulation (`IS DISTINCT FROM`), so manual release is only allowed
+  once the bin is genuinely free of conflicting product.
+- **Why it matters:** without auto-release, a long-lived facility accumulates
+  bins permanently tagged to old formulations, so they stop appearing as
+  "unassigned" for new pure-biochar or different-formulation intake. Acceptable
+  for now (manual release works); revisit if operators report bin churn.
+- **Resolve via:** decide between (a) keep manual release (document as the
+  intended model), or (b) auto-clear a bin's `formulationId` when its last
+  matching product leaves (`deleteBiocharProduct` + the move-out path of
+  `updateBiocharProduct`). If (b), record the decision and remove this entry.

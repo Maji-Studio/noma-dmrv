@@ -5,7 +5,7 @@
  * preserving the active `?facility=` scope. Kept so existing bookmarks/links
  * resolve; remove once nothing references it.
  */
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 
 export default async function AdminEmissionEstimatesRedirect({
   searchParams,
@@ -13,7 +13,7 @@ export default async function AdminEmissionEstimatesRedirect({
   searchParams: Promise<{ facility?: string }>;
 }) {
   const { facility } = await searchParams;
-  redirect(
+  permanentRedirect(
     facility
       ? `/certification/settings?facility=${encodeURIComponent(facility)}`
       : "/certification/settings",

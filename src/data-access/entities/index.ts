@@ -18,6 +18,7 @@ import {
   storageLocationTypes,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
+import { PURE_PRODUCT_BIN_FILTER } from "@/schemas/biochar-products";
 
 import { getFacilities, getFacilityById } from "./facilities";
 import { getReactors, getReactorById } from "./reactors";
@@ -41,6 +42,10 @@ import {
   getFormulationsEntity,
   getFormulationEntityById,
 } from "./formulations";
+import {
+  getBiocharProducts,
+  getBiocharProductEntityById,
+} from "./biochar-products";
 import {
   getCreditBatchesEntity,
   getCreditBatchEntityById,
@@ -95,11 +100,21 @@ export async function getEntities(
         if (validTypes.length === 0) return [];
         type = validTypes.length === 1 ? validTypes[0] : validTypes;
       }
+      // Product-bin formulation filter: the sentinel means "pure-biochar product →
+      // only unassigned bins"; a real id means "matching OR unassigned bins".
+      const rawFormulation = filterBy?.formulationId?.trim();
+      const pureProductOnly = rawFormulation === PURE_PRODUCT_BIN_FILTER;
+      const formulationId =
+        rawFormulation && rawFormulation !== PURE_PRODUCT_BIN_FILTER
+          ? rawFormulation
+          : undefined;
       return getStorageLocations({
         search,
         facilityId: filterBy?.facilityId,
         type,
         feedstockTypeId: filterBy?.feedstockTypeId,
+        formulationId,
+        pureProductOnly,
         limit,
       });
     }
@@ -125,6 +140,13 @@ export async function getEntities(
       return getApplicationsEntity({ search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
       return getFormulationsEntity({ search, limit });
+    case "biocharProduct":
+      return getBiocharProducts({
+        userId,
+        search,
+        facilityId: filterBy?.facilityId,
+        limit,
+      });
     case "creditBatch":
       return getCreditBatchesEntity({ search, facilityId: filterBy?.facilityId, limit });
     default:
@@ -165,6 +187,8 @@ export async function getEntityById(
       return getApplicationEntityById(id);
     case "formulation":
       return getFormulationEntityById(id);
+    case "biocharProduct":
+      return getBiocharProductEntityById(userId, id);
     case "creditBatch":
       return getCreditBatchEntityById(id);
     default:

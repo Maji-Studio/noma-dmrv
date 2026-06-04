@@ -150,6 +150,7 @@ const ENTITY_TYPE_LABELS = {
   productionRun: "production run",
   application: "application",
   formulation: "formulation",
+  biocharProduct: "product",
   creditBatch: "credit batch",
 } as const;
 

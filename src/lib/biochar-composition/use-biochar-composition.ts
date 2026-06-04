@@ -75,6 +75,15 @@ export function useBiocharComposition(
   // product) does not overwrite user-entered fields.
   const syncedFormulationIdRef = useRef(initialFormulationId ?? "");
   useEffect(() => {
+    // Pure-biochar product (no formulation) → no ingredient bins. Clear any rows
+    // left over from a previously-selected formulation.
+    if (!formulationId) {
+      if (syncedFormulationIdRef.current !== "") {
+        syncedFormulationIdRef.current = "";
+        replace([]);
+      }
+      return;
+    }
     if (!formulation?.ingredients) return;
     if (formulation.id === syncedFormulationIdRef.current) return;
     syncedFormulationIdRef.current = formulation.id;
@@ -82,7 +91,7 @@ export function useBiocharComposition(
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
     const next = reconcileComposition(formulation, live);
     replace(next);
-  }, [formulation, form, replace]);
+  }, [formulationId, formulation, form, replace]);
 
   // Facility cascade: clear each row's storageLocationId when the user picks
   // a different facility. Skips the initial mount.

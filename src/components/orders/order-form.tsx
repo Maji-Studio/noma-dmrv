@@ -9,7 +9,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import {
@@ -21,7 +21,6 @@ import {
 import type { Order } from "@/db/schema";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
-import { useBiocharProducts } from "@/hooks/use-biochar-products";
 import { useState, useEffect } from "react";
 
 // ============================================
@@ -78,17 +77,12 @@ export function OrderForm({
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });
-  const { data: productsData } = useBiocharProducts(
-    contextFacilityId ? { pageSize: 100, facilityId: contextFacilityId } : { pageSize: 100 },
-    { enabled: !!contextFacilityId },
-  );
   const { data: customerLocationsData } = useCustomerLocations(
     selectedCustomerId ?? "",
     !!selectedCustomerId
   );
 
   const customers = customersData?.items ?? [];
-  const products = productsData?.items ?? [];
 
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
@@ -103,13 +97,9 @@ export function OrderForm({
     label: l.name ?? "Unnamed location",
   }));
 
-  const productOptions = products.map((p) => ({
-    value: p.id,
-    label: [p.formulation?.name, p.facility?.name].filter(Boolean).join(" - ") || "Biochar product",
-  }));
-
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -244,23 +234,18 @@ export function OrderForm({
           Product Details
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="biocharProductId"
-            label="Biochar Product"
-            error={errors.biocharProductId?.message}
-            required
-          >
-            <FormSelect
-              id="biocharProductId"
-              placeholder="Select product..."
-              disabled={isSubmitting}
-              error={!!errors.biocharProductId}
-              options={productOptions}
-              {...register("biocharProductId")}
-            />
-          </FormField>
+        <FormEntitySelect
+          control={control}
+          name="biocharProductId"
+          label="Biochar Product"
+          entityType="biocharProduct"
+          placeholder="Select product..."
+          required
+          disabled={isSubmitting}
+          filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+        />
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="packaging"
             label="Packaging"

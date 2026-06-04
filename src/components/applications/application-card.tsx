@@ -90,18 +90,6 @@ export function ApplicationCard({
             </p>
           </div>
         </div>
-
-        {/* CO2e line */}
-        {application.co2eStoredTonnes != null && (
-          <div className="flex items-center justify-between border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] px-12 py-8">
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              CO2e Stored
-            </span>
-            <span className="body-small font-medium text-[var(--color-signal-green)]">
-              {application.co2eStoredTonnes.toFixed(2)} t
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
