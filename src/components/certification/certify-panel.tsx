@@ -5,10 +5,11 @@
  * ran the submit. That muddied the flow — submission now lives entirely in the
  * Certification workspace, so this panel is demoted to a status bridge:
  *
- *   - shows the removal's **own local** status only — never a verifier status
+ *   - shows the removal's **own local** status — never a verifier status
  *     attributed to the removal (P1-b). A removal's lifecycle ends at
- *     "Submitted"; the verifier lifecycle belongs to the GHG Statement, which
- *     is one tab away in the workspace.
+ *     "Submitted". When the removal has been rolled into a GHG Statement, that
+ *     statement's verifier status is shown inline as a separate, clearly
+ *     labelled line that deep-links into the GHG Statements tab.
  *   - lists the member credit batches (read-only — grouping happens in the
  *     workspace).
  *   - deep-links into Certification (the removal's guided Review flow, or the
@@ -24,6 +25,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useCertifyContextForCreditBatch } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
 import { Section } from "./panel-layout";
@@ -110,6 +112,7 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
 function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
   const latest = data.latestSubmission;
   const lockedInFlight = latest ? isLockedInFlight(latest) : false;
+  const linked = data.linkedGhgStatement;
 
   return (
     <div className="flex flex-col gap-6 border-t border-[var(--color-border-secondary)] pt-12">
@@ -134,11 +137,33 @@ function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
           {latest.externalId} · v{latest.version}
         </span>
       )}
-      <p className="body-caption text-[var(--color-text-tertiary)]">
-        A removal is done at &ldquo;Submitted&rdquo;. If it&apos;s rolled into a
-        GHG Statement, the verifier status lives in Certification → GHG
-        Statements.
-      </p>
+
+      {linked ? (
+        // The GHG Statement's verifier status — kept a distinct, labelled line
+        // so it's never read as the removal's own status (P1-b).
+        <div className="flex flex-col gap-4 border-t border-[var(--color-border-tertiary)] pt-8">
+          <div className="flex items-center justify-between gap-8">
+            <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+              GHG Statement
+            </span>
+            <StatusBadge
+              status={linked.status.value}
+              label={linked.status.label}
+            />
+          </div>
+          <Link
+            href={`/certification/ghg-statements?statement=${linked.id}&facility=${data.facilityId}`}
+            className="body-caption underline underline-offset-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          >
+            View in GHG Statements →
+          </Link>
+        </div>
+      ) : (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          A removal is done at &ldquo;Submitted&rdquo;. If it&apos;s rolled into
+          a GHG Statement, the verifier status appears here.
+        </p>
+      )}
     </div>
   );
 }

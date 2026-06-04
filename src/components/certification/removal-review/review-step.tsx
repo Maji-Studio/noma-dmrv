@@ -13,6 +13,7 @@ import type {
   RemovalCertifyContext,
   TransportCategory,
 } from "@/fn/certification/certify-context";
+import { formatMass } from "@/lib/format-utils";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -110,6 +111,25 @@ export function ReviewStep({ ctx }: { ctx: RemovalCertifyContext }) {
           {ctx.memberBatches.map((b) => b.code).join(", ") || "—"}
         </span>
       </Field>
+
+      {ctx.runSummary.runCount > 0 && (
+        <section className="flex flex-col gap-8">
+          <div className="grid grid-cols-1 gap-24 sm:grid-cols-3">
+            <Field label="Production runs">{ctx.runSummary.runCount}</Field>
+            <Field label="Biochar output">
+              {formatMass(ctx.runSummary.totalBiocharOutputKg)}
+            </Field>
+            <Field label="Applied (this removal)">
+              {formatMass(ctx.runSummary.appliedDryKg)}
+            </Field>
+          </div>
+          <p className="body-caption text-[var(--color-text-tertiary)] max-w-[680px]">
+            A removal counts only the biochar that reached soil — applied mass
+            is scoped per run against its output, so it submits a share of the
+            total output above.
+          </p>
+        </section>
+      )}
 
       <section className="flex flex-col gap-8">
         <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
