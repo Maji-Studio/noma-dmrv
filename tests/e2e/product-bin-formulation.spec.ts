@@ -78,12 +78,12 @@ test.describe("Product bin ↔ formulation filtering", () => {
     // Bins reference the facility; remove them before the facility. Formulations
     // are referenced by the bins (app-layer, no FK) so order is not strict, but
     // keep a sensible teardown order anyway.
-    await deleteTestStorageLocation(binA.id).catch(() => {});
-    await deleteTestStorageLocation(binB.id).catch(() => {});
-    await deleteTestStorageLocation(binEmpty.id).catch(() => {});
-    await deleteTestFormulation(formulationA.id).catch(() => {});
-    await deleteTestFormulation(formulationB.id).catch(() => {});
-    await deleteTestFacility(facility.id).catch(() => {});
+    if (binA) await deleteTestStorageLocation(binA.id).catch(() => {});
+    if (binB) await deleteTestStorageLocation(binB.id).catch(() => {});
+    if (binEmpty) await deleteTestStorageLocation(binEmpty.id).catch(() => {});
+    if (formulationA) await deleteTestFormulation(formulationA.id).catch(() => {});
+    if (formulationB) await deleteTestFormulation(formulationB.id).catch(() => {});
+    if (facility) await deleteTestFacility(facility.id).catch(() => {});
   });
 
   async function openCreateForm(page: Page) {

@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Calendar, Package, Plus } from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -260,6 +260,21 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
   const feedstockItems = feedstocksData?.items ?? [];
+  useEffect(() => {
+    if (!focusedFeedstockId) return;
+    if (focusedFeedstock.error || (focusedFeedstock.isSuccess && !focusedFeedstock.data)) {
+      setFocusedFeedstockId(null);
+      toast.error("Linked feedstock could not be opened");
+    }
+  }, [
+    focusedFeedstock.data,
+    focusedFeedstock.error,
+    focusedFeedstock.isSuccess,
+    focusedFeedstockId,
+    setFocusedFeedstockId,
+    toast,
+  ]);
+
   const deepLinkedSideSheet =
     focusedFeedstockId && focusedFeedstock.data
       ? ({ entity: focusedFeedstock.data, mode: "view" } as const)

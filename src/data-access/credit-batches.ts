@@ -40,6 +40,13 @@ export interface CreditBatchWithRelations extends CreditBatch {
   co2eStoredPreview: CreditBatchCo2eStoredPreview;
 }
 
+type CreditBatchWithOptionalPreview = Omit<
+  CreditBatchWithRelations,
+  "co2eStoredPreview"
+> & {
+  co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+};
+
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 
 export interface ApplicationCo2eStoredPreview {
@@ -88,14 +95,14 @@ export async function getFacilityCertifier(
 async function resolveCreditBatchCertifier(
   executor: DbTransaction,
   facilityId: string
-): Promise<"isometric"> {
+): Promise<"isometric" | null> {
   const provider = await getFacilityCertifierWithExecutor(executor, facilityId);
   if (provider && provider !== "isometric") {
     throw new SafeError(
       "Credit batches currently support only Isometric certifier mappings."
     );
   }
-  return "isometric";
+  return provider === "isometric" ? "isometric" : null;
 }
 
 function unique(values: string[]): string[] {
@@ -343,7 +350,17 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
 export async function getCreditBatchById(
   userId: string,
   id: string
-): Promise<CreditBatchWithRelations | null> {
+): Promise<CreditBatchWithRelations | null>;
+export async function getCreditBatchById(
+  userId: string,
+  id: string,
+  options: { skipPreview: true }
+): Promise<CreditBatchWithOptionalPreview | null>;
+export async function getCreditBatchById(
+  userId: string,
+  id: string,
+  options?: { skipPreview?: boolean }
+): Promise<CreditBatchWithRelations | CreditBatchWithOptionalPreview | null> {
   requireAuth(userId);
   const [batch] = await db
     .select({
@@ -365,11 +382,19 @@ export async function getCreditBatchById(
 
   const applicationIds = applicationData.map((a) => a.applicationId);
 
-  return {
+  const result = {
     ...batch.creditBatch,
     facility: batch.facilityName ? { name: batch.facilityName } : null,
     applicationCount: applicationData.length,
     applicationIds,
+  };
+
+  if (options?.skipPreview) {
+    return result;
+  }
+
+  return {
+    ...result,
     co2eStoredPreview: await buildCo2eStoredPreview(
       userId,
       batch.creditBatch,

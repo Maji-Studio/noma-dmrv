@@ -60,6 +60,8 @@ import {
 export interface TransportCoverageBucket {
   count: number;
   entityIds: string[];
+  legIds: string[];
+  firstLegEntityId: string | null;
   // Non-null when at least one leg fails the per-leg uniformity /
   // completeness checks `aggregateTransportLegs` enforces. Pooling legs from
   // several credit batches into one removal raises the chance of a mixed
@@ -180,27 +182,51 @@ function buildCoverage(
     feedstock: {
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
+      legIds: legs.feedstock.map((leg) => leg.id),
+      firstLegEntityId: legs.feedstock[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportLegs(legs.feedstock, "Feedstock")
         .warning,
     },
     biochar: {
       count: legs.biochar.length,
       entityIds: entityIds.biocharProductIds,
+      legIds: legs.biochar.map((leg) => leg.id),
+      firstLegEntityId: legs.biochar[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportLegs(legs.biochar, "Biochar")
         .warning,
     },
     sample: {
       count: legs.sample.length,
       entityIds: entityIds.sampleIds,
+      legIds: legs.sample.map((leg) => leg.id),
+      firstLegEntityId: legs.sample[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportLegs(legs.sample, "Sample").warning,
     },
   };
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
-  feedstock: { count: 0, entityIds: [], aggregationWarning: null },
-  biochar: { count: 0, entityIds: [], aggregationWarning: null },
-  sample: { count: 0, entityIds: [], aggregationWarning: null },
+  feedstock: {
+    count: 0,
+    entityIds: [],
+    legIds: [],
+    firstLegEntityId: null,
+    aggregationWarning: null,
+  },
+  biochar: {
+    count: 0,
+    entityIds: [],
+    legIds: [],
+    firstLegEntityId: null,
+    aggregationWarning: null,
+  },
+  sample: {
+    count: 0,
+    entityIds: [],
+    legIds: [],
+    firstLegEntityId: null,
+    aggregationWarning: null,
+  },
 };
 
 // The set of credit batches that compose one removal, with their facility.
@@ -255,12 +281,11 @@ export async function resolveScopeForRemoval(
   const batches = await getCreditBatchesByRemovalId(userId, removalId);
   const memberBatches = await Promise.all(
     batches.map(async (b) => {
-      const full = await getCreditBatchById(userId, b.id);
+      const full = await getCreditBatchById(userId, b.id, { skipPreview: true });
       return {
         id: b.id,
         code: b.code,
         applicationIds: full?.applicationIds ?? [],
-        co2eStoredPreview: full?.co2eStoredPreview,
       };
     }),
   );

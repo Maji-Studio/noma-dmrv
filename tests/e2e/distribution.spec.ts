@@ -11,6 +11,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
+import { selectEntity } from "./fixtures/page-helpers";
 
 // ============================================
 // Test Constants
@@ -26,14 +27,7 @@ const DELIVERIES_URL = "/deliveries";
  * button and per-option testids rather than selectOption().
  */
 async function selectBiocharProduct(page: Page, productId: string) {
-  await page
-    .locator('[role="dialog"]')
-    .getByTestId("entity-select-trigger")
-    .click();
-  await page.waitForSelector('[data-testid="entity-select-listbox"]', {
-    timeout: 10000,
-  });
-  await page.getByTestId(`entity-option-${productId}`).click();
+  await selectEntity(page, "Biochar Product", productId);
 }
 
 // ============================================

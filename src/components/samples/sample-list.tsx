@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate, PencilSimple, Trash } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
@@ -200,6 +200,21 @@ export function SampleList() {
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
+  useEffect(() => {
+    if (!focusedSampleId) return;
+    if (focusedSample.error || (focusedSample.isSuccess && !focusedSample.data)) {
+      setFocusedSampleId(null);
+      toast.error("Linked sample could not be opened");
+    }
+  }, [
+    focusedSample.data,
+    focusedSample.error,
+    focusedSample.isSuccess,
+    focusedSampleId,
+    setFocusedSampleId,
+    toast,
+  ]);
+
   const deepLinkedSideSheet =
     focusedSampleId && focusedSample.data
       ? ({ mode: "view", entity: focusedSample.data } as const)

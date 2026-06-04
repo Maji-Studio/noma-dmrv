@@ -110,6 +110,7 @@ function getStoredPreviewSummary(ctx: RemovalCertifyContext) {
     new Set(previews.flatMap((preview) => preview.missingInputs)),
   );
   const isComplete =
+    ctx.memberBatches.length > 0 &&
     previews.length === ctx.memberBatches.length &&
     previews.every((preview) => preview.co2eStoredTonnes != null);
   const total = isComplete
@@ -124,14 +125,19 @@ function buildTransportLegActionHref(
   cat: TransportCategory,
 ) {
   const meta = CATEGORY_META[cat];
-  const entityId = ctx.transportCoverage[cat].entityIds[0];
+  const coverage = ctx.transportCoverage[cat];
+  const legId = coverage.legIds[0];
+  const entityId = legId
+    ? coverage.firstLegEntityId
+    : coverage.entityIds[0];
   if (!entityId) return null;
 
   const params = new URLSearchParams({
     facility: ctx.facilityId,
     [meta.queryKey]: entityId,
-    transportLeg: "create",
+    transportLeg: legId ? "edit" : "create",
   });
+  if (legId) params.set("transportLegId", legId);
 
   return `${meta.route}?${params.toString()}`;
 }

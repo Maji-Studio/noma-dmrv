@@ -85,6 +85,9 @@ export {
 // Server action expects a flat subset of StorageLocationFormData.
 // ============================================
 
+const FORMULATION_PRODUCT_BIN_MESSAGE =
+  "formulationId is only allowed for product_bin storageMethod";
+
 export const storageLocationQuickAddSchema = z.object({
   name: z
     .string()
@@ -101,6 +104,14 @@ export const storageLocationQuickAddSchema = z.object({
     .nullable(),
   // Product bins only — restricts the bin to one formulation (empty = pure biochar)
   formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.formulationId && data.type !== "product_bin") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["formulationId"],
+      message: FORMULATION_PRODUCT_BIN_MESSAGE,
+    });
+  }
 });
 
 export type StorageLocationQuickAddData = z.infer<typeof storageLocationQuickAddSchema>;

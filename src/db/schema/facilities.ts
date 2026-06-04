@@ -88,6 +88,12 @@ export const storageLocations = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
+  (table) => [
+    check(
+      'storage_locations_formulation_product_bin_only',
+      sql`${table.type} = 'product_bin' or ${table.formulationId} is null`
+    ),
+  ],
 );
 
 // ============================================

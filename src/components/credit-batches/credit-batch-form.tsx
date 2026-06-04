@@ -411,7 +411,9 @@ export function CreditBatchForm({
         <div className="p-16 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
           <p className="body-caption text-[var(--color-text-tertiary)]">
             Durability inputs are resolved from linked lab samples and soil
-            temperature when the CO2e preview is built.
+            temperature for most CO2e previews. The <code>1000_year</code>{" "}
+            preview is returned as pending by the preview builder and may not
+            be populated automatically.
           </p>
         </div>
       </div>

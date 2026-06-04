@@ -76,7 +76,7 @@ export const creditBatches = pgTable(
     // Reactor traceable via FK chain: CreditBatch → Application → Delivery → BiocharProduct → ProductionRun → Reactor
     startDate: date('start_date').notNull(),
     endDate: date('end_date').notNull(),
-    certifier: text('certifier').notNull().default('isometric'),
+    certifier: text('certifier'),
     registry: text('registry'), // e.g., "Isometric"
 
     // --- Credit Details (Isometric Protocol Section 8) ---
