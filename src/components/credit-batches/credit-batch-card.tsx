@@ -30,13 +30,8 @@ export function CreditBatchCard({
   onDelete,
 }: CreditBatchCardProps) {
   const statusColors = getStatusColor(creditBatch.status as CreditBatchStatus);
-
-  const netCo2eRemoval =
-    creditBatch.totalCo2eStoredTons != null
-      ? creditBatch.totalCo2eStoredTons -
-        (creditBatch.totalCo2eEmissionsTons ?? 0) -
-        (creditBatch.totalCo2eCounterfactualTons ?? 0)
-      : null;
+  const co2eStored = creditBatch.co2eStoredPreview.co2eStoredTonnes;
+  const hasPendingCo2e = creditBatch.co2eStoredPreview.missingInputs.length > 0;
 
   return (
     <article
@@ -98,26 +93,23 @@ export function CreditBatchCard({
             </p>
             <p
               className={`title-heading-3 ${
-                creditBatch.totalCo2eStoredTons != null
+                co2eStored != null
                   ? "text-[var(--color-signal-green)]"
                   : ""
               }`}
             >
-              {creditBatch.totalCo2eStoredTons != null
-                ? `${creditBatch.totalCo2eStoredTons.toFixed(2)} t`
-                : "—"}
+              {co2eStored != null ? `${co2eStored.toFixed(2)} t` : "—"}
             </p>
           </div>
         </div>
 
-        {/* Net removal line */}
-        {netCo2eRemoval != null && creditBatch.totalCo2eStoredTons != null && (
+        {hasPendingCo2e && (
           <div className="flex items-center justify-between border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] px-12 py-8">
             <span className="body-caption text-[var(--color-text-tertiary)]">
-              Net CO2e Removal
+              CO2e Preview
             </span>
-            <span className="body-small font-medium text-[var(--color-signal-green)]">
-              {netCo2eRemoval.toFixed(2)} t
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">
+              Pending inputs
             </span>
           </div>
         )}

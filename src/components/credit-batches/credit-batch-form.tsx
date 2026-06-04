@@ -3,15 +3,14 @@
  * Reusable credit batch form with React Hook Form integration
  *
  * Form sections:
- * 1. Overview — startDate, endDate, certifier
+ * 1. Overview — startDate, endDate
  * 2. Applications — Auto-matched by date range + facility (M:M via credit_batch_applications)
- * 3. Durability — Toggle 200-year vs 1000-year with conditional fields
- * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool % (read-only)
+ * 3. Durability — Toggle 200-year vs 1000-year
+ * 4. GHG Accounting — emissions/counterfactual, buffer pool % (read-only)
  * 5. Verification — registry, weight, value, currency (read-only)
  */
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -184,7 +183,6 @@ export interface ApplicationOption {
   applicationDate: Date | null;
   biocharAppliedDryTons: number | null;
   fieldIdentifier: string | null;
-  co2eStoredTonnes: number | null;
   facilityId: string;
 }
 
@@ -237,21 +235,11 @@ export function CreditBatchForm({
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
-      certifier: "isometric",
       applicationIds: creditBatch?.applicationIds ?? [],
       durabilityOption:
         (creditBatch?.durabilityOption as DurabilityOption) ??
         (selectedFacility?.defaultDurabilityOption as DurabilityOption) ??
         "200_year",
-      hToCorgRatio: creditBatch?.hToCorgRatio ?? undefined,
-      meanRandomReflectancePercent:
-        creditBatch?.meanRandomReflectancePercent ?? undefined,
-      stdRandomReflectance: creditBatch?.stdRandomReflectance ?? undefined,
-      meanNonReactiveCarbonPercent:
-        creditBatch?.meanNonReactiveCarbonPercent ?? undefined,
-      stdNonReactiveCarbonPercent:
-        creditBatch?.stdNonReactiveCarbonPercent ?? undefined,
-      fDurableCalculated: creditBatch?.fDurableCalculated ?? undefined,
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
   });
@@ -269,26 +257,6 @@ export function CreditBatchForm({
       setValue("durabilityOption", selectedFacility.defaultDurabilityOption as DurabilityOption);
     }
   }, [creditBatch, selectedFacility?.defaultDurabilityOption, setValue]);
-
-  // Watch durability option for conditional rendering
-  const durabilityOption = useWatch({
-    control,
-    name: "durabilityOption",
-    defaultValue: "200_year",
-  });
-
-  // Clear opposite durability fields when option changes
-  useEffect(() => {
-    if (durabilityOption === "200_year") {
-      setValue("meanRandomReflectancePercent", undefined);
-      setValue("stdRandomReflectance", undefined);
-      setValue("meanNonReactiveCarbonPercent", undefined);
-      setValue("stdNonReactiveCarbonPercent", undefined);
-    } else if (durabilityOption === "1000_year") {
-      setValue("hToCorgRatio", undefined);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durabilityOption]);
 
   // Watch dates and facilityId for auto-matching
   const watchedStartDate = useWatch({ control, name: "startDate" });
@@ -316,16 +284,14 @@ export function CreditBatchForm({
         return d >= startDateStr && d <= endDateStr;
       })
     : [];
+  const matchedAppIds = matchedApps.map((a) => a.id).join(",");
 
   // Sync matched IDs into form state for submission
   useEffect(() => {
-    setValue("applicationIds", matchedApps.map((a) => a.id), { shouldValidate: true });
-  }, [
-    // Use stringified IDs for stable deps instead of arrays
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    matchedApps.map((a) => a.id).join(","),
-    setValue,
-  ]);
+    setValue("applicationIds", matchedAppIds ? matchedAppIds.split(",") : [], {
+      shouldValidate: true,
+    });
+  }, [matchedAppIds, setValue]);
 
   // Overlap detection (client-side warning) — uses watched facilityId
   const overlappingBatch = hasBothDates
@@ -389,20 +355,6 @@ export function CreditBatchForm({
           </div>
         )}
 
-        <FormField
-          id="certifier"
-          label="Certifier"
-          error={errors.certifier?.message}
-        >
-          <input type="hidden" value="isometric" {...register("certifier")} />
-          <FormInput
-            id="certifier"
-            value="Isometric"
-            readOnly
-            disabled
-            error={!!errors.certifier}
-          />
-        </FormField>
       </div>
 
       {/* ── Matched Applications ── */}
@@ -428,9 +380,6 @@ export function CreditBatchForm({
             )}
             <div className="flex items-center gap-12 ml-auto shrink-0">
               <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">Applied {formatTons(app.biocharAppliedDryTons)}</span>
-              {app.co2eStoredTonnes != null && (
-                <span className="text-[10px] uppercase tracking-wider font-medium text-[var(--color-signal-green)]">CO₂e {formatTons(app.co2eStoredTonnes)}</span>
-              )}
             </div>
           </div>
         ))}
@@ -459,146 +408,12 @@ export function CreditBatchForm({
           />
         </FormField>
 
-        {/* Conditional fields for 200-year */}
-        {durabilityOption === "200_year" && (
-          <div className="p-24 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] space-y-16">
-            <p className="body-caption font-medium text-[var(--color-text-secondary)]">
-              200-Year Durability (Woolf et al., 2021)
-            </p>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              F_durable,200 = min(0.95, 1 - [c + (a + b*ln(T_soil))*H/C_org])
-            </p>
-            <FormField
-              id="hToCorgRatio"
-              label="H:Corg Ratio"
-              error={errors.hToCorgRatio?.message}
-              helperText="Hydrogen to organic carbon ratio (0-1)"
-            >
-              <FormInput
-                id="hToCorgRatio"
-                type="number"
-                step="0.001"
-                placeholder="e.g., 0.4"
-                disabled={isSubmitting}
-                error={!!errors.hToCorgRatio}
-                {...register("hToCorgRatio", {
-                  setValueAs: numericValue,
-                })}
-              />
-            </FormField>
-          </div>
-        )}
-
-        {/* Conditional fields for 1000-year */}
-        {durabilityOption === "1000_year" && (
-          <div className="p-24 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] space-y-16">
-            <p className="body-caption font-medium text-[var(--color-text-secondary)]">
-              1000-Year Durability (Sanei et al., 2024)
-            </p>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              Based on petrographic analysis (R_0) and TGA (non-reactive carbon)
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-              <FormField
-                id="meanRandomReflectancePercent"
-                label="Mean R_0 Reflectance (%)"
-                error={errors.meanRandomReflectancePercent?.message}
-                helperText="Mean random reflectance from samples"
-              >
-                <FormInput
-                  id="meanRandomReflectancePercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 2.5"
-                  disabled={isSubmitting}
-                  error={!!errors.meanRandomReflectancePercent}
-                  {...register("meanRandomReflectancePercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="stdRandomReflectance"
-                label="Std Dev R_0"
-                error={errors.stdRandomReflectance?.message}
-                helperText="Standard deviation"
-              >
-                <FormInput
-                  id="stdRandomReflectance"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 0.3"
-                  disabled={isSubmitting}
-                  error={!!errors.stdRandomReflectance}
-                  {...register("stdRandomReflectance", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-              <FormField
-                id="meanNonReactiveCarbonPercent"
-                label="Mean Non-Reactive Carbon (%)"
-                error={errors.meanNonReactiveCarbonPercent?.message}
-                helperText="Mean from TGA analysis"
-              >
-                <FormInput
-                  id="meanNonReactiveCarbonPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 85.0"
-                  disabled={isSubmitting}
-                  error={!!errors.meanNonReactiveCarbonPercent}
-                  {...register("meanNonReactiveCarbonPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="stdNonReactiveCarbonPercent"
-                label="Std Dev Non-Reactive Carbon"
-                error={errors.stdNonReactiveCarbonPercent?.message}
-                helperText="Standard deviation"
-              >
-                <FormInput
-                  id="stdNonReactiveCarbonPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 2.5"
-                  disabled={isSubmitting}
-                  error={!!errors.stdNonReactiveCarbonPercent}
-                  {...register("stdNonReactiveCarbonPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-            </div>
-          </div>
-        )}
-
-        <FormField
-          id="fDurableCalculated"
-          label="Calculated Durability Fraction"
-          error={errors.fDurableCalculated?.message}
-          helperText="F_durable (max 0.95)"
-        >
-          <FormInput
-            id="fDurableCalculated"
-            type="number"
-            step="0.001"
-            placeholder="e.g., 0.85"
-            disabled={isSubmitting}
-            error={!!errors.fDurableCalculated}
-            {...register("fDurableCalculated", {
-              setValueAs: numericValue,
-            })}
-          />
-        </FormField>
+        <div className="p-16 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            Durability inputs are resolved from linked lab samples and soil
+            temperature when the CO2e preview is built.
+          </p>
+        </div>
       </div>
 
       {/* ── GHG Accounting (read-only) ── */}
@@ -608,25 +423,11 @@ export function CreditBatchForm({
           <ReadOnlyBadge />
         </div>
         <SectionHint>
-          Populated during Isometric verification. Net CO2e = Stored - Emissions - Counterfactual
+          Populated during Isometric verification. CO2e stored is previewed in
+          the credit-batch detail view.
         </SectionHint>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
-          <FormField
-            id="totalCo2eStoredTons"
-            label="CO2e Stored (tons)"
-            helperText="Total carbon durably stored"
-          >
-            <FormInput
-              id="totalCo2eStoredTons"
-              type="number"
-              step="0.01"
-              placeholder="—"
-              disabled
-              value={creditBatch?.totalCo2eStoredTons ?? ""}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="totalCo2eEmissionsTons"
             label="CO2e Emissions (tons)"

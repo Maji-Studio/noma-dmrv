@@ -1,0 +1,2 @@
+ALTER TABLE "credit_batches" DROP CONSTRAINT "credit_batches_200_year_requires_h_to_corg";--> statement-breakpoint
+ALTER TABLE "credit_batches" DROP CONSTRAINT "credit_batches_1000_year_requires_reflectance_and_non_reactive_carbon";
