@@ -231,6 +231,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
         batches={removals.data?.ungroupedBatches ?? []}
         removals={removals.data?.removals ?? []}
         isLoading={removals.isLoading}
+        isError={removals.isError}
       />
 
       {selected && data && (
@@ -250,12 +251,26 @@ function UngroupedSection({
   batches,
   removals,
   isLoading,
+  isError,
 }: {
   batches: MemberCreditBatch[];
   removals: RemovalHubEntry[];
   isLoading: boolean;
+  isError: boolean;
 }) {
   if (isLoading) return null;
+  // A failed fetch must not masquerade as "every credit batch is assigned" —
+  // the empty state below is only correct on a successful, empty response.
+  if (isError) {
+    return (
+      <section className="flex flex-col gap-16">
+        <h2 className="title-heading-3">Ungrouped credit batches</h2>
+        <p className="body-small text-[var(--clr-red)]" role="alert">
+          Couldn&apos;t load ungrouped credit batches. Try refreshing the page.
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="flex flex-col gap-16">
       <h2 className="title-heading-3">

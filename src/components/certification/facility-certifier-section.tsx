@@ -1,13 +1,14 @@
 /**
  * FacilityCertifierSection
- * Surfaces a facility's Isometric project mapping. Two modes, gated by
- * `canManage`:
- *  - `canManage` (default): full management view — Edit / Unlink / Link
- *    controls backed by the heavier management loader (available projects,
- *    templates, and cross-facility link hints from the Isometric API).
+ * Surfaces a facility's Isometric project mapping. Two modes, gated by the
+ * required `canManage` prop:
+ *  - manage: full management view — Edit / Unlink / Link controls backed by the
+ *    heavier management loader (available projects, templates, and
+ *    cross-facility link hints from the Isometric API).
  *  - read-only: a DB-only summary (no management payload on the wire) with no
  *    controls — for viewers who can read the current link but not change it.
- * Mounts in the facility EntitySideSheet and in /certification/settings.
+ * Mounts in /certification/settings (passing `canManage={isAdmin}`). The
+ * facility side-sheet shows the lighter `FacilityCertifierSummary` instead.
  */
 "use client";
 
@@ -33,10 +34,10 @@ interface FacilityCertifierSectionProps {
    * Whether the viewer can change the link. Gates BOTH the management controls
    * and the heavier management loader — when false, only the read-only summary
    * is fetched (the available-project list, template options, and link hints
-   * never reach a non-managing viewer). Defaults true so the facility
-   * side-sheet's existing mount is unchanged.
+   * never reach a non-managing viewer). Required: every caller makes the
+   * read-vs-manage choice explicitly (Settings passes `isAdmin`).
    */
-  canManage?: boolean;
+  canManage: boolean;
   /**
    * Drop the section's own border-top wrapper and "Certification" title when
    * the host already provides a titled card (e.g. the Settings "Registry
@@ -47,7 +48,7 @@ interface FacilityCertifierSectionProps {
 
 export function FacilityCertifierSection({
   facilityId,
-  canManage = true,
+  canManage,
   embedded = false,
 }: FacilityCertifierSectionProps) {
   return canManage ? (

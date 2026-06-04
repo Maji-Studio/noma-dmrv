@@ -19,7 +19,12 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { EnvBanner } from "./env-banner";
 import { Field, Section } from "./panel-layout";
 
-const SETTINGS_HREF = "/certification/settings";
+// Carry the viewed facility through to Settings — this summary renders in the
+// facility side-sheet, which can show a facility other than the sidebar-selected
+// one. Without `?facility=`, Settings would fall back to the localStorage
+// facility and the operator would manage the wrong link.
+const settingsHref = (facilityId: string) =>
+  `/certification/settings?facility=${facilityId}`;
 
 export function FacilityCertifierSummary({
   facilityId,
@@ -34,14 +39,14 @@ export function FacilityCertifierSummary({
         <div className="flex items-center justify-between gap-12">
           <h3 className="title-chapter-title">Isometric Certify</h3>
           <Link
-            href={SETTINGS_HREF}
+            href={settingsHref(facilityId)}
             className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
           >
             Manage in Certification → Settings ↗
           </Link>
         </div>
 
-        <SummaryBody query={query} />
+        <SummaryBody query={query} facilityId={facilityId} />
       </div>
     </Section>
   );
@@ -49,8 +54,10 @@ export function FacilityCertifierSummary({
 
 function SummaryBody({
   query,
+  facilityId,
 }: {
   query: ReturnType<typeof useFacilityCertifierSummary>;
+  facilityId: string;
 }) {
   if (query.isLoading) {
     return (
@@ -76,7 +83,7 @@ function SummaryBody({
         <p className="body-small text-[var(--color-text-secondary)]">
           This facility isn&apos;t linked to an Isometric project. Link it in{" "}
           <Link
-            href={SETTINGS_HREF}
+            href={settingsHref(facilityId)}
             className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"
           >
             Certification → Settings
