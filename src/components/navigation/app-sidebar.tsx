@@ -24,6 +24,8 @@ import {
   MapPin,
   Certificate,
   SealCheck,
+  Stack,
+  FileText,
   TestTube,
   ListChecks,
   Lightning,
@@ -42,6 +44,13 @@ interface NavItem {
   icon: ElementType;
   /** Skip appending the `?facility=` query param (e.g. admin pages with their own selectors). */
   skipFacilityParam?: boolean;
+  /**
+   * Match the active state on the exact path only, not the `href/` prefix.
+   * Needed for section-root items whose href is a prefix of their siblings
+   * (e.g. Certification → Overview at `/certification`, a prefix of
+   * `/certification/removals`), so the root doesn't stay highlighted on them.
+   */
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -109,13 +118,17 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    // Single first-class entry (ADR 0007); the in-page CertificationTabBar
-    // handles Overview / Removals / GHG Statements / Settings sub-nav. Landing
-    // on `/certification` opens the Overview work queue. Titleless — it's a
-    // top-level destination, not a group of links.
+    // First-class section (ADR 0007, amended 2026-06-04): the four sub-routes
+    // are surfaced directly in the sidebar — mirroring the Verification group —
+    // rather than behind an in-page tab bar. Overview is `exact` because its
+    // href (`/certification`) is a prefix of every sibling.
+    title: "Certification",
     accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification", label: "Certification", icon: SealCheck },
+      { href: "/certification", label: "Overview", icon: SealCheck, exact: true },
+      { href: "/certification/removals", label: "Removals", icon: Stack },
+      { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileText },
+      { href: "/certification/settings", label: "Settings", icon: GearSix },
     ],
   },
 ];
@@ -260,9 +273,10 @@ export function AppSidebar() {
                   <SectionLabel title={section.title} accent={accent} />
                 )}
                 {section.items.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`);
                   return (
                     <NavLink
                       key={item.href + item.label}

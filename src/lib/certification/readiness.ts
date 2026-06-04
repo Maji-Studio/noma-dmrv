@@ -12,7 +12,11 @@
  * unit-tested — Stage 4 migrates the panel/pre-flight onto it.
  */
 
-import { deriveRemovalStatus, type LocalSubmissionStatus } from "./status";
+import {
+  BLOCKING_SUBMISSION_STATUSES,
+  deriveRemovalStatus,
+  type LocalSubmissionStatus,
+} from "./status";
 
 export type RemovalReadinessState =
   | "submitted" // done from noma's side — nothing to action
@@ -56,17 +60,6 @@ export interface RemovalReadiness {
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
-
-// Local-status statuses that block a regroup, mirroring the server-side
-// `BLOCKING_SUBMISSION_STATUSES` in `data-access/certification.ts` (declared
-// locally to keep this module client-safe — no DB-schema runtime import). A
-// removal carrying one of these has a live remote dependency, so its
-// membership is frozen until it is superseded (ADR 0003).
-const REGROUP_BLOCKING_STATUSES: readonly LocalSubmissionStatus[] = [
-  "draft",
-  "submitted",
-  "accepted",
-];
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -250,5 +243,5 @@ export function canRegroupRemoval({
 }): boolean {
   if (lockInFlight) return false;
   if (local === null) return true;
-  return !REGROUP_BLOCKING_STATUSES.includes(local);
+  return !BLOCKING_SUBMISSION_STATUSES.includes(local);
 }

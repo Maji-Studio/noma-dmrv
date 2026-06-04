@@ -8,7 +8,7 @@ this doc does **not** repeat them:
 
 - **Plan:** `~/.claude/plans/i-d-like-to-remodel-scalable-moler.md`
   (8 locked decisions, status model, IA/routes, surfaces, staged rollout, risks).
-- **Prior handoff (Stage 3):** `docs/plans/2026-06-03-certification-remodel-stage3-handoff.md`
+- **Prior handoff (Stage 3):** `docs/archive/2026-06-03-certification-remodel-stage3-handoff.md`
   — superseded by this file; still the reference for Stages 1–3 detail.
 - **Domain truth:** `CONTEXT.md` (glossary) + `docs/adr/0003`–`0006`. **Stack/rules:** `.claude/CLAUDE.md`.
 - **Branch:** `chore/refactor-certify-flow` (NB: the Stage-3 doc said

@@ -1,10 +1,22 @@
-# Certification is a first-class tabbed workspace; submission consolidates into one entry point
+# Certification is a first-class workspace; submission consolidates into one entry point
 
 > **Status: Accepted, delivered** (2026-06-03). Reverses the dual-entry of
 > ADR 0003 (credit-batch Certify panel as a second submit surface). Builds on
 > ADR 0004 (GHG Statement as an independent, period-anchored artifact) and
 > ADR 0006 (telemetry as its own sub-status). Does **not** change the submission
 > domain model — only where submission lives in the UI and how status is read.
+
+> **Amendment (2026-06-04) — sidebar nav, no in-page tabs.** The in-page
+> `CertificationTabBar` was removed; the four sub-routes (Overview · Removals ·
+> GHG Statements · Settings) are promoted back to a titled **Certification**
+> group in the left sidebar, mirroring the Verification section, per operator
+> preference for one persistent nav. This changes only the *nav topology* of
+> decisions 1 and 5 below — a sidebar group instead of a single entry + tab bar.
+> Everything else stands unchanged: the workspace routes, the work-queue
+> Overview, the one submit entry point (decision 2), the shared status model
+> (decision 3), and Settings consolidation (decision 4). Overview's sidebar item
+> matches on its exact path (`/certification`) since that href prefixes every
+> sibling route.
 
 ## Context
 

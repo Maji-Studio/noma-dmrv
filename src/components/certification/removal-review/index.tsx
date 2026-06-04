@@ -22,10 +22,8 @@ import {
   buildRemovalPreflightChecklist,
   canRegroupRemoval,
   deriveRemovalReadiness,
-  type RemovalReadinessFacts,
 } from "@/lib/certification/readiness";
-import type { LocalSubmissionStatus } from "@/lib/certification/status";
-import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { Button } from "@/components/ui";
 import { AssembleStep } from "./assemble-step";
 import { ReviewStep } from "./review-step";
@@ -48,32 +46,6 @@ const STEP_KEYS = [
   "submit",
 ] as const;
 type StepKey = (typeof STEP_KEYS)[number];
-
-// Maps the UI context's facts onto the shared readiness classifier — the same
-// projection the server-owned Overview loader builds, so a removal's verdict is
-// identical whether it's read here or in the queue.
-function buildFacts(ctx: RemovalCertifyContext): RemovalReadinessFacts {
-  const lockInFlight = ctx.latestSubmission
-    ? isLockedInFlight(ctx.latestSubmission)
-    : false;
-  return {
-    local: (ctx.latestSubmission?.status ?? null) as LocalSubmissionStatus | null,
-    lockInFlight,
-    hasMapping: !!ctx.mapping,
-    hasDefaultTemplate: !!ctx.defaultTemplate,
-    missingDefaultTemplateId: ctx.missingDefaultTemplateId,
-    unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
-    hasSubmittableRuns: ctx.hasSubmittableRuns,
-    requiredTransport: ctx.requiredTransportCategories.map((category) => {
-      const bucket = ctx.transportCoverage[category];
-      return {
-        category,
-        count: bucket.count,
-        hasAggregationWarning: bucket.aggregationWarning !== null,
-      };
-    }),
-  };
-}
 
 export function RemovalReview({ removalId }: { removalId: string }) {
   const ctxQuery = useRemovalCertifyContext(removalId);
@@ -152,7 +124,7 @@ function Flow({
   step: StepKey;
   onStep: (key: StepKey) => void;
 }) {
-  const facts = buildFacts(ctx);
+  const facts = toRemovalReadinessFacts(ctx);
   const readiness = deriveRemovalReadiness(facts);
   const checklist = buildRemovalPreflightChecklist(facts);
   const regroupable = canRegroupRemoval({

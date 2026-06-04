@@ -20,13 +20,12 @@ import {
 } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
-import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import {
-  buildRunSummary,
+  buildMassAccounting,
   EMPTY_RUN_SUMMARY,
   type RemovalRunSummary,
-} from "@/lib/certification/run-summary";
+} from "@/lib/certification/mass-accounting";
 import type { DerivedStatus } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
@@ -232,7 +231,7 @@ async function resolveScopeForCreditBatch(
 }
 
 // Resolves the removal scope from a removal id — every member credit batch.
-async function resolveScopeForRemoval(
+export async function resolveScopeForRemoval(
   userId: string,
   removalId: string,
 ): Promise<RemovalScope> {
@@ -256,34 +255,6 @@ async function resolveScopeForRemoval(
     removal,
     memberBatches,
   };
-}
-
-// Per-run applied-biochar fraction: applied dry kg reaching this removal's
-// applications ÷ the run's total biochar output. Linear mass allocation —
-// `aggregateProductionRuns` clamps the result into [0, 1].
-function buildAttribution(
-  lineages: ChainOfCustodyData[],
-  runs: ProductionRunWithSamples[],
-): Map<string, number> {
-  const appliedKgByRun = new Map<string, number>();
-  for (const lineage of lineages) {
-    const runId = lineage.productionRun?.id;
-    if (!runId) continue;
-    const appliedTons = lineage.application.biocharAppliedDryTons ?? 0;
-    appliedKgByRun.set(
-      runId,
-      (appliedKgByRun.get(runId) ?? 0) + tonnesToKg(appliedTons),
-    );
-  }
-  const attribution = new Map<string, number>();
-  for (const run of runs) {
-    const appliedKg = appliedKgByRun.get(run.id) ?? 0;
-    const output = run.biocharDryMassKg;
-    // A null/zero output can't yield a fraction — fall back to full
-    // attribution; aggregateProductionRuns warns separately on null mass.
-    attribution.set(run.id, output && output > 0 ? appliedKg / output : 1);
-  }
-  return attribution;
 }
 
 // Resolves the GHG Statement a removal rolls into (via the persisted
@@ -315,72 +286,53 @@ async function loadLinkedGhgStatementStatus(
   };
 }
 
-// Builds the full submission context for one removal scope: resolves the
-// Isometric mapping/template/blueprints, walks every member batch's
-// application lineage into a deduped union of production runs, and computes
-// the removal-level transport coverage + applied-biochar attribution.
-async function buildRemovalContext(
+// The facility-scoped half of a removal's submission context: the Isometric
+// mapping + (when it resolves cleanly) the project / default template /
+// referenced component blueprints, and the transport categories that template
+// requires. These depend only on the facility, so the Overview work queue
+// resolves them ONCE and feeds them to every removal's `buildRemovalContext`
+// instead of re-pulling the same template/blueprint data per row.
+export interface FacilityCertifierFacts {
+  mapping: CertifierProjectRow | null;
+  project: IsometricProject | null;
+  defaultTemplate: IsometricRemovalTemplate | null;
+  missingDefaultTemplateId: string | null;
+  blueprintsForTemplate: IsometricComponentBlueprint[];
+  unresolvedBlueprintKeys: string[];
+  requiredTransportCategories: TransportCategory[];
+}
+
+// Facility facts before any mapping resolves — also the shape every
+// not-fully-configured short-circuit carries (the template-dependent fields
+// stay empty).
+const UNRESOLVED_FACILITY_FACTS: Omit<
+  FacilityCertifierFacts,
+  "mapping" | "project"
+> = {
+  defaultTemplate: null,
+  missingDefaultTemplateId: null,
+  blueprintsForTemplate: [],
+  unresolvedBlueprintKeys: [],
+  requiredTransportCategories: [],
+};
+
+// Resolves the facility-scoped certifier facts: the Isometric mapping and, when
+// it resolves cleanly, the project / default template / referenced component
+// blueprints + the template's required transport categories. Short-circuits the
+// same way the single-pass builder did — no mapping skips every remote list; no
+// default template skips the blueprint catalog — so the remote-call fan-out per
+// facility is unchanged.
+export async function loadFacilityCertifierFacts(
   userId: string,
-  scope: RemovalScope,
-): Promise<RemovalSubmissionContext> {
-  const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
-  const memberBatches: MemberCreditBatch[] = scope.memberBatches.map((b) => ({
-    id: b.id,
-    code: b.code,
-  }));
-
-  // The removal's own submission + its linked GHG Statement status resolve from
-  // the scope alone, so load them up-front: every early-return path then
-  // carries the real values rather than a placeholder.
-  const [latestSubmission, linkedGhgStatement] = await Promise.all([
-    scope.removalId
-      ? getLatestSubmission(userId, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: REMOVAL_SUBMISSION_TYPE,
-          localEntityType: REMOVAL_ENTITY_TYPE,
-          localEntityId: scope.removalId,
-        })
-      : Promise.resolve(null),
-    loadLinkedGhgStatementStatus(userId, scope.removal),
-  ]);
-
-  const base = {
-    facilityId: scope.facilityId,
-    removalId: scope.removalId,
-    memberBatches,
-    latestSubmission,
-    linkedGhgStatement,
-    isProduction,
-    lineages: [] as ChainOfCustodyData[],
-    runs: [] as ProductionRunWithSamples[],
-    attributionByRunId: new Map<string, number>(),
-    transportLegs: {
-      feedstock: [],
-      biochar: [],
-      sample: [],
-    } as TransportLegsByCategory,
-    transportCoverage: EMPTY_COVERAGE,
-    requiredTransportCategories: [] as TransportCategory[],
-    // No runs resolved on any early-return path (no mapping / template / runs).
-    hasSubmittableRuns: false,
-    runSummary: EMPTY_RUN_SUMMARY,
-  };
-
+  facilityId: string,
+): Promise<FacilityCertifierFacts> {
   const mapping = await getCertifierProjectByFacility(
     userId,
-    scope.facilityId,
+    facilityId,
     ISOMETRIC_PROVIDER,
   );
   if (!mapping) {
-    return {
-      ...base,
-      mapping: null,
-      project: null,
-      defaultTemplate: null,
-      missingDefaultTemplateId: null,
-      blueprintsForTemplate: [],
-      unresolvedBlueprintKeys: [],
-    };
+    return { mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
 
   const [projects, templates] = await Promise.all([
@@ -391,28 +343,17 @@ async function buildRemovalContext(
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
 
   if (!mapping.defaultRemovalTemplateId) {
-    return {
-      ...base,
-      mapping,
-      project,
-      defaultTemplate: null,
-      missingDefaultTemplateId: null,
-      blueprintsForTemplate: [],
-      unresolvedBlueprintKeys: [],
-    };
+    return { mapping, project, ...UNRESOLVED_FACILITY_FACTS };
   }
 
   const defaultTemplate =
     templates.find((t) => t.id === mapping.defaultRemovalTemplateId) ?? null;
   if (!defaultTemplate) {
     return {
-      ...base,
       mapping,
       project,
-      defaultTemplate: null,
+      ...UNRESOLVED_FACILITY_FACTS,
       missingDefaultTemplateId: mapping.defaultRemovalTemplateId,
-      blueprintsForTemplate: [],
-      unresolvedBlueprintKeys: [],
     };
   }
 
@@ -435,23 +376,73 @@ async function buildRemovalContext(
     else unresolvedBlueprintKeys.push(key);
   }
 
-  const requiredTransportCategories =
-    deriveRequiredTransportCategories(defaultTemplate);
+  return {
+    mapping,
+    project,
+    defaultTemplate,
+    missingDefaultTemplateId: null,
+    blueprintsForTemplate,
+    unresolvedBlueprintKeys,
+    requiredTransportCategories:
+      deriveRequiredTransportCategories(defaultTemplate),
+  };
+}
+
+// Composes one removal's full submission context from its resolved scope and
+// the facility-scoped certifier facts (loaded once per facility, passed in).
+// The facility half spreads straight onto the context; this only adds the
+// removal-level half — submission status, member-batch lineage, the deduped
+// production-run union, transport coverage, and mass accounting.
+export async function buildRemovalContext(
+  userId: string,
+  scope: RemovalScope,
+  facilityFacts: FacilityCertifierFacts,
+): Promise<RemovalSubmissionContext> {
+  const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
+  const memberBatches: MemberCreditBatch[] = scope.memberBatches.map((b) => ({
+    id: b.id,
+    code: b.code,
+  }));
+
+  // The removal's own submission + its linked GHG Statement status resolve from
+  // the scope alone, so load them up-front: every short-circuit path then
+  // carries the real values rather than a placeholder.
+  const [latestSubmission, linkedGhgStatement] = await Promise.all([
+    scope.removalId
+      ? getLatestSubmission(userId, {
+          provider: ISOMETRIC_PROVIDER,
+          submissionType: REMOVAL_SUBMISSION_TYPE,
+          localEntityType: REMOVAL_ENTITY_TYPE,
+          localEntityId: scope.removalId,
+        })
+      : Promise.resolve(null),
+    loadLinkedGhgStatementStatus(userId, scope.removal),
+  ]);
 
   // Walk every member batch's applications into one deduped run union.
   const applicationIds = Array.from(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
-  if (applicationIds.length === 0) {
+
+  // Nothing to submit unless the facility resolves a clean default template AND
+  // the removal carries applications — both gate the lineage walk. Either way
+  // the removal-level half is empty; the facility half is whatever resolved.
+  if (!facilityFacts.defaultTemplate || applicationIds.length === 0) {
     return {
-      ...base,
-      mapping,
-      project,
-      defaultTemplate,
-      missingDefaultTemplateId: null,
-      blueprintsForTemplate,
-      unresolvedBlueprintKeys,
-      requiredTransportCategories,
+      facilityId: scope.facilityId,
+      removalId: scope.removalId,
+      ...facilityFacts,
+      memberBatches,
+      transportCoverage: EMPTY_COVERAGE,
+      hasSubmittableRuns: false,
+      runSummary: EMPTY_RUN_SUMMARY,
+      latestSubmission,
+      linkedGhgStatement,
+      isProduction,
+      lineages: [],
+      runs: [],
+      attributionByRunId: new Map<string, number>(),
+      transportLegs: { feedstock: [], biochar: [], sample: [] },
     };
   }
 
@@ -473,22 +464,21 @@ async function buildRemovalContext(
   const entityIds = collectTransportEntityIds(lineages, runs);
   const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
-  const attributionByRunId = buildAttribution(lineages, runs);
+  // One mass-accounting walk: the per-run attribution the submit pipeline
+  // scopes by AND the Review-flow summary, so the two can never diverge.
+  const { attributionByRunId, runSummary } = buildMassAccounting(
+    lineages,
+    runs,
+  );
 
   return {
     facilityId: scope.facilityId,
     removalId: scope.removalId,
-    mapping,
-    project,
-    defaultTemplate,
-    missingDefaultTemplateId: null,
-    blueprintsForTemplate,
-    unresolvedBlueprintKeys,
+    ...facilityFacts,
     memberBatches,
     transportCoverage,
-    requiredTransportCategories,
     hasSubmittableRuns: runs.length > 0,
-    runSummary: buildRunSummary(lineages, runs),
+    runSummary,
     latestSubmission,
     linkedGhgStatement,
     isProduction,
@@ -500,14 +490,19 @@ async function buildRemovalContext(
 }
 
 // Submission-pipeline context keyed by removal id — used by `submitRemoval`.
+// Resolves the scope, then the facility facts for that scope's facility, then
+// composes; the Overview queue reuses `buildRemovalContext` with facility facts
+// loaded once across all of a facility's removals.
 export async function loadRemovalSubmissionContext(
   userId: string,
   removalId: string,
 ): Promise<RemovalSubmissionContext> {
-  return buildRemovalContext(
+  const scope = await resolveScopeForRemoval(userId, removalId);
+  const facilityFacts = await loadFacilityCertifierFacts(
     userId,
-    await resolveScopeForRemoval(userId, removalId),
+    scope.facilityId,
   );
+  return buildRemovalContext(userId, scope, facilityFacts);
 }
 
 function projectUiContext(
@@ -552,7 +547,13 @@ export async function loadCertifyContextForCreditBatchForUser(
   creditBatchId: string,
 ): Promise<RemovalCertifyContext> {
   const scope = await resolveScopeForCreditBatch(userId, creditBatchId);
-  return projectUiContext(await buildRemovalContext(userId, scope));
+  const facilityFacts = await loadFacilityCertifierFacts(
+    userId,
+    scope.facilityId,
+  );
+  return projectUiContext(
+    await buildRemovalContext(userId, scope, facilityFacts),
+  );
 }
 
 export async function loadCertifyContextForCreditBatch(

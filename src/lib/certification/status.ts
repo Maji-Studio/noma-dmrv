@@ -36,6 +36,25 @@ export type LocalSubmissionStatus =
   | "rejected"
   | "superseded";
 
+/**
+ * Local submission statuses that carry a live remote dependency, and so freeze
+ * what their removal represents: while one is present the removal's credit-batch
+ * membership can't be regrouped and its facility's certifier mapping can't be
+ * repointed/unlinked (ADR 0003). Terminal `rejected`/`superseded` rows are
+ * excluded — they have no live remote resource a change could orphan.
+ *
+ * The single client-safe source for this list: the server guards in
+ * `data-access/certification.ts` (`hasBlockingFacilitySubmission`,
+ * `removalHasBlockingSubmission`) and the client gate in
+ * `lib/certification/readiness.ts` (`canRegroupRemoval`) both import it from
+ * here, so the UI never offers a control the server will refuse.
+ */
+export const BLOCKING_SUBMISSION_STATUSES: readonly LocalSubmissionStatus[] = [
+  "draft",
+  "submitted",
+  "accepted",
+];
+
 /** Remote Isometric GHG-statement status (verifier lifecycle). */
 export type RemoteGhgStatus = components["schemas"]["GhgStatementStatus"];
 

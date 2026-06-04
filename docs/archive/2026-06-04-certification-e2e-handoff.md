@@ -7,7 +7,7 @@ Write the **optional E2E suite** the remodel deferred (plan Verification §4):
 the Certification (Isometric) workspace. Playwright, under `tests/e2e/`.
 
 Read these first — this doc does not repeat them:
-- **Remodel state + the just-resolved deferrals:** `docs/plans/2026-06-03-certification-remodel-stage5-handoff.md`
+- **Remodel state + the just-resolved deferrals:** `docs/archive/2026-06-03-certification-remodel-stage5-handoff.md`
   (Stages 1–6 = the whole remodel, DONE & committed at `638391b`).
 - **Plan (Verification §4 = the E2E scope):** `~/.claude/plans/i-d-like-to-remodel-scalable-moler.md`.
 - **Domain truth:** `CONTEXT.md` + `docs/adr/0003`–`0007`. **Stack/rules:** `.claude/CLAUDE.md`.

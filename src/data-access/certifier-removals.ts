@@ -5,9 +5,9 @@ import {
   certificationSubmissions,
 } from "@/db/schema/certification";
 import { creditBatches } from "@/db/schema/credits";
+import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { requireAuth } from "./utils";
-import { BLOCKING_SUBMISSION_STATUSES } from "./certification";
 
 export type CertifierRemovalRow = typeof certifierRemovals.$inferSelect;
 type CreditBatchRow = typeof creditBatches.$inferSelect;

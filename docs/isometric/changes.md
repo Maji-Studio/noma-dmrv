@@ -1,5 +1,42 @@
 # Isometric Docs Change Log
 
+## 2026-06-04 (consolidate the certify-flow review findings)
+
+Refactor-only — no schema/migration/behaviour change; the existing certify
+suites (`isometric-certify-context`, `certification-mass-accounting`,
+`readiness`, `status`) stay green. Resolves four review findings on the
+post-remodel certify flow; no new public surface beyond the helpers below.
+
+- **Facility facts loaded once per Overview, not per removal.** The Overview
+  work queue (`fn/certification/overview.ts`) was rebuilding the full submit
+  context per row, re-pulling the facility-level Isometric project / template /
+  blueprint data each time. `buildRemovalContext` now takes a
+  `FacilityCertifierFacts` (the facility-scoped half) resolved once via the new
+  `loadFacilityCertifierFacts`; the queue loads it a single time and both it and
+  the submit path (`loadRemovalSubmissionContext`) feed through the same
+  composer. Closes `open-questions.md` → `perf/overview-facility-refetch`.
+
+- **One mass-accounting walk.** `buildAttribution` (per-run applied fraction,
+  was inline in `certify-context.ts`) and `buildRunSummary` (Review aggregate)
+  duplicated the same lineage→kg conversion. Merged into `buildMassAccounting`
+  in the renamed `src/lib/certification/mass-accounting.ts` (was
+  `run-summary.ts`; test renamed to match), returning
+  `{ attributionByRunId, runSummary }` from one pass — so the Review summary and
+  the submit payload share a numerator/denominator and cannot drift (ADR 0003).
+
+- **One readiness-facts projection.** The context → `RemovalReadinessFacts`
+  mapping that lived inline in both the Overview loader and the Review
+  pre-flight is now the single `toRemovalReadinessFacts`
+  (`src/lib/certification/readiness-facts.ts`). The regroup-blocking status list
+  is no longer mirrored client-side: the canonical `BLOCKING_SUBMISSION_STATUSES`
+  now lives in the client-safe `lib/certification/status.ts`, imported by both
+  the server guards (`data-access/certification.ts`, `certifier-removals.ts`) and
+  the client gate `canRegroupRemoval`.
+
+- **Docs hygiene.** The dated certification-remodel (Stages 3–5) + E2E handoff
+  notes moved from `docs/plans/` to `docs/archive/` — session state, not
+  evergreen (CLAUDE.md Documentation Standards).
+
 ## 2026-06-03 (resolve the three certification-remodel deferrals)
 
 Closes the remaining post-remodel deferrals (was `open-questions.md` →
