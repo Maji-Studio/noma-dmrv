@@ -248,7 +248,13 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    runSummary: {
+      runCount: 1,
+      totalBiocharOutputKg: biocharMassKg,
+      appliedDryKg: biocharMassKg,
+    },
     latestSubmission: latest,
+    linkedGhgStatement: null,
     isProduction: false,
     lineages: [
       {

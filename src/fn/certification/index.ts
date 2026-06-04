@@ -29,7 +29,6 @@ export {
 export {
   assignCreditBatchToRemovalAction,
   ensureRemovalForCreditBatchAction,
-  submitCreditBatchRemoval,
   submitRemovalAction,
 } from "./removal-grouping";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an

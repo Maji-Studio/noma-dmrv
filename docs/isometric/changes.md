@@ -1,5 +1,41 @@
 # Isometric Docs Change Log
 
+## 2026-06-03 (resolve the three certification-remodel deferrals)
+
+Closes the remaining post-remodel deferrals (was `open-questions.md` →
+`certification/review-step-run-aggregation`, `…/bridge-linked-statement-status`,
+`…/orphaned-creditbatch-submit-action`; all three entries removed). UI + a lean
+context-field addition + dead-code removal — no schema/migration change.
+
+- **Review step now shows run aggregation.** A focused `runSummary` (run count,
+  total biochar output, applied dry kg) is added to the lean `RemovalCertifyContext`
+  and projected from the heavy `RemovalSubmissionContext` via the new pure,
+  unit-tested `buildRunSummary` (`src/lib/certification/run-summary.ts`,
+  `tests/certification-run-summary.test.ts`). `review-step.tsx` renders it as a
+  three-cell table; `appliedDryKg / totalBiocharOutputKg` is the overall
+  attribution the submit pipeline scopes by per run (ADR 0003). The heavy
+  `runs` array is still NOT shipped to the client — only the summary.
+
+- **Demoted Certify bridge inlines the linked GHG Statement's status.**
+  `RemovalCertifyContext.linkedGhgStatement` ({ id, derived `DerivedStatus` }) is
+  resolved up-front in `buildRemovalContext` from `certifierRemovals.ghgStatementId`
+  + the statement's own latest submission (`deriveSubmissionStatus(…, "ghgStatement")`,
+  the same `metadata.remoteStatus` overlay the GHG list reads). `certify-panel.tsx`
+  renders it as a separate, clearly-labelled line that deep-links to
+  `/certification/ghg-statements?statement=<id>`. P1-b preserved: the removal's own
+  status and the statement's verifier status are distinct rows — the verifier
+  lifecycle is never attributed to the removal. Computed up-front so every
+  early-return path of the loader carries the real value (the Stage-6 regression
+  surface the plan flagged).
+
+- **Deleted the orphaned `submitCreditBatchRemoval` action** (caller-less since the
+  Stage-6 panel demotion): removed from `fn/certification/removal-grouping.ts` + its
+  `fn/certification/index.ts` barrel export, and the now-unused `submitCreditBatchSchema`
+  / `SubmitCreditBatchInput` from `schemas/certification.ts`.
+
+- **Verification:** `pnpm typecheck` exit 0; `eslint` (changed files) 0 errors;
+  `pnpm vitest run` → 377 passed / 5 skipped (48 files; +6 new run-summary tests).
+
 ## 2026-06-03 (tighten document-redirect allowlist + reconcile the two SSRF guards)
 
 Closes the broad-suffix breadth in the `/api/documents/[id]` legacy-`fileUrl`

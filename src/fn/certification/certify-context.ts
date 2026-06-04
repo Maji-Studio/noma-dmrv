@@ -21,7 +21,15 @@ import {
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import {
+  buildRunSummary,
+  EMPTY_RUN_SUMMARY,
+  type RemovalRunSummary,
+} from "@/lib/certification/run-summary";
+import type { DerivedStatus } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
   aggregateTransportLegs,
   collectTransportEntityIds,
@@ -37,6 +45,8 @@ import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
@@ -76,6 +86,17 @@ export interface MemberCreditBatch {
   code: string;
 }
 
+// The GHG Statement this removal has been rolled into (if any), with its
+// derived verifier status. Carried separately from the removal's own
+// `latestSubmission` so the bridge can show the statement's status without
+// ever attributing a verifier lifecycle to the removal itself (P1-b). The
+// status is derived server-side (`deriveSubmissionStatus(..., "ghgStatement")`)
+// so the cached UI payload stays a lean value/label, not a submission row.
+export interface LinkedGhgStatementStatus {
+  id: string;
+  status: DerivedStatus;
+}
+
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
   facilityId: string;
@@ -99,7 +120,14 @@ export interface RemovalCertifyContext {
   // `hasSubmittableRuns` fact the server-owned Overview loader does, without
   // shipping the heavy `runs` array to the client.
   hasSubmittableRuns: boolean;
+  // Focused run aggregation (run count, total biochar output, applied dry kg)
+  // surfaced on the lean UI context so the Review step can show what's being
+  // submitted without shipping the heavy `runs` array.
+  runSummary: RemovalRunSummary;
   latestSubmission: CertificationSubmissionRow | null;
+  // The GHG Statement this removal rolls into + its verifier status, or null
+  // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
+  linkedGhgStatement: LinkedGhgStatementStatus | null;
   isProduction: boolean;
 }
 
@@ -258,6 +286,35 @@ function buildAttribution(
   return attribution;
 }
 
+// Resolves the GHG Statement a removal rolls into (via the persisted
+// `ghgStatementId` FK) and derives its verifier status from the statement's
+// own latest submission — the same `metadata.remoteStatus` overlay the GHG
+// Statements list reads. Returns null when the removal isn't grouped or isn't
+// linked to a statement. Kept lean (id + derived status) so it can ride on the
+// cached UI context.
+async function loadLinkedGhgStatementStatus(
+  userId: string,
+  removal: CertifierRemovalRow | null,
+): Promise<LinkedGhgStatementStatus | null> {
+  const ghgStatementId = removal?.ghgStatementId ?? null;
+  if (!ghgStatementId) return null;
+
+  const latest = await getLatestSubmission(userId, {
+    provider: ISOMETRIC_PROVIDER,
+    submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+    localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+    localEntityId: ghgStatementId,
+  });
+  return {
+    id: ghgStatementId,
+    status: deriveSubmissionStatus(
+      latest,
+      latest ? isLockedInFlight(latest) : false,
+      "ghgStatement",
+    ),
+  };
+}
+
 // Builds the full submission context for one removal scope: resolves the
 // Isometric mapping/template/blueprints, walks every member batch's
 // application lineage into a deduped union of production runs, and computes
@@ -272,20 +329,27 @@ async function buildRemovalContext(
     code: b.code,
   }));
 
-  const latestSubmission = scope.removalId
-    ? await getLatestSubmission(userId, {
-        provider: ISOMETRIC_PROVIDER,
-        submissionType: REMOVAL_SUBMISSION_TYPE,
-        localEntityType: REMOVAL_ENTITY_TYPE,
-        localEntityId: scope.removalId,
-      })
-    : null;
+  // The removal's own submission + its linked GHG Statement status resolve from
+  // the scope alone, so load them up-front: every early-return path then
+  // carries the real values rather than a placeholder.
+  const [latestSubmission, linkedGhgStatement] = await Promise.all([
+    scope.removalId
+      ? getLatestSubmission(userId, {
+          provider: ISOMETRIC_PROVIDER,
+          submissionType: REMOVAL_SUBMISSION_TYPE,
+          localEntityType: REMOVAL_ENTITY_TYPE,
+          localEntityId: scope.removalId,
+        })
+      : Promise.resolve(null),
+    loadLinkedGhgStatementStatus(userId, scope.removal),
+  ]);
 
   const base = {
     facilityId: scope.facilityId,
     removalId: scope.removalId,
     memberBatches,
     latestSubmission,
+    linkedGhgStatement,
     isProduction,
     lineages: [] as ChainOfCustodyData[],
     runs: [] as ProductionRunWithSamples[],
@@ -299,6 +363,7 @@ async function buildRemovalContext(
     requiredTransportCategories: [] as TransportCategory[],
     // No runs resolved on any early-return path (no mapping / template / runs).
     hasSubmittableRuns: false,
+    runSummary: EMPTY_RUN_SUMMARY,
   };
 
   const mapping = await getCertifierProjectByFacility(
@@ -423,7 +488,9 @@ async function buildRemovalContext(
     transportCoverage,
     requiredTransportCategories,
     hasSubmittableRuns: runs.length > 0,
+    runSummary: buildRunSummary(lineages, runs),
     latestSubmission,
+    linkedGhgStatement,
     isProduction,
     lineages,
     runs,
@@ -459,7 +526,9 @@ function projectUiContext(
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,
     hasSubmittableRuns: ctx.hasSubmittableRuns,
+    runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
+    linkedGhgStatement: ctx.linkedGhgStatement,
     isProduction: ctx.isProduction,
   };
 }
