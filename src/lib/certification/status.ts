@@ -211,7 +211,7 @@ export function deriveStatementStatus({
     case "submitted":
       // Submitted to the verifier locally; remote AWAITING not yet reflected.
       return {
-        value: "issued",
+        value: "pending",
         label: "Submitted",
         isActionable: false,
         isTerminal: false,

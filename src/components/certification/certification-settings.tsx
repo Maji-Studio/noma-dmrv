@@ -94,7 +94,7 @@ function SettingsTabs({
   return (
     <div
       className="flex gap-0 overflow-x-auto border-b border-[var(--color-border-secondary)]"
-      role="tablist"
+      role="group"
     >
       {tabs.map(({ key, label, icon: Icon }) => {
         const isActive = key === active;
@@ -102,8 +102,7 @@ function SettingsTabs({
           <button
             key={key}
             type="button"
-            role="tab"
-            aria-selected={isActive}
+            aria-pressed={isActive}
             onClick={() => onSelect(key)}
             className="flex shrink-0 items-center gap-8 h-[48px] px-16 label-button transition-colors cursor-pointer"
             style={{

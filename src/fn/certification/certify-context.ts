@@ -18,7 +18,10 @@ import {
   getChainOfCustodyData,
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
-import { getCreditBatchById } from "@/data-access/credit-batches";
+import {
+  getCreditBatchById,
+  type CreditBatchCo2eStoredPreview,
+} from "@/data-access/credit-batches";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import {
@@ -57,6 +60,8 @@ import {
 export interface TransportCoverageBucket {
   count: number;
   entityIds: string[];
+  legIds: string[];
+  firstLegEntityId: string | null;
   // Non-null when at least one leg fails the per-leg uniformity /
   // completeness checks `aggregateTransportLegs` enforces. Pooling legs from
   // several credit batches into one removal raises the chance of a mixed
@@ -83,6 +88,7 @@ const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
 export interface MemberCreditBatch {
   id: string;
   code: string;
+  co2eStoredPreview?: CreditBatchCo2eStoredPreview;
 }
 
 // The GHG Statement this removal has been rolled into (if any), with its
@@ -176,27 +182,51 @@ function buildCoverage(
     feedstock: {
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
+      legIds: legs.feedstock.map((leg) => leg.id),
+      firstLegEntityId: legs.feedstock[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportLegs(legs.feedstock, "Feedstock")
         .warning,
     },
     biochar: {
       count: legs.biochar.length,
       entityIds: entityIds.biocharProductIds,
+      legIds: legs.biochar.map((leg) => leg.id),
+      firstLegEntityId: legs.biochar[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportLegs(legs.biochar, "Biochar")
         .warning,
     },
     sample: {
       count: legs.sample.length,
       entityIds: entityIds.sampleIds,
+      legIds: legs.sample.map((leg) => leg.id),
+      firstLegEntityId: legs.sample[0]?.entityId ?? null,
       aggregationWarning: aggregateTransportLegs(legs.sample, "Sample").warning,
     },
   };
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
-  feedstock: { count: 0, entityIds: [], aggregationWarning: null },
-  biochar: { count: 0, entityIds: [], aggregationWarning: null },
-  sample: { count: 0, entityIds: [], aggregationWarning: null },
+  feedstock: {
+    count: 0,
+    entityIds: [],
+    legIds: [],
+    firstLegEntityId: null,
+    aggregationWarning: null,
+  },
+  biochar: {
+    count: 0,
+    entityIds: [],
+    legIds: [],
+    firstLegEntityId: null,
+    aggregationWarning: null,
+  },
+  sample: {
+    count: 0,
+    entityIds: [],
+    legIds: [],
+    firstLegEntityId: null,
+    aggregationWarning: null,
+  },
 };
 
 // The set of credit batches that compose one removal, with their facility.
@@ -204,7 +234,12 @@ interface RemovalScope {
   facilityId: string;
   removalId: string | null;
   removal: CertifierRemovalRow | null;
-  memberBatches: { id: string; code: string; applicationIds: string[] }[];
+  memberBatches: {
+    id: string;
+    code: string;
+    applicationIds: string[];
+    co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+  }[];
 }
 
 // Resolves the removal scope for a credit batch. When the batch is already
@@ -223,7 +258,12 @@ async function resolveScopeForCreditBatch(
       removalId: null,
       removal: null,
       memberBatches: [
-        { id: batch.id, code: batch.code, applicationIds: batch.applicationIds },
+        {
+          id: batch.id,
+          code: batch.code,
+          applicationIds: batch.applicationIds,
+          co2eStoredPreview: batch.co2eStoredPreview,
+        },
       ],
     };
   }
@@ -241,7 +281,7 @@ export async function resolveScopeForRemoval(
   const batches = await getCreditBatchesByRemovalId(userId, removalId);
   const memberBatches = await Promise.all(
     batches.map(async (b) => {
-      const full = await getCreditBatchById(userId, b.id);
+      const full = await getCreditBatchById(userId, b.id, { skipPreview: true });
       return {
         id: b.id,
         code: b.code,
@@ -402,6 +442,7 @@ export async function buildRemovalContext(
   const memberBatches: MemberCreditBatch[] = scope.memberBatches.map((b) => ({
     id: b.id,
     code: b.code,
+    co2eStoredPreview: b.co2eStoredPreview,
   }));
 
   // The removal's own submission + its linked GHG Statement status resolve from

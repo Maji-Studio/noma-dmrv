@@ -8,7 +8,9 @@
 "use client";
 
 import { CheckCircle, Warning, XCircle } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { buttonVariants } from "@/components/ui";
 import type {
   RemovalCertifyContext,
   TransportCategory,
@@ -67,9 +69,101 @@ const COVERAGE_LABEL: Record<CoverageStatus, string> = {
   missing: "No transport legs found",
 };
 
+const CATEGORY_META: Record<
+  TransportCategory,
+  {
+    label: string;
+    recordLabel: string;
+    route: string;
+    queryKey: string;
+  }
+> = {
+  feedstock: {
+    label: "Feedstock",
+    recordLabel: "feedstock record",
+    route: "/feedstocks",
+    queryKey: "feedstock",
+  },
+  biochar: {
+    label: "Biochar",
+    recordLabel: "biochar product",
+    route: "/biochar-products",
+    queryKey: "biocharProduct",
+  },
+  sample: {
+    label: "Sample",
+    recordLabel: "lab sample",
+    route: "/samples",
+    queryKey: "sample",
+  },
+};
+
+function pluralize(label: string, count: number) {
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
+}
+
+function getStoredPreviewSummary(ctx: RemovalCertifyContext) {
+  const previews = ctx.memberBatches
+    .map((batch) => batch.co2eStoredPreview)
+    .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
+  const missingInputs = Array.from(
+    new Set(previews.flatMap((preview) => preview.missingInputs)),
+  );
+  const isComplete =
+    ctx.memberBatches.length > 0 &&
+    previews.length === ctx.memberBatches.length &&
+    previews.every((preview) => preview.co2eStoredTonnes != null);
+  const total = isComplete
+    ? previews.reduce((sum, preview) => sum + (preview.co2eStoredTonnes ?? 0), 0)
+    : null;
+
+  return { total, missingInputs };
+}
+
+function buildTransportLegActionHref(
+  ctx: RemovalCertifyContext,
+  cat: TransportCategory,
+) {
+  const meta = CATEGORY_META[cat];
+  const coverage = ctx.transportCoverage[cat];
+  const legId = coverage.legIds[0];
+  const entityId = legId
+    ? coverage.firstLegEntityId
+    : coverage.entityIds[0];
+  if (!entityId) return null;
+
+  const params = new URLSearchParams({
+    facility: ctx.facilityId,
+    [meta.queryKey]: entityId,
+    transportLeg: legId ? "edit" : "create",
+  });
+  if (legId) params.set("transportLegId", legId);
+
+  return `${meta.route}?${params.toString()}`;
+}
+
+function coverageHint(ctx: RemovalCertifyContext, cat: TransportCategory) {
+  const bucket = ctx.transportCoverage[cat];
+  const meta = CATEGORY_META[cat];
+  const records = pluralize(meta.recordLabel, bucket.entityIds.length);
+
+  if (bucket.count === 0) {
+    return bucket.entityIds.length > 0
+      ? `Add at least one transport leg on the linked ${records}.`
+      : `No linked ${meta.recordLabel}s were resolved for this removal.`;
+  }
+
+  if (bucket.aggregationWarning) {
+    return "Open the linked records and align the leg calculation method and factors.";
+  }
+
+  return `${pluralize("transport leg", bucket.count)} recorded across ${records}.`;
+}
+
 export function ReviewStep({ ctx }: { ctx: RemovalCertifyContext }) {
   const projectLabel = ctx.project?.name ?? ctx.mapping?.externalProjectId ?? "—";
   const required = ctx.requiredTransportCategories;
+  const storedPreview = getStoredPreviewSummary(ctx);
 
   return (
     <div className="flex flex-col gap-24">
@@ -112,6 +206,23 @@ export function ReviewStep({ ctx }: { ctx: RemovalCertifyContext }) {
         </span>
       </Field>
 
+      <section className="grid grid-cols-1 gap-24 sm:grid-cols-2">
+        <Field label="CO2e durably stored">
+          {storedPreview.total != null ? (
+            `${storedPreview.total.toFixed(2)} t CO2e`
+          ) : (
+            <span className="text-[var(--color-signal-orange)]">
+              Pending inputs
+            </span>
+          )}
+        </Field>
+        <Field label="Stored-preview status">
+          {storedPreview.missingInputs.length > 0
+            ? storedPreview.missingInputs.join(", ")
+            : "Complete"}
+        </Field>
+      </section>
+
       {ctx.runSummary.runCount > 0 && (
         <section className="flex flex-col gap-8">
           <div className="grid grid-cols-1 gap-24 sm:grid-cols-3">
@@ -143,22 +254,42 @@ export function ReviewStep({ ctx }: { ctx: RemovalCertifyContext }) {
           <ul className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
             {required.map((cat, index) => {
               const status = coverageStatus(ctx, cat);
+              const actionHref =
+                status === "complete" ? null : buildTransportLegActionHref(ctx, cat);
               return (
                 <li
                   key={cat}
-                  className={`flex items-center justify-between gap-12 px-16 py-12 ${
+                  className={`flex flex-col gap-10 px-16 py-12 sm:flex-row sm:items-center sm:justify-between ${
                     index > 0
                       ? "border-t border-[var(--color-border-tertiary)]"
                       : ""
                   }`}
                 >
-                  <span className="body-small capitalize text-[var(--color-text-primary)]">
-                    {cat}
-                  </span>
-                  <span className="inline-flex items-center gap-6 body-caption text-[var(--color-text-secondary)]">
-                    {COVERAGE_ICON[status]}
-                    {COVERAGE_LABEL[status]}
-                  </span>
+                  <div className="flex flex-col gap-3">
+                    <span className="body-small text-[var(--color-text-primary)]">
+                      {CATEGORY_META[cat].label}
+                    </span>
+                    <span className="body-caption text-[var(--color-text-tertiary)]">
+                      {coverageHint(ctx, cat)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-10">
+                    <span className="inline-flex items-center gap-6 body-caption text-[var(--color-text-secondary)]">
+                      {COVERAGE_ICON[status]}
+                      {COVERAGE_LABEL[status]}
+                    </span>
+                    {actionHref && (
+                      <Link
+                        href={actionHref}
+                        className={buttonVariants({
+                          variant: status === "missing" ? "primary" : "default",
+                          size: "small",
+                        })}
+                      >
+                        {status === "missing" ? "Add leg" : "Fix legs"}
+                      </Link>
+                    )}
+                  </div>
                 </li>
               );
             })}

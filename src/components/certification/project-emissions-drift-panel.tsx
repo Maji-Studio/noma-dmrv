@@ -162,6 +162,8 @@ export function ProjectEmissionsDriftPanel() {
   const matchedRows = data.rows.filter((r) => r.status.kind === "match").length;
   const orphanCount = data.orphans.length;
   const allClean = totalRows === matchedRows && orphanCount === 0;
+  // Keep the active facility in scope when deep-linking into Settings.
+  const settingsHref = `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
   return (
     <section className="border border-[var(--color-border-secondary)] p-16">
@@ -179,7 +181,7 @@ export function ProjectEmissionsDriftPanel() {
             icon="warn"
             message="No LCA-period emission rows entered."
             fixHint="Add rows in Settings → Emissions →"
-            fixHref="/certification/settings"
+            fixHref={settingsHref}
           />
         )}
 
@@ -228,7 +230,7 @@ export function ProjectEmissionsDriftPanel() {
             icon="warn"
             message={`Project Component "${o.component.display_name}" (blueprint="${o.component.blueprint_key}") has no audit-trail row.`}
             fixHint="Add in Settings → Emissions →"
-            fixHref="/certification/settings"
+            fixHref={settingsHref}
           />
         ))}
       </ul>

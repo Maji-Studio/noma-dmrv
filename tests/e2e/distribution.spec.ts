@@ -8,8 +8,10 @@
  * - Admin user seeded and authenticated via adminPage
  * - Facility, Customer, CustomerLocation, BiocharProduct seeded via seededData
  */
+import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
+import { selectEntity } from "./fixtures/page-helpers";
 
 // ============================================
 // Test Constants
@@ -17,6 +19,16 @@ import { deliveryStatuses } from "../../src/schemas/deliveries";
 
 const ORDERS_URL = "/orders";
 const DELIVERIES_URL = "/deliveries";
+
+/**
+ * Select a biochar product in the order form.
+ * The product field is a searchable EntitySelect (custom dropdown showing live
+ * "kg in bin" stock), not a native <select>, so it is driven via its trigger
+ * button and per-option testids rather than selectOption().
+ */
+async function selectBiocharProduct(page: Page, productId: string) {
+  await selectEntity(page, "Biochar Product", productId);
+}
 
 // ============================================
 // Order + Delivery UI CRUD
@@ -79,10 +91,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     await adminPage.fill('input[name="quantityKg"]', "100");
 
     // Biochar Product
-    await adminPage.selectOption(
-      'select[name="biocharProductId"]',
-      seededData.biocharProduct.id
-    );
+    await selectBiocharProduct(adminPage, seededData.biocharProduct.id);
 
     // Submit the form
     await adminPage.click('button[type="submit"]:has-text("Create Order")');
@@ -167,7 +176,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     );
     await adminPage.selectOption('select[name="packaging"]', "loose");
     await adminPage.fill('input[name="quantityKg"]', "50");
-    await adminPage.selectOption('select[name="biocharProductId"]', seededData.biocharProduct.id);
+    await selectBiocharProduct(adminPage, seededData.biocharProduct.id);
     await adminPage.click('button[type="submit"]:has-text("Create Order")');
     await adminPage.waitForSelector('[role="dialog"]', {
       state: "hidden",

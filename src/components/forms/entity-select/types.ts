@@ -25,6 +25,7 @@ export type EntityType =
   | "productionRun"
   | "application"
   | "formulation"
+  | "biocharProduct"
   | "creditBatch";
 
 export interface EntitySelectProps {

@@ -81,7 +81,7 @@ export function CertificationOverview() {
 }
 
 function withFacility(href: string, facilityId: string): string {
-  return `${href}?facility=${facilityId}`;
+  return `${href}?facility=${encodeURIComponent(facilityId)}`;
 }
 
 function shortId(id: string): string {
@@ -93,7 +93,9 @@ function shortId(id: string): string {
 // lineage blockers are worked in the removal's guided Review (the Pre-flight
 // step lists them).
 function removalSheetHref(removalId: string, facilityId: string): string {
-  return `/certification/removals?facility=${facilityId}&removal=${removalId}`;
+  return `/certification/removals?facility=${encodeURIComponent(
+    facilityId,
+  )}&removal=${encodeURIComponent(removalId)}`;
 }
 
 function blockedHref(
@@ -108,7 +110,9 @@ function blockedHref(
   const isConfig = reasons.some((r) => /not linked|template|blueprint/i.test(r));
   return isConfig
     ? withFacility("/certification/settings", facilityId)
-    : `/certification/removals/${removalId}/review?facility=${facilityId}&step=preflight`;
+    : `/certification/removals/${encodeURIComponent(
+        removalId,
+      )}/review?facility=${encodeURIComponent(facilityId)}&step=preflight`;
 }
 
 function removalAttention(
@@ -159,7 +163,9 @@ function statementAttention(
       locked,
       "ghgStatement",
     );
-    const href = `/certification/ghg-statements?facility=${facilityId}&statement=${item.statement.id}`;
+    const href = `/certification/ghg-statements?facility=${encodeURIComponent(
+      facilityId,
+    )}&statement=${encodeURIComponent(item.statement.id)}`;
     const period = statementPeriodLabel(item.statement);
     if (status.value === "pending") {
       items.push({
@@ -210,9 +216,12 @@ function OverviewBody({ facilityId }: { facilityId: string }) {
   }
 
   const data = overview.data;
+  const statementItems = statements.data
+    ? statementAttention(statements.data, facilityId)
+    : [];
   const attention = [
     ...removalAttention(data.removals, facilityId),
-    ...statementAttention(statements.data ?? [], facilityId),
+    ...statementItems,
   ];
   // A failed statements fetch must not read as "all caught up" — surface it as
   // its own attention item rather than silently dropping to an empty list.
@@ -222,6 +231,14 @@ function OverviewBody({ facilityId }: { facilityId: string }) {
       tone: "blocked",
       title: "GHG statements",
       detail: "Couldn't load statements — refresh to retry",
+      href: withFacility("/certification/ghg-statements", facilityId),
+    });
+  } else if (statements.isLoading) {
+    attention.push({
+      key: "statements-loading",
+      tone: "waiting",
+      title: "GHG statements",
+      detail: "Loading statement status",
       href: withFacility("/certification/ghg-statements", facilityId),
     });
   }

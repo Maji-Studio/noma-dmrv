@@ -1,10 +1,11 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
   creditBatchApplications,
   type CreditBatch,
 } from "@/db/schema/credits";
+import { certifierProjects } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { applications } from "@/db/schema/application";
 import { deliveries } from "@/db/schema/logistics";
@@ -18,6 +19,14 @@ import {
   gcRemovalIfOrphaned,
   removalHasBlockingSubmission,
 } from "./certifier-removals";
+import { getChainOfCustodyData } from "./chain-of-custody";
+import { getProductionRunsWithSamples } from "./production-runs";
+import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+import {
+  SOIL_STORAGE_MODULE_VERSION,
+  computeApplicationCo2eStored,
+} from "@/lib/calculations/biochar-removal";
+import { aggregateProductionRuns } from "@/lib/isometric/utils/aggregation";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -28,6 +37,190 @@ export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
   applicationCount: number;
   applicationIds: string[];
+  co2eStoredPreview: CreditBatchCo2eStoredPreview;
+}
+
+type CreditBatchWithOptionalPreview = Omit<
+  CreditBatchWithRelations,
+  "co2eStoredPreview"
+> & {
+  co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+};
+
+type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
+
+export interface ApplicationCo2eStoredPreview {
+  applicationId: string;
+  applicationCode: string;
+  co2eStoredTonnes: number | null;
+  fDurable: number | null;
+  organicCarbonPercent: number | null;
+  effectiveSoilTemperatureC: number | null;
+  missingInputs: string[];
+  warnings: string[];
+}
+
+export interface CreditBatchCo2eStoredPreview {
+  provider: CertifierProvider | null;
+  co2eStoredTonnes: number | null;
+  moduleVersion: string | null;
+  applicationResults: ApplicationCo2eStoredPreview[];
+  missingInputs: string[];
+  warnings: string[];
+}
+
+async function getFacilityCertifierWithExecutor(
+  executor: DbTransaction | typeof db,
+  facilityId: string
+): Promise<CertifierProvider | null> {
+  const [row] = await executor
+    .select({ provider: certifierProjects.provider })
+    .from(certifierProjects)
+    .where(eq(certifierProjects.facilityId, facilityId))
+    .orderBy(
+      sql`case ${certifierProjects.provider} when 'isometric' then 0 when 'puro_earth' then 1 else 2 end`
+    )
+    .limit(1);
+  return row?.provider ?? null;
+}
+
+export async function getFacilityCertifier(
+  userId: string,
+  facilityId: string
+): Promise<CertifierProvider | null> {
+  requireAuth(userId);
+  return getFacilityCertifierWithExecutor(db, facilityId);
+}
+
+async function resolveCreditBatchCertifier(
+  executor: DbTransaction,
+  facilityId: string
+): Promise<"isometric" | null> {
+  const provider = await getFacilityCertifierWithExecutor(executor, facilityId);
+  if (provider && provider !== "isometric") {
+    throw new SafeError(
+      "Credit batches currently support only Isometric certifier mappings."
+    );
+  }
+  return provider === "isometric" ? "isometric" : null;
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+async function buildCo2eStoredPreview(
+  userId: string,
+  batch: Pick<CreditBatch, "facilityId" | "durabilityOption">,
+  applicationIds: string[]
+): Promise<CreditBatchCo2eStoredPreview> {
+  const provider = await getFacilityCertifier(userId, batch.facilityId);
+  if (provider !== "isometric") {
+    return {
+      provider,
+      co2eStoredTonnes: null,
+      moduleVersion: null,
+      applicationResults: [],
+      missingInputs: [provider ? "isometricCertifier" : "facilityCertifierProject"],
+      warnings: [],
+    };
+  }
+
+  if (applicationIds.length === 0) {
+    return {
+      provider,
+      co2eStoredTonnes: null,
+      moduleVersion: null,
+      applicationResults: [],
+      missingInputs: ["applicationIds"],
+      warnings: [],
+    };
+  }
+
+  if (batch.durabilityOption === "1000_year") {
+    return {
+      provider,
+      co2eStoredTonnes: null,
+      moduleVersion: null,
+      applicationResults: [],
+      missingInputs: ["1000YearDurabilityEngine"],
+      warnings: ["1000-year CO2e stored preview is deferred to issue #142."],
+    };
+  }
+
+  const [applicationRows, lineages] = await Promise.all([
+    db
+      .select({
+        id: applications.id,
+        code: applications.code,
+        biocharAppliedDryTons: applications.biocharAppliedDryTons,
+        soilTemperatureC: applications.soilTemperatureC,
+      })
+      .from(applications)
+      .where(inArray(applications.id, applicationIds)),
+    Promise.all(applicationIds.map((id) => getChainOfCustodyData(userId, id))),
+  ]);
+
+  const runIds = unique(
+    lineages
+      .map((lineage) => lineage.productionRun?.id)
+      .filter((id): id is string => Boolean(id))
+  );
+  const runs = await getProductionRunsWithSamples(userId, runIds);
+  const appById = new Map(applicationRows.map((app) => [app.id, app]));
+  const warnings: string[] = lineages.flatMap((lineage) =>
+    lineage.warnings.map((warning) => `${lineage.application.code}: ${warning}`)
+  );
+
+  let weightedOrganicCarbonPercent: number | null = null;
+  let weightedHToCorgRatio: number | null = null;
+  if (runs.length > 0) {
+    const { attributionByRunId } = buildMassAccounting(lineages, runs);
+    const aggregate = aggregateProductionRuns(runs, attributionByRunId);
+    weightedOrganicCarbonPercent = aggregate.weightedOrganicCarbonPercent;
+    weightedHToCorgRatio = aggregate.weightedHToCorgRatio;
+    warnings.push(...aggregate.warnings);
+  }
+
+  const applicationResults = applicationIds.map((applicationId) => {
+    const app = appById.get(applicationId);
+    const result = computeApplicationCo2eStored({
+      dryMassTonnes: app?.biocharAppliedDryTons ?? null,
+      soilTemperatureC: app?.soilTemperatureC ?? null,
+      hToCorgRatio: weightedHToCorgRatio,
+      organicCarbonPercent: weightedOrganicCarbonPercent,
+    });
+
+    return {
+      applicationId,
+      applicationCode: app?.code ?? applicationId,
+      co2eStoredTonnes: result.co2eStoredTonnes,
+      fDurable: result.fDurable,
+      organicCarbonPercent: result.organicCarbonPercent,
+      effectiveSoilTemperatureC: result.effectiveSoilTemperatureC,
+      missingInputs: result.missingInputs,
+      warnings: result.warnings,
+    };
+  });
+
+  const complete = applicationResults.every((r) => r.co2eStoredTonnes != null);
+  const co2eStoredTonnes = complete
+    ? applicationResults.reduce((sum, r) => sum + (r.co2eStoredTonnes ?? 0), 0)
+    : null;
+
+  return {
+    provider,
+    co2eStoredTonnes,
+    moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+    applicationResults,
+    missingInputs: unique(applicationResults.flatMap((r) => r.missingInputs)),
+    warnings: [
+      ...warnings,
+      ...applicationResults.flatMap((r) =>
+        r.warnings.map((warning) => `${r.applicationCode}: ${warning}`)
+      ),
+    ],
+  };
 }
 
 /**
@@ -133,12 +326,22 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
     {} as Record<string, string[]>
   );
 
-  return batches.map((b) => ({
-    ...b.creditBatch,
-    facility: b.facilityName ? { name: b.facilityName } : null,
-    applicationCount: applicationsByBatch[b.creditBatch.id]?.length ?? 0,
-    applicationIds: applicationsByBatch[b.creditBatch.id] ?? [],
-  }));
+  return Promise.all(
+    batches.map(async (b) => {
+      const applicationIds = applicationsByBatch[b.creditBatch.id] ?? [];
+      return {
+        ...b.creditBatch,
+        facility: b.facilityName ? { name: b.facilityName } : null,
+        applicationCount: applicationIds.length,
+        applicationIds,
+        co2eStoredPreview: await buildCo2eStoredPreview(
+          userId,
+          b.creditBatch,
+          applicationIds
+        ),
+      };
+    })
+  );
 }
 
 /**
@@ -147,7 +350,17 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
 export async function getCreditBatchById(
   userId: string,
   id: string
-): Promise<CreditBatchWithRelations | null> {
+): Promise<CreditBatchWithRelations | null>;
+export async function getCreditBatchById(
+  userId: string,
+  id: string,
+  options: { skipPreview: true }
+): Promise<CreditBatchWithOptionalPreview | null>;
+export async function getCreditBatchById(
+  userId: string,
+  id: string,
+  options?: { skipPreview?: boolean }
+): Promise<CreditBatchWithRelations | CreditBatchWithOptionalPreview | null> {
   requireAuth(userId);
   const [batch] = await db
     .select({
@@ -167,11 +380,26 @@ export async function getCreditBatchById(
     .from(creditBatchApplications)
     .where(eq(creditBatchApplications.creditBatchId, id));
 
-  return {
+  const applicationIds = applicationData.map((a) => a.applicationId);
+
+  const result = {
     ...batch.creditBatch,
     facility: batch.facilityName ? { name: batch.facilityName } : null,
     applicationCount: applicationData.length,
-    applicationIds: applicationData.map((a) => a.applicationId),
+    applicationIds,
+  };
+
+  if (options?.skipPreview) {
+    return result;
+  }
+
+  return {
+    ...result,
+    co2eStoredPreview: await buildCo2eStoredPreview(
+      userId,
+      batch.creditBatch,
+      applicationIds
+    ),
   };
 }
 
@@ -201,6 +429,8 @@ export async function createCreditBatch(
   const { applicationIds, ...batchData } = data;
 
   const creditBatch = await db.transaction(async (tx) => {
+    const certifier = await resolveCreditBatchCertifier(tx, batchData.facilityId);
+
     // Insert the credit batch
     const [batch] = await tx
       .insert(creditBatches)
@@ -209,7 +439,7 @@ export async function createCreditBatch(
         facilityId: batchData.facilityId,
         startDate: batchData.startDate.toISOString().split("T")[0],
         endDate: batchData.endDate.toISOString().split("T")[0],
-        certifier: batchData.certifier,
+        certifier,
         durabilityOption: batchData.durabilityOption,
         hToCorgRatio: batchData.hToCorgRatio ?? null,
         meanRandomReflectancePercent:
@@ -258,6 +488,11 @@ export async function createCreditBatch(
     facility: facility ?? null,
     applicationCount: applicationIds?.length ?? 0,
     applicationIds: applicationIds ?? [],
+    co2eStoredPreview: await buildCo2eStoredPreview(
+      userId,
+      creditBatch,
+      applicationIds ?? []
+    ),
   };
 }
 
@@ -284,8 +519,6 @@ export async function updateCreditBatch(
     updateData.startDate = updateFields.startDate.toISOString().split("T")[0];
   if (updateFields.endDate !== undefined)
     updateData.endDate = updateFields.endDate.toISOString().split("T")[0];
-  if (updateFields.certifier !== undefined)
-    updateData.certifier = updateFields.certifier;
   if (updateFields.durabilityOption !== undefined)
     updateData.durabilityOption = updateFields.durabilityOption;
   if (updateFields.hToCorgRatio !== undefined)
@@ -353,6 +586,8 @@ export async function updateCreditBatch(
     if (effectiveEndDate < effectiveStartDate) {
       throw new SafeError("End date must be after start date");
     }
+
+    updateData.certifier = await resolveCreditBatchCertifier(tx, targetFacilityId);
 
     await tx
       .update(creditBatches)

@@ -171,7 +171,7 @@ export async function createBiocharProductFn(
         createBiocharProduct(user.id, {
           code,
           facilityId: validated.facilityId,
-          formulationId: validated.formulationId,
+          formulationId: validated.formulationId ?? null,
           productionDate: validated.productionDate,
           status: validated.status,
           linkedProductionRunId: validated.linkedProductionRunId || null,
