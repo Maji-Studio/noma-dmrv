@@ -141,7 +141,12 @@ export async function getEntities(
     case "formulation":
       return getFormulationsEntity({ search, limit });
     case "biocharProduct":
-      return getBiocharProducts({ search, facilityId: filterBy?.facilityId, limit });
+      return getBiocharProducts({
+        userId,
+        search,
+        facilityId: filterBy?.facilityId,
+        limit,
+      });
     case "creditBatch":
       return getCreditBatchesEntity({ search, facilityId: filterBy?.facilityId, limit });
     default:
@@ -183,7 +188,7 @@ export async function getEntityById(
     case "formulation":
       return getFormulationEntityById(id);
     case "biocharProduct":
-      return getBiocharProductEntityById(id);
+      return getBiocharProductEntityById(userId, id);
     case "creditBatch":
       return getCreditBatchEntityById(id);
     default:

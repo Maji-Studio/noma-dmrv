@@ -22,6 +22,9 @@ export const storageLocationTypes = [
 
 export type StorageLocationType = (typeof storageLocationTypes)[number];
 
+const FORMULATION_PRODUCT_BIN_MESSAGE =
+  "formulationId is only allowed for product_bin storageMethod";
+
 // ============================================
 // Storage Location Form Schema (Client-side validation)
 // ============================================
@@ -60,6 +63,14 @@ export const storageLocationFormSchema = z.object({
     .max(1000, "Description must be less than 1000 characters")
     .optional()
     .or(z.literal("")),
+}).superRefine((data, ctx) => {
+  if (data.formulationId && data.type !== "product_bin") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["formulationId"],
+      message: FORMULATION_PRODUCT_BIN_MESSAGE,
+    });
+  }
 });
 
 // ============================================
@@ -93,6 +104,14 @@ export const updateStorageLocationSchema = z.object({
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
   supplierReferenceId: z.string().max(100).optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (data.formulationId && data.type && data.type !== "product_bin") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["formulationId"],
+      message: FORMULATION_PRODUCT_BIN_MESSAGE,
+    });
+  }
 });
 
 /**
@@ -168,4 +187,3 @@ export function formatStorageLocationType(type: StorageLocationType): string {
   };
   return labels[type];
 }
-

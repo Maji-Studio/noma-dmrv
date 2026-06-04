@@ -68,16 +68,43 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   });
 
   afterAll(async () => {
+    async function cleanup(step: () => Promise<unknown>) {
+      try {
+        await step();
+      } catch {
+        // Best-effort teardown; keep the original test failure visible.
+      }
+    }
+
     if (createdProductIds.length > 0) {
-      await db.delete(biocharProducts).where(inArray(biocharProducts.id, createdProductIds));
+      await cleanup(() =>
+        db.delete(biocharProducts).where(inArray(biocharProducts.id, createdProductIds)),
+      );
     }
+
     if (createdBinIds.length > 0) {
-      await db.delete(storageLocations).where(inArray(storageLocations.id, createdBinIds));
+      await cleanup(() =>
+        db.delete(storageLocations).where(inArray(storageLocations.id, createdBinIds)),
+      );
     }
-    await db.delete(productionRuns).where(eq(productionRuns.id, runId));
-    await db.delete(reactors).where(eq(reactors.id, reactorId));
-    await db.delete(formulations).where(inArray(formulations.id, [formulationAId, formulationBId]));
-    await db.delete(facilities).where(eq(facilities.id, facilityId));
+
+    if (runId) {
+      await cleanup(() => db.delete(productionRuns).where(eq(productionRuns.id, runId)));
+    }
+    if (reactorId) {
+      await cleanup(() => db.delete(reactors).where(eq(reactors.id, reactorId)));
+    }
+    const formulationIds = [formulationAId, formulationBId].filter(
+      (id): id is string => id != null,
+    );
+    if (formulationIds.length > 0) {
+      await cleanup(() =>
+        db.delete(formulations).where(inArray(formulations.id, formulationIds)),
+      );
+    }
+    if (facilityId) {
+      await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
+    }
   });
 
   async function makeProductBin(formulationId: string | null): Promise<string> {

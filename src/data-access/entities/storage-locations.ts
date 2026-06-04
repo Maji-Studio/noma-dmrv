@@ -21,6 +21,7 @@ import {
   formatStorageLocationType,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 
 function formatStorageLocationSubtitle(
   type: string,
@@ -59,7 +60,7 @@ function formatStorageLocationSubtitle(
     case "product_bin": {
       const typeLabel = formatStorageLocationType(type);
       // A product bin is bound to one formulation (or pure biochar when unset).
-      const blendLabel = formulationName ?? "Pure biochar";
+      const blendLabel = formulationName ?? PURE_BIOCHAR_LABEL;
       if (totalProductKg === 0) {
         return `${typeLabel} · ${blendLabel} · Empty`;
       }

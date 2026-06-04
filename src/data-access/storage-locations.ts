@@ -745,11 +745,19 @@ export async function updateStorageLocation(
     }
   }
 
-  if (data.formulationId) {
+  const effectiveType = data.type ?? existing.type;
+  const normalizedFormulationId =
+    effectiveType === "product_bin"
+      ? (data.formulationId !== undefined
+          ? data.formulationId
+          : existing.formulationId) ?? null
+      : null;
+
+  if (normalizedFormulationId) {
     const [formulation] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, data.formulationId));
+      .where(eq(formulations.id, normalizedFormulationId));
 
     if (!formulation) {
       throw new SafeError("Formulation not found");
@@ -760,15 +768,14 @@ export async function updateStorageLocation(
   // product of a different formulation — that would dirty the bin. `IS DISTINCT
   // FROM` handles NULL correctly (a pure-biochar product vs a named formulation
   // counts as a mismatch, and vice versa).
-  const effectiveType = data.type ?? existing.type;
-  if (data.formulationId !== undefined && effectiveType === "product_bin") {
+  if (effectiveType === "product_bin") {
     const [conflicting] = await db
       .select({ id: biocharProducts.id })
       .from(biocharProducts)
       .where(
         and(
           eq(biocharProducts.storageLocationId, storageLocationId),
-          sql`${biocharProducts.formulationId} IS DISTINCT FROM ${data.formulationId}`
+          sql`${biocharProducts.formulationId} IS DISTINCT FROM ${normalizedFormulationId}`
         )
       )
       .limit(1);
@@ -780,10 +787,13 @@ export async function updateStorageLocation(
     }
   }
 
+  const dataWithoutFormulation = { ...data };
+  delete dataWithoutFormulation.formulationId;
   const [updated] = await db
     .update(storageLocations)
     .set({
-      ...data,
+      ...dataWithoutFormulation,
+      formulationId: normalizedFormulationId,
       updatedAt: new Date(),
     })
     .where(eq(storageLocations.id, storageLocationId))

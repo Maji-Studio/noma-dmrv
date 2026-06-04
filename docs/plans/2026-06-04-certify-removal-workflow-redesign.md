@@ -52,7 +52,7 @@ batches that are actually ready.
 The single most important idea. Completeness splits cleanly by *grain* and by
 *where it's fixed*:
 
-```
+```text
 ┌─ BATCH HEALTH ─ per credit batch ─ fixed on /credit-batches/[id] ──────────┐
 │  • Durability inputs (conditional on durabilityOption)                     │
 │  • Feedstock eligibility (mass present, ineligible ≤ 25%)                   │
@@ -98,7 +98,7 @@ of `removals-list.tsx` header, `:55-65`). The old "Group into…" ungrouped
 dropdown is retired in favor of this.
 
 ### Step 1 — Select credit batches
-```
+```text
 overview (dimmed)
   ┌─ New removal ──────────────────────[1●][2][3]──── ✕ ─┐
   │  Select the credit batches for this removal           │
@@ -127,7 +127,7 @@ overview (dimmed)
   batches, advances to Step 2. (Server re-validates health — never trusts client.)
 
 ### Step 2 — Requirements (facility / registry level)
-```
+```text
   ┌─ New removal ──────────────────────[✓][2●][3]──── ✕ ─┐
   │  Registry requirements                                │
   │  ✓ Facility linked to an Isometric project            │
@@ -148,7 +148,7 @@ overview (dimmed)
   resume). The batches stay grouped.
 
 ### Step 3 — Submit
-```
+```text
   ┌─ New removal ──────────────────────[✓][✓][3●]──── ✕ ─┐
   │  Ready to submit 2 batches · 21.5 tCO₂e               │
   │  ⚠ Production environment — this is a real submission. │  (prod only)
@@ -180,7 +180,7 @@ gates this, `readiness.ts:237`). This replaces the standalone
 New detail route. Top of the page = the **health check** panel; batch details +
 edit below.
 
-```
+```text
 /credit-batches/CB-2025-045
 ┌─ Health check ── 2 of 7 issues ───────────────────────────┐
 │ ✓ Durability inputs (200-year: H:Corg present)            │
@@ -364,5 +364,3 @@ Layered per CLAUDE.md (component → hooks → fn → data-access → db).
    batch (COA? lab report? photos?) vs recommended.
 4. **Facility-setup gate UX** — confirm the banner-in-Step-1 approach vs a hard
    pre-gate before the modal opens.
-```
-

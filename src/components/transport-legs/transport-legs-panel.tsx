@@ -55,17 +55,32 @@ export function TransportLegsPanel({
 
   useEffect(() => {
     const intent = searchParams.get("transportLeg");
-    const shouldOpen = intent === "create" || intent === "add";
-    if (!shouldOpen) return;
+    const shouldCreate = intent === "create" || intent === "add";
+    const shouldEdit = intent === "edit";
+    if (!shouldCreate && !shouldEdit) return;
+
+    if (shouldCreate) {
+      queueMicrotask(() => setFormState({ mode: "create" }));
+    } else {
+      const legId = searchParams.get("transportLegId");
+      if (!legId) return;
+      if (!legs) return;
+
+      const leg = legs.find((candidate) => candidate.id === legId);
+      if (leg) {
+        queueMicrotask(() => setFormState({ mode: "edit", leg }));
+      }
+    }
 
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("transportLeg");
+    nextParams.delete("transportLegId");
     const nextQuery = nextParams.toString();
 
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
       scroll: false,
     });
-  }, [pathname, router, searchParams]);
+  }, [legs, pathname, router, searchParams]);
 
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;

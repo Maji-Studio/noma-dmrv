@@ -13,9 +13,8 @@ import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { biocharProducts, deliveries, formulations, orders } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
-
-/** Display name for a product with no amendment blend (NULL formulation). */
-const PURE_BIOCHAR_NAME = "Pure biochar";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import { requireAuth } from "../utils";
 
 function formatStockSubtitle(massKg: number | null, deliveredKg: number): string {
   const remaining = Math.max(0, (massKg ?? 0) - deliveredKg);
@@ -60,17 +59,19 @@ function toEntityOption(r: {
   return {
     id: r.id,
     code: r.code,
-    name: r.formulationName ?? PURE_BIOCHAR_NAME,
+    name: r.formulationName ?? PURE_BIOCHAR_LABEL,
     subtitle: formatStockSubtitle(r.massKg, r.totalDeliveredKg),
   };
 }
 
 export async function getBiocharProducts(params: {
+  userId: string;
   search?: string;
   facilityId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, limit } = params;
+  const { userId, search, facilityId, limit } = params;
+  requireAuth(userId);
 
   const conditions: SQL[] = [];
 
@@ -106,8 +107,10 @@ export async function getBiocharProducts(params: {
 }
 
 export async function getBiocharProductEntityById(
+  userId: string,
   id: string
 ): Promise<EntityOption | null> {
+  requireAuth(userId);
   const [result] = await db
     .select(selection)
     .from(biocharProducts)

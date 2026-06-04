@@ -144,7 +144,7 @@ export function computeFDurable200(input: FDurable200Input): FDurable200Result {
   const { a, b, c } = F_DURABLE_200_COEFFICIENTS;
 
   const rounded = roundSoilTemperatureC(input.soilTemperatureC);
-  const temperatureFloored = rounded < SOIL_TEMPERATURE_FLOOR_C;
+  const temperatureFloored = input.soilTemperatureC < SOIL_TEMPERATURE_FLOOR_C;
   const effectiveSoilTemperatureC = temperatureFloored ? SOIL_TEMPERATURE_FLOOR_C : rounded;
 
   const raw = 1 - (c + (a + b * Math.log(effectiveSoilTemperatureC)) * input.hToCorgRatio);

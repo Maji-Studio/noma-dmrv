@@ -28,6 +28,7 @@ import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 
 // ============================================
 // Helpers
@@ -86,8 +87,8 @@ function createColumns(
     {
       id: "formulation",
       header: "Formulation",
-      accessorFn: (row) => row.formulation?.name ?? "Pure biochar",
-      cell: ({ row }) => row.original.formulation?.name || "Pure biochar",
+      accessorFn: (row) => row.formulation?.name ?? PURE_BIOCHAR_LABEL,
+      cell: ({ row }) => row.original.formulation?.name || PURE_BIOCHAR_LABEL,
     },
     {
       accessorKey: "massKg",
@@ -369,7 +370,7 @@ export function BiocharProductList() {
             fields: [
               { label: "Code", value: displaySideSheet.entity.code },
               { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
-              { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? "Pure biochar" },
+              { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
               { label: "Wet Mass", value: formatMass(displaySideSheet.entity.massKg) },
               { label: "Moisture", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : undefined },
               { label: "Water Added", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : undefined },
