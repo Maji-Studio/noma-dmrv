@@ -63,6 +63,7 @@ export function GhgStatementCreateDrawer({
       <SlideOverPanel.Content size="wide">
         {open && (
           <DrawerBody
+            key={facilityId}
             facilityId={facilityId}
             isProduction={isProduction}
             onClose={onClose}

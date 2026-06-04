@@ -20,5 +20,7 @@ export default async function RemovalSourcesRedirect({
   const facility = typeof sp.facility === "string" ? sp.facility : undefined;
 
   const base = `/certification/removals/${removalId}/review?step=evidence`;
-  redirect(facility ? `${base}&facility=${facility}` : base);
+  redirect(
+    facility ? `${base}&facility=${encodeURIComponent(facility)}` : base,
+  );
 }

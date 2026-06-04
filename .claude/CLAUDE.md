@@ -35,7 +35,7 @@ Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock �
 
 ### Layered flow — each layer imports only from the layer below
 
-```
+```text
 Component (UI)
   ↓ hooks/        React Query — client state
   ↓ fn/           Server actions — "use server", Zod validation, orchestration
@@ -47,7 +47,7 @@ Rules: never skip layers · `fn/` always has `"use server"` and validates input 
 
 ### Project structure
 
-```
+```text
 src/
 ├── app/                # App Router
 │   ├── (auth)/         # Auth routes
@@ -194,7 +194,7 @@ Submits removals / GHG statements / sensor data to the Isometric registry via `s
 - `docs/isometric/versions.json` — single source of pinned protocol/module versions
 - `requirements-shortlist.md`, `schema-mapping.md`, `p0-compliance-checklist.md`, `simple-implementation-guide.md`, `condition-registry.md` (conditional-field triggers), `update-playbook.md`
 - `integration-plan.md`, `openapi-index.md`, `changes.md` (append-only changelog)
-- Decisions: `docs/adr/0001`–`0006`. Deferred work / sandbox checks: `docs/open-questions.md`.
+- Decisions: `docs/adr/0001`–`0007`. Deferred work / sandbox checks: `docs/open-questions.md`.
 
 All local summaries are **non-authoritative interpretations** — verify against linked Isometric Registry URLs before implementing logic or making credit claims. There's an `isometric` MCP server (call its `how_to` tool first) for authoritative protocol content.
 

@@ -81,17 +81,20 @@ export async function getEntities(
       // an unknown `filterBy.type` would otherwise be cast straight into a SQL
       // equality and silently match nothing (or, with future schema changes,
       // the wrong rows). Mirrors the productionRun status guard below.
-      const allowed = new Set<string>(storageLocationTypes);
-      const validTypes = (filterBy?.type ?? "")
-        .split(",")
-        .map((t) => t.trim())
-        .filter((t): t is StorageLocationType => allowed.has(t));
-      const type =
-        validTypes.length === 0
-          ? undefined
-          : validTypes.length === 1
-            ? validTypes[0]
-            : validTypes;
+      const rawType = filterBy?.type?.trim();
+      let type: StorageLocationType | StorageLocationType[] | undefined;
+      if (rawType) {
+        const allowed = new Set<string>(storageLocationTypes);
+        const validTypes = rawType
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t): t is StorageLocationType => allowed.has(t));
+        // A type filter was requested but nothing matched the allowed set.
+        // Treat it as a guaranteed no-match rather than dropping the filter —
+        // widening to `undefined` here would return unrelated locations.
+        if (validTypes.length === 0) return [];
+        type = validTypes.length === 1 ? validTypes[0] : validTypes;
+      }
       return getStorageLocations({
         search,
         facilityId: filterBy?.facilityId,
