@@ -108,15 +108,20 @@ function DrawerBody({
   // The preview query only runs once the operator reaches the Preview step.
   const openQuery = useOpenRemovalsForFacility(facilityId, stepIndex >= 1);
 
-  const goTo = (index: number) => {
+  const goTo = async (index: number) => {
+    if (
+      index > stepIndex &&
+      stepIndex === 0 &&
+      !(await trigger("reportingPeriodEndOn"))
+    ) {
+      return;
+    }
     setStepIndex(index);
     setFurthest((f) => Math.max(f, index));
   };
 
   const advance = async () => {
-    // Forward gate: the period must validate before previewing or confirming.
-    if (stepIndex === 0 && !(await trigger("reportingPeriodEndOn"))) return;
-    goTo(stepIndex + 1);
+    await goTo(stepIndex + 1);
   };
 
   const onCreate = handleSubmit(async (data) => {
