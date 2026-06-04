@@ -119,15 +119,6 @@ export type FacilityEmissionConfigFormData = z.infer<
   typeof facilityEmissionConfigSchema
 >;
 
-// Panel-facing submit: the Certify panel lives in the credit-batch side
-// sheet. Resolves (lazily creates) the batch's removal, then submits it.
-export const submitCreditBatchSchema = z.object({
-  creditBatchId: z.string().uuid(),
-  confirmProduction: z.boolean().optional(),
-});
-
-export type SubmitCreditBatchInput = z.infer<typeof submitCreditBatchSchema>;
-
 // Hub-facing submit: submit an existing removal directly by id.
 export const submitRemovalSchema = z.object({
   removalId: z.string().uuid(),

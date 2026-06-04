@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Modal } from "@/components/ui";
+import { Modal } from "@/components/ui";
 import {
   FormActions,
   FormField,
@@ -26,6 +26,7 @@ import {
 } from "@/hooks/use-certification";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
 import { ProductionConfirmation } from "./production-confirmation";
+import { ConfirmActionDialog } from "./confirm-action-dialog";
 
 interface FacilityCertifierDialogProps {
   isOpen: boolean;
@@ -261,41 +262,17 @@ export function UnlinkConfirmDialog({
   errorMessage,
 }: UnlinkConfirmDialogProps) {
   return (
-    <Modal
+    <ConfirmActionDialog
       isOpen={isOpen}
       onClose={onClose}
-      ariaLabelledBy="unlink-dialog-title"
-      width="sm"
-    >
-      <div className="flex flex-col gap-24">
-        <h2 id="unlink-dialog-title" className="title-heading-3">
-          Unlink Isometric project
-        </h2>
-        <p className="body-medium text-[var(--color-text-secondary)]">
-          The facility will no longer be associated with the Isometric
-          project. Past submissions stay on Isometric.
-        </p>
-        {errorMessage && <ServerError message={errorMessage} />}
-        <div className="flex gap-16 justify-end">
-          <Button
-            size="large"
-            variant="default"
-            onClick={onClose}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="large"
-            variant="default"
-            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
-            onClick={onConfirm}
-            disabled={isPending}
-          >
-            {isPending ? "Unlinking…" : "Unlink"}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      onConfirm={onConfirm}
+      isPending={isPending}
+      errorMessage={errorMessage}
+      variant="destructive"
+      title="Unlink Isometric project"
+      confirmLabel="Unlink"
+      busyLabel="Unlinking…"
+      body="The facility will no longer be associated with the Isometric project. Past submissions stay on Isometric."
+    />
   );
 }

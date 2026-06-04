@@ -178,8 +178,8 @@ export function ProjectEmissionsDriftPanel() {
           <DriftRow
             icon="warn"
             message="No LCA-period emission rows entered."
-            fixHint="Add rows in /admin/emission-estimates →"
-            fixHref="/admin/emission-estimates"
+            fixHint="Add rows in Settings → Emissions →"
+            fixHref="/certification/settings"
           />
         )}
 
@@ -227,8 +227,8 @@ export function ProjectEmissionsDriftPanel() {
             key={o.component.id}
             icon="warn"
             message={`Project Component "${o.component.display_name}" (blueprint="${o.component.blueprint_key}") has no audit-trail row.`}
-            fixHint="Add to /admin/emission-estimates →"
-            fixHref="/admin/emission-estimates"
+            fixHint="Add in Settings → Emissions →"
+            fixHref="/certification/settings"
           />
         ))}
       </ul>

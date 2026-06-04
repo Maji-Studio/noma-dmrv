@@ -247,7 +247,14 @@ function makeContext(
       sample: { count: 0, entityIds: [], aggregationWarning: null },
     },
     requiredTransportCategories: [],
+    hasSubmittableRuns: true,
+    runSummary: {
+      runCount: 1,
+      totalBiocharOutputKg: biocharMassKg,
+      appliedDryKg: biocharMassKg,
+    },
     latestSubmission: latest,
+    linkedGhgStatement: null,
     isProduction: false,
     lineages: [
       {
