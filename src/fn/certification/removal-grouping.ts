@@ -6,39 +6,14 @@ import {
 } from "@/data-access/certifier-removals";
 import {
   assignCreditBatchToRemovalSchema,
-  submitCreditBatchSchema,
   submitRemovalSchema,
   type AssignCreditBatchToRemovalInput,
-  type SubmitCreditBatchInput,
   type SubmitRemovalInput,
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { submitRemoval, type RemovalSubmissionResult } from "./submit-removal";
 import { submitRateLimit } from "./shared";
-
-// Panel-facing action — the Certify panel lives in the credit-batch side
-// sheet. Ensures the batch has a removal (lazy 1:1; creates one if the batch
-// is not yet grouped), then submits that removal. The removal may carry
-// sibling credit batches when the user has grouped them.
-export async function submitCreditBatchRemoval(
-  input: SubmitCreditBatchInput | string,
-): Promise<ActionResult<RemovalSubmissionResult>> {
-  return withAction(async (userId) => {
-    const parsed = submitCreditBatchSchema.parse(
-      typeof input === "string" ? { creditBatchId: input } : input,
-    );
-    const removalId = await ensureRemovalForCreditBatch(
-      userId,
-      parsed.creditBatchId,
-    );
-    return submitRemoval({
-      userId,
-      removalId,
-      confirmProduction: parsed.confirmProduction,
-    });
-  }, { rateLimit: submitRateLimit("cert:submit-removal") });
-}
 
 // Hub-facing action — submit an existing removal directly by id.
 export async function submitRemovalAction(

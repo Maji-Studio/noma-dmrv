@@ -1,0 +1,41 @@
+/**
+ * Adapter: the removal Certify context → the readiness facts the classifier
+ * judges. The ONE projection both readiness surfaces share — the server-owned
+ * Overview work queue (`fn/certification/overview.ts`) and the client Review
+ * pre-flight (`removal-review/index.tsx`) — so a removal's verdict is identical
+ * wherever it's computed, and neither side can drift from the other.
+ *
+ * Kept separate from `readiness.ts` (the pure classifier) so that module stays
+ * free of the context shape. Client-safe: a type-only context import plus the
+ * client-safe `isLockedInFlight`.
+ */
+
+import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import type { RemovalReadinessFacts } from "./readiness";
+import type { LocalSubmissionStatus } from "./status";
+
+export function toRemovalReadinessFacts(
+  ctx: RemovalCertifyContext,
+): RemovalReadinessFacts {
+  const lockInFlight = ctx.latestSubmission
+    ? isLockedInFlight(ctx.latestSubmission)
+    : false;
+  return {
+    local: (ctx.latestSubmission?.status ?? null) as LocalSubmissionStatus | null,
+    lockInFlight,
+    hasMapping: !!ctx.mapping,
+    hasDefaultTemplate: !!ctx.defaultTemplate,
+    missingDefaultTemplateId: ctx.missingDefaultTemplateId,
+    unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
+    hasSubmittableRuns: ctx.hasSubmittableRuns,
+    requiredTransport: ctx.requiredTransportCategories.map((category) => {
+      const bucket = ctx.transportCoverage[category];
+      return {
+        category,
+        count: bucket.count,
+        hasAggregationWarning: bucket.aggregationWarning !== null,
+      };
+    }),
+  };
+}
