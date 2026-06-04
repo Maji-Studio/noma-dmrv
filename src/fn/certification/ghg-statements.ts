@@ -34,6 +34,7 @@ import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
 import { db } from "@/db";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import {
   createGhgStatement,
   decideSubmissionClaim,
@@ -149,6 +150,16 @@ export async function createGhgStatementDraft(
   return withAction(async (userId) => {
     const parsed = createGhgStatementSchema.parse(input);
     assertProductionConfirmed(parsed.confirmProduction);
+
+    const submissionAttemptId = crypto.randomUUID();
+    logger.info(
+      {
+        op: "ghg-statement:create",
+        facilityId: parsed.facilityId,
+        submissionAttemptId,
+      },
+      "ghg statement draft requested",
+    );
 
     const project = await getCertifierProjectByFacility(
       userId,
@@ -427,6 +438,12 @@ export async function submitGhgStatementToVerifier(
   return withAction(async (userId) => {
     const parsed = submitGhgStatementDialogSchema.parse(input);
     assertProductionConfirmed(parsed.confirmProduction);
+
+    const submissionAttemptId = crypto.randomUUID();
+    logger.info(
+      { op: "ghg-statement:submit", ghgStatementId, submissionAttemptId },
+      "ghg statement submit started",
+    );
 
     // getLatestSubmission's key constrains type + entity, so the returned
     // row provably belongs to this GHG statement.

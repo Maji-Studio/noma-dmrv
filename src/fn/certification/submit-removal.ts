@@ -8,11 +8,13 @@ import {
   type CertifierProjectRow,
   type MappingClaimGuard,
 } from "@/data-access/certification";
+import { env } from "@/config/env";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SafeError } from "@/lib/errors";
+import { logger, type Logger } from "@/lib/log";
 import { z } from "zod";
 import {
   STAGE_SPLIT_SUM_TOLERANCE,
@@ -197,8 +199,19 @@ function resolveTemplateInputs(args: {
   // monitored Datapoint's `source_ids` so the audit trail attaches evidence
   // to each datapoint posted to Isometric.
   sourceIds: string[];
+  // Sandbox-only: allow a 0-magnitude stub for PERIOD_INPUT_TUPLES inputs a
+  // template still declares (ADR 0005). Off in production — see
+  // buildCreateDatapointRequest + docs/open-questions.md.
+  allowPeriodInputStub: boolean;
 }): ResolvedTemplateInputs {
-  const { template, blueprintsByKey, agg, externalProjectId, sourceIds } = args;
+  const {
+    template,
+    blueprintsByKey,
+    agg,
+    externalProjectId,
+    sourceIds,
+    allowPeriodInputStub,
+  } = args;
 
   const monitored: ResolvedMonitoredInput[] = [];
   const fixed: ResolvedFixedInput[] = [];
@@ -252,6 +265,7 @@ function resolveTemplateInputs(args: {
           projectId: externalProjectId,
           supplierRefId: "__placeholder__",
           sourceIds,
+          allowPeriodInputStub,
         });
         monitored.push({
           removalTemplateComponentId: component.id,
@@ -297,6 +311,16 @@ export async function submitRemoval(
   args: SubmitRemovalArgs,
 ): Promise<RemovalSubmissionResult> {
   const { userId, removalId, confirmProduction } = args;
+
+  // Per-attempt correlation id so the start breadcrumb, boundary logs, and any
+  // best-effort warnings for one submit can be tied together in an aggregator.
+  const submissionAttemptId = crypto.randomUUID();
+  const log = logger.child({
+    op: "removal:submit",
+    removalId,
+    submissionAttemptId,
+  });
+  log.info("removal submit started");
 
   const ctx = await loadRemovalSubmissionContext(userId, removalId);
   if (!ctx.mapping) {
@@ -418,12 +442,20 @@ export async function submitRemoval(
     candidateDocumentIds,
   });
 
+  // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
+  // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
+  // 0-magnitude stub instead of failing closed, so the pipeline can be
+  // exercised before the real LCA value lands. Production NEVER stubs — 0 is an
+  // over-claim for these positive emissions. See docs/open-questions.md.
+  const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
+
   const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
     template: defaultTemplate,
     blueprintsByKey,
     agg,
     externalProjectId,
     sourceIds,
+    allowPeriodInputStub,
   });
 
   // The hash is a function of what gets sent to Isometric — the run set and
@@ -517,13 +549,14 @@ export async function submitRemoval(
         externalProjectId,
         supersedePreviousId: null,
         resumed: true,
+        log,
       });
     }
     case "create-new-version": {
       if (claim.reason === "rejected-hash-changed") {
-        console.warn(
-          "Removal retry will create a new version after rejected row with changed hash",
+        log.warn(
           { submissionId: latest!.id },
+          "removal retry will create a new version after rejected row with changed hash",
         );
       }
       const removalSupplierRef = buildRemovalSupplierRef({
@@ -577,6 +610,7 @@ export async function submitRemoval(
                 agg,
                 externalProjectId,
                 sourceIds: lockedSourceIds,
+                allowPeriodInputStub,
               })
             : null;
           const finalMonitored = finalResolved?.monitored ?? monitored;
@@ -651,6 +685,7 @@ export async function submitRemoval(
         externalProjectId,
         supersedePreviousId: claim.supersedePreviousId,
         resumed: false,
+        log,
       });
     }
     case "resume-poll-existing":
@@ -674,6 +709,8 @@ interface RunRemovalSubmissionArgs {
   externalProjectId: string;
   supersedePreviousId: string | null;
   resumed: boolean;
+  /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
+  log: Logger;
 }
 
 async function runRemovalSubmission({
@@ -688,6 +725,7 @@ async function runRemovalSubmission({
   externalProjectId,
   supersedePreviousId,
   resumed,
+  log,
 }: RunRemovalSubmissionArgs): Promise<RemovalSubmissionResult> {
   const datapointIdsByRtcInput = new Map<string, string>();
   for (const f of fixed) {
@@ -749,10 +787,10 @@ async function runRemovalSubmission({
       completedOn: formatUtcDate(agg.latestEndTime),
     });
   } catch (err) {
-    console.warn("Failed to persist removal reporting window", {
-      removalId,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    log.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "failed to persist removal reporting window",
+    );
   }
 
   if (resumed) {

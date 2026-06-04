@@ -86,6 +86,7 @@ export function FacilityCard({
           <Button
             size="small"
             variant="default"
+            aria-label={`Delete facility ${facility.code}`}
             className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
             onClick={() => onDelete(facility.id)}
           >

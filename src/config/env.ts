@@ -31,7 +31,11 @@ const envSchema = z.object({
     .default("false")
     .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
+  // Logging level (pino). Optional; the logger defaults to "info" in
+  // production and "debug" otherwise when this is unset.
+  LOG_LEVEL: z
+    .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
+    .optional(),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
@@ -67,6 +71,17 @@ const envSchema = z.object({
   // regional/dualstack patterns. Entries match via `hostname.endsWith` after
   // leading-dot normalization, so list the full set you need.
   ISOMETRIC_UPLOAD_HOST_ALLOWLIST: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional(),
+  ),
+
+  // Allowlist for the /api/documents/[id] legacy-`fileUrl` redirect
+  // (`src/lib/documents/redirect-allowlist.ts`). Same shape/semantics as
+  // ISOMETRIC_UPLOAD_HOST_ALLOWLIST: empty → safe narrow default families
+  // (.s3.amazonaws.com + regional/dualstack S3, .isometric.com,
+  // .digitaloceanspaces.com, .storage.googleapis.com); a NON-EMPTY value
+  // REPLACES the defaults (use it to pin the exact Isometric report bucket).
+  ISOMETRIC_STORAGE_REDIRECT_HOSTS: z.preprocess(
     emptyToUndefined,
     z.string().min(1).optional(),
   ),
