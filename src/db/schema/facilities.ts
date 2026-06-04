@@ -77,6 +77,11 @@ export const storageLocations = pgTable(
     // Enforces "one feedstock type per bin" — set on first intake, validated on subsequent
     // No FK reference to avoid circular import with feedstock.ts; enforced at application layer
     feedstockTypeId: uuid('feedstock_type_id'),
+    // Product bins only: enforces "one formulation per bin" so product bins stay clean.
+    // NULL = a pure-biochar bin (or not yet claimed). Set at setup or on first product
+    // intake, validated on subsequent. No FK reference to avoid a circular import with
+    // products.ts; enforced at the application layer (mirrors feedstockTypeId above).
+    formulationId: uuid('formulation_id'),
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),

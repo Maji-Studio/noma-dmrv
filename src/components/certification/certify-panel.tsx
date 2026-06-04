@@ -57,7 +57,7 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
 
   if (ctx.error || !ctx.data) {
     return (
-      <p className="body-small text-[var(--clr-red)]" role="alert">
+      <p className="body-small text-[var(--color-signal-red)]" role="alert">
         Unable to load certification state. Try refreshing the page.
       </p>
     );

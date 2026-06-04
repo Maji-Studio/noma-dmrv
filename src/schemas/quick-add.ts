@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { emptyToNull } from "./helpers";
 import {
   storageLocationTypes,
   type StorageLocationType,
@@ -98,6 +99,8 @@ export const storageLocationQuickAddSchema = z.object({
     .positive("Capacity must be positive")
     .optional()
     .nullable(),
+  // Product bins only — restricts the bin to one formulation (empty = pure biochar)
+  formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
 });
 
 export type StorageLocationQuickAddData = z.infer<typeof storageLocationQuickAddSchema>;

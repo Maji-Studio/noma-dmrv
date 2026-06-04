@@ -54,8 +54,14 @@ function partitionEntries(entries: Iterable<string>): {
   for (const raw of entries) {
     const entry = raw.trim().toLowerCase();
     if (entry.length === 0) continue;
-    if (entry.startsWith(".")) suffixes.push(entry);
-    else exactHosts.push(entry);
+    if (entry.startsWith(".")) {
+      // A suffix must be a real dotted label sequence — reject malformed forms
+      // (`.`, `..example.com`, `example.`, doubled dots) rather than store an
+      // entry that can never match a legitimate host.
+      if (entry.length > 1 && !entry.endsWith(".") && !entry.includes("..")) {
+        suffixes.push(entry);
+      }
+    } else exactHosts.push(entry);
   }
   return { exactHosts, suffixes };
 }
@@ -70,7 +76,10 @@ export function resolveHostAllowlist(
   envRaw: string | undefined,
   defaults: readonly string[],
 ): HostAllowlist {
-  if (!envRaw) {
+  // A whitespace-only value (e.g. `"  "`) is treated the same as unset —
+  // otherwise it would partition to an empty allowlist with the defaults
+  // dropped, silently blocking every host.
+  if (!envRaw || envRaw.trim().length === 0) {
     return { ...partitionEntries(defaults), includeDefaultS3Patterns: true };
   }
   return {

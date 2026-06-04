@@ -24,6 +24,7 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   productionRun: "Production Run",
   application: "Application",
   formulation: "Formulation",
+  biocharProduct: "Biochar Product",
   creditBatch: "Credit Batch",
 };
 

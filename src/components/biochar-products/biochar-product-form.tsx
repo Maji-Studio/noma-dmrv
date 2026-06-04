@@ -18,6 +18,7 @@ import { useEntityById } from "@/hooks/use-entities";
 import { Button } from "@/components/ui";
 import {
   biocharProductFormSchema,
+  PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -230,6 +231,17 @@ export function BiocharProductForm({
     }
   }, [selectedFacilityId, setValue]);
 
+  // Clear the destination bin when the formulation changes — a product bin is
+  // reserved for a single formulation, so a previously chosen bin may no longer
+  // be valid for the new formulation (or for pure biochar).
+  const previousFormulationIdRef = useRef(selectedFormulationId);
+  useEffect(() => {
+    if (selectedFormulationId !== previousFormulationIdRef.current) {
+      setValue("storageLocationId", "");
+      previousFormulationIdRef.current = selectedFormulationId;
+    }
+  }, [selectedFormulationId, setValue]);
+
   // Auto-fill mass from linked production run
   useEffect(() => {
     if (product || dirtyFields.massKg || linkedRunPreview?.biocharOutputKg == null) return;
@@ -435,47 +447,58 @@ export function BiocharProductForm({
       <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
         <SectionLabel>Destination & Product</SectionLabel>
 
+        {/* Formulation drives the bin filter, so it comes first. Leaving it empty
+            produces a pure-biochar product and limits the bin list to pure bins. */}
         <FormField
-          id="storageLocationId"
-          label="Product Bin"
-          error={errors.storageLocationId?.message}
-          helperText="Where will the finished product be stored?"
-          required
+          id="formulationId"
+          label="Formulation"
+          error={errors.formulationId?.message}
+          helperText="Leave empty for a pure-biochar product (no amendment blend)."
         >
           <Controller
-            name="storageLocationId"
+            name="formulationId"
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
-                entityType="storageLocation"
+                entityType="formulation"
                 value={field.value || ""}
                 onChange={field.onChange}
-                placeholder="Select a product bin..."
+                placeholder="Select a formulation (or leave empty for pure biochar)"
                 disabled={isSubmitting}
                 error={!!fieldState.error}
-                filterBy={{
-                  ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
-                  type: "product_bin",
-                }}
               />
             )}
           />
         </FormField>
 
         <div className="grid grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="formulationId" label="Formulation" error={errors.formulationId?.message} required>
+          <FormField
+            id="storageLocationId"
+            label="Product Bin"
+            error={errors.storageLocationId?.message}
+            helperText={
+              selectedFormulationId
+                ? "Bins for this formulation, or unassigned bins (claimed on first use)."
+                : "Pure-biochar or unassigned bins."
+            }
+            required
+          >
             <Controller
-              name="formulationId"
+              name="storageLocationId"
               control={control}
               render={({ field, fieldState }) => (
                 <EntitySelect
-                  entityType="formulation"
-                  value={field.value}
+                  entityType="storageLocation"
+                  value={field.value || ""}
                   onChange={field.onChange}
-                  placeholder="Select a formulation"
+                  placeholder="Select a product bin..."
                   disabled={isSubmitting}
                   error={!!fieldState.error}
-                  autoSelectSingle
+                  filterBy={{
+                    ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
+                    type: "product_bin",
+                    formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
+                  }}
                 />
               )}
             />

@@ -24,7 +24,7 @@ import { Field, Section } from "./panel-layout";
 // one. Without `?facility=`, Settings would fall back to the localStorage
 // facility and the operator would manage the wrong link.
 const settingsHref = (facilityId: string) =>
-  `/certification/settings?facility=${facilityId}`;
+  `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
 export function FacilityCertifierSummary({
   facilityId,

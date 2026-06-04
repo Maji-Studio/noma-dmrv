@@ -218,6 +218,13 @@
       "when": 1780396133907,
       "tag": "0030_nappy_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780567156070,
+      "tag": "0031_lean_kronos",
+      "breakpoints": true
     }
   ]
 }
