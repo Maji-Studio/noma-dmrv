@@ -7,7 +7,7 @@
 > env override added, covered by `tests/redirect-allowlist.test.ts` +
 > `tests/documents-route.test.ts`. Recorded in `docs/isometric/changes.md`
 > (2026-06-03 entry). Kept for the rationale/grounding it captured.
-
+>
 > Self-contained execution plan. Picks up the deferred WU-C item from the
 > 2026-06-02 audit-remediation pass (see `docs/isometric/changes.md`). Safe to
 > execute in a fresh context — all grounding is inline.
@@ -19,7 +19,7 @@
 `src/lib/documents/redirect-allowlist.ts` currently allows whole provider
 families:
 
-```
+```ts
 const CLOUD_HOST_SUFFIXES = [".isometric.com", ".amazonaws.com",
   ".googleapis.com", ".digitaloceanspaces.com"];
 ```
@@ -40,7 +40,7 @@ emergency.
 `src/lib/isometric/utils/signed-upload.ts` guards the *opposite* direction (we
 PUT to Isometric-presigned upload URLs) and already does it right:
 
-```
+```ts
 // signed-upload.ts
 const DEFAULT_UPLOAD_HOST_SUFFIXES = [
   ".s3.amazonaws.com",          // NOT broad .amazonaws.com

@@ -165,12 +165,17 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     warnings: [],
   };
 
+  // Distinctive (non-"kg") unit so the stub assertion verifies the builder
+  // echoes blueprintInput.compatible_unit rather than coincidentally matching a
+  // hard-coded "kg".
+  const STUB_COMPATIBLE_UNIT = "tonne";
+
   function callWith(
     tuple: typeof PERIOD_INPUT_TUPLE_CANON[number],
     opts?: { allowPeriodInputStub?: boolean },
   ) {
     const blueprintInput: ComponentBlueprintInput = {
-      compatible_unit: "kg",
+      compatible_unit: STUB_COMPATIBLE_UNIT,
       data_shape: "SCALAR",
       description: "x",
       input_key: tuple.input,
@@ -223,7 +228,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     for (const t of PERIOD_INPUT_TUPLE_CANON) {
       const dp = callWith(t, { allowPeriodInputStub: true })();
       expect(dp.quantity.magnitude).toBe(0);
-      expect(dp.quantity.unit).toBe("kg"); // blueprintInput.compatible_unit
+      expect(dp.quantity.unit).toBe(STUB_COMPATIBLE_UNIT); // echoes blueprintInput.compatible_unit
       expect(dp.type).toBe("REPORTED");
       expect(dp.display_name).toBe(t.input);
     }

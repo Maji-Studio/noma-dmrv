@@ -28,8 +28,11 @@ function toApplicationOption(result: ApplicationOptionRow): EntityOption {
       result.facilityName,
       result.deliveryCode ? `Delivery ${result.deliveryCode}` : undefined,
       result.fieldIdentifier ?? undefined,
+      // Deterministic ISO `yyyy-mm-dd` — `toLocaleDateString()` renders in the
+      // server's locale/timezone, so the same row could format differently
+      // across environments.
       result.applicationDate
-        ? new Date(result.applicationDate).toLocaleDateString()
+        ? new Date(result.applicationDate).toISOString().slice(0, 10)
         : undefined,
       result.status,
     ]

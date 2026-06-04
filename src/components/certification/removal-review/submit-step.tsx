@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { CheckCircle } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, buttonVariants } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalReadiness } from "@/lib/certification/readiness";
@@ -85,8 +85,11 @@ export function SubmitStep({
             </span>
           </div>
         </div>
-        <Link href={backHref}>
-          <Button variant="primary">Back to Removals</Button>
+        <Link
+          href={backHref}
+          className={buttonVariants({ variant: "primary" })}
+        >
+          Back to Removals
         </Link>
       </div>
     );

@@ -5,15 +5,20 @@
  * side-sheet (project link) and /admin/emission-estimates (LCA config), plus
  * the formerly-invisible env/credential posture.
  *
- *   A · Registry connection — Isometric  (everyone reads; admins manage)
- *   B · Emission / LCA config            (admin only — ADR 0005, import-only)
- *   C · Environment & health             (admin only — read-only, no secrets)
+ * The three areas live behind tabs (deep-linkable via `?tab=`, matching the
+ * `?step=` / `?area=` convention elsewhere):
  *
- * Provider-neutral shell (Decision #1): a future registry slots in beside A.
- * Facility comes from context (never a per-form picker). Sections B/C are
- * gated client-side on role via `useIsAdmin()` — a UX gate only; the layout is
- * NEVER `requireAdmin`-ed (operators use the hubs), and every privileged
- * action is `requireAdminAction`-guarded server-side.
+ *   connection  · Registry connection — Isometric  (everyone reads; admins manage)
+ *   emissions   · Emission / LCA config            (admin only — ADR 0005, import-only)
+ *   environment · Environment & health             (admin only — read-only, no secrets)
+ *
+ * Provider-neutral shell (Decision #1): a future registry slots in beside the
+ * connection tab. Facility comes from context (never a per-form picker). The
+ * emissions/environment tabs are gated client-side on role via `useIsAdmin()`
+ * — a UX gate only; the layout is NEVER `requireAdmin`-ed (operators use the
+ * hubs), and every privileged action is `requireAdminAction`-guarded
+ * server-side. A non-admin who deep-links to an admin tab falls back to
+ * `connection`.
  */
 "use client";
 
@@ -23,6 +28,7 @@ import {
   Plugs,
   Pulse,
 } from "@phosphor-icons/react/dist/ssr";
+import { parseAsStringEnum, useQueryState } from "nuqs";
 import type { ElementType, ReactNode } from "react";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
 import { PeriodEmissionsSection } from "@/components/admin/period-emissions-section";
@@ -32,6 +38,20 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { EnvBanner } from "./env-banner";
 import { FacilityCertifierSection } from "./facility-certifier-section";
+
+const TAB_KEYS = ["connection", "emissions", "environment"] as const;
+type TabKey = (typeof TAB_KEYS)[number];
+
+const TABS: {
+  key: TabKey;
+  label: string;
+  icon: ElementType;
+  adminOnly: boolean;
+}[] = [
+  { key: "connection", label: "Connection", icon: Plugs, adminOnly: false },
+  { key: "emissions", label: "Emissions", icon: Gauge, adminOnly: true },
+  { key: "environment", label: "Environment", icon: Pulse, adminOnly: true },
+];
 
 function SettingsSection({
   icon: Icon,
@@ -62,17 +82,76 @@ function SettingsSection({
   );
 }
 
+function SettingsTabs({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: typeof TABS;
+  active: TabKey;
+  onSelect: (key: TabKey) => void;
+}) {
+  return (
+    <div
+      className="flex gap-0 overflow-x-auto border-b border-[var(--color-border-secondary)]"
+      role="tablist"
+    >
+      {tabs.map(({ key, label, icon: Icon }) => {
+        const isActive = key === active;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onSelect(key)}
+            className="flex shrink-0 items-center gap-8 h-[48px] px-16 label-button transition-colors cursor-pointer"
+            style={{
+              color: isActive
+                ? "var(--color-text-primary)"
+                : "var(--color-text-secondary)",
+              borderBottom: isActive
+                ? "2px solid var(--color-text-primary)"
+                : "2px solid transparent",
+              background: isActive
+                ? "var(--color-background-white)"
+                : "transparent",
+            }}
+          >
+            <Icon size={16} weight="bold" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CertificationSettings() {
   const { facilityId, selectedFacility } = useFacilityContext();
   const isAdmin = useIsAdmin();
 
   // DB-only summary — no Isometric API. Provides the page EnvBanner's
-  // environment and section B's prefill mapping without pulling the management
-  // payload (Section A fetches that itself, only when the viewer can manage).
+  // environment and the emissions tab's prefill mapping without pulling the
+  // management payload (the connection tab fetches that itself, only when the
+  // viewer can manage).
   const {
     data: summary,
     isLoading: summaryLoading,
   } = useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
+
+  const [tab, setTab] = useQueryState(
+    "tab",
+    parseAsStringEnum<TabKey>([...TAB_KEYS])
+      .withDefault("connection")
+      .withOptions({ shallow: true, history: "replace" }),
+  );
+
+  // Only show admin tabs to admins; a non-admin deep-linking to one falls back
+  // to `connection`. `isAdmin` is false until hydration, so the admin tabs
+  // appear once the session resolves — matching the rest of the page's gating.
+  const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  const activeTab = visibleTabs.some((t) => t.key === tab) ? tab : "connection";
 
   return (
     <div className="container-max flex flex-col gap-32 py-32">
@@ -110,31 +189,39 @@ export function CertificationSettings() {
           </div>
         </div>
       ) : (
-        <>
+        <div className="flex flex-col gap-24">
           <EnvBanner
             isProduction={summary?.isProduction ?? false}
             isLoading={summaryLoading || !summary}
           />
 
-          {/* A · Registry connection — Isometric */}
-          <SettingsSection
-            icon={Plugs}
-            title="Registry connection — Isometric"
-            caption="The Isometric project every removal and GHG statement from this facility targets."
-          >
-            <FacilityCertifierSection
-              key={facilityId}
-              facilityId={facilityId}
-              canManage={isAdmin}
-              embedded
-            />
-          </SettingsSection>
+          <SettingsTabs
+            tabs={visibleTabs}
+            active={activeTab}
+            onSelect={setTab}
+          />
 
-          {/* B · Emission / LCA config — admin only (ADR 0005, import-only).
+          {/* Registry connection — Isometric (everyone reads; admins manage) */}
+          {activeTab === "connection" && (
+            <SettingsSection
+              icon={Plugs}
+              title="Registry connection — Isometric"
+              caption="The Isometric project every removal and GHG statement from this facility targets."
+            >
+              <FacilityCertifierSection
+                key={`facility-certifier-${facilityId}`}
+                facilityId={facilityId}
+                canManage={isAdmin}
+                embedded
+              />
+            </SettingsSection>
+          )}
+
+          {/* Emission / LCA config — admin only (ADR 0005, import-only).
               EmissionEstimatesForm seeds its RHF defaultValues from `mapping`
               at mount, so it must not mount until the summary has loaded —
               otherwise saved genset/stage-split values render blank. */}
-          {isAdmin && (
+          {activeTab === "emissions" && isAdmin && (
             <SettingsSection
               icon={Gauge}
               title="Emission estimates"
@@ -144,19 +231,27 @@ export function CertificationSettings() {
                 <p className="body-medium text-[var(--color-text-tertiary)]">
                   Loading facility configuration…
                 </p>
+              ) : !summary ? (
+                <p className="body-medium text-[var(--clr-red)]" role="alert">
+                  Couldn&apos;t load facility configuration. Refresh the page to
+                  retry.
+                </p>
               ) : (
                 <EmissionEstimatesForm
-                  key={facilityId}
+                  key={`emission-estimates-${facilityId}`}
                   facilityId={facilityId}
-                  mapping={summary?.mapping ?? null}
+                  mapping={summary.mapping ?? null}
                 />
               )}
-              <PeriodEmissionsSection key={facilityId} facilityId={facilityId} />
+              <PeriodEmissionsSection
+                key={`period-emissions-${facilityId}`}
+                facilityId={facilityId}
+              />
             </SettingsSection>
           )}
 
-          {/* C · Environment & health — admin only, read-only, no secrets */}
-          {isAdmin && (
+          {/* Environment & health — admin only, read-only, no secrets */}
+          {activeTab === "environment" && isAdmin && (
             <SettingsSection
               icon={Pulse}
               title="Environment & health"
@@ -165,7 +260,7 @@ export function CertificationSettings() {
               <CertificationHealthPanel />
             </SettingsSection>
           )}
-        </>
+        </div>
       )}
     </div>
   );
