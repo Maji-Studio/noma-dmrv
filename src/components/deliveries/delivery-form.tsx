@@ -106,6 +106,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       biocharProductId: delivery?.biocharProductId ?? undefined,
       driverId: delivery?.driverId ?? undefined,
       vehicleId: delivery?.vehicleId ?? undefined,
+      transportDistanceKm: undefined,
     },
   });
 
@@ -290,6 +291,37 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
         </div>
+      </div>
+
+      {/* Transport */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Transport
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="transportDistanceKm"
+            label="Transport distance (km)"
+            error={errors.transportDistanceKm?.message}
+            helperText="Leave blank to use the customer location's stored distance from facility. Override here if the route differs."
+          >
+            <FormInput
+              id="transportDistanceKm"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="e.g., 120"
+              disabled={isSubmitting}
+              error={!!errors.transportDistanceKm}
+              {...register("transportDistanceKm", { setValueAs: numericValue })}
+            />
+          </FormField>
+        </div>
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          We record distance + delivered mass as one road transport leg.
+          Isometric applies the emission factor.
+        </p>
       </div>
 
       {/* Form Actions */}

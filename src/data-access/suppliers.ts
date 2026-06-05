@@ -156,6 +156,7 @@ export async function getSuppliers(
       contactEmail: suppliers.contactEmail,
       contactPhone: suppliers.contactPhone,
       sourceRegion: suppliers.sourceRegion,
+      distanceToFacilityKm: suppliers.distanceToFacilityKm,
       createdAt: suppliers.createdAt,
       updatedAt: suppliers.updatedAt,
     })
@@ -221,6 +222,7 @@ export async function createSupplier(
     contactEmail?: string | null;
     contactPhone?: string | null;
     sourceRegion?: string | null;
+    distanceToFacilityKm?: number | null;
   }
 ): Promise<Supplier> {
   requireAuth(userId);
@@ -250,6 +252,7 @@ export async function createSupplier(
         contactEmail: data.contactEmail ?? null,
         contactPhone: data.contactPhone ?? null,
         sourceRegion: data.sourceRegion ?? null,
+        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
       })
       .returning();
 
@@ -283,6 +286,7 @@ export async function updateSupplier(
     contactEmail?: string | null;
     contactPhone?: string | null;
     sourceRegion?: string | null;
+    distanceToFacilityKm?: number | null;
   }
 ): Promise<Supplier> {
   await ensureSupplierOwnership(userId, supplierId);

@@ -4,6 +4,43 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-04 (GHG statement UX: non-overlapping periods, derived start, removal cross-link, amend-not-undo)
+
+Operator-feedback pass on the GHG-statement flow. Behaviour-affecting (a new
+create-time guard rejects overlapping periods); no schema/migration change.
+
+- **Non-overlapping reporting periods.** `createGhgStatementDraft`
+  (`src/fn/certification/ghg-statements.ts`) now reads the facility's existing
+  statements and rejects an `end_on` on or before the latest *other* statement's
+  end — periods are consecutive (Isometric derives each start as the prior end +
+  1 day), so this stops a period being carved inside an existing one. The
+  own-end is excluded so the idempotent re-create (double-click / two tabs) still
+  resolves through the submission-claim machinery. Mirrored client-side in the
+  create drawer. App-layer guard only (no DB exclusion constraint) — a truly
+  concurrent pair of overlapping creates is an accepted TOCTOU gap, tracked under
+  `isometric/ghg-period-overlap-db-constraint`.
+- **Derived period start shown at create.** The create API still accepts only
+  `end_on`; the drawer now displays the derived `[start → end]` window (start =
+  prior statement's end + 1 via `addDaysIso`, "Set by Isometric" for the first
+  statement) so the operator sees a full period, not a floating end date.
+- **Removal cross-link accordion.** New `removal-batches-accordion.tsx` renders a
+  statement's removals as an accordion — each expands to its grouped credit
+  batches (code, window, stored CO₂e, status) plus a new-tab link to the removal
+  review page. Used in both the create preview (step 2) and the detail view.
+  Backed by a batched `getCreditBatchSummariesByRemovalIds`
+  (`data-access/certifier-removals.ts`); `OpenRemovalView` / `LinkedRemoval`
+  gained a `creditBatches` field.
+- **Detail view is now a Modal, not a side-sheet.** `GhgStatementDetailSheet` is
+  read-only (no form), so it moved from `SlideOverPanel` to the shared `Modal`;
+  side-sheets stay reserved for forms (create flow, entity edit). Adds copy
+  making the lifecycle explicit: statements can't be withdrawn — to change what's
+  included, open a removal, edit it, and resubmit (membership stays
+  server-derived by date range, ADR 0004; the pending-changes resubmit path is
+  unchanged).
+- **Tests** — `tests/isometric-ghg-statement-submit.test.ts` stubs the new
+  `listGhgStatementsForFacility` read in its create setup; all GHG-statement
+  suites green.
+
 ## 2026-06-03 (tighten document-redirect allowlist + reconcile the two SSRF guards)
 
 Closes the broad-suffix breadth in the `/api/documents/[id]` legacy-`fileUrl`

@@ -5,7 +5,7 @@
  * Form sections:
  * 1. Overview — startDate, endDate
  * 2. Applications — Auto-matched by date range + facility (M:M via credit_batch_applications)
- * 3. Durability — Toggle 200-year vs 1000-year
+ * 3. Durability — read-only; inherited from the facility's default option (PDD-level decision)
  * 4. GHG Accounting — emissions/counterfactual, buffer pool % (read-only)
  * 5. Verification — registry, weight, value, currency (read-only)
  */
@@ -18,11 +18,10 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormSelect, FormTextarea, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
   creditBatchFormSchema,
-  durabilityOptions,
   formatDurabilityOption,
   type CreditBatchFormData,
   type DurabilityOption,
@@ -30,26 +29,8 @@ import {
 import type { CreditBatch } from "@/db/schema/credits";
 
 // ============================================
-// Constants for select options
-// ============================================
-
-const durabilityOptionsList: readonly { value: string; label: string }[] =
-  durabilityOptions.map((option) => ({
-    value: option,
-    label: formatDurabilityOption(option as DurabilityOption),
-  }));
-
-// ============================================
 // Section helpers
 // ============================================
-
-function SectionHint({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="body-caption text-[var(--color-text-tertiary)]">
-      {children}
-    </p>
-  );
-}
 
 function ReadOnlyBadge() {
   return (
@@ -66,6 +47,54 @@ function ReadOnlyBadge() {
 function formatTons(value: number | null): string {
   if (value == null) return "—";
   return `${value.toFixed(2)} t`;
+}
+
+function formatMaybe(
+  value: number | string | null | undefined,
+  suffix = ""
+): string {
+  if (value == null || value === "") return "—";
+  return `${value}${suffix}`;
+}
+
+// ============================================
+// Read-only display field
+// ============================================
+
+/**
+ * Renders an auto-populated value as a static label/value pair rather than a
+ * disabled <input>. Disabled inputs read as "editable but locked"; a plain
+ * value row makes it unambiguous that the system owns this field.
+ */
+function ReadOnlyField({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  const isEmpty = value === "—";
+  return (
+    <div className="flex flex-col gap-2">
+      <dt className="body-caption text-[var(--color-text-tertiary)]">{label}</dt>
+      <dd
+        className={`body-medium tabular-nums ${
+          isEmpty
+            ? "text-[var(--color-text-quaternary)]"
+            : "text-[var(--color-text-primary)]"
+        }`}
+      >
+        {value}
+      </dd>
+      {hint && (
+        <dd className="body-caption text-[var(--color-text-quaternary)]">
+          {hint}
+        </dd>
+      )}
+    </div>
+  );
 }
 
 // ============================================
@@ -106,16 +135,15 @@ function AutoMatchedSection({
   return (
     <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <SectionLabel>{title}</SectionLabel>
+        <SectionLabel hint="Automatically matched based on the crediting period above.">
+          {title}
+        </SectionLabel>
         {hasDates && count > 0 && (
           <span className="inline-flex items-center px-8 py-2 body-caption font-medium bg-[var(--clr-purple-10)] text-[var(--clr-purple)]">
             {count} matched
           </span>
         )}
       </div>
-      <SectionHint>
-        Automatically matched based on the crediting period above
-      </SectionHint>
 
       {!hasDates ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
@@ -262,6 +290,7 @@ export function CreditBatchForm({
   const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const durabilityOption = useWatch({ control, name: "durabilityOption" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
 
   const startDate = parseWatchedDate(watchedStartDate);
@@ -387,153 +416,35 @@ export function CreditBatchForm({
 
       {/* ── Durability ── */}
       <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Durability</SectionLabel>
-        <SectionHint>
-          Isometric Protocol: Choose durability crediting option (200-year or
-          1000-year)
-        </SectionHint>
-
-        <FormField
-          id="durabilityOption"
-          label="Durability Option"
-          error={errors.durabilityOption?.message}
+        <SectionLabel
+          hint={
+            <>
+              The durability crediting tier is a project-level (PDD) decision,
+              set per facility and snapshotted onto the batch when it&apos;s
+              created — not a per-batch claim. The <code>1000_year</code> tier
+              additionally requires reflectance lab data and is not yet
+              supported by the CO₂e preview.
+            </>
+          }
         >
-          <FormSelect
-            id="durabilityOption"
-            placeholder="Select option..."
-            disabled={isSubmitting}
-            error={!!errors.durabilityOption}
-            options={durabilityOptionsList}
-            {...register("durabilityOption")}
+          Durability
+        </SectionLabel>
+
+        {/* Snapshotted from the facility's default at create; kept in form state
+            so it round-trips on update, but not editable here. */}
+        <input type="hidden" {...register("durabilityOption")} />
+
+        <dl>
+          <ReadOnlyField
+            label="Durability Option"
+            value={
+              durabilityOption
+                ? formatDurabilityOption(durabilityOption as DurabilityOption)
+                : "—"
+            }
+            hint="Change it for future batches in the facility's settings."
           />
-        </FormField>
-
-        <div className="p-16 bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            Durability inputs are resolved from linked lab samples and soil
-            temperature for most CO2e previews. The <code>1000_year</code>{" "}
-            preview is returned as pending by the preview builder and may not
-            be populated automatically.
-          </p>
-        </div>
-      </div>
-
-      {/* ── GHG Accounting (read-only) ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <div className="flex items-center justify-between">
-          <SectionLabel>GHG Accounting</SectionLabel>
-          <ReadOnlyBadge />
-        </div>
-        <SectionHint>
-          Populated during Isometric verification. CO2e stored is previewed in
-          the credit-batch detail view.
-        </SectionHint>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="totalCo2eEmissionsTons"
-            label="CO2e Emissions (tons)"
-            helperText="Project emissions"
-          >
-            <FormInput
-              id="totalCo2eEmissionsTons"
-              type="number"
-              step="0.01"
-              placeholder="—"
-              disabled
-              value={creditBatch?.totalCo2eEmissionsTons ?? ""}
-            />
-          </FormField>
-
-          <FormField
-            id="totalCo2eCounterfactualTons"
-            label="CO2e Counterfactual (tons)"
-            helperText="Baseline emissions"
-          >
-            <FormInput
-              id="totalCo2eCounterfactualTons"
-              type="number"
-              step="0.01"
-              placeholder="—"
-              disabled
-              value={creditBatch?.totalCo2eCounterfactualTons ?? ""}
-            />
-          </FormField>
-        </div>
-
-        <FormField
-          id="bufferPoolPercent"
-          label="Buffer Pool (%)"
-          helperText="Risk-based buffer (2-20%)"
-        >
-          <FormInput
-            id="bufferPoolPercent"
-            type="number"
-            step="0.1"
-            placeholder="—"
-            disabled
-            value={creditBatch?.bufferPoolPercent ?? ""}
-          />
-        </FormField>
-      </div>
-
-      {/* ── Verification (read-only) ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <div className="flex items-center justify-between">
-          <SectionLabel>Verification</SectionLabel>
-          <ReadOnlyBadge />
-        </div>
-        <SectionHint>
-          Populated after registry issuance
-        </SectionHint>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="registry" label="Registry">
-            <FormInput
-              id="registry"
-              type="text"
-              placeholder="—"
-              disabled
-              value={creditBatch?.registry ?? ""}
-            />
-          </FormField>
-
-          <FormField
-            id="weightTons"
-            label="Weight (tons)"
-            helperText="Total credit weight"
-          >
-            <FormInput
-              id="weightTons"
-              type="number"
-              placeholder="—"
-              disabled
-              value={creditBatch?.weightTons ?? ""}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="value" label="Value" helperText="Credit value">
-            <FormInput
-              id="value"
-              type="number"
-              placeholder="—"
-              disabled
-              value={creditBatch?.value ?? ""}
-            />
-          </FormField>
-
-          <FormField id="currency" label="Currency">
-            <FormInput
-              id="currency"
-              type="text"
-              placeholder="—"
-              disabled
-              value={creditBatch?.currency ?? ""}
-            />
-          </FormField>
-        </div>
+        </dl>
       </div>
 
       {/* ── Site Management Notes ── */}
@@ -555,6 +466,54 @@ export function CreditBatchForm({
             {...register("siteManagementNotes")}
           />
         </FormField>
+      </div>
+
+      {/* ── Registry & accounting (read-only, system-populated) ── */}
+      <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
+        <div className="flex items-center justify-between">
+          <SectionLabel hint="Calculated by Isometric verification and registry issuance — not editable here.">
+            Registry &amp; accounting
+          </SectionLabel>
+          <ReadOnlyBadge />
+        </div>
+
+        <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-24 gap-y-20 p-20 bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
+          <ReadOnlyField
+            label="CO2e emissions"
+            value={formatTons(creditBatch?.totalCo2eEmissionsTons ?? null)}
+            hint="Project emissions"
+          />
+          <ReadOnlyField
+            label="CO2e counterfactual"
+            value={formatTons(creditBatch?.totalCo2eCounterfactualTons ?? null)}
+            hint="Baseline emissions"
+          />
+          <ReadOnlyField
+            label="Buffer pool"
+            value={formatMaybe(creditBatch?.bufferPoolPercent ?? null, "%")}
+            hint="Risk-based (2–20%)"
+          />
+          <ReadOnlyField
+            label="Registry"
+            value={formatMaybe(creditBatch?.registry)}
+          />
+          <ReadOnlyField
+            label="Weight"
+            value={formatTons(creditBatch?.weightTons ?? null)}
+            hint="Total credit weight"
+          />
+          <ReadOnlyField
+            label="Value"
+            value={
+              creditBatch?.value != null
+                ? `${creditBatch.value}${
+                    creditBatch.currency ? ` ${creditBatch.currency}` : ""
+                  }`
+                : "—"
+            }
+            hint="Credit value"
+          />
+        </dl>
       </div>
 
       {/* ── Form Actions ── */}

@@ -46,25 +46,22 @@ export interface AggregatedProductionData {
   warnings: string[];
 }
 
-// Aggregates a category's transport legs into a single distance value such
-// that Certify's `distance × Σmass × factor` server-side calculation equals
-// the per-leg sum Σⱼ(distⱼ × massⱼ × factor) — i.e., compliant with Isometric
-// Transportation v1.1 §5 ("Calculations shall be completed separately for
-// each leg ... total emissions calculated by the sum of emissions from
-// each leg"). This equivalence ONLY holds when every leg in the category
-// shares the same calculation method and emission factor. Mixed factors
-// break the linearity, so this function refuses to aggregate them and
-// records a warning instead.
+// Aggregates a category's transport legs into a single mass-weighted distance
+// such that Certify's `distance × Σmass × factor` server-side calculation
+// equals the per-leg sum Σⱼ(distⱼ × massⱼ × factor) — compliant with Isometric
+// Transportation v1.1 §5. The emission factor is NOT stored on our legs: it
+// lives in the Isometric component blueprint and Certify applies the SAME
+// factor uniformly across the category, so the linearity always holds (we no
+// longer need to verify factor uniformity ourselves). We still require a
+// per-leg load mass for the weighting, and a single calculation method.
 //
 // Returns:
-//   { distanceKm }                  — uniform legs, mass-weighted distance
-//   { warning }                     — non-uniform, missing data, or empty
+//   { distanceKm }                  — mass-weighted distance
+//   { warning }                     — missing load mass, mixed method, or empty
 export interface TransportAggregationResult {
   distanceKm: number | null;
   warning: string | null;
 }
-
-const FACTOR_TOLERANCE = 1e-9;
 
 // Percent-to-fraction denominator.
 const PERCENT_DENOMINATOR = 100;
@@ -77,9 +74,8 @@ export function aggregateTransportLegs(
     return { distanceKm: null, warning: null };
   }
 
-  // Every leg must carry the per-leg fields needed to verify uniformity and
-  // to compute the mass-weighted sum. Unweighted means are non-compliant
-  // (they would silently underweight large loads).
+  // Every leg needs a load mass to mass-weight the distance. Unweighted means
+  // are non-compliant (they would silently underweight large loads).
   for (const leg of legs) {
     if (leg.loadMassKg == null || leg.loadMassKg <= 0) {
       return {
@@ -87,29 +83,14 @@ export function aggregateTransportLegs(
         warning: `${categoryLabel} transport leg ${leg.id}: missing load_mass_kg — required for per-leg accounting`,
       };
     }
-    if (leg.emissionFactorUsed == null) {
-      return {
-        distanceKm: null,
-        warning: `${categoryLabel} transport leg ${leg.id}: missing emission_factor_used — required to verify per-leg uniformity (Isometric v1.1 §5)`,
-      };
-    }
   }
 
   const method = legs[0].calculationMethodType;
-  const factor = legs[0].emissionFactorUsed as number;
   for (const leg of legs) {
     if (leg.calculationMethodType !== method) {
       return {
         distanceKm: null,
         warning: `${categoryLabel} transport legs mix calculation methods (${method} vs ${leg.calculationMethodType}); Isometric v1.1 §5 requires per-leg accounting. Submit separately or unify methods.`,
-      };
-    }
-    if (
-      Math.abs((leg.emissionFactorUsed as number) - factor) > FACTOR_TOLERANCE
-    ) {
-      return {
-        distanceKm: null,
-        warning: `${categoryLabel} transport legs mix emission factors (${factor} vs ${leg.emissionFactorUsed}); Isometric v1.1 §5 requires per-leg accounting. Submit separately or unify factors.`,
       };
     }
   }

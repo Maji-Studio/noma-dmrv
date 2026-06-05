@@ -2,7 +2,11 @@
 
 **Date:** 2026-06-04
 **Branch:** `chore/refactor-certify-flow`
-**Status:** Design — awaiting approval (no code yet)
+**Status:** ✅ Implemented — all 6 build-sequence steps (§10) landed. Batch health
+foundation, credit-batch detail + health panel, deferred-create action, the
+New-Removal modal wizard + CTA, the verified "View on Isometric" link (§7), and
+the review-route consolidation (the old 5-step `/[removalId]/review` flow is
+removed; the route redirects into the wizard's resume step). Unit + E2E covered.
 
 > Design doc for reshaping the "submit a removal to Isometric" flow. Decisions in
 > this doc were locked with the product owner; see **Locked decisions**. All
@@ -243,22 +247,35 @@ Settings route + tab confirmed at
 
 ---
 
-## 7. "View on Isometric" link
+## 7. "View on Isometric" link — RESOLVED 2026-06-04
 
-`src/lib/isometric/links.ts` already exposes `isometricRegistry.project(id)` →
-`https://registry.isometric.com/project/{id}` (known-working, used in settings).
-We need an analogous `removal(externalId)` builder, plus the success-state link
-in the submit step.
+`src/lib/isometric/links.ts` exposes `isometricRegistry.removal({ environment,
+externalProjectId, externalRemovalId })`, and the wizard's submit step renders a
+"View on Isometric ↗" link on success.
 
-**⚠ URL is unverified.** Two conflicting candidates:
-- existing code convention → `https://registry.isometric.com/removal/{id}`
-- MCP `how_to` → `https://app.isometric.com/removals/{id}` (prod) /
-  `sandbox.isometric.com` (sandbox)
+**URL verified** against a live submitted removal (2026-06-04). Both earlier
+candidates were wrong on domain *and* path. The real structure:
 
-These disagree on domain *and* path. **Do not ship a guess.** Confirm the real
-URL before wiring (inspect a real submitted removal, or `isometric_docs_*`), and
-respect sandbox vs production (`ISOMETRIC_ENVIRONMENT`, `env.ts:64-67`). Tracked
-in `docs/open-questions.md`.
+```text
+{host}/account/certify/project/{externalProjectId}/ghg-entry/{externalRemovalId}/edit
+  host = registry.sandbox.isometric.com  (sandbox)
+       = registry.isometric.com          (production)
+```
+
+Findings that shaped this:
+- A submitted removal is **private** to the supplier in **Certify** until credit
+  issuance (per `docs/.../data-visibility`) — it is NOT a public registry page,
+  so `registry.isometric.com/removal/{id}` would 404.
+- In the Certify UI a removal is a **"ghg-entry"**, and the page is
+  **project-scoped** — the builder needs the facility's mapped `externalProjectId`
+  (from `ctx.mapping`), not just the removal id.
+- The Certify `Removal` OpenAPI object exposes **no** url/href field, so the link
+  is constructed. Environment comes from `ctx.isProduction`
+  (`ISOMETRIC_ENVIRONMENT`).
+
+Drift guard: `src/lib/isometric/links.test.ts` asserts the exact verified URL for
+both environments — if Isometric changes the host/path/`ghg-entry` segment/`/edit`
+suffix, the test fails. Switch to an API-provided link the day Isometric adds one.
 
 ---
 
@@ -308,7 +325,7 @@ Layered per CLAUDE.md (component → hooks → fn → data-access → db).
   `submit-step.tsx`).
 
 ### Modify
-- `src/lib/certification/links.ts` (isometric) — add `removal(externalId)`
+- `src/lib/isometric/links.ts` — add/update the `removal(externalId)`
   builder *(after URL verified)*.
 - `src/lib/certification/readiness.ts` — split helper so the wizard can request
   the **facility-level subset** of the checklist (batch-level rows move to

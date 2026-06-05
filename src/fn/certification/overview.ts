@@ -5,6 +5,8 @@ import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
 } from "@/data-access/certifier-removals";
+import { deriveBatchHealth } from "@/lib/certification/batch-health";
+import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import {
   deriveRemovalReadiness,
   type RemovalReadiness,
@@ -14,6 +16,7 @@ import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
+  buildCreditBatchContextWithFacts,
   buildRemovalContext,
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
@@ -41,8 +44,16 @@ export interface RemovalPreflightSummary {
 
 export interface CertificationOverviewData {
   removals: RemovalPreflightSummary[];
-  /** Credit batches not yet grouped into a removal — a "needs grouping" nudge. */
+  /** Every credit batch not yet grouped into a removal (healthy or not). */
   ungroupedBatchCount: number;
+  /**
+   * Ungrouped batches whose own data is complete enough to start a removal —
+   * the subset of `ungroupedBatchCount` that the New-Removal wizard would let
+   * you select. Computed from the SAME per-batch health verdict the wizard
+   * shows, so the Overview's "Ready to start" count can never claim a batch is
+   * ready that the wizard then greys out.
+   */
+  readyToStartBatchCount: number;
   isProduction: boolean;
 }
 
@@ -98,9 +109,33 @@ export async function loadCertificationOverview(
       removals.push(...summaries);
     }
 
+    // "Ready to start": ungrouped batches whose own data is complete, judged by
+    // the same `deriveBatchHealth` verdict the New-Removal wizard uses. Built
+    // from the facility facts resolved once above and bounded the same way the
+    // removal loop is, so the landing page can't fan out an unbounded burst.
+    let readyToStartBatchCount = 0;
+    for (let i = 0; i < ungroupedBatches.length; i += READINESS_CONCURRENCY) {
+      const verdicts = await Promise.all(
+        ungroupedBatches
+          .slice(i, i + READINESS_CONCURRENCY)
+          .map(async (batch) => {
+            const ctx = await buildCreditBatchContextWithFacts(
+              userId,
+              batch.id,
+              facilityFacts,
+            );
+            return deriveBatchHealth(toBatchHealthFacts(ctx, batch.id));
+          }),
+      );
+      readyToStartBatchCount += verdicts.filter(
+        (h) => h.state === "ready",
+      ).length;
+    }
+
     return {
       removals,
       ungroupedBatchCount: ungroupedBatches.length,
+      readyToStartBatchCount,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
     };
   });

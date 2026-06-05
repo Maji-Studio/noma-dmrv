@@ -18,7 +18,13 @@ export {
   loadCertifyContextForCreditBatchForUser,
   loadRemovalCertifyContext,
   loadRemovalsForFacility,
+  loadSelectableBatchesForFacility,
+  type SelectableBatch,
+  type SelectableBatchesData,
 } from "./certify-context";
+// Per-batch data-completeness verdict for the credit-batch detail page +
+// New-Removal wizard selection gate (classifier shared via batch-health.ts).
+export { loadBatchHealth } from "./batch-health";
 // Server-owned per-removal readiness for the Overview work queue (reuses the
 // submit pipeline's context; classifier shared with table hint + pre-flight).
 export {
@@ -26,11 +32,10 @@ export {
   type CertificationOverviewData,
   type RemovalPreflightSummary,
 } from "./overview";
-export {
-  assignCreditBatchToRemovalAction,
-  ensureRemovalForCreditBatchAction,
-  submitRemovalAction,
-} from "./removal-grouping";
+export { submitRemovalAction } from "./removal-grouping";
+// Deferred-create — the New-Removal wizard's "Confirm" step. Server re-derives
+// each selected batch's health before atomically creating the removal.
+export { createRemovalWithBatchesAction } from "./create-removal-with-batches";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an
 // independent, period-anchored artifact that rolls up multiple Removals
 // (ADR 0003).

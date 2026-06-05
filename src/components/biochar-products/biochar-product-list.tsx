@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Cube, Plus, Scales } from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -23,7 +23,10 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { TransportLegsPanel } from "@/components/transport-legs";
+import {
+  TransportLegsEditor,
+  TransportLegsSummary,
+} from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
@@ -196,6 +199,25 @@ export function BiocharProductList() {
       ? ({ mode: "view", entity: focusedProduct.data } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  useEffect(() => {
+    if (!focusedProductId) return;
+    if (focusedProduct.isLoading) return;
+    if (!focusedProduct.isError && focusedProduct.data) return;
+
+    toast.error("Couldn't load the linked biochar product");
+    queueMicrotask(() => {
+      setFocusedProductId(null);
+      setSideSheet(null);
+    });
+  }, [
+    focusedProduct.data,
+    focusedProduct.isError,
+    focusedProduct.isLoading,
+    focusedProductId,
+    setFocusedProductId,
+    toast,
+  ]);
 
   // Computed stats
   const totalProducts = products.length;
@@ -389,7 +411,15 @@ export function BiocharProductList() {
         ] : undefined}
         viewModeChildren={
           displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <TransportLegsPanel
+            <TransportLegsSummary
+              entityType="biochar"
+              entityId={displaySideSheet.entity.id}
+            />
+          ) : null
+        }
+        editModeChildren={
+          displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
+            <TransportLegsEditor
               entityType="biochar"
               entityId={displaySideSheet.entity.id}
             />

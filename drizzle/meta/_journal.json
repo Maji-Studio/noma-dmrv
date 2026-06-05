@@ -232,6 +232,13 @@
       "when": 1780573117202,
       "tag": "0032_steady_warstar",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1780648036227,
+      "tag": "0033_brief_frank_castle",
+      "breakpoints": true
     }
   ]
 }

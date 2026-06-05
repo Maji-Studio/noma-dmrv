@@ -230,6 +230,83 @@ export function buildRemovalPreflightChecklist(
   ];
 }
 
+// ---------------------------------------------------------------------------
+// New-Removal wizard — the "requirements" step's facility-level subset.
+// ---------------------------------------------------------------------------
+
+const TRANSPORT_UNIFORMITY_LABEL = "Transport legs aggregate cleanly";
+
+export type RemovalRequirementKey = "mapping" | "template" | "transportUniformity";
+
+export interface RemovalRequirementCheck {
+  key: RemovalRequirementKey;
+  /** Affirmative label — what's true when the check is met. */
+  label: string;
+  status: PreflightCheckStatus;
+  /** The blocker text when unmet, or context when met/skipped. */
+  detail?: string;
+}
+
+/**
+ * The New-Removal wizard's requirements step shows only the checks that are NOT
+ * a single batch's concern (design doc §3): facility setup (project mapping +
+ * default template) and the cross-batch transport uniformity that can only be
+ * judged once batches are pooled into a removal. Batch-level checks — production
+ * lineage and transport-leg PRESENCE — are the batch health check's job, so they
+ * are deliberately excluded here even when unmet (the wizard only let ready
+ * batches in, so they are already satisfied). Pure projection of the same facts
+ * the full pre-flight uses, so the two never disagree on the shared rows.
+ */
+export function buildRemovalRequirementsChecklist(
+  facts: RemovalReadinessFacts,
+): RemovalRequirementCheck[] {
+  const linked = facts.hasMapping;
+  const templateClean = templateResolvesCleanly(facts);
+
+  const uniformity = ((): RemovalRequirementCheck => {
+    // Uniformity is only meaningful once the template chain resolves and legs
+    // are actually present (presence is the batch's concern, not this step's).
+    if (!linked || !templateClean) {
+      return {
+        key: "transportUniformity",
+        label: TRANSPORT_UNIFORMITY_LABEL,
+        status: "skipped",
+      };
+    }
+    const mixed = facts.requiredTransport
+      .filter((t) => t.count > 0 && t.hasAggregationWarning)
+      .map((t) => t.category);
+    return mixed.length === 0
+      ? {
+          key: "transportUniformity",
+          label: TRANSPORT_UNIFORMITY_LABEL,
+          status: "met",
+        }
+      : {
+          key: "transportUniformity",
+          label: TRANSPORT_UNIFORMITY_LABEL,
+          status: "unmet",
+          detail: `Mixed method/factor across ${describeCategories(mixed)} legs`,
+        };
+  })();
+
+  return [
+    {
+      key: "mapping",
+      label: "Facility linked to an Isometric project",
+      status: linked ? "met" : "unmet",
+      detail: linked ? undefined : NOT_LINKED_REASON,
+    },
+    {
+      key: "template",
+      label: "Removal template resolved",
+      status: !linked ? "skipped" : templateClean ? "met" : "unmet",
+      detail: !linked ? undefined : (templateBlockerReason(facts) ?? undefined),
+    },
+    uniformity,
+  ];
+}
+
 /**
  * Whether a removal's credit-batch membership can still be changed. Mirrors the
  * server guard (`assignCreditBatchToRemoval` → `removalHasBlockingSubmission`):

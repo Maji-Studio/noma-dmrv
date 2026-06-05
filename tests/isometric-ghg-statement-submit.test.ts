@@ -311,6 +311,10 @@ beforeEach(() => {
       }) as unknown as DocumentRow,
   );
 
+  // The non-overlap guard reads the facility's existing statements before
+  // get-or-create; no siblings here, so nothing to overlap.
+  vi.mocked(ghgDA.listGhgStatementsForFacility).mockResolvedValue([]);
+
   // GHG-statement DA ops touched after the remote create.
   vi.mocked(ghgDA.reconcileRemovalMembership).mockResolvedValue({
     linkedRemovalIds: [REMOVAL_ID],
