@@ -19,6 +19,8 @@ import {
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import { requireAuth } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
+import { replaceDerivedTransportLeg } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin", "ingredient_bin"] as const;
@@ -573,6 +575,64 @@ export async function getFeedstockOptions(
     .from(feedstocks)
     .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
     .orderBy(desc(feedstocks.createdAt));
+}
+
+// ============================================
+// Transport leg (auto-derived: supplier → facility)
+// ============================================
+
+/**
+ * Recompute and persist the feedstock's single transport leg from records we
+ * already hold (supplier origin + facility destination + vehicle + wet cargo
+ * mass). Distance uses `distanceKmOverride` when provided, else the supplier's
+ * stored distance-to-facility. Call after every feedstock create/update.
+ */
+export async function syncFeedstockTransportLeg(
+  userId: string,
+  feedstockId: string,
+  distanceKmOverride?: number | null,
+): Promise<void> {
+  requireAuth(userId);
+
+  const [row] = await db
+    .select({
+      supplierName: suppliers.name,
+      supplierGpsLatitude: suppliers.gpsLatitude,
+      supplierGpsLongitude: suppliers.gpsLongitude,
+      supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
+      facilityName: facilities.name,
+      facilityGpsLatitude: facilities.gpsLatitude,
+      facilityGpsLongitude: facilities.gpsLongitude,
+      vehicleType: vehicles.vehicleType,
+      vehicleModelYear: vehicles.modelYear,
+      loadMassKg: feedstocks.massWetKg,
+    })
+    .from(feedstocks)
+    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
+    .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
+    .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
+    .where(eq(feedstocks.id, feedstockId));
+
+  if (!row) return;
+
+  const derived = deriveTransportLeg({
+    origin: {
+      name: row.supplierName,
+      gpsLatitude: row.supplierGpsLatitude,
+      gpsLongitude: row.supplierGpsLongitude,
+    },
+    destination: {
+      name: row.facilityName,
+      gpsLatitude: row.facilityGpsLatitude,
+      gpsLongitude: row.facilityGpsLongitude,
+    },
+    vehicle: { vehicleType: row.vehicleType, modelYear: row.vehicleModelYear },
+    loadMassKg: row.loadMassKg,
+    storedDistanceKm: row.supplierDistanceToFacilityKm,
+    distanceKmOverride,
+  });
+
+  await replaceDerivedTransportLeg(userId, "feedstock", feedstockId, derived);
 }
 
 // ============================================

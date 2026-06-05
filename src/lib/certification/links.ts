@@ -13,5 +13,7 @@ export function certificationSettingsHref(
   facilityId: string,
   tab: string = "connection",
 ): string {
-  return `/certification/settings?tab=${tab}&facility=${facilityId}`;
+  return `/certification/settings?tab=${encodeURIComponent(
+    tab,
+  )}&facility=${encodeURIComponent(facilityId)}`;
 }

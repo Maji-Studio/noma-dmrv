@@ -6,20 +6,14 @@ import {
   type AggregatedProductionData,
 } from "@/lib/isometric/utils/aggregation";
 
-// Minimal-shape TransportLeg builder. Only the columns the aggregator reads
-// are populated; the rest stay typed but nullish to keep tests focused on
-// the uniformity rules introduced for Isometric Transportation v1.1 §5
-// compliance.
-function leg(
-  distanceKm: number,
-  loadMassKg: number | null,
-  opts: {
-    method?: TransportLeg["calculationMethodType"];
-    factor?: number | null;
-  } = {},
-): TransportLeg {
+// Minimal-shape TransportLeg builder. Only the columns the aggregator reads are
+// populated. The emission factor is no longer stored on legs (it lives in the
+// Isometric component blueprint), so the aggregator only needs distance, load
+// mass, and method — and mass-weights distance so Certify's
+// `distance × Σmass × factor` equals the per-leg sum (Transportation v1.1 §5).
+function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
   return {
-    id: "tl_" + Math.random().toString(36).slice(2, 8),
+    id: "tl_" + distanceKm + "_" + (loadMassKg ?? "null"),
     entityType: "delivery",
     entityId: "ent_test",
     originGpsLatitude: null,
@@ -32,14 +26,8 @@ function leg(
     transportMethodType: "road",
     vehicleType: null,
     modelYear: null,
-    fuelType: null,
-    fuelConsumedLiters: null,
-    electricityKwh: null,
     loadMassKg,
-    calculationMethodType: opts.method ?? "distance_based",
-    emissionFactorUsed: opts.factor === undefined ? 0.12 : opts.factor,
-    emissionFactorSource: null,
-    transportEmissionsCo2eKg: null,
+    calculationMethodType: "distance_based",
     billOfLading: null,
     weighScaleTicketRef: null,
     createdAt: new Date(),
@@ -54,13 +42,13 @@ describe("aggregateTransportLegs", () => {
     expect(result.warning).toBeNull();
   });
 
-  it("returns the single distance when one uniform leg is supplied", () => {
+  it("returns the single distance when one leg is supplied", () => {
     const result = aggregateTransportLegs([leg(50, 1000)], "Feedstock");
     expect(result.distanceKm).toBe(50);
     expect(result.warning).toBeNull();
   });
 
-  it("computes mass-weighted distance across multiple uniform legs", () => {
+  it("computes mass-weighted distance across multiple legs", () => {
     // (50*1000 + 100*4000) / (1000 + 4000) = 450000 / 5000 = 90
     const result = aggregateTransportLegs(
       [leg(50, 1000), leg(100, 4000)],
@@ -68,25 +56,6 @@ describe("aggregateTransportLegs", () => {
     );
     expect(result.distanceKm).toBe(90);
     expect(result.warning).toBeNull();
-  });
-
-  it("warns when legs in a category mix calculation methods", () => {
-    const result = aggregateTransportLegs(
-      [leg(50, 1000, { method: "distance_based" }), leg(100, 1000, { method: "energy_usage" })],
-      "Feedstock",
-    );
-    expect(result.distanceKm).toBeNull();
-    expect(result.warning).toMatch(/mix calculation methods/);
-    expect(result.warning).toMatch(/§5/);
-  });
-
-  it("warns when legs in a category mix emission factors", () => {
-    const result = aggregateTransportLegs(
-      [leg(50, 1000, { factor: 0.12 }), leg(100, 1000, { factor: 0.25 })],
-      "Biochar",
-    );
-    expect(result.distanceKm).toBeNull();
-    expect(result.warning).toMatch(/mix emission factors/);
   });
 
   it("warns when a leg is missing load_mass_kg (per-leg accounting requires it)", () => {
@@ -98,28 +67,7 @@ describe("aggregateTransportLegs", () => {
     expect(result.warning).toMatch(/missing load_mass_kg/);
   });
 
-  it("warns when a leg is missing emission_factor_used", () => {
-    const result = aggregateTransportLegs(
-      [leg(50, 1000, { factor: null })],
-      "Sample",
-    );
-    expect(result.distanceKm).toBeNull();
-    expect(result.warning).toMatch(/missing emission_factor_used/);
-  });
-
-  it("tolerates floating-point factor jitter within 1e-9", () => {
-    const result = aggregateTransportLegs(
-      [
-        leg(50, 1000, { factor: 0.12 }),
-        leg(100, 1000, { factor: 0.12 + 1e-12 }),
-      ],
-      "Feedstock",
-    );
-    expect(result.warning).toBeNull();
-    expect(result.distanceKm).toBeCloseTo(75);
-  });
-
-  it("handles zero-distance legs cleanly when uniform", () => {
+  it("handles zero-distance legs cleanly", () => {
     // (0*1000 + 100*1000) / 2000 = 50
     const result = aggregateTransportLegs(
       [leg(0, 1000), leg(100, 1000)],
@@ -230,17 +178,11 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.sampleTransportAvgDistanceKm).toBeNull();
   });
 
-  it("appends a warning per non-uniform category instead of returning a distance", () => {
+  it("appends a warning per category with a leg missing load mass", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
-      feedstock: [
-        leg(50, 1000, { factor: 0.12 }),
-        leg(100, 1000, { factor: 0.25 }),
-      ],
+      feedstock: [leg(50, 1000), leg(100, null)],
       biochar: [leg(200, 1000)],
-      sample: [
-        leg(10, 500, { method: "distance_based" }),
-        leg(30, 500, { method: "energy_usage" }),
-      ],
+      sample: [leg(10, 500), leg(30, null)],
     });
 
     expect(enriched.feedstockTransportAvgDistanceKm).toBeNull();
@@ -258,14 +200,9 @@ describe("enrichWithTransportLegs", () => {
     };
     const enriched = enrichWithTransportLegs(aggWithExisting, {
       feedstock: [leg(50, 1000)],
-      biochar: [
-        leg(100, 1000, { factor: 0.1 }),
-        leg(200, 1000, { factor: 0.5 }),
-      ],
+      biochar: [],
       sample: [],
     });
-
-    expect(enriched.warnings[0]).toMatch(/missing biocharDryMassKg/);
-    expect(enriched.warnings[1]).toMatch(/Biochar transport legs mix/);
+    expect(enriched.warnings[0]).toMatch(/PR-2026-001/);
   });
 });

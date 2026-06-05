@@ -30,8 +30,9 @@ export function CreditBatchCard({
   onDelete,
 }: CreditBatchCardProps) {
   const statusColors = getStatusColor(creditBatch.status as CreditBatchStatus);
-  const co2eStored = creditBatch.co2eStoredPreview.co2eStoredTonnes;
-  const hasPendingCo2e = creditBatch.co2eStoredPreview.missingInputs.length > 0;
+  const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
+  const hasPendingCo2e =
+    (creditBatch.co2eStoredPreview?.missingInputs.length ?? 0) > 0;
 
   return (
     <article

@@ -386,6 +386,7 @@ async function seedDemoData() {
           contactName: 'Asha Mallya',
           contactEmail: 'asha@kili-forestry.coop',
           contactPhone: '+255700200001',
+          distanceToFacilityKm: 42,
         },
         {
           id: ids.supplierMeru,
@@ -398,6 +399,7 @@ async function seedDemoData() {
           contactName: 'John Kimaro',
           contactEmail: 'john@meru-agri.co.tz',
           contactPhone: '+255700200002',
+          distanceToFacilityKm: 58,
         },
         {
           id: ids.supplierVictoria,
@@ -410,6 +412,7 @@ async function seedDemoData() {
           contactName: 'Grace Mushi',
           contactEmail: 'grace@victoria-rice.tz',
           contactPhone: '+255700200003',
+          distanceToFacilityKm: 310,
         },
       ]);
 
@@ -453,6 +456,7 @@ async function seedDemoData() {
           gpsLatitude: -3.245,
           gpsLongitude: 37.425,
           address: 'Plot N-12, Kilema Village',
+          distanceFromFacilityKm: 120,
         },
         {
           id: ids.locationCoffeeSouth,
@@ -461,6 +465,7 @@ async function seedDemoData() {
           gpsLatitude: -3.289,
           gpsLongitude: 37.198,
           address: 'Plot S-8, Machame Weruweru',
+          distanceFromFacilityKm: 95,
         },
         {
           id: ids.locationTeaEast,
@@ -469,6 +474,7 @@ async function seedDemoData() {
           gpsLatitude: -4.789,
           gpsLongitude: 38.312,
           address: 'Block E-1, Usambara Estate',
+          distanceFromFacilityKm: 140,
         },
       ]);
 
@@ -943,8 +949,6 @@ async function seedDemoData() {
       // ============================================================
 
       console.log('Creating transport legs...');
-      const ROAD_FREIGHT_FACTOR = 0.10752; // kgCO2e per tonne-km
-      const FACTOR_SOURCE = 'DEFRA 2024 — HGV, all rigid, average laden';
       await tx.insert(schema.transportLegs).values([
         // --- Feedstock: source region -> Moshi facility ---
         {
@@ -956,12 +960,8 @@ async function seedDemoData() {
           distanceKm: 42,
           transportMethodType: 'road',
           vehicleType: 'Class 8 heavy-duty truck',
-          fuelType: 'diesel',
           loadMassKg: 7200,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 32.51,
         },
         {
           id: ids.transportLegFeedstock2,
@@ -972,12 +972,8 @@ async function seedDemoData() {
           distanceKm: 58,
           transportMethodType: 'road',
           vehicleType: 'Class 8 heavy-duty truck',
-          fuelType: 'diesel',
           loadMassKg: 5400,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 33.68,
         },
         {
           id: ids.transportLegFeedstock3,
@@ -988,12 +984,8 @@ async function seedDemoData() {
           distanceKm: 42,
           transportMethodType: 'road',
           vehicleType: 'Class 8 heavy-duty truck',
-          fuelType: 'diesel',
           loadMassKg: 6300,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 28.45,
         },
         // --- Biochar: Moshi facility -> customer site ---
         {
@@ -1005,12 +997,8 @@ async function seedDemoData() {
           distanceKm: 120,
           transportMethodType: 'road',
           vehicleType: 'Class 8 heavy-duty truck',
-          fuelType: 'diesel',
           loadMassKg: 2450,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 31.61,
         },
         {
           id: ids.transportLegBiochar2,
@@ -1021,12 +1009,8 @@ async function seedDemoData() {
           distanceKm: 95,
           transportMethodType: 'road',
           vehicleType: 'Class 8 heavy-duty truck',
-          fuelType: 'diesel',
           loadMassKg: 1800,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 18.39,
         },
         {
           id: ids.transportLegBiochar3,
@@ -1037,12 +1021,8 @@ async function seedDemoData() {
           distanceKm: 140,
           transportMethodType: 'road',
           vehicleType: 'Class 8 heavy-duty truck',
-          fuelType: 'diesel',
           loadMassKg: 2125,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 31.99,
         },
         // --- Sample: Moshi facility -> analysis lab ---
         {
@@ -1054,12 +1034,8 @@ async function seedDemoData() {
           distanceKm: 270,
           transportMethodType: 'road',
           vehicleType: 'Courier van',
-          fuelType: 'diesel',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 0.15,
         },
         {
           id: ids.transportLegSample2,
@@ -1070,12 +1046,8 @@ async function seedDemoData() {
           distanceKm: 270,
           transportMethodType: 'road',
           vehicleType: 'Courier van',
-          fuelType: 'diesel',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 0.15,
         },
         {
           id: ids.transportLegSample3,
@@ -1086,12 +1058,8 @@ async function seedDemoData() {
           distanceKm: 270,
           transportMethodType: 'road',
           vehicleType: 'Courier van',
-          fuelType: 'diesel',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
-          emissionFactorUsed: ROAD_FREIGHT_FACTOR,
-          emissionFactorSource: FACTOR_SOURCE,
-          transportEmissionsCo2eKg: 0.15,
         },
       ]);
 

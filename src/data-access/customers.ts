@@ -471,6 +471,7 @@ export async function createCustomerLocation(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
+    distanceFromFacilityKm?: number | null;
   }
 ): Promise<CustomerLocation> {
   requireAuth(userId);
@@ -496,6 +497,7 @@ export async function createCustomerLocation(
       gpsLatitude: data.gpsLatitude ?? null,
       gpsLongitude: data.gpsLongitude ?? null,
       address: data.address ?? null,
+      distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
     })
     .returning();
 
@@ -516,6 +518,7 @@ export async function updateCustomerLocation(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
+    distanceFromFacilityKm?: number | null;
   }
 ): Promise<CustomerLocation> {
   requireAuth(userId);
@@ -538,6 +541,7 @@ export async function updateCustomerLocation(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
+    distanceFromFacilityKm?: number | null;
     updatedAt: Date;
   } = {
     updatedAt: new Date(),
@@ -550,6 +554,7 @@ export async function updateCustomerLocation(
   if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
   if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
   if (data.address !== undefined) updateData.address = data.address;
+  if (data.distanceFromFacilityKm !== undefined) updateData.distanceFromFacilityKm = data.distanceFromFacilityKm;
 
   const [updated] = await db
     .update(customerLocations)

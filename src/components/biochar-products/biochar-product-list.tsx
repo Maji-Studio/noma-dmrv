@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Cube, Plus, Scales } from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -199,6 +199,25 @@ export function BiocharProductList() {
       ? ({ mode: "view", entity: focusedProduct.data } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  useEffect(() => {
+    if (!focusedProductId) return;
+    if (focusedProduct.isLoading) return;
+    if (!focusedProduct.isError && focusedProduct.data) return;
+
+    toast.error("Couldn't load the linked biochar product");
+    queueMicrotask(() => {
+      setFocusedProductId(null);
+      setSideSheet(null);
+    });
+  }, [
+    focusedProduct.data,
+    focusedProduct.isError,
+    focusedProduct.isLoading,
+    focusedProductId,
+    setFocusedProductId,
+    toast,
+  ]);
 
   // Computed stats
   const totalProducts = products.length;

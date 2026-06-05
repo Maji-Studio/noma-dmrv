@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getCreditBatchesFn,
   getCreditBatchByIdFn,
+  getCo2eStoredPreviewsFn,
   createCreditBatchFn,
   updateCreditBatchFn,
   deleteCreditBatchFn,
@@ -21,6 +22,7 @@ export const creditBatchKeys = {
     [...creditBatchKeys.lists(), filters] as const,
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
+  previews: (ids: string[]) => [...creditBatchKeys.all, "previews", ids] as const,
 };
 
 /**
@@ -54,6 +56,23 @@ export function useCreditBatch(id: string) {
       return result.data;
     },
     enabled: !!id,
+    staleTime: 30000,
+  });
+}
+
+export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
+  const sortedIds = [...batchIds].sort();
+
+  return useQuery({
+    queryKey: creditBatchKeys.previews(sortedIds),
+    queryFn: async () => {
+      const result = await getCo2eStoredPreviewsFn(sortedIds);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: sortedIds.length > 0,
     staleTime: 30000,
   });
 }

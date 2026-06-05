@@ -13,6 +13,7 @@ import Link from "next/link";
 import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { formatSafeDate } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
+import { InfoHint } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   formatCreditBatchStatus,
@@ -84,16 +85,16 @@ export function CreditBatchDetail({
 
   if (error) {
     return (
-      <div className="container-max py-32 flex flex-col gap-32">
+      <div className="mx-auto w-full max-w-[1200px] px-24 py-32 flex flex-col gap-32">
         <Breadcrumb code={null} />
         <ServerError message={error.message || "Failed to load credit batch"} />
       </div>
     );
   }
 
-  if (isLoading || !creditBatch) {
+  if (isLoading) {
     return (
-      <div className="container-max py-32 flex flex-col gap-32">
+      <div className="mx-auto w-full max-w-[1200px] px-24 py-32 flex flex-col gap-32">
         <Breadcrumb code={null} />
         <div
           className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-32"
@@ -101,6 +102,19 @@ export function CreditBatchDetail({
         >
           <span className="body-small text-[var(--color-text-tertiary)]">
             Loading credit batch…
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!creditBatch) {
+    return (
+      <div className="mx-auto w-full max-w-[1200px] px-24 py-32 flex flex-col gap-32">
+        <Breadcrumb code={null} />
+        <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-32">
+          <span className="body-small text-[var(--color-text-tertiary)]">
+            No credit batch found.
           </span>
         </div>
       </div>
@@ -117,7 +131,7 @@ export function CreditBatchDetail({
   }));
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="mx-auto w-full max-w-[1200px] px-24 py-32 flex flex-col gap-32">
       <Breadcrumb code={creditBatch.code} />
 
       {/* Header */}
@@ -150,12 +164,12 @@ export function CreditBatchDetail({
         id="batch-details"
         className="flex flex-col gap-24 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-32 scroll-mt-24"
       >
-        <div className="flex flex-col gap-4">
-          <h2 className="title-heading-3">Batch details</h2>
-          <p className="body-small text-[var(--color-text-secondary)]">
+        <h2 className="title-heading-3 flex items-center gap-6">
+          Batch details
+          <InfoHint>
             Crediting period and durability drive the carbon accounting above.
-          </p>
-        </div>
+          </InfoHint>
+        </h2>
 
         {updateError && <ServerError message={updateError} />}
 

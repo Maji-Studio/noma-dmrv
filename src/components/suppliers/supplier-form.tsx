@@ -59,6 +59,7 @@ export function SupplierForm({
       contactEmail: supplier?.contactEmail ?? "",
       contactPhone: supplier?.contactPhone ?? "",
       sourceRegion: supplier?.sourceRegion ?? "",
+      distanceToFacilityKm: supplier?.distanceToFacilityKm ?? undefined,
     },
   });
 
@@ -131,6 +132,24 @@ export function SupplierForm({
               disabled={isSubmitting}
               error={!!errors.sourceRegion}
               {...register("sourceRegion")}
+            />
+          </FormField>
+
+          <FormField
+            id="distanceToFacilityKm"
+            label="Distance to facility (km)"
+            error={errors.distanceToFacilityKm?.message}
+            helperText="Road distance to the delivery facility. Autofills a feedstock's transport leg (overridable per delivery)."
+          >
+            <FormInput
+              id="distanceToFacilityKm"
+              type="number"
+              step="any"
+              min={0}
+              placeholder="e.g., 85"
+              disabled={isSubmitting}
+              error={!!errors.distanceToFacilityKm}
+              {...register("distanceToFacilityKm", { setValueAs: nullableNumericValue })}
             />
           </FormField>
         </div>

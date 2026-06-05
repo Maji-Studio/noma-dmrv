@@ -325,7 +325,7 @@ Layered per CLAUDE.md (component → hooks → fn → data-access → db).
   `submit-step.tsx`).
 
 ### Modify
-- `src/lib/certification/links.ts` (isometric) — add `removal(externalId)`
+- `src/lib/isometric/links.ts` — add/update the `removal(externalId)`
   builder *(after URL verified)*.
 - `src/lib/certification/readiness.ts` — split helper so the wizard can request
   the **facility-level subset** of the checklist (batch-level rows move to

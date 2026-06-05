@@ -118,10 +118,13 @@ export function RemovalDetailSheet({
   const isActionable = state === "ready" || state === "blocked";
   const isOneClick = state === "ready" && summary.memberBatchCodes.length === 1;
 
-  const reviewHref = `/certification/removals/${encodeURIComponent(
+  // Resume the New-Removal wizard directly on this removal. The legacy
+  // `/removals/[id]/review` route only redirects here (dropping any `?step=`),
+  // so we skip the hop and build the resume URL these links resolve to.
+  const reviewHref = `/certification/removals?resume=${encodeURIComponent(
     summary.removalId,
-  )}/review?facility=${encodeURIComponent(facilityId)}`;
-  const evidenceHref = `${reviewHref}&step=evidence`;
+  )}&facility=${encodeURIComponent(facilityId)}`;
+  const evidenceHref = reviewHref;
 
   const window =
     summary.startedOn && summary.completedOn

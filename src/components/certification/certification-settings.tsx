@@ -54,6 +54,14 @@ const TABS: {
   { key: "environment", label: "Environment", icon: Pulse, adminOnly: true },
 ];
 
+function getTabId(key: TabKey) {
+  return `certification-settings-tab-${key}`;
+}
+
+function getPanelId(key: TabKey) {
+  return `certification-settings-panel-${key}`;
+}
+
 function SettingsSection({
   icon: Icon,
   title,
@@ -95,7 +103,7 @@ function SettingsTabs({
   return (
     <div
       className="flex gap-0 overflow-x-auto border-b border-[var(--color-border-secondary)]"
-      role="group"
+      role="tablist"
     >
       {tabs.map(({ key, label, icon: Icon }) => {
         const isActive = key === active;
@@ -103,7 +111,11 @@ function SettingsTabs({
           <button
             key={key}
             type="button"
-            aria-pressed={isActive}
+            id={getTabId(key)}
+            role="tab"
+            aria-selected={isActive ? "true" : "false"}
+            aria-controls={getPanelId(key)}
+            tabIndex={isActive ? 0 : -1}
             onClick={() => onSelect(key)}
             className="flex shrink-0 items-center gap-8 h-[48px] px-16 label-button transition-colors cursor-pointer"
             style={{
@@ -203,18 +215,24 @@ export function CertificationSettings() {
 
           {/* Registry connection — Isometric (everyone reads; admins manage) */}
           {activeTab === "connection" && (
-            <SettingsSection
-              icon={Plugs}
-              title="Registry connection — Isometric"
-              caption="The Isometric project every removal and GHG statement from this facility targets."
+            <div
+              id={getPanelId("connection")}
+              role="tabpanel"
+              aria-labelledby={getTabId("connection")}
             >
-              <FacilityCertifierSection
-                key={`facility-certifier-${facilityId}`}
-                facilityId={facilityId}
-                canManage={isAdmin}
-                embedded
-              />
-            </SettingsSection>
+              <SettingsSection
+                icon={Plugs}
+                title="Registry connection — Isometric"
+                caption="The Isometric project every removal and GHG statement from this facility targets."
+              >
+                <FacilityCertifierSection
+                  key={`facility-certifier-${facilityId}`}
+                  facilityId={facilityId}
+                  canManage={isAdmin}
+                  embedded
+                />
+              </SettingsSection>
+            </div>
           )}
 
           {/* Emission / LCA config — admin only (ADR 0005, import-only).
@@ -222,47 +240,59 @@ export function CertificationSettings() {
               at mount, so it must not mount until the summary has loaded —
               otherwise saved genset/stage-split values render blank. */}
           {activeTab === "emissions" && isAdmin && (
-            <SettingsSection
-              icon={Gauge}
-              title="Emission estimates"
-              caption="Genset yield + process-stage energy split, and the per-period LCA journal. Feed the per-stage energy datapoints on submission."
+            <div
+              id={getPanelId("emissions")}
+              role="tabpanel"
+              aria-labelledby={getTabId("emissions")}
             >
-              {summaryLoading ? (
-                <p className="body-medium text-[var(--color-text-tertiary)]">
-                  Loading facility configuration…
-                </p>
-              ) : !summary ? (
-                <p className="body-medium text-[var(--clr-red)]" role="alert">
-                  Couldn&apos;t load facility configuration. Refresh the page to
-                  retry.
-                </p>
-              ) : (
-                <EmissionEstimatesForm
-                  key={`emission-estimates-${facilityId}`}
+              <SettingsSection
+                icon={Gauge}
+                title="Emission estimates"
+                caption="Genset yield + process-stage energy split, and the per-period LCA journal. Feed the per-stage energy datapoints on submission."
+              >
+                {summaryLoading ? (
+                  <p className="body-medium text-[var(--color-text-tertiary)]">
+                    Loading facility configuration…
+                  </p>
+                ) : !summary ? (
+                  <p className="body-medium text-[var(--clr-red)]" role="alert">
+                    Couldn&apos;t load facility configuration. Refresh the page to
+                    retry.
+                  </p>
+                ) : (
+                  <EmissionEstimatesForm
+                    key={`emission-estimates-${facilityId}`}
+                    facilityId={facilityId}
+                    mapping={summary.mapping ?? null}
+                  />
+                )}
+                {/* What's drifted vs. the registry (read-only) sits directly
+                    above the journal where the operator records the matching
+                    rows — the Overview only shows the one-line summary. */}
+                <ProjectEmissionsDriftPanel />
+                <PeriodEmissionsSection
+                  key={`period-emissions-${facilityId}`}
                   facilityId={facilityId}
-                  mapping={summary.mapping ?? null}
                 />
-              )}
-              {/* What's drifted vs. the registry (read-only) sits directly
-                  above the journal where the operator records the matching
-                  rows — the Overview only shows the one-line summary. */}
-              <ProjectEmissionsDriftPanel />
-              <PeriodEmissionsSection
-                key={`period-emissions-${facilityId}`}
-                facilityId={facilityId}
-              />
-            </SettingsSection>
+              </SettingsSection>
+            </div>
           )}
 
           {/* Environment & health — admin only, read-only, no secrets */}
           {activeTab === "environment" && isAdmin && (
-            <SettingsSection
-              icon={Pulse}
-              title="Environment & health"
-              caption="Read-only integration status. Never exposes tokens or secrets."
+            <div
+              id={getPanelId("environment")}
+              role="tabpanel"
+              aria-labelledby={getTabId("environment")}
             >
-              <CertificationHealthPanel />
-            </SettingsSection>
+              <SettingsSection
+                icon={Pulse}
+                title="Environment & health"
+                caption="Read-only integration status. Never exposes tokens or secrets."
+              >
+                <CertificationHealthPanel />
+              </SettingsSection>
+            </div>
           )}
         </div>
       )}

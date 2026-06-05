@@ -20,7 +20,6 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
-  TransportLegsEditor,
   TransportLegsSummary,
 } from "@/components/transport-legs";
 import {
@@ -425,14 +424,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           viewModeChildren={
             displaySideSheet.mode === "view" && displaySideSheet.entity ? (
               <TransportLegsSummary
-                entityType="feedstock"
-                entityId={displaySideSheet.entity.id}
-              />
-            ) : null
-          }
-          editModeChildren={
-            displaySideSheet.mode === "edit" && displaySideSheet.entity ? (
-              <TransportLegsEditor
                 entityType="feedstock"
                 entityId={displaySideSheet.entity.id}
               />

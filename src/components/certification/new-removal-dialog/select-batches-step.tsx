@@ -15,6 +15,7 @@ import {
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
+import { InfoHint } from "@/components/ui/tooltip";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { SelectableBatch } from "@/fn/certification";
@@ -140,12 +141,12 @@ export function SelectBatchesStep({
 }: SelectBatchesStepProps) {
   return (
     <div className="flex flex-col gap-16">
-      <div className="flex flex-col gap-4">
-        <h3 className="title-heading-3">Select credit batches</h3>
-        <p className="body-small text-[var(--color-text-secondary)]">
+      <h3 className="title-heading-3 flex items-center gap-6">
+        Select credit batches
+        <InfoHint>
           Only batches whose data is complete can be grouped into a removal.
-        </p>
-      </div>
+        </InfoHint>
+      </h3>
 
       {!facilitySetupComplete && (
         <div className="flex items-start gap-12 border-l-4 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">

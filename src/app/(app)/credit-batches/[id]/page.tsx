@@ -24,10 +24,12 @@ export default async function CreditBatchDetailPage({
   // both a layer bypass and a scaling hazard. Now routed through the guarded
   // data-access layer.
   const batch = await getCreditBatchById(user.id, id, { skipPreview: true });
-  const applicationOptions = await getCreditBatchApplicationOptions(
-    user.id,
-    batch?.facilityId,
-  );
+  // Guard a null batch (not found / not authorized): calling the options query
+  // with an undefined facilityId would drop the facility filter and load *every*
+  // application in the system — the unscoped query this page was built to avoid.
+  const applicationOptions = batch
+    ? await getCreditBatchApplicationOptions(user.id, batch.facilityId)
+    : [];
 
   return (
     <CreditBatchDetail creditBatchId={id} applications={applicationOptions} />
