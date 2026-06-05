@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
@@ -33,6 +34,9 @@ export function TransportLegsPanel({
   entityId,
   title,
 }: TransportLegsPanelProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
     entityId,
@@ -42,9 +46,41 @@ export function TransportLegsPanel({
 
   const [formState, setFormState] = useState<
     { mode: "create" } | { mode: "edit"; leg: TransportLeg } | null
-  >(null);
+  >(() => {
+    const intent = searchParams.get("transportLeg");
+    return intent === "create" || intent === "add" ? { mode: "create" } : null;
+  });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const intent = searchParams.get("transportLeg");
+    const shouldCreate = intent === "create" || intent === "add";
+    const shouldEdit = intent === "edit";
+    if (!shouldCreate && !shouldEdit) return;
+
+    if (shouldCreate) {
+      queueMicrotask(() => setFormState({ mode: "create" }));
+    } else {
+      const legId = searchParams.get("transportLegId");
+      if (!legId) return;
+      if (!legs) return;
+
+      const leg = legs.find((candidate) => candidate.id === legId);
+      if (leg) {
+        queueMicrotask(() => setFormState({ mode: "edit", leg }));
+      }
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("transportLeg");
+    nextParams.delete("transportLegId");
+    const nextQuery = nextParams.toString();
+
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [legs, pathname, router, searchParams]);
 
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;

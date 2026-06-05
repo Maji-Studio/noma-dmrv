@@ -59,6 +59,7 @@ export function StorageLocationForm({
       facilityId: storageLocation?.facilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? "",
+      formulationId: storageLocation?.formulationId ?? "",
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
     },
@@ -66,6 +67,7 @@ export function StorageLocationForm({
 
   const watchedType = useWatch({ control, name: "type" });
   const showFeedstockType = !!watchedType && FEEDSTOCK_BIN_TYPES.includes(watchedType);
+  const showFormulation = watchedType === "product_bin";
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
@@ -75,6 +77,9 @@ export function StorageLocationForm({
     const normalized = { ...data } as StorageLocationFormData;
     if (!normalized.type || !FEEDSTOCK_BIN_TYPES.includes(normalized.type)) {
       normalized.feedstockTypeId = null;
+    }
+    if (normalized.type !== "product_bin") {
+      normalized.formulationId = null;
     }
     return onSubmit(normalized);
   });
@@ -148,6 +153,20 @@ export function StorageLocationForm({
             placeholder="Select feedstock type..."
             disabled={isSubmitting}
             helperText="Restricts this bin to one feedstock type"
+          />
+        </div>
+      )}
+
+      {showFormulation && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormEntitySelect
+            control={control}
+            name="formulationId"
+            label="Formulation"
+            entityType="formulation"
+            placeholder="Pure biochar (no formulation)"
+            disabled={isSubmitting}
+            helperText="Keeps this bin clean — restricts it to one formulation. Leave empty for pure biochar."
           />
         </div>
       )}

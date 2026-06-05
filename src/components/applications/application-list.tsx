@@ -8,7 +8,7 @@
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { MapPin, Plus, Leaf, Thermometer } from "@phosphor-icons/react";
+import { MapPin, Plus, Leaf } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -93,17 +93,6 @@ function createColumns(
         <span>
           {row.original.applicationMethodType
             ? formatApplicationMethod(row.original.applicationMethodType as ApplicationMethod)
-            : "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "co2eStoredTonnes",
-      header: "CO2e Stored",
-      cell: ({ row }) => (
-        <span className={row.original.co2eStoredTonnes != null ? "font-mono text-[var(--color-signal-green)]" : ""}>
-          {row.original.co2eStoredTonnes != null
-            ? `${row.original.co2eStoredTonnes.toFixed(2)} t`
             : "—"}
         </span>
       ),
@@ -244,7 +233,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deliveryOptions = scopedDeliveries ?? deliveries;
   const totalApplications = items.length;
   const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
-  const totalCo2e = items.reduce((sum, a) => sum + (a.co2eStoredTonnes ?? 0), 0);
 
   if (error) {
     return (
@@ -273,7 +261,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total Applications"
           value={totalApplications}
@@ -286,13 +274,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           value={formatApplicationKgFromTons(totalBiochar)}
           icon={<Leaf size={24} weight="bold" />}
           description="Total biochar applied"
-          isLoading={isLoading}
-        />
-        <StatCard
-          title="CO2e Stored"
-          value={`${totalCo2e.toFixed(2)} t`}
-          icon={<Thermometer size={24} weight="bold" />}
-          description="Total carbon stored"
           isLoading={isLoading}
         />
       </div>
@@ -413,17 +394,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 },
                 { label: "Crop Type", value: sideSheet.entity.cropType },
                 { label: "Field Identifier", value: sideSheet.entity.fieldIdentifier },
-              ],
-            },
-            {
-              title: "Metrics",
-              fields: [
-                {
-                  label: "CO2e Stored",
-                  value: sideSheet.entity.co2eStoredTonnes != null
-                    ? `${sideSheet.entity.co2eStoredTonnes.toFixed(2)} t CO\u2082e`
-                    : null,
-                },
               ],
             },
           ] : undefined}

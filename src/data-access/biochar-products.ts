@@ -27,11 +27,12 @@ export interface BiocharProductWithRelations extends BiocharProduct {
     code: string;
     name: string;
   };
+  /** Null for a pure-biochar product (no amendment blend). */
   formulation: {
     id: string;
     code: string;
     name: string;
-  };
+  } | null;
   linkedProductionRun?: {
     id: string;
     code: string;
@@ -200,11 +201,13 @@ export async function getBiocharProducts(
       code: row.facilityCode ?? "",
       name: row.facilityName ?? "",
     },
-    formulation: {
-      id: row.formulationId,
-      code: row.formulationCode ?? "",
-      name: row.formulationName ?? "",
-    },
+    formulation: row.formulationId
+      ? {
+          id: row.formulationId,
+          code: row.formulationCode ?? "",
+          name: row.formulationName ?? "",
+        }
+      : null,
     linkedProductionRun: row.linkedProductionRunId && row.productionRunCode
       ? {
           id: row.linkedProductionRunId,
@@ -297,11 +300,13 @@ export async function getBiocharProductById(
       code: row.facilityCode ?? "",
       name: row.facilityName ?? "",
     },
-    formulation: {
-      id: row.formulationId,
-      code: row.formulationCode ?? "",
-      name: row.formulationName ?? "",
-    },
+    formulation: row.formulationId
+      ? {
+          id: row.formulationId,
+          code: row.formulationCode ?? "",
+          name: row.formulationName ?? "",
+        }
+      : null,
     linkedProductionRun: row.linkedProductionRunId && row.productionRunCode
       ? {
           id: row.linkedProductionRunId,
@@ -330,7 +335,7 @@ export async function createBiocharProduct(
   data: {
     code: string;
     facilityId: string;
-    formulationId: string;
+    formulationId?: string | null;
     productionDate?: Date;
     status?: "draft" | "testing" | "ready" | "sold";
     linkedProductionRunId?: string | null;
@@ -344,6 +349,9 @@ export async function createBiocharProduct(
 ): Promise<BiocharProduct> {
   requireAuth(userId);
 
+  // A null formulation means a pure-biochar product (no amendment blend).
+  const formulationId = data.formulationId ?? null;
+
   // Check for duplicate code
   const [existing] = await db
     .select({ id: biocharProducts.id })
@@ -354,25 +362,28 @@ export async function createBiocharProduct(
     throw new SafeError("A biochar product with this code already exists");
   }
 
-  // Verify facility + formulation exist. The lookups are independent, so run
-  // them in parallel — but evaluate the results in a fixed order so the
-  // surfaced error stays deterministic (facility before formulation).
-  const [[facility], [formulation]] = await Promise.all([
+  // Verify facility exists; verify the formulation only when one was provided.
+  // The lookups are independent, so run them in parallel — but evaluate the
+  // results in a fixed order so the surfaced error stays deterministic
+  // (facility before formulation).
+  const [[facility], formulationRows] = await Promise.all([
     db
       .select({ id: facilities.id })
       .from(facilities)
       .where(eq(facilities.id, data.facilityId)),
-    db
-      .select({ id: formulations.id })
-      .from(formulations)
-      .where(eq(formulations.id, data.formulationId)),
+    formulationId
+      ? db
+          .select({ id: formulations.id })
+          .from(formulations)
+          .where(eq(formulations.id, formulationId))
+      : Promise.resolve([] as { id: string }[]),
   ]);
 
   if (!facility) {
     throw new SafeError("Facility not found");
   }
 
-  if (!formulation) {
+  if (formulationId && formulationRows.length === 0) {
     throw new SafeError("Formulation not found");
   }
 
@@ -401,24 +412,11 @@ export async function createBiocharProduct(
     throw new SafeError("Water added must be a non-negative finite number");
   }
 
-  // Verify the linked production run + storage location. Both lookups are
-  // independent and the required-field guards above guarantee non-null ids,
-  // so run them in parallel — results are evaluated in a fixed order (run
-  // before storage) to keep the surfaced error deterministic.
-  const [[run], [storage]] = await Promise.all([
-    db
-      .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
-      .from(productionRuns)
-      .where(eq(productionRuns.id, data.linkedProductionRunId)),
-    db
-      .select({
-        id: storageLocations.id,
-        facilityId: storageLocations.facilityId,
-        type: storageLocations.type,
-      })
-      .from(storageLocations)
-      .where(eq(storageLocations.id, data.storageLocationId)),
-  ]);
+  // Validate the linked production run (independent, read-only).
+  const [run] = await db
+    .select({ id: productionRuns.id, facilityId: productionRuns.facilityId })
+    .from(productionRuns)
+    .where(eq(productionRuns.id, data.linkedProductionRunId));
 
   if (!run) {
     throw new SafeError("Linked production run not found");
@@ -427,33 +425,70 @@ export async function createBiocharProduct(
     throw new SafeError("Linked production run belongs to a different facility");
   }
 
-  if (!storage) {
-    throw new SafeError("Storage location not found");
-  }
-  if (storage.facilityId !== data.facilityId) {
-    throw new SafeError("Storage location belongs to a different facility");
-  }
-  if (storage.type !== "product_bin") {
-    throw new SafeError("Storage location must be a product bin");
-  }
+  const destinationBinId = data.storageLocationId;
 
-  const [product] = await db
-    .insert(biocharProducts)
-    .values({
-      code: data.code,
-      facilityId: data.facilityId,
-      formulationId: data.formulationId,
-      productionDate: data.productionDate ?? new Date(),
-      status: data.status ?? "testing",
-      linkedProductionRunId: data.linkedProductionRunId ?? null,
-      storageLocationId: data.storageLocationId ?? null,
-      massKg: data.massKg ?? null,
-      moistureContentPercent: data.moistureContentPercent ?? null,
-      densityKgM3: data.densityKgM3 ?? null,
-      waterAddedKg: data.waterAddedKg ?? null,
-      composition: data.composition ?? {},
-    })
-    .returning();
+  // Lock the destination bin, validate it, insert the product, and claim the bin
+  // atomically. The row lock serializes concurrent placements into the same bin,
+  // so two products with different formulations can't both pass the reservation
+  // check and strand a mismatched product (the claim-after-insert TOCTOU).
+  const product = await db.transaction(async (tx) => {
+    const [storage] = await tx
+      .select({
+        id: storageLocations.id,
+        facilityId: storageLocations.facilityId,
+        type: storageLocations.type,
+        formulationId: storageLocations.formulationId,
+      })
+      .from(storageLocations)
+      .where(eq(storageLocations.id, destinationBinId))
+      .for("update");
+
+    if (!storage) {
+      throw new SafeError("Storage location not found");
+    }
+    if (storage.facilityId !== data.facilityId) {
+      throw new SafeError("Storage location belongs to a different facility");
+    }
+    if (storage.type !== "product_bin") {
+      throw new SafeError("Storage location must be a product bin");
+    }
+    // Keep the bin clean: a product bin holds one formulation (or pure biochar).
+    // An unassigned bin (null) accepts anything and is claimed below on first use.
+    if (storage.formulationId !== null && storage.formulationId !== formulationId) {
+      throw new SafeError(
+        "Product bin is reserved for a different formulation. Pick a matching or empty bin."
+      );
+    }
+
+    const [inserted] = await tx
+      .insert(biocharProducts)
+      .values({
+        code: data.code,
+        facilityId: data.facilityId,
+        formulationId,
+        productionDate: data.productionDate ?? new Date(),
+        status: data.status ?? "testing",
+        linkedProductionRunId: data.linkedProductionRunId ?? null,
+        storageLocationId: destinationBinId,
+        massKg: data.massKg ?? null,
+        moistureContentPercent: data.moistureContentPercent ?? null,
+        densityKgM3: data.densityKgM3 ?? null,
+        waterAddedKg: data.waterAddedKg ?? null,
+        composition: data.composition ?? {},
+      })
+      .returning();
+
+    // Claim an unassigned bin for this formulation so it stays clean going
+    // forward. Safe under the row lock held above.
+    if (formulationId && storage.formulationId === null) {
+      await tx
+        .update(storageLocations)
+        .set({ formulationId, updatedAt: new Date() })
+        .where(eq(storageLocations.id, destinationBinId));
+    }
+
+    return inserted;
+  });
 
   return product;
 }
@@ -471,7 +506,7 @@ export async function updateBiocharProduct(
   data: {
     code?: string;
     facilityId?: string;
-    formulationId?: string;
+    formulationId?: string | null;
     productionDate?: Date;
     status?: "draft" | "testing" | "ready" | "sold";
     linkedProductionRunId?: string | null;
@@ -596,32 +631,74 @@ export async function updateBiocharProduct(
     }
   }
 
-  // Verify storage location exists, belongs to same facility, and is a product bin
-  if (effectiveStorageId && (data.storageLocationId !== undefined || facilityChanged)) {
-    const [storage] = await db
-      .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
-      .from(storageLocations)
-      .where(eq(storageLocations.id, effectiveStorageId));
+  // The effective formulation is the new one if being changed, otherwise existing.
+  // A null formulation means a pure-biochar product.
+  const effectiveFormulationId =
+    data.formulationId !== undefined ? data.formulationId : existing.formulationId;
 
-    if (!storage) {
-      throw new SafeError("Storage location not found");
-    }
-    if (storage.facilityId !== effectiveFacilityId) {
-      throw new SafeError("Storage location belongs to a different facility");
-    }
-    if (storage.type !== "product_bin") {
-      throw new SafeError("Storage location must be a product bin");
-    }
-  }
+  // Re-check the destination bin whenever the bin, the formulation, or the
+  // facility changes, then update the product and (re)claim an unassigned bin —
+  // all atomically. Locking the bin row serializes concurrent placements so two
+  // products with different formulations can't strand a mismatch in one bin.
+  const updated = await db.transaction(async (tx) => {
+    let claimBinFormulationId: string | null = null;
 
-  const [updated] = await db
-    .update(biocharProducts)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(biocharProducts.id, productId))
-    .returning();
+    if (
+      effectiveStorageId &&
+      (data.storageLocationId !== undefined ||
+        data.formulationId !== undefined ||
+        facilityChanged)
+    ) {
+      const [storage] = await tx
+        .select({
+          id: storageLocations.id,
+          facilityId: storageLocations.facilityId,
+          type: storageLocations.type,
+          formulationId: storageLocations.formulationId,
+        })
+        .from(storageLocations)
+        .where(eq(storageLocations.id, effectiveStorageId))
+        .for("update");
+
+      if (!storage) {
+        throw new SafeError("Storage location not found");
+      }
+      if (storage.facilityId !== effectiveFacilityId) {
+        throw new SafeError("Storage location belongs to a different facility");
+      }
+      if (storage.type !== "product_bin") {
+        throw new SafeError("Storage location must be a product bin");
+      }
+      if (storage.formulationId !== null && storage.formulationId !== effectiveFormulationId) {
+        throw new SafeError(
+          "Product bin is reserved for a different formulation. Pick a matching or empty bin."
+        );
+      }
+      if (effectiveFormulationId && storage.formulationId === null) {
+        claimBinFormulationId = effectiveFormulationId;
+      }
+    }
+
+    const [row] = await tx
+      .update(biocharProducts)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(biocharProducts.id, productId))
+      .returning();
+
+    // Claim an unassigned bin for this formulation so it stays clean going
+    // forward. Safe under the row lock held above.
+    if (claimBinFormulationId && effectiveStorageId) {
+      await tx
+        .update(storageLocations)
+        .set({ formulationId: claimBinFormulationId, updatedAt: new Date() })
+        .where(eq(storageLocations.id, effectiveStorageId));
+    }
+
+    return row;
+  });
 
   return updated;
 }

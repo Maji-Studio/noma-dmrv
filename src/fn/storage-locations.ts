@@ -216,6 +216,7 @@ export async function createStorageLocationFn(
           facilityId: validated.facilityId,
           capacityKg: validated.capacityKg ?? null,
           feedstockTypeId: validated.feedstockTypeId ?? null,
+          formulationId: validated.formulationId ?? null,
           storageMethod: validated.storageMethod || null,
           storageDescription: validated.storageDescription || null,
         })
@@ -267,6 +268,7 @@ export async function updateStorageLocationFn(
         facilityId: validated.facilityId,
         capacityKg: validated.capacityKg,
         feedstockTypeId: validated.feedstockTypeId,
+        formulationId: validated.formulationId,
         storageMethod: validated.storageMethod,
         storageDescription: validated.storageDescription,
         supplierReferenceId: validated.supplierReferenceId,
