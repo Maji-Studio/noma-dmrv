@@ -208,7 +208,6 @@ export function BiocharProductList() {
     toast.error("Couldn't load the linked biochar product");
     queueMicrotask(() => {
       setFocusedProductId(null);
-      setSideSheet(null);
     });
   }, [
     focusedProduct.data,

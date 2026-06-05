@@ -29,6 +29,7 @@ import {
   type BatchHealth,
 } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import {
   buildMassAccounting,
@@ -131,6 +132,9 @@ export interface RemovalCertifyContext {
   // `hasSubmittableRuns` fact the server-owned Overview loader does, without
   // shipping the heavy `runs` array to the client.
   hasSubmittableRuns: boolean;
+  // Compact labels from the per-entity certifier-readiness layer. The raw
+  // entity rows stay server-side; Review/pre-flight only needs gap labels.
+  entityReadinessGaps?: string[];
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -209,6 +213,37 @@ function buildCoverage(
       aggregationWarning: aggregateTransportLegs(legs.sample, "Sample").warning,
     },
   };
+}
+
+function buildEntityReadinessGaps(
+  runs: ProductionRunWithSamples[],
+  transportLegs: TransportLegsByCategory,
+): string[] {
+  const gaps: string[] = [];
+
+  for (const run of runs) {
+    const readiness = deriveEntityCertifyReadiness("productionRun", run);
+    for (const gap of readiness.gaps) {
+      gaps.push(`Production run ${run.code}: ${gap.label}`);
+    }
+    for (const sample of run.samples) {
+      const sampleReadiness = deriveEntityCertifyReadiness("sample", sample);
+      for (const gap of sampleReadiness.gaps) {
+        gaps.push(`Sample ${sample.sampleCode}: ${gap.label}`);
+      }
+    }
+  }
+
+  for (const [category, legs] of Object.entries(transportLegs)) {
+    for (const leg of legs) {
+      const readiness = deriveEntityCertifyReadiness("transportLeg", leg);
+      for (const gap of readiness.gaps) {
+        gaps.push(`${category} transport leg ${leg.id}: ${gap.label}`);
+      }
+    }
+  }
+
+  return Array.from(new Set(gaps));
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
@@ -483,6 +518,7 @@ export async function buildRemovalContext(
       memberBatches,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
+      entityReadinessGaps: [],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
@@ -512,6 +548,7 @@ export async function buildRemovalContext(
   const entityIds = collectTransportEntityIds(lineages, runs);
   const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
+  const entityReadinessGaps = buildEntityReadinessGaps(runs, transportLegs);
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(
@@ -526,6 +563,7 @@ export async function buildRemovalContext(
     memberBatches,
     transportCoverage,
     hasSubmittableRuns: runs.length > 0,
+    entityReadinessGaps,
     runSummary,
     latestSubmission,
     linkedGhgStatement,
@@ -569,6 +607,7 @@ function projectUiContext(
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,
     hasSubmittableRuns: ctx.hasSubmittableRuns,
+    entityReadinessGaps: ctx.entityReadinessGaps,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,

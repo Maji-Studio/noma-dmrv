@@ -36,6 +36,10 @@ export const suppliers = pgTable(
       'suppliers_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
+    check(
+      'suppliers_distance_to_facility_km_non_negative',
+      sql`${table.distanceToFacilityKm} is null or ${table.distanceToFacilityKm} >= 0`
+    ),
   ]
 );
 
@@ -74,7 +78,8 @@ export const customerLocations = pgTable(
     gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
     // Road distance (km) from the origin facility to this customer location.
-    // Autofills a delivery transport leg's distance (overridable). Stored.
+    // Stored as operational route metadata; certifier transport is recorded on
+    // cargo entities, not deliveries.
     distanceFromFacilityKm: real('distance_from_facility_km'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -87,6 +92,10 @@ export const customerLocations = pgTable(
     check(
       'customer_locations_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
+    ),
+    check(
+      'customer_locations_distance_from_facility_km_non_negative',
+      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
     ),
   ]
 );

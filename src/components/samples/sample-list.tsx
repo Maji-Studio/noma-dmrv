@@ -30,6 +30,8 @@ import { SampleDocumentsPanel } from "./sample-documents-panel";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -111,6 +113,15 @@ function createColumns(
       accessorKey: "durabilityOption",
       header: "Durability",
       cell: ({ row }) => <DurabilityBadge durability={row.original.durabilityOption} />,
+    },
+    {
+      id: "certifyReadiness",
+      header: "Certifier",
+      cell: ({ row }) => (
+        <EntityCertifyReadinessBadge
+          readiness={deriveEntityCertifyReadiness("sample", row.original)}
+        />
+      ),
     },
     {
       id: "actions",
@@ -223,13 +234,26 @@ export function SampleList() {
       ? ({ mode: "view", entity: focusedSample.data } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const showSavedToast = (message: string, sample: SampleWithRelations) => {
+    const readiness = deriveEntityCertifyReadiness("sample", sample);
+    if (readiness.state === "ready") {
+      toast.success(message);
+      return;
+    }
+    const gapLabels = readiness.gaps
+      .slice(0, 3)
+      .map((gap) => gap.label)
+      .join(", ");
+    const suffix = readiness.gaps.length > 3 ? ", ..." : "";
+    toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
+  };
 
   const handleCreate = async (data: SampleFormData) => {
     setFormError(null);
     try {
-      await createSample.mutateAsync(data);
+      const sample = await createSample.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Sample created successfully");
+      showSavedToast("Sample created successfully", sample);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create sample");
     }
@@ -239,9 +263,12 @@ export function SampleList() {
     if (sideSheet?.mode !== "edit") return;
     setFormError(null);
     try {
-      await updateSample.mutateAsync({ sampleId: sideSheet.entity.id, ...data });
+      const sample = await updateSample.mutateAsync({
+        sampleId: sideSheet.entity.id,
+        ...data,
+      });
       setSideSheet(null);
-      toast.success("Sample updated successfully");
+      showSavedToast("Sample updated successfully", sample);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update sample");
     }
@@ -424,6 +451,17 @@ export function SampleList() {
               { label: "Sampling Time", value: new Date(displaySideSheet.entity.samplingTime).toLocaleString() },
               { label: "Production Run", value: displaySideSheet.entity.productionRunCode },
               { label: "Facility", value: displaySideSheet.entity.facilityName },
+              {
+                label: "Certifier",
+                value: (
+                  <EntityCertifyReadinessBadge
+                    readiness={deriveEntityCertifyReadiness(
+                      "sample",
+                      displaySideSheet.entity,
+                    )}
+                  />
+                ),
+              },
             ],
           },
           {

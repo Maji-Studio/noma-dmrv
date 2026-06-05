@@ -17,6 +17,8 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
@@ -117,6 +119,15 @@ function createColumns(
             ? `${row.original.moistureContentPercent}%`
             : "—"}
         </span>
+      ),
+    },
+    {
+      id: "certifyReadiness",
+      header: "Certifier",
+      cell: ({ row }) => (
+        <EntityCertifyReadinessBadge
+          readiness={deriveEntityCertifyReadiness("feedstock", row.original)}
+        />
       ),
     },
     {
@@ -389,6 +400,17 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 { label: "Supplier", value: displaySideSheet.entity.supplierName },
                 { label: "Supplier Code", value: displaySideSheet.entity.supplierCode },
                 { label: "Vehicle", value: displaySideSheet.entity.vehiclePlateNumber },
+                {
+                  label: "Certifier",
+                  value: (
+                    <EntityCertifyReadinessBadge
+                      readiness={deriveEntityCertifyReadiness(
+                        "feedstock",
+                        displaySideSheet.entity,
+                      )}
+                    />
+                  ),
+                },
               ],
             },
             {
