@@ -52,6 +52,8 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 // Helpers
 // ============================================
 
+const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
+
 function CreditStatusBadge({ status }: { status: CreditBatchStatus }) {
   const colors = getStatusColor(status);
   return (
@@ -100,7 +102,7 @@ export function CreditBatchList({
   const toast = useToast();
 
   // Client-side filtering
-  const allItems = (creditBatches ?? []) as CreditBatchWithRelations[];
+  const allItems = creditBatches ?? EMPTY_CREDIT_BATCHES;
 
   const filteredItems = useMemo(() => {
     let items = allItems;
@@ -132,8 +134,11 @@ export function CreditBatchList({
 
   // Stats (from all items, not filtered)
   const totalBatches = allItems.length;
+  const hasPendingCo2e = allItems.some(
+    (b) => b.co2eStoredPreview.missingInputs.length > 0
+  );
   const totalCo2e = allItems.reduce(
-    (sum, b) => sum + (b.totalCo2eStoredTons ?? 0),
+    (sum, b) => sum + (b.co2eStoredPreview.co2eStoredTonnes ?? 0),
     0
   );
   const totalValue = allItems.reduce((sum, b) => sum + (b.value ?? 0), 0);
@@ -264,7 +269,7 @@ export function CreditBatchList({
         />
         <StatCard
           title="CO2e Stored"
-          value={`${totalCo2e.toFixed(2)} t`}
+          value={hasPendingCo2e ? "Pending" : `${totalCo2e.toFixed(2)} t`}
           icon={<Leaf size={24} weight="bold" />}
           description="Total carbon stored"
           isLoading={isLoading}
@@ -509,9 +514,16 @@ export function CreditBatchList({
                       {
                         label: "Total CO2e Stored",
                         value:
-                          sideSheet.entity.totalCo2eStoredTons != null
-                            ? `${sideSheet.entity.totalCo2eStoredTons.toFixed(2)} t CO\u2082e`
-                            : null,
+                          sideSheet.entity.co2eStoredPreview.co2eStoredTonnes != null
+                            ? `${sideSheet.entity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO\u2082e`
+                            : "Pending inputs",
+                      },
+                      {
+                        label: "Preview Inputs",
+                        value:
+                          sideSheet.entity.co2eStoredPreview.missingInputs.length > 0
+                            ? sideSheet.entity.co2eStoredPreview.missingInputs.join(", ")
+                            : "Complete",
                       },
                     ],
                   },

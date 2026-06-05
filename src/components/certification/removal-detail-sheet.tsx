@@ -15,7 +15,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { CheckCircle, Warning } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui";
+import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
@@ -112,7 +112,9 @@ export function RemovalDetailSheet({
   const { state } = summary.readiness;
   const isOneClick = state === "ready" && summary.memberBatchCodes.length === 1;
 
-  const reviewHref = `/certification/removals/${summary.removalId}/review?facility=${facilityId}`;
+  const reviewHref = `/certification/removals/${encodeURIComponent(
+    summary.removalId,
+  )}/review?facility=${encodeURIComponent(facilityId)}`;
   const evidenceHref = `${reviewHref}&step=evidence`;
   const reviewLabel =
     state === "ready" || state === "blocked" ? "Review & submit" : "Open Review";
@@ -203,10 +205,14 @@ export function RemovalDetailSheet({
               {summary.externalId ? "Resubmit" : "Submit"}
             </Button>
           ) : (
-            <Link href={reviewHref} className="flex-1">
-              <Button variant="primary" className="w-full">
-                {reviewLabel}
-              </Button>
+            <Link
+              href={reviewHref}
+              className={buttonVariants({
+                variant: "primary",
+                className: "flex-1",
+              })}
+            >
+              {reviewLabel}
             </Link>
           )}
           <SlideOverPanel.Close>

@@ -18,7 +18,6 @@ export default async function CreditBatchesPage() {
       applicationDate: applications.applicationDate,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,
       fieldIdentifier: applications.fieldIdentifier,
-      co2eStoredTonnes: applications.co2eStoredTonnes,
       facilityId: deliveries.facilityId,
     })
     .from(applications)

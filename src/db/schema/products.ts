@@ -90,9 +90,8 @@ export const biocharProducts = pgTable('biochar_products', {
   status: biocharProductStatus('status').default('testing').notNull(),
 
   // --- Composition ---
-  formulationId: uuid('formulation_id')
-    .notNull()
-    .references(() => formulations.id),
+  // Nullable: a NULL formulation means a pure-biochar product (no amendment blend).
+  formulationId: uuid('formulation_id').references(() => formulations.id),
   linkedProductionRunId: uuid('linked_production_run_id').references(
     () => productionRuns.id
   ),

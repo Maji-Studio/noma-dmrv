@@ -24,7 +24,7 @@ import { Field, Section } from "./panel-layout";
 // one. Without `?facility=`, Settings would fall back to the localStorage
 // facility and the operator would manage the wrong link.
 const settingsHref = (facilityId: string) =>
-  `/certification/settings?facility=${facilityId}`;
+  `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
 export function FacilityCertifierSummary({
   facilityId,
@@ -68,7 +68,7 @@ function SummaryBody({
   }
   if (query.error || !query.data) {
     return (
-      <p className="body-small text-[var(--clr-red)]" role="alert">
+      <p className="body-small text-[var(--color-signal-red)]" role="alert">
         Unable to load the registry link.
       </p>
     );

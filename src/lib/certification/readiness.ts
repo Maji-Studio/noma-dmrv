@@ -60,6 +60,8 @@ export interface RemovalReadiness {
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
+const NO_PRODUCTION_REASON = "No production data linked yet — nothing to submit";
+const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -138,7 +140,7 @@ export function deriveRemovalReadiness(
   }
 
   if (!facts.hasSubmittableRuns) {
-    reasons.push("No production data linked yet — nothing to submit");
+    reasons.push(NO_PRODUCTION_REASON);
   }
 
   return reasons.length > 0
@@ -180,22 +182,26 @@ export function buildRemovalPreflightChecklist(
 
   const transport = ((): PreflightCheck => {
     if (!linked || !templateClean) {
-      return { key: "transport", label: "Transport coverage complete", status: "skipped" };
+      return {
+        key: "transport",
+        label: TRANSPORT_COVERAGE_LABEL,
+        status: "skipped",
+      };
     }
     if (facts.requiredTransport.length === 0) {
       return {
         key: "transport",
-        label: "Transport coverage complete",
+        label: TRANSPORT_COVERAGE_LABEL,
         status: "met",
         detail: "This template requires no transport legs.",
       };
     }
     const gaps = transportGapReasons(facts.requiredTransport);
     return gaps.length === 0
-      ? { key: "transport", label: "Transport coverage complete", status: "met" }
+      ? { key: "transport", label: TRANSPORT_COVERAGE_LABEL, status: "met" }
       : {
           key: "transport",
-          label: "Transport coverage complete",
+          label: TRANSPORT_COVERAGE_LABEL,
           status: "unmet",
           detail: gaps.join(" · "),
         };
@@ -219,9 +225,7 @@ export function buildRemovalPreflightChecklist(
       key: "production",
       label: "Production data linked",
       status: facts.hasSubmittableRuns ? "met" : "unmet",
-      detail: facts.hasSubmittableRuns
-        ? undefined
-        : "No production data linked yet — nothing to submit",
+      detail: facts.hasSubmittableRuns ? undefined : NO_PRODUCTION_REASON,
     },
   ];
 }

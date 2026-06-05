@@ -22,7 +22,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local", override: false });
 
 import * as crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -75,7 +75,12 @@ export async function deleteCertifierMapping(facilityId: string): Promise<void> 
   try {
     await db
       .delete(schema.certifierProjects)
-      .where(eq(schema.certifierProjects.facilityId, facilityId));
+      .where(
+        and(
+          eq(schema.certifierProjects.facilityId, facilityId),
+          eq(schema.certifierProjects.provider, "isometric"),
+        ),
+      );
   } finally {
     await pool.end();
   }

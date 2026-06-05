@@ -51,6 +51,15 @@ export interface TestFormulation {
   description: string | null;
 }
 
+export interface TestStorageLocation {
+  id: string;
+  code: string;
+  name: string;
+  type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
+  facilityId: string;
+  formulationId: string | null;
+}
+
 export interface TestBiocharProduct {
   id: string;
   code: string;
@@ -270,6 +279,57 @@ export async function deleteTestFacility(facilityId: string): Promise<void> {
 }
 
 /**
+ * Create a test storage location (bin). For product bins, pass `formulationId`
+ * to reserve the bin for a formulation (null = unassigned / pure-biochar bin).
+ */
+export async function createTestStorageLocation(
+  facilityId: string,
+  overrides: Partial<Omit<TestStorageLocation, "id" | "facilityId">> = {}
+): Promise<TestStorageLocation> {
+  const { db, pool } = createDbConnection();
+
+  try {
+    const testId = generateTestId();
+    const location: TestStorageLocation = {
+      id: crypto.randomUUID(),
+      code: overrides.code || `E2E-BIN-${testId.toUpperCase()}`,
+      name: overrides.name || `E2E Test Bin ${testId}`,
+      type: overrides.type ?? "product_bin",
+      facilityId,
+      formulationId: overrides.formulationId ?? null,
+    };
+
+    await db.insert(schema.storageLocations).values({
+      id: location.id,
+      code: location.code,
+      name: location.name,
+      type: location.type,
+      facilityId: location.facilityId,
+      formulationId: location.formulationId,
+    });
+
+    return location;
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Delete a test storage location
+ */
+export async function deleteTestStorageLocation(storageLocationId: string): Promise<void> {
+  const { db, pool } = createDbConnection();
+
+  try {
+    await db
+      .delete(schema.storageLocations)
+      .where(eq(schema.storageLocations.id, storageLocationId));
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
  * Create a test supplier
  */
 export async function createTestSupplier(
@@ -471,6 +531,7 @@ export async function bulkCleanup(entities: {
   projectIds?: string[];
   itemIds?: string[];
   facilityIds?: string[];
+  storageLocationIds?: string[];
   supplierIds?: string[];
   formulationIds?: string[];
   biocharProductIds?: string[];
@@ -508,7 +569,28 @@ export async function bulkCleanup(entities: {
           .where(inArray(schema.projects.id, entities.projectIds));
       }
 
-      // Delete facilities
+      // Delete biochar products (before formulations due to FK)
+      if (entities.biocharProductIds && entities.biocharProductIds.length > 0) {
+        await tx
+          .delete(schema.biocharProducts)
+          .where(inArray(schema.biocharProducts.id, entities.biocharProductIds));
+      }
+
+      // Delete storage locations before facilities.
+      if (entities.storageLocationIds && entities.storageLocationIds.length > 0) {
+        await tx
+          .delete(schema.storageLocations)
+          .where(inArray(schema.storageLocations.id, entities.storageLocationIds));
+      }
+
+      // Delete formulations
+      if (entities.formulationIds && entities.formulationIds.length > 0) {
+        await tx
+          .delete(schema.formulations)
+          .where(inArray(schema.formulations.id, entities.formulationIds));
+      }
+
+      // Delete facilities after dependent storage locations and products.
       if (entities.facilityIds && entities.facilityIds.length > 0) {
         await tx
           .delete(schema.facilities)
@@ -520,20 +602,6 @@ export async function bulkCleanup(entities: {
         await tx
           .delete(schema.suppliers)
           .where(inArray(schema.suppliers.id, entities.supplierIds));
-      }
-
-      // Delete biochar products (before formulations due to FK)
-      if (entities.biocharProductIds && entities.biocharProductIds.length > 0) {
-        await tx
-          .delete(schema.biocharProducts)
-          .where(inArray(schema.biocharProducts.id, entities.biocharProductIds));
-      }
-
-      // Delete formulations
-      if (entities.formulationIds && entities.formulationIds.length > 0) {
-        await tx
-          .delete(schema.formulations)
-          .where(inArray(schema.formulations.id, entities.formulationIds));
       }
 
       // Delete users (and cascade to sessions, accounts)
@@ -569,6 +637,7 @@ export class TestDataBuilder {
     projectIds: string[];
     itemIds: string[];
     facilityIds: string[];
+    storageLocationIds: string[];
     memberIds: string[];
   };
 
@@ -579,6 +648,7 @@ export class TestDataBuilder {
       projectIds: [],
       itemIds: [],
       facilityIds: [],
+      storageLocationIds: [],
       memberIds: [],
     };
   }
@@ -639,6 +709,18 @@ export class TestDataBuilder {
   }
 
   /**
+   * Create a storage location
+   */
+  async createStorageLocation(
+    facilityId: string,
+    overrides: Partial<Omit<TestStorageLocation, "id" | "facilityId">> = {}
+  ): Promise<TestStorageLocation> {
+    const storageLocation = await createTestStorageLocation(facilityId, overrides);
+    this.createdEntities.storageLocationIds.push(storageLocation.id);
+    return storageLocation;
+  }
+
+  /**
    * Clean up all entities created by this builder
    */
   async cleanup(): Promise<void> {
@@ -646,6 +728,7 @@ export class TestDataBuilder {
       projectIds: this.createdEntities.projectIds,
       itemIds: this.createdEntities.itemIds,
       facilityIds: this.createdEntities.facilityIds,
+      storageLocationIds: this.createdEntities.storageLocationIds,
     });
 
     // Reset tracking
@@ -653,6 +736,7 @@ export class TestDataBuilder {
       projectIds: [],
       itemIds: [],
       facilityIds: [],
+      storageLocationIds: [],
       memberIds: [],
     };
   }

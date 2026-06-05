@@ -121,6 +121,7 @@ describe("deriveStatementStatus", () => {
   it("falls back to local 'Submitted' when remote is still DRAFT", () => {
     const s = deriveStatementStatus({ ...base, remoteStatus: "DRAFT" });
     expect(s.label).toBe("Submitted");
+    expect(s.value).toBe("pending");
   });
 
   it("falls back to local 'Draft' before any submission", () => {

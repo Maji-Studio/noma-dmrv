@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { creditBatchConditionSchema } from "./isometric";
 
 // ============================================
 // Constants and Enums
@@ -42,7 +41,7 @@ export type CurrencyCode = (typeof currencyCodes)[number];
 /**
  * Schema for credit batch form (client-side validation)
  * Form sections:
- * 1. Overview — code, facilityId, startDate, endDate, certifier, status
+ * 1. Overview — code, facilityId, startDate, endDate, status
  * 2. Applications — applicationIds (M:M via credit_batch_applications)
  * 3. Durability — durabilityOption toggle (200-year vs 1000-year) with conditional fields
  * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool %
@@ -54,7 +53,6 @@ export const creditBatchFormSchema = z
     facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
-    certifier: z.enum(certifierProviders).default("isometric"),
 
     // === Section 2: Applications (M:M) ===
     applicationIds: z
@@ -162,31 +160,9 @@ export const creditBatchFormSchema = z
         message: "End date must be after start date",
       });
     }
-
-    // Apply conditional validation from isometric schema
-    const durabilityResult = creditBatchConditionSchema.safeParse({
-      durability_option: data.durabilityOption,
-      h_to_c_org_ratio: data.hToCorgRatio,
-      mean_random_reflectance_percent: data.meanRandomReflectancePercent,
-      mean_non_reactive_carbon_percent: data.meanNonReactiveCarbonPercent,
-    });
-
-    if (!durabilityResult.success) {
-      for (const issue of durabilityResult.error.issues) {
-        // Map isometric schema paths to form field paths
-        const pathMap: Record<string, string> = {
-          h_to_c_org_ratio: "hToCorgRatio",
-          mean_random_reflectance_percent: "meanRandomReflectancePercent",
-          mean_non_reactive_carbon_percent: "meanNonReactiveCarbonPercent",
-        };
-        const formPath = pathMap[issue.path[0] as string] || issue.path[0];
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [formPath as string],
-          message: issue.message,
-        });
-      }
-    }
+    // Durability inputs come from sample aggregation at preview/submission time.
+    // Missing lab data is represented in the CO2e preview instead of blocking
+    // credit-batch creation.
   });
 
 // ============================================
@@ -212,7 +188,6 @@ export const updateCreditBatchSchema = z.object({
   facilityId: z.string().uuid().optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
-  certifier: z.enum(certifierProviders).optional(),
   applicationIds: z.array(z.string().uuid()).optional(),
   durabilityOption: z.enum(durabilityOptions).optional(),
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),

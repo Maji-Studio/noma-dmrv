@@ -22,7 +22,7 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui";
+import { buttonVariants } from "@/components/ui";
 import { useCertifyContextForCreditBatch } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -57,7 +57,7 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
 
   if (ctx.error || !ctx.data) {
     return (
-      <p className="body-small text-[var(--clr-red)]" role="alert">
+      <p className="body-small text-[var(--color-signal-red)]" role="alert">
         Unable to load certification state. Try refreshing the page.
       </p>
     );
@@ -65,6 +65,9 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
 
   const data = ctx.data;
   const { mapping, project, isProduction } = data;
+  const settingsHref = data.facilityId
+    ? `/certification/settings?facility=${encodeURIComponent(data.facilityId)}`
+    : "/certification/settings";
 
   if (!mapping) {
     return (
@@ -73,7 +76,7 @@ function PanelBody({ creditBatchId }: { creditBatchId: string }) {
         <p className="body-small text-[var(--color-text-secondary)]">
           This facility isn&apos;t linked to an Isometric project. Link it in{" "}
           <Link
-            href="/certification/settings"
+            href={settingsHref}
             className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"
           >
             Certification → Settings
@@ -152,7 +155,9 @@ function RemovalStatusRow({ data }: { data: RemovalCertifyContext }) {
             />
           </div>
           <Link
-            href={`/certification/ghg-statements?statement=${linked.id}&facility=${data.facilityId}`}
+            href={`/certification/ghg-statements?statement=${encodeURIComponent(
+              linked.id,
+            )}&facility=${encodeURIComponent(data.facilityId)}`}
             className="body-caption underline underline-offset-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           >
             View in GHG Statements →
@@ -207,17 +212,20 @@ function MemberBatchesRow({
 
 function OpenInCertification({ data }: { data: RemovalCertifyContext }) {
   // A grouped removal deep-links to its guided Review flow; an ungrouped batch
-  // goes to the Removals tab, where it can be grouped and submitted.
+  // goes to the Removals route, where it can be grouped and submitted.
   const href = data.removalId
-    ? `/certification/removals/${data.removalId}/review?facility=${data.facilityId}`
-    : `/certification/removals?facility=${data.facilityId}`;
+    ? `/certification/removals/${encodeURIComponent(
+        data.removalId,
+      )}/review?facility=${encodeURIComponent(data.facilityId)}`
+    : `/certification/removals?facility=${encodeURIComponent(data.facilityId)}`;
 
   return (
     <div className="border-t border-[var(--color-border-secondary)] pt-12">
-      <Link href={href} className="block">
-        <Button variant="primary" width="full">
-          Open in Certification →
-        </Button>
+      <Link
+        href={href}
+        className={buttonVariants({ variant: "primary", width: "full" })}
+      >
+        Open in Certification →
       </Link>
     </div>
   );

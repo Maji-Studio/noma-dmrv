@@ -38,6 +38,7 @@ export function StorageLocationQuickAddDialog({
         type: data.type,
         facilityId: data.facilityId || facilityId,
         capacityKg: data.capacityKg ?? null,
+        formulationId: data.formulationId ?? null,
       }),
     onSuccess,
     onClose,
