@@ -73,6 +73,12 @@ interface EntitySideSheetProps {
    * cards, dialog openers). Edit/create modes still use `children`.
    */
   viewModeChildren?: React.ReactNode;
+  /**
+   * Optional edit-mode body extension. When provided, renders below the form
+   * (`children`) in edit/create mode — e.g. for managing child entities that
+   * belong to the editing flow rather than the read-only view.
+   */
+  editModeChildren?: React.ReactNode;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** The form component rendered in edit/create mode */
@@ -107,6 +113,7 @@ function EntitySideSheet({
   subtitle,
   sections,
   viewModeChildren,
+  editModeChildren,
   editLabel = "Edit",
   children,
   size = "wide",
@@ -161,7 +168,7 @@ function EntitySideSheet({
         {/* Body */}
         <SlideOverPanel.Body
           className={isViewMode ? "flex flex-col gap-32" : undefined}
-          noPaddingBottom={!isViewMode}
+          noPaddingBottom={!isViewMode && !editModeChildren}
         >
           {isViewMode ? (
             <>
@@ -183,7 +190,12 @@ function EntitySideSheet({
               {viewModeChildren}
             </>
           ) : (
-            children
+            <>
+              {children}
+              {editModeChildren ? (
+                <div className="mt-24">{editModeChildren}</div>
+              ) : null}
+            </>
           )}
         </SlideOverPanel.Body>
 

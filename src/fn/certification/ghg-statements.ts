@@ -30,7 +30,11 @@ import {
   updateGhgStatementReportingWindow,
   type CertifierGhgStatementRow,
 } from "@/data-access/certifier-ghg-statements";
-import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
+import {
+  getCreditBatchSummariesByRemovalIds,
+  type CertifierRemovalRow,
+  type RemovalCreditBatchSummary,
+} from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
 import { db } from "@/db";
 import { SafeError } from "@/lib/errors";
@@ -98,11 +102,19 @@ export interface SubmitGhgStatementResult {
   remoteStatus: GhgStatementStatus;
 }
 
+// Re-exported so client components can type the cross-link accordion without
+// importing from the data-access layer. Must re-export directly from source —
+// `export type { LocalBinding }` of an imported type is miscompiled by SWC
+// inside a "use server" module and emits a runtime reference (ReferenceError).
+export type { RemovalCreditBatchSummary } from "@/data-access/certifier-removals";
+
 // One removal absorbed by a statement, with its latest removal-ledger row
-// for a status badge.
+// for a status badge, and the credit batches grouped into it (the
+// cross-link the operator opens to understand what the removal contains).
 export interface LinkedRemoval {
   removal: CertifierRemovalRow;
   submission: CertificationSubmissionRow | null;
+  creditBatches: RemovalCreditBatchSummary[];
 }
 
 export interface GhgStatementState {
@@ -127,6 +139,9 @@ export interface OpenRemovalView {
   externalId: string;
   completedOn: string | null;
   startedOn: string | null;
+  // Credit batches grouped into this removal — surfaced inline in the preview
+  // accordion so the operator can see what each predicted removal contains.
+  creditBatches: RemovalCreditBatchSummary[];
 }
 
 // =====================================================================
@@ -181,6 +196,27 @@ export async function createGhgStatementDraft(
       provider: ISOMETRIC_PROVIDER,
       expectedExternalProjectId: project.externalProjectId,
     };
+
+    // Reporting periods are consecutive and non-overlapping — Isometric
+    // derives each period's start as the day after the previous period's end.
+    // Enforce that here so a new period can't be carved inside an existing
+    // one: reject an end date that lands on or before the latest *other*
+    // statement's end. The own-end is excluded so an idempotent re-create
+    // (same end, double-click / two tabs) still resolves to the existing row
+    // via the submission-claim machinery below rather than being blocked.
+    const existing = await listGhgStatementsForFacility(
+      userId,
+      parsed.facilityId,
+    );
+    const latestOtherEnd = existing
+      .map((s) => s.reportingPeriodEndOn)
+      .filter((end) => end !== parsed.reportingPeriodEndOn)
+      .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
+    if (latestOtherEnd && parsed.reportingPeriodEndOn <= latestOtherEnd) {
+      throw new SafeError(
+        `This reporting period overlaps an existing GHG statement ending ${latestOtherEnd}. Pick an end date after ${latestOtherEnd}.`,
+      );
+    }
 
     // Get-or-create the local statement row. Its id is stable per
     // (facility, period) and anchors the ledger localEntityId, so a repeat
@@ -652,16 +688,22 @@ export async function loadGhgStatementState(
         }),
       ]);
 
-    // One batched lookup for every linked removal's latest ledger row.
-    const removalSubmissions = await getLatestSubmissionsForEntities(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: REMOVAL_SUBMISSION_TYPE,
-      localEntityType: REMOVAL_ENTITY_TYPE,
-      localEntityIds: removalRows.map((removal) => removal.id),
-    });
+    // Two batched lookups for every linked removal — its latest ledger row
+    // (status badge) and its grouped credit batches (cross-link accordion).
+    const removalIds = removalRows.map((removal) => removal.id);
+    const [removalSubmissions, creditBatchesByRemoval] = await Promise.all([
+      getLatestSubmissionsForEntities(userId, {
+        provider: ISOMETRIC_PROVIDER,
+        submissionType: REMOVAL_SUBMISSION_TYPE,
+        localEntityType: REMOVAL_ENTITY_TYPE,
+        localEntityIds: removalIds,
+      }),
+      getCreditBatchSummariesByRemovalIds(userId, removalIds),
+    ]);
     const linkedRemovals: LinkedRemoval[] = removalRows.map((removal) => ({
       removal,
       submission: removalSubmissions.get(removal.id) ?? null,
+      creditBatches: creditBatchesByRemoval.get(removal.id) ?? [],
     }));
 
     const remote = statementSubmission?.externalId
@@ -718,11 +760,16 @@ export async function loadOpenRemovalsForFacility(
 ): Promise<ActionResult<OpenRemovalView[]>> {
   return withAction(async (userId) => {
     const open = await listOpenRemovalsForFacility(userId, facilityId);
+    const creditBatchesByRemoval = await getCreditBatchSummariesByRemovalIds(
+      userId,
+      open.map(({ removal }) => removal.id),
+    );
     return open.map(({ removal, externalId }) => ({
       removalId: removal.id,
       externalId,
       completedOn: removal.completedOn,
       startedOn: removal.startedOn,
+      creditBatches: creditBatchesByRemoval.get(removal.id) ?? [],
     }));
   });
 }

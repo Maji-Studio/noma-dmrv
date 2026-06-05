@@ -36,7 +36,7 @@ import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
-import { ProjectEmissionsDriftPanel } from "./project-emissions-drift-panel";
+import { EmissionsSetupSummary } from "./emissions-setup-summary";
 
 const STAT_ICON_SIZE = 24;
 
@@ -250,10 +250,10 @@ function OverviewBody({ facilityId }: { facilityId: string }) {
       <NeedsAttention
         items={attention}
         hasRemovals={data.removals.length > 0}
-        ungroupedCount={data.ungroupedBatchCount}
+        readyToStartCount={data.readyToStartBatchCount}
         facilityId={facilityId}
       />
-      <ProjectEmissionsDriftPanel />
+      <EmissionsSetupSummary />
     </>
   );
 }
@@ -266,6 +266,7 @@ function StatStrip({ data }: { data?: CertificationOverviewData }) {
   const submittedCount = data
     ? data.removals.filter((r) => r.readiness.state === "submitted").length
     : 0;
+  const readyToStartCount = data ? data.readyToStartBatchCount : 0;
 
   return (
     <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-4">
@@ -291,10 +292,10 @@ function StatStrip({ data }: { data?: CertificationOverviewData }) {
         isLoading={loading}
       />
       <StatCard
-        title="Needs grouping"
-        value={loading ? "—" : data.ungroupedBatchCount}
+        title="Ready to start"
+        value={loading ? "—" : readyToStartCount}
         icon={<Stack size={STAT_ICON_SIZE} weight="bold" />}
-        description="Credit batches not yet in a removal"
+        description="Healthy batches you can put in a removal"
         isLoading={loading}
       />
     </div>
@@ -316,12 +317,12 @@ const TONE_COLOR: Record<AttentionTone, string> = {
 function NeedsAttention({
   items,
   hasRemovals,
-  ungroupedCount,
+  readyToStartCount,
   facilityId,
 }: {
   items: AttentionItem[];
   hasRemovals: boolean;
-  ungroupedCount: number;
+  readyToStartCount: number;
   facilityId: string;
 }) {
   return (
@@ -339,13 +340,15 @@ function NeedsAttention({
           title={hasRemovals ? "You're all caught up" : "No removals yet"}
           description={
             hasRemovals
-              ? ungroupedCount > 0
-                ? `Nothing is blocked. ${ungroupedCount} credit batch${ungroupedCount === 1 ? "" : "es"} can still be grouped into removals.`
+              ? readyToStartCount > 0
+                ? `Nothing is blocked. ${readyToStartCount} batch${readyToStartCount === 1 ? "" : "es"} ${readyToStartCount === 1 ? "is" : "are"} ready to start a new removal.`
                 : "Nothing is waiting on you right now."
-              : "Group credit batches into removals to start submitting."
+              : readyToStartCount > 0
+                ? `${readyToStartCount} batch${readyToStartCount === 1 ? "" : "es"} ${readyToStartCount === 1 ? "is" : "are"} ready — start a removal to begin submitting.`
+                : "Add credit batches to start a removal."
           }
           action={
-            !hasRemovals || ungroupedCount > 0 ? (
+            !hasRemovals || readyToStartCount > 0 ? (
               <Link
                 href={withFacility("/certification/removals", facilityId)}
                 className="body-small underline underline-offset-2 hover:text-[var(--color-text-secondary)]"

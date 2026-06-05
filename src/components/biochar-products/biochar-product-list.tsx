@@ -23,7 +23,10 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { TransportLegsPanel } from "@/components/transport-legs";
+import {
+  TransportLegsEditor,
+  TransportLegsSummary,
+} from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
@@ -389,7 +392,15 @@ export function BiocharProductList() {
         ] : undefined}
         viewModeChildren={
           displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <TransportLegsPanel
+            <TransportLegsSummary
+              entityType="biochar"
+              entityId={displaySideSheet.entity.id}
+            />
+          ) : null
+        }
+        editModeChildren={
+          displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
+            <TransportLegsEditor
               entityType="biochar"
               entityId={displaySideSheet.entity.id}
             />

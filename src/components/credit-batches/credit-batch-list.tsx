@@ -5,6 +5,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { formatSafeDate, getPaginationLabel } from "@/lib/format-utils";
 import {
   Certificate,
@@ -93,6 +94,8 @@ export function CreditBatchList({
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const router = useRouter();
 
   // Data fetching
   const { data: creditBatches, isLoading, error } = useCreditBatches();
@@ -210,8 +213,10 @@ export function CreditBatchList({
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
+  // Opening a batch goes to its detail page (health check + edit), the redesign
+  // replacement for the read-only view side-sheet.
   const openView = (batch: CreditBatchWithRelations) => {
-    setSideSheet({ entity: batch, mode: "view" });
+    router.push(`/credit-batches/${batch.id}?facility=${batch.facilityId}`);
   };
   const openEdit = (batch: CreditBatchWithRelations) => {
     setCreateError(null);

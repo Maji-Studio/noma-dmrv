@@ -1,13 +1,20 @@
 /**
- * GhgStatementCreateDrawer — period-first GHG Statement creation, upgraded from
- * the old Modal stepper to the shared `StepFlow` chrome (`orientation="vertical"`)
- * inside a SlideOverPanel (Stage 5). Three steps:
+ * GhgStatementCreateDrawer — period-first GHG Statement creation, in a
+ * SlideOverPanel (it's a multi-step form, so a side-sheet is the right chrome).
+ * Three steps:
  *   1. Period   — pick the reporting-period end (`end_on`, the only date the
- *                 Isometric create API accepts).
- *   2. Preview  — the removals *predicted* to be linked by completion date;
- *                 membership is decided server-side, so this is a forecast.
+ *                 Isometric create API accepts). We display the *derived* start
+ *                 (day after the prior statement's period) so the operator sees
+ *                 a full [start → end] window even though only the end is sent.
+ *   2. Preview  — the removals *predicted* to be linked by completion date, as
+ *                 a cross-link accordion (each expands to its credit batches +
+ *                 a link to the removal). Membership is decided server-side, so
+ *                 this is a forecast.
  *   3. Confirm  — production-gated create; the result panel shows what Isometric
  *                 actually reconciled (+ any drift warnings).
+ *
+ * Reporting periods are consecutive and non-overlapping: the operator can't pick
+ * an end on or before an existing statement's end (mirrored server-side).
  *
  * The drawer mounts only while open (the list renders it conditionally), so the
  * RHF form and mutation start fresh each time — no Modal-style onOpen reset.
@@ -29,8 +36,10 @@ import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import {
   useCreateGhgStatement,
+  useGhgStatementsForFacility,
   useOpenRemovalsForFacility,
 } from "@/hooks/use-certification";
+import { addDaysIso } from "@/lib/date-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -38,6 +47,7 @@ import {
 import type { OpenRemovalView } from "@/fn/certification/ghg-statements";
 import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
+import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 
 interface GhgStatementCreateDrawerProps {
   facilityId: string;
@@ -51,6 +61,30 @@ const STEPS: StepFlowStep[] = [
   { key: "preview", label: "Preview", description: "Predicted removals" },
   { key: "confirm", label: "Confirm", description: "Create the statement" },
 ];
+
+// The latest existing period end strictly before `endOn` defines the new
+// period's start (day after) — Isometric derives the same. Null for the first
+// statement, where Isometric anchors the start to the project start.
+function derivePeriodStart(
+  endOn: string,
+  existingEnds: string[],
+): string | null {
+  const priorEnd = existingEnds
+    .filter((end) => end < endOn)
+    .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
+  return priorEnd ? addDaysIso(priorEnd, 1) : null;
+}
+
+// The latest existing end that the chosen `endOn` would overlap — periods are
+// consecutive, so a new end on or before another statement's end carves a
+// period inside it. The own-end is excluded so re-picking an existing period
+// resolves to that statement instead of erroring.
+function overlappingEnd(endOn: string, existingEnds: string[]): string | null {
+  const latestOther = existingEnds
+    .filter((end) => end !== endOn)
+    .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
+  return latestOther && endOn <= latestOther ? latestOther : null;
+}
 
 export function GhgStatementCreateDrawer({
   facilityId,
@@ -87,6 +121,7 @@ function DrawerBody({
   const [furthest, setFurthest] = useState(0);
   const toast = useToast();
   const mutation = useCreateGhgStatement();
+  const statementsQuery = useGhgStatementsForFacility(facilityId);
 
   const {
     register,
@@ -105,16 +140,23 @@ function DrawerBody({
   });
 
   const endOn = watch("reportingPeriodEndOn");
+  const existingEnds = (statementsQuery.data ?? []).map(
+    (item) => item.statement.reportingPeriodEndOn,
+  );
+  const derivedStart = endOn ? derivePeriodStart(endOn, existingEnds) : null;
   // The preview query only runs once the operator reaches the Preview step.
   const openQuery = useOpenRemovalsForFacility(facilityId, stepIndex >= 1);
 
   const goTo = async (index: number) => {
-    if (
-      index > stepIndex &&
-      stepIndex === 0 &&
-      !(await trigger("reportingPeriodEndOn"))
-    ) {
-      return;
+    if (index > stepIndex && stepIndex === 0) {
+      if (!(await trigger("reportingPeriodEndOn"))) return;
+      const overlap = overlappingEnd(endOn, existingEnds);
+      if (overlap) {
+        setError("reportingPeriodEndOn", {
+          message: `Overlaps an existing statement ending ${overlap}. Pick an end after ${overlap}.`,
+        });
+        return;
+      }
     }
     setStepIndex(index);
     setFurthest((f) => Math.max(f, index));
@@ -182,12 +224,21 @@ function DrawerBody({
               <StepPeriod
                 register={register}
                 error={errors.reportingPeriodEndOn?.message}
+                endOn={endOn}
+                derivedStart={derivedStart}
               />
             )}
-            {stepIndex === 1 && <StepPreview query={openQuery} endOn={endOn} />}
+            {stepIndex === 1 && (
+              <StepPreview
+                query={openQuery}
+                endOn={endOn}
+                facilityId={facilityId}
+              />
+            )}
             {stepIndex === 2 && (
               <StepConfirm
                 endOn={endOn}
+                derivedStart={derivedStart}
                 isProduction={isProduction}
                 registerProps={register("confirmProduction")}
                 confirmError={errors.confirmProduction?.message}
@@ -245,19 +296,40 @@ function DrawerBody({
   );
 }
 
+// Renders the resolved [start → end] reporting window. The start is derived
+// (or set by Isometric for the first statement), never operator-entered.
+function PeriodWindow({
+  derivedStart,
+  endOn,
+}: {
+  derivedStart: string | null;
+  endOn: string;
+}) {
+  return (
+    <span className="font-mono text-[var(--color-text-primary)]">
+      {derivedStart ?? "Set by Isometric"} → {endOn}
+    </span>
+  );
+}
+
 function StepPeriod({
   register,
   error,
+  endOn,
+  derivedStart,
 }: {
   register: UseFormRegister<CreateGhgStatementInput>;
   error?: string;
+  endOn: string;
+  derivedStart: string | null;
 }) {
   return (
     <div className="flex flex-col gap-12">
       <h3 className="title-heading-4">Reporting period</h3>
       <p className="body-small text-[var(--color-text-secondary)]">
         Pick the reporting-period end date. Isometric links every Removal whose
-        completion date falls in the period to this statement.
+        completion date falls in the period to this statement, and derives the
+        period start from the previous statement.
       </p>
       <FormField
         id="reportingPeriodEndOn"
@@ -272,6 +344,14 @@ function StepPeriod({
           {...register("reportingPeriodEndOn")}
         />
       </FormField>
+      {endOn && !error && (
+        <div className="flex flex-col gap-2 border-l-2 border-[var(--color-border-secondary)] pl-12">
+          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+            Reporting period
+          </span>
+          <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
+        </div>
+      )}
     </div>
   );
 }
@@ -279,9 +359,11 @@ function StepPeriod({
 function StepPreview({
   query,
   endOn,
+  facilityId,
 }: {
   query: ReturnType<typeof useOpenRemovalsForFacility>;
   endOn: string;
+  facilityId: string;
 }) {
   if (query.isLoading) {
     return (
@@ -318,75 +400,64 @@ function StepPreview({
       <h3 className="title-heading-4">Predicted removals</h3>
       <p className="body-small text-[var(--color-text-secondary)]">
         Membership is decided server-side by Isometric and confirmed after the
-        statement is created — this is a prediction by completion date.
+        statement is created — this is a prediction by completion date. Expand a
+        removal to see its credit batches.
       </p>
-      <PreviewSection
-        title={`Predicted to be linked (${inPeriod.length})`}
-        removals={inPeriod}
-        emptyText="No open removals fall on or before this date."
-      />
-      <PreviewSection
-        title={`Open removals outside this period (${outside.length})`}
-        removals={outside}
-        emptyText="No other open removals."
-        muted
-      />
-    </div>
-  );
-}
 
-function PreviewSection({
-  title,
-  removals,
-  emptyText,
-  muted = false,
-}: {
-  title: string;
-  removals: OpenRemovalView[];
-  emptyText: string;
-  muted?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-8">
-      <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-        {title}
-      </span>
-      {removals.length === 0 ? (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          {emptyText}
-        </p>
-      ) : (
-        <ul
-          className={
-            muted ? "flex flex-col gap-4 opacity-60" : "flex flex-col gap-4"
-          }
-        >
-          {removals.map((removal) => (
-            <li
-              key={removal.removalId}
-              className="flex items-center justify-between gap-8 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8"
-            >
-              <span className="body-small font-mono text-[var(--color-text-secondary)] truncate">
-                {removal.externalId}
-              </span>
-              <span className="body-caption text-[var(--color-text-tertiary)] shrink-0">
-                {removal.completedOn ?? "no completion date"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="flex flex-col gap-8">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Predicted to be linked ({inPeriod.length})
+        </span>
+        {inPeriod.length === 0 ? (
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            No open removals fall on or before this date.
+          </p>
+        ) : (
+          <RemovalBatchesAccordion
+            facilityId={facilityId}
+            entries={inPeriod.map((removal) => ({
+              removalId: removal.removalId,
+              label: removal.externalId,
+              completedOn: removal.completedOn,
+              creditBatches: removal.creditBatches,
+            }))}
+          />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-8 opacity-60">
+        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Open removals outside this period ({outside.length})
+        </span>
+        {outside.length === 0 ? (
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            No other open removals.
+          </p>
+        ) : (
+          <RemovalBatchesAccordion
+            facilityId={facilityId}
+            entries={outside.map((removal) => ({
+              removalId: removal.removalId,
+              label: removal.externalId,
+              completedOn: removal.completedOn,
+              creditBatches: removal.creditBatches,
+            }))}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
 function StepConfirm({
   endOn,
+  derivedStart,
   isProduction,
   registerProps,
   confirmError,
 }: {
   endOn: string;
+  derivedStart: string | null;
   isProduction: boolean;
   registerProps: UseFormRegisterReturn;
   confirmError?: string;
@@ -395,11 +466,9 @@ function StepConfirm({
     <div className="flex flex-col gap-16">
       <h3 className="title-heading-4">Confirm &amp; create</h3>
       <p className="body-small text-[var(--color-text-secondary)]">
-        Create a GHG Statement with reporting-period end{" "}
-        <strong className="font-mono text-[var(--color-text-primary)]">
-          {endOn}
-        </strong>
-        . Isometric will derive the period start and link the matching Removals.
+        Create a GHG Statement for the reporting period{" "}
+        <PeriodWindow derivedStart={derivedStart} endOn={endOn} />. Isometric
+        derives the period start and links the matching Removals.
       </p>
       {isProduction ? (
         <ProductionConfirmation

@@ -14,6 +14,8 @@ import { useDialog } from "@/hooks/use-dialog";
 import { useToast } from "@/components/ui/toast";
 import {
   emissionsCalculationMethods,
+  fuelTypeUsesElectricity,
+  transportFuelTypeOptions,
   transportLegFormSchema,
   transportMethods,
   type EmissionsCalculationMethodValue,
@@ -32,13 +34,18 @@ interface TransportLegFormProps {
   onClose: () => void;
   entityType: TransportEntityTypeValue;
   entityId: string;
-  /** When provided, the form is in edit mode for this leg. */
+  /** When provided, the form edits this leg; otherwise it creates a new one. */
   leg?: TransportLeg | null;
 }
 
 const transportMethodOptions = transportMethods.map((m) => ({
   value: m,
   label: m.charAt(0).toUpperCase() + m.slice(1),
+}));
+
+const fuelTypeOptions = transportFuelTypeOptions.map(({ value, label }) => ({
+  value,
+  label,
 }));
 
 const calculationMethodOptions = emissionsCalculationMethods.map((m) => ({
@@ -55,10 +62,11 @@ function legToFormDefaults(leg: TransportLeg | null | undefined) {
     destinationGpsLongitude: leg?.destinationGpsLongitude ?? null,
     destinationName: leg?.destinationName ?? "",
     distanceKm: leg?.distanceKm ?? undefined,
-    transportMethodType: (leg?.transportMethodType ?? "road") as TransportMethodValue,
+    transportMethodType: (leg?.transportMethodType ??
+      "road") as TransportMethodValue,
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
-    fuelType: leg?.fuelType ?? "",
+    fuelType: leg?.fuelType ?? "diesel",
     fuelConsumedLiters: leg?.fuelConsumedLiters ?? null,
     electricityKwh: leg?.electricityKwh ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
@@ -66,9 +74,37 @@ function legToFormDefaults(leg: TransportLeg | null | undefined) {
       "energy_usage") as EmissionsCalculationMethodValue,
     emissionFactorUsed: leg?.emissionFactorUsed ?? null,
     emissionFactorSource: leg?.emissionFactorSource ?? "",
+    // Not shown in the form (auto-computed by the Certify aggregator) but kept
+    // in defaults so edits preserve any pre-computed value rather than wiping it.
     transportEmissionsCo2eKg: leg?.transportEmissionsCo2eKg ?? null,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
+  };
+}
+
+/**
+ * Drops activity data that doesn't apply to the chosen method/fuel so we never
+ * persist a stale value from a field the user has since hidden (e.g. litres left
+ * behind after switching to electricity, or fuel data on a distance-based leg).
+ */
+function normalizeForMethod(data: TransportLegFormData): TransportLegFormData {
+  if (data.calculationMethodType === "energy_usage") {
+    const electric = fuelTypeUsesElectricity(data.fuelType);
+    return {
+      ...data,
+      vehicleType: null,
+      billOfLading: null,
+      weighScaleTicketRef: null,
+      fuelConsumedLiters: electric ? null : data.fuelConsumedLiters,
+      electricityKwh: electric ? data.electricityKwh : null,
+    };
+  }
+  // distance_based: no per-fuel activity data is recorded.
+  return {
+    ...data,
+    fuelType: null,
+    fuelConsumedLiters: null,
+    electricityKwh: null,
   };
 }
 
@@ -98,15 +134,21 @@ export function TransportLegForm({
   const toast = useToast();
   const createMutation = useCreateTransportLeg();
   const updateMutation = useUpdateTransportLeg(entityType, entityId);
+
   const watchedMethod = watch("calculationMethodType");
+  const watchedFuelType = watch("fuelType");
+  const isEnergyUsage = watchedMethod === "energy_usage";
+  const isDistanceBased = watchedMethod === "distance_based";
+  const isElectric = fuelTypeUsesElectricity(watchedFuelType);
 
   const onSubmit = handleSubmit(async (data) => {
+    const payload = normalizeForMethod(data);
     try {
       if (isEditMode && leg) {
-        await updateMutation.mutateAsync({ id: leg.id, ...data });
+        await updateMutation.mutateAsync({ id: leg.id, ...payload });
         toast.success("Transport leg updated");
       } else {
-        await createMutation.mutateAsync({ ...data, entityType, entityId });
+        await createMutation.mutateAsync({ ...payload, entityType, entityId });
         toast.success("Transport leg added");
       }
       onClose();
@@ -122,9 +164,6 @@ export function TransportLegForm({
   });
 
   if (!isOpen) return null;
-
-  const isEnergyUsage = watchedMethod === "energy_usage";
-  const isDistanceBased = watchedMethod === "distance_based";
 
   return (
     <dialog
@@ -245,42 +284,46 @@ export function TransportLegForm({
                 required
                 error={errors.fuelType?.message}
               >
-                <FormInput
+                <FormSelect
                   id="fuelType"
-                  placeholder="diesel, biodiesel, electricity…"
+                  options={fuelTypeOptions}
                   error={!!errors.fuelType}
                   {...register("fuelType")}
                 />
               </FormField>
-              <FormField
-                id="fuelConsumedLiters"
-                label="Fuel consumed (L)"
-                error={errors.fuelConsumedLiters?.message}
-                helperText="Provide this OR electricity (kWh)."
-              >
-                <FormInput
-                  id="fuelConsumedLiters"
-                  type="number"
-                  step="any"
-                  min={0}
-                  error={!!errors.fuelConsumedLiters}
-                  {...register("fuelConsumedLiters")}
-                />
-              </FormField>
-              <FormField
-                id="electricityKwh"
-                label="Electricity used (kWh)"
-                error={errors.electricityKwh?.message}
-              >
-                <FormInput
+              {isElectric ? (
+                <FormField
                   id="electricityKwh"
-                  type="number"
-                  step="any"
-                  min={0}
-                  error={!!errors.electricityKwh}
-                  {...register("electricityKwh")}
-                />
-              </FormField>
+                  label="Electricity used (kWh)"
+                  required
+                  error={errors.electricityKwh?.message}
+                >
+                  <FormInput
+                    id="electricityKwh"
+                    type="number"
+                    step="any"
+                    min={0}
+                    error={!!errors.electricityKwh}
+                    {...register("electricityKwh")}
+                  />
+                </FormField>
+              ) : (
+                <FormField
+                  id="fuelConsumedLiters"
+                  label="Fuel consumed (L)"
+                  required
+                  error={errors.fuelConsumedLiters?.message}
+                >
+                  <FormInput
+                    id="fuelConsumedLiters"
+                    type="number"
+                    step="any"
+                    min={0}
+                    error={!!errors.fuelConsumedLiters}
+                    {...register("fuelConsumedLiters")}
+                  />
+                </FormField>
+              )}
             </div>
           )}
 
@@ -308,7 +351,7 @@ export function TransportLegForm({
               label="Emission factor"
               required
               error={errors.emissionFactorUsed?.message}
-              helperText="kg CO₂e per L, kWh, or t·km depending on method."
+              helperText="kg CO₂e per L, kWh, or t·km depending on method. You supply this from a reputable source — Isometric does not provide it (Transportation v1.1 §3.4)."
             >
               <FormInput
                 id="emissionFactorUsed"
@@ -330,50 +373,44 @@ export function TransportLegForm({
                 {...register("emissionFactorSource")}
               />
             </FormField>
-            <FormField
-              id="transportEmissionsCo2eKg"
-              label="Computed emissions (kg CO₂e)"
-              error={errors.transportEmissionsCo2eKg?.message}
-              helperText="Optional. Auto-computed downstream; record here if pre-computed."
-            >
-              <FormInput
-                id="transportEmissionsCo2eKg"
-                type="number"
-                step="any"
-                error={!!errors.transportEmissionsCo2eKg}
-                {...register("transportEmissionsCo2eKg")}
-              />
-            </FormField>
           </div>
         </div>
 
-        <div className="flex flex-col gap-16">
-          <SectionLabel>Documentation (optional)</SectionLabel>
-          <div className="grid grid-cols-2 gap-16">
-            <FormField
-              id="billOfLading"
-              label="Bill of lading"
-              error={errors.billOfLading?.message}
-            >
-              <FormInput
+        {isDistanceBased && (
+          <div className="flex flex-col gap-16">
+            <SectionLabel>Documentation</SectionLabel>
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Required records for the distance-based method (Transportation
+              v1.1 §6).
+            </p>
+            <div className="grid grid-cols-2 gap-16">
+              <FormField
                 id="billOfLading"
-                error={!!errors.billOfLading}
-                {...register("billOfLading")}
-              />
-            </FormField>
-            <FormField
-              id="weighScaleTicketRef"
-              label="Weigh-scale ticket"
-              error={errors.weighScaleTicketRef?.message}
-            >
-              <FormInput
+                label="Bill of lading"
+                required
+                error={errors.billOfLading?.message}
+              >
+                <FormInput
+                  id="billOfLading"
+                  error={!!errors.billOfLading}
+                  {...register("billOfLading")}
+                />
+              </FormField>
+              <FormField
                 id="weighScaleTicketRef"
-                error={!!errors.weighScaleTicketRef}
-                {...register("weighScaleTicketRef")}
-              />
-            </FormField>
+                label="Weigh-scale ticket"
+                required
+                error={errors.weighScaleTicketRef?.message}
+              >
+                <FormInput
+                  id="weighScaleTicketRef"
+                  error={!!errors.weighScaleTicketRef}
+                  {...register("weighScaleTicketRef")}
+                />
+              </FormField>
+            </div>
           </div>
-        </div>
+        )}
 
         <FormActions
           onCancel={onClose}
