@@ -30,6 +30,14 @@ const durabilityOptionList: readonly { value: string; label: string }[] =
     label: formatDurabilityOption(option as DurabilityOption),
   }));
 
+function getDefaultDurabilityOption(
+  option: Facility["defaultDurabilityOption"] | null | undefined
+): DurabilityOption {
+  return durabilityOptions.includes(option as DurabilityOption)
+    ? (option as DurabilityOption)
+    : "200_year";
+}
+
 interface FacilityFormProps {
   facility?: Facility;
   onSubmit: (data: FacilityFormData) => Promise<void> | void;
@@ -65,8 +73,9 @@ export function FacilityForm({
       timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
         ? facility.timezone as Timezone
         : undefined),
-      defaultDurabilityOption:
-        (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
+      defaultDurabilityOption: getDefaultDurabilityOption(
+        facility?.defaultDurabilityOption,
+      ),
     },
   });
 
@@ -194,7 +203,7 @@ export function FacilityForm({
           id="defaultDurabilityOption"
           label="Default Durability Option"
           error={errors.defaultDurabilityOption?.message}
-          helperText="Isometric crediting tier for this facility's credit batches — a project-level decision declared in the PDD. New batches inherit this; existing batches keep the option they were created with. 1000-year additionally requires reflectance lab data."
+          hint="Isometric crediting tier for this facility's credit batches. New batches inherit this project-level PDD decision; existing batches keep their original option. 1000-year additionally requires reflectance lab data."
         >
           <FormSelect
             id="defaultDurabilityOption"

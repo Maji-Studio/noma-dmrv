@@ -42,6 +42,8 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
@@ -119,6 +121,15 @@ function createColumns(
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+    {
+      id: "certifyReadiness",
+      header: "Certifier",
+      cell: ({ row }) => (
+        <EntityCertifyReadinessBadge
+          readiness={deriveEntityCertifyReadiness("productionRun", row.original)}
+        />
+      ),
     },
     {
       accessorKey: "totalFeedstockMassKg",
@@ -203,13 +214,29 @@ export function ProductionRunList() {
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
+  const showSavedToast = (
+    message: string,
+    run: ProductionRunWithRelations,
+  ) => {
+    const readiness = deriveEntityCertifyReadiness("productionRun", run);
+    if (readiness.state === "ready") {
+      toast.success(message);
+      return;
+    }
+    const gapLabels = readiness.gaps
+      .slice(0, 3)
+      .map((gap) => gap.label)
+      .join(", ");
+    const suffix = readiness.gaps.length > 3 ? ", ..." : "";
+    toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
+  };
 
   const handleCreate = async (data: ProductionRunFormData) => {
     setCreateError(null);
     try {
-      await createRun.mutateAsync(data);
+      const run = await createRun.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Production run created successfully");
+      showSavedToast("Production run created successfully", run);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create production run");
     }
@@ -220,7 +247,7 @@ export function ProductionRunList() {
     setUpdateError(null);
     try {
       const { date, startTime, endTime, ...rest } = data;
-      await updateRun.mutateAsync({
+      const run = await updateRun.mutateAsync({
         productionRunId: sideSheet.entity.id,
         ...rest,
         date: date instanceof Date ? date : new Date(date),
@@ -232,7 +259,7 @@ export function ProductionRunList() {
           : undefined,
       });
       setSideSheet(null);
-      toast.success("Production run updated successfully");
+      showSavedToast("Production run updated successfully", run);
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update production run");
     }
@@ -394,6 +421,17 @@ export function ProductionRunList() {
                 { label: "Code", value: sideSheet.entity.code },
                 { label: "Date", value: formatDateField(sideSheet.entity.date) },
                 { label: "Status", value: <StatusBadge status={sideSheet.entity.status} /> },
+                {
+                  label: "Certifier",
+                  value: (
+                    <EntityCertifyReadinessBadge
+                      readiness={deriveEntityCertifyReadiness(
+                        "productionRun",
+                        sideSheet.entity,
+                      )}
+                    />
+                  ),
+                },
               ],
             },
             {

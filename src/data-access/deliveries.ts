@@ -10,15 +10,12 @@ import {
   orders,
   facilities,
   customers,
-  customerLocations,
   biocharProducts,
   drivers,
   vehicles,
   type Delivery,
 } from "@/db/schema";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
-import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
-import { replaceDerivedTransportLeg } from "./transport-legs";
 
 // ============================================
 // Types
@@ -558,69 +555,6 @@ export async function createDelivery(
     .returning(getDeliveryBaseSelection(deliveryColumns));
 
   return delivery;
-}
-
-// ============================================
-// Transport leg (auto-derived: facility → customer location)
-// ============================================
-
-/**
- * Recompute and persist the delivery's single transport leg from records we
- * already hold (facility origin + customer-location destination + vehicle +
- * delivered wet cargo mass). Distance uses `distanceKmOverride` when provided,
- * else the customer location's stored distance-from-facility. Call after every
- * delivery create/update.
- */
-export async function syncDeliveryTransportLeg(
-  userId: string,
-  deliveryId: string,
-  distanceKmOverride?: number | null,
-): Promise<void> {
-  requireAuth(userId);
-
-  const [row] = await db
-    .select({
-      facilityName: facilities.name,
-      facilityGpsLatitude: facilities.gpsLatitude,
-      facilityGpsLongitude: facilities.gpsLongitude,
-      destinationName: customerLocations.name,
-      destinationGpsLatitude: customerLocations.gpsLatitude,
-      destinationGpsLongitude: customerLocations.gpsLongitude,
-      destinationDistanceKm: customerLocations.distanceFromFacilityKm,
-      vehicleType: vehicles.vehicleType,
-      vehicleModelYear: vehicles.modelYear,
-      loadMassKg: deliveries.deliveredWetMassKg,
-    })
-    .from(deliveries)
-    .leftJoin(facilities, eq(deliveries.facilityId, facilities.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .leftJoin(
-      customerLocations,
-      eq(orders.customerLocationId, customerLocations.id),
-    )
-    .leftJoin(vehicles, eq(deliveries.vehicleId, vehicles.id))
-    .where(eq(deliveries.id, deliveryId));
-
-  if (!row) return;
-
-  const derived = deriveTransportLeg({
-    origin: {
-      name: row.facilityName,
-      gpsLatitude: row.facilityGpsLatitude,
-      gpsLongitude: row.facilityGpsLongitude,
-    },
-    destination: {
-      name: row.destinationName,
-      gpsLatitude: row.destinationGpsLatitude,
-      gpsLongitude: row.destinationGpsLongitude,
-    },
-    vehicle: { vehicleType: row.vehicleType, modelYear: row.vehicleModelYear },
-    loadMassKg: row.loadMassKg,
-    storedDistanceKm: row.destinationDistanceKm,
-    distanceKmOverride,
-  });
-
-  await replaceDerivedTransportLeg(userId, "delivery", deliveryId, derived);
 }
 
 // ============================================

@@ -290,14 +290,6 @@ test.describe("Full Chain UI Smoke Test", () => {
 
           if (allDeliveryIds.length) {
             await tx
-              .delete(schema.transportLegs)
-              .where(
-                and(
-                  eq(schema.transportLegs.entityType, "delivery"),
-                  inArray(schema.transportLegs.entityId, allDeliveryIds)
-                )
-              );
-            await tx
               .delete(schema.deliveries)
               .where(inArray(schema.deliveries.id, allDeliveryIds));
           }

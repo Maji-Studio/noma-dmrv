@@ -19,6 +19,7 @@ interface FormFieldProps {
    */
   hint?: ReactNode;
   required?: boolean;
+  certifyRequired?: boolean;
   children: ReactNode;
 }
 
@@ -54,6 +55,7 @@ export function FormField({
   helperText,
   hint,
   required,
+  certifyRequired,
   children,
 }: FormFieldProps) {
   const errorId = `${id}-error`;
@@ -80,6 +82,11 @@ export function FormField({
             </>
           )}
         </label>
+        {certifyRequired && (
+          <span className="body-caption border border-[var(--color-border-primary)] px-4 py-1 text-[var(--color-text-secondary)]">
+            CERT<span className="sr-only">Required for certification</span>
+          </span>
+        )}
         {hint != null && <InfoHint side="top">{hint}</InfoHint>}
       </div>
       {describeChild(children, describedBy)}

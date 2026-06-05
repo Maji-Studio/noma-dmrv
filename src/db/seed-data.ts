@@ -465,7 +465,7 @@ async function seedDemoData() {
           gpsLatitude: -3.289,
           gpsLongitude: 37.198,
           address: 'Plot S-8, Machame Weruweru',
-          distanceFromFacilityKm: 95,
+          distanceFromFacilityKm: 140,
         },
         {
           id: ids.locationTeaEast,
@@ -474,7 +474,7 @@ async function seedDemoData() {
           gpsLatitude: -4.789,
           gpsLongitude: 38.312,
           address: 'Block E-1, Usambara Estate',
-          distanceFromFacilityKm: 140,
+          distanceFromFacilityKm: 95,
         },
       ]);
 

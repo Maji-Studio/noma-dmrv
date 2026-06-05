@@ -153,13 +153,15 @@ export async function createFeedstockFn(
 
     // Auto-derive the transport leg for each created feedstock (split deliveries
     // produce one feedstock row per bin; each gets its own leg, mass-weighted).
-    for (const feedstock of result.feedstocks) {
-      await syncFeedstockTransportLeg(
-        user.id,
-        feedstock.id,
-        data.transportDistanceKm,
-      );
-    }
+    await Promise.all(
+      result.feedstocks.map((feedstock) =>
+        syncFeedstockTransportLeg(
+          user.id,
+          feedstock.id,
+          data.transportDistanceKm,
+        ),
+      ),
+    );
 
     return { success: true, data: result };
   } catch (error) {
