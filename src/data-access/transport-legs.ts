@@ -17,6 +17,10 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
+import {
+  isDerivedLegPersistable,
+  type DerivedTransportLeg,
+} from "@/lib/calculations/transport-leg";
 import { requireAuth } from "./utils";
 
 export type TransportEntityType = TransportEntityTypeValue;
@@ -224,4 +228,52 @@ export async function deleteTransportLeg(
   if (result.length === 0) {
     throw new SafeError("Transport leg not found");
   }
+}
+
+// ============================================
+// Auto-derived legs (feedstock + delivery)
+// ============================================
+
+// Feedstock and delivery own a SINGLE auto-derived leg, computed from records
+// already held (supplier/facility/customer + vehicle + mass + stored distance).
+// We replace it wholesale on every save: drop the existing leg(s) for the
+// entity, then insert the derived one when it has the hard requirements
+// (distance + load mass). When inputs are incomplete we leave no leg, so a
+// stale leg never lingers after the source data changes.
+export async function replaceDerivedTransportLeg(
+  userId: string,
+  entityType: TransportEntityType,
+  entityId: string,
+  derived: DerivedTransportLeg,
+): Promise<void> {
+  requireAuth(userId);
+  await resolveEntityFacility(entityType, entityId);
+
+  await db
+    .delete(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, entityType),
+        eq(transportLegs.entityId, entityId),
+      ),
+    );
+
+  if (!isDerivedLegPersistable(derived)) return;
+
+  await db.insert(transportLegs).values({
+    entityType,
+    entityId,
+    originName: derived.originName,
+    originGpsLatitude: derived.originGpsLatitude,
+    originGpsLongitude: derived.originGpsLongitude,
+    destinationName: derived.destinationName,
+    destinationGpsLatitude: derived.destinationGpsLatitude,
+    destinationGpsLongitude: derived.destinationGpsLongitude,
+    distanceKm: derived.distanceKm as number,
+    transportMethodType: derived.transportMethodType,
+    calculationMethodType: derived.calculationMethodType,
+    vehicleType: derived.vehicleType,
+    modelYear: derived.modelYear,
+    loadMassKg: derived.loadMassKg as number,
+  });
 }

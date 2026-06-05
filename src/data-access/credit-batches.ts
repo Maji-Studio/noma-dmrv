@@ -37,7 +37,8 @@ export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
   applicationCount: number;
   applicationIds: string[];
-  co2eStoredPreview: CreditBatchCo2eStoredPreview;
+  co2eStoredPreview: CreditBatchCo2eStoredPreview | null;
+  previewAvailable: boolean;
 }
 
 type CreditBatchWithOptionalPreview = Omit<
@@ -327,21 +328,64 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
   );
 
   return Promise.all(
-    batches.map(async (b) => {
+    batches.map((b) => {
       const applicationIds = applicationsByBatch[b.creditBatch.id] ?? [];
       return {
         ...b.creditBatch,
         facility: b.facilityName ? { name: b.facilityName } : null,
         applicationCount: applicationIds.length,
         applicationIds,
-        co2eStoredPreview: await buildCo2eStoredPreview(
-          userId,
-          b.creditBatch,
-          applicationIds
-        ),
+        co2eStoredPreview: null,
+        previewAvailable: false,
       };
     })
   );
+}
+
+export async function getCo2eStoredPreviews(
+  userId: string,
+  batchIds: string[]
+): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
+  requireAuth(userId);
+  const ids = unique(batchIds);
+  if (ids.length === 0) return {};
+
+  const [batches, applicationData] = await Promise.all([
+    db
+      .select()
+      .from(creditBatches)
+      .where(inArray(creditBatches.id, ids)),
+    db
+      .select({
+        creditBatchId: creditBatchApplications.creditBatchId,
+        applicationId: creditBatchApplications.applicationId,
+      })
+      .from(creditBatchApplications)
+      .where(inArray(creditBatchApplications.creditBatchId, ids)),
+  ]);
+
+  const applicationsByBatch = applicationData.reduce(
+    (acc, row) => {
+      if (!acc[row.creditBatchId]) {
+        acc[row.creditBatchId] = [];
+      }
+      acc[row.creditBatchId].push(row.applicationId);
+      return acc;
+    },
+    {} as Record<string, string[]>
+  );
+
+  const previews = await Promise.all(
+    batches.map(async (batch) => {
+      const applicationIds = applicationsByBatch[batch.id] ?? [];
+      return [
+        batch.id,
+        await buildCo2eStoredPreview(userId, batch, applicationIds),
+      ] as const;
+    })
+  );
+
+  return Object.fromEntries(previews);
 }
 
 /**
@@ -387,6 +431,8 @@ export async function getCreditBatchById(
     facility: batch.facilityName ? { name: batch.facilityName } : null,
     applicationCount: applicationData.length,
     applicationIds,
+    co2eStoredPreview: null,
+    previewAvailable: false,
   };
 
   if (options?.skipPreview) {
@@ -400,6 +446,7 @@ export async function getCreditBatchById(
       batch.creditBatch,
       applicationIds
     ),
+    previewAvailable: true,
   };
 }
 
@@ -493,6 +540,7 @@ export async function createCreditBatch(
       creditBatch,
       applicationIds ?? []
     ),
+    previewAvailable: true,
   };
 }
 

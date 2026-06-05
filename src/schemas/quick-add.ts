@@ -86,7 +86,7 @@ export {
 // ============================================
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
-  "formulationId is only allowed for product_bin storageMethod";
+  "formulationId is only allowed for type 'product_bin'";
 
 export const storageLocationQuickAddSchema = z.object({
   name: z

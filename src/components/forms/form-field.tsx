@@ -5,12 +5,19 @@
 
 import { cloneElement, isValidElement, type ReactNode } from "react";
 import { FormError } from "./form-error";
+import { InfoHint } from "@/components/ui/tooltip";
 
 interface FormFieldProps {
   id: string;
   label: string;
   error?: string;
   helperText?: string;
+  /**
+   * Explanatory text shown via an info ⓘ icon next to the label instead of
+   * inline. Prefer this over `helperText` for longer prose so the form stays
+   * compact; keep `helperText` for short, always-visible cues.
+   */
+  hint?: ReactNode;
   required?: boolean;
   children: ReactNode;
 }
@@ -45,6 +52,7 @@ export function FormField({
   label,
   error,
   helperText,
+  hint,
   required,
   children,
 }: FormFieldProps) {
@@ -57,18 +65,23 @@ export function FormField({
 
   return (
     <div>
-      <label
-        htmlFor={id}
-        className="body-small font-medium text-[var(--color-text-secondary)] block mb-6"
-      >
-        {label}
-        {required && (
-          <>
-            <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
-            <span className="sr-only">Required</span>
-          </>
-        )}
-      </label>
+      {/* Keep the info icon a sibling of the label, not a child — a button
+          inside a <label> would forward its clicks to the field control. */}
+      <div className="flex items-center gap-6 mb-6">
+        <label
+          htmlFor={id}
+          className="body-small font-medium text-[var(--color-text-secondary)]"
+        >
+          {label}
+          {required && (
+            <>
+              <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
+              <span className="sr-only">Required</span>
+            </>
+          )}
+        </label>
+        {hint != null && <InfoHint side="top">{hint}</InfoHint>}
+      </div>
       {describeChild(children, describedBy)}
       {showHelper && (
         <p

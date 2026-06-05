@@ -91,6 +91,17 @@ export function toDateInputValue(value: string | Date | null | undefined): strin
   return formatLocalDate(date);
 }
 
+/**
+ * Returns a "YYYY-MM-DD" string shifted by `days`, treating the input as a UTC
+ * calendar date so the result is purely arithmetic (no timezone drift). Used to
+ * derive a GHG-statement reporting-period start from the prior period's end.
+ */
+export function addDaysIso(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
 /** Parse a "YYYY-MM-DD" string as a local date (avoids UTC midnight shift). */
 export function parseLocalDateString(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number);

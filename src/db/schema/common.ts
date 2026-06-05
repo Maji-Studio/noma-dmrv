@@ -139,8 +139,10 @@ export const transportMethod = pgEnum('transport_method', [
 // Emissions calculation method (Transportation Emissions Accounting Module v1.1)
 // Section 3.2: Energy Usage Method (preferred), Section 3.3: Distance-Based Method
 export const emissionsCalculationMethod = pgEnum('emissions_calculation_method', [
-  'energy_usage', // Uses fuel consumption + emission factors
-  'distance_based', // Uses distance + weight + emission factors
+  // distance_based only — we submit distance + cargo mass; the Isometric
+  // component blueprint holds the emission factor (Eq. 3). energy_usage was
+  // removed: we never metered fuel, so fuel-based accounting was never real.
+  'distance_based', // Uses distance + weight + emission factor (Isometric Eq. 3)
 ]);
 
 // ============================================

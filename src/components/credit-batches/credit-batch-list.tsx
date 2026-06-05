@@ -5,6 +5,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { formatSafeDate, getPaginationLabel } from "@/lib/format-utils";
 import {
   Certificate,
@@ -31,6 +32,7 @@ import { CreditBatchCard } from "./credit-batch-card";
 import { CertifyPanel } from "@/components/certification";
 import {
   useCreditBatches,
+  useCreditBatchCo2eStoredPreviews,
   useCreateCreditBatch,
   useUpdateCreditBatch,
   useDeleteCreditBatch,
@@ -94,6 +96,8 @@ export function CreditBatchList({
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
+  const router = useRouter();
+
   // Data fetching
   const { data: creditBatches, isLoading, error } = useCreditBatches();
   const createCreditBatch = useCreateCreditBatch();
@@ -131,14 +135,29 @@ export function CreditBatchList({
     (safeCurrentPage - 1) * pageSize,
     safeCurrentPage * pageSize
   );
+  const previewIds = paginatedItems.map((b) => b.id);
+  const {
+    data: co2eStoredPreviews = {},
+    isLoading: previewsLoading,
+  } = useCreditBatchCo2eStoredPreviews(previewIds);
+  const hydratedPaginatedItems = paginatedItems.map((batch) => {
+    const preview = co2eStoredPreviews[batch.id];
+    return preview
+      ? { ...batch, co2eStoredPreview: preview, previewAvailable: true }
+      : batch;
+  });
 
   // Stats (from all items, not filtered)
   const totalBatches = allItems.length;
-  const hasPendingCo2e = allItems.some(
-    (b) => b.co2eStoredPreview.missingInputs.length > 0
-  );
-  const totalCo2e = allItems.reduce(
-    (sum, b) => sum + (b.co2eStoredPreview.co2eStoredTonnes ?? 0),
+  const visibleCo2ePreviews = hydratedPaginatedItems
+    .map((b) => b.co2eStoredPreview)
+    .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
+  const hasPendingCo2e =
+    previewsLoading ||
+    visibleCo2ePreviews.length < hydratedPaginatedItems.length ||
+    visibleCo2ePreviews.some((preview) => preview.missingInputs.length > 0);
+  const totalCo2e = visibleCo2ePreviews.reduce(
+    (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
     0
   );
   const totalValue = allItems.reduce((sum, b) => sum + (b.value ?? 0), 0);
@@ -210,8 +229,10 @@ export function CreditBatchList({
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
+  // Opening a batch goes to its detail page (health check + edit), the redesign
+  // replacement for the read-only view side-sheet.
   const openView = (batch: CreditBatchWithRelations) => {
-    setSideSheet({ entity: batch, mode: "view" });
+    router.push(`/credit-batches/${batch.id}?facility=${batch.facilityId}`);
   };
   const openEdit = (batch: CreditBatchWithRelations) => {
     setCreateError(null);
@@ -271,8 +292,8 @@ export function CreditBatchList({
           title="CO2e Stored"
           value={hasPendingCo2e ? "Pending" : `${totalCo2e.toFixed(2)} t`}
           icon={<Leaf size={24} weight="bold" />}
-          description="Total carbon stored"
-          isLoading={isLoading}
+          description="Current page carbon stored"
+          isLoading={isLoading || previewsLoading}
         />
         <StatCard
           title="Total Value"
@@ -376,7 +397,7 @@ export function CreditBatchList({
       ) : (
         <>
           <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">
-            {paginatedItems.map((batch) => (
+            {hydratedPaginatedItems.map((batch) => (
               <CreditBatchCard
                 key={batch.id}
                 creditBatch={batch}
@@ -514,16 +535,20 @@ export function CreditBatchList({
                       {
                         label: "Total CO2e Stored",
                         value:
-                          sideSheet.entity.co2eStoredPreview.co2eStoredTonnes != null
+                          sideSheet.entity.co2eStoredPreview?.co2eStoredTonnes != null
                             ? `${sideSheet.entity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO\u2082e`
-                            : "Pending inputs",
+                            : sideSheet.entity.co2eStoredPreview
+                              ? "Pending inputs"
+                              : "Open the batch detail to calculate",
                       },
                       {
                         label: "Preview Inputs",
                         value:
-                          sideSheet.entity.co2eStoredPreview.missingInputs.length > 0
-                            ? sideSheet.entity.co2eStoredPreview.missingInputs.join(", ")
-                            : "Complete",
+                          !sideSheet.entity.co2eStoredPreview
+                            ? "Open the batch detail to calculate"
+                            : sideSheet.entity.co2eStoredPreview.missingInputs.length > 0
+                              ? sideSheet.entity.co2eStoredPreview.missingInputs.join(", ")
+                              : "Complete",
                       },
                     ],
                   },

@@ -1,12 +1,12 @@
-// Conditional required-field rules mirror the DB check constraints
-// `transport_legs_energy_usage_requirements` and
-// `transport_legs_distance_based_requirements`.
+// Transport legs use the Isometric distance-based method (Eq. 3): we record
+// distance + cargo mass per leg; the emission factor lives in the Isometric
+// component blueprint (not stored here). Required fields mirror the DB check
+// `transport_legs_distance_based_requirements` (load mass present).
 
 import { z } from "zod";
 import {
   latitudeSchema,
   longitudeSchema,
-  optionalNumber,
   optionalPositiveNumber,
   toNumberOrUndefined,
 } from "./helpers";
@@ -32,10 +32,9 @@ export const transportMethods = [
 ] as const;
 export type TransportMethodValue = (typeof transportMethods)[number];
 
-export const emissionsCalculationMethods = [
-  "energy_usage",
-  "distance_based",
-] as const;
+// Distance-based is the only method: we never meter fuel, so emissions are
+// always distance × cargo-mass × (Isometric component factor).
+export const emissionsCalculationMethods = ["distance_based"] as const;
 export type EmissionsCalculationMethodValue =
   (typeof emissionsCalculationMethods)[number];
 
@@ -63,22 +62,16 @@ const baseTransportLegShape = {
       .positive("Distance must be greater than 0"),
   ),
 
-  // Transport details
-  transportMethodType: z.enum(transportMethods, {
-    error: () => "Transport method is required",
-  }),
+  // Transport details. Vehicle type is metadata that maps to the Isometric
+  // component's emission factor (Eq. 3) — optional, not a blocker.
+  transportMethodType: z
+    .enum(transportMethods, { error: () => "Transport method is required" })
+    .default("road"),
   vehicleType: z.string().trim().max(255).optional().nullable(),
   modelYear: optionalPositiveNumber,
 
-  // Fuel / energy (energy_usage method)
-  fuelType: z.string().trim().max(64).optional().nullable(),
-  fuelConsumedLiters: optionalPositiveNumber,
-  electricityKwh: optionalPositiveNumber,
-
-  // Load mass — required on every leg regardless of calculation method.
-  // The Certify aggregator mass-weights distance across a category so that
-  // `distance × Σmass × factor = Σⱼ(distⱼ × massⱼ × factor)` (Transportation
-  // v1.1 §5), which requires a per-leg mass even for energy_usage legs.
+  // Cargo mass moved on this leg (Eq. 3, W_j) — required on every leg so the
+  // Certify aggregator can mass-weight distance across a category.
   loadMassKg: z.preprocess(
     toNumberOrUndefined,
     z
@@ -91,87 +84,21 @@ const baseTransportLegShape = {
       .positive("Load mass must be greater than 0"),
   ),
 
-  // Emissions
-  calculationMethodType: z.enum(emissionsCalculationMethods, {
-    error: () => "Calculation method is required",
-  }),
-  emissionFactorUsed: optionalNumber,
-  emissionFactorSource: z.string().trim().max(500).optional().nullable(),
-  transportEmissionsCo2eKg: optionalNumber,
+  // Method — distance_based only.
+  calculationMethodType: z
+    .enum(emissionsCalculationMethods)
+    .default("distance_based"),
 
-  // Documentation
+  // Documentation (Isometric §6 verification evidence — optional, attachable later).
   billOfLading: z.string().trim().max(255).optional().nullable(),
   weighScaleTicketRef: z.string().trim().max(255).optional().nullable(),
 };
 
 // ============================================
-// Conditional validators
-// ============================================
-
-function refineMethodRequirements(
-  data: {
-    calculationMethodType: EmissionsCalculationMethodValue;
-    fuelType?: string | null;
-    fuelConsumedLiters?: number | null;
-    electricityKwh?: number | null;
-    vehicleType?: string | null;
-    emissionFactorUsed?: number | null;
-  },
-  ctx: z.RefinementCtx,
-): void {
-  if (data.calculationMethodType === "energy_usage") {
-    if (!data.fuelType?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["fuelType"],
-        message: "Fuel type is required for energy-usage method",
-      });
-    }
-    const hasFuelOrElectricity =
-      (data.fuelConsumedLiters ?? null) !== null ||
-      (data.electricityKwh ?? null) !== null;
-    if (!hasFuelOrElectricity) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["fuelConsumedLiters"],
-        message:
-          "Provide either fuel consumed (L) or electricity used (kWh)",
-      });
-    }
-    if ((data.emissionFactorUsed ?? null) === null) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["emissionFactorUsed"],
-        message: "Emission factor is required for energy-usage method",
-      });
-    }
-  }
-
-  if (data.calculationMethodType === "distance_based") {
-    if (!data.vehicleType?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["vehicleType"],
-        message: "Vehicle type is required for distance-based method",
-      });
-    }
-    if ((data.emissionFactorUsed ?? null) === null) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["emissionFactorUsed"],
-        message: "Emission factor is required for distance-based method",
-      });
-    }
-  }
-}
-
-// ============================================
 // Form schema (no entity context)
 // ============================================
 
-export const transportLegFormSchema = z
-  .object(baseTransportLegShape)
-  .superRefine(refineMethodRequirements);
+export const transportLegFormSchema = z.object(baseTransportLegShape);
 
 export type TransportLegFormData = z.infer<typeof transportLegFormSchema>;
 
@@ -184,21 +111,17 @@ const entityContextShape = {
   entityId: z.string().uuid("Invalid entity id"),
 };
 
-export const createTransportLegSchema = z
-  .object({
-    ...baseTransportLegShape,
-    ...entityContextShape,
-  })
-  .superRefine(refineMethodRequirements);
+export const createTransportLegSchema = z.object({
+  ...baseTransportLegShape,
+  ...entityContextShape,
+});
 
 export type CreateTransportLegData = z.infer<typeof createTransportLegSchema>;
 
-export const updateTransportLegSchema = z
-  .object({
-    id: z.string().uuid("Invalid transport leg id"),
-    ...baseTransportLegShape,
-  })
-  .superRefine(refineMethodRequirements);
+export const updateTransportLegSchema = z.object({
+  id: z.string().uuid("Invalid transport leg id"),
+  ...baseTransportLegShape,
+});
 
 export type UpdateTransportLegData = z.infer<typeof updateTransportLegSchema>;
 

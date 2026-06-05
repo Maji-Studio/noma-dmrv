@@ -12,3 +12,4 @@ export * from "./slide-over-panel";
 export * from "./status-badge";
 export * from "./entity-side-sheet";
 export * from "./step-flow";
+export * from "./tooltip";

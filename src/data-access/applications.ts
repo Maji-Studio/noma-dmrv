@@ -307,6 +307,44 @@ export async function getApplicationDeliveryOptions(
   }));
 }
 
+export interface CreditBatchApplicationOption {
+  id: string;
+  code: string;
+  applicationDate: Date | null;
+  biocharAppliedDryTons: number | null;
+  fieldIdentifier: string | null;
+  facilityId: string;
+}
+
+/**
+ * The application options the credit-batch auto-match selector pairs against,
+ * each tagged with its facility (via the delivery join). Scoped to `facilityId`
+ * when provided — the batch detail page passes its batch's facility so it only
+ * loads that facility's applications instead of every application in the system.
+ */
+export async function getCreditBatchApplicationOptions(
+  userId: string,
+  facilityId?: string,
+): Promise<CreditBatchApplicationOption[]> {
+  requireAuth(userId);
+  const where = facilityId
+    ? eq(deliveries.facilityId, facilityId)
+    : undefined;
+  return db
+    .select({
+      id: applications.id,
+      code: applications.code,
+      applicationDate: applications.applicationDate,
+      biocharAppliedDryTons: applications.biocharAppliedDryTons,
+      fieldIdentifier: applications.fieldIdentifier,
+      facilityId: deliveries.facilityId,
+    })
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .where(where)
+    .orderBy(desc(applications.applicationDate));
+}
+
 /**
  * Get application by ID
  */

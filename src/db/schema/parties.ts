@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, index, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { users } from './auth';
 
 // ============================================
@@ -21,6 +21,9 @@ export const suppliers = pgTable(
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
     sourceRegion: text('source_region'),
+    // Road distance (km) from this supplier to the delivery facility. Autofills
+    // a feedstock transport leg's distance (overridable). Stored, not computed.
+    distanceToFacilityKm: real('distance_to_facility_km'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -70,6 +73,9 @@ export const customerLocations = pgTable(
     gpsLatitude: doublePrecision('gps_latitude'),
     gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
+    // Road distance (km) from the origin facility to this customer location.
+    // Autofills a delivery transport leg's distance (overridable). Stored.
+    distanceFromFacilityKm: real('distance_from_facility_km'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

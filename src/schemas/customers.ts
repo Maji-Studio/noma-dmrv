@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { optionalPositiveNumber } from "./helpers";
 
 // ============================================
 // Shared Location Part Schemas
@@ -98,6 +99,9 @@ export const customerLocationFormSchema = z.object({
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
+  // Road distance (km) from the origin facility — autofills a delivery
+  // transport leg's distance (overridable per delivery).
+  distanceFromFacilityKm: optionalPositiveNumber,
 });
 
 // ============================================
@@ -155,6 +159,7 @@ export const createCustomerLocationSchema = z.object({
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
+  distanceFromFacilityKm: optionalPositiveNumber,
 });
 
 /**
@@ -169,6 +174,7 @@ export const updateCustomerLocationSchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationTextSchema.optional(),
+  distanceFromFacilityKm: optionalPositiveNumber,
 });
 
 /**

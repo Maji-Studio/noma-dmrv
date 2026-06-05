@@ -2,23 +2,24 @@
  * GhgStatementDetailSheet — the read-only quick view for a GHG Statement,
  * opened from the Statements table via `?statement=<id>`. Shows the reporting
  * period, derived status, the registry record, the verifier (remote) status,
- * and the removals Isometric linked into it.
+ * and the removals Isometric linked into it (as a cross-link accordion).
  *
- * Membership is strictly read-only here (ADR 0004): Isometric links removals to
- * the statement server-side by reporting-period date range, so there is no
- * UI to assign or detach a removal. The only actions are the two guided ones —
- * refresh the verifier status, and submit/resubmit to the verifier.
+ * It's a Modal, not a side-sheet: there's no form here — only read-only fields
+ * plus the two guided actions (refresh status, submit/resubmit). Side-sheets in
+ * this app are reserved for forms (the create flow, entity edit); a read-only
+ * view belongs in a centred dialog.
  *
- * Built on SlideOverPanel (like RemovalDetailSheet) rather than EntitySideSheet:
- * it's a read-only quick view with bespoke actions, not a view↔edit form.
+ * Membership is read-only (ADR 0004): Isometric links removals to the statement
+ * server-side by reporting-period date range, so there is no UI to assign or
+ * detach a removal. To change what a statement contains, open a linked removal
+ * (via the accordion), edit it, and resubmit — there is no undo/withdraw.
  */
 "use client";
 
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { ArrowsClockwise } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui";
-import { SlideOverPanel } from "@/components/ui/slide-over-panel";
+import { Button, Modal } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -31,6 +32,7 @@ import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventLog } from "./sync-event-log";
 
@@ -68,54 +70,60 @@ export function GhgStatementDetailSheet({
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
-  const { statement, latestSubmission, linkedRemovalCount } = item;
+  const { statement, latestSubmission } = item;
   const period = statementPeriod(item);
   const locked = latestSubmission ? isLockedInFlight(latestSubmission) : false;
   const derived = deriveSubmissionStatus(latestSubmission, locked, "ghgStatement");
 
   return (
-    <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <SlideOverPanel.Content size="default">
-        <SlideOverPanel.Header showClose>
-          <SlideOverPanel.Title>GHG Statement</SlideOverPanel.Title>
-          <SlideOverPanel.Description>{period}</SlideOverPanel.Description>
-        </SlideOverPanel.Header>
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      ariaLabelledBy="ghg-detail-title"
+      width="lg"
+    >
+      <div className="flex flex-col gap-24">
+        <header className="flex flex-col gap-4">
+          <h2 id="ghg-detail-title" className="title-heading-3">
+            GHG Statement
+          </h2>
+          <p className="body-small text-[var(--color-text-secondary)]">
+            {period}
+          </p>
+        </header>
 
-        <SlideOverPanel.Body className="flex flex-col gap-24">
-          <EnvBanner isProduction={isProduction} variant="inline" />
+        <EnvBanner isProduction={isProduction} variant="inline" />
 
-          <div className="flex items-center justify-between gap-12">
-            <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Status
+        <div className="flex items-center justify-between gap-12">
+          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+            Status
+          </span>
+          <StatusBadge status={derived.value} label={derived.label} />
+        </div>
+
+        <Field label="Reporting period">{period}</Field>
+
+        {latestSubmission?.externalId && (
+          <Field label="Registry record">
+            <span className="font-mono text-[var(--color-text-secondary)]">
+              {latestSubmission.externalId} · v{latestSubmission.version}
             </span>
-            <StatusBadge status={derived.value} label={derived.label} />
-          </div>
+          </Field>
+        )}
 
-          <Field label="Reporting period">{period}</Field>
+        <DetailState
+          ghgStatementId={statement.id}
+          facilityId={statement.facilityId}
+          isProduction={isProduction}
+        />
 
-          <Field label="Linked removals">{linkedRemovalCount}</Field>
-
-          {latestSubmission?.externalId && (
-            <Field label="Registry record">
-              <span className="font-mono text-[var(--color-text-secondary)]">
-                {latestSubmission.externalId} · v{latestSubmission.version}
-              </span>
-            </Field>
-          )}
-
-          <DetailState
-            ghgStatementId={statement.id}
-            isProduction={isProduction}
-          />
-        </SlideOverPanel.Body>
-
-        <SlideOverPanel.Footer className="justify-end">
-          <SlideOverPanel.Close>
-            <Button variant="default">Close</Button>
-          </SlideOverPanel.Close>
-        </SlideOverPanel.Footer>
-      </SlideOverPanel.Content>
-    </SlideOverPanel.Root>
+        <div className="flex justify-end border-t border-[var(--color-border-tertiary)] pt-16">
+          <Button variant="default" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -124,9 +132,11 @@ export function GhgStatementDetailSheet({
 // which only runs while one statement is selected — never per table row (P2-a).
 function DetailState({
   ghgStatementId,
+  facilityId,
   isProduction,
 }: {
   ghgStatementId: string;
+  facilityId: string;
   isProduction: boolean;
 }) {
   const query = useGhgStatementState(ghgStatementId);
@@ -190,30 +200,38 @@ function DetailState({
             No removals linked yet.
           </p>
         ) : (
-          <ul className="flex flex-col gap-4">
-            {linkedRemovals.map(({ removal, submission }) => (
-              <li
-                key={removal.id}
-                className="flex items-center justify-between gap-8 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8"
-              >
-                <span className="body-caption font-mono text-[var(--color-text-secondary)] truncate">
-                  {submission?.externalId ?? `${removal.id.slice(0, SHORT_ID)}…`}
-                </span>
+          <RemovalBatchesAccordion
+            facilityId={facilityId}
+            entries={linkedRemovals.map(({ removal, submission, creditBatches }) => ({
+              removalId: removal.id,
+              label: submission?.externalId ?? `${removal.id.slice(0, SHORT_ID)}…`,
+              completedOn: removal.completedOn,
+              creditBatches,
+              badge: (
                 <SubmissionStatusBadge
                   latest={submission}
                   isLockedInFlight={
                     submission ? isLockedInFlight(submission) : false
                   }
                 />
-              </li>
-            ))}
-          </ul>
+              ),
+            }))}
+          />
         )}
       </div>
 
       <SyncEventLog events={recentSyncEvents} compact />
 
       <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
+        {/* No undo/withdraw exists for a submitted statement. The supported
+            path is amend-and-resubmit: edit a linked removal (open it above),
+            then resubmit a new version — membership itself stays server-derived
+            by date range (ADR 0004). */}
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          Statements can&apos;t be withdrawn. To change what&apos;s included,
+          open a removal above, edit it, then resubmit — pending changes are
+          flagged here.
+        </p>
         {blockedNote && (
           <p className="body-caption text-[var(--color-text-tertiary)]">
             {blockedNote}

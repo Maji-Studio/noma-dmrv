@@ -17,6 +17,7 @@ import {
   getFeedstockOptions as getFeedstockOptionsData,
   isFeedstockCodeAvailable as isFeedstockCodeAvailableData,
   updateFeedstock,
+  syncFeedstockTransportLeg,
   type PaginatedFeedstocks,
   type FeedstockWithRelations,
   type FeedstockStats,
@@ -149,6 +150,17 @@ export async function createFeedstockFn(
       generateNextCodes("FI", feedstocksTable, feedstocksTable.code, count);
 
     const result = await createFeedstock(user.id, data, codesFn);
+
+    // Auto-derive the transport leg for each created feedstock (split deliveries
+    // produce one feedstock row per bin; each gets its own leg, mass-weighted).
+    for (const feedstock of result.feedstocks) {
+      await syncFeedstockTransportLeg(
+        user.id,
+        feedstock.id,
+        data.transportDistanceKm,
+      );
+    }
+
     return { success: true, data: result };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -175,8 +187,13 @@ export async function updateFeedstockFn(
     const user = await getUser();
     if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    const { feedstockId, ...updateData } = updateFeedstockSchema.parse(input);
+    // transportDistanceKm is not a feedstock column — it drives the derived
+    // transport leg, so strip it before the feedstock update spread.
+    const { feedstockId, transportDistanceKm, ...updateData } =
+      updateFeedstockSchema.parse(input);
     const data = await updateFeedstock(user.id, feedstockId, updateData);
+
+    await syncFeedstockTransportLeg(user.id, feedstockId, transportDistanceKm);
 
     return { success: true, data };
   } catch (error) {
