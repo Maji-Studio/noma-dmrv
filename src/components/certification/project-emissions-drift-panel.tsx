@@ -70,7 +70,7 @@ export function ProjectEmissionsDriftPanel() {
     return (
       <section className="border border-[var(--color-border-secondary)] p-16">
         <header className="mb-12">
-          <p className="title-chapter-title">Period emissions</p>
+          <p className="title-chapter-title">Registry reconciliation</p>
         </header>
         <p className="body-small text-[var(--color-text-tertiary)]">
           Select a facility to see Project-scope emissions drift.
@@ -83,7 +83,7 @@ export function ProjectEmissionsDriftPanel() {
     return (
       <section className="border border-[var(--color-border-secondary)] p-16">
         <header className="mb-12">
-          <p className="title-chapter-title">Period emissions</p>
+          <p className="title-chapter-title">Registry reconciliation</p>
         </header>
         <p
           className="body-small text-[var(--color-text-tertiary)]"
@@ -103,7 +103,7 @@ export function ProjectEmissionsDriftPanel() {
         role="alert"
       >
         <header className="mb-12 flex items-baseline justify-between gap-12">
-          <p className="title-chapter-title">Period emissions</p>
+          <p className="title-chapter-title">Registry reconciliation</p>
           <Button
             size="small"
             variant="weak"
@@ -131,7 +131,7 @@ export function ProjectEmissionsDriftPanel() {
     return (
       <section className="border border-[var(--color-border-secondary)] p-16">
         <header className="mb-12">
-          <p className="title-chapter-title">Period emissions</p>
+          <p className="title-chapter-title">Registry reconciliation</p>
         </header>
         <DriftRow
           icon="warn"
@@ -146,7 +146,7 @@ export function ProjectEmissionsDriftPanel() {
     return (
       <section className="border border-[var(--color-border-secondary)] p-16">
         <header className="mb-12">
-          <p className="title-chapter-title">Period emissions</p>
+          <p className="title-chapter-title">Registry reconciliation</p>
         </header>
         <DriftRow
           icon="warn"
@@ -162,16 +162,14 @@ export function ProjectEmissionsDriftPanel() {
   const matchedRows = data.rows.filter((r) => r.status.kind === "match").length;
   const orphanCount = data.orphans.length;
   const allClean = totalRows === matchedRows && orphanCount === 0;
-  // Keep the active facility in scope when deep-linking into Settings.
-  const settingsHref = `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
   return (
     <section className="border border-[var(--color-border-secondary)] p-16">
       <header className="mb-12 flex items-baseline justify-between gap-12">
-        <p className="title-chapter-title">Period emissions</p>
+        <p className="title-chapter-title">Registry reconciliation</p>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {matchedRows}/{totalRows} reconciled · {orphanCount} orphan
-          {orphanCount === 1 ? "" : "s"}
+          {matchedRows}/{totalRows} reconciled · {orphanCount} not recorded
+          locally
         </p>
       </header>
 
@@ -179,9 +177,8 @@ export function ProjectEmissionsDriftPanel() {
         {totalRows === 0 && orphanCount === 0 && (
           <DriftRow
             icon="warn"
-            message="No LCA-period emission rows entered."
-            fixHint="Add rows in Settings → Emissions →"
-            fixHref={settingsHref}
+            message="No period emissions recorded yet."
+            fixHint="Add rows in the journal below."
           />
         )}
 
@@ -228,9 +225,8 @@ export function ProjectEmissionsDriftPanel() {
           <DriftRow
             key={o.component.id}
             icon="warn"
-            message={`Project Component "${o.component.display_name}" (blueprint="${o.component.blueprint_key}") has no audit-trail row.`}
-            fixHint="Add in Settings → Emissions →"
-            fixHref={settingsHref}
+            message={`Registry component "${o.component.display_name}" isn't recorded in the journal yet.`}
+            fixHint="Add a matching row in the journal below."
           />
         ))}
       </ul>

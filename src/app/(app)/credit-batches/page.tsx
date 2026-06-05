@@ -4,29 +4,15 @@
  * Protected by requireAuth guard in the (app) layout
  */
 import { CreditBatchList } from "@/components/credit-batches";
-import { db } from "@/db";
-import { applications } from "@/db/schema/application";
-import { deliveries } from "@/db/schema/logistics";
-import { desc, eq } from "drizzle-orm";
+import { requireAuth } from "@/lib/auth/server";
+import { getCreditBatchApplicationOptions } from "@/data-access/applications";
 
 export default async function CreditBatchesPage() {
-  // Fetch applications with facility info for the auto-match selector
-  const applicationOptions = await db
-    .select({
-      id: applications.id,
-      code: applications.code,
-      applicationDate: applications.applicationDate,
-      biocharAppliedDryTons: applications.biocharAppliedDryTons,
-      fieldIdentifier: applications.fieldIdentifier,
-      facilityId: deliveries.facilityId,
-    })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .orderBy(desc(applications.applicationDate));
+  const user = await requireAuth();
+  // Application options for the auto-match selector, via the guarded data-access
+  // layer (was a raw, unguarded db query duplicated in this page). The list
+  // spans all facilities, so these are intentionally unfiltered.
+  const applicationOptions = await getCreditBatchApplicationOptions(user.id);
 
-  return (
-    <CreditBatchList
-      applications={applicationOptions}
-    />
-  );
+  return <CreditBatchList applications={applicationOptions} />;
 }

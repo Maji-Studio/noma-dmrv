@@ -127,14 +127,19 @@ export const submitRemovalSchema = z.object({
 
 export type SubmitRemovalInput = z.infer<typeof submitRemovalSchema>;
 
-// N:1 grouping — move a credit batch onto a removal, or detach with null.
-export const assignCreditBatchToRemovalSchema = z.object({
-  creditBatchId: z.string().uuid(),
-  removalId: z.string().uuid().nullable(),
+// Deferred-create: spin up a new removal in a facility from a confirmed set of
+// healthy credit batches (the New-Removal wizard's "Confirm" step). The server
+// re-derives each batch's health before writing — this is the input contract,
+// not the authorization.
+export const createRemovalWithBatchesSchema = z.object({
+  facilityId: z.string().uuid(),
+  creditBatchIds: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one credit batch."),
 });
 
-export type AssignCreditBatchToRemovalInput = z.infer<
-  typeof assignCreditBatchToRemovalSchema
+export type CreateRemovalWithBatchesInput = z.infer<
+  typeof createRemovalWithBatchesSchema
 >;
 
 export const submitGhgStatementDialogSchema = z.object({

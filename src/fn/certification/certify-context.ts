@@ -13,6 +13,7 @@ import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
   type CertifierRemovalRow,
+  type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
   getChainOfCustodyData,
@@ -23,6 +24,11 @@ import {
   type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import {
+  deriveBatchHealth,
+  type BatchHealth,
+} from "@/lib/certification/batch-health";
+import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import {
   buildMassAccounting,
@@ -281,11 +287,12 @@ export async function resolveScopeForRemoval(
   const batches = await getCreditBatchesByRemovalId(userId, removalId);
   const memberBatches = await Promise.all(
     batches.map(async (b) => {
-      const full = await getCreditBatchById(userId, b.id, { skipPreview: true });
+      const full = await getCreditBatchById(userId, b.id);
       return {
         id: b.id,
         code: b.code,
         applicationIds: full?.applicationIds ?? [],
+        co2eStoredPreview: full?.co2eStoredPreview,
       };
     }),
   );
@@ -605,6 +612,25 @@ export async function loadCertifyContextForCreditBatch(
   );
 }
 
+// Same as `loadCertifyContextForCreditBatchForUser` but reuses caller-supplied
+// facility facts instead of loading them per call. A multi-batch confirm (the
+// New-Removal wizard) loads `loadFacilityCertifierFacts` — which includes the
+// facility's Isometric registry calls — ONCE for the shared facility, then
+// builds each batch's context with these facts rather than re-fetching them per
+// batch. Safe because `facilityId`/`removalId`/`memberBatches` come from the
+// per-batch scope; the facts only feed health-relevant fields the caller reads
+// after confirming the batch belongs to that facility.
+export async function buildCreditBatchContextWithFacts(
+  userId: string,
+  creditBatchId: string,
+  facilityFacts: FacilityCertifierFacts,
+): Promise<RemovalCertifyContext> {
+  const scope = await resolveScopeForCreditBatch(userId, creditBatchId);
+  return projectUiContext(
+    await buildRemovalContext(userId, scope, facilityFacts),
+  );
+}
+
 export interface RemovalHubEntry {
   removal: CertifierRemovalRow;
   memberBatches: MemberCreditBatch[];
@@ -651,6 +677,61 @@ export async function loadRemovalsForFacility(
     return {
       removals,
       ungroupedBatches,
+      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+    };
+  });
+}
+
+// One ungrouped credit batch with its per-batch health verdict — a selection
+// card in the New-Removal wizard's first step.
+export interface SelectableBatch extends UngroupedCreditBatchRow {
+  health: BatchHealth;
+}
+
+export interface SelectableBatchesData {
+  batches: SelectableBatch[];
+  // Facility setup (project mapping + cleanly-resolving default template) is
+  // done. When false the wizard shows a "finish facility setup" banner and the
+  // transport health check on each batch reads `skipped` (design doc §8).
+  facilitySetupComplete: boolean;
+  // Whether a submit from this facility writes to the production registry —
+  // drives the wizard's production confirmation gate.
+  isProduction: boolean;
+}
+
+// Selection-step payload for the New-Removal wizard: every ungrouped credit
+// batch in the facility paired with the SAME health verdict the credit-batch
+// detail page shows. Loads the facility certifier facts ONCE and reuses them
+// across every batch's context build (the facts are facility-scoped, so a
+// per-batch reload would just repeat the same remote calls). Server-authoritative
+// gating still happens at confirm time in `createRemovalWithBatchesAction`; this
+// only drives which cards are selectable.
+export async function loadSelectableBatchesForFacility(
+  facilityId: string,
+): Promise<ActionResult<SelectableBatchesData>> {
+  return withAction(async (userId) => {
+    const facilityFacts = await loadFacilityCertifierFacts(userId, facilityId);
+    const ungrouped = await listUngroupedCreditBatches(userId, facilityId);
+    const batches = await Promise.all(
+      ungrouped.map(async (row) => {
+        const scope = await resolveScopeForCreditBatch(userId, row.id);
+        const ctx = projectUiContext(
+          await buildRemovalContext(userId, scope, facilityFacts),
+        );
+        return {
+          ...row,
+          health: deriveBatchHealth(toBatchHealthFacts(ctx, row.id)),
+        };
+      }),
+    );
+    const facilitySetupComplete =
+      !!facilityFacts.mapping &&
+      !!facilityFacts.defaultTemplate &&
+      !facilityFacts.missingDefaultTemplateId &&
+      facilityFacts.unresolvedBlueprintKeys.length === 0;
+    return {
+      batches,
+      facilitySetupComplete,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
     };
   });

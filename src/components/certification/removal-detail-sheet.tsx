@@ -110,14 +110,18 @@ export function RemovalDetailSheet({
     lockInFlight: summary.lockInFlight,
   });
   const { state } = summary.readiness;
+  // The workflow may only be (re)entered while something still needs doing:
+  // `ready` (submit it) or `blocked` (resolve preconditions). A `submitted`
+  // removal is done, and an `inProgress` one is mid-flight — neither offers an
+  // action, so the sheet stays read-only (the server would refuse a resubmit
+  // anyway; this just stops offering a dead-end control).
+  const isActionable = state === "ready" || state === "blocked";
   const isOneClick = state === "ready" && summary.memberBatchCodes.length === 1;
 
   const reviewHref = `/certification/removals/${encodeURIComponent(
     summary.removalId,
   )}/review?facility=${encodeURIComponent(facilityId)}`;
   const evidenceHref = `${reviewHref}&step=evidence`;
-  const reviewLabel =
-    state === "ready" || state === "blocked" ? "Review & submit" : "Open Review";
 
   const window =
     summary.startedOn && summary.completedOn
@@ -186,37 +190,43 @@ export function RemovalDetailSheet({
 
           <ReadinessBlock summary={summary} />
 
-          <Link
-            href={evidenceHref}
-            className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-          >
-            Evidence &amp; sources →
-          </Link>
+          {isActionable && (
+            <Link
+              href={evidenceHref}
+              className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
+            >
+              Evidence &amp; sources →
+            </Link>
+          )}
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer className="justify-stretch">
-          {isOneClick ? (
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={handleSubmit}
-              busy={submitMutation.isPending}
-            >
-              {summary.externalId ? "Resubmit" : "Submit"}
-            </Button>
-          ) : (
-            <Link
-              href={reviewHref}
-              className={buttonVariants({
-                variant: "primary",
-                className: "flex-1",
-              })}
-            >
-              {reviewLabel}
-            </Link>
-          )}
+          {isActionable &&
+            (isOneClick ? (
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={handleSubmit}
+                busy={submitMutation.isPending}
+              >
+                {summary.externalId ? "Resubmit" : "Submit"}
+              </Button>
+            ) : (
+              <Link
+                href={reviewHref}
+                className={buttonVariants({
+                  variant: "primary",
+                  className: "flex-1",
+                })}
+              >
+                Review &amp; submit
+              </Link>
+            ))}
           <SlideOverPanel.Close>
-            <Button variant="default" className="flex-1">
+            <Button
+              variant={isActionable ? "default" : "primary"}
+              className="flex-1"
+            >
               Close
             </Button>
           </SlideOverPanel.Close>

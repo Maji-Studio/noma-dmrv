@@ -38,6 +38,7 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { EnvBanner } from "./env-banner";
 import { FacilityCertifierSection } from "./facility-certifier-section";
+import { ProjectEmissionsDriftPanel } from "./project-emissions-drift-panel";
 
 const TAB_KEYS = ["connection", "emissions", "environment"] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -242,6 +243,10 @@ export function CertificationSettings() {
                   mapping={summary.mapping ?? null}
                 />
               )}
+              {/* What's drifted vs. the registry (read-only) sits directly
+                  above the journal where the operator records the matching
+                  rows — the Overview only shows the one-line summary. */}
+              <ProjectEmissionsDriftPanel />
               <PeriodEmissionsSection
                 key={`period-emissions-${facilityId}`}
                 facilityId={facilityId}

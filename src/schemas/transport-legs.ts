@@ -39,6 +39,27 @@ export const emissionsCalculationMethods = [
 export type EmissionsCalculationMethodValue =
   (typeof emissionsCalculationMethods)[number];
 
+// Fuel types offered for the energy-usage method. "electricity" is the only
+// value measured in kWh; every other value is measured in litres of fuel.
+export const transportFuelTypes = ["diesel", "petrol", "electricity"] as const;
+export type TransportFuelTypeValue = (typeof transportFuelTypes)[number];
+
+export const transportFuelTypeOptions: ReadonlyArray<{
+  value: TransportFuelTypeValue;
+  label: string;
+}> = [
+  { value: "diesel", label: "Diesel" },
+  { value: "petrol", label: "Petrol / Gasoline" },
+  { value: "electricity", label: "Electricity" },
+];
+
+/** Electricity is the only fuel type whose activity data is kWh, not litres. */
+export function fuelTypeUsesElectricity(
+  fuelType: string | null | undefined,
+): boolean {
+  return fuelType === "electricity";
+}
+
 // ============================================
 // Base shape
 // ============================================
@@ -116,6 +137,8 @@ function refineMethodRequirements(
     electricityKwh?: number | null;
     vehicleType?: string | null;
     emissionFactorUsed?: number | null;
+    billOfLading?: string | null;
+    weighScaleTicketRef?: string | null;
   },
   ctx: z.RefinementCtx,
 ): void {
@@ -127,15 +150,21 @@ function refineMethodRequirements(
         message: "Fuel type is required for energy-usage method",
       });
     }
-    const hasFuelOrElectricity =
-      (data.fuelConsumedLiters ?? null) !== null ||
-      (data.electricityKwh ?? null) !== null;
-    if (!hasFuelOrElectricity) {
+    // The form shows one activity field based on the fuel type, so require the
+    // matching one: electricity → kWh, every other fuel → litres.
+    if (fuelTypeUsesElectricity(data.fuelType)) {
+      if ((data.electricityKwh ?? null) === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["electricityKwh"],
+          message: "Electricity used (kWh) is required for electric transport",
+        });
+      }
+    } else if ((data.fuelConsumedLiters ?? null) === null) {
       ctx.addIssue({
         code: "custom",
         path: ["fuelConsumedLiters"],
-        message:
-          "Provide either fuel consumed (L) or electricity used (kWh)",
+        message: "Fuel consumed (L) is required",
       });
     }
     if ((data.emissionFactorUsed ?? null) === null) {
@@ -160,6 +189,22 @@ function refineMethodRequirements(
         code: "custom",
         path: ["emissionFactorUsed"],
         message: "Emission factor is required for distance-based method",
+      });
+    }
+    // Isometric Transportation v1.1 §6 makes these mandatory records for the
+    // distance-based method.
+    if (!data.billOfLading?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["billOfLading"],
+        message: "Bill of lading is required for distance-based method",
+      });
+    }
+    if (!data.weighScaleTicketRef?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["weighScaleTicketRef"],
+        message: "Weigh-scale ticket is required for distance-based method",
       });
     }
   }

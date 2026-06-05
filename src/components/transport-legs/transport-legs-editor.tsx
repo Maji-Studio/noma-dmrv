@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
@@ -10,12 +9,12 @@ import {
   useDeleteTransportLeg,
   useTransportLegsForEntity,
 } from "@/hooks/use-transport-legs";
-import { formatMass } from "@/lib/format-utils";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
+import { TransportLegLine } from "./transport-leg-list-item";
 
-interface TransportLegsPanelProps {
+interface TransportLegsEditorProps {
   entityType: TransportEntityTypeValue;
   entityId: string;
   /** Override the section title. Defaults based on entityType. */
@@ -29,14 +28,20 @@ const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
   delivery: "Transport legs",
 };
 
-export function TransportLegsPanel({
+type FormState =
+  | { mode: "create" }
+  | { mode: "edit"; leg: TransportLeg }
+  | null;
+
+/**
+ * Edit-mode transport-leg management for the side sheet: list rows with
+ * edit/delete plus an inline add/edit form rendered in place (no popup dialog).
+ */
+export function TransportLegsEditor({
   entityType,
   entityId,
   title,
-}: TransportLegsPanelProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+}: TransportLegsEditorProps) {
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
     entityId,
@@ -44,43 +49,9 @@ export function TransportLegsPanel({
   const deleteMutation = useDeleteTransportLeg(entityType, entityId);
   const toast = useToast();
 
-  const [formState, setFormState] = useState<
-    { mode: "create" } | { mode: "edit"; leg: TransportLeg } | null
-  >(() => {
-    const intent = searchParams.get("transportLeg");
-    return intent === "create" || intent === "add" ? { mode: "create" } : null;
-  });
+  const [formState, setFormState] = useState<FormState>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const intent = searchParams.get("transportLeg");
-    const shouldCreate = intent === "create" || intent === "add";
-    const shouldEdit = intent === "edit";
-    if (!shouldCreate && !shouldEdit) return;
-
-    if (shouldCreate) {
-      queueMicrotask(() => setFormState({ mode: "create" }));
-    } else {
-      const legId = searchParams.get("transportLegId");
-      if (!legId) return;
-      if (!legs) return;
-
-      const leg = legs.find((candidate) => candidate.id === legId);
-      if (leg) {
-        queueMicrotask(() => setFormState({ mode: "edit", leg }));
-      }
-    }
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete("transportLeg");
-    nextParams.delete("transportLegId");
-    const nextQuery = nextParams.toString();
-
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
-      scroll: false,
-    });
-  }, [legs, pathname, router, searchParams]);
 
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
@@ -134,27 +105,7 @@ export function TransportLegsPanel({
               key={leg.id}
               className="flex items-start justify-between gap-12 border border-[var(--color-border-secondary)] p-12"
             >
-              <div className="flex flex-col gap-4">
-                <div className="body-medium">
-                  {leg.originName ?? "—"} → {leg.destinationName ?? "—"}
-                </div>
-                <div className="body-small text-[var(--color-text-secondary)]">
-                  {leg.distanceKm} km ·{" "}
-                  {leg.transportMethodType.replace(/_/g, " ")} ·{" "}
-                  {leg.calculationMethodType.replace(/_/g, " ")}
-                  {leg.transportEmissionsCo2eKg != null && (
-                    <>
-                      {" "}
-                      · {leg.transportEmissionsCo2eKg.toLocaleString()} kg CO₂e
-                    </>
-                  )}
-                </div>
-                {leg.loadMassKg != null && (
-                  <div className="body-small text-[var(--color-text-secondary)]">
-                    Load: {formatMass(leg.loadMassKg)}
-                  </div>
-                )}
-              </div>
+              <TransportLegLine leg={leg} />
               <div className="flex gap-8">
                 <Button
                   variant="weak"
@@ -180,7 +131,8 @@ export function TransportLegsPanel({
 
       {formState && (
         <TransportLegForm
-          isOpen={true}
+          key={formState.mode === "edit" ? formState.leg.id : "create"}
+          isOpen
           onClose={() => setFormState(null)}
           entityType={entityType}
           entityId={entityId}

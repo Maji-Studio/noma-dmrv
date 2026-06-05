@@ -1,2 +1,3 @@
 export { TransportLegForm } from "./transport-leg-form";
-export { TransportLegsPanel } from "./transport-legs-panel";
+export { TransportLegsEditor } from "./transport-legs-editor";
+export { TransportLegsSummary } from "./transport-legs-summary";

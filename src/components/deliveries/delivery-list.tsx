@@ -18,7 +18,10 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
-import { TransportLegsPanel } from "@/components/transport-legs";
+import {
+  TransportLegsEditor,
+  TransportLegsSummary,
+} from "@/components/transport-legs";
 import {
   useCreateDelivery,
   useDeleteDelivery,
@@ -437,7 +440,15 @@ export function DeliveryList() {
         }
         viewModeChildren={
           sideSheetMode === "view" && sideSheetEntity ? (
-            <TransportLegsPanel
+            <TransportLegsSummary
+              entityType="delivery"
+              entityId={sideSheetEntity.id}
+            />
+          ) : null
+        }
+        editModeChildren={
+          sideSheetMode === "edit" && sideSheetEntity ? (
+            <TransportLegsEditor
               entityType="delivery"
               entityId={sideSheetEntity.id}
             />
