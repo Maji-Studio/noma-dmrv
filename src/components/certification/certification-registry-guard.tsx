@@ -38,7 +38,9 @@ export function CertificationRegistryGuard({
 
   useEffect(() => {
     if (shouldRedirect && facilityId) {
-      router.replace(`${SETTINGS_PATH}?facility=${facilityId}`);
+      router.replace(
+        `${SETTINGS_PATH}?facility=${encodeURIComponent(facilityId)}`,
+      );
     }
   }, [shouldRedirect, facilityId, router]);
 

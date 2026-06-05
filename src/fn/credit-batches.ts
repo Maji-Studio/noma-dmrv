@@ -8,12 +8,14 @@ import { withAutoCode } from "@/data-access/code-generator";
 import {
   getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
+  getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   createCreditBatch as createCreditBatchData,
   updateCreditBatch as updateCreditBatchData,
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
   checkCreditBatchDateOverlap,
   type CreditBatchWithRelations,
+  type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
@@ -69,6 +71,30 @@ export async function getCreditBatchByIdFn(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to get credit batch",
+    };
+  }
+}
+
+export async function getCo2eStoredPreviewsFn(
+  batchIds: string[]
+): Promise<ActionResult<Record<string, CreditBatchCo2eStoredPreview>>> {
+  try {
+    const user = await getUser();
+    if (!user || !user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const ids = z.array(z.string().uuid()).parse(batchIds);
+    const previews = await getCo2eStoredPreviewsData(user.id, ids);
+    return { success: true, data: previews };
+  } catch (error) {
+    console.error("Failed to get CO2e stored previews:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to get CO2e stored previews",
     };
   }
 }

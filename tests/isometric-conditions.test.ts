@@ -13,23 +13,21 @@ describe("Isometric conditional required validation", () => {
       calculation_method: "distance_based",
       vehicle_type: "truck",
       distance_km: 10,
-      emission_factor_used: 0.12,
     });
 
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "load_mass_kg is required when calculation_method=distance_based"
+      "load_mass_kg is required"
     );
   });
 
-  it("accepts valid energy usage transport payload", () => {
+  it("accepts a valid distance-based transport payload", () => {
     const result = transportLegConditionSchema.safeParse({
-      calculation_method: "energy_usage",
-      fuel_type: "diesel",
-      fuel_consumed_liters: 14.5,
+      calculation_method: "distance_based",
+      vehicle_type: "truck",
+      load_mass_kg: 7200,
       distance_km: 32,
-      emission_factor_used: 2.68,
     });
 
     expect(result.success).toBe(true);

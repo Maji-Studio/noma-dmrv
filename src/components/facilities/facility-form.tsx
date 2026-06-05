@@ -14,10 +14,21 @@ import {
   type FacilityFormData,
   type Timezone,
 } from "@/schemas/facilities";
+import {
+  durabilityOptions,
+  formatDurabilityOption,
+  type DurabilityOption,
+} from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
 
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
+
+const durabilityOptionList: readonly { value: string; label: string }[] =
+  durabilityOptions.map((option) => ({
+    value: option,
+    label: formatDurabilityOption(option as DurabilityOption),
+  }));
 
 interface FacilityFormProps {
   facility?: Facility;
@@ -54,6 +65,8 @@ export function FacilityForm({
       timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
         ? facility.timezone as Timezone
         : undefined),
+      defaultDurabilityOption:
+        (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
     },
   });
 
@@ -172,6 +185,23 @@ export function FacilityForm({
             disabled={isSubmitting}
             error={!!errors.contactPhone}
             {...register("contactPhone")}
+          />
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-1 gap-y-20">
+        <FormField
+          id="defaultDurabilityOption"
+          label="Default Durability Option"
+          error={errors.defaultDurabilityOption?.message}
+          helperText="Isometric crediting tier for this facility's credit batches — a project-level decision declared in the PDD. New batches inherit this; existing batches keep the option they were created with. 1000-year additionally requires reflectance lab data."
+        >
+          <FormSelect
+            id="defaultDurabilityOption"
+            disabled={isSubmitting}
+            error={!!errors.defaultDurabilityOption}
+            options={durabilityOptionList}
+            {...register("defaultDurabilityOption")}
           />
         </FormField>
       </div>

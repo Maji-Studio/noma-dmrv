@@ -9,66 +9,21 @@ const uuidLikeString = z.string().regex(
   }
 );
 
+// Distance-based only: a leg needs distance + cargo mass. The emission factor
+// is supplied by the Isometric component blueprint, not by us (Eq. 3).
 export const transportLegConditionSchema = z
   .object({
-    calculation_method: z.enum(['energy_usage', 'distance_based']),
-    fuel_type: optionalString,
-    fuel_consumed_liters: optionalNumber,
-    electricity_kwh: optionalNumber,
+    calculation_method: z.enum(['distance_based']).default('distance_based'),
     load_mass_kg: optionalNumber,
     vehicle_type: optionalString,
     distance_km: optionalNumber,
-    emission_factor_used: optionalNumber,
   })
   .superRefine((value, ctx) => {
-    if (value.calculation_method === 'energy_usage') {
-      if (!value.fuel_type) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['fuel_type'],
-          message: 'fuel_type is required when calculation_method=energy_usage',
-        });
-      }
-
-      if (
-        value.fuel_consumed_liters == null &&
-        value.electricity_kwh == null
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['fuel_consumed_liters'],
-          message:
-            'fuel_consumed_liters or electricity_kwh is required when calculation_method=energy_usage',
-        });
-      }
-    }
-
-    if (value.calculation_method === 'distance_based') {
-      if (value.load_mass_kg == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['load_mass_kg'],
-          message:
-            'load_mass_kg is required when calculation_method=distance_based',
-        });
-      }
-
-      if (!value.vehicle_type) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['vehicle_type'],
-          message:
-            'vehicle_type is required when calculation_method=distance_based',
-        });
-      }
-    }
-
-    if (value.emission_factor_used == null) {
+    if (value.load_mass_kg == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['emission_factor_used'],
-        message:
-          'emission_factor_used is required when calculation_method is provided',
+        path: ['load_mass_kg'],
+        message: 'load_mass_kg is required',
       });
     }
 

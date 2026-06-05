@@ -268,7 +268,7 @@ async function resolveScopeForCreditBatch(
           id: batch.id,
           code: batch.code,
           applicationIds: batch.applicationIds,
-          co2eStoredPreview: batch.co2eStoredPreview,
+          co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
         },
       ],
     };
@@ -292,7 +292,7 @@ export async function resolveScopeForRemoval(
         id: b.id,
         code: b.code,
         applicationIds: full?.applicationIds ?? [],
-        co2eStoredPreview: full?.co2eStoredPreview,
+        co2eStoredPreview: full?.co2eStoredPreview ?? undefined,
       };
     }),
   );

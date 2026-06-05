@@ -19,7 +19,6 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
 import {
-  TransportLegsEditor,
   TransportLegsSummary,
 } from "@/components/transport-legs";
 import {
@@ -441,14 +440,6 @@ export function DeliveryList() {
         viewModeChildren={
           sideSheetMode === "view" && sideSheetEntity ? (
             <TransportLegsSummary
-              entityType="delivery"
-              entityId={sideSheetEntity.id}
-            />
-          ) : null
-        }
-        editModeChildren={
-          sideSheetMode === "edit" && sideSheetEntity ? (
-            <TransportLegsEditor
               entityType="delivery"
               entityId={sideSheetEntity.id}
             />

@@ -44,7 +44,7 @@ export function TransportLegsSummary({
         />
       )}
 
-      {isLoading ? (
+      {error ? null : isLoading ? (
         <p className="body-small text-[var(--color-text-secondary)]">
           Loading transport legs…
         </p>

@@ -31,6 +31,7 @@ import {
 import { CheckCircle, Warning } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
+import { InfoHint } from "@/components/ui/tooltip";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
@@ -325,12 +326,14 @@ function StepPeriod({
 }) {
   return (
     <div className="flex flex-col gap-12">
-      <h3 className="title-heading-4">Reporting period</h3>
-      <p className="body-small text-[var(--color-text-secondary)]">
-        Pick the reporting-period end date. Isometric links every Removal whose
-        completion date falls in the period to this statement, and derives the
-        period start from the previous statement.
-      </p>
+      <h3 className="title-heading-4 flex items-center gap-6">
+        Reporting period
+        <InfoHint>
+          Pick the reporting-period end date. Isometric links every Removal
+          whose completion date falls in the period to this statement, and
+          derives the period start from the previous statement.
+        </InfoHint>
+      </h3>
       <FormField
         id="reportingPeriodEndOn"
         label="Reporting period end"
@@ -397,12 +400,14 @@ function StepPreview({
 
   return (
     <div className="flex flex-col gap-16">
-      <h3 className="title-heading-4">Predicted removals</h3>
-      <p className="body-small text-[var(--color-text-secondary)]">
-        Membership is decided server-side by Isometric and confirmed after the
-        statement is created — this is a prediction by completion date. Expand a
-        removal to see its credit batches.
-      </p>
+      <h3 className="title-heading-4 flex items-center gap-6">
+        Predicted removals
+        <InfoHint>
+          Membership is decided server-side by Isometric and confirmed after
+          the statement is created — this is a prediction by completion date.
+          Expand a removal to see its credit batches.
+        </InfoHint>
+      </h3>
 
       <div className="flex flex-col gap-8">
         <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
