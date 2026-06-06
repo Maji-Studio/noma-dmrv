@@ -21,6 +21,8 @@ import {
 } from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
 
+const DEFAULT_DURABILITY_OPTION: DurabilityOption = "200_year";
+
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
 
@@ -35,7 +37,7 @@ function getDefaultDurabilityOption(
 ): DurabilityOption {
   return durabilityOptions.includes(option as DurabilityOption)
     ? (option as DurabilityOption)
-    : "200_year";
+    : DEFAULT_DURABILITY_OPTION;
 }
 
 interface FacilityFormProps {

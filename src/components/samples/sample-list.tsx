@@ -40,6 +40,8 @@ import {
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
 
+const READINESS_PREVIEW_LIMIT = 3;
+
 // ============================================
 // Durability Badge
 // ============================================
@@ -241,10 +243,10 @@ export function SampleList() {
       return;
     }
     const gapLabels = readiness.gaps
-      .slice(0, 3)
+      .slice(0, READINESS_PREVIEW_LIMIT)
       .map((gap) => gap.label)
       .join(", ");
-    const suffix = readiness.gaps.length > 3 ? ", ..." : "";
+    const suffix = readiness.gaps.length > READINESS_PREVIEW_LIMIT ? ", ..." : "";
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 

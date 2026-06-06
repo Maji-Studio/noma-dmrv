@@ -218,6 +218,7 @@ function buildCoverage(
 function buildEntityReadinessGaps(
   runs: ProductionRunWithSamples[],
   transportLegs: TransportLegsByCategory,
+  requiredTransportCategories: readonly TransportCategory[],
 ): string[] {
   const gaps: string[] = [];
 
@@ -234,7 +235,8 @@ function buildEntityReadinessGaps(
     }
   }
 
-  for (const [category, legs] of Object.entries(transportLegs)) {
+  for (const category of requiredTransportCategories) {
+    const legs = transportLegs[category];
     for (const leg of legs) {
       const readiness = deriveEntityCertifyReadiness("transportLeg", leg);
       for (const gap of readiness.gaps) {
@@ -548,7 +550,11 @@ export async function buildRemovalContext(
   const entityIds = collectTransportEntityIds(lineages, runs);
   const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
-  const entityReadinessGaps = buildEntityReadinessGaps(runs, transportLegs);
+  const entityReadinessGaps = buildEntityReadinessGaps(
+    runs,
+    transportLegs,
+    facilityFacts.requiredTransportCategories,
+  );
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(
