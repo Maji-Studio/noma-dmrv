@@ -22,7 +22,10 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { TransportLegsPanel } from "@/components/transport-legs";
+import {
+  TransportLegsEditor,
+  TransportLegsSummary,
+} from "@/components/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
@@ -459,12 +462,20 @@ export function SampleList() {
         viewModeChildren={
           displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
             <div className="flex flex-col gap-24">
-              <TransportLegsPanel
+              <TransportLegsSummary
                 entityType="sample"
                 entityId={displaySideSheet.entity.id}
               />
               <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} />
             </div>
+          ) : null
+        }
+        editModeChildren={
+          displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
+            <TransportLegsEditor
+              entityType="sample"
+              entityId={displaySideSheet.entity.id}
+            />
           ) : null
         }
       >

@@ -47,7 +47,7 @@ export function CustomerLocationForm({
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<CustomerLocationFormData>({
+  } = useForm({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues: {
       name: location?.name ?? "",
@@ -57,13 +57,14 @@ export function CustomerLocationForm({
       gpsLatitude: location?.gpsLatitude ?? undefined,
       gpsLongitude: location?.gpsLongitude ?? undefined,
       address: location?.address ?? "",
+      distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
     },
   });
 
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data);
+    return onSubmit(data as CustomerLocationFormData);
   });
 
   return (
@@ -193,6 +194,35 @@ export function CustomerLocationForm({
               disabled={isSubmitting}
               error={!!errors.gpsLongitude}
               {...register("gpsLongitude", {
+                setValueAs: nullableNumericValue,
+              })}
+            />
+          </FormField>
+        </div>
+      </div>
+
+      {/* Logistics Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Logistics
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="distanceFromFacilityKm"
+            label="Distance from facility (km)"
+            error={errors.distanceFromFacilityKm?.message}
+            helperText="Road distance from the origin facility. Autofills a delivery's transport leg (overridable per delivery)."
+          >
+            <FormInput
+              id="distanceFromFacilityKm"
+              type="number"
+              step="any"
+              min={0}
+              placeholder="e.g., 120"
+              disabled={isSubmitting}
+              error={!!errors.distanceFromFacilityKm}
+              {...register("distanceFromFacilityKm", {
                 setValueAs: nullableNumericValue,
               })}
             />

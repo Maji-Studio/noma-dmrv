@@ -71,6 +71,9 @@ const deliveryFormBaseSchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  // Road distance (km) for the delivery transport leg — autofills from the
+  // customer location, overridable per delivery.
+  transportDistanceKm: optionalNumber,
 });
 
 /**
@@ -145,6 +148,9 @@ export const createDeliverySchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  // Road distance (km) for the delivery transport leg — autofills from the
+  // customer location, overridable per delivery.
+  transportDistanceKm: optionalNumber,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -193,6 +199,9 @@ export const updateDeliverySchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  // Road distance (km) for the delivery transport leg — autofills from the
+  // customer location, overridable per delivery.
+  transportDistanceKm: optionalNumber,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({

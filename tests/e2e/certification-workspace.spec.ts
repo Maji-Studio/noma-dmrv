@@ -2,25 +2,25 @@
  * Certification workspace E2E — section navigation across the four routes and
  * the consolidated Settings surface (Stage 3 remodel).
  *
- * Two scenarios live here; the heavier guided-Review happy path is its own
- * file (`certification-review-flow.spec.ts`).
+ * Two scenarios live here; the create→submit happy path is its own file
+ * (`certification-full-removal-submit.spec.ts`).
  *
- *  1. Section navigation — NO Isometric creds needed. Visits each of the four
- *     certification routes (Overview / Removals / GHG Statements / Settings) via
- *     its nav link and asserts the per-route heading plus that the active
- *     `?facility=` scope is preserved on every hop. Links are addressed by
- *     accessible name, so this holds whether the sub-nav is the in-page tab bar
- *     or the sidebar section (ADR 0007 amended 2026-06-04 moved it to the
- *     sidebar — same labels, hrefs, and `?facility=` behaviour).
- *  2. Settings round-trip — needs a seeded `certifier_projects` mapping (the
- *     load-bearing gotcha: `loadFacilityCertifierMapping` always reads from
- *     Isometric, so a linked facility can only be produced with sandbox creds
- *     + a real project id). Gated behind the sandbox skip, mirroring
- *     `facility-certifier-mapping.spec.ts`. Asserts the Settings page renders
- *     the linked project in the "Registry connection — Isometric" card and that
- *     the admin-only sections (Emission estimates, Environment & health) mount.
- *     The link/edit/unlink dialog behaviour is already covered by
- *     `facility-certifier-mapping.spec.ts` — not duplicated here.
+ *  1. Section navigation — NO sandbox creds needed. Seeds a DB-only
+ *     `certifier_projects` row with a throwaway project id so the facility is
+ *     "linked" — the operational routes (Overview / Removals / GHG Statements)
+ *     are gated behind a registry link (ADR 0007), and the gate reads the
+ *     DB-only `loadFacilityCertifierSummary`, so no real project is required.
+ *     Then visits each of the four routes via its nav link and asserts the
+ *     per-route heading plus that the active `?facility=` scope is preserved on
+ *     every hop. Links are addressed by accessible name (sidebar section per
+ *     ADR 0007, amended 2026-06-04).
+ *  2. Settings round-trip — needs a seeded `certifier_projects` mapping against
+ *     the REAL sandbox project (the connection card resolves the project from
+ *     Isometric), so it's gated behind the sandbox skip. Asserts the Settings
+ *     page renders the linked project in the "Registry connection — Isometric"
+ *     card and that the admin-only sections — now behind the Emissions /
+ *     Environment tabs (redesign) — mount. The link/edit/unlink dialog
+ *     behaviour is covered by `facility-certifier-mapping.spec.ts`.
  *
  * Playwright loads `.env.test` only; we additionally pull `.env.local` (without
  * overriding) so a developer/CI with sandbox creds + `ISOMETRIC_DEMO_PROJECT_ID`
@@ -43,36 +43,63 @@ const SECTIONS = [
   { label: "Settings", path: "/certification/settings" },
 ] as const;
 
+// DB-only link target to un-gate the operational routes; never reaches
+// Isometric, so any string works. (Page DATA queries 404 against a fake
+// project, leaving an "Unable to load…" content error — harmless here, since
+// this test only asserts each route's heading + the preserved `?facility=`
+// scope, both of which are page chrome that renders independent of the data.)
+const FAKE_PROJECT_ID = "e2e-workspace-fake-project";
+
+// First navigation to a not-yet-compiled certification route can take 10-30s in
+// dev (Turbopack cold compile), worse under parallel load; give the per-hop
+// URL + heading assertions that budget so the test isn't compile-flaky.
+const COLD_COMPILE_TIMEOUT_MS = 30_000;
+
 test.describe("Certification workspace — section navigation", () => {
   test("navigates every section route and preserves the facility scope", async ({
     adminPage: page,
     seededData,
+    cleanupTestData,
   }) => {
+    void cleanupTestData; // activate fixture auto-cleanup
+
     const facilityId = seededData.facility.id;
-    await page.goto(`/certification?facility=${facilityId}`);
+    // Operational cert routes are gated on a registry link (ADR 0007). Seed a
+    // DB-only mapping so the nav links surface and the routes don't redirect to
+    // Settings; the gate reads `useFacilityCertifierSummary` (DB only), so a
+    // throwaway project id is enough — no sandbox creds needed.
+    const mapping = await seedCertifierMapping(facilityId, {
+      externalProjectId: FAKE_PROJECT_ID,
+    });
+    try {
+      await page.goto(`/certification?facility=${facilityId}`);
 
-    // Await the landing heading so the shell has hydrated before we navigate.
-    // The section links are unique in the page, so we address them by name
-    // rather than scoping to a particular nav landmark.
-    await expect(
-      page.getByRole("heading", { name: "Overview", level: 1 }),
-    ).toBeVisible({ timeout: 20000 });
-    const navLink = (label: string) =>
-      page.getByRole("link", { name: label, exact: true });
-    // Gate on the facility context having hydrated: a section link only appends
-    // `?facility=` once `useFacilityContext().facilityId` is populated. Clicking
-    // before then would navigate without the scope and drop it. Waiting on the
-    // href (rather than mere visibility) is the precise readiness signal.
-    await expect(navLink("Removals")).toHaveAttribute(
-      "href",
-      new RegExp(`facility=${facilityId}`),
-    );
+      // Await the landing heading so the shell has hydrated before we navigate.
+      // The section links are unique in the page, so we address them by name
+      // rather than scoping to a particular nav landmark.
+      await expect(
+        page.getByRole("heading", { name: "Overview", level: 1 }),
+      ).toBeVisible({ timeout: 20000 });
+      const navLink = (label: string) =>
+        page.getByRole("link", { name: label, exact: true });
+      // Gate on the facility context having hydrated: a section link only
+      // appends `?facility=` once `useFacilityContext().facilityId` is
+      // populated. Clicking before then would navigate without the scope and
+      // drop it. Waiting on the href (rather than visibility) is the precise
+      // readiness signal.
+      await expect(navLink("Removals")).toHaveAttribute(
+        "href",
+        new RegExp(`facility=${facilityId}`),
+      );
 
-    // Visit each route in turn; assert the URL, the heading, and that the
-    // `?facility=` scope rides along (every section link carries it).
-    for (const section of SECTIONS) {
-      await navLink(section.label).click();
-      await assertOnSection(page, section.label, section.path, facilityId);
+      // Visit each route in turn; assert the URL, the heading, and that the
+      // `?facility=` scope rides along (every section link carries it).
+      for (const section of SECTIONS) {
+        await navLink(section.label).click();
+        await assertOnSection(page, section.label, section.path, facilityId);
+      }
+    } finally {
+      await mapping.cleanup();
     }
   });
 });
@@ -114,10 +141,17 @@ test.describe("Certification workspace — Settings", () => {
         page.getByRole("button", { name: "Unlink", exact: true }),
       ).toBeVisible();
 
-      // B/C · Admin-only sections mount for an admin viewer.
+      // B/C · Admin-only sections live behind tabs (redesign): Connection is the
+      // default tab, so switch to each admin tab and assert its section mounts.
+      await page
+        .getByRole("button", { name: "Emissions", exact: true })
+        .click();
       await expect(
         page.getByRole("heading", { name: "Emission estimates", level: 2 }),
       ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Environment", exact: true })
+        .click();
       await expect(
         page.getByRole("heading", { name: "Environment & health", level: 2 }),
       ).toBeVisible();
@@ -138,11 +172,11 @@ async function assertOnSection(
     path === "/certification"
       ? new RegExp(`/certification\\?facility=${facilityId}`)
       : new RegExp(`${path}\\?facility=${facilityId}`);
-  await page.waitForURL(urlPattern, { timeout: 15000 });
+  await page.waitForURL(urlPattern, { timeout: COLD_COMPILE_TIMEOUT_MS });
 
   await expect(
     page.getByRole("heading", { name: label, level: 1 }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
   // The facility scope must survive the navigation.
   await expect(page).toHaveURL(new RegExp(`facility=${facilityId}`));
 }

@@ -19,7 +19,9 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
-import { TransportLegsPanel } from "@/components/transport-legs";
+import {
+  TransportLegsSummary,
+} from "@/components/transport-legs";
 import {
   useFeedstocks,
   useFeedstock,
@@ -421,7 +423,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           ] : undefined}
           viewModeChildren={
             displaySideSheet.mode === "view" && displaySideSheet.entity ? (
-              <TransportLegsPanel
+              <TransportLegsSummary
                 entityType="feedstock"
                 entityId={displaySideSheet.entity.id}
               />

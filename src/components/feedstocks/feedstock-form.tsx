@@ -15,6 +15,8 @@ import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEntityById } from "@/hooks/use-entities";
+import { useSupplier } from "@/hooks/use-suppliers";
+import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
@@ -70,7 +72,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
     defaultValues: {
@@ -78,6 +80,7 @@ export function FeedstockForm({
       deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
       supplierId: feedstock?.supplierId ?? "",
       vehicleId: feedstock?.vehicleId ?? "",
+      transportDistanceKm: undefined as number | undefined,
       feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
       moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
@@ -104,6 +107,7 @@ export function FeedstockForm({
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
+  const watchedSupplierId = useWatch({ control, name: "supplierId" });
 
   // Default new bins by feedstock category, while allowing intake into either compatible bin type.
   const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
@@ -111,12 +115,31 @@ export function FeedstockForm({
     ? "ingredient_bin"
     : "feedstock_bin";
 
+  // Transport distance autofills from the supplier's stored distance-to-facility
+  // (create) or the existing leg (edit); overridable. We never auto-calc from GPS.
+  const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
+  const { data: existingLegs } = useTransportLegsForEntity("feedstock", feedstock?.id ?? "", {
+    enabled: isEditMode,
+  });
+  const existingLegDistanceKm = existingLegs?.[0]?.distanceKm ?? null;
+  const suggestedDistanceKm = isEditMode
+    ? existingLegDistanceKm ?? selectedSupplier?.distanceToFacilityKm ?? null
+    : selectedSupplier?.distanceToFacilityKm ?? null;
+
   // Auto-set facility from context
   useEffect(() => {
     if (!feedstock && contextFacilityId && !watchedFacilityId) {
       setValue("facilityId", contextFacilityId);
     }
   }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
+
+  // Prefill the distance from the supplier/existing leg unless the user edited it.
+  useEffect(() => {
+    if (dirtyFields.transportDistanceKm) return;
+    if (suggestedDistanceKm != null) {
+      setValue("transportDistanceKm", suggestedDistanceKm);
+    }
+  }, [suggestedDistanceKm, dirtyFields.transportDistanceKm, setValue]);
 
   // Calculated dry mass
   const deliveredDryMassKg =
@@ -213,7 +236,33 @@ export function FeedstockForm({
               createLabel="Add new vehicle"
               onCreateNew={() => vehicleDialog.open()}
             />
+
+            <FormField
+              id="transportDistanceKm"
+              label="Transport distance (km)"
+              error={errors.transportDistanceKm?.message}
+              helperText={
+                selectedSupplier?.distanceToFacilityKm != null
+                  ? "Autofilled from the supplier — override for this delivery if the route differs."
+                  : "Road distance supplier → facility. Set a default on the supplier to autofill this."
+              }
+            >
+              <FormInput
+                id="transportDistanceKm"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="e.g., 85"
+                disabled={isSubmitting}
+                error={!!errors.transportDistanceKm}
+                {...register("transportDistanceKm", { setValueAs: numericValue })}
+              />
+            </FormField>
           </div>
+          <p className="body-small text-[var(--color-text-tertiary)]">
+            We record distance + load mass (the delivery&apos;s wet mass) as one
+            road transport leg. Isometric applies the emission factor.
+          </p>
         </div>
 
         {/* Material Details */}

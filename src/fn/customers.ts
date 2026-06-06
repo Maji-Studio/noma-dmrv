@@ -391,6 +391,7 @@ export async function createCustomerLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
+      distanceFromFacilityKm: validated.distanceFromFacilityKm,
     });
 
     return { success: true, data: location };
@@ -433,6 +434,7 @@ export async function updateCustomerLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
+      distanceFromFacilityKm: validated.distanceFromFacilityKm,
     });
 
     return { success: true, data: location };

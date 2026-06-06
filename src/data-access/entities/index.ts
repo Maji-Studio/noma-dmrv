@@ -109,6 +109,7 @@ export async function getEntities(
           ? rawFormulation
           : undefined;
       return getStorageLocations({
+        userId,
         search,
         facilityId: filterBy?.facilityId,
         type,
@@ -174,7 +175,7 @@ export async function getEntityById(
     case "operator":
       return getOperatorById(id);
     case "storageLocation":
-      return getStorageLocationById(id);
+      return getStorageLocationById(userId, id);
     case "vehicle":
       return getVehicleById(id);
     case "feedstockType":

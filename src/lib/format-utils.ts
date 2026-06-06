@@ -15,6 +15,20 @@ export function formatMass(kg: number | null | undefined): string {
 }
 
 /**
+ * Format a value already expressed in tonnes (NOT kg — use `formatMass` for kg).
+ * Returns "—" for null/undefined. Defaults to 2 decimals and a "t" unit; pass
+ * `unit: "t CO₂e"` for stored-carbon displays.
+ */
+export function formatTonnes(
+  value: number | null | undefined,
+  opts?: { digits?: number; unit?: string }
+): string {
+  if (value == null) return "—";
+  const { digits = 2, unit = "t" } = opts ?? {};
+  return `${value.toFixed(digits)} ${unit}`;
+}
+
+/**
  * Safely format a date string or Date object.
  * Returns "—" for invalid/null dates.
  */

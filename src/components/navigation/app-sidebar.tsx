@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth, authClient } from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { FacilitySelector } from "./facility-selector";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -70,6 +71,13 @@ const SECTION_ACCENTS = {
   admin: "var(--clr-red)",
   default: "var(--clr-rose)",
 } as const;
+
+// Certification is a conditional workspace (ADR 0007): its operational routes
+// only surface once the current facility is linked to a registry. Settings is
+// the lone exception — it's the only place that link gets created, so it stays
+// visible even when unlinked (otherwise an admin could never link a facility).
+const CERTIFICATION_SECTION_TITLE = "Certification";
+const CERTIFICATION_SETTINGS_HREF = "/certification/settings";
 
 const navSections: NavSection[] = [
   {
@@ -122,7 +130,7 @@ const navSections: NavSection[] = [
     // are surfaced directly in the sidebar — mirroring the Verification group —
     // rather than behind an in-page tab bar. Overview is `exact` because its
     // href (`/certification`) is a prefix of every sibling.
-    title: "Certification",
+    title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
       { href: "/certification", label: "Overview", icon: SealCheck, exact: true },
@@ -232,7 +240,28 @@ export function AppSidebar() {
   // mounts after hydration). Server-side `requireAdmin()` in
   // src/app/admin/layout.tsx remains the actual access boundary.
   const isAdmin = useIsAdmin();
-  const sections = isAdmin ? [...navSections, adminSection] : navSections;
+
+  // Gate the Certification operational routes on the current facility having a
+  // registry link. The summary is DB-only (no Isometric API) and shared with
+  // the certification pages, so it's usually a cache hit. Until a link is
+  // confirmed, only Settings is shown — the entry point for creating one.
+  const { data: certifierSummary } = useFacilityCertifierSummary(
+    facilityParam ?? "",
+    !!facilityParam,
+  );
+  const hasRegistry = Boolean(certifierSummary?.mapping);
+
+  const baseSections = isAdmin ? [...navSections, adminSection] : navSections;
+  const sections = baseSections.map((section) =>
+    section.title === CERTIFICATION_SECTION_TITLE && !hasRegistry
+      ? {
+          ...section,
+          items: section.items.filter(
+            (item) => item.href === CERTIFICATION_SETTINGS_HREF,
+          ),
+        }
+      : section,
+  );
 
   return (
     <aside

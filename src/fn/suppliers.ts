@@ -205,6 +205,7 @@ export async function createSupplierFn(
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
           sourceRegion: validated.sourceRegion || null,
+          distanceToFacilityKm: validated.distanceToFacilityKm ?? null,
         })
     );
 
@@ -253,6 +254,7 @@ export async function updateSupplierFn(
       contactEmail: validated.contactEmail,
       contactPhone: validated.contactPhone,
       sourceRegion: validated.sourceRegion,
+      distanceToFacilityKm: validated.distanceToFacilityKm,
     });
 
     return { success: true, data: supplier };

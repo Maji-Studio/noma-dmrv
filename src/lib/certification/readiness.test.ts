@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRemovalPreflightChecklist,
+  buildRemovalRequirementsChecklist,
   canRegroupRemoval,
   deriveRemovalReadiness,
   type PreflightCheck,
+  type RemovalRequirementCheck,
+  type RemovalRequirementKey,
   type RemovalReadinessFacts,
   type TransportCoverageFact,
 } from "./readiness";
@@ -301,6 +304,74 @@ describe("buildRemovalPreflightChecklist", () => {
     );
     expect(checkFor(checks, "production").status).toBe("unmet");
     expect(checkFor(checks, "production").detail).toContain("nothing to submit");
+  });
+});
+
+describe("buildRemovalRequirementsChecklist — wizard facility-level subset", () => {
+  function reqFor(
+    checks: RemovalRequirementCheck[],
+    key: RemovalRequirementKey,
+  ): RemovalRequirementCheck {
+    const found = checks.find((c) => c.key === key);
+    if (!found) throw new Error(`no requirement check for ${key}`);
+    return found;
+  }
+
+  it("only surfaces facility-level keys (never batch-level production/presence)", () => {
+    const checks = buildRemovalRequirementsChecklist(ready());
+    expect(checks.map((c) => c.key)).toEqual([
+      "mapping",
+      "template",
+      "transportUniformity",
+    ]);
+  });
+
+  it("is all-met for a fully-ready, uniform removal", () => {
+    const checks = buildRemovalRequirementsChecklist(ready());
+    expect(checks.every((c) => c.status === "met")).toBe(true);
+  });
+
+  it("flags an unlinked facility and skips downstream checks", () => {
+    const checks = buildRemovalRequirementsChecklist(
+      ready({ hasMapping: false }),
+    );
+    expect(reqFor(checks, "mapping").status).toBe("unmet");
+    expect(reqFor(checks, "template").status).toBe("skipped");
+    expect(reqFor(checks, "transportUniformity").status).toBe("skipped");
+  });
+
+  it("flags an unresolved template and skips transport uniformity", () => {
+    const checks = buildRemovalRequirementsChecklist(
+      ready({ hasDefaultTemplate: false }),
+    );
+    expect(reqFor(checks, "template").status).toBe("unmet");
+    expect(reqFor(checks, "transportUniformity").status).toBe("skipped");
+  });
+
+  it("flags cross-batch transport non-uniformity (present but mixed)", () => {
+    const checks = buildRemovalRequirementsChecklist(
+      ready({
+        requiredTransport: [
+          { category: "biochar", count: 2, hasAggregationWarning: true },
+        ],
+      }),
+    );
+    const uniformity = reqFor(checks, "transportUniformity");
+    expect(uniformity.status).toBe("unmet");
+    expect(uniformity.detail).toContain("biochar");
+  });
+
+  it("does NOT flag uniformity for a missing leg — that's the batch's concern", () => {
+    // count === 0 is a batch-level presence gap, excluded from this step even
+    // though the full pre-flight would mark transport unmet.
+    const checks = buildRemovalRequirementsChecklist(
+      ready({
+        requiredTransport: [
+          { category: "biochar", count: 0, hasAggregationWarning: false },
+        ],
+      }),
+    );
+    expect(reqFor(checks, "transportUniformity").status).toBe("met");
   });
 });
 
