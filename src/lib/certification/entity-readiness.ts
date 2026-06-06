@@ -1,0 +1,136 @@
+import {
+  getCertifyFieldDescriptors,
+  type CertifyEntityKind,
+  type CertifyFieldDescriptor,
+} from "./certify-field-registry";
+
+export type EntityCertifyReadinessState = "ready" | "incomplete";
+
+export type EntityCertifyGapKind = "lifecycle" | "field";
+
+export interface EntityCertifyGap {
+  kind: EntityCertifyGapKind;
+  key: string;
+  label: string;
+  fields: readonly string[];
+  detail: string;
+}
+
+export interface EntityCertifyReadiness {
+  state: EntityCertifyReadinessState;
+  gaps: EntityCertifyGap[];
+}
+
+export type EntityReadinessRecord = object;
+
+const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
+  productionRun: ["complete"],
+  feedstock: ["complete"],
+};
+
+function fieldValue(
+  entity: EntityReadinessRecord,
+  field: string,
+): unknown {
+  return (entity as Record<string, unknown>)[field];
+}
+
+function isPresent(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  return true;
+}
+
+function conditionApplies(
+  descriptor: CertifyFieldDescriptor,
+  entity: EntityReadinessRecord,
+): boolean {
+  if (!descriptor.condition) return true;
+  return (
+    fieldValue(entity, descriptor.condition.field) === descriptor.condition.equals
+  );
+}
+
+function descriptorFields(descriptor: CertifyFieldDescriptor): readonly string[] {
+  return descriptor.formFields ?? [descriptor.key];
+}
+
+function descriptorSatisfied(
+  descriptor: CertifyFieldDescriptor,
+  entity: EntityReadinessRecord,
+): boolean {
+  if (descriptor.kind === "derived") return true;
+
+  if (descriptor.satisfaction?.mode === "anyOf") {
+    return descriptor.satisfaction.fields.some((field) =>
+      isPresent(fieldValue(entity, field)),
+    );
+  }
+
+  return descriptorFields(descriptor).every((field) =>
+    isPresent(fieldValue(entity, field)),
+  );
+}
+
+function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
+  const fields =
+    descriptor.satisfaction?.mode === "anyOf"
+      ? descriptor.satisfaction.fields
+      : descriptorFields(descriptor);
+  const requirement =
+    descriptor.condition != null
+      ? `${descriptor.label} is required for ${descriptor.condition.label}`
+      : `${descriptor.label} is required to certify`;
+
+  return {
+    kind: "field",
+    key: descriptor.key,
+    label: descriptor.label,
+    fields,
+    detail: requirement,
+  };
+}
+
+function lifecycleGap(
+  entityKind: CertifyEntityKind,
+  lifecycleState: string | null | undefined,
+): EntityCertifyGap | null {
+  const terminalStates = TERMINAL_STATUS_BY_ENTITY[entityKind];
+  if (!terminalStates) return null;
+  if (lifecycleState != null && terminalStates.includes(lifecycleState)) {
+    return null;
+  }
+
+  return {
+    kind: "lifecycle",
+    key: "lifecycleState",
+    label: "Lifecycle state",
+    fields: ["status"],
+    detail: `Status must be ${terminalStates.join(" or ")} to certify`,
+  };
+}
+
+export function deriveEntityCertifyReadiness(
+  entityKind: CertifyEntityKind,
+  entity: EntityReadinessRecord,
+  lifecycleState?: string | null,
+): EntityCertifyReadiness {
+  const gaps: EntityCertifyGap[] = [];
+  const effectiveLifecycleState =
+    lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
+
+  const lifecycle = lifecycleGap(entityKind, effectiveLifecycleState);
+  if (lifecycle) gaps.push(lifecycle);
+
+  for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
+    if (!conditionApplies(descriptor, entity)) continue;
+    if (descriptorSatisfied(descriptor, entity)) continue;
+    gaps.push(fieldGap(descriptor));
+  }
+
+  return {
+    state: gaps.length === 0 ? "ready" : "incomplete",
+    gaps,
+  };
+}

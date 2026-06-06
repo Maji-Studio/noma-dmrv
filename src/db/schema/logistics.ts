@@ -1,5 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   doublePrecision,
   integer,
@@ -7,6 +8,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
@@ -188,6 +190,7 @@ export const transportLegs = pgTable(
       emissionsCalculationMethod('calculation_method')
         .notNull()
         .default('distance_based'),
+    isDerived: boolean('is_derived').notNull().default(false),
 
     // --- Documentation ---
     billOfLading: text('bill_of_lading'),
@@ -219,6 +222,9 @@ export const transportLegs = pgTable(
       'transport_legs_distance_based_requirements',
       sql`${table.calculationMethodType} <> 'distance_based'::emissions_calculation_method or ${table.loadMassKg} is not null`
     ),
+    uniqueIndex('transport_legs_one_derived_per_entity_idx')
+      .on(table.entityType, table.entityId)
+      .where(sql`${table.isDerived} = true`),
   ]
 );
 

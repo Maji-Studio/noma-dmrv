@@ -1,10 +1,10 @@
 /**
  * Derive a transport leg from records we already hold.
  *
- * Used for feedstock (supplier → facility) and delivery (facility → customer
- * location). Every input is known, so the user never re-enters route, mass, or
- * vehicle — the only editable value is the distance, which autofills from a
- * stored "distance to/from facility" on the partner entity (no GPS auto-calc).
+ * Used for feedstock (supplier → facility). Inputs are known, so the user never
+ * re-enters route, mass, or vehicle — the only editable value is the distance,
+ * which autofills from a stored "distance to facility" on the supplier entity
+ * (no GPS auto-calc).
  *
  * Method is always distance-based (Isometric Transportation v1.1 Eq. 3):
  *   emissions = distance (km) × cargo mass (tonnes) × EF (kg CO₂e/tonne·km)
@@ -19,13 +19,13 @@ export interface TransportPartyRef {
 }
 
 export interface DeriveTransportLegInput {
-  /** Origin partner (feedstock: supplier; delivery: facility). */
+  /** Origin partner (feedstock: supplier). */
   origin: TransportPartyRef | null;
-  /** Destination partner (feedstock: facility; delivery: customer location). */
+  /** Destination partner (feedstock: facility). */
   destination: TransportPartyRef | null;
   /** Vehicle supplies the vehicle type (maps to the Isometric component EF). */
   vehicle: { vehicleType?: string | null; modelYear?: number | null } | null;
-  /** Cargo mass moved on the leg (Eq. 3, W_j), kg. Feedstock/delivery wet mass. */
+  /** Cargo mass moved on the leg (Eq. 3, W_j), kg. */
   loadMassKg?: number | null;
   /** Stored default distance (km) from the partner entity. */
   storedDistanceKm?: number | null;

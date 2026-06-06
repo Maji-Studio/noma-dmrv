@@ -88,7 +88,7 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Biochar → storage transport (delivery leg category)
+  // Biochar → storage transport (biochar product leg category)
   "biochar-transport": {
     transport: {
       distance: {

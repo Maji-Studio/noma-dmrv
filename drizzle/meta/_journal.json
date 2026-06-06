@@ -239,6 +239,13 @@
       "when": 1780648036227,
       "tag": "0033_brief_frank_castle",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1780676729530,
+      "tag": "0034_peaceful_firebird",
+      "breakpoints": true
     }
   ]
 }

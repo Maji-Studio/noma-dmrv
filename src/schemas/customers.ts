@@ -99,8 +99,8 @@ export const customerLocationFormSchema = z.object({
   address: customerLocationTextSchema,
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
-  // Road distance (km) from the origin facility — autofills a delivery
-  // transport leg's distance (overridable per delivery).
+  // Operational road distance (km) from the origin facility. Certifier
+  // transport is recorded on cargo entities, not deliveries.
   distanceFromFacilityKm: optionalPositiveNumber,
 });
 

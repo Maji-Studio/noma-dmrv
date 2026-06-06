@@ -124,7 +124,6 @@ export const transportEntityType = pgEnum('transport_entity_type', [
   'feedstock',
   'biochar',
   'sample',
-  'delivery',
 ]);
 
 // Transport methods (Transportation Emissions Accounting Module v1.1)

@@ -23,6 +23,8 @@ import {
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
 
+const MAX_BATCH_PREVIEWS = 50;
+
 /**
  * Get all credit batches
  */
@@ -84,7 +86,13 @@ export async function getCo2eStoredPreviewsFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const ids = z.array(z.string().uuid()).parse(batchIds);
+    const ids = z
+      .array(z.string().uuid())
+      .max(
+        MAX_BATCH_PREVIEWS,
+        `Select at most ${MAX_BATCH_PREVIEWS} credit batches for preview`,
+      )
+      .parse(batchIds);
     const previews = await getCo2eStoredPreviewsData(user.id, ids);
     return { success: true, data: previews };
   } catch (error) {
