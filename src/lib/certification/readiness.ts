@@ -51,6 +51,8 @@ export interface RemovalReadinessFacts {
   hasSubmittableRuns: boolean;
   /** Coverage facts for the template's required transport categories only. */
   requiredTransport: TransportCoverageFact[];
+  /** Compact labels from per-entity certifier-readiness checks. */
+  entityReadinessGaps?: string[];
 }
 
 export interface RemovalReadiness {
@@ -62,6 +64,9 @@ export interface RemovalReadiness {
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
 const NO_PRODUCTION_REASON = "No production data linked yet — nothing to submit";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
+const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
+const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
+const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -143,6 +148,19 @@ export function deriveRemovalReadiness(
     reasons.push(NO_PRODUCTION_REASON);
   }
 
+  const entityReadinessGaps = facts.entityReadinessGaps ?? [];
+  if (entityReadinessGaps.length > 0) {
+    const suffix =
+      entityReadinessGaps.length > ENTITY_READINESS_REASON_PREVIEW_LIMIT
+        ? ", ..."
+        : "";
+    reasons.push(
+      `Incomplete entity certifier data: ${entityReadinessGaps
+        .slice(0, ENTITY_READINESS_REASON_PREVIEW_LIMIT)
+        .join(", ")}${suffix}`,
+    );
+  }
+
   return reasons.length > 0
     ? { state: "blocked", reasons }
     : { state: "ready", reasons: [] };
@@ -158,7 +176,7 @@ export type PreflightCheckStatus =
   | "skipped"; // not yet evaluable (an upstream check is unmet)
 
 export interface PreflightCheck {
-  key: "mapping" | "template" | "transport" | "production";
+  key: "mapping" | "template" | "transport" | "production" | "entityReadiness";
   /** Affirmative label — what's true when the check is met. */
   label: string;
   status: PreflightCheckStatus;
@@ -207,6 +225,18 @@ export function buildRemovalPreflightChecklist(
         };
   })();
 
+  const entityReadiness = ((): PreflightCheck => {
+    const gaps = facts.entityReadinessGaps ?? [];
+    return gaps.length === 0
+      ? { key: "entityReadiness", label: ENTITY_READINESS_LABEL, status: "met" }
+      : {
+          key: "entityReadiness",
+          label: ENTITY_READINESS_LABEL,
+          status: "unmet",
+          detail: gaps.slice(0, ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT).join(" · "),
+        };
+  })();
+
   return [
     {
       key: "mapping",
@@ -227,6 +257,7 @@ export function buildRemovalPreflightChecklist(
       status: facts.hasSubmittableRuns ? "met" : "unmet",
       detail: facts.hasSubmittableRuns ? undefined : NO_PRODUCTION_REASON,
     },
+    entityReadiness,
   ];
 }
 

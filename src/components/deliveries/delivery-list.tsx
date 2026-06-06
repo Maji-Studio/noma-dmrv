@@ -19,9 +19,6 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
 import {
-  TransportLegsSummary,
-} from "@/components/transport-legs";
-import {
   useCreateDelivery,
   useDeleteDelivery,
   useDeliveries,
@@ -436,14 +433,6 @@ export function DeliveryList() {
                 },
               ]
             : undefined
-        }
-        viewModeChildren={
-          sideSheetMode === "view" && sideSheetEntity ? (
-            <TransportLegsSummary
-              entityType="delivery"
-              entityId={sideSheetEntity.id}
-            />
-          ) : null
         }
       >
         {formError && <ServerError message={formError} />}

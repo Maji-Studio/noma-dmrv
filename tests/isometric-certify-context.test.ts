@@ -421,6 +421,72 @@ describe("requiredTransportCategories", () => {
     ]);
   });
 
+  it("only reports transport readiness gaps for categories required by the template", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "tpl_no_sample" }),
+    );
+    mockedListTemplates.mockResolvedValue([
+      transportTemplate("tpl_no_sample", ["sample"]),
+    ]);
+    mockedListBlueprints.mockResolvedValue([blueprint("transport")]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: { biocharAppliedDryTons: 0.1 } as never,
+      delivery: {} as never,
+      order: null,
+      biocharProduct: { id: "bp-1" } as never,
+      productionRun: { id: "pr-1" } as never,
+      reactor: null,
+      feedstocks: [{ id: "fs-1" } as never],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        feedstockWetMassKg: 100,
+        feedstockMoisturePercent: 10,
+        biocharOutputKg: 40,
+        biocharDryMassKg: 35,
+        biocharMoisturePercent: 12,
+        dieselOperationLiters: 0,
+        preprocessingFuelLiters: 0,
+        dieselGensetLiters: 0,
+        electricityKwh: 0,
+        samples: [
+          {
+            id: "s-1",
+            sampleCode: "S-1",
+            organicCarbonPercent: 70,
+            hToCOrgRatio: 0.4,
+            durabilityOption: "200_year",
+          },
+        ],
+      } as never,
+    ]);
+    mockedGetLegs.mockImplementation(async (_user, entityType) => {
+      if (entityType === "sample") {
+        return [{ id: "tl-s1", entityId: "s-1", distanceKm: 12 }] as never;
+      }
+      return [];
+    });
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.requiredTransportCategories).toEqual(["feedstock", "biochar"]);
+    expect(result.entityReadinessGaps).toEqual([]);
+    expect(result.transportCoverage.sample.aggregationWarning).toContain("tl-s1");
+  });
+
   it("returns an empty list when the template has no transport inputs", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "tpl_none" }),
