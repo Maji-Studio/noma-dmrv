@@ -65,6 +65,8 @@ const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
 const NO_PRODUCTION_REASON = "No production data linked yet — nothing to submit";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
+const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
+const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -148,10 +150,14 @@ export function deriveRemovalReadiness(
 
   const entityReadinessGaps = facts.entityReadinessGaps ?? [];
   if (entityReadinessGaps.length > 0) {
+    const suffix =
+      entityReadinessGaps.length > ENTITY_READINESS_REASON_PREVIEW_LIMIT
+        ? ", ..."
+        : "";
     reasons.push(
       `Incomplete entity certifier data: ${entityReadinessGaps
-        .slice(0, 3)
-        .join(", ")}${entityReadinessGaps.length > 3 ? ", ..." : ""}`,
+        .slice(0, ENTITY_READINESS_REASON_PREVIEW_LIMIT)
+        .join(", ")}${suffix}`,
     );
   }
 
@@ -227,7 +233,7 @@ export function buildRemovalPreflightChecklist(
           key: "entityReadiness",
           label: ENTITY_READINESS_LABEL,
           status: "unmet",
-          detail: gaps.slice(0, 5).join(" · "),
+          detail: gaps.slice(0, ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT).join(" · "),
         };
   })();
 

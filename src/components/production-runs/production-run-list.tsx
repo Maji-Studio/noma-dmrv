@@ -56,6 +56,8 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 
+const TOAST_GAP_PREVIEW_LIMIT = 3;
+
 // ============================================
 // Status Badge
 // ============================================
@@ -224,10 +226,10 @@ export function ProductionRunList() {
       return;
     }
     const gapLabels = readiness.gaps
-      .slice(0, 3)
+      .slice(0, TOAST_GAP_PREVIEW_LIMIT)
       .map((gap) => gap.label)
       .join(", ");
-    const suffix = readiness.gaps.length > 3 ? ", ..." : "";
+    const suffix = readiness.gaps.length > TOAST_GAP_PREVIEW_LIMIT ? ", ..." : "";
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 
