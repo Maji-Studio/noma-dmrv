@@ -14,6 +14,22 @@ Each entry follows this shape:
 
 ## Isometric Certify integration
 
+### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
+
+- **Non-overlapping reporting periods are enforced in `createGhgStatementDraft`**
+  (reject an `end_on` ≤ the latest other statement's end) and mirrored in the
+  create drawer. This is a read-then-write check, not a DB invariant.
+- A truly concurrent pair of creates with overlapping periods could both pass
+  the check (TOCTOU). Low likelihood — periods are consecutive, the
+  `(provider, facility, end_on)` unique constraint already blocks exact dupes,
+  and this is a single-operator internal tool — but it's not airtight.
+- Resolve via: a Postgres `EXCLUDE USING gist` range constraint on
+  `(facility_id, daterange(reporting_period_start_on, reporting_period_end_on))`
+  once start dates are reliably populated (they're reconciled post-create, so a
+  draft row has a null start until Isometric returns the window — the constraint
+  would need to tolerate that or be deferred). Decide if the DB-level guarantee
+  is worth the `btree_gist` extension + null-start handling.
+
 ### Project-emission category disambiguator for `mass_based_ci_emissions` (opened 2026-05-24)
 
 - **`miscellaneous` and `sampling_consumables` collide on the same Isometric blueprint**
@@ -583,6 +599,89 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
   - **Do NOT re-add a zero-stub `INPUT_MAPPING` entry to bypass the
     guard.** That reverts ADR 0005 and re-introduces the over-claim.
     The unblock path is template-field removal, not a fake datapoint.
+
+### Certify-removal redesign — pinned biochar protocol behind latest certified (opened 2026-06-04)
+
+- `docs/isometric/versions.json` pins biochar `1.2.0`; a `protocols_analyze` on
+  2026-06-04 resolved patch `1.2.2`, and biochar `1.3` is now **CERTIFIED**
+  (2026-05-22) on the registry (some modules likewise have newer patches).
+- **Why it matters:** the per-batch health check + submit payload encode
+  1.2-line expectations; if 1.3 changes the required-input/evidence set or
+  durability thresholds (H:Corg < 0.5, R₀ ≥ 2%, pollutant ceilings), they drift
+  from the live protocol.
+- **Resolve via:** an `update-playbook.md` pass evaluating 1.2 → 1.3 (refresh
+  `requirements-shortlist.md` + `schema-mapping.md`, append to `changes.md`).
+  Out of scope for the redesign build itself — but the redesign must not bake in
+  1.2-specific numbers it doesn't already depend on.
+
+### Certify-removal redesign — submit-context builder N+1 on selection/submit hot paths (`certification/submit-context-n+1`, opened 2026-06-05)
+
+- Two N+1s remain in the shared submission-context builder (surfaced by the
+  2026-06-05 CodeRabbit + audit pass): `loadSelectableBatchesForFacility`
+  (`fn/certification/certify-context.ts`) loops a full `buildRemovalContext` per
+  ungrouped batch — each iteration walks that batch's applications through
+  `getChainOfCustodyData` (~6 queries/application) plus production-run and
+  transport-leg loads; and `resolveScopeForRemoval` resolves member
+  `applicationIds` + `co2eStoredPreview` per member (≈2×M queries).
+- **Why it matters:** the New-Removal wizard's first step and the submit path;
+  cost scales with batches × applications-per-batch. The per-batch Isometric
+  *remote* calls were already hoisted, and the create-removal confirm loop was
+  fixed in the same pass (`buildCreditBatchContextWithFacts` loads facility facts
+  once) — what's left is the per-batch DB lineage fan-out.
+- **Resolve via:** rework `buildRemovalContext` to batch the lineage walks across
+  a batch set (one chain-of-custody resolve keyed by all `applicationIds`, one
+  transport-leg query over all entity ids), or add a lighter projected
+  fact-loader for the ungrouped-batch health verdict that doesn't need the full
+  submission context. **Constraint:** `resolveScopeForRemoval` now intentionally
+  does per-batch preview work because the submit summary needs
+  `co2eStoredPreview` per member (the `0.0 tCO₂e` fix, 2026-06-05) — a
+  grouped-`applicationIds` optimization must still supply the per-batch preview.
+  The builder is shared with the submit pipeline (`submitRemoval`), so verify
+  both paths. High-risk, deliberately deferred — wants a focused pass, not a
+  mechanical edit.
+
+### Certify-removal redesign — wizard robustness gaps (`certification/wizard-robustness`, opened 2026-06-05)
+
+- Three failure-path gaps from the 2026-06-05 audit, all low-likelihood on a
+  single-operator tool but each a surprising mode before a registry write:
+  - **Submit double-fire:** `SubmitConfirmDialog.onConfirm`
+    (`components/certification/new-removal-dialog/submit-step.tsx`) calls
+    `fireSubmit(true)` unconditionally; a double-activate before `isPending`
+    flips can fire the mutation twice. (Server submit is ~idempotent, which
+    softens it; the primary Submit button is already `busy`-guarded.)
+  - **Registry-guard error path:** `CertificationRegistryGuard`
+    (`components/certification/certification-registry-guard.tsx`) ignores the
+    certifier-summary query's `error` — a transient fetch failure reads as
+    "no registry" and silently redirects the operator from every certification
+    page to Settings (vs. a retry state). It also renders blank `null` while
+    loading rather than a loading affordance.
+  - **Batch-health TOCTOU:** `createRemovalWithBatchesAction` re-derives each
+    batch's health *outside* the write transaction; the data-access write
+    re-checks ungrouped/same-facility under `FOR UPDATE` but not health, so a
+    batch could regress below `ready` between check and locked write. Health is
+    a soft/derived gate, so impact is grouping a briefly-regressed batch.
+- **Resolve via:** guard `onConfirm` with `if (submitMutation.isPending) return;`
+  and disable the confirm action while pending; give the registry guard an
+  explicit error/retry state distinct from "no registry" (and a loading
+  affordance vs. bare `null`); for the TOCTOU, either re-assert
+  `state === "ready"` inside `createRemovalWithCreditBatches` after acquiring the
+  locks, or document health as a point-in-time advisory, not a write invariant.
+  (Missing structured logs on the removal writes belong with the deferred
+  observability work — see `Correctness / observability` below — not here.)
+
+### Certify-removal redesign — removal-detail-sheet deep link drops `step=evidence` (`certification/removal-detail-deep-link`, opened 2026-06-05)
+
+- The redesign turned `removals/[removalId]/review` into a redirect that strips
+  `?step=`. `components/certification/removal-detail-sheet.tsx` (not in the
+  redesign's changed set, so untouched) still builds
+  `evidenceHref = ${reviewHref}&step=evidence` plus a "Review & submit" link, so
+  that deep link silently loses its evidence-step intent and lands on the wizard
+  entry instead. Flagged by both the simplify and loading-states audit passes.
+- **Why it matters:** minor UX regression on an existing entry point; not a
+  crash, but the operator no longer arrives where the link promises.
+- **Resolve via:** point `removal-detail-sheet.tsx` at the wizard's resume entry
+  directly (drop the now-dead `&step=` param), or have the redirect
+  preserve/translate `step=` into the new `resume=` param.
 
 ## Audit follow-ups (opened 2026-05-25)
 

@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { latitudeSchema, longitudeSchema, requiredLatitudeSchema, requiredLongitudeSchema, toNumberOrUndefined } from "./helpers";
+import { latitudeSchema, longitudeSchema, optionalPositiveNumber, requiredLatitudeSchema, requiredLongitudeSchema, toNumberOrUndefined } from "./helpers";
 
 // ============================================
 // Supplier Form Schema (Client-side validation)
@@ -59,6 +59,10 @@ export const supplierFormSchema = z.object({
     .max(255, "Source region must be less than 255 characters")
     .optional()
     .or(z.literal("")),
+
+  // Road distance (km) to the delivery facility — autofills a feedstock
+  // transport leg's distance (overridable per delivery).
+  distanceToFacilityKm: optionalPositiveNumber,
 });
 
 // ============================================
@@ -92,6 +96,7 @@ export const updateSupplierSchema = z.object({
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
+  distanceToFacilityKm: optionalPositiveNumber,
 });
 
 /**

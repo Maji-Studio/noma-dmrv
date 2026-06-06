@@ -6,10 +6,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  assignCreditBatchToRemovalAction,
   createGhgStatementDraft,
+  createRemovalWithBatchesAction,
   deleteFacilityCertifierMapping,
-  ensureRemovalForCreditBatchAction,
+  loadBatchHealth,
   loadCertificationHealth,
   loadCertificationOverview,
   loadCertifyContextForCreditBatch,
@@ -21,6 +21,7 @@ import {
   loadOpenRemovalsForFacility,
   loadRemovalCertifyContext,
   loadRemovalsForFacility,
+  loadSelectableBatchesForFacility,
   refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
@@ -28,8 +29,8 @@ import {
   submitRemovalAction,
 } from "@/fn/certification";
 import type {
-  AssignCreditBatchToRemovalInput,
   CreateGhgStatementInput,
+  CreateRemovalWithBatchesInput,
   FacilityEmissionConfigFormData,
   SaveMappingInput,
   SubmitGhgStatementDialogInput,
@@ -59,6 +60,8 @@ export const certificationKeys = {
       "credit-batch",
       creditBatchId,
     ] as const,
+  batchHealth: (creditBatchId: string) =>
+    [...certificationKeys.all, "batch-health", creditBatchId] as const,
   certifyContextForRemoval: (removalId: string) =>
     [
       ...certificationKeys.all,
@@ -68,6 +71,8 @@ export const certificationKeys = {
     ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
+  selectableBatches: (facilityId: string) =>
+    [...certificationKeys.all, "selectable-batches", facilityId] as const,
   ghgStatementsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "ghg-statements", facilityId] as const,
   ghgStatementState: (ghgStatementId: string) =>
@@ -218,6 +223,23 @@ export function useCertifyContextForCreditBatch(
   });
 }
 
+// Per-batch data-completeness verdict for the credit-batch detail page's
+// health-check panel. Reuses the single-batch certify context server-side and
+// runs the shared classifier. Mutations to the batch / its lineage invalidate
+// `certificationKeys.all`, which covers this key.
+export function useBatchHealth(creditBatchId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.batchHealth(creditBatchId),
+    queryFn: async () => {
+      const result = await loadBatchHealth(creditBatchId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!creditBatchId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
 // Removal-keyed Certify context for the guided Review flow. Like the
 // credit-batch variant it refetches while a submission is locked in flight so
 // the pre-flight reflects progress without a manual refresh.
@@ -253,6 +275,23 @@ export function useRemovalsForFacility(facilityId: string, enabled = true) {
   });
 }
 
+// Ungrouped credit batches + per-batch health for the New-Removal wizard's
+// selection step. Heavier than the plain ungrouped list (derives health per
+// batch), so it leans on caching; grouping mutations invalidate
+// `certificationKeys.all`, refreshing it.
+export function useSelectableBatches(facilityId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.selectableBatches(facilityId),
+    queryFn: async () => {
+      const result = await loadSelectableBatchesForFacility(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
 // Submits an existing removal directly (the workspace's single submit entry).
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
@@ -268,27 +307,16 @@ export function useSubmitRemoval() {
   });
 }
 
-// Starts a fresh removal for a credit batch (no submission).
-export function useEnsureRemovalForCreditBatch() {
+// Deferred-create — create a new removal from a confirmed set of healthy
+// credit batches (the New-Removal wizard's "Confirm" step). The server
+// re-validates batch health before writing; on success the wizard advances
+// into the returned removal. Invalidates all certification queries since
+// membership (and the ungrouped pool) changed.
+export function useCreateRemovalWithBatches() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (creditBatchId: string) => {
-      const result = await ensureRemovalForCreditBatchAction(creditBatchId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
-  });
-}
-
-// N:1 grouping — move a credit batch onto a removal, or detach with null.
-export function useAssignCreditBatchToRemoval() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: AssignCreditBatchToRemovalInput) => {
-      const result = await assignCreditBatchToRemovalAction(input);
+    mutationFn: async (input: CreateRemovalWithBatchesInput) => {
+      const result = await createRemovalWithBatchesAction(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

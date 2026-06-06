@@ -22,6 +22,7 @@ import {
   type StorageLocationType,
 } from "@/schemas/storage-locations";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import { requireAuth } from "../utils";
 
 function formatStorageLocationSubtitle(
   type: string,
@@ -167,6 +168,7 @@ const productInventoryAggregate = db
   .as("product_inventory_agg");
 
 export async function getStorageLocations(params: {
+  userId: string;
   search?: string;
   facilityId?: string;
   type?: StorageLocationType | StorageLocationType[];
@@ -177,8 +179,9 @@ export async function getStorageLocations(params: {
   pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, type, feedstockTypeId, formulationId, pureProductOnly, limit } =
+  const { userId, search, facilityId, type, feedstockTypeId, formulationId, pureProductOnly, limit } =
     params;
+  requireAuth(userId);
 
   const conditions: SQL[] = [];
 
@@ -208,12 +211,20 @@ export async function getStorageLocations(params: {
   // bin; a formulated product can land in a matching bin or an unassigned one (which
   // then gets claimed for that formulation on first intake).
   if (pureProductOnly) {
-    conditions.push(sql`${storageLocations.formulationId} IS NULL`);
+    conditions.push(
+      and(
+        eq(storageLocations.type, "product_bin"),
+        sql`${storageLocations.formulationId} IS NULL`
+      )!
+    );
   } else if (formulationId) {
     conditions.push(
-      or(
-        sql`${storageLocations.formulationId} IS NULL`,
-        eq(storageLocations.formulationId, formulationId)
+      and(
+        eq(storageLocations.type, "product_bin"),
+        or(
+          sql`${storageLocations.formulationId} IS NULL`,
+          eq(storageLocations.formulationId, formulationId)
+        )!
       )!
     );
   }
@@ -289,8 +300,11 @@ export async function getStorageLocations(params: {
 }
 
 export async function getStorageLocationById(
+  userId: string,
   id: string
 ): Promise<EntityOption | null> {
+  requireAuth(userId);
+
   const [result] = await db
     .select({
       id: storageLocations.id,

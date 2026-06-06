@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, toNumberOrNull } from "./helpers";
+import { emptyToNull, optionalPositiveNumber, toNumberOrNull } from "./helpers";
 
 // ============================================
 // Shared numeric field helpers
@@ -70,6 +70,9 @@ export const feedstockFormSchema = z.object({
 
   // Optional transport
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  // Road distance (km) for the feedstock transport leg — autofills from the
+  // supplier's distance-to-facility, overridable per delivery.
+  transportDistanceKm: optionalPositiveNumber,
 
   // --- Material ---
   feedstockTypeId: z
@@ -121,6 +124,7 @@ export const updateFeedstockSchema = z.object({
   ]).optional(),
   supplierId: z.string().uuid().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  transportDistanceKm: optionalPositiveNumber,
   feedstockTypeId: z.string().uuid().optional(),
   massWetKg: z.number().min(0).optional(),
   moistureContentPercent: z.number().min(0).max(100).optional(),

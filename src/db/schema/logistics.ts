@@ -175,23 +175,19 @@ export const transportLegs = pgTable(
 
     // --- Transport Details ---
     transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft
-    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck"
+    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck" — selects the Isometric component EF (Eq. 3)
     modelYear: integer('model_year'),
 
-    // --- Fuel/Energy Details (Isometric: Energy Usage Method - preferred) ---
-    fuelType: text('fuel_type'), // diesel, biodiesel, gasoline, electricity, etc.
-    fuelConsumedLiters: real('fuel_consumed_liters'),
-    electricityKwh: real('electricity_kwh'),
-
-    // --- Load Details (Isometric: Distance-Based Method) ---
+    // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---
     loadMassKg: real('load_mass_kg'),
 
-    // --- Emissions Calculation (Isometric: Section 3) ---
+    // --- Method (distance-based only — see ADR/changes; the emission factor
+    // lives in the Isometric component blueprint, NOT here: we submit distance +
+    // mass and Certify computes `distance × Σmass × factor`). ---
     calculationMethodType:
-      emissionsCalculationMethod('calculation_method').notNull(), // energy_usage | distance_based
-    emissionFactorUsed: real('emission_factor_used'),
-    emissionFactorSource: text('emission_factor_source'), // Citation for emission factor
-    transportEmissionsCo2eKg: real('transport_emissions_co2e_kg'),
+      emissionsCalculationMethod('calculation_method')
+        .notNull()
+        .default('distance_based'),
 
     // --- Documentation ---
     billOfLading: text('bill_of_lading'),
@@ -217,21 +213,11 @@ export const transportLegs = pgTable(
       'transport_legs_destination_gps_longitude_range',
       sql`${table.destinationGpsLongitude} is null or (${table.destinationGpsLongitude} >= -180 and ${table.destinationGpsLongitude} <= 180)`
     ),
-    check(
-      'transport_legs_energy_usage_requirements',
-      sql`${table.calculationMethodType} <> 'energy_usage'::emissions_calculation_method or (
-        ${table.fuelType} is not null and
-        (${table.fuelConsumedLiters} is not null or ${table.electricityKwh} is not null) and
-        ${table.emissionFactorUsed} is not null
-      )`
-    ),
+    // Distance-based accounting (Eq. 3) needs the cargo mass on every leg; the
+    // emission factor is supplied by the Isometric component, not stored here.
     check(
       'transport_legs_distance_based_requirements',
-      sql`${table.calculationMethodType} <> 'distance_based'::emissions_calculation_method or (
-        ${table.loadMassKg} is not null and
-        ${table.vehicleType} is not null and
-        ${table.emissionFactorUsed} is not null
-      )`
+      sql`${table.calculationMethodType} <> 'distance_based'::emissions_calculation_method or ${table.loadMassKg} is not null`
     ),
   ]
 );
