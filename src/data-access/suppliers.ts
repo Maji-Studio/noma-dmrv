@@ -29,28 +29,28 @@ export interface PaginatedSuppliers {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 
-async function ensureSupplierOwnership(
+// Single-org / shared-data model: all authenticated users share the same
+// supplier records, so these guards verify existence only (not per-user
+// ownership). `suppliers.userId` is retained for create-time attribution.
+async function ensureSupplierExists(
   userId: string,
   supplierId: string
 ): Promise<{ id: string }> {
   requireAuth(userId);
 
   const [supplier] = await db
-    .select({ id: suppliers.id, userId: suppliers.userId })
+    .select({ id: suppliers.id })
     .from(suppliers)
     .where(eq(suppliers.id, supplierId));
 
   if (!supplier) {
     throw new SafeError("Supplier not found");
   }
-  if (supplier.userId !== userId) {
-    throw new SafeError("Unauthorized");
-  }
 
   return { id: supplier.id };
 }
 
-async function ensureSupplierLocationOwnership(
+async function ensureSupplierLocationExists(
   userId: string,
   locationId: string
 ): Promise<{ id: string; supplierId: string }> {
@@ -60,17 +60,12 @@ async function ensureSupplierLocationOwnership(
     .select({
       id: supplierLocations.id,
       supplierId: supplierLocations.supplierId,
-      ownerUserId: suppliers.userId,
     })
     .from(supplierLocations)
-    .innerJoin(suppliers, eq(supplierLocations.supplierId, suppliers.id))
     .where(eq(supplierLocations.id, locationId));
 
   if (!location) {
     throw new SafeError("Supplier location not found");
-  }
-  if (location.ownerUserId !== userId) {
-    throw new SafeError("Unauthorized");
   }
 
   return { id: location.id, supplierId: location.supplierId };
@@ -99,8 +94,8 @@ export async function getSuppliers(
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions — always scoped to the current user
-  const conditions: SQL[] = [eq(suppliers.userId, userId)];
+  // Build where conditions — shared-data model, no per-user scoping
+  const conditions: SQL[] = [];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -188,7 +183,7 @@ export async function getSupplierById(
   userId: string,
   supplierId: string
 ): Promise<Supplier> {
-  await ensureSupplierOwnership(userId, supplierId);
+  await ensureSupplierExists(userId, supplierId);
 
   const [supplier] = await db
     .select()
@@ -289,7 +284,7 @@ export async function updateSupplier(
     distanceToFacilityKm?: number | null;
   }
 ): Promise<Supplier> {
-  await ensureSupplierOwnership(userId, supplierId);
+  await ensureSupplierExists(userId, supplierId);
 
   // Verify supplier exists
   const [existing] = await db
@@ -337,7 +332,7 @@ export async function deleteSupplier(
   userId: string,
   supplierId: string
 ): Promise<void> {
-  await ensureSupplierOwnership(userId, supplierId);
+  await ensureSupplierExists(userId, supplierId);
 
   // Verify supplier exists
   const [existing] = await db
@@ -438,7 +433,7 @@ export async function getSupplierLocationsBySupplier(
   supplierId: string
 ): Promise<SupplierLocation[]> {
   requireAuth(userId);
-  await ensureSupplierOwnership(userId, supplierId);
+  await ensureSupplierExists(userId, supplierId);
 
   return db
     .select()
@@ -452,7 +447,7 @@ export async function getSupplierLocationById(
   locationId: string
 ): Promise<SupplierLocation> {
   requireAuth(userId);
-  await ensureSupplierLocationOwnership(userId, locationId);
+  await ensureSupplierLocationExists(userId, locationId);
 
   const [location] = await db
     .select()
@@ -480,7 +475,7 @@ export async function createSupplierLocation(
   }
 ): Promise<SupplierLocation> {
   requireAuth(userId);
-  await ensureSupplierOwnership(userId, data.supplierId);
+  await ensureSupplierExists(userId, data.supplierId);
 
   const [location] = await db
     .insert(supplierLocations)
@@ -513,7 +508,7 @@ export async function updateSupplierLocation(
   }
 ): Promise<SupplierLocation> {
   requireAuth(userId);
-  await ensureSupplierLocationOwnership(userId, locationId);
+  await ensureSupplierLocationExists(userId, locationId);
 
   const [updated] = await db
     .update(supplierLocations)
@@ -536,7 +531,7 @@ export async function deleteSupplierLocation(
   locationId: string
 ): Promise<void> {
   requireAuth(userId);
-  await ensureSupplierLocationOwnership(userId, locationId);
+  await ensureSupplierLocationExists(userId, locationId);
 
   const deleted = await db.delete(supplierLocations).where(eq(supplierLocations.id, locationId)).returning({ id: supplierLocations.id });
 

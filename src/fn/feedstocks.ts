@@ -147,7 +147,7 @@ export async function createFeedstockFn(
 
     // Generate sequential codes for each allocation in one batch
     const codesFn = (count: number) =>
-      generateNextCodes("FI", feedstocksTable, feedstocksTable.code, count);
+      generateNextCodes("FS", feedstocksTable, feedstocksTable.code, count);
 
     const result = await createFeedstock(user.id, data, codesFn);
 

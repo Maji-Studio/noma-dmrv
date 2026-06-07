@@ -157,7 +157,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="temperatureC"
-            label="Temperature (\u00B0C)"
+            label="Temperature (°C)"
             error={errors.temperatureC?.message}
           >
             <FormInput

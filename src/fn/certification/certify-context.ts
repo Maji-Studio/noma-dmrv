@@ -317,6 +317,7 @@ async function resolveScopeForCreditBatch(
 export async function resolveScopeForRemoval(
   userId: string,
   removalId: string,
+  options?: { skipPreview?: boolean },
 ): Promise<RemovalScope> {
   const removal = await getCertifierRemovalById(userId, removalId);
   if (!removal) throw new SafeError("Removal not found");
@@ -324,7 +325,9 @@ export async function resolveScopeForRemoval(
   const batches = await getCreditBatchesByRemovalId(userId, removalId);
   const memberBatches = await Promise.all(
     batches.map(async (b) => {
-      const full = await getCreditBatchById(userId, b.id);
+      const full = options?.skipPreview
+        ? await getCreditBatchById(userId, b.id, { skipPreview: true })
+        : await getCreditBatchById(userId, b.id);
       return {
         id: b.id,
         code: b.code,

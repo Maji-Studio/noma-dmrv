@@ -24,7 +24,8 @@ export type BatchHealthState =
 export type BatchHealthCheckKey =
   | "carbon" // carbon & durability lab inputs resolved
   | "production" // lineage resolves >= 1 production run
-  | "transport"; // transport legs present for the template's required categories
+  | "transport" // transport legs present for the template's required categories
+  | "entityReadiness"; // certifier-required entity fields, surfaced but submit-gated
 
 export type BatchHealthCheckStatus =
   | "met" // satisfied
@@ -53,6 +54,12 @@ export interface BatchHealthFacts {
    * resolve (sample carbon content, durability lab inputs, …); empty ⇒ complete.
    */
   carbonMissingInputs: string[];
+  /**
+   * Per-entity certifier-readiness gaps from the batch lineage. These are not
+   * carbon inputs and do not block grouping; removal readiness blocks submit
+   * with the same labels once the batch is in a removal.
+   */
+  entityReadinessGaps: string[];
   /** The batch's application lineage resolves at least one production run. */
   hasSubmittableRuns: boolean;
   /**
@@ -79,6 +86,8 @@ export interface BatchHealth {
 const CARBON_LABEL = "Carbon & durability inputs complete";
 const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
+const ENTITY_READINESS_LABEL = "Entity certifier fields checked before submit";
+const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -141,6 +150,28 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheck {
       };
 }
 
+function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheck {
+  if (facts.entityReadinessGaps.length === 0) {
+    return {
+      key: "entityReadiness",
+      label: ENTITY_READINESS_LABEL,
+      status: "met",
+    };
+  }
+  const suffix =
+    facts.entityReadinessGaps.length > ENTITY_READINESS_PREVIEW_LIMIT
+      ? ", ..."
+      : "";
+  return {
+    key: "entityReadiness",
+    label: ENTITY_READINESS_LABEL,
+    status: "skipped",
+    detail: `Reviewed before submit: ${facts.entityReadinessGaps
+      .slice(0, ENTITY_READINESS_PREVIEW_LIMIT)
+      .join(", ")}${suffix}`,
+  };
+}
+
 /**
  * Folds a batch's data-completeness facts into one verdict + an itemised
  * checklist. A batch is "ready" (selectable into a removal) when no check is
@@ -152,6 +183,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     carbonCheck(facts),
     productionCheck(facts),
     transportCheck(facts),
+    entityReadinessCheck(facts),
   ];
   const issueCount = checks.filter((c) => c.status === "unmet").length;
   return {

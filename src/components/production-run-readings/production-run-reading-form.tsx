@@ -75,7 +75,7 @@ export function ProductionRunReadingForm({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
         <FormField
           id="temperatureC"
-          label="Temperature (\u00B0C)"
+          label="Temperature (°C)"
           error={errors.temperatureC?.message}
         >
           <FormInput

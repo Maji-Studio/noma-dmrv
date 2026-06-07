@@ -101,6 +101,23 @@ export async function createItemFn(data: CreateItemInput) {
 }
 ```
 
+## Tenancy & data-ownership model
+
+The biochar-entity domain (facilities, suppliers, production runs, products,
+deliveries, credit batches, …) is **single-org / shared-data**: every
+authenticated user shares — and can **read, edit, and delete** — the same
+records. Data-access guards verify **existence**, not per-user ownership
+(`ensure*Exists`, not `ensure*Ownership`); `requireAuth` only gates
+*authentication*. The `userId` columns on these tables are **attribution
+only** (who created a row), not an authorization boundary.
+
+This is deliberate (the org runs one shared facility set), and it's why the
+option-fetchers and list queries don't scope by `userId`. **If multi-tenancy
+is ever introduced, this is the landmine to revisit:** the `ensure*Exists`
+guards and the unscoped `get*`/`get*Options` queries would each need an
+ownership/tenant filter re-added. Project-scoped resources are the exception —
+they still go through `requireProjectMember`.
+
 ## Switching Auth Providers
 
 The auth layer uses Better Auth directly, but you can abstract it further:

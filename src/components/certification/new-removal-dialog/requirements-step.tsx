@@ -21,7 +21,7 @@ import { CheckRow } from "../check-row";
 function fixLinkFor(
   key: RemovalRequirementKey,
   facilityId: string,
-): { label: string; href: string } {
+): { label: string; href: string } | null {
   switch (key) {
     case "mapping":
     case "template":
@@ -34,6 +34,8 @@ function fixLinkFor(
         label: "Review transport",
         href: `/deliveries?facility=${facilityId}`,
       };
+    case "entityReadiness":
+      return null;
   }
 }
 

@@ -336,12 +336,13 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     return found;
   }
 
-  it("only surfaces facility-level keys (never batch-level production/presence)", () => {
+  it("surfaces wizard-level keys (never batch-level production/presence)", () => {
     const checks = buildRemovalRequirementsChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
       "template",
       "transportUniformity",
+      "entityReadiness",
     ]);
   });
 
@@ -391,6 +392,17 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       }),
     );
     expect(reqFor(checks, "transportUniformity").status).toBe("met");
+  });
+
+  it("flags entity-readiness gaps so submit is never disabled without a visible reason", () => {
+    const checks = buildRemovalRequirementsChecklist(
+      ready({
+        entityReadinessGaps: ["Production run PR-1: Electricity reading"],
+      }),
+    );
+    const entityReadiness = reqFor(checks, "entityReadiness");
+    expect(entityReadiness.status).toBe("unmet");
+    expect(entityReadiness.detail).toContain("Electricity reading");
   });
 });
 

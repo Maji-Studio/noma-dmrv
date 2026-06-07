@@ -32,6 +32,7 @@ import { CreditBatchCard } from "./credit-batch-card";
 import { CertifyPanel } from "@/components/certification";
 import {
   useCreditBatches,
+  useCreditBatchApplicationOptions,
   useCreditBatchCo2eStoredPreviews,
   useCreateCreditBatch,
   useUpdateCreditBatch,
@@ -49,6 +50,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 
 // ============================================
 // Helpers
@@ -97,9 +99,14 @@ export function CreditBatchList({
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   const router = useRouter();
+  const { facilityId: contextFacilityId } = useFacilityContext();
+  const applicationFacilityId =
+    sideSheet?.entity?.facilityId ?? contextFacilityId ?? undefined;
 
   // Data fetching
   const { data: creditBatches, isLoading, error } = useCreditBatches();
+  const { data: scopedApplications = [] } =
+    useCreditBatchApplicationOptions(applicationFacilityId);
   const createCreditBatch = useCreateCreditBatch();
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
@@ -107,6 +114,10 @@ export function CreditBatchList({
 
   // Client-side filtering
   const allItems = creditBatches ?? EMPTY_CREDIT_BATCHES;
+  const formApplications =
+    applicationFacilityId && applications.length > 0
+      ? applications.filter((app) => app.facilityId === applicationFacilityId)
+      : scopedApplications;
 
   const filteredItems = useMemo(() => {
     let items = allItems;
@@ -580,7 +591,7 @@ export function CreditBatchList({
           <CreditBatchForm
             key={sideSheet.entity?.id ?? "create"}
             creditBatch={sideSheet.entity ?? undefined}
-            applications={applications}
+            applications={formApplications}
             existingBatches={allItems.map((b) => ({
               id: b.id,
               code: b.code,
@@ -593,6 +604,10 @@ export function CreditBatchList({
                 ? handleUpdate
                 : handleCreate
             }
+            onClearServerError={() => {
+              setCreateError(null);
+              setUpdateError(null);
+            }}
             onCancel={closeSideSheet}
             isSubmitting={
               createCreditBatch.isPending || updateCreditBatch.isPending
