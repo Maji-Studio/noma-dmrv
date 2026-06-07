@@ -32,6 +32,15 @@ export function deriveMassDryKg(
   return roundKg(deliveredWetMassKg * (1 - moisturePercent / 100));
 }
 
+/**
+ * Dry (carbon) solids for a product that may have had water added.
+ *
+ * Dry solids are determined by the product's pre-water mass and moisture only —
+ * adding water raises wet mass and final moisture but cannot create dry matter.
+ * `moisturePercent` is the pre-water product moisture, so `addedWaterKg` does
+ * not enter the dry-mass figure (it is still validated as a non-negative input;
+ * callers compute effective wet mass / final moisture separately).
+ */
 export function deriveMassDryKgWithAddedWater(
   wetMassKg: number,
   moisturePercent: number,
@@ -43,7 +52,7 @@ export function deriveMassDryKgWithAddedWater(
     throw new RangeError('addedWaterKg must be >= 0');
   }
 
-  return deriveMassDryKg(wetMassKg + waterAddedKg, moisturePercent);
+  return deriveMassDryKg(wetMassKg, moisturePercent);
 }
 
 /** Compute dry mass clamped to wet mass (dry can never exceed wet). */

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 interface FormSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: boolean;
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: string; label: string; disabled?: boolean }[];
   placeholder?: string;
 }
 
@@ -35,7 +35,7 @@ export const FormSelect = forwardRef<HTMLSelectElement, FormSelectProps>(
           </option>
         )}
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} disabled={option.disabled}>
             {option.label}
           </option>
         ))}

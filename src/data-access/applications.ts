@@ -319,17 +319,14 @@ export interface CreditBatchApplicationOption {
 /**
  * The application options the credit-batch auto-match selector pairs against,
  * each tagged with its facility (via the delivery join). Scoped to `facilityId`
- * when provided — the batch detail page passes its batch's facility so it only
- * loads that facility's applications instead of every application in the system.
+ * scoped to `facilityId` — callers must resolve the facility first so this
+ * never returns every application in the system.
  */
 export async function getCreditBatchApplicationOptions(
   userId: string,
-  facilityId?: string,
+  facilityId: string,
 ): Promise<CreditBatchApplicationOption[]> {
   requireAuth(userId);
-  const where = facilityId
-    ? eq(deliveries.facilityId, facilityId)
-    : undefined;
   return db
     .select({
       id: applications.id,
@@ -341,7 +338,7 @@ export async function getCreditBatchApplicationOptions(
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .where(where)
+    .where(eq(deliveries.facilityId, facilityId))
     .orderBy(desc(applications.applicationDate));
 }
 

@@ -39,6 +39,7 @@ export interface CustomerDetail extends Customer {
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
+    distanceFromFacilityKm: number | null;
     createdAt: Date;
     updatedAt: Date;
   }>;
@@ -230,6 +231,7 @@ export async function getCustomerWithRelations(
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
+      distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
       createdAt: customerLocations.createdAt,
       updatedAt: customerLocations.updatedAt,
     })
@@ -259,6 +261,7 @@ export async function getCustomerLocations(
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
+    distanceFromFacilityKm: number | null;
     createdAt: Date;
     updatedAt: Date;
   }>
@@ -285,6 +288,7 @@ export async function getCustomerLocations(
       gpsLatitude: customerLocations.gpsLatitude,
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
+      distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
       createdAt: customerLocations.createdAt,
       updatedAt: customerLocations.updatedAt,
     })

@@ -131,9 +131,9 @@ export function FormulationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharRatio"
-            label="Biochar Ratio"
+            label="Biochar Ratio (0–1)"
             error={errors.biocharRatio?.message}
-            helperText="Value between 0 and 1 (e.g., 0.7 for 70%)"
+            helperText="Value between 0 and 1 (e.g., 0.7 displays as 70%)"
           >
             <FormInput
               id="biocharRatio"

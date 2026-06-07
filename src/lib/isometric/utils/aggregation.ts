@@ -108,13 +108,14 @@ export function aggregateTransportLegs(
 
   // Every leg needs a load mass to mass-weight the distance. Unweighted means
   // are non-compliant (they would silently underweight large loads).
-  for (const leg of legs) {
-    if (leg.loadMassKg == null || leg.loadMassKg <= 0) {
-      return {
-        distanceKm: null,
-        warning: `${categoryLabel} transport leg ${leg.id}: missing load_mass_kg — required for per-leg accounting`,
-      };
-    }
+  const missingMassLegIds = legs
+    .filter((leg) => leg.loadMassKg == null || leg.loadMassKg <= 0)
+    .map((leg) => leg.id);
+  if (missingMassLegIds.length > 0) {
+    return {
+      distanceKm: null,
+      warning: `${categoryLabel} transport legs missing load_mass_kg (${missingMassLegIds.join(", ")}) - required for per-leg accounting`,
+    };
   }
 
   const factorWarning = getMixedTransportFactorWarning(legs, categoryLabel);
