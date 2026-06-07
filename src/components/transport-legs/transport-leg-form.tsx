@@ -22,6 +22,7 @@ import {
   useCreateTransportLeg,
   useUpdateTransportLeg,
 } from "@/hooks/use-transport-legs";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
 
 interface TransportLegFormProps {
@@ -37,6 +38,10 @@ const transportMethodOptions = transportMethods.map((m) => ({
   value: m,
   label: m.charAt(0).toUpperCase() + m.slice(1),
 }));
+
+const MIN_LOAD_MASS_KG = 0.000001;
+const isTransportLegCertifyField = (field: string) =>
+  isCertifyFormField("transportLeg", field);
 
 function legToFormDefaults(leg: TransportLeg | null | undefined) {
   return {
@@ -160,6 +165,7 @@ export function TransportLegForm({
               label="Distance (km)"
               required
               error={errors.distanceKm?.message}
+              certifyRequired={isTransportLegCertifyField("distanceKm")}
             >
               <FormInput
                 id="distanceKm"
@@ -189,12 +195,13 @@ export function TransportLegForm({
               required
               error={errors.loadMassKg?.message}
               helperText="Cargo mass moved on this leg (Eq. 3, W_j). Required so the Certify aggregator can mass-weight distance."
+              certifyRequired={isTransportLegCertifyField("loadMassKg")}
             >
               <FormInput
                 id="loadMassKg"
                 type="number"
                 step="any"
-                min={0}
+                min={MIN_LOAD_MASS_KG}
                 error={!!errors.loadMassKg}
                 {...register("loadMassKg")}
               />

@@ -204,6 +204,16 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     );
   });
 
+  it("blocks when entity certifier fields are incomplete", () => {
+    const r = deriveRemovalReadiness(
+      ready({ entityReadinessGaps: ["Production run PR-1: Electricity"] }),
+    );
+    expect(r.state).toBe("blocked");
+    expect(r.reasons).toContain(
+      "Incomplete entity certifier data: Production run PR-1: Electricity",
+    );
+  });
+
   it("accumulates template + transport + no-data reasons together", () => {
     const r = deriveRemovalReadiness(
       ready({
@@ -222,13 +232,14 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("buildRemovalPreflightChecklist", () => {
-  it("returns the four checks in a stable order", () => {
+  it("returns the five checks in a stable order", () => {
     const checks = buildRemovalPreflightChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
       "template",
       "transport",
       "production",
+      "entityReadiness",
     ]);
   });
 
@@ -304,6 +315,14 @@ describe("buildRemovalPreflightChecklist", () => {
     );
     expect(checkFor(checks, "production").status).toBe("unmet");
     expect(checkFor(checks, "production").detail).toContain("nothing to submit");
+  });
+
+  it("flags entity-level certifier gaps", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ entityReadinessGaps: ["Production run PR-1: Electricity"] }),
+    );
+    expect(checkFor(checks, "entityReadiness").status).toBe("unmet");
+    expect(checkFor(checks, "entityReadiness").detail).toContain("Electricity");
   });
 });
 

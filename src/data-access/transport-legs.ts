@@ -7,7 +7,6 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
-  deliveries,
   feedstocks,
   productionRuns,
   samples,
@@ -29,7 +28,6 @@ const ENTITY_LABEL: Record<TransportEntityType, string> = {
   feedstock: "Feedstock",
   biochar: "Biochar product",
   sample: "Sample",
-  delivery: "Delivery",
 };
 
 // sample resolves indirectly via `production_runs.facility_id`; others have
@@ -52,15 +50,6 @@ async function resolveEntityFacility(
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
       .where(eq(biocharProducts.id, entityId));
-    if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
-    return { facilityId: row.facilityId };
-  }
-
-  if (entityType === "delivery") {
-    const [row] = await db
-      .select({ facilityId: deliveries.facilityId })
-      .from(deliveries)
-      .where(eq(deliveries.id, entityId));
     if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
     return { facilityId: row.facilityId };
   }
@@ -231,15 +220,14 @@ export async function deleteTransportLeg(
 }
 
 // ============================================
-// Auto-derived legs (feedstock + delivery)
+// Auto-derived legs (feedstock)
 // ============================================
 
-// Feedstock and delivery own a SINGLE auto-derived leg, computed from records
-// already held (supplier/facility/customer + vehicle + mass + stored distance).
-// We replace it wholesale on every save: drop the existing leg(s) for the
-// entity, then insert the derived one when it has the hard requirements
-// (distance + load mass). When inputs are incomplete we leave no leg, so a
-// stale leg never lingers after the source data changes.
+// Feedstock owns a SINGLE auto-derived leg, computed from records already held
+// (supplier/facility + vehicle + mass + stored distance).
+// We replace the derived row wholesale on every save: drop the existing derived
+// leg for the entity, then insert the new one when it has the hard requirements
+// (distance + load mass). Manual legs remain untouched.
 export async function replaceDerivedTransportLeg(
   userId: string,
   entityType: TransportEntityType,
@@ -249,31 +237,35 @@ export async function replaceDerivedTransportLeg(
   requireAuth(userId);
   await resolveEntityFacility(entityType, entityId);
 
-  await db
-    .delete(transportLegs)
-    .where(
-      and(
-        eq(transportLegs.entityType, entityType),
-        eq(transportLegs.entityId, entityId),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(transportLegs)
+      .where(
+        and(
+          eq(transportLegs.entityType, entityType),
+          eq(transportLegs.entityId, entityId),
+          eq(transportLegs.isDerived, true),
+        ),
+      );
 
-  if (!isDerivedLegPersistable(derived)) return;
+    if (!isDerivedLegPersistable(derived)) return;
 
-  await db.insert(transportLegs).values({
-    entityType,
-    entityId,
-    originName: derived.originName,
-    originGpsLatitude: derived.originGpsLatitude,
-    originGpsLongitude: derived.originGpsLongitude,
-    destinationName: derived.destinationName,
-    destinationGpsLatitude: derived.destinationGpsLatitude,
-    destinationGpsLongitude: derived.destinationGpsLongitude,
-    distanceKm: derived.distanceKm as number,
-    transportMethodType: derived.transportMethodType,
-    calculationMethodType: derived.calculationMethodType,
-    vehicleType: derived.vehicleType,
-    modelYear: derived.modelYear,
-    loadMassKg: derived.loadMassKg as number,
+    await tx.insert(transportLegs).values({
+      entityType,
+      entityId,
+      isDerived: true,
+      originName: derived.originName,
+      originGpsLatitude: derived.originGpsLatitude,
+      originGpsLongitude: derived.originGpsLongitude,
+      destinationName: derived.destinationName,
+      destinationGpsLatitude: derived.destinationGpsLatitude,
+      destinationGpsLongitude: derived.destinationGpsLongitude,
+      distanceKm: derived.distanceKm as number,
+      transportMethodType: derived.transportMethodType,
+      calculationMethodType: derived.calculationMethodType,
+      vehicleType: derived.vehicleType,
+      modelYear: derived.modelYear,
+      loadMassKg: derived.loadMassKg as number,
+    });
   });
 }

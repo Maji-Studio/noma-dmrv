@@ -14,7 +14,7 @@ import {
 function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
   return {
     id: "tl_" + distanceKm + "_" + (loadMassKg ?? "null"),
-    entityType: "delivery",
+    entityType: "biochar",
     entityId: "ent_test",
     originGpsLatitude: null,
     originGpsLongitude: null,
@@ -28,6 +28,7 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     modelYear: null,
     loadMassKg,
     calculationMethodType: "distance_based",
+    isDerived: false,
     billOfLading: null,
     weighScaleTicketRef: null,
     createdAt: new Date(),

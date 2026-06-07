@@ -50,10 +50,8 @@ export interface AggregatedProductionData {
 // such that Certify's `distance × Σmass × factor` server-side calculation
 // equals the per-leg sum Σⱼ(distⱼ × massⱼ × factor) — compliant with Isometric
 // Transportation v1.1 §5. The emission factor is NOT stored on our legs: it
-// lives in the Isometric component blueprint and Certify applies the SAME
-// factor uniformly across the category, so the linearity always holds (we no
-// longer need to verify factor uniformity ourselves). We still require a
-// per-leg load mass for the weighting, and a single calculation method.
+// lives in the Isometric component blueprint, so collapsing is valid only when
+// every leg shares the local fields that select that factor.
 //
 // Returns:
 //   { distanceKm }                  — mass-weighted distance
@@ -65,6 +63,40 @@ export interface TransportAggregationResult {
 
 // Percent-to-fraction denominator.
 const PERCENT_DENOMINATOR = 100;
+
+const TRANSPORT_FACTOR_FIELDS = [
+  "calculationMethodType",
+  "transportMethodType",
+  "vehicleType",
+  "modelYear",
+] as const satisfies readonly (keyof TransportLeg)[];
+type TransportFactorField = (typeof TRANSPORT_FACTOR_FIELDS)[number];
+
+function formatFactorValue(value: TransportLeg[TransportFactorField]): string {
+  return value == null ? "unset" : String(value);
+}
+
+function getMixedTransportFactorWarning(
+  legs: TransportLeg[],
+  categoryLabel: string,
+): string | null {
+  if (legs.length === 0) return null;
+
+  const first = legs[0];
+  for (const leg of legs) {
+    for (const field of TRANSPORT_FACTOR_FIELDS) {
+      if (leg[field] !== first[field]) {
+        return (
+          `${categoryLabel} transport legs mix factor fields ` +
+          `(${field}: ${formatFactorValue(first[field])} vs ${formatFactorValue(leg[field])}); ` +
+          "submit separately or unify transport method and vehicle fields."
+        );
+      }
+    }
+  }
+
+  return null;
+}
 
 export function aggregateTransportLegs(
   legs: TransportLeg[],
@@ -85,14 +117,12 @@ export function aggregateTransportLegs(
     }
   }
 
-  const method = legs[0].calculationMethodType;
-  for (const leg of legs) {
-    if (leg.calculationMethodType !== method) {
-      return {
-        distanceKm: null,
-        warning: `${categoryLabel} transport legs mix calculation methods (${method} vs ${leg.calculationMethodType}); Isometric v1.1 §5 requires per-leg accounting. Submit separately or unify methods.`,
-      };
-    }
+  const factorWarning = getMixedTransportFactorWarning(legs, categoryLabel);
+  if (factorWarning) {
+    return {
+      distanceKm: null,
+      warning: factorWarning,
+    };
   }
 
   let weighted = 0;
@@ -247,6 +277,8 @@ export function enrichWithTransportLegs(
 // quantity (tonne·km) the Certify `mass_distance_based_ci_emissions`
 // blueprint expects. 0 for an empty category (no sample transport).
 function sumMassDistanceTonneKm(legs: TransportLeg[]): number {
+  if (getMixedTransportFactorWarning(legs, "Sample")) return 0;
+
   let total = 0;
   for (const leg of legs) {
     total += leg.distanceKm * kgToTonnes(nz(leg.loadMassKg));

@@ -25,7 +25,6 @@ const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
   feedstock: "Transport: feedstock → processing",
   biochar: "Transport: biochar → storage",
   sample: "Transport: sample → lab",
-  delivery: "Transport legs",
 };
 
 type FormState =

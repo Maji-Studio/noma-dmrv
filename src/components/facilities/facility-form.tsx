@@ -21,6 +21,8 @@ import {
 } from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
 
+const DEFAULT_DURABILITY_OPTION: DurabilityOption = "200_year";
+
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
 
@@ -29,6 +31,14 @@ const durabilityOptionList: readonly { value: string; label: string }[] =
     value: option,
     label: formatDurabilityOption(option as DurabilityOption),
   }));
+
+function getDefaultDurabilityOption(
+  option: Facility["defaultDurabilityOption"] | null | undefined
+): DurabilityOption {
+  return durabilityOptions.includes(option as DurabilityOption)
+    ? (option as DurabilityOption)
+    : DEFAULT_DURABILITY_OPTION;
+}
 
 interface FacilityFormProps {
   facility?: Facility;
@@ -65,8 +75,9 @@ export function FacilityForm({
       timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
         ? facility.timezone as Timezone
         : undefined),
-      defaultDurabilityOption:
-        (facility?.defaultDurabilityOption as DurabilityOption) ?? "200_year",
+      defaultDurabilityOption: getDefaultDurabilityOption(
+        facility?.defaultDurabilityOption,
+      ),
     },
   });
 
@@ -194,7 +205,7 @@ export function FacilityForm({
           id="defaultDurabilityOption"
           label="Default Durability Option"
           error={errors.defaultDurabilityOption?.message}
-          helperText="Isometric crediting tier for this facility's credit batches — a project-level decision declared in the PDD. New batches inherit this; existing batches keep the option they were created with. 1000-year additionally requires reflectance lab data."
+          hint="Isometric crediting tier for this facility's credit batches. New batches inherit this project-level PDD decision; existing batches keep their original option. 1000-year additionally requires reflectance lab data."
         >
           <FormSelect
             id="defaultDurabilityOption"

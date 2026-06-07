@@ -18,6 +18,7 @@ import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import { Button } from "@/components/ui";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   productionRunFormSchema,
   productionRunStatuses,
@@ -35,6 +36,9 @@ const statusOptions: readonly { value: string; label: string }[] = productionRun
   value: status,
   label: formatProductionRunStatus(status),
 }));
+
+const isProductionRunCertifyField = (field: string) =>
+  isCertifyFormField("productionRun", field);
 
 // ============================================
 // Process Flow Visual
@@ -448,7 +452,12 @@ export function ProductionRunForm({
         </FormField>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="feedstockWetMassKg" label="Wet Mass (kg)" error={errors.feedstockWetMassKg?.message}>
+          <FormField
+            id="feedstockWetMassKg"
+            label="Wet Mass (kg)"
+            error={errors.feedstockWetMassKg?.message}
+            certifyRequired={isProductionRunCertifyField("feedstockWetMassKg")}
+          >
             <FormInput
               id="feedstockWetMassKg"
               type="number"
@@ -462,7 +471,12 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="feedstockMoisturePercent" label="Moisture Content (%)" error={errors.feedstockMoisturePercent?.message}>
+          <FormField
+            id="feedstockMoisturePercent"
+            label="Moisture Content (%)"
+            error={errors.feedstockMoisturePercent?.message}
+            certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}
+          >
             <FormInput
               id="feedstockMoisturePercent"
               type="number"
@@ -549,7 +563,12 @@ export function ProductionRunForm({
               )}
             />
           </FormField>
-          <FormField id="biocharOutputKg" label="Biochar Wet Mass (kg)" error={errors.biocharOutputKg?.message}>
+          <FormField
+            id="biocharOutputKg"
+            label="Biochar Wet Mass (kg)"
+            error={errors.biocharOutputKg?.message}
+            certifyRequired={isProductionRunCertifyField("biocharOutputKg")}
+          >
             <FormInput
               id="biocharOutputKg"
               type="number"
@@ -562,7 +581,12 @@ export function ProductionRunForm({
               })}
             />
           </FormField>
-          <FormField id="biocharMoisturePercent" label="Biochar Moisture (%)" error={errors.biocharMoisturePercent?.message}>
+          <FormField
+            id="biocharMoisturePercent"
+            label="Biochar Moisture (%)"
+            error={errors.biocharMoisturePercent?.message}
+            certifyRequired={isProductionRunCertifyField("biocharMoisturePercent")}
+          >
             <FormInput
               id="biocharMoisturePercent"
               type="number"
@@ -583,7 +607,12 @@ export function ProductionRunForm({
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-16 gap-y-16">
-          <FormField id="dieselOperationLiters" label="Diesel Ops (L)" error={errors.dieselOperationLiters?.message}>
+          <FormField
+            id="dieselOperationLiters"
+            label="Diesel Ops (L)"
+            error={errors.dieselOperationLiters?.message}
+            certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
+          >
             <FormInput
               id="dieselOperationLiters"
               type="number"
@@ -597,7 +626,12 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="dieselGensetLiters" label="Diesel Genset (L)" error={errors.dieselGensetLiters?.message}>
+          <FormField
+            id="dieselGensetLiters"
+            label="Diesel Genset (L)"
+            error={errors.dieselGensetLiters?.message}
+            certifyRequired={isProductionRunCertifyField("dieselGensetLiters")}
+          >
             <FormInput
               id="dieselGensetLiters"
               type="number"
@@ -615,6 +649,7 @@ export function ProductionRunForm({
             id="preprocessingFuelLiters"
             label="Preprocess Fuel (L)"
             error={errors.preprocessingFuelLiters?.message}
+            certifyRequired={isProductionRunCertifyField("preprocessingFuelLiters")}
           >
             <FormInput
               id="preprocessingFuelLiters"
@@ -629,7 +664,12 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="electricityKwh" label="Electricity (kWh)" error={errors.electricityKwh?.message}>
+          <FormField
+            id="electricityKwh"
+            label="Electricity (kWh)"
+            error={errors.electricityKwh?.message}
+            certifyRequired={isProductionRunCertifyField("electricityKwh")}
+          >
             <FormInput
               id="electricityKwh"
               type="number"
