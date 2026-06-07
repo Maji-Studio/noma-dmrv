@@ -15,7 +15,7 @@ import {
   type IsometricProject,
   type IsometricRemovalTemplate,
 } from "@/lib/isometric";
-import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context";
+import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
@@ -121,8 +121,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     vi.resetAllMocks();
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
+      code: "CB-1",
       facilityId: FACILITY_ID,
       applicationIds: [],
+      durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     // Default the transport-coverage walkers to empty so each test only
     // overrides what it cares about.
@@ -374,8 +376,10 @@ describe("requiredTransportCategories", () => {
     vi.resetAllMocks();
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
+      code: "CB-1",
       facilityId: FACILITY_ID,
       applicationIds: [],
+      durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetLegs.mockResolvedValue([]);
     mockedGetLineage.mockResolvedValue(
@@ -424,8 +428,10 @@ describe("requiredTransportCategories", () => {
   it("only reports transport readiness gaps for categories required by the template", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
+      code: "CB-1",
       facilityId: FACILITY_ID,
       applicationIds: ["app-1"],
+      durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "tpl_no_sample" }),
@@ -485,6 +491,68 @@ describe("requiredTransportCategories", () => {
     expect(result.requiredTransportCategories).toEqual(["feedstock", "biochar"]);
     expect(result.entityReadinessGaps).toEqual([]);
     expect(result.transportCoverage.sample.aggregationWarning).toContain("tl-s1");
+  });
+
+  it("requires 1000-year sample data from the credit batch durability pathway", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+      durabilityOption: "1000_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "tpl_ready" }),
+    );
+    mockedListTemplates.mockResolvedValue([transportTemplate("tpl_ready", [])]);
+    mockedListBlueprints.mockResolvedValue([]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: { biocharAppliedDryTons: 0.1 } as never,
+      delivery: {} as never,
+      order: null,
+      biocharProduct: null,
+      productionRun: { id: "pr-1" } as never,
+      reactor: null,
+      feedstocks: [],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        feedstockWetMassKg: 100,
+        feedstockMoisturePercent: 10,
+        biocharOutputKg: 40,
+        biocharDryMassKg: 35,
+        biocharMoisturePercent: 12,
+        dieselOperationLiters: 0,
+        preprocessingFuelLiters: 0,
+        dieselGensetLiters: 0,
+        electricityKwh: 0,
+        samples: [
+          {
+            id: "s-1",
+            sampleCode: "S-1",
+            organicCarbonPercent: 70,
+            hToCOrgRatio: 0.4,
+            randomReflectanceR0Percent: null,
+            reactiveCarbonPercent: null,
+            residualCarbonPercent: null,
+          },
+        ],
+      } as never,
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.entityReadinessGaps).toEqual([
+      "Sample S-1: TGA non-reactive carbon data · R0 reflectance",
+    ]);
   });
 
   it("returns an empty list when the template has no transport inputs", async () => {

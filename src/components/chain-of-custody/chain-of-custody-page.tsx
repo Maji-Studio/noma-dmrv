@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Background,
@@ -11,6 +12,8 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  useNodesInitialized,
+  useReactFlow,
   type Node,
   type NodeTypes,
 } from "@xyflow/react";
@@ -24,6 +27,23 @@ import { useChainGraph } from "./use-chain-graph";
 const nodeTypes: NodeTypes = {
   chainNode: ChainNode,
 };
+
+function FitViewOnNodesReady({ nodeCount }: { nodeCount: number }) {
+  const nodesInitialized = useNodesInitialized();
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    if (!nodesInitialized || nodeCount === 0) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      void fitView({ padding: 0.18 });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [fitView, nodeCount, nodesInitialized]);
+
+  return null;
+}
 
 export function ChainOfCustodyPage() {
   const router = useRouter();
@@ -165,6 +185,7 @@ export function ChainOfCustodyPage() {
                 maxZoom={2}
                 defaultEdgeOptions={{ type: "smoothstep" }}
               >
+                <FitViewOnNodesReady nodeCount={nodes.length} />
                 <Background
                   variant={BackgroundVariant.Dots}
                   gap={16}

@@ -152,6 +152,7 @@ export function CreditBatchCard({
             variant="default"
             className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
             onClick={() => onDelete(creditBatch.id)}
+            aria-label={`Delete credit batch ${creditBatch.code}`}
           >
             <Trash size={16} />
           </Button>

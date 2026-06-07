@@ -19,6 +19,7 @@ import {
 import { CaretUp, CaretDown, MagnifyingGlass, CaretLeft, CaretRight, Check } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -87,6 +88,8 @@ const tableRowVariants = cva(
     },
   }
 );
+
+const MAX_LOADING_ROWS = 5;
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Props                                                    */
@@ -261,6 +264,7 @@ function DataTableRoot<TData, TValue>({
   const effectiveGlobalFilter = externalGlobalFilter ?? globalFilter;
   const effectiveColumnVisibility = externalColumnVisibility ?? columnVisibility;
   const effectiveRowSelection = externalRowSelection ?? rowSelection;
+  const loadingRows = Math.min(pagination.pageSize, MAX_LOADING_ROWS);
 
   const table = useReactTable({
     data,
@@ -303,6 +307,7 @@ function DataTableRoot<TData, TValue>({
           <table
             className={cn(tableVariants({ variant: "default", size }), className)}
             aria-label={ariaLabel}
+            aria-busy={isLoading}
           >
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -316,6 +321,7 @@ function DataTableRoot<TData, TValue>({
                     return (
                       <th
                         key={header.id}
+                        scope="col"
                         className={cn(
                           "body-caption-fit-bold py-10 px-12 text-left text-[var(--color-text-primary)]",
                           isSortable && "cursor-pointer select-none hover:bg-[var(--color-background-light)]"
@@ -365,17 +371,12 @@ function DataTableRoot<TData, TValue>({
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-48 px-12 text-center text-[var(--color-text-secondary)]"
-                  >
-                    <div className="flex items-center justify-center gap-8">
-                      <span className="inline-block h-16 w-16 animate-spin rounded-full border-2 border-[var(--color-border-primary)] border-t-[var(--color-interaction)]" />
-                      <span>Loading...</span>
-                    </div>
-                  </td>
-                </tr>
+                Array.from({ length: loadingRows }).map((_, index) => (
+                  <TableRowSkeleton
+                    key={index}
+                    columns={table.getVisibleLeafColumns().length}
+                  />
+                ))
               ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
@@ -398,6 +399,19 @@ function DataTableRoot<TData, TValue>({
                       onRowClick && "cursor-pointer"
                     )}
                     onClick={() => onRowClick?.(row.original)}
+                    onKeyDown={
+                      onRowClick
+                        ? (event) => {
+                            if (event.key !== "Enter" && event.key !== " ") {
+                              return;
+                            }
+                            event.preventDefault();
+                            onRowClick(row.original);
+                          }
+                        : undefined
+                    }
+                    role={onRowClick ? "button" : undefined}
+                    tabIndex={onRowClick ? 0 : undefined}
                     data-state={row.getIsSelected() ? "selected" : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (

@@ -4,8 +4,12 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
-import { optionalPositiveNumber, toNumberOrNull } from "./helpers";
+import {
+  emptyToNull,
+  optionalPositiveNumber,
+  requiredNumber,
+  toNumberOrNull,
+} from "./helpers";
 
 // ============================================
 // Constants
@@ -14,13 +18,10 @@ import { optionalPositiveNumber, toNumberOrNull } from "./helpers";
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
 
-const requiredNonNegativeNumber = (message: string) => z.preprocess(
-  toNumberOrNull,
-  z.number().finite().min(0, message)
-);
+const requiredNonNegativeNumber = (message: string) =>
+  requiredNumber().pipe(z.number().min(0, message));
 
-const requiredPercent = z.preprocess(
-  toNumberOrNull,
+const requiredPercent = requiredNumber().pipe(
   z
     .number()
     .min(MOISTURE_MIN, "Must be 0-100")
