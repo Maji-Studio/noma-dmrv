@@ -88,7 +88,9 @@ export async function loadCertificationOverview(
         removalRows
           .slice(i, i + READINESS_CONCURRENCY)
           .map(async (removal): Promise<RemovalPreflightSummary> => {
-            const scope = await resolveScopeForRemoval(userId, removal.id);
+            const scope = await resolveScopeForRemoval(userId, removal.id, {
+              skipPreview: true,
+            });
             const ctx = await buildRemovalContext(userId, scope, facilityFacts);
             const facts = toRemovalReadinessFacts(ctx);
             const readiness = deriveRemovalReadiness(facts);

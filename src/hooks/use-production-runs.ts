@@ -45,6 +45,9 @@ export const productionRunKeys = {
   detail: (id: string) => [...productionRunKeys.details(), id] as const,
   stats: (facilityId?: string) =>
     [...productionRunKeys.all, "stats", facilityId] as const,
+  // Prefix that matches every stats variant regardless of facilityId — use for
+  // invalidation so a facility-scoped stats query is refetched.
+  statsPrefix: () => [...productionRunKeys.all, "stats"] as const,
   energyTotals: (facilityId: string) =>
     [...productionRunKeys.all, "energyTotals", facilityId] as const,
   readings: (productionRunId: string) =>
@@ -203,7 +206,7 @@ export function useCreateProductionRun(
       // Invalidate all production run lists
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
       // Invalidate facility detail (run count may have changed)
       queryClient.invalidateQueries({
         queryKey: facilityKeys.detail(data.facilityId),
@@ -318,7 +321,7 @@ export function useUpdateProductionRun(
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -426,7 +429,7 @@ export function useDeleteProductionRun(
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
       // Invalidate facility data
       if (facilityId) {
         queryClient.invalidateQueries({
@@ -580,10 +583,10 @@ export function useProductionRunCacheInvalidation() {
         queryKey: productionRunKeys.detail(productionRunId),
       }),
 
-    /** Invalidate production run stats */
-    invalidateStats: (facilityId?: string) =>
+    /** Invalidate production run stats (all facility variants) */
+    invalidateStats: () =>
       queryClient.invalidateQueries({
-        queryKey: productionRunKeys.stats(facilityId),
+        queryKey: productionRunKeys.statsPrefix(),
       }),
 
     /** Invalidate readings for a production run */

@@ -22,29 +22,29 @@ const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(1
 // Demo data codes
 const demoCodes = {
   // Facilities
-  facilityMoshi: 'FAC-MOSHI-001',
-  facilityArusha: 'FAC-ARUSHA-001',
-  facilityMwanza: 'FAC-MWANZA-001',
+  facilityMoshi: 'FAC-26-001',
+  facilityArusha: 'FAC-26-002',
+  facilityMwanza: 'FAC-26-003',
 
   // Reactors
-  reactorMoshi1: 'R-MOSHI-001',
-  reactorMoshi2: 'R-MOSHI-002',
-  reactorArusha1: 'R-ARUSHA-001',
+  reactorMoshi1: 'R-26-001',
+  reactorMoshi2: 'R-26-002',
+  reactorArusha1: 'R-26-003',
 
   // Storage
-  storageFeedMoshi: 'SL-FEED-MOSHI-01',
-  storageCharMoshi: 'SL-CHAR-MOSHI-01',
-  storageProdMoshi: 'SL-PROD-MOSHI-01',
+  storageFeedMoshi: 'SL-26-001',
+  storageCharMoshi: 'SL-26-002',
+  storageProdMoshi: 'SL-26-003',
 
   // Suppliers
-  supplierKili: 'SUP-KILI-001',
-  supplierMeru: 'SUP-MERU-001',
-  supplierVictoria: 'SUP-VICTORIA-001',
+  supplierKili: 'SUP-26-001',
+  supplierMeru: 'SUP-26-002',
+  supplierVictoria: 'SUP-26-003',
 
   // Customers
-  customerCoffee: 'CUS-COFFEE-001',
-  customerTea: 'CUS-TEA-001',
-  customerVegetable: 'CUS-VEG-001',
+  customerCoffee: 'CUS-26-001',
+  customerTea: 'CUS-26-002',
+  customerVegetable: 'CUS-26-003',
 } as const;
 
 // Demo entity IDs
@@ -351,7 +351,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageFeedArusha,
-          code: 'SL-FEED-ARUSHA-01',
+          code: 'SL-26-004',
           name: 'Arusha Feedstock Storage',
           type: 'feedstock_bin' as const,
           capacityKg: 25000,
@@ -360,7 +360,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageCharArusha,
-          code: 'SL-CHAR-ARUSHA-01',
+          code: 'SL-26-005',
           name: 'Arusha Biochar Storage',
           type: 'biochar_bin' as const,
           capacityKg: 18000,
@@ -482,14 +482,14 @@ async function seedDemoData() {
       await tx.insert(schema.drivers).values([
         {
           id: ids.driverJackson,
-          code: 'DRV-JACKSON',
+          code: 'DRV-26-001',
           name: 'Jackson Mrema',
           licenseNumber: 'TZ-C-99821',
           contactPhone: '+255700400001',
         },
         {
           id: ids.driverAmina,
-          code: 'DRV-AMINA',
+          code: 'DRV-26-002',
           name: 'Amina Salim',
           licenseNumber: 'TZ-C-88754',
           contactPhone: '+255700400002',
@@ -514,7 +514,7 @@ async function seedDemoData() {
       await tx.insert(schema.vehicles).values([
         {
           id: ids.vehicleTruck1,
-          code: 'VEH-ISUZU-002',
+          code: 'VEH-26-001',
           name: 'Isuzu NQR 7T',
           identifier: 'T-420-ABC',
           vehicleType: 'heavy_truck',
@@ -524,7 +524,7 @@ async function seedDemoData() {
         },
         {
           id: ids.vehicleTruck2,
-          code: 'VEH-FUSO-001',
+          code: 'VEH-26-002',
           name: 'Fuso Fighter 8T',
           identifier: 'T-512-XYZ',
           vehicleType: 'heavy_truck',
@@ -542,28 +542,28 @@ async function seedDemoData() {
       await tx.insert(schema.feedstockTypes).values([
         {
           id: ids.feedstockWoodchips,
-          code: 'FT-WOODCHIPS',
+          code: 'FT-26-001',
           name: 'Mixed Hardwood Chips',
           category: 'forestry',
           description: 'Pruned branches and sawmill residues from local forestry operations',
         },
         {
           id: ids.feedstockCoffeeHusk,
-          code: 'FT-COFFEE-HUSK',
+          code: 'FT-26-002',
           name: 'Arabica Coffee Husk',
           category: 'agricultural',
           description: 'Coffee processing residue from wet mills',
         },
         {
           id: ids.feedstockRiceHusk,
-          code: 'FT-RICE-HUSK',
+          code: 'FT-26-003',
           name: 'Rice Husk',
           category: 'agricultural',
           description: 'Rice milling byproduct with high silica content',
         },
         {
           id: ids.feedstockCoconut,
-          code: 'FT-COCONUT',
+          code: 'FT-26-004',
           name: 'Coconut Shell',
           category: 'agricultural',
           description: 'Coconut processing waste shells',
@@ -574,7 +574,7 @@ async function seedDemoData() {
       await tx.insert(schema.feedstockDeliveries).values([
         {
           id: ids.deliveryFeed1,
-          code: 'FD-2026-101',
+          code: 'FD-26-001',
           facilityId: ids.facilityMoshi,
           status: 'complete',
           deliveryDate: demoTimestamps.firstDelivery,
@@ -589,7 +589,7 @@ async function seedDemoData() {
         },
         {
           id: ids.deliveryFeed2,
-          code: 'FD-2026-102',
+          code: 'FD-26-002',
           facilityId: ids.facilityMoshi,
           status: 'complete',
           deliveryDate: demoTimestamps.secondDelivery,
@@ -604,7 +604,7 @@ async function seedDemoData() {
         },
         {
           id: ids.deliveryFeed3,
-          code: 'FD-2026-103',
+          code: 'FD-26-003',
           facilityId: ids.facilityMoshi,
           status: 'complete',
           deliveryDate: demoTimestamps.thirdDelivery,
@@ -623,7 +623,7 @@ async function seedDemoData() {
       await tx.insert(schema.feedstocks).values([
         {
           id: ids.feedstock1,
-          code: 'FS-2026-101',
+          code: 'FS-26-001',
           facilityId: ids.facilityMoshi,
           status: 'complete',
           feedstockDeliveryId: ids.deliveryFeed1,
@@ -640,7 +640,7 @@ async function seedDemoData() {
         },
         {
           id: ids.feedstock2,
-          code: 'FS-2026-102',
+          code: 'FS-26-002',
           facilityId: ids.facilityMoshi,
           status: 'complete',
           feedstockDeliveryId: ids.deliveryFeed2,
@@ -657,7 +657,7 @@ async function seedDemoData() {
         },
         {
           id: ids.feedstock3,
-          code: 'FS-2026-103',
+          code: 'FS-26-003',
           facilityId: ids.facilityMoshi,
           status: 'complete',
           feedstockDeliveryId: ids.deliveryFeed3,
@@ -682,7 +682,7 @@ async function seedDemoData() {
       await tx.insert(schema.productionRuns).values([
         {
           id: ids.productionRun1,
-          code: 'PR-2026-101',
+          code: 'PR-26-001',
           facilityId: ids.facilityMoshi,
           date: '2026-05-13',
           status: 'complete',
@@ -704,7 +704,7 @@ async function seedDemoData() {
         },
         {
           id: ids.productionRun2,
-          code: 'PR-2026-102',
+          code: 'PR-26-002',
           facilityId: ids.facilityMoshi,
           date: '2026-05-15',
           status: 'complete',
@@ -726,7 +726,7 @@ async function seedDemoData() {
         },
         {
           id: ids.productionRun3,
-          code: 'PR-2026-103',
+          code: 'PR-26-003',
           facilityId: ids.facilityMoshi,
           date: '2026-05-17',
           status: 'complete',
@@ -776,7 +776,7 @@ async function seedDemoData() {
           id: ids.sample1,
           productionRunId: ids.productionRun1,
           samplingTime: new Date('2026-05-13T09:30:00.000Z'),
-          sampleCode: 'S-2026-101',
+          sampleCode: 'SAM-26-001',
           weightGrams: 520,
           volumeMl: 980,
           labName: 'Kibo Analytical Labs',
@@ -794,7 +794,7 @@ async function seedDemoData() {
           id: ids.sample2,
           productionRunId: ids.productionRun2,
           samplingTime: new Date('2026-05-15T09:00:00.000Z'),
-          sampleCode: 'S-2026-102',
+          sampleCode: 'SAM-26-002',
           weightGrams: 485,
           volumeMl: 920,
           labName: 'Kibo Analytical Labs',
@@ -812,7 +812,7 @@ async function seedDemoData() {
           id: ids.sample3,
           productionRunId: ids.productionRun3,
           samplingTime: new Date('2026-05-17T10:00:00.000Z'),
-          sampleCode: 'S-2026-103',
+          sampleCode: 'SAM-26-003',
           weightGrams: 510,
           volumeMl: 960,
           labName: 'Kibo Analytical Labs',
@@ -836,21 +836,21 @@ async function seedDemoData() {
       await tx.insert(schema.formulations).values([
         {
           id: ids.formulationStandard,
-          code: 'BCF-STD-01',
+          code: 'BCF-26-001',
           name: 'Standard Biochar Blend',
           biocharRatio: 0.4,
           description: 'Balanced blend for general agricultural use',
         },
         {
           id: ids.formulationPremium,
-          code: 'BCF-PRM-01',
+          code: 'BCF-26-002',
           name: 'Premium High-Carbon Blend',
           biocharRatio: 0.7,
           description: 'High biochar content for maximum carbon sequestration',
         },
         {
           id: ids.formulationOrganic,
-          code: 'BCF-ORG-01',
+          code: 'BCF-26-003',
           name: 'Certified Organic Blend',
           biocharRatio: 0.5,
           description: 'Organic-certified blend with verified compost',
@@ -903,7 +903,7 @@ async function seedDemoData() {
       await tx.insert(schema.biocharProducts).values([
         {
           id: ids.biocharProduct1,
-          code: 'BP-2026-101',
+          code: 'BP-26-001',
           facilityId: ids.facilityMoshi,
           productionDate: new Date('2026-05-14T08:00:00.000Z'),
           status: 'ready',
@@ -915,7 +915,7 @@ async function seedDemoData() {
         },
         {
           id: ids.biocharProduct2,
-          code: 'BP-2026-102',
+          code: 'BP-26-002',
           facilityId: ids.facilityMoshi,
           productionDate: new Date('2026-05-16T09:00:00.000Z'),
           status: 'ready',
@@ -927,7 +927,7 @@ async function seedDemoData() {
         },
         {
           id: ids.biocharProduct3,
-          code: 'BP-2026-103',
+          code: 'BP-26-003',
           facilityId: ids.facilityMoshi,
           productionDate: new Date('2026-05-18T10:00:00.000Z'),
           status: 'ready',
@@ -1071,7 +1071,7 @@ async function seedDemoData() {
       await tx.insert(schema.orders).values([
         {
           id: ids.order1,
-          code: 'OR-2026-101',
+          code: 'OR-26-001',
           facilityId: ids.facilityMoshi,
           orderDate: demoTimestamps.order1Date,
           customerId: ids.customerCoffee,
@@ -1083,7 +1083,7 @@ async function seedDemoData() {
         },
         {
           id: ids.order2,
-          code: 'OR-2026-102',
+          code: 'OR-26-002',
           facilityId: ids.facilityMoshi,
           orderDate: demoTimestamps.order2Date,
           customerId: ids.customerTea,
@@ -1095,7 +1095,7 @@ async function seedDemoData() {
         },
         {
           id: ids.order3,
-          code: 'OR-2026-103',
+          code: 'OR-26-003',
           facilityId: ids.facilityMoshi,
           orderDate: demoTimestamps.order3Date,
           customerId: ids.customerCoffee,
@@ -1111,7 +1111,7 @@ async function seedDemoData() {
       await tx.insert(schema.deliveries).values([
         {
           id: ids.delivery1,
-          code: 'DL-2026-101',
+          code: 'DL-26-001',
           facilityId: ids.facilityMoshi,
           deliveryDate: demoTimestamps.delivery1Date,
           status: 'delivered',
@@ -1127,7 +1127,7 @@ async function seedDemoData() {
         },
         {
           id: ids.delivery2,
-          code: 'DL-2026-102',
+          code: 'DL-26-002',
           facilityId: ids.facilityMoshi,
           deliveryDate: demoTimestamps.delivery2Date,
           status: 'delivered',
@@ -1143,7 +1143,7 @@ async function seedDemoData() {
         },
         {
           id: ids.delivery3,
-          code: 'DL-2026-103',
+          code: 'DL-26-003',
           facilityId: ids.facilityMoshi,
           deliveryDate: demoTimestamps.delivery3Date,
           status: 'delivered',
@@ -1167,7 +1167,7 @@ async function seedDemoData() {
       await tx.insert(schema.applications).values([
         {
           id: ids.application1,
-          code: 'AP-2026-101',
+          code: 'AP-26-001',
           applicationDate: demoTimestamps.application1Date,
           status: 'applied',
           deliveryId: ids.delivery1,
@@ -1185,7 +1185,7 @@ async function seedDemoData() {
         },
         {
           id: ids.application2,
-          code: 'AP-2026-102',
+          code: 'AP-26-002',
           applicationDate: demoTimestamps.application2Date,
           status: 'applied',
           deliveryId: ids.delivery2,
@@ -1203,7 +1203,7 @@ async function seedDemoData() {
         },
         {
           id: ids.application3,
-          code: 'AP-2026-103',
+          code: 'AP-26-003',
           applicationDate: demoTimestamps.application3Date,
           status: 'applied',
           deliveryId: ids.delivery3,
@@ -1225,7 +1225,7 @@ async function seedDemoData() {
       await tx.insert(schema.creditBatches).values([
         {
           id: ids.creditBatch1,
-          code: 'CB-2026-101',
+          code: 'CB-26-001',
           facilityId: ids.facilityMoshi,
           status: 'pending',
           startDate: '2026-05-13',
@@ -1243,7 +1243,7 @@ async function seedDemoData() {
         },
         {
           id: ids.creditBatch2,
-          code: 'CB-2026-102',
+          code: 'CB-26-002',
           facilityId: ids.facilityMoshi,
           status: 'draft',
           startDate: '2026-06-01',

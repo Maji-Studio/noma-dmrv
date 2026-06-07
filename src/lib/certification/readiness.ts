@@ -267,7 +267,11 @@ export function buildRemovalPreflightChecklist(
 
 const TRANSPORT_UNIFORMITY_LABEL = "Transport legs aggregate cleanly";
 
-export type RemovalRequirementKey = "mapping" | "template" | "transportUniformity";
+export type RemovalRequirementKey =
+  | "mapping"
+  | "template"
+  | "transportUniformity"
+  | "entityReadiness";
 
 export interface RemovalRequirementCheck {
   key: RemovalRequirementKey;
@@ -282,7 +286,8 @@ export interface RemovalRequirementCheck {
  * The New-Removal wizard's requirements step shows only the checks that are NOT
  * a single batch's concern (design doc §3): facility setup (project mapping +
  * default template) and the cross-batch transport uniformity that can only be
- * judged once batches are pooled into a removal. Batch-level checks — production
+ * judged once batches are pooled into a removal, plus entity certifier-readiness
+ * gaps that submit readiness already blocks on. Batch-level checks — production
  * lineage and transport-leg PRESENCE — are the batch health check's job, so they
  * are deliberately excluded here even when unmet (the wizard only let ready
  * batches in, so they are already satisfied). Pure projection of the same facts
@@ -321,6 +326,24 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
+  const entityReadiness = ((): RemovalRequirementCheck => {
+    const gaps = facts.entityReadinessGaps ?? [];
+    return gaps.length === 0
+      ? {
+          key: "entityReadiness",
+          label: ENTITY_READINESS_LABEL,
+          status: "met",
+        }
+      : {
+          key: "entityReadiness",
+          label: ENTITY_READINESS_LABEL,
+          status: "unmet",
+          detail: gaps
+            .slice(0, ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT)
+            .join(" · "),
+        };
+  })();
+
   return [
     {
       key: "mapping",
@@ -335,6 +358,7 @@ export function buildRemovalRequirementsChecklist(
       detail: !linked ? undefined : (templateBlockerReason(facts) ?? undefined),
     },
     uniformity,
+    entityReadiness,
   ];
 }
 
