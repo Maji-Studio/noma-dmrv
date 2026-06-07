@@ -11,7 +11,11 @@ import {
   facilities,
   type Reactor,
 } from "@/db/schema";
-import { getMethodBEligibilityByReactor, type MethodBEligibilitySummary } from "@/data-access/isometric";
+import {
+  getMethodBEligibilityByReactor,
+  METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+  type MethodBEligibilitySummary,
+} from "@/data-access/isometric";
 import type { ReactorFilterData } from "@/schemas/reactors";
 
 // ============================================
@@ -294,6 +298,15 @@ export async function createReactor(
     throw new SafeError("Facility not found");
   }
 
+  // A brand-new reactor has zero prior samples, so it can never satisfy the
+  // Method B prerequisite — reject it up front rather than persisting an
+  // ineligible configuration.
+  if (data.samplingMethod === "method_b") {
+    throw new SafeError(
+      `Method B requires at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} prior Method A samples. A new reactor has none — start with Method A.`
+    );
+  }
+
   const [reactor] = await db
     .insert(reactors)
     .values({
@@ -363,6 +376,18 @@ export async function updateReactor(
 
     if (!facility) {
       throw new SafeError("Facility not found");
+    }
+  }
+
+  // Switching to Method B requires the reactor to have enough prior Method A
+  // samples. Only check when actually moving to Method B (re-saving an already
+  // eligible Method B reactor stays valid since sample counts only grow).
+  if (data.samplingMethod === "method_b" && existing.samplingMethod !== "method_b") {
+    const eligibility = await getMethodBEligibilityByReactor(userId, { reactorId });
+    if (!eligibility.meetsMinimumMethodASamples) {
+      throw new SafeError(
+        `Method B requires at least ${eligibility.minimumMethodASampleCount} prior Method A samples; this reactor has ${eligibility.priorMethodASampleCount}.`
+      );
     }
   }
 

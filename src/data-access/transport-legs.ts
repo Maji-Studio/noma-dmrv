@@ -4,7 +4,7 @@
 // a facility-membership model lands.
 
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts,
   feedstocks,
@@ -217,6 +217,24 @@ export async function deleteTransportLeg(
   if (result.length === 0) {
     throw new SafeError("Transport leg not found");
   }
+}
+
+// Internal cascade helper for parent deletes. `transport_legs.entity_id` is
+// polymorphic, so PostgreSQL cannot enforce FK cascades for feedstocks,
+// biochar products, or samples.
+export async function deleteTransportLegsForEntity(
+  tx: DbTransaction,
+  entityType: TransportEntityType,
+  entityId: string,
+): Promise<void> {
+  await tx
+    .delete(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, entityType),
+        eq(transportLegs.entityId, entityId),
+      ),
+    );
 }
 
 // ============================================

@@ -11,6 +11,7 @@ import {
 // set up, and every required transport category present.
 const HEALTHY: BatchHealthFacts = {
   carbonMissingInputs: [],
+  entityReadinessGaps: [],
   hasSubmittableRuns: true,
   facilitySetupComplete: true,
   requiredTransport: [
@@ -34,7 +35,12 @@ describe("deriveBatchHealth", () => {
     const result = deriveBatchHealth(facts());
     expect(result.state).toBe("ready");
     expect(result.issueCount).toBe(0);
-    expect(result.checks.map((c) => c.status)).toEqual(["met", "met", "met"]);
+    expect(result.checks.map((c) => c.status)).toEqual([
+      "met",
+      "met",
+      "met",
+      "met",
+    ]);
   });
 
   it("flags missing carbon/durability inputs and names them", () => {
@@ -53,6 +59,20 @@ describe("deriveBatchHealth", () => {
     const result = deriveBatchHealth(facts({ hasSubmittableRuns: false }));
     expect(result.state).toBe("incomplete");
     expect(checkFor(result, "production").status).toBe("unmet");
+  });
+
+  it("surfaces entity readiness separately without blocking grouping", () => {
+    const result = deriveBatchHealth(
+      facts({
+        entityReadinessGaps: ["Production run PR-1: Electricity reading"],
+      }),
+    );
+    expect(result.state).toBe("ready");
+    expect(result.issueCount).toBe(0);
+    expect(checkFor(result, "carbon").status).toBe("met");
+    const entity = checkFor(result, "entityReadiness");
+    expect(entity.status).toBe("skipped");
+    expect(entity.detail).toContain("Electricity reading");
   });
 
   it("flags a missing transport category by name", () => {

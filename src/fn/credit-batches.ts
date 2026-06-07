@@ -3,8 +3,13 @@
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { getUser } from "@/lib/auth/server";
+import { logger } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
+import {
+  getCreditBatchApplicationOptions,
+  type CreditBatchApplicationOption,
+} from "@/data-access/applications";
 import {
   getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
@@ -25,6 +30,14 @@ import {
 
 const MAX_BATCH_PREVIEWS = 50;
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function logCreditBatchError(message: string, error: unknown): void {
+  logger.error({ errorMessage: errorMessage(error) }, message);
+}
+
 /**
  * Get all credit batches
  */
@@ -40,7 +53,7 @@ export async function getCreditBatchesFn(): Promise<
     const creditBatches = await getCreditBatchesData(user.id);
     return { success: true, data: creditBatches };
   } catch (error) {
-    console.error("Failed to get credit batches:", error);
+    logCreditBatchError("Failed to get credit batches", error);
     return {
       success: false,
       error:
@@ -68,7 +81,7 @@ export async function getCreditBatchByIdFn(
 
     return { success: true, data: creditBatch };
   } catch (error) {
-    console.error("Failed to get credit batch:", error);
+    logCreditBatchError("Failed to get credit batch", error);
     return {
       success: false,
       error:
@@ -96,13 +109,40 @@ export async function getCo2eStoredPreviewsFn(
     const previews = await getCo2eStoredPreviewsData(user.id, ids);
     return { success: true, data: previews };
   } catch (error) {
-    console.error("Failed to get CO2e stored previews:", error);
+    logCreditBatchError("Failed to get CO2e stored previews", error);
     return {
       success: false,
       error:
         error instanceof Error
           ? error.message
           : "Failed to get CO2e stored previews",
+    };
+  }
+}
+
+export async function getCreditBatchApplicationOptionsFn(
+  facilityId: string,
+): Promise<ActionResult<CreditBatchApplicationOption[]>> {
+  try {
+    const user = await getUser();
+    if (!user || !user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validatedFacilityId = z.string().uuid().parse(facilityId);
+    const options = await getCreditBatchApplicationOptions(
+      user.id,
+      validatedFacilityId,
+    );
+    return { success: true, data: options };
+  } catch (error) {
+    logCreditBatchError("Failed to get credit batch application options", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to get credit batch application options",
     };
   }
 }
@@ -145,7 +185,7 @@ export async function createCreditBatchFn(
 
     return { success: true, data: creditBatch };
   } catch (error) {
-    console.error("Failed to create credit batch:", error);
+    logCreditBatchError("Failed to create credit batch", error);
     if (error instanceof z.ZodError) {
       const msg = error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
       return { success: false, error: msg };
@@ -220,7 +260,7 @@ export async function updateCreditBatchFn(
     const creditBatch = await updateCreditBatchData(user.id, creditBatchId, updateData);
     return { success: true, data: creditBatch };
   } catch (error) {
-    console.error("Failed to update credit batch:", error);
+    logCreditBatchError("Failed to update credit batch", error);
     if (error instanceof z.ZodError) {
       return {
         success: false,
@@ -260,7 +300,7 @@ export async function deleteCreditBatchFn(
     await deleteCreditBatchData(user.id, validated.creditBatchId);
     return { success: true, data: undefined };
   } catch (error) {
-    console.error("Failed to delete credit batch:", error);
+    logCreditBatchError("Failed to delete credit batch", error);
     if (error instanceof z.ZodError) {
       return {
         success: false,

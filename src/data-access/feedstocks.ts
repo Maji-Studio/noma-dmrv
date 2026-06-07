@@ -20,7 +20,10 @@ import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import { requireAuth } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
-import { replaceDerivedTransportLeg } from "./transport-legs";
+import {
+  deleteTransportLegsForEntity,
+  replaceDerivedTransportLeg,
+} from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin", "ingredient_bin"] as const;
@@ -530,7 +533,10 @@ export async function deleteFeedstock(
     );
   }
 
-  await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+  await db.transaction(async (tx) => {
+    await deleteTransportLegsForEntity(tx, "feedstock", feedstockId);
+    await tx.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+  });
 }
 
 // ============================================

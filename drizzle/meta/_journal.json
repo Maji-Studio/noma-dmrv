@@ -246,6 +246,13 @@
       "when": 1780676729530,
       "tag": "0034_peaceful_firebird",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1780825491000,
+      "tag": "0035_deterministic_product_bin_formulation",
+      "breakpoints": true
     }
   ]
 }

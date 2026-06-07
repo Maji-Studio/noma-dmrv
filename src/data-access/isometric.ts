@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { productionRuns, samples } from "@/db/schema";
 import { requireAuth } from "./utils";
 
-const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
+export const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
 
 export type MethodBEligibilitySummary = {
   priorMethodASampleCount: number;

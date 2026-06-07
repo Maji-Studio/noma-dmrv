@@ -36,16 +36,21 @@ interface FormFieldProps {
  */
 function describeChild(
   children: ReactNode,
-  describedBy: string | undefined
+  describedBy: string | undefined,
+  invalid: boolean
 ): ReactNode {
-  if (!describedBy || !isValidElement(children)) return children;
-  const childProps = children.props as { "aria-describedby"?: string };
+  if ((!describedBy && !invalid) || !isValidElement(children)) return children;
+  const childProps = children.props as {
+    "aria-describedby"?: string;
+    "aria-invalid"?: boolean | "true" | "false";
+  };
   const merged = [childProps["aria-describedby"], describedBy]
     .filter(Boolean)
     .join(" ");
-  return cloneElement(children, { "aria-describedby": merged } as Partial<
-    typeof childProps
-  >);
+  return cloneElement(children, {
+    ...(merged ? { "aria-describedby": merged } : {}),
+    "aria-invalid": invalid ? true : childProps["aria-invalid"],
+  } as Partial<typeof childProps>);
 }
 
 export function FormField({
@@ -89,7 +94,7 @@ export function FormField({
         )}
         {hint != null && <InfoHint side="top">{hint}</InfoHint>}
       </div>
-      {describeChild(children, describedBy)}
+      {describeChild(children, describedBy, Boolean(error))}
       {showHelper && (
         <p
           id={helperId}

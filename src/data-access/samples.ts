@@ -12,6 +12,7 @@ import {
   facilities,
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
+import { deleteTransportLegsForEntity } from "./transport-legs";
 
 // ============================================
 // Types
@@ -669,7 +670,10 @@ export async function deleteSample(
     throw new SafeError("Sample not found");
   }
 
-  await db.delete(samples).where(eq(samples.id, sampleId));
+  await db.transaction(async (tx) => {
+    await deleteTransportLegsForEntity(tx, "sample", sampleId);
+    await tx.delete(samples).where(eq(samples.id, sampleId));
+  });
 }
 
 // ============================================
