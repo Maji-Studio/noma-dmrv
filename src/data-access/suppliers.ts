@@ -317,6 +317,10 @@ export async function updateSupplier(
     .where(eq(suppliers.id, supplierId))
     .returning();
 
+  if (!updated) {
+    throw new SafeError("Supplier not found");
+  }
+
   return updated;
 }
 
