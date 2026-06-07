@@ -19,7 +19,6 @@ export const transportEntityTypes = [
   "feedstock",
   "biochar",
   "sample",
-  "delivery",
 ] as const;
 export type TransportEntityTypeValue = (typeof transportEntityTypes)[number];
 

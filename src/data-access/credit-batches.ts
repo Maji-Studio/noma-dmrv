@@ -350,19 +350,21 @@ export async function getCo2eStoredPreviews(
   const ids = unique(batchIds);
   if (ids.length === 0) return {};
 
-  const [batches, applicationData] = await Promise.all([
-    db
-      .select()
-      .from(creditBatches)
-      .where(inArray(creditBatches.id, ids)),
-    db
-      .select({
-        creditBatchId: creditBatchApplications.creditBatchId,
-        applicationId: creditBatchApplications.applicationId,
-      })
-      .from(creditBatchApplications)
-      .where(inArray(creditBatchApplications.creditBatchId, ids)),
-  ]);
+  const batches = await db
+    .select()
+    .from(creditBatches)
+    .where(inArray(creditBatches.id, ids));
+
+  const allowedIds = batches.map((batch) => batch.id);
+  if (allowedIds.length === 0) return {};
+
+  const applicationData = await db
+    .select({
+      creditBatchId: creditBatchApplications.creditBatchId,
+      applicationId: creditBatchApplications.applicationId,
+    })
+    .from(creditBatchApplications)
+    .where(inArray(creditBatchApplications.creditBatchId, allowedIds));
 
   const applicationsByBatch = applicationData.reduce(
     (acc, row) => {

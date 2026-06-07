@@ -10,7 +10,6 @@ import { type Delivery, deliveries as deliveriesTable } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
   createDelivery,
-  syncDeliveryTransportLeg,
   deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryById as getDeliveryByIdData,
@@ -240,8 +239,6 @@ export async function createDeliveryFn(
       }
     );
 
-    await syncDeliveryTransportLeg(user.id, delivery.id, data.transportDistanceKm);
-
     return { success: true, data: delivery };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -290,12 +287,6 @@ export async function updateDeliveryFn(
       truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
       truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
     });
-
-    await syncDeliveryTransportLeg(
-      user.id,
-      validated.deliveryId,
-      validated.transportDistanceKm,
-    );
 
     return { success: true, data: delivery };
   } catch (error) {

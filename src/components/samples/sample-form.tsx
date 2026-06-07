@@ -26,6 +26,7 @@ import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/f
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   sampleFormSchema,
   calculateHToCOrgRatio,
@@ -43,6 +44,9 @@ const durabilityOptions = [
   { value: "200_year", label: "200-Year Durability" },
   { value: "1000_year", label: "1000-Year Durability" },
 ] as const;
+
+const isSampleCertifyField = (field: string) =>
+  isCertifyFormField("sample", field);
 
 // ============================================
 // Component
@@ -355,6 +359,7 @@ export function SampleForm({
                   error={errors.organicCarbonPercent?.message}
                   helperText="C_org for stability calculations"
                   required
+                  certifyRequired={isSampleCertifyField("organicCarbonPercent")}
                 >
                   <FormInput
                     id="organicCarbonPercent"
@@ -650,6 +655,7 @@ export function SampleForm({
                   label="H:C org Ratio"
                   error={errors.hToCOrgRatio?.message}
                   helperText="Auto-calculated from H% and C_org%"
+                  certifyRequired={isSampleCertifyField("hToCOrgRatio")}
                 >
                   <FormInput
                     id="hToCOrgRatio"
@@ -699,6 +705,7 @@ export function SampleForm({
                     id="randomReflectanceR0Percent"
                     label="Mean Random Reflectance R₀ (%)"
                     error={errors.randomReflectanceR0Percent?.message}
+                    certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
                   >
                     <FormInput
                       id="randomReflectanceR0Percent"
@@ -758,6 +765,7 @@ export function SampleForm({
                     id="reactiveCarbonPercent"
                     label="Reactive Carbon (%)"
                     error={errors.reactiveCarbonPercent?.message}
+                    certifyRequired={isSampleCertifyField("reactiveCarbonPercent")}
                   >
                     <FormInput
                       id="reactiveCarbonPercent"
@@ -776,6 +784,7 @@ export function SampleForm({
                     id="residualCarbonPercent"
                     label="Residual (Non-Reactive) Carbon (%)"
                     error={errors.residualCarbonPercent?.message}
+                    certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                   >
                     <FormInput
                       id="residualCarbonPercent"

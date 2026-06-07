@@ -212,7 +212,7 @@ export function CustomerLocationForm({
             id="distanceFromFacilityKm"
             label="Distance from facility (km)"
             error={errors.distanceFromFacilityKm?.message}
-            helperText="Road distance from the origin facility. Autofills a delivery's transport leg (overridable per delivery)."
+            helperText="Operational road distance from the origin facility. Certifier transport is recorded on the cargo entities."
           >
             <FormInput
               id="distanceFromFacilityKm"
