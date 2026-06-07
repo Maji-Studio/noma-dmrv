@@ -1,6 +1,6 @@
 {
-  "id": "6a1ed903-4f48-4d91-ba61-fda01bea4e54",
-  "prevId": "108acced-140b-46fc-abb4-e9f9c02582f6",
+  "id": "5707bda5-97ef-4918-9b50-820c0a5d3371",
+  "prevId": "6a1ed903-4f48-4d91-ba61-fda01bea4e54",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2657,7 +2657,7 @@
       "checkConstraints": {
         "credit_batches_certifier_is_isometric": {
           "name": "credit_batches_certifier_is_isometric",
-          "value": "\"credit_batches\".\"certifier\" = 'isometric'"
+          "value": "\"credit_batches\".\"certifier\" is null or \"credit_batches\".\"certifier\" = 'isometric'"
         },
         "credit_batches_total_feedstock_mass_non_negative": {
           "name": "credit_batches_total_feedstock_mass_non_negative",
@@ -4867,7 +4867,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "production_run_readings_run_timestamp_idx": {
+          "name": "production_run_readings_run_timestamp_idx",
+          "columns": [
+            {
+              "expression": "production_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "timestamp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "production_run_readings_production_run_id_production_runs_id_fk": {
           "name": "production_run_readings_production_run_id_production_runs_id_fk",
@@ -6587,6 +6609,27 @@
           ],
           "isUnique": true,
           "where": "\"transport_legs\".\"is_derived\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transport_legs_entity_type_entity_id_idx": {
+          "name": "transport_legs_entity_type_entity_id_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -6,9 +6,10 @@
  */
 "use client";
 
+import { ServerError } from "@/components/forms";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityEnergyTotals } from "@/hooks/use-production-runs";
-import { useFacilityCertifierMapping } from "@/hooks/use-certification";
+import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 
 const STAGES = [
   { key: "biomass", label: "Biomass processing" },
@@ -33,21 +34,22 @@ function SummaryCard({ label, value, unit }: { label: string; value: string; uni
 
 export function EnergySummary() {
   const { facilityId } = useFacilityContext();
-  const { data: totals, isLoading } = useFacilityEnergyTotals(
+  const { data: totals, isLoading, error: totalsError } = useFacilityEnergyTotals(
     facilityId ?? "",
     !!facilityId,
   );
-  const { data: mappingData } = useFacilityCertifierMapping(
-    facilityId ?? "",
-    !!facilityId,
-  );
+  const { data: certifierSummary, isLoading: mappingLoading, error: mappingError } =
+    useFacilityCertifierSummary(
+      facilityId ?? "",
+      !!facilityId,
+    );
 
   const electricityKwh = totals?.electricityKwh ?? 0;
   const gensetLitres = totals?.gensetLitres ?? 0;
   const startupLitres = totals?.startupLitres ?? 0;
   const runCount = totals?.runCount ?? 0;
 
-  const config = mappingData?.mapping ?? null;
+  const config = certifierSummary?.mapping ?? null;
   const yieldKwhPerL = config?.gensetEnergyYieldKwhPerLitre ?? null;
   const gensetKwh = yieldKwhPerL != null ? gensetLitres * yieldKwhPerL : null;
 
@@ -68,6 +70,26 @@ export function EnergySummary() {
       <p className="body-medium text-[var(--color-text-secondary)]">
         Select a facility to view its energy summary.
       </p>
+    );
+  }
+
+  if (totalsError) {
+    return (
+      <div className="flex flex-col gap-16">
+        <header className="flex flex-col gap-4">
+          <h1 className="title-heading-2">Electricity &amp; diesel</h1>
+          <p className="body-medium text-[var(--color-text-secondary)]">
+            Energy totals could not be loaded for this facility.
+          </p>
+        </header>
+        <ServerError
+          message={
+            totalsError instanceof Error
+              ? totalsError.message
+              : "Failed to load energy totals"
+          }
+        />
+      </div>
     );
   }
 
@@ -102,9 +124,24 @@ export function EnergySummary() {
 
       <div className="flex flex-col gap-12">
         <h2 className="title-heading-3">Per-stage submission preview</h2>
-        {!config && (
+        {mappingLoading && (
           <p className="body-medium text-[var(--color-text-secondary)]">
-            This facility is not linked to an Isometric project.
+            Loading registry link…
+          </p>
+        )}
+        {mappingError && (
+          <ServerError
+            message={
+              mappingError instanceof Error
+                ? mappingError.message
+                : "Failed to load registry link"
+            }
+          />
+        )}
+        {!mappingLoading && !mappingError && !config && (
+          <p className="body-medium text-[var(--color-text-secondary)]">
+            Link this facility to an Isometric project in Certification
+            Settings to preview per-stage submission data.
           </p>
         )}
         {config && (!splits || yieldKwhPerL == null) && (

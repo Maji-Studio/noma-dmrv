@@ -219,7 +219,9 @@ export function FeedstockForm({
 
         {/* Transport Details */}
         <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>
+          <SectionLabel
+            hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
+          >
             Transport Details
           </SectionLabel>
 
@@ -243,8 +245,8 @@ export function FeedstockForm({
               error={errors.transportDistanceKm?.message}
               helperText={
                 selectedSupplier?.distanceToFacilityKm != null
-                  ? "Autofilled from the supplier — override for this delivery if the route differs."
-                  : "Road distance supplier → facility. Set a default on the supplier to autofill this."
+                  ? "Autofilled from the supplier; override if the route differs."
+                  : "Set a supplier default to autofill this distance."
               }
             >
               <FormInput
@@ -259,10 +261,6 @@ export function FeedstockForm({
               />
             </FormField>
           </div>
-          <p className="body-small text-[var(--color-text-tertiary)]">
-            We record distance + load mass (the delivery&apos;s wet mass) as one
-            road transport leg. Isometric applies the emission factor.
-          </p>
         </div>
 
         {/* Material Details */}

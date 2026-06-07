@@ -117,24 +117,33 @@ export const productionRuns = pgTable(
 // Temperature: 5-min intervals, Pressure/Emissions: 1-min intervals
 // ============================================
 
-export const productionRunReadings = pgTable('production_run_readings', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
-    .notNull()
-    .references(() => productionRuns.id),
+export const productionRunReadings = pgTable(
+  'production_run_readings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    productionRunId: uuid('production_run_id')
+      .notNull()
+      .references(() => productionRuns.id),
 
-  timestamp: timestamp('timestamp').notNull(),
+    timestamp: timestamp('timestamp').notNull(),
 
-  // Temperature monitoring (5-min intervals required)
-  temperatureC: real('temperature_c'),
+    // Temperature monitoring (5-min intervals required)
+    temperatureC: real('temperature_c'),
 
-  // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
-  pressureBar: real('pressure_bar'),
+    // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
+    pressureBar: real('pressure_bar'),
 
-  gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
+    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('production_run_readings_run_timestamp_idx').on(
+      table.productionRunId,
+      table.timestamp
+    ),
+  ]
+);
 
 // ============================================
 // Samples - Biochar quality samples

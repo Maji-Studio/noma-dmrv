@@ -4,6 +4,7 @@ import { createRemovalWithCreditBatches } from "@/data-access/certifier-removals
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import {
   createRemovalWithBatchesSchema,
   type CreateRemovalWithBatchesInput,
@@ -13,7 +14,7 @@ import { withAction } from "../with-action";
 import {
   buildCreditBatchContextWithFacts,
   loadFacilityCertifierFacts,
-} from "./certify-context";
+} from "./certify-context-core";
 
 // Deferred-create: the New-Removal wizard holds off creating the removal until
 // the operator confirms a batch selection. This action IS that confirm — and it
@@ -31,6 +32,12 @@ export async function createRemovalWithBatchesAction(
     const { facilityId, creditBatchIds } =
       createRemovalWithBatchesSchema.parse(input);
     const uniqueIds = Array.from(new Set(creditBatchIds));
+    const log = logger.child({
+      op: "certifier-removal:create-with-batches",
+      facilityId,
+      batchCount: uniqueIds.length,
+    });
+    log.info("certifier removal create requested");
 
     // Every selected batch shares one facility, so resolve the facility's
     // certifier facts (incl. its Isometric registry calls) ONCE and reuse them
@@ -72,6 +79,7 @@ export async function createRemovalWithBatchesAction(
       facilityId,
       uniqueIds,
     );
+    log.info({ removalId }, "certifier removal created");
     return { removalId };
   });
 }

@@ -44,6 +44,7 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
@@ -416,6 +417,34 @@ export function ProductionRunList() {
           }
           editLabel="Edit Production Run"
           size="wide"
+          viewModeChildren={sideSheet.entity ? (
+            <>
+              <ProductionRunReadingTable
+                productionRunId={sideSheet.entity.id}
+                readOnly
+              />
+              <ProductionSampleTable
+                productionRunId={sideSheet.entity.id}
+                readOnly
+              />
+              <ProductionIncidentTable
+                productionRunId={sideSheet.entity.id}
+                readOnly
+              />
+            </>
+          ) : undefined}
+          editModeChildren={sideSheet.entity ? (
+            <>
+              <ProductionRunReadingTable productionRunId={sideSheet.entity.id} />
+              <ProductionSampleTable productionRunId={sideSheet.entity.id} />
+              <ProductionIncidentTable
+                productionRunId={sideSheet.entity.id}
+                facilityId={sideSheet.entity.facilityId}
+                defaultReactorId={sideSheet.entity.reactorId}
+                defaultOperatorId={sideSheet.entity.operatorId}
+              />
+            </>
+          ) : undefined}
           sections={sideSheet.entity ? [
             {
               title: "General",
@@ -486,19 +515,7 @@ export function ProductionRunList() {
             onCancel={closeSideSheet}
             isSubmitting={createRun.isPending || updateRun.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Production Run"}
-          >
-            {sideSheet.entity && sideSheet.mode === "edit" && (
-              <>
-                <ProductionSampleTable productionRunId={sideSheet.entity.id} />
-                <ProductionIncidentTable
-                  productionRunId={sideSheet.entity.id}
-                  facilityId={sideSheet.entity.facilityId}
-                  defaultReactorId={sideSheet.entity.reactorId}
-                  defaultOperatorId={sideSheet.entity.operatorId}
-                />
-              </>
-            )}
-          </ProductionRunForm>
+          />
         </EntitySideSheet>
       )}
     </div>

@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ProductionRunReadingForm } from "./production-run-reading-form";
 import type { ProductionRunReadingWithRelations } from "@/data-access/production-run-readings";
@@ -46,10 +47,12 @@ function formatNum(v: number | null, decimals = 1): string {
 
 interface ProductionRunReadingTableProps {
   productionRunId: string;
+  readOnly?: boolean;
 }
 
 export function ProductionRunReadingTable({
   productionRunId,
+  readOnly = false,
 }: ProductionRunReadingTableProps) {
   const {
     data: readings,
@@ -128,7 +131,7 @@ export function ProductionRunReadingTable({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Production Readings
         </h3>
-        {!inlineForm.open && (
+        {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <Plus size={16} weight="bold" />
             Add Reading
@@ -141,13 +144,12 @@ export function ProductionRunReadingTable({
 
       {/* Table */}
       {isLoading ? (
-        <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          Loading readings...
-        </p>
+        <TableSkeleton columns={readOnly ? 4 : 5} rows={3} />
       ) : !readings?.length && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          No readings recorded yet. Click &ldquo;Add Reading&rdquo; to record
-          monitoring data.
+          {readOnly
+            ? "No readings recorded yet."
+            : "No readings recorded yet. Click \"Add Reading\" to record monitoring data."}
         </p>
       ) : readings?.length ? (
         <div className="overflow-x-auto">
@@ -158,7 +160,9 @@ export function ProductionRunReadingTable({
                 <th className="py-8 pr-12 font-medium">Temp (&deg;C)</th>
                 <th className="py-8 pr-12 font-medium">Pressure (bar)</th>
                 <th className="py-8 pr-12 font-medium">Gas Flow</th>
-                <th className="py-8 font-medium text-right">Actions</th>
+                {!readOnly && (
+                  <th className="py-8 font-medium text-right">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -173,28 +177,30 @@ export function ProductionRunReadingTable({
                   <td className="py-8 pr-12">{formatNum(r.temperatureC, 1)}</td>
                   <td className="py-8 pr-12">{formatNum(r.pressureBar, 2)}</td>
                   <td className="py-8 pr-12">{formatNum(r.gasFlowRate, 3)}</td>
-                  <td className="py-8 text-right">
-                    <div className="flex items-center justify-end gap-4">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(r)}
-                        className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
-                        aria-label="Edit reading"
-                        disabled={inlineForm.open}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(r.id)}
-                        className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
-                        aria-label="Delete reading"
-                        disabled={inlineForm.open}
-                      >
-                        <Trash size={16} />
-                      </button>
-                    </div>
-                  </td>
+                  {!readOnly && (
+                    <td className="py-8 text-right">
+                      <div className="flex items-center justify-end gap-4">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(r)}
+                          className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+                          aria-label="Edit reading"
+                          disabled={inlineForm.open}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingId(r.id)}
+                          className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+                          aria-label="Delete reading"
+                          disabled={inlineForm.open}
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -203,7 +209,7 @@ export function ProductionRunReadingTable({
       ) : null}
 
       {/* Inline Add/Edit Form */}
-      {inlineForm.open && (
+      {!readOnly && inlineForm.open && (
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
           <h4 className="title-heading-4 mb-16">
             {inlineForm.reading ? "Edit Reading" : "Add Reading"}
@@ -225,14 +231,16 @@ export function ProductionRunReadingTable({
       )}
 
       {/* Delete Confirmation */}
-      <DeleteConfirmDialog
-        isOpen={!!deletingId}
-        title="Delete Reading"
-        message="Are you sure you want to delete this reading? This action cannot be undone."
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeletingId(null)}
-        isPending={deleteReading.isPending}
-      />
+      {!readOnly && (
+        <DeleteConfirmDialog
+          isOpen={!!deletingId}
+          title="Delete Reading"
+          message="Are you sure you want to delete this reading? This action cannot be undone."
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeletingId(null)}
+          isPending={deleteReading.isPending}
+        />
+      )}
     </div>
   );
 }

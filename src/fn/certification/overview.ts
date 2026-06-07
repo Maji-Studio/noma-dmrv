@@ -20,7 +20,7 @@ import {
   buildRemovalContext,
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
-} from "./certify-context";
+} from "./certify-context-core";
 
 // Per-removal readiness rebuilds the submission context (DB-only — the facility
 // half is resolved once up front). Bound how many run at once so a facility with

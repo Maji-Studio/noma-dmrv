@@ -226,6 +226,16 @@ export function buildRemovalPreflightChecklist(
   })();
 
   const entityReadiness = ((): PreflightCheck => {
+    // Gaps are derived from the production runs, so with nothing to submit the
+    // list is empty for the "not evaluated" reason, not the "all complete" one.
+    // Skip rather than let an unevaluated check read as satisfied.
+    if (!facts.hasSubmittableRuns) {
+      return {
+        key: "entityReadiness",
+        label: ENTITY_READINESS_LABEL,
+        status: "skipped",
+      };
+    }
     const gaps = facts.entityReadinessGaps ?? [];
     return gaps.length === 0
       ? { key: "entityReadiness", label: ENTITY_READINESS_LABEL, status: "met" }

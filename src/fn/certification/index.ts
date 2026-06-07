@@ -15,7 +15,6 @@ export {
 } from "./health";
 export {
   loadCertifyContextForCreditBatch,
-  loadCertifyContextForCreditBatchForUser,
   loadRemovalCertifyContext,
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,

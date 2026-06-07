@@ -28,11 +28,20 @@ describe("biocharProductFormSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issuePaths = result.error.issues.map((issue) => issue.path.join("."));
+      const issueMessages = new Map(
+        result.error.issues.map((issue) => [
+          issue.path.join("."),
+          issue.message,
+        ]),
+      );
       expect(issuePaths).toContain("linkedProductionRunId");
       expect(issuePaths).toContain("storageLocationId");
       expect(issuePaths).toContain("massKg");
       expect(issuePaths).toContain("moistureContentPercent");
       expect(issuePaths).toContain("waterAddedKg");
+      expect(issueMessages.get("massKg")).toBe("Required");
+      expect(issueMessages.get("moistureContentPercent")).toBe("Required");
+      expect(issueMessages.get("waterAddedKg")).toBe("Required");
     }
   });
 

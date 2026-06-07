@@ -248,7 +248,7 @@ export async function deleteTransportLegsForEntity(
 // (distance + load mass). Manual legs remain untouched.
 export async function replaceDerivedTransportLeg(
   userId: string,
-  entityType: TransportEntityType,
+  entityType: "feedstock",
   entityId: string,
   derived: DerivedTransportLeg,
 ): Promise<void> {
