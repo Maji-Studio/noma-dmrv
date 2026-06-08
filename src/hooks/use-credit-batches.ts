@@ -3,6 +3,7 @@ import {
   getCreditBatchesFn,
   getCreditBatchByIdFn,
   getCo2eStoredPreviewsFn,
+  getCreditBatchApplicationOptionsFn,
   createCreditBatchFn,
   updateCreditBatchFn,
   deleteCreditBatchFn,
@@ -23,6 +24,8 @@ export const creditBatchKeys = {
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
   previews: (ids: string[]) => [...creditBatchKeys.all, "previews", ids] as const,
+  applicationOptions: (facilityId?: string) =>
+    [...creditBatchKeys.all, "applicationOptions", facilityId] as const,
 };
 
 /**
@@ -73,6 +76,22 @@ export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
       return result.data;
     },
     enabled: sortedIds.length > 0,
+    staleTime: 30000,
+  });
+}
+
+export function useCreditBatchApplicationOptions(facilityId?: string) {
+  return useQuery({
+    queryKey: creditBatchKeys.applicationOptions(facilityId),
+    queryFn: async () => {
+      if (!facilityId) return [];
+      const result = await getCreditBatchApplicationOptionsFn(facilityId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: !!facilityId,
     staleTime: 30000,
   });
 }

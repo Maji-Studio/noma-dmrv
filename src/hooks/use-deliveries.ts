@@ -45,6 +45,9 @@ export const deliveryKeys = {
     [...deliveryKeys.all, "select", orderId] as const,
   stats: (filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }) =>
     [...deliveryKeys.all, "stats", filters] as const,
+  // Prefix that matches every stats variant regardless of filters — use for
+  // invalidation so a filtered stats query (e.g. {facilityId}) is refetched.
+  statsPrefix: () => [...deliveryKeys.all, "stats"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...deliveryKeys.all, "codeCheck", code, excludeId] as const,
 };
@@ -197,7 +200,7 @@ export function useCreateDelivery(
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
 
@@ -292,7 +295,7 @@ export function useUpdateDelivery(
         queryKey: deliveryKeys.detailWithRelations(data.id),
       });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -382,7 +385,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       });
       // Invalidate lists and stats for consistency
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.stats() });
+      queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
 
       await callbacks?.onSuccess?.(undefined, deliveryId);
     },
@@ -439,7 +442,7 @@ export function useDeliveryCacheInvalidation() {
 
     /** Invalidate delivery statistics */
     invalidateStats: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.stats() }),
+      queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() }),
 
     /** Invalidate a specific delivery detail */
     invalidateDetail: (deliveryId: string) =>

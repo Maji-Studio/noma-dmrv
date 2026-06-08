@@ -66,10 +66,8 @@ export function toBatchHealthFacts(
   batchId: string,
 ): BatchHealthFacts {
   return {
-    carbonMissingInputs: [
-      ...carbonMissingInputs(ctx, batchId),
-      ...(ctx.entityReadinessGaps ?? []),
-    ],
+    carbonMissingInputs: carbonMissingInputs(ctx, batchId),
+    entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     facilitySetupComplete: isFacilitySetupComplete(ctx),
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({

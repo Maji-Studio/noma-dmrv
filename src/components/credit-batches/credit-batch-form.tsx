@@ -231,6 +231,8 @@ interface CreditBatchFormProps {
   existingBatches?: ExistingBatchPeriod[];
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
+  /** Called when the user edits the date range — used to clear a stale submit-time server error (e.g. an overlap message that no longer applies) */
+  onClearServerError?: () => void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -244,6 +246,7 @@ export function CreditBatchForm({
   applications = [],
   existingBatches = [],
   onSubmit,
+  onClearServerError,
   onCancel,
   isSubmitting = false,
   submitLabel,
@@ -356,7 +359,9 @@ export function CreditBatchForm({
               type="date"
               disabled={isSubmitting}
               error={!!errors.startDate}
-              {...register("startDate")}
+              {...register("startDate", {
+                onChange: () => onClearServerError?.(),
+              })}
             />
           </FormField>
 
@@ -370,7 +375,9 @@ export function CreditBatchForm({
               type="date"
               disabled={isSubmitting}
               error={!!errors.endDate}
-              {...register("endDate")}
+              {...register("endDate", {
+                onChange: () => onClearServerError?.(),
+              })}
             />
           </FormField>
         </div>
@@ -528,7 +535,11 @@ export function CreditBatchForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={isSubmitting || !!overlappingBatch}
+        >
           {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
         </Button>
       </div>

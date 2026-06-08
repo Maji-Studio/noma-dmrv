@@ -1,6 +1,6 @@
 /**
  * Auto-generate entity codes when not provided
- * Format: {PREFIX}-{YYYY}-{NNN} (e.g., BP-2026-001)
+ * Format: {PREFIX}-{YY}-{NNN} (e.g., BP-26-001)
  */
 
 import { db } from "@/db";
@@ -8,6 +8,11 @@ import { sql } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 
 const MAX_RETRIES = 3;
+
+/** Two-digit current year for code generation (e.g. 2026 -> "26"). */
+function currentYearShort(): string {
+  return String(new Date().getFullYear() % 100).padStart(2, "0");
+}
 
 /**
  * Generate the next sequential code for an entity.
@@ -18,14 +23,14 @@ const MAX_RETRIES = 3;
  * @param prefix - Entity prefix (e.g., "BP", "FAC")
  * @param table - Drizzle table reference
  * @param codeColumn - The code column on the table
- * @returns Next sequential code like "BP-2026-001"
+ * @returns Next sequential code like "BP-26-001"
  */
 export async function generateNextCode(
   prefix: string,
   table: PgTable,
   codeColumn: PgColumn
 ): Promise<string> {
-  const year = new Date().getFullYear();
+  const year = currentYearShort();
   const pattern = `${prefix}-${year}-%`;
 
   // Find the highest existing code number for this prefix + year
@@ -63,7 +68,7 @@ export async function generateNextCodes(
   codeColumn: PgColumn,
   count: number
 ): Promise<string[]> {
-  const year = new Date().getFullYear();
+  const year = currentYearShort();
   const pattern = `${prefix}-${year}-%`;
 
   const result = await db

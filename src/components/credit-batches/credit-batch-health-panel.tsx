@@ -51,6 +51,11 @@ function fixLinkFor(key: BatchHealthCheckKey, facilityId: string): FixLink {
         label: "Add transport leg",
         href: `/deliveries?transportLeg=create&facility=${facilityId}`,
       };
+    case "entityReadiness":
+      return {
+        label: "Review source data",
+        href: `/production-runs?facility=${facilityId}`,
+      };
   }
 }
 

@@ -7,6 +7,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useReactorMethodBEligibility } from "@/hooks/use-reactors";
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -113,6 +114,32 @@ export function ReactorForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
 
+  // Method B requires a minimum number of prior Method A samples. A new reactor
+  // has none, so eligibility is only fetched (and ever true) in edit mode.
+  const { data: methodBEligibility } = useReactorMethodBEligibility(
+    reactor?.id ?? "",
+    isEditMode
+  );
+  const minimumMethodASamples =
+    methodBEligibility?.minimumMethodASampleCount ?? 30;
+  // Keep Method B available if the reactor is already on it, even if the
+  // eligibility query hasn't resolved yet, so editing never silently downgrades.
+  const methodBAvailable =
+    defaultSamplingMethod === "method_b" ||
+    (methodBEligibility?.meetsMinimumMethodASamples ?? false);
+
+  const samplingMethodSelectOptions = samplingMethodOptions.map((option) =>
+    option.value === "method_b"
+      ? { ...option, disabled: !methodBAvailable }
+      : option
+  );
+
+  const samplingMethodHelperText = methodBAvailable
+    ? "Method B samples every 10th batch"
+    : isEditMode
+      ? `Method B requires ${minimumMethodASamples} prior Method A samples (currently ${methodBEligibility?.priorMethodASampleCount ?? 0})`
+      : `Method B requires ${minimumMethodASamples} prior Method A samples — start with Method A`;
+
   const handleFormSubmit = handleSubmit((data) => {
     const { capacityTph, ...rest } = data as ReactorFormData;
     onSubmit({
@@ -179,13 +206,13 @@ export function ReactorForm({
             id="samplingMethod"
             label="Sampling Method"
             error={errors.samplingMethod?.message}
-            helperText="Method B requires 30 prior Method A samples"
+            helperText={samplingMethodHelperText}
           >
             <FormSelect
               id="samplingMethod"
               disabled={isSubmitting}
               error={!!errors.samplingMethod}
-              options={samplingMethodOptions}
+              options={samplingMethodSelectOptions}
               {...register("samplingMethod")}
             />
           </FormField>

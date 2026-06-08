@@ -10,7 +10,7 @@ import {
   resolveOrganicCarbonPercent,
 } from "./biochar-removal";
 
-// Inputs lifted from seed-data.ts (AP-2026-101) + its production-run sample,
+// Inputs lifted from seed-data.ts (AP-26-001) + its production-run sample,
 // so this worked example mirrors a real traceability chain.
 const AP_101 = {
   dryMassTonnes: 1.79, // applications.biocharAppliedDryTons
@@ -33,7 +33,7 @@ describe("drift locks against the certified v1.2 module", () => {
 });
 
 describe("computeFDurable200 (Eq.3)", () => {
-  it("matches the hand-worked AP-2026-101 durability", () => {
+  it("matches the hand-worked AP-26-001 durability", () => {
     const r = computeFDurable200({ soilTemperatureC: 24.5, hToCorgRatio: 0.27 });
     expect(r.fDurable).toBeCloseTo(0.84914, 4);
     expect(r.temperatureFloored).toBe(false);
@@ -92,7 +92,7 @@ describe("computeCo2eStoredTonnes (Eq.1)", () => {
 });
 
 describe("computeApplicationCo2eStored (Eq.2 → Eq.3 → Eq.1)", () => {
-  it("produces a principled value for AP-2026-101", () => {
+  it("produces a principled value for AP-26-001", () => {
     const r = computeApplicationCo2eStored(AP_101);
     expect(r.co2eStoredTonnes).toBeCloseTo(4.362, 2);
     expect(r.fDurable).toBeCloseTo(0.84914, 4);

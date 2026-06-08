@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import { ArrowSquareOut, CheckCircle } from "@phosphor-icons/react/dist/ssr";
+import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitRemoval } from "@/hooks/use-certification";
@@ -35,22 +36,33 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
   const submitMutation = useSubmitRemoval();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
+  const rejectedWithExternal =
+    ctx.latestSubmission?.status === "rejected" && externalId !== null;
   const batchCount = ctx.memberBatches.length;
 
   const fireSubmit = (confirmProduction = false) => {
+    if (rejectedWithExternal) {
+      setSubmitError(
+        "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.",
+      );
+      return;
+    }
+    setSubmitError(null);
     submitMutation.mutate(
       { removalId, confirmProduction },
       {
-        onSuccess: (result) =>
-          toast.success(`Submitted removal ${result.externalId}.`),
-        onError: (err) =>
-          toast.error(
-            `Submission failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          ),
+        onSuccess: (result) => {
+          setSubmitError(null);
+          toast.success(`Submitted removal ${result.externalId}.`);
+        },
+        onError: (err) => {
+          setSubmitError(
+            err instanceof Error ? err.message : "Submission failed",
+          );
+        },
       },
     );
   };
@@ -126,11 +138,22 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
 
       <EnvBanner isProduction={ctx.isProduction} variant="inline" />
 
+      {(rejectedWithExternal || submitError) && (
+        <ServerError
+          message={
+            rejectedWithExternal
+              ? "This removal was rejected in Isometric. Resolve the registry record before retrying from noma."
+              : submitError ?? undefined
+          }
+        />
+      )}
+
       <div className="flex justify-end">
         <Button
           variant="primary"
           onClick={handleSubmit}
           busy={submitMutation.isPending}
+          disabled={rejectedWithExternal}
         >
           {externalId ? "Resubmit removal" : "Submit removal"}
         </Button>
