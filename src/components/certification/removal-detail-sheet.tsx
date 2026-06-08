@@ -23,6 +23,7 @@ import { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
 import { EnvBanner } from "./env-banner";
+import { RegistryRecordLink } from "./registry-record-link";
 import { SubmitConfirmDialog } from "./submit-confirm-dialog";
 
 interface RemovalDetailSheetProps {
@@ -185,9 +186,13 @@ export function RemovalDetailSheet({
 
           {summary.externalId && (
             <Field label="Registry record">
-              <span className="font-mono text-[var(--color-text-secondary)]">
-                {summary.externalId} · v{summary.version}
-              </span>
+              <RegistryRecordLink
+                facilityId={facilityId}
+                externalId={summary.externalId}
+                version={summary.version}
+                isProduction={isProduction}
+                kind="removal"
+              />
             </Field>
           )}
 

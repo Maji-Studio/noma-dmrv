@@ -63,6 +63,9 @@ export function NewRemovalDialog({
       onClose={onClose}
       width="lg"
       ariaLabelledBy="new-removal-title"
+      // Multi-step wizard: a stray backdrop click must not discard a
+      // half-built removal. Close button + ESC still dismiss.
+      dismissOnClickOutside={false}
     >
       <WizardBody
         facilityId={facilityId}

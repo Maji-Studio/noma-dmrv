@@ -46,6 +46,19 @@ export const isometricRegistry = {
     `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
       args.externalProjectId,
     )}/ghg-entry/${encodeURIComponent(args.externalRemovalId)}/edit`,
+  // A GHG statement, like a removal, lives in the supplier's private Certify
+  // workspace, nested under its project on an environment-specific host. The
+  // path segment is `ghg-statement` (vs the removal's `ghg-entry`), with no
+  // `/edit` suffix. Format confirmed against the Isometric MCP on 2026-06-08:
+  //   {host}/account/certify/project/{projectId}/ghg-statement/{statementId}
+  ghgStatement: (args: {
+    environment: IsometricEnvironment;
+    externalProjectId: string;
+    externalStatementId: string;
+  }) =>
+    `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
+      args.externalProjectId,
+    )}/ghg-statement/${encodeURIComponent(args.externalStatementId)}`,
 };
 
 export const isometricDocs = {

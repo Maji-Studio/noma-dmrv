@@ -7,7 +7,6 @@
 "use client";
 
 import { useId } from "react";
-import { X } from "@phosphor-icons/react";
 import { Modal, type ModalWidth } from "@/components/ui";
 
 interface QuickAddDialogShellProps {
@@ -46,18 +45,10 @@ export function QuickAddDialogShell({
     >
       <div className="flex flex-col" data-testid={testId}>
         {/* Header */}
-        <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
+        <div className="flex items-center p-24 border-b border-[var(--color-border-primary)]">
           <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-4 rounded-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
-            aria-label="Close dialog"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Error banner + form content */}
