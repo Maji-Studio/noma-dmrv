@@ -28,7 +28,9 @@ export async function selectEntity(
 ) {
   const dialog = page.locator('[role="dialog"]');
   const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
-  const fieldContainer = label.locator("..");
+  const fieldContainer = label.locator(
+    "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+  );
 
   await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
   await page.waitForSelector('[data-testid="entity-select-listbox"]', {
@@ -57,7 +59,9 @@ export async function selectEntity(
 export async function selectFirstEntity(page: Page, fieldLabel: string) {
   const dialog = page.locator('[role="dialog"]');
   const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
-  const fieldContainer = label.locator("..");
+  const fieldContainer = label.locator(
+    "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+  );
 
   await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
   await page.waitForSelector('[data-testid="entity-select-listbox"]', {

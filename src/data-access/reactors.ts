@@ -383,7 +383,10 @@ export async function updateReactor(
   // samples. Only check when actually moving to Method B (re-saving an already
   // eligible Method B reactor stays valid since sample counts only grow).
   if (data.samplingMethod === "method_b" && existing.samplingMethod !== "method_b") {
-    const eligibility = await getMethodBEligibilityByReactor(userId, { reactorId });
+    const eligibility = await getMethodBEligibilityByReactor(userId, {
+      reactorId,
+      asOfDate: new Date().toISOString(),
+    });
     if (!eligibility.meetsMinimumMethodASamples) {
       throw new SafeError(
         `Method B requires at least ${eligibility.minimumMethodASampleCount} prior Method A samples; this reactor has ${eligibility.priorMethodASampleCount}.`

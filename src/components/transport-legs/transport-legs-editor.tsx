@@ -5,6 +5,7 @@ import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import {
   useDeleteTransportLeg,
   useTransportLegsForEntity,
@@ -90,9 +91,7 @@ export function TransportLegsEditor({
       )}
 
       {isLoading ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Loading transport legs…
-        </p>
+        <TableSkeleton columns={3} rows={3} />
       ) : !legs || legs.length === 0 ? (
         <p className="body-small text-[var(--color-text-secondary)]">
           No transport legs recorded yet.

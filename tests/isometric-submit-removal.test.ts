@@ -41,7 +41,7 @@ import type {
 
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certifier-removals");
-vi.mock("@/fn/certification/certify-context");
+vi.mock("@/fn/certification/certify-context-core");
 // Phase 3.5: submitRemoval now resolves mirrored Source IDs before
 // hashing. The default-empty mock keeps the pre-Phase-3.5 assertions
 // (`source_ids: []` on every Datapoint) valid; specific Phase 3.5 tests
@@ -65,7 +65,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
 
 import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
-import * as certifyContext from "@/fn/certification/certify-context";
+import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as isometric from "@/lib/isometric";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 
@@ -321,6 +321,9 @@ beforeEach(() => {
   nextLedgerRowId = 1;
 
   vi.mocked(ledger.getLatestSubmission).mockImplementation(async () =>
+    storedLatest(),
+  );
+  vi.mocked(ledger.getLatestSubmissionInTx).mockImplementation(async () =>
     storedLatest(),
   );
   vi.mocked(ledger.insertDraftSubmissionWithMappingLock).mockImplementation(

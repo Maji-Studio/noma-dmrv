@@ -223,7 +223,7 @@ export function CertificationSettings() {
               <SettingsSection
                 icon={Plugs}
                 title="Registry connection — Isometric"
-                caption="The Isometric project every removal and GHG statement from this facility targets."
+                caption="The Isometric project that every removal and GHG statement from this facility targets."
               >
                 <FacilityCertifierSection
                   key={`facility-certifier-${facilityId}`}

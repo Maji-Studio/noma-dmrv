@@ -330,7 +330,23 @@ export async function getLatestSubmission(
   key: SubmissionKey,
 ): Promise<CertificationSubmissionRow | null> {
   requireAuth(userId);
-  const [row] = await db
+  return getLatestSubmissionWithExecutor(db, key);
+}
+
+export async function getLatestSubmissionInTx(
+  userId: string,
+  tx: Tx,
+  key: SubmissionKey,
+): Promise<CertificationSubmissionRow | null> {
+  requireAuth(userId);
+  return getLatestSubmissionWithExecutor(tx, key);
+}
+
+async function getLatestSubmissionWithExecutor(
+  executor: Tx | typeof db,
+  key: SubmissionKey,
+): Promise<CertificationSubmissionRow | null> {
+  const [row] = await executor
     .select()
     .from(certificationSubmissions)
     .where(

@@ -30,12 +30,11 @@ import {
 
 const MAX_BATCH_PREVIEWS = 50;
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function logCreditBatchError(message: string, error: unknown): void {
-  logger.error({ errorMessage: errorMessage(error) }, message);
+  logger.error(
+    { errorName: error instanceof Error ? error.name : typeof error },
+    message,
+  );
 }
 
 /**

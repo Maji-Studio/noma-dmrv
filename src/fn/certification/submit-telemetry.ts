@@ -46,7 +46,7 @@ import {
 } from "@/lib/isometric/parquet/writer";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadRemovalSubmissionContext } from "./certify-context";
+import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,

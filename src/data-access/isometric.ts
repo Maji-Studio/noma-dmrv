@@ -1,9 +1,11 @@
 import { and, count, eq, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, samples } from "@/db/schema";
+import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { requireAuth } from "./utils";
 
-export const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
+// Re-exported for existing consumers that import the threshold from this module.
+export { METHOD_B_MINIMUM_METHOD_A_SAMPLES };
 
 export type MethodBEligibilitySummary = {
   priorMethodASampleCount: number;

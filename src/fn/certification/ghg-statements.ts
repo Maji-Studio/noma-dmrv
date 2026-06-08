@@ -318,8 +318,9 @@ export async function createGhgStatementDraft(
       row,
       externalProjectId: project.externalProjectId,
       endOn: parsed.reportingPeriodEndOn,
+      submissionAttemptId,
     });
-  });
+  }, { rateLimit: submitRateLimit("cert:create-ghg-statement") });
 }
 
 // POSTs the statement to Isometric, with reconcile-on-error: a network
@@ -331,8 +332,16 @@ async function createGhgStatementRemote(args: {
   row: CertificationSubmissionRow;
   externalProjectId: string;
   endOn: string;
+  submissionAttemptId: string;
 }): Promise<CreateGhgStatementResult> {
-  const { userId, statement, row, externalProjectId, endOn } = args;
+  const {
+    userId,
+    statement,
+    row,
+    externalProjectId,
+    endOn,
+    submissionAttemptId,
+  } = args;
 
   let remote: GhgStatement;
   try {
@@ -341,6 +350,16 @@ async function createGhgStatementRemote(args: {
       project_id: externalProjectId,
     });
   } catch (err) {
+    logger.warn(
+      {
+        op: "ghg-statement:create",
+        ghgStatementId: statement.id,
+        submissionId: row.id,
+        submissionAttemptId,
+        errorName: err instanceof Error ? err.name : typeof err,
+      },
+      "ghg statement create failed; attempting reconciliation",
+    );
     const reconciled = await reconcileGhgStatement({
       projectId: externalProjectId,
       endOn,
@@ -548,6 +567,16 @@ export async function submitGhgStatementToVerifier(
               ghg_statement_report_url: parsed.reportUrl,
             });
     } catch (err) {
+      logger.warn(
+        {
+          op: `ghg-statement:${submitMode}`,
+          ghgStatementId,
+          submissionId: submission.id,
+          submissionAttemptId,
+          errorName: err instanceof Error ? err.name : typeof err,
+        },
+        "ghg statement submit failed; attempting reconciliation",
+      );
       const after = await getGhgStatement(submission.externalId).catch(
         () => null,
       );

@@ -68,6 +68,18 @@ describe("aggregateTransportLegs", () => {
     expect(result.warning).toMatch(/missing load_mass_kg/);
   });
 
+  it("warns when legs mix transport-factor fields (different method)", () => {
+    // Collapsing to one mass-weighted distance is only valid when every leg
+    // shares the fields that select the Certify emission factor. A differing
+    // transportMethodType must surface a warning instead of a value.
+    const result = aggregateTransportLegs(
+      [leg(50, 1000), { ...leg(100, 1000), transportMethodType: "rail" }],
+      "Feedstock",
+    );
+    expect(result.distanceKm).toBeNull();
+    expect(result.warning).toMatch(/mix factor fields/);
+  });
+
   it("handles zero-distance legs cleanly", () => {
     // (0*1000 + 100*1000) / 2000 = 50
     const result = aggregateTransportLegs(

@@ -19,6 +19,7 @@
 
 import { useState } from "react";
 import { Button, Modal } from "@/components/ui";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   useCreateRemovalWithBatches,
@@ -281,19 +282,31 @@ function Footer({
     );
   }
 
+  const submitButton = (
+    <Button
+      variant="primary"
+      onClick={onAdvanceToSubmit}
+      disabled={!canSubmit}
+    >
+      Submit
+    </Button>
+  );
+
   // requirements
   return (
     <div className="flex items-center justify-end gap-12 border-t border-[var(--color-border-secondary)] pt-16">
       <Button variant="default" onClick={onResolveLater}>
         Resolve later
       </Button>
-      <Button
-        variant="primary"
-        onClick={onAdvanceToSubmit}
-        disabled={!canSubmit}
-      >
-        Submit
-      </Button>
+      {canSubmit ? (
+        submitButton
+      ) : (
+        <Tooltip content="Complete unmet registry requirements before submitting.">
+          <span className="inline-flex" tabIndex={0}>
+            {submitButton}
+          </span>
+        </Tooltip>
+      )}
     </div>
   );
 }
