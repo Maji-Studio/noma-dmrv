@@ -1,6 +1,7 @@
 "use client";
 
 import { ServerError } from "@/components/forms";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { TransportLegLine } from "./transport-leg-list-item";
@@ -44,9 +45,7 @@ export function TransportLegsSummary({
       )}
 
       {error ? null : isLoading ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Loading transport legs…
-        </p>
+        <TableSkeleton columns={2} rows={3} />
       ) : !legs || legs.length === 0 ? (
         <p className="body-small text-[var(--color-text-secondary)]">
           No transport legs recorded yet. Use Edit to add one.

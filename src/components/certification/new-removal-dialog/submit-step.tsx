@@ -19,6 +19,9 @@ import { isometricRegistry } from "@/lib/isometric/links";
 import { EnvBanner } from "../env-banner";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 
+const REJECTED_IN_ISOMETRIC_MSG =
+  "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
+
 interface SubmitStepProps {
   removalId: string;
   ctx: RemovalCertifyContext;
@@ -45,9 +48,7 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
-      setSubmitError(
-        "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.",
-      );
+      setSubmitError(REJECTED_IN_ISOMETRIC_MSG);
       return;
     }
     setSubmitError(null);
@@ -142,7 +143,7 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
         <ServerError
           message={
             rejectedWithExternal
-              ? "This removal was rejected in Isometric. Resolve the registry record before retrying from noma."
+              ? REJECTED_IN_ISOMETRIC_MSG
               : submitError ?? undefined
           }
         />

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ProductionSampleForm } from "./production-sample-form";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
@@ -44,10 +45,12 @@ function formatNum(v: number | null, unit?: string): string {
 
 interface ProductionSampleTableProps {
   productionRunId: string;
+  readOnly?: boolean;
 }
 
 export function ProductionSampleTable({
   productionRunId,
+  readOnly = false,
 }: ProductionSampleTableProps) {
   const { data: samples, isLoading, error } = useProductionSamples(productionRunId);
   const createSample = useCreateProductionSample();
@@ -113,7 +116,7 @@ export function ProductionSampleTable({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Production Samples
         </h3>
-        {!inlineForm.open && (
+        {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <Plus size={16} weight="bold" />
             Add Sample
@@ -126,12 +129,12 @@ export function ProductionSampleTable({
 
       {/* Table */}
       {isLoading ? (
-        <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          Loading samples...
-        </p>
+        <TableSkeleton columns={readOnly ? 7 : 8} rows={3} />
       ) : !samples?.length && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          No samples recorded yet. Click &ldquo;Add Sample&rdquo; to record an in-process measurement.
+          {readOnly
+            ? "No samples recorded yet."
+            : "No samples recorded yet. Click \"Add Sample\" to record an in-process measurement."}
         </p>
       ) : samples?.length ? (
         <div className="overflow-x-auto">
@@ -145,7 +148,9 @@ export function ProductionSampleTable({
                 <th className="py-8 pr-12 font-medium">Moisture</th>
                 <th className="py-8 pr-12 font-medium">Fixed C</th>
                 <th className="py-8 pr-12 font-medium">Operator</th>
-                <th className="py-8 font-medium text-right">Actions</th>
+                {!readOnly && (
+                  <th className="py-8 font-medium text-right">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -163,28 +168,30 @@ export function ProductionSampleTable({
                   <td className="py-8 pr-12">{formatNum(s.moistureContentPercent, "%")}</td>
                   <td className="py-8 pr-12">{formatNum(s.fixedCarbonPercent, "%")}</td>
                   <td className="py-8 pr-12">{s.operatorName ?? "\u2014"}</td>
-                  <td className="py-8 text-right">
-                    <div className="flex items-center justify-end gap-4">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(s)}
-                        className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
-                        aria-label="Edit sample"
-                        disabled={inlineForm.open}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(s.id)}
-                        className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
-                        aria-label="Delete sample"
-                        disabled={inlineForm.open}
-                      >
-                        <Trash size={16} />
-                      </button>
-                    </div>
-                  </td>
+                  {!readOnly && (
+                    <td className="py-8 text-right">
+                      <div className="flex items-center justify-end gap-4">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(s)}
+                          className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+                          aria-label="Edit sample"
+                          disabled={inlineForm.open}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingId(s.id)}
+                          className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+                          aria-label="Delete sample"
+                          disabled={inlineForm.open}
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -193,7 +200,7 @@ export function ProductionSampleTable({
       ) : null}
 
       {/* Inline Add/Edit Form */}
-      {inlineForm.open && (
+      {!readOnly && inlineForm.open && (
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
           <h4 className="title-heading-4 mb-16">
             {inlineForm.sample ? "Edit Sample" : "Add Production Sample"}
@@ -211,14 +218,16 @@ export function ProductionSampleTable({
       )}
 
       {/* Delete Confirmation */}
-      <DeleteConfirmDialog
-        isOpen={!!deletingId}
-        title="Delete Production Sample"
-        message="Are you sure you want to delete this sample? This action cannot be undone."
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeletingId(null)}
-        isPending={deleteSample.isPending}
-      />
+      {!readOnly && (
+        <DeleteConfirmDialog
+          isOpen={!!deletingId}
+          title="Delete Production Sample"
+          message="Are you sure you want to delete this sample? This action cannot be undone."
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeletingId(null)}
+          isPending={deleteSample.isPending}
+        />
+      )}
     </div>
   );
 }

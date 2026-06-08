@@ -96,6 +96,8 @@ export function Modal({
     <dialog
       ref={dialogRef}
       className={`${baseClass} ${widthClass} ${className ?? ""}`.trim()}
+      role="dialog"
+      aria-modal="true"
       aria-labelledby={ariaLabelledBy}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}

@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   doublePrecision,
+  index,
   integer,
   pgTable,
   real,
@@ -225,6 +226,10 @@ export const transportLegs = pgTable(
     uniqueIndex('transport_legs_one_derived_per_entity_idx')
       .on(table.entityType, table.entityId)
       .where(sql`${table.isDerived} = true`),
+    index('transport_legs_entity_type_entity_id_idx').on(
+      table.entityType,
+      table.entityId
+    ),
   ]
 );
 

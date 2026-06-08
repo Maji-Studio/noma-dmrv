@@ -8,6 +8,7 @@ import { db } from "@/db";
 import {
   formulations,
   formulationIngredients,
+  storageLocations,
   type Formulation,
   type FormulationIngredient,
 } from "@/db/schema";
@@ -315,7 +316,7 @@ export async function deleteFormulation(
 ): Promise<void> {
   requireAuth(userId);
 
-  const [existingResult, productCountResult] = await Promise.all([
+  const [existingResult, productCountResult, binCountResult] = await Promise.all([
     db
       .select({ id: formulations.id })
       .from(formulations)
@@ -324,6 +325,10 @@ export async function deleteFormulation(
       .select({ count: count() })
       .from(biocharProducts)
       .where(eq(biocharProducts.formulationId, formulationId)),
+    db
+      .select({ count: count() })
+      .from(storageLocations)
+      .where(eq(storageLocations.formulationId, formulationId)),
   ]);
 
   if (existingResult.length === 0) {
@@ -333,6 +338,12 @@ export async function deleteFormulation(
   if (Number(productCountResult[0].count) > 0) {
     throw new SafeError(
       "Cannot delete formulation with associated biochar products. Remove products first."
+    );
+  }
+
+  if (Number(binCountResult[0].count) > 0) {
+    throw new SafeError(
+      "Cannot delete formulation used by product bins. Clear those bins first."
     );
   }
 
