@@ -711,7 +711,6 @@ test.describe("Full E2E Workflow - UI Navigation", () => {
       "/customers",
       "/feedstocks",
       "/production-runs",
-      "/projects",
     ];
 
     for (const route of protectedRoutes) {

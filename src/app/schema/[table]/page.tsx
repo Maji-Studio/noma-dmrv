@@ -22,11 +22,9 @@ const AREA_ACCENT: Record<SchemaArea, string> = {
   Logistics: "var(--clr-dark-purple)",
   Application: "var(--clr-pink)",
   Credits: "var(--clr-purple)",
-  Emissions: "var(--clr-red)",
   Documentation: "var(--clr-dark-purple)",
   Certification: "var(--clr-orange)",
   Compliance: "var(--clr-red)",
-  "Legacy/Core Template": "var(--color-text-tertiary)",
   Other: "var(--color-text-tertiary)",
 };
 

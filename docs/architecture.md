@@ -25,11 +25,11 @@ Rules:
 ## Routing Model
 
 - `src/app/(auth)/*`: public auth pages.
-- `src/app/(app)/projects`: authenticated project list/CRUD.
-- `src/app/(app)/[projectId]/*`: project-scoped pages.
+- `src/app/(app)/*`: authenticated MRV workspace pages.
 - `src/app/(app)/admin/*`: admin-only pages.
+- `src/app/api/*`: API routes for auth, local storage, documents, and integration support.
 
-Project-scoped routes use `src/app/(app)/[projectId]/layout.tsx` to enforce project membership once at layout level.
+The app workspace is facility-scoped. `src/app/(app)/layout.tsx` enforces authentication and mounts `FacilityProvider`; pages and forms receive the active `facilityId` from context or explicit route/search params. The legacy starter `projects` / `[projectId]` route tree was removed in the 2026-06-08 schema slim-down.
 
 ## Auth Architecture
 
@@ -65,7 +65,8 @@ This template uses **Next.js 16's `proxy.ts`** instead of traditional `middlewar
 ## State and Data Fetching
 
 - React Query provider is mounted once in `src/app/layout.tsx`.
-- Feature hooks (`use-items`, `use-projects`) call server actions and invalidate cache keys.
+- Feature hooks in `src/hooks/` call server actions and invalidate cache keys.
+- Facility-scoped query keys include the active `facilityId` when the resource is facility-specific.
 
 ### Caching Strategy
 
@@ -83,7 +84,7 @@ This template uses **Next.js 16's `proxy.ts`** instead of traditional `middlewar
 **What is cached:**
 - Client-side: React Query handles all data caching
   - Stale time: 30s for current data, 5m for historical
-  - Query keys: `["resource", projectId, ...specifics]`
+  - Query keys: `["resource", facilityId, ...specifics]` for facility-scoped resources
   - Automatic invalidation on mutations
 
 **What is NOT cached:**
@@ -181,8 +182,9 @@ data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
 lib/isometric/              # Pure HTTP client + transformers + utils
                             #   (no DB, no auth, no ActionResult)
        ↓
-db/schema/certification.ts  # certifier_projects, certifier_ghg_statements,
-                            #   certifier_removals, certifier_sources,
+db/schema/certification.ts  # certifier_projects, certifier_sensors,
+                            #   certifier_project_emissions,
+                            #   certifier_ghg_statements, certifier_removals,
                             #   certification_submissions,
                             #   certifier_document_uploads,
                             #   certifier_sync_events
@@ -204,29 +206,21 @@ state). See ADR 0003 for the Removal submission model.
 
 **UI surfaces:**
 
-- Credit-batch side sheet — Certify panel mounted via the
-  `viewModeChildren` slot on `EntitySideSheet`
-  (`src/components/credit-batches/credit-batch-list.tsx`). A **read-only
-  status bridge** (ADR 0007): it shows the credit batch's removal
-  membership and the removal's own local status, lists member batches
-  read-only, and deep-links **"Open in Certification →"** (the removal's
-  guided Review flow, or the Removals tab when ungrouped). It no longer
-  submits — submission consolidated into the Certification workspace
-  below. The GHG Statement lifecycle (create, submit, status) is
-  decoupled and lives there too — not here.
+- Credit-batch detail and health surfaces show readiness, membership, and
+  blocker context. They do not submit directly; submission is consolidated
+  into the Certification workspace.
 - `/certification` route group (`src/app/(app)/certification/`) — a
   first-class certification **workspace** (ADR 0007), reached from its own
   titled **Certification** group in the sidebar with four routes: Overview ·
   Removals · GHG Statements · Settings. Overview (`page.tsx` →
   `CertificationOverview`) is an operator **work queue** ("needs attention"),
   not a dashboard; Removals and GHG Statements are DataTables with read-only
-  side-sheets (`?removal=` / `?statement=`); the complex removal path is a
-  guided full-width **Review flow** (`removals/[id]/review`: Assemble → Review
-  → Evidence → Pre-flight → Submit). Settings consolidates the
-  facility↔project link and emission/LCA config (the old
-  `/admin/emission-estimates` redirects here). Provider-neutral by design —
-  Verra / Gold Standard / CSI surfaces may be added as sibling routes later;
-  today every surface is Isometric-specific.
+  side-sheets (`?removal=` / `?statement=`). New removals are created through
+  the New-Removal wizard: select ready ungrouped batches, review registry
+  requirements, then submit. Settings consolidates the facility↔project link
+  and emission/LCA config (the old `/admin/emission-estimates` redirects here).
+  Provider-neutral by design — Verra / Gold Standard / CSI surfaces may be
+  added as sibling routes later; today every surface is Isometric-specific.
 - Facility list side sheet — facility ↔ Isometric project mapping
   (`src/components/certification/facility-certifier-section.tsx`).
 
@@ -277,9 +271,8 @@ const { facilityId, selectedFacility, facilities, setFacilityId } = useFacilityC
 ## What Is Intentionally Scaffolded
 
 - Admin user invitation UI (`/admin/users`) is a scaffold.
-- Project settings page is a scaffold.
 
-These are intentionally marked so template consumers can extend without hidden assumptions.
+These are intentionally marked so future work can extend them without hidden assumptions.
 
 ## Caching Best Practices
 

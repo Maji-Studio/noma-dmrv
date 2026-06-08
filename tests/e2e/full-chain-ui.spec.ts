@@ -248,20 +248,8 @@ test.describe("Full Chain UI Smoke Test", () => {
               .delete(schema.certifierDocumentUploads)
               .where(inArray(schema.certifierDocumentUploads.documentId, documentIds));
             await tx
-              .delete(schema.feedstockScAssessments)
-              .where(inArray(schema.feedstockScAssessments.evidenceDocumentId, documentIds));
-            await tx
-              .delete(schema.custodyHandoffs)
-              .where(inArray(schema.custodyHandoffs.documentId, documentIds));
-            await tx
               .delete(schema.documents)
               .where(inArray(schema.documents.id, documentIds));
-          }
-
-          if (creditBatchIds.length) {
-            await tx
-              .delete(schema.ghgMaterialityAssessments)
-              .where(inArray(schema.ghgMaterialityAssessments.creditBatchId, creditBatchIds));
           }
 
           if (applicationIds.length) {
@@ -331,9 +319,6 @@ test.describe("Full Chain UI Smoke Test", () => {
           }
 
           if (feedstockIds.length) {
-            await tx
-              .delete(schema.feedstockScAssessments)
-              .where(inArray(schema.feedstockScAssessments.feedstockId, feedstockIds));
             await tx
               .delete(schema.productionRunFeedstocks)
               .where(inArray(schema.productionRunFeedstocks.feedstockId, feedstockIds));
