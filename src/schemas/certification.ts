@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emptyToNull, toNumberOrUndefined } from "@/schemas/helpers";
+import { emptyToNull, requiredNumber } from "@/schemas/helpers";
 
 // Hard cap on the free-text "summary of changes" the operator writes when
 // resubmitting a GHG statement. 2 kB is enough for the audit-trail context
@@ -69,29 +69,19 @@ export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 export const STAGE_SPLIT_TOTAL_PCT = 100;
 export const STAGE_SPLIT_SUM_TOLERANCE = 0.1;
 
-function requiredNumber(label: string) {
-  return z.preprocess(
-    toNumberOrUndefined,
-    z.number({
-      error: (iss) =>
-        iss.input === undefined ? `${label} is required` : "Invalid number",
-    }),
-  );
-}
-
 export const facilityEmissionConfigSchema = z
   .object({
     facilityId: z.string().uuid("Select a facility"),
-    gensetEnergyYieldKwhPerLitre: requiredNumber("Genset energy yield").pipe(
+    gensetEnergyYieldKwhPerLitre: requiredNumber("Genset energy yield is required").pipe(
       z.number().positive("Genset energy yield must be greater than 0"),
     ),
-    stageSplitBiomassPct: requiredNumber("Biomass processing split").pipe(
+    stageSplitBiomassPct: requiredNumber("Biomass processing split is required").pipe(
       z.number().min(0).max(100, "Split must be between 0 and 100"),
     ),
-    stageSplitPyrolysisPct: requiredNumber("Pyrolysis split").pipe(
+    stageSplitPyrolysisPct: requiredNumber("Pyrolysis split is required").pipe(
       z.number().min(0).max(100, "Split must be between 0 and 100"),
     ),
-    stageSplitBiocharPct: requiredNumber("Biochar processing split").pipe(
+    stageSplitBiocharPct: requiredNumber("Biochar processing split is required").pipe(
       z.number().min(0).max(100, "Split must be between 0 and 100"),
     ),
   })
@@ -195,4 +185,3 @@ export const createGhgStatementSchema = z.object({
 });
 
 export type CreateGhgStatementInput = z.infer<typeof createGhgStatementSchema>;
-

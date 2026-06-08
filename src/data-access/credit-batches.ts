@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
@@ -26,6 +26,7 @@ import {
   SOIL_STORAGE_MODULE_VERSION,
   computeApplicationCo2eStored,
 } from "@/lib/calculations/biochar-removal";
+import { formatUtcDate } from "@/lib/date-utils";
 import { aggregateProductionRuns } from "@/lib/isometric/utils/aggregation";
 import { SafeError } from "@/lib/errors";
 
@@ -269,12 +270,12 @@ async function validateApplicationIds(
 
   // Validate application dates fall within the credit batch date window
   if (startDate != null && endDate != null) {
-    const startStr = typeof startDate === "string" ? startDate : startDate.toISOString().split("T")[0];
-    const endStr = typeof endDate === "string" ? endDate : endDate.toISOString().split("T")[0];
+    const startStr = typeof startDate === "string" ? startDate : formatUtcDate(startDate);
+    const endStr = typeof endDate === "string" ? endDate : formatUtcDate(endDate);
 
     const outsideWindow = rows.filter((r) => {
       if (!r.applicationDate) return true;
-      const appDateStr = r.applicationDate.toISOString().split("T")[0];
+      const appDateStr = formatUtcDate(r.applicationDate);
       return appDateStr < startStr || appDateStr > endStr;
     });
 
@@ -327,19 +328,17 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
     {} as Record<string, string[]>
   );
 
-  return Promise.all(
-    batches.map((b) => {
-      const applicationIds = applicationsByBatch[b.creditBatch.id] ?? [];
-      return {
-        ...b.creditBatch,
-        facility: b.facilityName ? { name: b.facilityName } : null,
-        applicationCount: applicationIds.length,
-        applicationIds,
-        co2eStoredPreview: null,
-        previewAvailable: false,
-      };
-    })
-  );
+  return batches.map((b) => {
+    const applicationIds = applicationsByBatch[b.creditBatch.id] ?? [];
+    return {
+      ...b.creditBatch,
+      facility: b.facilityName ? { name: b.facilityName } : null,
+      applicationCount: applicationIds.length,
+      applicationIds,
+      co2eStoredPreview: null,
+      previewAvailable: false,
+    };
+  });
 }
 
 export async function getCo2eStoredPreviews(
@@ -486,8 +485,8 @@ export async function createCreditBatch(
       .values({
         code: batchData.code,
         facilityId: batchData.facilityId,
-        startDate: batchData.startDate.toISOString().split("T")[0],
-        endDate: batchData.endDate.toISOString().split("T")[0],
+        startDate: formatUtcDate(batchData.startDate),
+        endDate: formatUtcDate(batchData.endDate),
         certifier,
         durabilityOption: batchData.durabilityOption,
         hToCorgRatio: batchData.hToCorgRatio ?? null,
@@ -566,9 +565,9 @@ export async function updateCreditBatch(
   if (updateFields.facilityId !== undefined)
     updateData.facilityId = updateFields.facilityId;
   if (updateFields.startDate !== undefined)
-    updateData.startDate = updateFields.startDate.toISOString().split("T")[0];
+    updateData.startDate = formatUtcDate(updateFields.startDate);
   if (updateFields.endDate !== undefined)
-    updateData.endDate = updateFields.endDate.toISOString().split("T")[0];
+    updateData.endDate = formatUtcDate(updateFields.endDate);
   if (updateFields.durabilityOption !== undefined)
     updateData.durabilityOption = updateFields.durabilityOption;
   if (updateFields.hToCorgRatio !== undefined)
@@ -627,10 +626,10 @@ export async function updateCreditBatch(
 
     // Resolve the effective date window after update
     const effectiveStartDate = updateFields.startDate
-      ? updateFields.startDate.toISOString().split("T")[0]
+      ? formatUtcDate(updateFields.startDate)
       : existingBatch.startDate;
     const effectiveEndDate = updateFields.endDate
-      ? updateFields.endDate.toISOString().split("T")[0]
+      ? formatUtcDate(updateFields.endDate)
       : existingBatch.endDate;
 
     if (effectiveEndDate < effectiveStartDate) {
@@ -729,6 +728,7 @@ export async function creditBatchCodeExists(
   code: string,
   excludeId?: string
 ): Promise<boolean> {
+  requireAuth(userId);
   const existing = await getCreditBatchByCode(userId, code);
   if (!existing) return false;
   if (excludeId && existing.id === excludeId) return false;
@@ -762,19 +762,24 @@ export async function checkCreditBatchDateOverlap(
   excludeId?: string,
 ): Promise<CreditBatch | null> {
   requireAuth(userId);
-  const startStr = startDate.toISOString().split("T")[0];
-  const endStr = endDate.toISOString().split("T")[0];
+  const startStr = formatUtcDate(startDate);
+  const endStr = formatUtcDate(endDate);
 
-  const existing = await db
+  const conditions = [
+    eq(creditBatches.facilityId, facilityId),
+    lte(creditBatches.startDate, endStr),
+    gte(creditBatches.endDate, startStr),
+  ];
+
+  if (excludeId) {
+    conditions.push(sql`${creditBatches.id} != ${excludeId}`);
+  }
+
+  const [overlapping] = await db
     .select()
     .from(creditBatches)
-    .where(eq(creditBatches.facilityId, facilityId));
-
-  const overlapping = existing.find((batch) => {
-    if (excludeId && batch.id === excludeId) return false;
-    // Overlap: startA <= endB AND endA >= startB
-    return batch.startDate <= endStr && batch.endDate >= startStr;
-  });
+    .where(and(...conditions))
+    .limit(1);
 
   return overlapping ?? null;
 }

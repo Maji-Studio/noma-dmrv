@@ -4,19 +4,21 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, optionalPositiveNumber, toNumberOrNull } from "./helpers";
+import {
+  emptyToNull,
+  optionalPositiveNumber,
+  requiredNumber,
+} from "./helpers";
 
 // ============================================
 // Shared numeric field helpers
 // ============================================
 
-const requiredNonNegativeNumber = z.preprocess(
-  toNumberOrNull,
+const requiredNonNegativeNumber = requiredNumber().pipe(
   z.number().min(0, "Must be 0 or greater")
 );
 
-const requiredMoisturePercent = z.preprocess(
-  toNumberOrNull,
+const requiredMoisturePercent = requiredNumber().pipe(
   z
     .number()
     .min(0, "Moisture must be between 0 and 100")
@@ -32,12 +34,7 @@ export const binAllocationSchema = z.object({
     .string()
     .min(1, "Please select a storage bin")
     .uuid("Please select a valid storage bin"),
-  allocatedWetMassKg: z.preprocess(
-    toNumberOrNull,
-    z
-      .number()
-      .min(0, "Must be 0 or greater")
-  ),
+  allocatedWetMassKg: requiredNonNegativeNumber,
 });
 
 export type BinAllocation = z.infer<typeof binAllocationSchema>;

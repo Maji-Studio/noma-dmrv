@@ -324,6 +324,15 @@ describe("buildRemovalPreflightChecklist", () => {
     expect(checkFor(checks, "entityReadiness").status).toBe("unmet");
     expect(checkFor(checks, "entityReadiness").detail).toContain("Electricity");
   });
+
+  it("skips entity readiness when there is nothing to submit", () => {
+    // No runs ⇒ no entities to evaluate ⇒ empty gaps means "not evaluated",
+    // not "complete", so the check is skipped rather than met.
+    const checks = buildRemovalPreflightChecklist(
+      ready({ hasSubmittableRuns: false, entityReadinessGaps: [] }),
+    );
+    expect(checkFor(checks, "entityReadiness").status).toBe("skipped");
+  });
 });
 
 describe("buildRemovalRequirementsChecklist — wizard facility-level subset", () => {

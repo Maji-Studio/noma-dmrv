@@ -7,6 +7,7 @@ import {
 import { creditBatches } from "@/db/schema/credits";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import { requireAuth } from "./utils";
 
 export type CertifierRemovalRow = typeof certifierRemovals.$inferSelect;
@@ -73,6 +74,7 @@ export async function gcRemovalIfOrphaned(
   if (anySubmission) return;
 
   await tx.delete(certifierRemovals).where(eq(certifierRemovals.id, removalId));
+  logger.info({ removalId }, "orphan certifier removal deleted");
 }
 
 export async function getCertifierRemovalById(

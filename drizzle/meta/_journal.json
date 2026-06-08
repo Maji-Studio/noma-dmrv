@@ -253,6 +253,13 @@
       "when": 1780825491000,
       "tag": "0035_deterministic_product_bin_formulation",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780848022929,
+      "tag": "0036_cultured_rattler",
+      "breakpoints": true
     }
   ]
 }

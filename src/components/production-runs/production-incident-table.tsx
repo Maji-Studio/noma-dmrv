@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ProductionIncidentForm } from "./production-incident-form";
 import {
@@ -37,6 +38,7 @@ interface ProductionIncidentTableProps {
   facilityId?: string;
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
+  readOnly?: boolean;
 }
 
 export function ProductionIncidentTable({
@@ -44,6 +46,7 @@ export function ProductionIncidentTable({
   facilityId,
   defaultReactorId,
   defaultOperatorId,
+  readOnly = false,
 }: ProductionIncidentTableProps) {
   const { data: incidents, isLoading, error } = useProductionIncidents(productionRunId);
   const createIncident = useCreateProductionIncident();
@@ -107,7 +110,7 @@ export function ProductionIncidentTable({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Production Incidents
         </h3>
-        {!inlineForm.open && (
+        {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <Plus size={16} weight="bold" />
             Add Incident
@@ -118,12 +121,12 @@ export function ProductionIncidentTable({
       {error && <ServerError message={error.message} />}
 
       {isLoading ? (
-        <p className="body-small py-16 text-[var(--color-text-tertiary)]">
-          Loading incidents...
-        </p>
+        <TableSkeleton columns={readOnly ? 5 : 6} rows={3} />
       ) : !incidents?.length && !inlineForm.open ? (
         <p className="body-small py-16 text-[var(--color-text-tertiary)]">
-          No incidents recorded yet. Use this section to log production issues and corrective actions.
+          {readOnly
+            ? "No incidents recorded yet."
+            : "No incidents recorded yet. Use this section to log production issues and corrective actions."}
         </p>
       ) : incidents?.length ? (
         <div className="overflow-x-auto">
@@ -135,7 +138,9 @@ export function ProductionIncidentTable({
                 <th className="py-8 pr-12 font-medium">Reactor</th>
                 <th className="py-8 pr-12 font-medium">Operator</th>
                 <th className="py-8 pr-12 font-medium">Description</th>
-                <th className="py-8 font-medium text-right">Actions</th>
+                {!readOnly && (
+                  <th className="py-8 font-medium text-right">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -155,28 +160,30 @@ export function ProductionIncidentTable({
                   <td className="py-8 pr-12 max-w-[360px] whitespace-normal">
                     {incident.description}
                   </td>
-                  <td className="py-8 text-right">
-                    <div className="flex items-center justify-end gap-4">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(incident)}
-                        className="p-6 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
-                        aria-label="Edit incident"
-                        disabled={inlineForm.open}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(incident.id)}
-                        className="p-6 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-signal-red)]"
-                        aria-label="Delete incident"
-                        disabled={inlineForm.open}
-                      >
-                        <Trash size={16} />
-                      </button>
-                    </div>
-                  </td>
+                  {!readOnly && (
+                    <td className="py-8 text-right">
+                      <div className="flex items-center justify-end gap-4">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(incident)}
+                          className="p-6 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
+                          aria-label="Edit incident"
+                          disabled={inlineForm.open}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingId(incident.id)}
+                          className="p-6 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-signal-red)]"
+                          aria-label="Delete incident"
+                          disabled={inlineForm.open}
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -184,7 +191,7 @@ export function ProductionIncidentTable({
         </div>
       ) : null}
 
-      {inlineForm.open && (
+      {!readOnly && inlineForm.open && (
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
           <h4 className="title-heading-4 mb-16">
             {inlineForm.incident ? "Edit Incident" : "Add Production Incident"}
@@ -204,14 +211,16 @@ export function ProductionIncidentTable({
         </div>
       )}
 
-      <DeleteConfirmDialog
-        isOpen={!!deletingId}
-        title="Delete Production Incident"
-        message="Are you sure you want to delete this incident? This action cannot be undone."
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeletingId(null)}
-        isPending={deleteIncident.isPending}
-      />
+      {!readOnly && (
+        <DeleteConfirmDialog
+          isOpen={!!deletingId}
+          title="Delete Production Incident"
+          message="Are you sure you want to delete this incident? This action cannot be undone."
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeletingId(null)}
+          isPending={deleteIncident.isPending}
+        />
+      )}
     </div>
   );
 }

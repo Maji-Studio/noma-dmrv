@@ -86,7 +86,7 @@ export interface BatchHealth {
 const CARBON_LABEL = "Carbon & durability inputs complete";
 const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
-const ENTITY_READINESS_LABEL = "Entity certifier fields checked before submit";
+const ENTITY_READINESS_LABEL = "Final-submit entity fields";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 
 function describeCategories(categories: TransportCategory[]): string {
@@ -156,6 +156,7 @@ function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheck {
       key: "entityReadiness",
       label: ENTITY_READINESS_LABEL,
       status: "met",
+      detail: "No entity field gaps detected for submission.",
     };
   }
   const suffix =
@@ -166,7 +167,7 @@ function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheck {
     key: "entityReadiness",
     label: ENTITY_READINESS_LABEL,
     status: "skipped",
-    detail: `Reviewed before submit: ${facts.entityReadinessGaps
+    detail: `Still needed before submit: ${facts.entityReadinessGaps
       .slice(0, ENTITY_READINESS_PREVIEW_LIMIT)
       .join(", ")}${suffix}`,
   };
