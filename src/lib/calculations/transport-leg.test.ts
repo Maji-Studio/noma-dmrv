@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  aggregateDistributionLegs,
   deriveTransportLeg,
   isDerivedLegPersistable,
+  type DistributionLegRow,
 } from "./transport-leg";
+
+function row(
+  loadMassKg: number | null,
+  distanceKm: number | null,
+  locationName: string | null = null,
+  gps: [number, number] | null = null,
+): DistributionLegRow {
+  return {
+    loadMassKg,
+    distanceKm,
+    locationName,
+    locationGpsLatitude: gps?.[0] ?? null,
+    locationGpsLongitude: gps?.[1] ?? null,
+  };
+}
 
 describe("deriveTransportLeg", () => {
   const origin = { name: "Acme Forestry", gpsLatitude: 51.5, gpsLongitude: -0.12 };
@@ -71,5 +88,57 @@ describe("deriveTransportLeg", () => {
     });
     expect(leg.missing).toHaveLength(0);
     expect(isDerivedLegPersistable(leg)).toBe(true);
+  });
+});
+
+describe("aggregateDistributionLegs", () => {
+  it("passes a single delivery straight through", () => {
+    const agg = aggregateDistributionLegs([row(250, 40, "Plot A", [-6.84, 39.31])]);
+    expect(agg.totalMassKg).toBe(250);
+    expect(agg.weightedDistanceKm).toBe(40);
+    expect(agg.destinationName).toBe("Plot A");
+    expect(agg.destinationGpsLatitude).toBe(-6.84);
+    expect(agg.destinationGpsLongitude).toBe(39.31);
+  });
+
+  it("mass-weights distance so avgDist × totalMass === Σ(distⱼ·massⱼ)", () => {
+    const rows = [row(100, 30), row(300, 50)];
+    const agg = aggregateDistributionLegs(rows);
+    const exactProduct = 100 * 30 + 300 * 50; // 16500 kg·km
+    expect(agg.totalMassKg).toBe(400);
+    // (100·30 + 300·50) / 400 = 45
+    expect(agg.weightedDistanceKm).toBe(45);
+    expect(agg.weightedDistanceKm! * agg.totalMassKg).toBe(exactProduct);
+  });
+
+  it("skips deliveries missing a positive mass or distance", () => {
+    const agg = aggregateDistributionLegs([
+      row(250, 40, "Plot A"),
+      row(null, 40, "Plot B"), // no mass → skipped
+      row(100, null, "Plot C"), // no distance → skipped
+      row(0, 40, "Plot D"), // zero mass → skipped
+    ]);
+    expect(agg.totalMassKg).toBe(250);
+    expect(agg.weightedDistanceKm).toBe(40);
+    expect(agg.destinationName).toBe("Plot A");
+  });
+
+  it("labels multiple destinations generically and drops single GPS", () => {
+    const agg = aggregateDistributionLegs([
+      row(100, 20, "Plot A", [1, 2]),
+      row(100, 60, "Plot B", [3, 4]),
+    ]);
+    expect(agg.totalMassKg).toBe(200);
+    expect(agg.weightedDistanceKm).toBe(40);
+    expect(agg.destinationName).toBe("Customer sites");
+    expect(agg.destinationGpsLatitude).toBeNull();
+    expect(agg.destinationGpsLongitude).toBeNull();
+  });
+
+  it("returns an empty, non-persistable aggregate when nothing qualifies", () => {
+    const agg = aggregateDistributionLegs([row(null, null), row(0, 10)]);
+    expect(agg.totalMassKg).toBe(0);
+    expect(agg.weightedDistanceKm).toBeNull();
+    expect(agg.destinationName).toBeNull();
   });
 });

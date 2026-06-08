@@ -22,7 +22,9 @@ import {
   type DeliveryDetail,
   type DeliveryStats,
 } from "@/data-access/deliveries";
+import { syncBiocharProductTransportLeg } from "@/data-access/transport-legs";
 import { getUser } from "@/lib/auth/server";
+import { logger } from "@/lib/log";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
@@ -30,6 +32,39 @@ import {
   deliveryFilterSchema,
 } from "@/schemas/deliveries";
 import type { ActionResult } from "@/types/actions";
+
+// A biochar product's distribution transport leg is auto-derived from the
+// aggregate of its deliveries (customer-location distance + delivered mass), so
+// any delivery write must resync the affected product(s). Reassignments and
+// deletes resync both the old and new product. Dedupes and skips nulls.
+async function resyncBiocharLegs(
+  userId: string,
+  biocharProductIds: Array<string | null | undefined>,
+): Promise<void> {
+  const ids = [
+    ...new Set(
+      biocharProductIds.filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  // The resync runs AFTER the delivery write has committed, so a failure here
+  // must not surface as a failed delivery mutation. The derived leg is
+  // self-healing — the next delivery write for the product recomputes it via
+  // the idempotent upsert — so we log and move on rather than throw.
+  try {
+    await Promise.all(
+      ids.map((id) => syncBiocharProductTransportLeg(userId, id)),
+    );
+  } catch (error) {
+    logger.warn(
+      {
+        userId,
+        biocharProductIds: ids,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "biochar transport leg resync failed; leg may be stale until next delivery write",
+    );
+  }
+}
 
 // ============================================
 // List/Query Operations
@@ -239,6 +274,8 @@ export async function createDeliveryFn(
       }
     );
 
+    await resyncBiocharLegs(user.id, [delivery.biocharProductId]);
+
     return { success: true, data: delivery };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -272,6 +309,9 @@ export async function updateDeliveryFn(
 
     const validated = updateDeliverySchema.parse(data);
 
+    // Capture the prior product so a product reassignment resyncs both.
+    const previous = await getDeliveryByIdData(user.id, validated.deliveryId);
+
     const delivery = await updateDelivery(user.id, validated.deliveryId, {
       code: validated.code,
       orderId: validated.orderId,
@@ -287,6 +327,11 @@ export async function updateDeliveryFn(
       truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
       truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
     });
+
+    await resyncBiocharLegs(user.id, [
+      previous?.biocharProductId,
+      delivery.biocharProductId,
+    ]);
 
     return { success: true, data: delivery };
   } catch (error) {
@@ -320,7 +365,10 @@ export async function deleteDeliveryFn(
     }
 
     const validated = deleteDeliverySchema.parse(data);
+    const previous = await getDeliveryByIdData(user.id, validated.deliveryId);
     await deleteDelivery(user.id, validated.deliveryId);
+
+    await resyncBiocharLegs(user.id, [previous?.biocharProductId]);
 
     return { success: true, data: undefined };
   } catch (error) {

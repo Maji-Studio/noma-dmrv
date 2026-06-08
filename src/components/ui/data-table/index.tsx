@@ -399,6 +399,12 @@ function DataTableRoot<TData, TValue>({
                       onRowClick && "cursor-pointer"
                     )}
                     onClick={() => onRowClick?.(row.original)}
+                    // A clickable row must be reachable and activatable by
+                    // keyboard, so expose it as a focusable button when
+                    // onRowClick is wired.
+                    role={onRowClick ? "button" : undefined}
+                    tabIndex={onRowClick ? 0 : undefined}
+                    aria-label={onRowClick ? "View row details" : undefined}
                     onKeyDown={
                       onRowClick
                         ? (event) => {
@@ -408,9 +414,11 @@ function DataTableRoot<TData, TValue>({
                             // Ignore Enter/Space bubbling up from nested
                             // interactive controls (buttons, links, inputs) so
                             // they don't also trigger the row-level action.
+                            // Exclude tabindex="-1" — those are only
+                            // programmatically focusable, not user-interactive.
                             if (
                               (event.target as HTMLElement).closest(
-                                'button, a, input, textarea, select, [role="button"], [tabindex]'
+                                'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])'
                               )
                             ) {
                               return;
