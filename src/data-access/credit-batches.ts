@@ -728,6 +728,8 @@ export async function creditBatchCodeExists(
   code: string,
   excludeId?: string
 ): Promise<boolean> {
+  // Defense-in-depth: getCreditBatchByCode below also enforces auth, but this
+  // guard is kept intentionally so the check holds even if that call changes.
   requireAuth(userId);
   const existing = await getCreditBatchByCode(userId, code);
   if (!existing) return false;

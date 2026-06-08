@@ -61,17 +61,19 @@ describe("deriveBatchHealth", () => {
     expect(checkFor(result, "production").status).toBe("unmet");
   });
 
-  it("surfaces entity readiness separately without blocking grouping", () => {
+  it("blocks grouping when the batch's entity certifier fields are incomplete", () => {
     const result = deriveBatchHealth(
       facts({
         entityReadinessGaps: ["Production run PR-1: Electricity reading"],
       }),
     );
-    expect(result.state).toBe("ready");
-    expect(result.issueCount).toBe(0);
+    // The gaps are on this batch's own lineage, so the batch genuinely can't be
+    // certified — it must be non-selectable until they're resolved.
+    expect(result.state).toBe("incomplete");
+    expect(result.issueCount).toBe(1);
     expect(checkFor(result, "carbon").status).toBe("met");
     const entity = checkFor(result, "entityReadiness");
-    expect(entity.status).toBe("skipped");
+    expect(entity.status).toBe("unmet");
     expect(entity.detail).toContain("Electricity reading");
   });
 

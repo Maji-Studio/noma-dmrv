@@ -1,22 +1,25 @@
 /**
- * Modal — shared chrome for every native <dialog> in the app.
+ * Modal — shared chrome for every centered dialog in the app.
  *
- * Wraps the native <dialog> element + `useDialog` hook so all modals
- * inherit the same border, backdrop, centering, focus management, and
- * width tokens. New dialogs should compose this component instead of
- * rolling their own <dialog> markup — it keeps the visual + a11y
- * contract consistent and removes the per-instance opportunity to
- * forget the centering fix.
+ * Built on Base UI `Dialog` (the same primitive as `SlideOverPanel`) so the
+ * whole app speaks one dialog library. New centered dialogs should compose
+ * this component instead of rolling their own markup — it keeps the visual +
+ * a11y contract consistent and gives every instance the same affordances:
  *
- * Centering is restored globally in `globals.css` (Tailwind v4 preflight
- * resets `margin: 0` on every element, which overrides the UA stylesheet's
- * `dialog[open] { margin: auto }`). This component does not re-apply
- * `m-auto` per instance — the global rule is the single source of truth.
+ * - a built-in close button in the top-right corner (no per-instance X)
+ * - dismiss on ESC and on outside (backdrop) click
+ * - focus trap + scroll lock + focus restore (handled by Base UI)
+ *
+ * Outside-click dismissal can be turned off per instance via
+ * `dismissOnClickOutside={false}` — use it for multi-step workflows where an
+ * accidental backdrop click would discard in-progress work. The close button
+ * and ESC stay available even then.
  */
 "use client";
 
-import { type ReactNode } from "react";
-import { useDialog } from "@/hooks/use-dialog";
+import { type ReactNode, useEffect, useRef } from "react";
+import { Dialog } from "@base-ui/react/dialog";
+import { cn } from "@/lib/utils";
 
 /** Named width tokens map to the dialog widths already used in the app. */
 const WIDTH_CLASSES = {
@@ -31,7 +34,7 @@ export type ModalWidth = keyof typeof WIDTH_CLASSES;
 export interface ModalProps {
   /** Controls visibility. Setting false triggers the close animation. */
   isOpen: boolean;
-  /** Called on ESC, backdrop click (via cancel event), and Cancel buttons. */
+  /** Called on ESC, outside click, and the built-in close button. */
   onClose: () => void;
   /** Optional callback fired when the dialog opens — use to reset form state. */
   onOpen?: () => void;
@@ -52,14 +55,20 @@ export interface ModalProps {
    * edges) and own all their padding.
    */
   contentClassName?: string;
+  /**
+   * Whether clicking the backdrop dismisses the modal. Defaults to `true`.
+   * Set `false` for multi-step workflows so a stray click can't discard
+   * in-progress work — the close button and ESC still work.
+   */
+  dismissOnClickOutside?: boolean;
   children: ReactNode;
 }
 
 /**
- * Renders a native modal <dialog> with the project's shared chrome.
+ * Renders a centered modal dialog with the project's shared chrome.
  *
- * Returns `null` while closed so the dialog isn't kept in the DOM with stale
- * form state — matches the existing `if (!isOpen) return null` pattern.
+ * Children unmount while closed (Base UI default), so each open starts with
+ * fresh form state — matching the previous `if (!isOpen) return null` pattern.
  */
 export function Modal({
   isOpen,
@@ -71,12 +80,9 @@ export function Modal({
   width = "md",
   className,
   contentClassName = "p-24",
+  dismissOnClickOutside = true,
   children,
 }: ModalProps) {
-  const dialogRef = useDialog(isOpen, onClose, onOpen);
-
-  if (!isOpen) return null;
-
   // A modal dialog with no accessible name is announced as just "dialog" by
   // screen readers. The props exist to prevent that, but nothing enforced
   // them — flag the omission at dev time so it's caught before review rather
@@ -88,21 +94,96 @@ export function Modal({
     );
   }
 
+  // Fire `onOpen` on the closed→open transition. Base UI's `onOpenChange`
+  // only fires for user-driven changes (not the controlled `open` prop), and
+  // consumers depend on this to reset form state that lives in a parent that
+  // never unmounts. A ref tracks the previous value so it fires once per open.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (isOpen && !wasOpen.current) onOpen?.();
+    wasOpen.current = isOpen;
+    // onOpen intentionally excluded — only react to isOpen changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   const widthClass = WIDTH_CLASSES[width];
-  const baseClass =
-    "p-0 border border-[var(--color-border-primary)] max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] overflow-auto";
 
   return (
-    <dialog
-      ref={dialogRef}
-      className={`${baseClass} ${widthClass} ${className ?? ""}`.trim()}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={ariaLabelledBy}
-      aria-label={ariaLabel}
-      aria-describedby={ariaDescribedBy}
+    <Dialog.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      disablePointerDismissal={!dismissOnClickOutside}
+      modal
     >
-      <div className={contentClassName}>{children}</div>
-    </dialog>
+      <Dialog.Portal>
+        <Dialog.Backdrop
+          className={cn(
+            "fixed inset-0 z-40 bg-[var(--color-black-50)]",
+            "transition-opacity duration-200",
+            "data-[open]:opacity-100",
+            "data-[starting-style]:opacity-0",
+            "data-[ending-style]:opacity-0"
+          )}
+        />
+        <Dialog.Popup
+          aria-labelledby={ariaLabelledBy}
+          aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          className={cn(
+            "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
+            "bg-[var(--color-background-white)] border border-[var(--color-border-primary)]",
+            "max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] overflow-auto",
+            "outline-none",
+            "transition-opacity duration-200",
+            "data-[open]:opacity-100",
+            "data-[starting-style]:opacity-0",
+            "data-[ending-style]:opacity-0",
+            widthClass,
+            className
+          )}
+        >
+          <Dialog.Close
+            aria-label="Close"
+            className={cn(
+              "absolute top-16 right-16 z-10",
+              "flex items-center justify-center",
+              "w-32 h-32 shrink-0",
+              "text-[var(--color-text-tertiary)]",
+              "hover:text-[var(--color-text-primary)]",
+              "hover:bg-[var(--color-background-medium)]",
+              "transition-colors duration-200",
+              "focus-visible:outline-none focus-visible:ring-2",
+              "focus-visible:ring-[var(--color-border-primary)]",
+              "cursor-pointer"
+            )}
+          >
+            <CloseIcon />
+          </Dialog.Close>
+          <div className={contentClassName}>{children}</div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
   );
 }

@@ -16,6 +16,11 @@
 > (decision 3), and Settings consolidation (decision 4). Overview's sidebar item
 > matches on its exact path (`/certification`) since that href prefixes every
 > sibling route.
+> **Amendment (2026-06-08) — New-Removal wizard replaces the review route.**
+> The workspace remains the only submission entry point, but the complex path is
+> now the New-Removal wizard (`select ready batches -> registry requirements ->
+> submit`) rather than `/certification/removals/[id]/review`. Credit-batch health
+> and entity-readiness surfaces push completeness earlier in the workflow.
 
 ## Context
 
@@ -48,19 +53,18 @@ into that workspace**.
    Settings), with no in-page tabs. The Overview is a **work queue** ("needs
    attention"), not a dashboard. Lists are **DataTables** (the `production-runs`
    idiom); quick view is a **read-only side-sheet** (`?removal=` /
-   `?statement=`). The complex removal path is a **guided full-width Review flow**
-   (`/certification/removals/[id]/review`: Assemble → Review → Evidence →
-   Pre-flight → Submit) — Sources + telemetry become the **Evidence** step, so
-   the old removal detail page goes away (it redirects to `?step=evidence`).
+   `?statement=`). The complex removal path is the **New-Removal wizard**:
+   select ready ungrouped credit batches, review registry requirements, then
+   submit. Evidence upload and transport-document completion are handled on the
+   relevant entity surfaces before a batch is selectable.
 
 2. **One submit entry point.** The credit-batch **Certify panel is demoted to a
    read-only bridge**: it shows the removal's **own local** status only — never a
    verifier status attributed to the removal (P1-b) — lists member batches
-   read-only, and deep-links **"Open in Certification →"** (the removal's Review
-   flow, or the Removals route when ungrouped). The inline blocker / coverage /
-   submit logic it carried is deleted; that logic is canonical in
-   `lib/certification/readiness.ts` + the Review flow. This **reverses ADR 0003's
-   dual-entry**.
+   read-only, and deep-links **"Open in Certification →"**. The inline blocker /
+   coverage / submit logic it carried is deleted; that logic is canonical in
+   `lib/certification/readiness.ts`, `lib/certification/batch-health.ts`, and the
+   New-Removal wizard. This **reverses ADR 0003's dual-entry**.
 
 3. **Shared status model** (`lib/certification/status.ts`, client-safe, unit
    tested). One pure mapper per artifact folds `(local, lockInFlight, remote)`
@@ -94,16 +98,16 @@ into that workspace**.
   Isometric-owned and read-only (ADR 0004); telemetry stays its own sub-status
   (ADR 0006). What changed is UI topology and the single submit entry point.
 - **The credit-batch panel no longer submits.** Operators submit from the
-  workspace (sheet one-click for a ready 1:1 removal, or the guided Review flow).
-  `useSubmitCreditBatchRemoval` (the lazy ensure-then-submit hook) is retired;
-  the underlying `submitCreditBatchRemoval` server action is left in place but
-  orphaned (flagged for later removal).
+  workspace through the New-Removal wizard. `useSubmitCreditBatchRemoval` (the
+  lazy ensure-then-submit hook) is retired; direct credit-batch submission should
+  not be reintroduced.
 - **Deferred:** the demoted panel does not yet inline the linked GHG Statement's
   verifier status (it points to the GHG Statements route instead) — threading that
   through the submission-context loader is tracked in `docs/open-questions.md`.
-- **Verification:** the pure status mappers + readiness classifier are unit
-  tested (too many surfaces depend on them for E2E alone); sidebar nav, settings
-  round-trip, and the removal Review happy path are covered by E2E.
+- **Verification:** the pure status mappers, entity-readiness classifier, and
+  batch-health classifier are unit tested (too many surfaces depend on them for
+  E2E alone); sidebar nav, settings round-trip, and the New-Removal wizard are
+  covered by E2E.
 
 Rollout was staged (status foundation → settings → sidebar workspace + Overview →
 Removals → GHG Statements → this bridge + nav + cleanup); each stage was

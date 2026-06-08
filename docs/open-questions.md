@@ -12,6 +12,51 @@ Each entry follows this shape:
   - Why it matters / blocking what
   - What we'd need to resolve it (sandbox check, stakeholder ask, doc lookup)
 
+## Schema
+
+### Dropped protocol-stub tables — re-add when each feature is built (opened 2026-06-08)
+
+Removed in migration `drizzle/0037_sour_lethal_legion.sql`. These tables were
+scaffolded ahead of implementation — defined in the schema but never queried or
+seeded by any app code. Dropped to keep the schema honest about what the app
+actually uses (no prod data yet, so re-adding later is cheap). Recover the
+original column definitions from git history (the schema files just before
+`0037`) when rebuilding the matching feature.
+
+- **`loss_records`** (was `db/schema/loss.ts`) — Biochar Protocol §8.4.2 loss
+  accounting (residue / spillage / runoff / volatilization / transport_loss
+  adjusting batch CO₂e). Re-add when mass-loss accounting enters credit math.
+- **`reversal_risk_assessments`** (was in `credits.ts`) — Appendix I reversal
+  risk → buffer-pool %. Also dropped the `credit_batches.reversal_risk_assessment_id`
+  FK and the `land_tenure_type` / `soil_erosion_risk` / `climate_volatility_risk`
+  / `natural_disaster_risk` / `operator_track_record` enums. Today
+  `credit_batches.buffer_pool_percent` is entered directly; re-add when
+  buffer-pool justification is built.
+- **`ghg_materiality_assessments`** (was in `compliance.ts`) — SSR-emissions-vs-
+  net-removals materiality (<1%) checks per credit batch. Re-add when materiality
+  assessment is implemented.
+- **`feedstock_sc_assessments`** (was in `compliance.ts`) — per-feedstock
+  sustainability-criteria pass/fail/conditional records with evidence docs.
+  Re-add when the SC assessment workflow is built.
+- **`custody_handoffs`** (was in `compliance.ts`) — chain-of-custody ledger.
+  Redundant with the *built* chain-of-custody, which derives lineage from FK
+  relationships (`data-access/chain-of-custody.ts`), not a ledger. Re-add only
+  if an explicit handoff ledger is actually needed.
+- **`certifier_sources`** (was in `certification.ts`) — Isometric Source
+  definitions; `certification_submissions.source_id` FK dropped with it. Re-add
+  when submission Sources are tracked locally rather than derived at submit time.
+- **`emission_factors`** (was `db/schema/emissions.ts`) — region/fuel EF
+  configuration. The app lets the Isometric component hold EFs (see
+  [[transport-legs-distance-based]]); re-add only if EFs move in-house.
+- **`production_runs.emission_factors_used`** (column) — JSONB snapshot of EFs
+  applied to a run; selected in queries but never written. Re-add as an audit
+  snapshot when run-level EF provenance is needed.
+
+Also removed the same day (not Isometric-related): the legacy Next.js-starter
+`projects` / `project_members` / `items` template cluster — tables plus their
+`[projectId]` route tree, data-access, fn, hooks, components, and `requireProjectMember`
+guard. Pure starter-template residue; the app is facility-scoped.
+
 ## Isometric Certify integration
 
 ### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
@@ -996,12 +1041,11 @@ archived in
 
 ## Audit follow-ups (whole-repo audit, opened 2026-06-07)
 
-Deferred items from the 9-commit + working-tree audit. The high-severity findings
-(MRV durability gate, use-server exposure surface, submit-removal version race, log
-redaction, missing indexes, nullable-certifier CHECK, formulation orphan guard,
-energy error UI, GHG rate-limit/breadcrumbs) were **fixed** in that pass; these are the
-items intentionally held back as needing a product/UX decision or being larger than a
-review-fix. Sizing: (S) small, (M) medium, (L) large.
+Deferred items from the 9-commit + working-tree audit — held back as needing a
+product/UX decision or being larger than a review-fix. The audit pass's
+execution summary (which high-severity findings were fixed) is archived in
+[docs/archive/2026-06-07-whole-repo-audit-snapshot.md](archive/2026-06-07-whole-repo-audit-snapshot.md).
+Sizing: (S) small, (M) medium, (L) large.
 
 ### Unbounded readings table — pagination/virtualization (`perf/readings-table-unbounded`) — opened 2026-06-07, **deferred**
 

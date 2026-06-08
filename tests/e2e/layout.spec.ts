@@ -23,8 +23,6 @@ test.describe("App Layout - Sidebar Navigation", () => {
     page,
   }) => {
     const protectedRoutes = [
-      // Overview
-      "/projects",
       // Production
       "/feedstocks",
       "/production-runs",

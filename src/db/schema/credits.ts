@@ -11,51 +11,10 @@ import {
   index,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import {
-  climateVolatilityRisk,
-  creditBatchStatus,
-  durabilityOption,
-  landTenureType,
-  naturalDisasterRisk,
-  operatorTrackRecord,
-  soilErosionRisk,
-} from './common';
+import { creditBatchStatus, durabilityOption } from './common';
 import { facilities } from './facilities';
 import { applications } from './application';
 import { certifierRemovals } from './certification';
-
-// ============================================
-// Reversal Risk Assessments - Justification for buffer pool %
-// Isometric Protocol: Appendix I — Reversal Risk Assessment
-// Connected to facility (risk is per project area). Credit batches reference the applicable assessment.
-// ============================================
-
-export const reversalRiskAssessments = pgTable(
-  'reversal_risk_assessments',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "RRA-2025-001"
-    facilityId: uuid('facility_id')
-      .notNull()
-      .references(() => facilities.id),
-    landTenureType: landTenureType('land_tenure_type').notNull(),
-    soilErosionRisk: soilErosionRisk('soil_erosion_risk').notNull(),
-    climateVolatilityRisk: climateVolatilityRisk('climate_volatility_risk').notNull(),
-    naturalDisasterRisk: naturalDisasterRisk('natural_disaster_risk').notNull(),
-    operatorTrackRecord: operatorTrackRecord('operator_track_record').notNull(),
-    calculatedBufferPercent: real('calculated_buffer_percent').notNull(),
-    locationNotes: text('location_notes'), // regional context (geography, land use, etc.)
-    notes: text('notes'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    check(
-      'reversal_risk_buffer_percent_range',
-      sql`${table.calculatedBufferPercent} >= 0 and ${table.calculatedBufferPercent} <= 20`
-    ),
-  ]
-);
 
 // ============================================
 // Credit Batches - Carbon credit batches for registry
@@ -137,12 +96,6 @@ export const creditBatches = pgTable(
     n2oCompositionPercent: real('n2o_composition_percent'),
     n2oPpm: real('n2o_ppm'),
 
-    // --- Reversal Risk (Isometric: Appendix I) ---
-    // References the risk assessment that justifies the bufferPoolPercent value
-    reversalRiskAssessmentId: uuid('reversal_risk_assessment_id').references(
-      () => reversalRiskAssessments.id
-    ),
-
     // --- Isometric Removal grouping ---
     // The Isometric Removal this credit batch is submitted within. N credit
     // batches may share one removalId (default 1:1 per month). Null until the
@@ -209,27 +162,12 @@ export const creditBatchApplications = pgTable(
 // Relations
 // ============================================
 
-export const reversalRiskAssessmentsRelations = relations(
-  reversalRiskAssessments,
-  ({ one, many }) => ({
-    facility: one(facilities, {
-      fields: [reversalRiskAssessments.facilityId],
-      references: [facilities.id],
-    }),
-    creditBatches: many(creditBatches),
-  })
-);
-
 export const creditBatchesRelations = relations(
   creditBatches,
   ({ one, many }) => ({
     facility: one(facilities, {
       fields: [creditBatches.facilityId],
       references: [facilities.id],
-    }),
-    reversalRiskAssessment: one(reversalRiskAssessments, {
-      fields: [creditBatches.reversalRiskAssessmentId],
-      references: [reversalRiskAssessments.id],
     }),
     removal: one(certifierRemovals, {
       fields: [creditBatches.removalId],
@@ -257,8 +195,6 @@ export const creditBatchApplicationsRelations = relations(
 // Type Exports
 // ============================================
 
-export type ReversalRiskAssessment = typeof reversalRiskAssessments.$inferSelect;
-export type NewReversalRiskAssessment = typeof reversalRiskAssessments.$inferInsert;
 export type CreditBatch = typeof creditBatches.$inferSelect;
 export type NewCreditBatch = typeof creditBatches.$inferInsert;
 export type CreditBatchApplication = typeof creditBatchApplications.$inferSelect;

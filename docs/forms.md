@@ -1,6 +1,6 @@
 # Forms Guide
 
-This guide covers form handling in the template using React Hook Form with Zod validation.
+This guide covers form handling in noma-dmrv using React Hook Form with Zod validation.
 
 ## Quick Start
 
@@ -241,16 +241,16 @@ function MyForm() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: createItemFn,
+    mutationFn: createFeedstockAction,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["items", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["feedstocks", facilityId] });
       reset(); // Clear form
       onClose(); // Close modal
     },
   });
 
   async function onSubmit(data: MyFormData) {
-    mutation.mutate({ ...data, projectId });
+    mutation.mutate({ ...data, facilityId });
   }
 
   return (
@@ -270,7 +270,7 @@ function MyForm() {
 ### 1. Schema Location
 
 - Store schemas in `src/schemas/` directory
-- Group by feature (e.g., `items.ts`, `auth.ts`)
+- Group by feature (e.g., `feedstocks.ts`, `auth.ts`)
 - Export type inference: `export type MyFormData = z.infer<typeof myFormSchema>`
 
 ### 2. Error Messages
@@ -294,9 +294,9 @@ function MyForm() {
 - `FormError` includes `role="alert"` for screen readers
 - `ServerError` includes `role="alert"` and `aria-live="polite"`
 
-### 5. File Upload (Mockup)
+### 5. File Upload
 
-Use `FormFileUpload` for file attachment fields. This is currently a UI mockup — file upload infrastructure (S3, API routes) is not yet implemented.
+Use `FormFileUpload` for file attachment fields. Uploads use the storage abstraction in `src/lib/storage/` with presigned PUT/GET URLs. Local development can use `STORAGE_PROVIDER=local-fs`; production must use S3-compatible storage.
 
 ```typescript
 import { FormField, FormFileUpload } from "@/components/forms";
@@ -327,7 +327,7 @@ import { FormField, FormFileUpload } from "@/components/forms";
 
 **Placement:** In forms with a "Documentation" section, the upload field should appear **before** the notes textarea.
 
-**Design:** The component follows the brutalist aesthetic — dashed border, no border-radius, design system color tokens for all states (default, hover, drag-over, error, disabled).
+**Design:** The component follows the design system tokens for all states (default, hover, drag-over, error, disabled).
 
 ### 6. Notes and Documentation Fields
 
@@ -637,7 +637,7 @@ formatTimezoneLabel("Africa/Nairobi");  // "Africa/Nairobi (UTC+3)"
 
 See these files for complete examples:
 
-- **Simple Form**: `src/components/items/ItemForm.tsx`
+- **Simple Form**: `src/components/feedstocks/feedstock-form.tsx`
 - **Single Field**: `src/components/auth/ForgotPasswordForm.tsx`
 - **Cross-Field Validation**: `src/components/auth/SetPasswordForm.tsx`
 - **Complex Logic**: `src/components/auth/LoginForm.tsx` (with resend verification)

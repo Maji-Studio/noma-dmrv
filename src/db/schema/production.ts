@@ -8,7 +8,6 @@ import {
   real,
   date,
   integer,
-  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
@@ -68,7 +67,6 @@ export const productionRuns = pgTable(
     feedstockMassDryKg: real('feedstock_mass_dry_kg'),
 
     // --- Metadata ---
-    emissionFactorsUsed: jsonb('emission_factors_used'), // Snapshot of factors used
     plcDataFileUrl: text('plc_data_file_url'), // URL to uploaded PLC CSV data file
 
     createdAt: timestamp('created_at').defaultNow().notNull(),

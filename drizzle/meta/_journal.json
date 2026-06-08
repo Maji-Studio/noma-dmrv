@@ -260,6 +260,13 @@
       "when": 1780848022929,
       "tag": "0036_cultured_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1780911821105,
+      "tag": "0037_sour_lethal_legion",
+      "breakpoints": true
     }
   ]
 }
