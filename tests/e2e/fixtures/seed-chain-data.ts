@@ -297,11 +297,6 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
           .where(eq(schema.creditBatches.facilityId, data.facility.id));
       }
 
-      // Delete reversal risk assessments linked to the facility
-      await tx
-        .delete(schema.reversalRiskAssessments)
-        .where(eq(schema.reversalRiskAssessments.facilityId, data.facility.id));
-
       // Find and delete applications linked to facility-scoped deliveries
       const facilityDeliveries = await tx
         .select({ id: schema.deliveries.id })

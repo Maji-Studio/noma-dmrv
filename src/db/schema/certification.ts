@@ -277,27 +277,6 @@ export const certifierRemovals = pgTable(
   ]
 );
 
-export const certifierSources = pgTable(
-  'certifier_sources',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    provider: certifierProvider('provider').notNull().default('isometric'),
-    sourceType: text('source_type').notNull(),
-    sourceReferenceId: text('source_reference_id').notNull(),
-    description: text('description'),
-    metadata: jsonb('metadata'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    unique('certifier_sources_provider_type_ref_unique').on(
-      table.provider,
-      table.sourceType,
-      table.sourceReferenceId
-    ),
-  ]
-);
-
 // Generic, provider-agnostic submission history with immutable payload snapshots.
 export const certificationSubmissions = pgTable(
   'certification_submissions',
@@ -307,7 +286,6 @@ export const certificationSubmissions = pgTable(
     submissionType: text('submission_type').notNull(),
     localEntityType: text('local_entity_type').notNull(),
     localEntityId: uuid('local_entity_id').notNull(),
-    sourceId: uuid('source_id').references(() => certifierSources.id),
     externalId: text('external_id'),
     version: integer('version').notNull().default(1),
     status: certificationSubmissionStatus('status').notNull().default('draft'),

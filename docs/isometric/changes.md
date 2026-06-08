@@ -4,6 +4,19 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-08 (Schema slim-down: drop unused protocol-stub tables)
+
+Schema-only cleanup; no behaviour change. Dropped tables/columns that were
+defined ahead of implementation but never queried or seeded
+(migration `drizzle/0037_sour_lethal_legion.sql`). Isometric-relevant drops:
+`certifier_sources` (+ `certification_submissions.source_id`),
+`reversal_risk_assessments` (Appendix I), `ghg_materiality_assessments`,
+`feedstock_sc_assessments`, `custody_handoffs`, `emission_factors`,
+`loss_records`, and `production_runs.emission_factors_used`. Full re-add
+backlog with protocol citations: `docs/open-questions.md` → "Schema → Dropped
+protocol-stub tables". Submissions still record their Source via the
+derived-at-submit-time path; nothing read `certifier_sources`.
+
 ## 2026-06-04 (GHG statement UX: non-overlapping periods, derived start, removal cross-link, amend-not-undo)
 
 Operator-feedback pass on the GHG-statement flow. Behaviour-affecting (a new

@@ -40,11 +40,9 @@ const AREA_ORDER: SchemaArea[] = [
   "Logistics",
   "Application",
   "Credits",
-  "Emissions",
   "Documentation",
   "Certification",
   "Compliance",
-  "Legacy/Core Template",
   "Other",
 ];
 
@@ -58,11 +56,9 @@ const AREA_ACCENT: Record<SchemaArea, string> = {
   Logistics: "var(--clr-dark-purple)",
   Application: "var(--clr-pink)",
   Credits: "var(--clr-purple)",
-  Emissions: "var(--clr-red)",
   Documentation: "var(--clr-dark-purple)",
   Certification: "var(--clr-orange)",
   Compliance: "var(--clr-red)",
-  "Legacy/Core Template": "var(--color-text-tertiary)",
   Other: "var(--color-text-tertiary)",
 };
 
@@ -184,7 +180,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
 
   /* Derive visible areas (with at least 1 table) */
   const areasWithTables = AREA_ORDER.filter((a) => {
-    if (hideLegacy && (a === "Legacy/Core Template" || a === "Other")) {
+    if (hideLegacy && a === "Other") {
       const hasNonLegacy = tables.some((t) => t.area === a && !t.isLegacy);
       if (!hasNonLegacy) return false;
     }

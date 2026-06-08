@@ -93,7 +93,7 @@ function WizardBody({
   const createMutation = useCreateRemovalWithBatches();
   const toast = useToast();
 
-  const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? true;
+  const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? false;
 
   const toggle = (id: string) => {
     setSelectedIds((prev) => {

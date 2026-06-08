@@ -46,8 +46,6 @@ export {
 
 // Test data seeding helpers
 export {
-  type TestProject,
-  type TestItem,
   type TestFacility,
   type TestSupplier,
   type TestFormulation,
@@ -55,17 +53,12 @@ export {
   type TestBiocharProduct,
   type TestApplication,
   generateTestId,
-  createTestProject,
-  addProjectMember,
-  createTestItem,
   createTestFacility,
   createTestSupplier,
   createTestFormulation,
   createTestStorageLocation,
   createTestBiocharProduct,
   createTestApplication,
-  deleteTestProject,
-  deleteTestItems,
   deleteTestFacility,
   deleteTestSupplier,
   deleteTestFormulation,
@@ -74,5 +67,4 @@ export {
   deleteTestApplication,
   bulkCleanup,
   TestDataBuilder,
-  createTestScenario,
 } from "./test-data-helpers";

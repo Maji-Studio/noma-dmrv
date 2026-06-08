@@ -13,13 +13,7 @@ export * from "./products";
 export * from "./logistics";
 export * from "./application";
 export * from "./credits";
-export * from "./loss";
 export * from "./storage-inventory";
-export * from "./emissions";
 export * from "./documentation";
 export * from "./certification";
 export * from "./compliance";
-
-// Legacy template entities retained temporarily for app compatibility.
-export * from "./projects";
-export * from "./items";
