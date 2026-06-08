@@ -2,7 +2,7 @@
 
 ## Design Goals
 
-- Keep the template simple enough to extend quickly.
+- Keep the MRV app simple enough to extend quickly.
 - Keep data boundaries explicit so it scales without rewrites.
 - Enforce security at multiple layers (route + data-access).
 
@@ -40,7 +40,7 @@ The app workspace is facility-scoped. `src/app/(app)/layout.tsx` enforces authen
 
 ### Proxy Middleware (Next.js 16)
 
-This template uses **Next.js 16's `proxy.ts`** instead of traditional `middleware.ts`:
+This app uses **Next.js 16's `proxy.ts`** instead of traditional `middleware.ts`:
 
 **Why proxy.ts?**
 - Runs in **Node.js runtime** (not Edge runtime)
@@ -70,7 +70,7 @@ This template uses **Next.js 16's `proxy.ts`** instead of traditional `middlewar
 
 ### Caching Strategy
 
-**This template uses client-side caching via React Query, NOT Next.js 16 Cache Components.**
+This app uses client-side caching via React Query, not Next.js 16 Cache Components.
 
 **Configuration**: `cacheComponents: false` (default - not set in `next.config.ts`)
 
@@ -100,7 +100,7 @@ This template uses **Next.js 16's `proxy.ts`** instead of traditional `middlewar
 
 ### API Routes Configuration
 
-All API routes in this template are **dynamic** by default (not prerendered at build time).
+All API routes in this app are dynamic by default (not prerendered at build time).
 
 **How API routes stay dynamic:**
 1. They call `getUser()` which accesses headers
@@ -295,7 +295,7 @@ These are intentionally marked so future work can extend them without hidden ass
 - ✅ Admin-only system operations
 - ✅ Reduce load on external services
 
-**Key Takeaway**: This template prioritizes **simplicity and security** over aggressive caching. React Query is sufficient for 95% of use cases. Only enable Cache Components if you have a specific need and understand the tradeoffs.
+**Key Takeaway**: noma-dmrv prioritizes simplicity and security over aggressive caching. React Query is sufficient for most app data. Only enable Cache Components if you have a specific need and understand the tradeoffs.
 
 ## Shared Utilities
 
