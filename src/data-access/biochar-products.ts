@@ -58,6 +58,7 @@ export interface PaginatedBiocharProducts {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { deleteTransportLegsForEntity } from "./transport-legs";
 
 // ============================================
 // Biochar Product Read Operations
@@ -742,7 +743,10 @@ export async function deleteBiocharProduct(
     );
   }
 
-  await db.delete(biocharProducts).where(eq(biocharProducts.id, productId));
+  await db.transaction(async (tx) => {
+    await deleteTransportLegsForEntity(tx, "biochar", productId);
+    await tx.delete(biocharProducts).where(eq(biocharProducts.id, productId));
+  });
 }
 
 // ============================================

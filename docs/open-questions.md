@@ -926,3 +926,65 @@ two oversized data-access files. The remainder is still open:
   intended model), or (b) auto-clear a bin's `formulationId` when its last
   matching product leaves (`deleteBiocharProduct` + the move-out path of
   `updateBiocharProduct`). If (b), record the decision and remove this entry.
+
+## E2E walkthrough follow-ups (opened 2026-06-07)
+
+From the manual browser walkthrough of every entity + certification
+(`docs/plans/2026-06-07-e2e-findings-fix-plan.md`). The P0/P1/P2 items and
+two P3s (D2 Method-B gate, C4 code-prefix alignment) were fixed; the two
+below were deferred by product decision.
+
+### Production-run Readings: wire-in vs. remove (`production-runs/readings`) — opened 2026-06-07, **deferred**
+
+- `ProductionRunReadingForm` + `ProductionRunReadingTable` (plus the schema and
+  `src/data-access/production-runs` reading queries/hooks) exist but are
+  **imported nowhere**. The only readings UI on the prod-run form is a
+  non-functional CSV stub labelled "UI mock only … not uploaded or saved yet".
+- **Why it matters:** a half-built feature plus a stub that looks functional
+  invites confusion (an operator may believe CSV readings are persisted).
+- **Resolve via:** decide between (a) wire the Reading table/form into the
+  prod-run **edit** sheet like Samples/Incidents and implement real CSV upload
+  + persistence (L), or (b) remove the dead components and the CSV stub (S).
+  Record the decision and remove this entry.
+
+### Certification view is local-first; doesn't mirror the registry (`isometric/registry-mirror`) — opened 2026-06-07, **deferred**
+
+- The in-app cert view shows 0 removals / 0 GHG statements while the live
+  sandbox registry (`prj_1K9YJ33RKSBX9FFF`) holds 7 draft statements / 12
+  removals. Period math aligns (the app preview's "0 removals" for the open
+  period matches the registry draft), so this is almost certainly **by-design**:
+  the app surfaces only what *it* created, not the full registry state.
+- **Why it matters:** the bare 0-counts can be misread as "the registry is
+  empty" rather than "nothing created from here yet".
+- **Resolve via:** decide between (a) a one-line note in the cert UI clarifying
+  the local-first model (S), or (b) a read/sync view that mirrors existing
+  registry removals/statements into the app (M–L). Likely (a); record the
+  decision and remove this entry.
+- **API note (2026-06-07):** option (b) is technically **unblocked** — the
+  Certify API exposes `GET /ghg_statements` (active, cursor-paginated) and
+  `GET /removals` (deprecated but functional, filterable by
+  `supplier_reference_id`), plus single-`GET` variants. So a read/sync view is
+  buildable; the open decision is product (do we want it), not capability.
+
+### Isometric submission refs aren't stable across a DB reseed (`isometric/reseed-idempotency`) — opened 2026-06-07, **deferred**
+
+- Submission idempotency **is implemented and correct within a DB lifetime**:
+  `submission-claim.ts` locks drafts, refs are deterministic
+  (`buildSourceSupplierRef` → `nm-src-{documentId}`), and
+  `findRemovalBySupplierRef` + idempotent membership linking reconcile after a
+  5xx instead of recreating. The gap: `supplier_reference_id` is derived from
+  **local row UUIDs**, which `pnpm db:reset` regenerates → the dedupe lookup
+  can't match the prior registry entity → re-submission creates a **duplicate**
+  registry removal/source/statement. This is the likely cause of the sandbox
+  project accumulating ~12 draft removals across test cycles.
+- **Why it matters:** **sandbox-only today** — prod won't reseed, so refs stay
+  stable and idempotency holds. It's a test-hygiene issue, not a production
+  data-integrity bug. But it makes the sandbox registry a noisy mirror, and any
+  future reseed-like prod event (restore from scratch, re-key) would silently
+  duplicate.
+- **Resolve via:** (a) accept it — sandbox drafts are harmless (0 credits
+  issued); optionally clean them periodically (S); or (b) derive
+  `supplier_reference_id` from a stable business key (the entity's `XX-26-NNN`
+  code) instead of the row UUID, so re-submission after a reseed reconciles
+  instead of duplicating (M). Likely (a) pre-launch. Record the decision and
+  remove this entry.

@@ -11,9 +11,14 @@ describe("Dry mass derivation", () => {
     expect(deriveMassDryKg(1000, 10)).toBe(900);
   });
 
-  it("includes added water in product dry mass derivation", () => {
-    expect(deriveMassDryKgWithAddedWater(500, 10, 50)).toBe(495);
+  it("ignores added water in product dry mass derivation (dry solids are pre-water)", () => {
+    // Adding water cannot create dry matter: dry mass depends only on the
+    // pre-water mass and moisture, so it equals deriveMassDryKg(wet, moisture).
+    expect(deriveMassDryKgWithAddedWater(500, 10, 50)).toBe(450);
     expect(deriveMassDryKgWithAddedWater(500, 10, null)).toBe(450);
+    // Plan's worked example: 1500 kg @ 2% + 30 kg water → 1470 (not 1499.4).
+    expect(deriveMassDryKgWithAddedWater(1500, 2, 30)).toBe(1470);
+    expect(deriveMassDryKgWithAddedWater(1500, 2, 30)).toBe(deriveMassDryKg(1500, 2));
   });
 
   it("rejects negative addedWaterKg", () => {
