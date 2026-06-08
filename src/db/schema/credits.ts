@@ -162,7 +162,7 @@ export const creditBatches = pgTable(
   (table) => [
     check(
       'credit_batches_certifier_is_isometric',
-      sql`${table.certifier} = 'isometric'`
+      sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
     check(
       'credit_batches_total_feedstock_mass_non_negative',

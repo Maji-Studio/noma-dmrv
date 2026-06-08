@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emptyToNull, toNumberOrUndefined } from "@/schemas/helpers";
+import { emptyToNull, requiredNumber } from "@/schemas/helpers";
 
 // Six canonical LCA emission categories (ADR 0005). Mirrors the
 // `project_emission_category` pgEnum in `src/db/schema/common.ts` exactly —
@@ -49,16 +49,6 @@ const dateString = z
     );
   }, "Not a valid calendar date");
 
-function requiredNumber(label: string) {
-  return z.preprocess(
-    toNumberOrUndefined,
-    z.number({
-      error: (iss) =>
-        iss.input === undefined ? `${label} is required` : "Invalid number",
-    }),
-  );
-}
-
 // Base shape shared between create + update — extracted so the two variants
 // stay in lockstep per CLAUDE.md.
 const projectEmissionBaseSchema = z
@@ -69,7 +59,7 @@ const projectEmissionBaseSchema = z
     }),
     lcaWindowStartOn: dateString,
     lcaWindowEndOn: dateString,
-    magnitude: requiredNumber("Magnitude").pipe(
+    magnitude: requiredNumber("Magnitude is required").pipe(
       z.number().finite().min(0, "Magnitude must be non-negative"),
     ),
     unit: z.string().min(1, "Unit is required"),

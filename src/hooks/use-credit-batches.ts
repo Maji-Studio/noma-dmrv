@@ -13,6 +13,10 @@ import type {
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 
+// Credit-batch data changes infrequently within a session; 30s keeps the UI
+// fresh without re-fetching on every mount.
+const CREDIT_BATCH_STALE_TIME_MS = 30_000;
+
 /**
  * Query key factory for credit batches
  */
@@ -41,7 +45,7 @@ export function useCreditBatches() {
       }
       return result.data;
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }
 
@@ -59,7 +63,7 @@ export function useCreditBatch(id: string) {
       return result.data;
     },
     enabled: !!id,
-    staleTime: 30000,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }
 
@@ -76,7 +80,7 @@ export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
       return result.data;
     },
     enabled: sortedIds.length > 0,
-    staleTime: 30000,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }
 
@@ -92,7 +96,7 @@ export function useCreditBatchApplicationOptions(facilityId?: string) {
       return result.data;
     },
     enabled: !!facilityId,
-    staleTime: 30000,
+    staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }
 

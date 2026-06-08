@@ -45,7 +45,7 @@ export async function generateNextCode(
   let nextNumber = 1;
 
   if (maxCode) {
-    // Extract the numeric suffix: "BP-2026-042" -> 42
+    // Extract the numeric suffix: "BP-26-042" -> 42
     const parts = maxCode.split("-");
     const lastPart = parts[parts.length - 1];
     const parsed = parseInt(lastPart, 10);

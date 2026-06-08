@@ -8,6 +8,7 @@
 import { numericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useReactorMethodBEligibility } from "@/hooks/use-reactors";
+import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -116,29 +117,44 @@ export function ReactorForm({
 
   // Method B requires a minimum number of prior Method A samples. A new reactor
   // has none, so eligibility is only fetched (and ever true) in edit mode.
-  const { data: methodBEligibility } = useReactorMethodBEligibility(
-    reactor?.id ?? "",
-    isEditMode
-  );
+  const {
+    data: methodBEligibility,
+    isLoading: isEligibilityLoading,
+    isError: isEligibilityError,
+  } = useReactorMethodBEligibility(reactor?.id ?? "", isEditMode);
   const minimumMethodASamples =
-    methodBEligibility?.minimumMethodASampleCount ?? 30;
-  // Keep Method B available if the reactor is already on it, even if the
-  // eligibility query hasn't resolved yet, so editing never silently downgrades.
-  const methodBAvailable =
-    defaultSamplingMethod === "method_b" ||
-    (methodBEligibility?.meetsMinimumMethodASamples ?? false);
+    methodBEligibility?.minimumMethodASampleCount ??
+    METHOD_B_MINIMUM_METHOD_A_SAMPLES;
+  // A reactor already on Method B always keeps it available so editing never
+  // silently downgrades. A brand-new reactor (create mode) has no prior samples,
+  // so Method B is unavailable by definition. In edit mode the option stays
+  // enabled while eligibility is still loading or couldn't be verified (a
+  // non-destructive "checking" state) and is only disabled once the hook
+  // explicitly reports the reactor as ineligible.
+  const alreadyMethodB = defaultSamplingMethod === "method_b";
+  const explicitlyIneligible =
+    methodBEligibility !== undefined &&
+    !methodBEligibility.meetsMinimumMethodASamples;
+  const methodBDisabled =
+    !alreadyMethodB && (!isEditMode || explicitlyIneligible);
 
   const samplingMethodSelectOptions = samplingMethodOptions.map((option) =>
     option.value === "method_b"
-      ? { ...option, disabled: !methodBAvailable }
+      ? { ...option, disabled: methodBDisabled }
       : option
   );
 
-  const samplingMethodHelperText = methodBAvailable
+  const samplingMethodHelperText = alreadyMethodB
     ? "Method B samples every 10th batch"
-    : isEditMode
-      ? `Method B requires ${minimumMethodASamples} prior Method A samples (currently ${methodBEligibility?.priorMethodASampleCount ?? 0})`
-      : `Method B requires ${minimumMethodASamples} prior Method A samples — start with Method A`;
+    : !isEditMode
+      ? `Method B requires ${minimumMethodASamples} prior Method A samples — start with Method A`
+      : isEligibilityLoading
+        ? "Checking Method B eligibility…"
+        : isEligibilityError
+          ? "Couldn't verify Method B eligibility — try again"
+          : explicitlyIneligible
+            ? `Method B requires ${minimumMethodASamples} prior Method A samples (currently ${methodBEligibility?.priorMethodASampleCount ?? 0})`
+            : "Method B samples every 10th batch";
 
   const handleFormSubmit = handleSubmit((data) => {
     const { capacityTph, ...rest } = data as ReactorFormData;

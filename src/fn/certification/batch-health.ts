@@ -7,7 +7,7 @@ import {
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { loadCertifyContextForCreditBatchForUser } from "./certify-context";
+import { loadCertifyContextForCreditBatchForUser } from "./certify-context-core";
 
 // Per-batch health verdict for the credit-batch detail page (and, later, the
 // New-Removal wizard's selection gate). Reuses the single-batch certify context

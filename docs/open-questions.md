@@ -929,10 +929,11 @@ two oversized data-access files. The remainder is still open:
 
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
-From the manual browser walkthrough of every entity + certification
-(`docs/plans/2026-06-07-e2e-findings-fix-plan.md`). The P0/P1/P2 items and
-two P3s (D2 Method-B gate, C4 code-prefix alignment) were fixed; the two
-below were deferred by product decision.
+Surfaced by a manual walkthrough of every entity + certification; most findings
+were fixed in that pass and the two below were deferred by product decision. The
+dated run context and the registry counts that prompted these questions are
+archived in
+[docs/archive/2026-06-07-e2e-walkthrough-snapshot.md](archive/2026-06-07-e2e-walkthrough-snapshot.md).
 
 ### Production-run Readings: wire-in vs. remove (`production-runs/readings`) — opened 2026-06-07, **deferred**
 
@@ -949,11 +950,13 @@ below were deferred by product decision.
 
 ### Certification view is local-first; doesn't mirror the registry (`isometric/registry-mirror`) — opened 2026-06-07, **deferred**
 
-- The in-app cert view shows 0 removals / 0 GHG statements while the live
-  sandbox registry (`prj_1K9YJ33RKSBX9FFF`) holds 7 draft statements / 12
-  removals. Period math aligns (the app preview's "0 removals" for the open
-  period matches the registry draft), so this is almost certainly **by-design**:
-  the app surfaces only what *it* created, not the full registry state.
+- The in-app cert view can show 0 removals / 0 GHG statements while the live
+  sandbox registry holds drafts created out-of-band. Period math aligns (the
+  app preview's "0 removals" for an open period matches the registry draft), so
+  this is almost certainly **by-design**: the app surfaces only what *it*
+  created, not the full registry state. (A concrete observed snapshot of these
+  counts is archived in
+  [2026-06-07-e2e-walkthrough-snapshot.md](archive/2026-06-07-e2e-walkthrough-snapshot.md).)
 - **Why it matters:** the bare 0-counts can be misread as "the registry is
   empty" rather than "nothing created from here yet".
 - **Resolve via:** decide between (a) a one-line note in the cert UI clarifying
@@ -976,7 +979,9 @@ below were deferred by product decision.
   **local row UUIDs**, which `pnpm db:reset` regenerates → the dedupe lookup
   can't match the prior registry entity → re-submission creates a **duplicate**
   registry removal/source/statement. This is the likely cause of the sandbox
-  project accumulating ~12 draft removals across test cycles.
+  project accumulating duplicate draft removals across test cycles (see the
+  archived [walkthrough snapshot](archive/2026-06-07-e2e-walkthrough-snapshot.md)
+  for observed counts).
 - **Why it matters:** **sandbox-only today** — prod won't reseed, so refs stay
   stable and idempotency holds. It's a test-hygiene issue, not a production
   data-integrity bug. But it makes the sandbox registry a noisy mirror, and any
@@ -988,3 +993,92 @@ below were deferred by product decision.
   code) instead of the row UUID, so re-submission after a reseed reconciles
   instead of duplicating (M). Likely (a) pre-launch. Record the decision and
   remove this entry.
+
+## Audit follow-ups (whole-repo audit, opened 2026-06-07)
+
+Deferred items from the 9-commit + working-tree audit. The high-severity findings
+(MRV durability gate, use-server exposure surface, submit-removal version race, log
+redaction, missing indexes, nullable-certifier CHECK, formulation orphan guard,
+energy error UI, GHG rate-limit/breadcrumbs) were **fixed** in that pass; these are the
+items intentionally held back as needing a product/UX decision or being larger than a
+review-fix. Sizing: (S) small, (M) medium, (L) large.
+
+### Unbounded readings table — pagination/virtualization (`perf/readings-table-unbounded`) — opened 2026-06-07, **deferred**
+
+- The `(production_run_id, timestamp)` index **landed** (migration `0036`), so the query
+  is no longer a full scan. Still open: `getProductionRunReadings` has no `.limit`, and
+  `production-run-reading-table.tsx` renders every row to the DOM with no virtualization.
+  Telemetry is the highest-cardinality child entity on a run.
+- **Why it matters:** a run with thousands of readings ships the whole set to the client
+  and paints every row. Not biting yet at seed scale; will bite as real telemetry lands.
+- **Resolve via:** decide server-side paging UX (page size, infinite-scroll vs. pages),
+  then add `.limit`/offset + `@tanstack/react-virtual` (M). UX decision first.
+
+### Overview loader lineage fan-out (`perf/overview-lineage-nplus1`) — opened 2026-06-07, **deferred**
+
+- `loadCertificationOverview` rebuilds a full submission context per removal; each walks
+  every application through `getChainOfCustodyData`, which issues ~5–6 sequential single-row
+  queries → on the order of R×A×6 round-trips per landing-page load, uncached. Same root
+  pattern as the per-batch `getCo2eStoredPreview` fan-out (`credit-batches.ts:380`) and the
+  per-row `getCreditBatchById`/`getLatestSubmission` loops in `certify-context-core.ts`.
+- **Why it matters:** the certification landing page latency grows linearly with
+  removals×applications; every navigation re-runs the full fan-out.
+- **Resolve via:** batch lineage with set-based `inArray` queries (delivery→order→
+  product→run in one pass, zip in JS) and/or memoize the Overview payload (React Query
+  staleTime or a server cache). The batched primitive `getCreditBatchSummariesByRemovalIds`
+  already exists as a model (L). Owner decides read/write/cache tradeoff.
+
+### create-removal idempotency key (`concurrency/create-removal-idempotency`) — opened 2026-06-07, **deferred**
+
+- `createRemovalWithBatchesAction` has no server-side idempotency key. Batch double-link is
+  already race-safe (rows locked `FOR UPDATE`, re-checked `removalId IS NULL`), and the UI
+  Confirm button is `busy`-gated, so single-tab and same-batch-set retries are covered. The
+  residual gap: a network retry or a second tab submitting a **disjoint** batch set can create
+  an extra `certifier_removals` row, and `gcRemovalIfOrphaned` only reaps on delete, not create.
+  A creation **log line** was added in the audit pass; the dedupe key was not.
+- **Why it matters:** narrow exposure (no batch double-spend, no bad credits — just a stray
+  empty/duplicate removal), but it needs product semantics to close cleanly.
+- **Resolve via:** add optional client-generated `idempotencyKey` to
+  `createRemovalWithBatchesSchema`, persist with a unique index, `INSERT … ON CONFLICT
+  (idempotency_key) DO NOTHING RETURNING id` inside the existing txn (M). Local Postgres
+  dedupe only — the Isometric POST happens later in `submitRemoval`, no upstream idempotency
+  header applies here.
+
+### Inline-CRUD table duplication (`refactor/inline-crud-table`) — opened 2026-06-07, **deferred**
+
+- The three production-run child tables (readings/incidents/samples) share ~90% boilerplate:
+  identical `inlineForm` discriminated-union state machine, header markup, `TableSkeleton`,
+  empty state, edit/delete column, and `DeleteConfirmDialog` wiring. `formatTimestamp` is
+  copy-pasted 3×.
+- **Why it matters:** maintenance drift — a fix to one table's CRUD flow has to be mirrored
+  3× (this audit already had to touch all three together for the `readOnly`/loading changes).
+- **Resolve via:** extract a generic `<InlineEntityTable>` or `useInlineCrudTable` hook
+  parameterized by columns + form component + mutation hooks; per-entity files collapse to a
+  config (M). Deliberately not done as a review-fix — pure refactor, no behavior change, wants
+  its own PR + test pass.
+
+### Generic typing for the certify field registry (`types/certify-registry-generic`) — opened 2026-06-07, **deferred**
+
+- `certify-field-registry.ts` condition/`formFields` lookups are keyed by bare strings probed
+  via `(entity as Record<string, unknown>)[field]` in `entity-readiness.ts`. A typo in a
+  registry key compiles fine and silently reads `undefined` → readiness gate passes when it
+  shouldn't. This class of bug is exactly what produced the original **MRV durability gap**
+  (now fixed at the data layer + covered by a regression test in
+  `tests/isometric-certify-context.test.ts`).
+- **Why it matters:** the focused regression test closes the *known* instance; the *class*
+  remains open — another mistyped key would fail the same silent way.
+- **Resolve via:** make the registry generic per entity — `CertifyFieldDescriptor<T>` with
+  `condition.field: keyof T` and `formFields: readonly (keyof T)[]`, and
+  `deriveEntityCertifyReadiness<T>` bound to the real row type per entity kind, so every key
+  becomes a compile-checked property reference (M). Judged not worth doing solely to satisfy
+  the audit now that the root cause has a test; revisit when the registry next grows.
+
+### Minor: correlation-id field drift in removal submit (`observability/submit-correlation-id`) — opened 2026-06-07, **deferred**
+
+- The removal submit flow binds `submissionAttemptId` on its child logger but several deeper
+  boundary logs key the correlation field as `submissionId` (the DB row id) instead — an
+  aggregator filtering on one won't see records keyed by the other. No data loss; weakens
+  "trace one attempt end-to-end." `ghg-statements.ts` already uses `submissionAttemptId`
+  consistently.
+- **Resolve via:** thread the attempt-scoped `log` child (which already carries
+  `submissionAttemptId`) through those boundary logs, or include both ids (S).

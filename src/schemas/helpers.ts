@@ -97,6 +97,25 @@ export const optionalPositiveNumber = z.preprocess(
   z.number().finite().min(0, "Must be a non-negative number").nullable().optional()
 );
 
+/**
+ * Required numeric field: preprocess form strings to number | undefined, then
+ * surface a friendly required/invalid message instead of Zod's raw type error.
+ */
+export function requiredNumber(
+  requiredMessage = "Required",
+  invalidMessage = "Invalid number",
+) {
+  return z.preprocess(
+    toNumberOrUndefined,
+    z
+      .number({
+        error: (iss) =>
+          iss.input === undefined ? requiredMessage : invalidMessage,
+      })
+      .finite(invalidMessage),
+  );
+}
+
 /** Optional percent field: preprocess form string → number | null, then validate 0–100 range. */
 export const optionalPercent = z.preprocess(
   toNumberOrNull,
