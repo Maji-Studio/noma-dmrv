@@ -1,10 +1,7 @@
 "use client";
 
-import { ServerError } from "@/components/forms";
-import { TableSkeleton } from "@/components/ui/loading-skeleton";
-import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
-import { TransportLegLine } from "./transport-leg-list-item";
+import { TransportLegsEditor } from "./transport-legs-editor";
 
 interface TransportLegsSummaryProps {
   entityType: TransportEntityTypeValue;
@@ -13,55 +10,21 @@ interface TransportLegsSummaryProps {
   title?: string;
 }
 
-const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
-  feedstock: "Transport: feedstock → processing",
-  biochar: "Transport: biochar → storage",
-  sample: "Transport: sample → lab",
-};
-
-/** Read-only transport-leg list for the side-sheet view mode. */
+/**
+ * Read-only transport-leg list for the side-sheet view mode. Renders the same
+ * table as the editor (via `readOnly`) so view and edit stay visually identical.
+ */
 export function TransportLegsSummary({
   entityType,
   entityId,
   title,
 }: TransportLegsSummaryProps) {
-  const { data: legs, isLoading, error } = useTransportLegsForEntity(
-    entityType,
-    entityId,
-  );
-
   return (
-    <section className="flex flex-col gap-12 border border-[var(--color-border-secondary)] p-16">
-      <h3 className="title-heading-3">{title ?? DEFAULT_TITLES[entityType]}</h3>
-
-      {error && (
-        <ServerError
-          message={
-            error instanceof Error
-              ? error.message
-              : "Failed to load transport legs"
-          }
-        />
-      )}
-
-      {error ? null : isLoading ? (
-        <TableSkeleton columns={2} rows={3} />
-      ) : !legs || legs.length === 0 ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          No transport legs recorded yet. Use Edit to add one.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-8">
-          {legs.map((leg) => (
-            <li
-              key={leg.id}
-              className="border border-[var(--color-border-secondary)] p-12"
-            >
-              <TransportLegLine leg={leg} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <TransportLegsEditor
+      entityType={entityType}
+      entityId={entityId}
+      title={title}
+      readOnly
+    />
   );
 }

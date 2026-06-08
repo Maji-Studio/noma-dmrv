@@ -25,7 +25,7 @@ export type BatchHealthCheckKey =
   | "carbon" // carbon & durability lab inputs resolved
   | "production" // lineage resolves >= 1 production run
   | "transport" // transport legs present for the template's required categories
-  | "entityReadiness"; // certifier-required entity fields, surfaced but submit-gated
+  | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
 
 export type BatchHealthCheckStatus =
   | "met" // satisfied
@@ -55,9 +55,11 @@ export interface BatchHealthFacts {
    */
   carbonMissingInputs: string[];
   /**
-   * Per-entity certifier-readiness gaps from the batch lineage. These are not
-   * carbon inputs and do not block grouping; removal readiness blocks submit
-   * with the same labels once the batch is in a removal.
+   * Per-entity certifier-readiness gaps from THIS batch's own lineage (its
+   * production runs, samples, and transport legs resolve 1:1 for an ungrouped
+   * batch). A batch whose underlying entities are missing certifier-required
+   * fields genuinely can't be certified, so these gaps block selection — the
+   * operator resolves them from the batch's cards before grouping.
    */
   entityReadinessGaps: string[];
   /** The batch's application lineage resolves at least one production run. */
@@ -86,7 +88,7 @@ export interface BatchHealth {
 const CARBON_LABEL = "Carbon & durability inputs complete";
 const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
-const ENTITY_READINESS_LABEL = "Final-submit entity fields";
+const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 
 function describeCategories(categories: TransportCategory[]): string {
@@ -166,8 +168,8 @@ function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheck {
   return {
     key: "entityReadiness",
     label: ENTITY_READINESS_LABEL,
-    status: "skipped",
-    detail: `Still needed before submit: ${facts.entityReadinessGaps
+    status: "unmet",
+    detail: `Missing: ${facts.entityReadinessGaps
       .slice(0, ENTITY_READINESS_PREVIEW_LIMIT)
       .join(", ")}${suffix}`,
   };
@@ -175,9 +177,14 @@ function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheck {
 
 /**
  * Folds a batch's data-completeness facts into one verdict + an itemised
- * checklist. A batch is "ready" (selectable into a removal) when no check is
- * `unmet`; `skipped` checks (facility setup not done) do not block — that gap is
- * the removal/facility-level concern surfaced in the wizard's requirements step.
+ * checklist. A batch is "ready" (selectable into a removal) when no `unmet`
+ * check remains — carbon inputs, production lineage, transport-leg presence, and
+ * the batch's own entity certifier fields all gate selection, so the wizard only
+ * ever offers a batch that can actually be certified. Only `skipped` checks
+ * (transport when facility setup isn't done — the wizard surfaces that gap
+ * separately) are non-blocking. Facility-level concerns that aren't a single
+ * batch's data (project mapping, template resolution, cross-batch transport
+ * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const checks = [

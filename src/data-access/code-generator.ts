@@ -33,26 +33,22 @@ export async function generateNextCode(
   const year = currentYearShort();
   const pattern = `${prefix}-${year}-%`;
 
-  // Find the highest existing code number for this prefix + year
+  // Find the highest existing suffix for this prefix + year. We MAX on the
+  // integer suffix, not the raw code string — a lexicographic max picks
+  // "ABC-26-999" over "ABC-26-1000" once the sequence exceeds 3 digits.
   const result = await db
     .select({
-      maxCode: sql<string>`max(${codeColumn})`.as("max_code"),
+      maxSuffix: sql<
+        number | null
+      >`max(cast(substring(${codeColumn} from '[0-9]+$') as integer))`.as(
+        "max_suffix",
+      ),
     })
     .from(table)
     .where(sql`${codeColumn} like ${pattern}`);
 
-  const maxCode = result[0]?.maxCode;
-  let nextNumber = 1;
-
-  if (maxCode) {
-    // Extract the numeric suffix: "BP-26-042" -> 42
-    const parts = maxCode.split("-");
-    const lastPart = parts[parts.length - 1];
-    const parsed = parseInt(lastPart, 10);
-    if (!isNaN(parsed)) {
-      nextNumber = parsed + 1;
-    }
-  }
+  const maxSuffix = result[0]?.maxSuffix ?? null;
+  const nextNumber = (maxSuffix ?? 0) + 1;
 
   const paddedNumber = String(nextNumber).padStart(3, "0");
   return `${prefix}-${year}-${paddedNumber}`;
@@ -71,24 +67,21 @@ export async function generateNextCodes(
   const year = currentYearShort();
   const pattern = `${prefix}-${year}-%`;
 
+  // MAX on the integer suffix (see generateNextCode for why the raw-string max
+  // is wrong once the sequence passes 3 digits).
   const result = await db
     .select({
-      maxCode: sql<string>`max(${codeColumn})`.as("max_code"),
+      maxSuffix: sql<
+        number | null
+      >`max(cast(substring(${codeColumn} from '[0-9]+$') as integer))`.as(
+        "max_suffix",
+      ),
     })
     .from(table)
     .where(sql`${codeColumn} like ${pattern}`);
 
-  const maxCode = result[0]?.maxCode;
-  let nextNumber = 1;
-
-  if (maxCode) {
-    const parts = maxCode.split("-");
-    const lastPart = parts[parts.length - 1];
-    const parsed = parseInt(lastPart, 10);
-    if (!isNaN(parsed)) {
-      nextNumber = parsed + 1;
-    }
-  }
+  const maxSuffix = result[0]?.maxSuffix ?? null;
+  const nextNumber = (maxSuffix ?? 0) + 1;
 
   return Array.from({ length: count }, (_, i) => {
     const paddedNumber = String(nextNumber + i).padStart(3, "0");

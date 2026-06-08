@@ -31,6 +31,12 @@ export const transportMethods = [
 ] as const;
 export type TransportMethodValue = (typeof transportMethods)[number];
 
+// The full enum stays valid for storage/back-compat, but the UI only offers
+// methods whose emission-factor component is bound in the Isometric biochar
+// blueprint. Today that's road only; add others here once the blueprint binds
+// them (Transportation v1.1 supports rail/ship/pipeline/aircraft too).
+export const selectableTransportMethods = ["road"] as const satisfies readonly TransportMethodValue[];
+
 // Distance-based is the only method: we never meter fuel, so emissions are
 // always distance × cargo-mass × (Isometric component factor).
 export const emissionsCalculationMethods = ["distance_based"] as const;

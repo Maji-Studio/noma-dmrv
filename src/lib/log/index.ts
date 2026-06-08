@@ -146,3 +146,29 @@ function makeLogger(bindings: Record<string, unknown>): Logger {
 }
 
 export const logger: Logger = makeLogger({});
+
+/** Default cap for sanitized error-message fields. */
+const ERROR_MESSAGE_MAX_LENGTH = 200;
+const EMAIL_PATTERN = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+
+/**
+ * Turn an arbitrary error (or message string) into a log-safe value: extract its
+ * message, strip email-shaped PII (the logger's key-based `redact` cannot reach
+ * free-text inside a message), and truncate so a verbose driver/stack message
+ * can't bloat a log line. Pass the result as a structured field, not raw error.
+ */
+export function sanitizeErrorMessage(
+  messageOrError: unknown,
+  maxLength = ERROR_MESSAGE_MAX_LENGTH,
+): string {
+  const raw =
+    messageOrError instanceof Error
+      ? messageOrError.message
+      : typeof messageOrError === "string"
+        ? messageOrError
+        : String(messageOrError);
+  const scrubbed = raw.replace(EMAIL_PATTERN, REDACTED);
+  return scrubbed.length > maxLength
+    ? `${scrubbed.slice(0, maxLength)}…`
+    : scrubbed;
+}
