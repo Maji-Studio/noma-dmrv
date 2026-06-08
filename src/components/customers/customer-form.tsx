@@ -386,7 +386,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       setFormError("Longitude must be between -180 and 180");
       return;
     }
-    if (distance !== null && (Number.isNaN(distance) || distance < 0)) {
+    if (distance !== null && (!Number.isFinite(distance) || distance < 0)) {
       setFormError("Distance from facility must be 0 or greater");
       return;
     }
