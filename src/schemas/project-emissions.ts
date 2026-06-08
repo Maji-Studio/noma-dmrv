@@ -60,7 +60,7 @@ const projectEmissionBaseSchema = z
     lcaWindowStartOn: dateString,
     lcaWindowEndOn: dateString,
     magnitude: requiredNumber("Magnitude is required").pipe(
-      z.number().finite().min(0, "Magnitude must be non-negative"),
+      z.number().min(0, "Magnitude must be non-negative"),
     ),
     unit: z.string().min(1, "Unit is required"),
     allocationStrategyRecommendation: z

@@ -2,9 +2,12 @@
  * SelectBatchesStep — step 1 of the New-Removal wizard. Lists the facility's
  * ungrouped credit batches paired with the per-batch health verdict
  * (`useSelectableBatches`). A "ready" batch is a selectable checkbox card; an
- * "incomplete" batch is non-selectable and links out to its detail page's health
- * check (design doc §4). When facility setup is incomplete a banner nudges the
- * operator to finish it — transport health can't be judged without it (§8).
+ * "incomplete" batch is non-selectable and shows its exact gaps inline (carbon,
+ * production, transport, the batch's own entity certifier fields) with a link out
+ * to the batch page where each is fixed — so the operator resolves everything
+ * here, at selection, rather than discovering it after grouping (design doc §4).
+ * When facility setup is incomplete a banner blocks grouping for the whole
+ * facility — there's no registry to submit to without it (§8).
  */
 "use client";
 
@@ -102,6 +105,10 @@ function IncompleteCard({
   batch: SelectableBatch;
   facilityId: string;
 }) {
+  // The unmet checks, each with the exact missing items — shown inline so the
+  // operator sees precisely what's outstanding without leaving the dialog, then
+  // jumps to the batch page to resolve it.
+  const gaps = batch.health.checks.filter((c) => c.status === "unmet");
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
       <div className="flex items-start justify-between gap-12">
@@ -117,6 +124,20 @@ function IncompleteCard({
       <span className="body-caption text-[var(--color-text-tertiary)]">
         {formatSafeDate(batch.startDate)} — {formatSafeDate(batch.endDate)}
       </span>
+      <ul className="flex flex-col gap-6">
+        {gaps.map((check) => (
+          <li key={check.key} className="flex flex-col gap-2">
+            <span className="body-caption font-medium text-[var(--color-text-secondary)]">
+              {check.label}
+            </span>
+            {check.detail && (
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {check.detail}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
       <Link
         href={`/credit-batches/${batch.id}?facility=${facilityId}`}
         target="_blank"
@@ -158,7 +179,8 @@ export function SelectBatchesStep({
           />
           <div className="flex flex-col gap-2">
             <span className="body-small text-[var(--color-text-primary)]">
-              Finish facility setup to certify.
+              Link this facility to Isometric and set a removal template before
+              grouping batches.
             </span>
             <Link
               href={certificationSettingsHref(facilityId)}
