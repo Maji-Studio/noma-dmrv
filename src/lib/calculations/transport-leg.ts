@@ -97,3 +97,74 @@ export function deriveTransportLeg(
 export function isDerivedLegPersistable(leg: DerivedTransportLeg): boolean {
   return leg.distanceKm != null && leg.loadMassKg != null;
 }
+
+// ============================================
+// Distribution leg aggregation (biochar)
+// ============================================
+
+/** One delivery's contribution to a product's aggregated distribution leg. */
+export interface DistributionLegRow {
+  /** Cargo mass moved on this delivery, kg. */
+  loadMassKg: number | null;
+  /** Road distance facility → destination, km. */
+  distanceKm: number | null;
+  /** Destination (customer-location) name, when known. */
+  locationName: string | null;
+  locationGpsLatitude: number | null;
+  locationGpsLongitude: number | null;
+}
+
+export interface AggregatedDistributionLeg {
+  /** Σ of qualifying deliveries' mass; 0 when none qualify. */
+  totalMassKg: number;
+  /** Mass-weighted-average distance, or null when nothing qualifies. */
+  weightedDistanceKm: number | null;
+  /** Single destination's name, "Customer sites" for many, null for none. */
+  destinationName: string | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
+}
+
+/**
+ * Collapse a product's deliveries into ONE distribution leg. A product is
+ * delivered to many sites at different distances, but the one-derived-per-entity
+ * invariant means a single leg. The distance-based method needs `Σ distⱼ × massⱼ`;
+ * storing `totalMass` with the mass-weighted-average distance is exact, since
+ * `(Σ distⱼ·massⱼ / Σ massⱼ) × Σ massⱼ = Σ distⱼ·massⱼ`. Deliveries missing a
+ * positive mass or distance are skipped.
+ */
+export function aggregateDistributionLegs(
+  rows: DistributionLegRow[],
+): AggregatedDistributionLeg {
+  let totalMassKg = 0;
+  let weightedDistanceSum = 0;
+  const names = new Set<string>();
+  let namedGps: { lat: number | null; lng: number | null } | null = null;
+
+  for (const row of rows) {
+    const mass = positiveOrNull(row.loadMassKg);
+    const distance = positiveOrNull(row.distanceKm);
+    if (mass === null || distance === null) continue;
+    totalMassKg += mass;
+    weightedDistanceSum += mass * distance;
+    if (row.locationName) {
+      names.add(row.locationName);
+      namedGps = { lat: row.locationGpsLatitude, lng: row.locationGpsLongitude };
+    }
+  }
+
+  const weightedDistanceKm =
+    totalMassKg > 0 ? weightedDistanceSum / totalMassKg : null;
+  const single = names.size === 1;
+  return {
+    totalMassKg,
+    weightedDistanceKm,
+    destinationName: single
+      ? [...names][0]
+      : names.size > 1
+        ? "Customer sites"
+        : null,
+    destinationGpsLatitude: single && namedGps ? namedGps.lat : null,
+    destinationGpsLongitude: single && namedGps ? namedGps.lng : null,
+  };
+}

@@ -3,11 +3,15 @@
 // facility via `resolveEntityFacility`. Swap for `requireFacilityAccess` once
 // a facility-membership model lands.
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts,
+  customerLocations,
+  deliveries,
+  facilities,
   feedstocks,
+  orders,
   productionRuns,
   samples,
   transportLegs,
@@ -17,6 +21,8 @@ import {
 import { SafeError } from "@/lib/errors";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import {
+  aggregateDistributionLegs,
+  deriveTransportLeg,
   isDerivedLegPersistable,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
@@ -248,15 +254,16 @@ export async function deleteTransportLegsForEntity(
 // (distance + load mass). Manual legs remain untouched.
 export async function replaceDerivedTransportLeg(
   userId: string,
-  entityType: "feedstock",
+  entityType: "feedstock" | "biochar",
   entityId: string,
   derived: DerivedTransportLeg,
 ): Promise<void> {
   requireAuth(userId);
   await resolveEntityFacility(entityType, entityId);
 
-  await db.transaction(async (tx) => {
-    await tx
+  // No persistable derivation → clear any stale derived leg.
+  if (!isDerivedLegPersistable(derived)) {
+    await db
       .delete(transportLegs)
       .where(
         and(
@@ -265,25 +272,147 @@ export async function replaceDerivedTransportLeg(
           eq(transportLegs.isDerived, true),
         ),
       );
+    return;
+  }
 
-    if (!isDerivedLegPersistable(derived)) return;
+  // Upsert onto the one-derived-per-entity partial unique index
+  // (`transport_legs_one_derived_per_entity_idx`) so concurrent resyncs for the
+  // same entity converge to a single row instead of racing a delete-then-insert
+  // into a unique violation. Manual legs (is_derived = false) are not in the
+  // index and are never touched.
+  const fields = {
+    originName: derived.originName,
+    originGpsLatitude: derived.originGpsLatitude,
+    originGpsLongitude: derived.originGpsLongitude,
+    destinationName: derived.destinationName,
+    destinationGpsLatitude: derived.destinationGpsLatitude,
+    destinationGpsLongitude: derived.destinationGpsLongitude,
+    distanceKm: derived.distanceKm as number,
+    transportMethodType: derived.transportMethodType,
+    calculationMethodType: derived.calculationMethodType,
+    vehicleType: derived.vehicleType,
+    modelYear: derived.modelYear,
+    loadMassKg: derived.loadMassKg as number,
+  };
 
-    await tx.insert(transportLegs).values({
-      entityType,
-      entityId,
-      isDerived: true,
-      originName: derived.originName,
-      originGpsLatitude: derived.originGpsLatitude,
-      originGpsLongitude: derived.originGpsLongitude,
-      destinationName: derived.destinationName,
-      destinationGpsLatitude: derived.destinationGpsLatitude,
-      destinationGpsLongitude: derived.destinationGpsLongitude,
-      distanceKm: derived.distanceKm as number,
-      transportMethodType: derived.transportMethodType,
-      calculationMethodType: derived.calculationMethodType,
-      vehicleType: derived.vehicleType,
-      modelYear: derived.modelYear,
-      loadMassKg: derived.loadMassKg as number,
+  await db
+    .insert(transportLegs)
+    .values({ entityType, entityId, isDerived: true, ...fields })
+    .onConflictDoUpdate({
+      target: [transportLegs.entityType, transportLegs.entityId],
+      targetWhere: sql`${transportLegs.isDerived} = true`,
+      set: { ...fields, updatedAt: new Date() },
     });
+}
+
+// ============================================
+// Auto-derived legs (biochar distribution)
+// ============================================
+
+/**
+ * Recompute and persist a biochar product's SINGLE auto-derived distribution
+ * leg (facility → customer sites) from its deliveries. A product can be
+ * delivered many times to different distances; the one-derived-per-entity
+ * invariant means we store ONE aggregated leg. Aggregation is exact for the
+ * distance-based method (`Σ distanceⱼ × massⱼ`): we store the total delivered
+ * mass and the mass-weighted-average distance, so `avgDist × totalMass`
+ * reproduces `Σ(distⱼ · massⱼ)`. Deliveries missing a positive distance (no
+ * `customer_locations.distance_from_facility_km`) or mass are skipped. Call
+ * after every delivery create/update/delete. Manual legs are untouched.
+ */
+export async function syncBiocharProductTransportLeg(
+  userId: string,
+  biocharProductId: string,
+): Promise<void> {
+  requireAuth(userId);
+
+  const [facility] = await db
+    .select({
+      name: facilities.name,
+      gpsLatitude: facilities.gpsLatitude,
+      gpsLongitude: facilities.gpsLongitude,
+    })
+    .from(biocharProducts)
+    .innerJoin(facilities, eq(biocharProducts.facilityId, facilities.id))
+    .where(eq(biocharProducts.id, biocharProductId));
+
+  if (!facility) return;
+
+  // The destination location lives on the order in the common flow; the
+  // delivery may also carry its own override. Resolve via
+  // COALESCE(delivery.customerLocationId, order.customerLocationId).
+  const rows = await db
+    .select({
+      loadMassKg: deliveries.deliveredWetMassKg,
+      distanceKm: customerLocations.distanceFromFacilityKm,
+      locationName: customerLocations.name,
+      locationGpsLatitude: customerLocations.gpsLatitude,
+      locationGpsLongitude: customerLocations.gpsLongitude,
+    })
+    .from(deliveries)
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(
+      customerLocations,
+      eq(
+        customerLocations.id,
+        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+      ),
+    )
+    .where(eq(deliveries.biocharProductId, biocharProductId));
+
+  const agg = aggregateDistributionLegs(rows);
+
+  const derived = deriveTransportLeg({
+    origin: {
+      name: facility.name,
+      gpsLatitude: facility.gpsLatitude,
+      gpsLongitude: facility.gpsLongitude,
+    },
+    destination: {
+      name: agg.destinationName,
+      gpsLatitude: agg.destinationGpsLatitude,
+      gpsLongitude: agg.destinationGpsLongitude,
+    },
+    vehicle: null,
+    loadMassKg: agg.totalMassKg > 0 ? agg.totalMassKg : null,
+    storedDistanceKm: agg.weightedDistanceKm,
   });
+
+  // When no delivery qualifies, `derived` is not persistable and the replace
+  // clears any stale derived leg.
+  await replaceDerivedTransportLeg(userId, "biochar", biocharProductId, derived);
+}
+
+/**
+ * Resync the derived biochar legs of every product delivered to a given
+ * customer location. The leg's distance comes from
+ * `customer_locations.distance_from_facility_km`, so editing that distance must
+ * recompute the affected products' legs. Call after a customer-location update.
+ */
+export async function syncBiocharLegsForCustomerLocation(
+  userId: string,
+  customerLocationId: string,
+): Promise<void> {
+  requireAuth(userId);
+
+  // Match deliveries whose resolved destination is this location — either the
+  // delivery's own override or, in the common flow, its order's location.
+  const rows = await db
+    .selectDistinct({ biocharProductId: deliveries.biocharProductId })
+    .from(deliveries)
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .where(
+      eq(
+        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        customerLocationId,
+      ),
+    );
+
+  const productIds = rows
+    .map((row) => row.biocharProductId)
+    .filter((id): id is string => Boolean(id));
+
+  await Promise.all(
+    productIds.map((id) => syncBiocharProductTransportLeg(userId, id)),
+  );
 }
