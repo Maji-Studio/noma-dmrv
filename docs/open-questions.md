@@ -996,12 +996,11 @@ archived in
 
 ## Audit follow-ups (whole-repo audit, opened 2026-06-07)
 
-Deferred items from the 9-commit + working-tree audit. The high-severity findings
-(MRV durability gate, use-server exposure surface, submit-removal version race, log
-redaction, missing indexes, nullable-certifier CHECK, formulation orphan guard,
-energy error UI, GHG rate-limit/breadcrumbs) were **fixed** in that pass; these are the
-items intentionally held back as needing a product/UX decision or being larger than a
-review-fix. Sizing: (S) small, (M) medium, (L) large.
+Deferred items from the 9-commit + working-tree audit — held back as needing a
+product/UX decision or being larger than a review-fix. The audit pass's
+execution summary (which high-severity findings were fixed) is archived in
+[docs/archive/2026-06-07-whole-repo-audit-snapshot.md](archive/2026-06-07-whole-repo-audit-snapshot.md).
+Sizing: (S) small, (M) medium, (L) large.
 
 ### Unbounded readings table — pagination/virtualization (`perf/readings-table-unbounded`) — opened 2026-06-07, **deferred**
 

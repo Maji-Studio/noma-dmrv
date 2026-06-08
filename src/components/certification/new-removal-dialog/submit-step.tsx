@@ -1,9 +1,17 @@
 /**
- * SubmitStep — step 3 of the New-Removal wizard. Reuses the same single-phase
- * `submitRemoval` (via `useSubmitRemoval`) and production confirmation gate as
- * the standalone Review flow, so the two submit paths behave identically. On
- * success it shows the resulting registry record; the "View on Isometric" link
- * is wired in a later step once the registry URL is verified (design doc §7).
+ * SubmitStep — the final "Confirm & submit" step of the New-Removal wizard. It
+ * folds in what used to be a separate "Requirements" step: the facility/registry-
+ * level checks (project mapping, default template, cross-batch transport
+ * uniformity) are shown inline as a confirmation checklist with smart fix links,
+ * and the submit button is gated on the shared `deriveRemovalReadiness` verdict.
+ * Per-batch concerns (carbon, production lineage, transport-leg presence, and the
+ * batch's own entity certifier fields) were already resolved at selection — only
+ * ready batches got grouped — so this screen is a true confirmation, not a place
+ * to discover new blockers.
+ *
+ * Reuses the same single-phase `submitRemoval` (via `useSubmitRemoval`) and
+ * production confirmation gate as the standalone Review flow, so the two submit
+ * paths behave identically. On success it shows the resulting registry record.
  */
 "use client";
 
@@ -11,11 +19,20 @@ import { useState } from "react";
 import { ArrowSquareOut, CheckCircle } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import {
+  buildRemovalRequirementsChecklist,
+  deriveRemovalReadiness,
+  type RemovalRequirementKey,
+} from "@/lib/certification/readiness";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { certificationSettingsHref } from "@/lib/certification/links";
 import { formatTonnes } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { CheckRow } from "../check-row";
 import { EnvBanner } from "../env-banner";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 
@@ -25,6 +42,7 @@ const REJECTED_IN_ISOMETRIC_MSG =
 interface SubmitStepProps {
   removalId: string;
   ctx: RemovalCertifyContext;
+  facilityId: string;
   onDone: () => void;
 }
 
@@ -35,7 +53,35 @@ function totalCo2e(ctx: RemovalCertifyContext): number {
   );
 }
 
-export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
+// Where each unmet facility-level requirement is fixed (design doc §6). All
+// in-app, so plain Next <Link> navigation, facility-scoped.
+function fixLinkFor(
+  key: RemovalRequirementKey,
+  facilityId: string,
+): { label: string; href: string } | null {
+  switch (key) {
+    case "mapping":
+    case "template":
+      return {
+        label: "Open settings",
+        href: certificationSettingsHref(facilityId),
+      };
+    case "transportUniformity":
+      return {
+        label: "Review transport",
+        href: `/deliveries?facility=${facilityId}`,
+      };
+    case "entityReadiness":
+      return null;
+  }
+}
+
+export function SubmitStep({
+  removalId,
+  ctx,
+  facilityId,
+  onDone,
+}: SubmitStepProps) {
   const submitMutation = useSubmitRemoval();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -45,6 +91,11 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
   const rejectedWithExternal =
     ctx.latestSubmission?.status === "rejected" && externalId !== null;
   const batchCount = ctx.memberBatches.length;
+
+  const facts = toRemovalReadinessFacts(ctx);
+  const checklist = buildRemovalRequirementsChecklist(facts);
+  const readiness = deriveRemovalReadiness(facts);
+  const requirementsMet = readiness.state === "ready";
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
@@ -127,15 +178,43 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
     );
   }
 
+  const submitButton = (
+    <Button
+      variant="primary"
+      onClick={handleSubmit}
+      busy={submitMutation.isPending}
+      disabled={rejectedWithExternal || !requirementsMet}
+    >
+      {externalId ? "Resubmit removal" : "Submit removal"}
+    </Button>
+  );
+
   return (
     <div className="flex flex-col gap-16">
       <div className="flex flex-col gap-4">
-        <h3 className="title-heading-3">Submit</h3>
+        <h3 className="title-heading-3">Confirm &amp; submit</h3>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Ready to submit {batchCount} {batchCount === 1 ? "batch" : "batches"} ·{" "}
+          {batchCount} {batchCount === 1 ? "batch" : "batches"} ·{" "}
           {formatTonnes(totalCo2e(ctx), { digits: 1, unit: "t CO₂e" })}
         </p>
       </div>
+
+      <ul className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+        {checklist.map((check, index) => (
+          <CheckRow
+            key={check.key}
+            status={check.status}
+            label={check.label}
+            detail={check.detail}
+            isFirst={index === 0}
+            fix={
+              check.status === "unmet"
+                ? fixLinkFor(check.key, facilityId)
+                : null
+            }
+          />
+        ))}
+      </ul>
 
       <EnvBanner isProduction={ctx.isProduction} variant="inline" />
 
@@ -150,14 +229,15 @@ export function SubmitStep({ removalId, ctx, onDone }: SubmitStepProps) {
       )}
 
       <div className="flex justify-end">
-        <Button
-          variant="primary"
-          onClick={handleSubmit}
-          busy={submitMutation.isPending}
-          disabled={rejectedWithExternal}
-        >
-          {externalId ? "Resubmit removal" : "Submit removal"}
-        </Button>
+        {requirementsMet ? (
+          submitButton
+        ) : (
+          <Tooltip content="Resolve the registry requirements above before submitting.">
+            <span className="inline-flex" tabIndex={0}>
+              {submitButton}
+            </span>
+          </Tooltip>
+        )}
       </div>
 
       <SubmitConfirmDialog

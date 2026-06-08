@@ -48,8 +48,8 @@ export function deriveMassDryKgWithAddedWater(
 ): number {
   const waterAddedKg = addedWaterKg ?? 0;
 
-  if (waterAddedKg < 0) {
-    throw new RangeError('addedWaterKg must be >= 0');
+  if (!Number.isFinite(waterAddedKg) || waterAddedKg < 0) {
+    throw new RangeError('addedWaterKg must be a finite number >= 0');
   }
 
   return deriveMassDryKg(wetMassKg, moisturePercent);
