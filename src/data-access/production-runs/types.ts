@@ -36,7 +36,6 @@ export interface ProductionRunWithRelations {
   feedstockWetMassKg: number | null;
   feedstockMoisturePercent: number | null;
   feedstockMassDryKg: number | null;
-  emissionFactorsUsed: unknown | null;
   plcDataFileUrl: string | null;
   createdAt: Date;
   updatedAt: Date;

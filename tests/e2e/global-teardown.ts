@@ -416,26 +416,6 @@ export default async function globalTeardown() {
 
       // ─── Auth data: sessions, accounts, users ───
 
-      // Project members for E2E projects
-      await client.query(`
-        DELETE FROM project_members
-        WHERE user_id LIKE 'e2e-%'
-           OR project_id IN (
-                SELECT id FROM projects WHERE name LIKE 'E2E Test Project%'
-              )
-      `);
-
-      // Items in E2E projects
-      await client.query(`
-        DELETE FROM items
-        WHERE project_id IN (
-          SELECT id FROM projects WHERE name LIKE 'E2E Test Project%'
-        )
-      `);
-
-      // Projects
-      await client.query(`DELETE FROM projects WHERE name LIKE 'E2E Test Project%'`);
-
       // Sessions for E2E users
       await client.query(`DELETE FROM session WHERE user_id LIKE 'e2e-%'`);
 

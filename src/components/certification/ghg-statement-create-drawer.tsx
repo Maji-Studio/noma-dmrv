@@ -94,7 +94,13 @@ export function GhgStatementCreateDrawer({
   onClose,
 }: GhgStatementCreateDrawerProps) {
   return (
-    <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
+    <SlideOverPanel.Root
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      // Multi-step wizard: a stray backdrop click must not discard a
+      // half-built statement. Close button + ESC still dismiss.
+      dismissOnClickOutside={false}
+    >
       <SlideOverPanel.Content size="wide">
         {open && (
           <DrawerBody

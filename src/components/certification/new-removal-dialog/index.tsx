@@ -63,6 +63,9 @@ export function NewRemovalDialog({
       onClose={onClose}
       width="lg"
       ariaLabelledBy="new-removal-title"
+      // Multi-step wizard: a stray backdrop click must not discard a
+      // half-built removal. Close button + ESC still dismiss.
+      dismissOnClickOutside={false}
     >
       <WizardBody
         facilityId={facilityId}
@@ -93,7 +96,7 @@ function WizardBody({
   const createMutation = useCreateRemovalWithBatches();
   const toast = useToast();
 
-  const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? true;
+  const facilitySetupComplete = selectable.data?.facilitySetupComplete ?? false;
 
   const toggle = (id: string) => {
     setSelectedIds((prev) => {

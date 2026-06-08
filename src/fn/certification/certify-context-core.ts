@@ -62,6 +62,12 @@ import {
   type TransportLegsByCategory,
 } from "./shared";
 
+// Each removal/batch in a facility-level fan-out rebuilds its own context (a
+// chain of DB queries + registry lookups). Bound how many run at once so a
+// facility with many removals/batches can't burst an unbounded number of query
+// chains at the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
+const FANOUT_CONCURRENCY = 8;
+
 export interface TransportCoverageBucket {
   count: number;
   entityIds: string[];
@@ -753,24 +759,30 @@ export async function loadRemovalsForFacility(
       listRemovalsForFacility(userId, facilityId),
       listUngroupedCreditBatches(userId, facilityId),
     ]);
-    const removals = await Promise.all(
-      removalRows.map(async (removal) => {
-        const [batches, latestSubmission] = await Promise.all([
-          getCreditBatchesByRemovalId(userId, removal.id),
-          getLatestSubmission(userId, {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: removal.id,
-          }),
-        ]);
-        return {
-          removal,
-          memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
-          latestSubmission,
-        };
-      }),
-    );
+    // Bounded chunks (order-preserving) rather than one unbounded Promise.all
+    // over every removal — see FANOUT_CONCURRENCY.
+    const removals: RemovalHubEntry[] = [];
+    for (let i = 0; i < removalRows.length; i += FANOUT_CONCURRENCY) {
+      const chunk = await Promise.all(
+        removalRows.slice(i, i + FANOUT_CONCURRENCY).map(async (removal) => {
+          const [batches, latestSubmission] = await Promise.all([
+            getCreditBatchesByRemovalId(userId, removal.id),
+            getLatestSubmission(userId, {
+              provider: ISOMETRIC_PROVIDER,
+              submissionType: REMOVAL_SUBMISSION_TYPE,
+              localEntityType: REMOVAL_ENTITY_TYPE,
+              localEntityId: removal.id,
+            }),
+          ]);
+          return {
+            removal,
+            memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
+            latestSubmission,
+          };
+        }),
+      );
+      removals.push(...chunk);
+    }
     return {
       removals,
       ungroupedBatches,
@@ -809,18 +821,24 @@ export async function loadSelectableBatchesForFacility(
   return withAction(async (userId) => {
     const facilityFacts = await loadFacilityCertifierFacts(userId, facilityId);
     const ungrouped = await listUngroupedCreditBatches(userId, facilityId);
-    const batches = await Promise.all(
-      ungrouped.map(async (row) => {
-        const scope = await resolveScopeForCreditBatch(userId, row.id);
-        const ctx = projectUiContext(
-          await buildRemovalContext(userId, scope, facilityFacts),
-        );
-        return {
-          ...row,
-          health: deriveBatchHealth(toBatchHealthFacts(ctx, row.id)),
-        };
-      }),
-    );
+    // Bounded chunks (order-preserving) rather than one unbounded Promise.all
+    // over every ungrouped batch — see FANOUT_CONCURRENCY.
+    const batches: SelectableBatch[] = [];
+    for (let i = 0; i < ungrouped.length; i += FANOUT_CONCURRENCY) {
+      const chunk = await Promise.all(
+        ungrouped.slice(i, i + FANOUT_CONCURRENCY).map(async (row) => {
+          const scope = await resolveScopeForCreditBatch(userId, row.id);
+          const ctx = projectUiContext(
+            await buildRemovalContext(userId, scope, facilityFacts),
+          );
+          return {
+            ...row,
+            health: deriveBatchHealth(toBatchHealthFacts(ctx, row.id)),
+          };
+        }),
+      );
+      batches.push(...chunk);
+    }
     const facilitySetupComplete =
       !!facilityFacts.mapping &&
       !!facilityFacts.defaultTemplate &&

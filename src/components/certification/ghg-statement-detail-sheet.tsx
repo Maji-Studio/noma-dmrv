@@ -32,6 +32,7 @@ import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventLog } from "./sync-event-log";
@@ -105,9 +106,13 @@ export function GhgStatementDetailSheet({
 
         {latestSubmission?.externalId && (
           <Field label="Registry record">
-            <span className="font-mono text-[var(--color-text-secondary)]">
-              {latestSubmission.externalId} · v{latestSubmission.version}
-            </span>
+            <RegistryRecordLink
+              facilityId={statement.facilityId}
+              externalId={latestSubmission.externalId}
+              version={latestSubmission.version}
+              isProduction={isProduction}
+              kind="ghgStatement"
+            />
           </Field>
         )}
 

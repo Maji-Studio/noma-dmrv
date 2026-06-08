@@ -1,278 +1,170 @@
 # Organization Guide
 
-How to organize components, features, and code in this Next.js template.
+How to organize components, features, and shared code in noma-dmrv.
 
 ## File Naming
 
-**All files use kebab-case:**
+All files use kebab-case:
+
+```text
+feedstock-form.tsx
+use-feedstocks.ts
+create-dialog.tsx
 ```
-✅ item-form.tsx, use-items.ts, create-dialog.tsx
-❌ ItemForm.tsx, item_form.tsx, itemForm.tsx
-```
 
-**Exports use standard JavaScript conventions:**
-- Components: `PascalCase` → `export function ItemForm()`
-- Hooks: `camelCase` → `export function useItems()`
-- Functions: `camelCase` → `export function formatDate()`
-- Constants: `UPPER_SNAKE_CASE` → `export const MAX_ITEMS = 20`
+Exports use standard JavaScript conventions:
 
-**Avoid abbreviations** unless widely understood (e.g., `button.tsx` not `btn.tsx`)
+- Components: `PascalCase` (`export function FeedstockForm()`)
+- Hooks and functions: `camelCase` (`export function useFeedstocks()`)
+- Constants: `UPPER_SNAKE_CASE` (`export const MAX_PREVIEW_ROWS = 5`)
 
-## Component Organization Patterns
+Avoid abbreviations unless they are domain-standard.
 
-### Simple Pattern (Most Features)
+## Component Organization
 
-**Use when:**
-- < 500 lines total
-- < 3 components
-- No dialogs/modals
+### Simple Feature Folders
 
-**Structure:**
-```
-components/[feature]/
-├── index.ts                 # Barrel export
+Use this when a feature is under roughly 500 lines, has fewer than three major components, and has no nested dialog/modal set.
+
+```text
+src/components/[feature]/
+├── index.ts
 ├── [feature]-list.tsx
 ├── [feature]-card.tsx
 └── [feature]-form.tsx
 ```
 
-**Example (items/):**
-```typescript
-// components/items/index.ts
-export { ItemCard } from "./item-card";
-export { ItemForm } from "./item-form";
-export { ItemList } from "./item-list";
+Current examples:
 
-// Usage
-import { ItemList, ItemCard } from "@/components/items";
+- `src/components/credit-batches/`
+- `src/components/feedstocks/`
+- `src/components/transport-legs/`
+
+Barrel exports are fine at the folder boundary:
+
+```ts
+// src/components/feedstocks/index.ts
+export { FeedstockForm } from "./feedstock-form";
+export { FeedstockList } from "./feedstock-list";
 ```
 
-### Complex Pattern (Growing Features)
+Use the barrel from outside the folder:
 
-**Use when:**
-- 500+ lines total
-- 3+ components
-- 2+ custom hooks
-- Multiple dialogs/modals
-
-**Structure:**
-```
-components/[feature]/
-├── [feature-view].tsx       # Main export
-└── [feature]/               # Implementation folder
-    ├── components/          # Reusable feature components
-    │   ├── index.ts
-    │   └── *.tsx
-    ├── dialogs/             # Dialogs and modals
-    │   ├── index.ts
-    │   └── *.tsx
-    ├── hooks/               # Feature-specific hooks
-    │   ├── index.ts
-    │   └── use-*.ts
-    ├── utils.ts             # Feature utilities
-    └── constants.ts         # Feature constants
+```ts
+import { FeedstockForm, FeedstockList } from "@/components/feedstocks";
 ```
 
-**Example:**
-```typescript
-// components/items/items-view.tsx
-import { ItemCard, ItemFilters } from "./items/components";
-import { CreateDialog } from "./items/dialogs";
-import { useItemFilters } from "./items/hooks";
+Inside the same folder, use direct imports to avoid circular dependencies:
 
-export function ItemsView({ projectId }: Props) {
-  const { filters } = useItemFilters();
-  // Implementation
-}
-
-// components/items/index.ts
-export { ItemsView } from "./items-view";
+```ts
+import { WetMassWarning } from "./wet-mass-warning";
 ```
 
-## Dialogs and Modals
+### Growing Feature Folders
 
-Place in `dialogs/` folder when feature-specific.
+Split a feature when it crosses one or more of these thresholds:
 
-**Naming:**
-- `-dialog.tsx` → Forms and confirmations (create, edit, delete)
-- `-modal.tsx` → Content-heavy overlays (details, settings)
+- 500+ lines in the folder.
+- 3+ related components.
+- 2+ custom UI-state hooks.
+- Multiple dialogs, sheets, or modals.
 
+Use a main export plus an implementation folder:
+
+```text
+src/components/[feature]/
+├── [feature]-view.tsx
+└── [feature]/
+    ├── components/
+    ├── dialogs/
+    ├── hooks/
+    ├── constants.ts
+    └── utils.ts
 ```
+
+Start simple. Split only when the current shape makes the feature harder to scan or test.
+
+## Dialogs, Modals, And Sheets
+
+Place feature-specific overlays near the feature:
+
+```text
 dialogs/
-├── create-item-dialog.tsx       # Create form
-├── edit-item-dialog.tsx         # Edit form
-├── delete-item-dialog.tsx       # Delete confirmation
-└── item-details-modal.tsx       # Full details view
+├── create-feedstock-dialog.tsx
+├── edit-feedstock-dialog.tsx
+└── delete-feedstock-dialog.tsx
 ```
 
-## Global vs Feature-Specific
+Naming:
 
-**Decision tree:**
-```
-Is this used in 2+ features?
-├─ YES → Global location
-│   ├─ Hook → src/hooks/
-│   ├─ Utility → src/lib/
-│   ├─ Component → src/components/ui/
-│   └─ Type → src/types/
-└─ NO → Feature-specific location
-    ├─ Hook → components/[feature]/[feature]/hooks/
-    ├─ Utility → components/[feature]/[feature]/utils.ts
-    ├─ Component → components/[feature]/[feature]/components/
-    └─ Constants → components/[feature]/[feature]/constants.ts
-```
+- `*-dialog.tsx`: forms and confirmations.
+- `*-modal.tsx`: content-heavy overlays.
+- `*-sheet.tsx`: side-sheet/detail surfaces.
 
-**Rule of thumb:** Start feature-specific. Promote to global after third use in a different feature.
+Global primitives stay in `src/components/ui/`.
 
-## Barrel Exports
+## Global Vs Feature-Specific
 
-Use `index.ts` for clean imports:
+Start feature-specific. Promote after repeated use across features.
 
-```typescript
-// components/items/index.ts
-export { ItemCard } from "./item-card";
-export { ItemForm } from "./item-form";
-export { ItemList } from "./item-list";
-```
+| Need | Feature-specific location | Global location |
+|---|---|---|
+| UI state hook | `src/components/[feature]/hooks/` | `src/hooks/` only if shared across features |
+| Server data hook | `src/hooks/use-[feature].ts` | `src/hooks/` |
+| Utility | `src/components/[feature]/utils.ts` | `src/lib/` |
+| Form schema | N/A | `src/schemas/[feature].ts` |
+| UI primitive | N/A | `src/components/ui/` |
+| Type | near owner module | `src/types/` only if widely shared |
 
-**Benefits:**
-```typescript
-// Without barrel export
-import { ItemCard } from "@/components/items/item-card";
-import { ItemForm } from "@/components/items/item-form";
+## Layering
 
-// With barrel export
-import { ItemCard, ItemForm } from "@/components/items";
+Component organization follows the repo architecture:
+
+```text
+components/      UI
+  -> hooks/      React Query
+  -> fn/         server actions
+  -> data-access/ queries + auth guards
+  -> db/         Drizzle schema + connection
 ```
 
-**Avoiding circular dependencies:**
+Distinguish UI-state hooks from server-data hooks:
 
-Within the same folder, use **direct imports** (not barrel):
-```typescript
-// ❌ BAD: Circular dependency
-// item-card.tsx
-import { formatItem } from "./";  // Don't import from barrel in same folder
-
-// ✅ GOOD: Direct import
-import { formatItem } from "./utils";  // Direct import
-```
-
-## Integration with Layered Architecture
-
-Component organization fits into the overall architecture:
-
-```
-components/                    UI Layer
-    ↓
-hooks/ (React Query)          Client State Layer
-    ↓
-fn/ (Server actions)          Server Actions Layer
-    ↓
-data-access/                  Data Access Layer
-    ↓
-db/                           Database Layer
-```
-
-**Key distinction:**
-- **Component hooks** (`components/[feature]/hooks/`) → UI state, filters, selections
-- **React Query hooks** (`hooks/use-[feature].ts`) → Server data fetching
-
-**Example:**
-```typescript
-// Component hook - UI state
-// components/items/items/hooks/use-item-filters.ts
-export function useItemFilters() {
-  const [filters, setFilters] = useState({});
-  return { filters, setFilters };
+```ts
+// Feature UI state: keep near the feature.
+export function useFeedstockFilters() {
+  // search, table filters, local selections
 }
+```
 
-// React Query hook - Server data
-// hooks/use-items.ts
-export function useItems(projectId: string) {
+```ts
+// Server data: src/hooks/use-feedstocks.ts
+export function useFeedstocks(facilityId: string | null) {
   return useQuery({
-    queryKey: ["items", projectId],
-    queryFn: () => getItems(projectId),
+    queryKey: ["feedstocks", facilityId],
+    queryFn: () => listFeedstocksAction(facilityId),
+    enabled: !!facilityId,
   });
 }
 ```
 
-## When to Refactor
+## Feature Checklist
 
-**Start simple.** Only refactor when you hit these thresholds:
+When adding or changing a domain feature, keep related files aligned:
 
-- ✅ 500+ lines of code
-- ✅ 3+ related components
-- ✅ 2+ custom hooks
-- ✅ Multiple dialogs/modals
+1. `src/schemas/[feature].ts` for form/action schemas and `z.infer` types.
+2. `src/db/schema/[domain].ts` for persistent shape.
+3. `src/data-access/[feature].ts` for guarded queries and mutations.
+4. `src/fn/[feature].ts` for `"use server"` actions and orchestration.
+5. `src/hooks/use-[feature].ts` for React Query reads/mutations.
+6. `src/components/[feature]/` for forms, lists, and details.
+7. `tests/` or `tests/e2e/` coverage scaled to risk.
 
-**Don't over-engineer:**
-- Don't create subfolders "just in case"
-- Don't abstract until you need it
-- Three similar lines is better than premature abstraction
+Use current entity patterns such as facilities, feedstocks, and credit batches as references. Do not copy removed starter-template project/item patterns from git history.
 
-## Migration Example
+## Documentation Hygiene
 
-**Before (simple):**
-```
-items/
-├── index.ts
-├── item-list.tsx
-├── item-card.tsx
-└── item-form.tsx
-```
-
-**After hitting thresholds (complex):**
-```
-items/
-├── items-view.tsx                    # New main export
-└── items/
-    ├── components/
-    │   ├── index.ts
-    │   ├── item-card.tsx             # Moved
-    │   ├── item-filters.tsx          # New
-    │   └── item-bulk-actions.tsx     # New
-    ├── dialogs/
-    │   ├── index.ts
-    │   ├── create-item-dialog.tsx    # New
-    │   └── edit-item-dialog.tsx      # New
-    └── hooks/
-        ├── index.ts
-        ├── use-item-filters.ts       # New
-        └── use-bulk-selection.ts     # New
-```
-
-**Steps:**
-1. Create `items/items/` subfolder
-2. Create `items/items/components/`, `items/items/dialogs/`, `items/items/hooks/` subfolders
-3. Move existing components to `items/items/components/`
-4. Create new components in appropriate subfolders
-5. Create `items-view.tsx` as main export
-6. Update `items/index.ts` to export only `ItemsView`
-7. Update imports throughout the app
-
-## Current Template Examples
-
-**Simple features:**
-- `src/components/items/` - Item CRUD (~300 lines, 3 components)
-- `src/components/auth/` - Auth forms (4 independent forms)
-- `src/components/forms/` - Form utilities (5 reusable components)
-
-**When items would become complex:**
-If we added: filtering UI, bulk operations, multiple dialogs, filter state management, bulk selection logic → then refactor to complex pattern.
-
-## Non-CRUD Features
-
-Some features don't follow the standard list/form pattern:
-
-- **`src/components/chain-of-custody/`** — Application-first lineage graph (React Flow). Uses `chain-constants.ts` for node style definitions, `use-chain-graph.ts` for dagre layout computation from lineage data, `chain-node.tsx` for custom node rendering.
-
-## Summary
-
-- **Files**: kebab-case (`item-form.tsx`)
-- **Exports**: PascalCase components, camelCase functions
-- **Simple** (default): Flat folder with barrel export
-- **Complex** (500+ lines, 3+ components): Subfolder with organized structure
-- **Dialogs**: `-dialog.tsx` for forms, `-modal.tsx` for content
-- **Global vs Feature**: Promote after third use in different feature
-- **Barrel exports**: Use for clean imports, avoid circular deps
-- **Refactor**: Only when hitting thresholds, don't over-engineer
+- Keep evergreen design and architecture notes in `/docs`.
+- Move dated plans, audit notes, and implementation logs to `docs/archive/`.
+- Track deferred work in `docs/open-questions.md`, not code comments.
+- Update the relevant feature doc when a decision becomes settled.
