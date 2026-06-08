@@ -73,7 +73,7 @@ export function EnergySummary() {
     );
   }
 
-  if (totalsError) {
+  if (totalsError && !totals) {
     return (
       <div className="flex flex-col gap-16">
         <header className="flex flex-col gap-4">
@@ -103,6 +103,16 @@ export function EnergySummary() {
           datapoints of an Isometric submission.
         </p>
       </header>
+
+      {totalsError && (
+        <ServerError
+          message={
+            totalsError instanceof Error
+              ? totalsError.message
+              : "Failed to refresh energy totals — showing the last loaded figures."
+          }
+        />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-16">
         <SummaryCard

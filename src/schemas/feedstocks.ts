@@ -14,6 +14,9 @@ import {
 // Shared numeric field helpers
 // ============================================
 
+const MOISTURE_MIN = 0;
+const MOISTURE_MAX = 100;
+
 const requiredNonNegativeNumber = requiredNumber().pipe(
   z.number().min(0, "Must be 0 or greater")
 );
@@ -21,8 +24,8 @@ const requiredNonNegativeNumber = requiredNumber().pipe(
 const requiredMoisturePercent = requiredNumber().pipe(
   z
     .number()
-    .min(0, "Moisture must be between 0 and 100")
-    .max(100, "Moisture must be between 0 and 100")
+    .min(MOISTURE_MIN, "Moisture must be between 0 and 100")
+    .max(MOISTURE_MAX, "Moisture must be between 0 and 100")
 );
 
 // ============================================

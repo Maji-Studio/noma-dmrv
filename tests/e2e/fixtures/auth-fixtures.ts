@@ -18,7 +18,7 @@ import {
 } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 import {
@@ -53,7 +53,6 @@ export interface AuthFixtures {
   labTechnicianContext: BrowserContext;
   viewerContext: BrowserContext;
   testUsers: Record<UserRole, TestUser>;
-  testProjectId: string;
   seededData: SeededChainData;
   seedTestData: () => Promise<void>;
   cleanupTestData: () => Promise<void>;
@@ -63,7 +62,6 @@ export type { SeededChainData };
 
 interface WorkerAuthData {
   users: Record<UserRole, TestUser>;
-  projectId: string;
   authStates: Record<UserRole, AuthStorageState>;
   cleanupTestData: () => Promise<void>;
 }
@@ -136,11 +134,10 @@ function createDbConnection() {
  */
 export async function seedTestUsers(
   users: Record<UserRole, Omit<TestUser, "id">>
-): Promise<{ users: Record<UserRole, TestUser>; projectId: string }> {
+): Promise<{ users: Record<UserRole, TestUser> }> {
   const { db, pool } = createDbConnection();
 
   try {
-    const projectId = crypto.randomUUID();
     const seededUsers: Record<UserRole, TestUser> = {} as Record<UserRole, TestUser>;
 
     // Hash passwords using Better Auth's scrypt format
@@ -179,29 +176,9 @@ export async function seedTestUsers(
           id: userId,
         };
       }
-
-      // Create test project
-      await tx.insert(schema.projects).values({
-        id: projectId,
-        name: `E2E Test Project ${testRunId}`,
-        description: "Automated E2E test project",
-        ownerId: seededUsers.admin.id,
-      });
-
-      // Create project memberships
-      for (const [, userData] of Object.entries(seededUsers) as [UserRole, TestUser][]) {
-        if (userData.projectRole) {
-          await tx.insert(schema.projectMembers).values({
-            id: crypto.randomUUID(),
-            projectId: projectId,
-            userId: userData.id,
-            role: userData.projectRole,
-          });
-        }
-      }
     });
 
-    return { users: seededUsers, projectId };
+    return { users: seededUsers };
   } finally {
     await pool.end();
   }
@@ -210,9 +187,8 @@ export async function seedTestUsers(
 /**
  * Clean up test data from the database
  */
-async function cleanupAuthUsersAndProject(
-  users: Record<UserRole, TestUser>,
-  projectId: string
+async function cleanupAuthUsers(
+  users: Record<UserRole, TestUser>
 ): Promise<void> {
   const { db, pool } = createDbConnection();
 
@@ -220,27 +196,6 @@ async function cleanupAuthUsersAndProject(
     const userIds = Object.values(users).map((u) => u.id);
 
     await db.transaction(async (tx) => {
-      // Delete project members first (FK constraint)
-      await tx
-        .delete(schema.projectMembers)
-        .where(eq(schema.projectMembers.projectId, projectId));
-
-      // Also delete project members for any projects owned by test users
-      await tx
-        .delete(schema.projectMembers)
-        .where(inArray(schema.projectMembers.userId, userIds));
-
-      // Delete items associated with the project
-      await tx.delete(schema.items).where(eq(schema.items.projectId, projectId));
-
-      // Delete the project BEFORE deleting users (owner FK constraint)
-      await tx.delete(schema.projects).where(eq(schema.projects.id, projectId));
-
-      // Also delete any other projects owned by test users
-      await tx
-        .delete(schema.projects)
-        .where(inArray(schema.projects.ownerId, userIds));
-
       // Delete sessions for test users
       await tx
         .delete(schema.sessions)
@@ -260,10 +215,9 @@ async function cleanupAuthUsersAndProject(
 }
 
 export async function cleanupTestData(
-  users: Record<UserRole, TestUser>,
-  projectId: string
+  users: Record<UserRole, TestUser>
 ): Promise<void> {
-  await cleanupAuthUsersAndProject(users, projectId);
+  await cleanupAuthUsers(users);
 }
 
 function buildAuthStorageState(
@@ -483,21 +437,19 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     async ({}, use) => {
       const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
       let users: Record<UserRole, TestUser> | null = null;
-      let projectId: string | null = null;
       let cleanedUp = false;
 
       const cleanupBoundTestData = async () => {
-        if (cleanedUp || !users || !projectId) {
+        if (cleanedUp || !users) {
           return;
         }
         cleanedUp = true;
-        await cleanupTestData(users, projectId);
+        await cleanupTestData(users);
       };
 
       try {
         const seeded = await seedTestUsers(defaultTestUsers);
         users = seeded.users;
-        projectId = seeded.projectId;
 
         const authStates: Record<UserRole, AuthStorageState> = {
           admin: await createSignedAuthStorageState(users.admin, baseURL),
@@ -511,7 +463,6 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
 
         await use({
           users,
-          projectId,
           authStates,
           cleanupTestData: cleanupBoundTestData,
         });
@@ -526,10 +477,6 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     await use(workerAuthData.users);
   },
 
-  testProjectId: async ({ workerAuthData }, use) => {
-    await use(workerAuthData.projectId);
-  },
-
   seededData: async ({}, use) => {
     // Generate a unique seed ID per test to avoid collisions between
     // parallel tests in the same worker that share the module-level testRunId
@@ -542,10 +489,10 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     }
   },
 
-  seedTestData: async ({ testUsers, testProjectId, seededData }, use) => {
+  seedTestData: async ({ testUsers, seededData }, use) => {
     const seedFn = async () => {
       console.log(
-        `Test data ready: ${Object.keys(testUsers).length} users, project: ${testProjectId}, facility: ${seededData.facility.code}`
+        `Test data ready: ${Object.keys(testUsers).length} users, facility: ${seededData.facility.code}`
       );
     };
     await use(seedFn);

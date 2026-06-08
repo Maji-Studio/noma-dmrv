@@ -16,7 +16,7 @@ describe("Auth middleware", () => {
     getSessionMock.mockResolvedValueOnce(null);
 
     const { updateSession } = await import("@/lib/auth/middleware");
-    const request = new NextRequest("http://localhost:3100/api/projects");
+    const request = new NextRequest("http://localhost:3100/api/documents");
 
     const response = await updateSession(request);
 

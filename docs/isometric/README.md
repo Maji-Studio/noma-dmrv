@@ -63,5 +63,5 @@ deferred work live in `docs/open-questions.md`.
 ## Freshness
 
 - Requirements KB last refreshed: 2026-05-11
-- Integration plan last refreshed: 2026-05-24
+- Integration plan last refreshed: 2026-06-08
 - Source of truth: Isometric Registry URLs in `versions.json`
