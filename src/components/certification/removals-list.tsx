@@ -8,7 +8,7 @@
  *
  * Creating a removal is the "New removal" modal wizard (`NewRemovalDialog`,
  * design doc §4) — it replaces the old per-batch "Group into…" dropdown:
- * pick complete batches → confirm (deferred create) → requirements → submit.
+ * pick ready batches → continue (deferred create) → confirm & submit.
  *
  * Readiness is server-owned: rows come from `useCertificationOverview` (the
  * shared `deriveRemovalReadiness` classifier), so the table hint, the Overview

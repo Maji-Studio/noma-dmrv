@@ -33,6 +33,7 @@ export const DOCUMENT_ENTITY_TYPES = [
   "facility",
   "reactor",
   "order",
+  "transport_leg",
 ] as const;
 export type DocumentEntityType = (typeof DOCUMENT_ENTITY_TYPES)[number];
 

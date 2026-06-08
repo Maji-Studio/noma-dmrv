@@ -405,13 +405,21 @@ function DataTableRoot<TData, TValue>({
                             if (event.key !== "Enter" && event.key !== " ") {
                               return;
                             }
+                            // Ignore Enter/Space bubbling up from nested
+                            // interactive controls (buttons, links, inputs) so
+                            // they don't also trigger the row-level action.
+                            if (
+                              (event.target as HTMLElement).closest(
+                                'button, a, input, textarea, select, [role="button"], [tabindex]'
+                              )
+                            ) {
+                              return;
+                            }
                             event.preventDefault();
                             onRowClick(row.original);
                           }
                         : undefined
                     }
-                    role={onRowClick ? "button" : undefined}
-                    tabIndex={onRowClick ? 0 : undefined}
                     data-state={row.getIsSelected() ? "selected" : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (

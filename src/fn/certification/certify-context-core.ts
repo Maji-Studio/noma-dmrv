@@ -320,12 +320,12 @@ async function resolveScopeForCreditBatch(
       removal: null,
       memberBatches: [
         {
-        id: batch.id,
-        code: batch.code,
-        applicationIds: batch.applicationIds,
-        durabilityOption: batch.durabilityOption,
-        co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
-      },
+          id: batch.id,
+          code: batch.code,
+          applicationIds: batch.applicationIds,
+          durabilityOption: batch.durabilityOption,
+          co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
+        },
       ],
     };
   }
@@ -347,12 +347,20 @@ export async function resolveScopeForRemoval(
       const full = options?.skipPreview
         ? await getCreditBatchById(userId, b.id, { skipPreview: true })
         : await getCreditBatchById(userId, b.id);
+      // Fail fast rather than emitting a member batch with empty
+      // applicationIds / missing preview — partial data here silently
+      // understates a removal's scope downstream.
+      if (!full) {
+        throw new SafeError(
+          `Credit batch ${b.id} in removal ${removalId} could not be loaded`,
+        );
+      }
       return {
-        id: b.id,
-        code: b.code,
-        applicationIds: full?.applicationIds ?? [],
-        durabilityOption: full?.durabilityOption ?? b.durabilityOption,
-        co2eStoredPreview: full?.co2eStoredPreview ?? undefined,
+        id: full.id,
+        code: full.code,
+        applicationIds: full.applicationIds,
+        durabilityOption: full.durabilityOption,
+        co2eStoredPreview: full.co2eStoredPreview ?? undefined,
       };
     }),
   );

@@ -35,6 +35,8 @@ const demoCodes = {
   storageFeedMoshi: 'SL-26-001',
   storageCharMoshi: 'SL-26-002',
   storageProdMoshi: 'SL-26-003',
+  storageFeedArusha: 'SL-26-004',
+  storageCharArusha: 'SL-26-005',
 
   // Suppliers
   supplierKili: 'SUP-26-001',
@@ -351,7 +353,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageFeedArusha,
-          code: 'SL-26-004',
+          code: demoCodes.storageFeedArusha,
           name: 'Arusha Feedstock Storage',
           type: 'feedstock_bin' as const,
           capacityKg: 25000,
@@ -360,7 +362,7 @@ async function seedDemoData() {
         },
         {
           id: ids.storageCharArusha,
-          code: 'SL-26-005',
+          code: demoCodes.storageCharArusha,
           name: 'Arusha Biochar Storage',
           type: 'biochar_bin' as const,
           capacityKg: 18000,

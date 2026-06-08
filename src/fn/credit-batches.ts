@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { getUser } from "@/lib/auth/server";
-import { logger } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
@@ -32,7 +32,10 @@ const MAX_BATCH_PREVIEWS = 50;
 
 function logCreditBatchError(message: string, error: unknown): void {
   logger.error(
-    { errorName: error instanceof Error ? error.name : typeof error },
+    {
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: sanitizeErrorMessage(error),
+    },
     message,
   );
 }

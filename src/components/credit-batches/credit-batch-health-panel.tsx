@@ -1,6 +1,7 @@
 /**
  * CreditBatchHealthPanel — the batch-grain sibling of the removal-level
- * requirements check (`certification/new-removal-dialog/requirements-step.tsx`).
+ * requirements shown on the New-Removal wizard's confirm-&-submit step
+ * (`certification/new-removal-dialog/submit-step.tsx`).
  * It answers "is this batch complete enough to group into a removal, and if not,
  * what's missing and where do I fix it?" Driven by `useBatchHealth`, which runs
  * the shared pure
