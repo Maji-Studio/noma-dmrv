@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { CircleNotch } from "@phosphor-icons/react"
+import { CircleNotch } from "@phosphor-icons/react/dist/ssr"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(

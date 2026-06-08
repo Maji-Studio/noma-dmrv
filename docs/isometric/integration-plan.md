@@ -4,7 +4,7 @@ This doc is the **forward-looking** plan and status surface. It owns
 roadmap, current architecture contracts, pre-deploy gates, and what
 still has to be built. It does **not** narrate per-PR history — that
 lives in `docs/isometric/changes.md`. Design decisions live in
-`docs/adr/0001`–`0006`; open questions live in
+`docs/adr/0001`–`0007`; open questions live in
 `docs/open-questions.md`.
 
 ## Scope
@@ -49,6 +49,11 @@ requirements can be pulled programmatically.
   `ProjectComponentAmortizationStrategy`. noma is the **LCA journal**
   (`/admin/emission-estimates` rows + drift panel), not the publisher;
   the operator posts Project Components directly in the Isometric UI.
+- **[ADR 0007 — Certification workspace consolidation](../adr/0007-certification-workspace-consolidation.md)**.
+  Certification is a first-class workspace. The credit-batch surfaces show
+  readiness and membership context; creation/submission lives in the
+  New-Removal wizard (`select ready batches -> registry requirements ->
+  submit`) and GHG Statement flows.
 
 ## Phase status
 
@@ -66,6 +71,7 @@ requirements can be pulled programmatically.
 | **4.5** — Multi-removal GHG Statements | ✅ | Provider-neutral `/certification/` route group (hub + Removals + GHG Statements). Period-first stepper. Membership reconciliation never steals. Unlink/repoint guard widened. |
 | **5** — Time-series + bulk | 🟢 Slice A shipped (2026-05-29 scoped → built), B + C deferred | **Slice A** — `DataUploadSubmission` of `biochar_pyrolysis_reactor_facility_time_series` (Parquet bulk upload of **60-second clock-aligned** aggregations of `production_run_readings`, one file per facility per Removal-window — hard cap surfaced by sandbox smoke 2026-05-29 with `AggregationPeriodDurationInvalidError: ... exceeds maximum allowed of 60 seconds`). New `certifier_sensors` table maps `(reactor × measurement_property) → externalSensorId + sensorReference`. New `certifier_projects.externalFacilityId` column (operator-pasted from Certify UI; no `POST /facilities` exists). Manual "Submit Telemetry" button on the Removal page; status badge surfaces the latest `GET /data-upload-submissions/{id}` poll. Idempotency uses journaled-step IDs in `payloadSnapshot` (no supplier-reference reconciliation path — see [ADR 0006](../adr/0006-data-upload-submission-idempotency.md)). Parquet writer locked to **`hyparquet-writer`** (validated end-to-end against sandbox 2026-05-29; explicit `SchemaElement[]` with `logical_type: { type: 'TIMESTAMP', isAdjustedToUTC: true, unit: 'NANOS' }` for the four timestamp columns; INT64 bigint values written directly without Date conversion). **Slice B** (`POST /biochar_applications`) and **Slice C** (`MonitoringSubmission`) tracked under `docs/open-questions.md`. Webhook receiver still pending Isometric publishing a contract. |
 | **6** — Protocol/SOP surfacing | ⏭ Deferred | Resolved as outbound links to `registry.isometric.com` / `docs.isometric.com`. Reopen only if operators report tab-switching friction. |
+| **7** — Certify workspace and readiness UX | ✅ | Credit-batch health classifier, entity certifier-readiness badges, New-Removal wizard, certifier requirements checks, deep "View on Isometric" link, and transport evidence upload UX. Facility setup is treated as incomplete unless mapping/template/protocol config is present. |
 
 ## Pre-deploy gates
 
@@ -135,10 +141,16 @@ src/data-access/
 
 src/fn/certification/                  # withAction-wrapped server actions
   ├─ facility-mapping.ts               # Phase 1
-  ├─ certify-context.ts                # Phase 2
+  ├─ certify-context.ts                # public context loaders
+  ├─ certify-context-core.ts           # context assembly + bounded fan-out
+  ├─ create-removal-with-batches.ts    # New-Removal wizard create step
+  ├─ batch-health.ts                   # credit-batch health/readiness actions
   ├─ submit-removal.ts                 # Phase 3 (ADR 0003)
   ├─ removal-grouping.ts               # ADR 0003 (assignCreditBatchToRemoval)
   ├─ ghg-statements.ts                 # Phase 4.5 (ADR 0004)
+  ├─ project-emissions.ts              # ADR 0005 journal/drift actions
+  ├─ sources-transfer.ts               # evidence mirroring
+  ├─ submit-telemetry.ts               # ADR 0006 telemetry upload
   ├─ shared.ts
   └─ index.ts
 
@@ -150,9 +162,9 @@ src/components/certification/          # all UI: facility section + dialog,
                                        #   submission-status-badge, sync-event-log,
                                        #   removals-list, ghg-statements-list,
                                        #   ghg-statement-create-drawer + submit-dialog,
-                                       #   removal-review/ (guided Review flow)
+                                       #   new-removal-dialog/
 src/app/(app)/certification/           # route group: overview + removals +
-                                       #   ghg-statements + settings + removals/[id]/review
+                                       #   ghg-statements + settings
 ```
 
 **Reused, do not touch:** `src/data-access/isometric.ts` +
@@ -231,6 +243,14 @@ ISOMETRIC_ENVIRONMENT:   z.enum(['sandbox', 'production']).optional()
 | 0027 | `fluffy_chamber` | 3.7-period | additive | `certifier_project_emissions` table + `project_emission_category` pgEnum (ADR 0005) |
 | 0028 | `demonic_harpoon` | docs upload onDelete | constraint change | `certifier_project_emissions.source_document_id` FK `ON DELETE SET NULL` (no schema-shape change) |
 | 0029 | `heavy_umar` | 5 (Slice A) | additive | `certifier_sensors` table + `certifier_projects.external_facility_id` column (ADR 0006); no destructive ops |
+| 0030 | `nappy_omega_sentinel` | 5 (Slice A) | constraint change | Sensor uniqueness includes provider. |
+| 0031 | `lean_kronos` | certification / inventory | additive + nullable changes | Product-bin formulation metadata, nullable batch certifier, storage-location formulation linkage. |
+| 0032 | `steady_warstar` | credits | constraint drop | Dropped premature durability constraints from `credit_batches`; readiness handles missing evidence. |
+| 0033 | `brief_frank_castle` | transport | destructive + additive | Distance-only transport-leg model, derived legs, supplier/customer distance defaults. |
+| 0034 | `peaceful_firebird` | transport readiness | destructive enum change | Transport legs attach to feedstock, biochar, or sample; delivery legs removed. |
+| 0035 | `deterministic_product_bin_formulation` | inventory | data fix | Deterministic product-bin formulation backfill. |
+| 0036 | `cultured_rattler` | readiness / performance | index + constraint | Reading and transport-leg indexes; nullable Isometric-only batch certifier constraint. |
+| 0037 | `sour_lethal_legion` | schema slim-down | destructive cleanup | Dropped unused protocol-stub tables, removed `certifier_sources`, and removed legacy starter `projects` / `items` tables. |
 
 ## Operational health
 
@@ -315,8 +335,10 @@ exist before adding a parallel surface:
     registration with `externalProjectId`, `protocolSlug`,
     `protocolVersion`, optional `webhookSecret`, JSONB `metadata`,
     `defaultRemovalTemplateId`, emission-estimate columns).
-  - `certifierSources`, `certifierDocumentUploads`,
-    `certifierSyncEvents`.
+  - `certifierSensors` (reactor measurement-property to external sensor
+    mapping).
+  - `certifierProjectEmissions` (period-emission journal rows for ADR 0005).
+  - `certifierDocumentUploads`, `certifierSyncEvents`.
   - `certificationSubmissions` — has everything for safe idempotency:
     `submissionType`, `localEntityType/Id`, `externalId`, `version`,
     `status`, `payloadSnapshot`, `payloadHash`, `lockedAt`,
@@ -336,6 +358,10 @@ exist before adding a parallel surface:
   `viewModeChildren` mounts append content under sections in view
   mode. The credit-batch and facility Certify panels both ride this
   slot; no new detail route is needed.
+- **`src/lib/certification/entity-readiness.ts`** and
+  **`src/lib/certification/batch-health.ts`** — client-safe readiness
+  classifiers used by badges, batch health panels, and the New-Removal
+  wizard.
 
 ## What to deliberately NOT do
 

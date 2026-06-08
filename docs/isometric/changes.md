@@ -17,6 +17,15 @@ backlog with protocol citations: `docs/open-questions.md` → "Schema → Droppe
 protocol-stub tables". Submissions still record their Source via the
 derived-at-submit-time path; nothing read `certifier_sources`.
 
+## 2026-06-08 (Certify readiness hardening)
+
+The New-Removal wizard now treats facility setup as incomplete until selectable
+batch data has loaded, preventing a transient ready-looking state when the
+facility has no registry mapping/template/protocol config. Facility-level
+removal and selectable-batch loaders now bound fan-out at 8 concurrent context
+builds to avoid unbounded DB/query bursts for facilities with many removals or
+ungrouped batches.
+
 ## 2026-06-04 (GHG statement UX: non-overlapping periods, derived start, removal cross-link, amend-not-undo)
 
 Operator-feedback pass on the GHG-statement flow. Behaviour-affecting (a new
