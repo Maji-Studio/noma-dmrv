@@ -416,11 +416,15 @@ function DataTableRoot<TData, TValue>({
                             // they don't also trigger the row-level action.
                             // Exclude tabindex="-1" — those are only
                             // programmatically focusable, not user-interactive.
-                            if (
-                              (event.target as HTMLElement).closest(
-                                'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])'
-                              )
-                            ) {
+                            // closest() also matches the row itself (it carries
+                            // role="button"/tabIndex), so only bail when the
+                            // match is a *nested* control, not the <tr>.
+                            const interactive = (
+                              event.target as HTMLElement
+                            ).closest(
+                              'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])'
+                            );
+                            if (interactive && interactive !== event.currentTarget) {
                               return;
                             }
                             event.preventDefault();

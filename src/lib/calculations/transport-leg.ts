@@ -12,6 +12,9 @@
  * blueprint and Certify applies it — we never store or submit a factor.
  */
 
+/** Destination label used when a product's deliveries span multiple sites. */
+const CUSTOMER_SITES_LABEL = "Customer sites";
+
 export interface TransportPartyRef {
   name?: string | null;
   gpsLatitude?: number | null;
@@ -149,7 +152,12 @@ export function aggregateDistributionLegs(
     weightedDistanceSum += mass * distance;
     if (row.locationName) {
       names.add(row.locationName);
-      namedGps = { lat: row.locationGpsLatitude, lng: row.locationGpsLongitude };
+      // Only record GPS when this row actually carries coordinates, so a later
+      // row missing them doesn't clobber a valid pair found earlier for the
+      // same single destination.
+      if (row.locationGpsLatitude !== null && row.locationGpsLongitude !== null) {
+        namedGps = { lat: row.locationGpsLatitude, lng: row.locationGpsLongitude };
+      }
     }
   }
 
@@ -162,7 +170,7 @@ export function aggregateDistributionLegs(
     destinationName: single
       ? [...names][0]
       : names.size > 1
-        ? "Customer sites"
+        ? CUSTOMER_SITES_LABEL
         : null,
     destinationGpsLatitude: single && namedGps ? namedGps.lat : null,
     destinationGpsLongitude: single && namedGps ? namedGps.lng : null,
