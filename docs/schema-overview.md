@@ -2,6 +2,8 @@
 
 Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
+Current shape after migration `0037_sour_lethal_legion`: 45 table exports across 14 schema files.
+
 | Table | Area | What it does | Use cases | Links |
 |---|---|---|---|---|
 | `users` | Auth | Stores user identity, role, and profile metadata. | Sign-up, login identity, role-based permissions. | `src/db/schema/auth.ts:12` |
@@ -11,6 +13,7 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `facilities` | Facilities | Master record for production sites and defaults. | Facility onboarding, regional reporting, durability defaults. | `src/db/schema/facilities.ts:9` |
 | `reactors` | Facilities | Defines pyrolysis units installed at facilities. | Run-to-reactor traceability, capacity planning, reactor compliance checks, sampling-method selection. | `src/db/schema/facilities.ts:45` |
 | `storage_locations` | Facilities | Defines physical material storage points at facilities. | Feedstock/biochar inventory location tracking. | `src/db/schema/facilities.ts:66` |
+| `biochar_storage_inventory` | Facilities | Tracks biochar inventory movements and storage state. | Stored-product inventory, dispatch readiness, mass-balance support. | `src/db/schema/storage-inventory.ts` |
 | `suppliers` | Parties | Master list of feedstock suppliers and contacts. | Supply chain tracking, chain-of-custody references. | `src/db/schema/parties.ts:8` |
 | `customers` | Parties | Buyer/customer entities for biochar distribution. | Sales destination tracking, customer-level delivery reporting. | `src/db/schema/parties.ts:42` |
 | `customer_locations` | Parties | Normalized delivery/application locations per customer with structured address fields (country, state/region, city). | Multi-field customers, geospatial destination accuracy. | `src/db/schema/parties.ts` |
@@ -37,23 +40,17 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 | `soil_temperature_measurements` | Application | Soil temperature observations tied to applications. | 200-year durability baseline and evidence support. | `src/db/schema/application.ts:88` |
 | `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. Includes `total_feedstock_mass_kg` and `ineligible_feedstock_mass_kg` summary columns for the >25% ineligible-biomass cap (P0-01). | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep, Method B cadence guardrails (reactor-driven), ineligible biomass fraction reporting. | `src/db/schema/credits.ts:22` |
 | `credit_batch_applications` | Credits | M:N join between credit batches and applications. | Tracing which applications contribute to each issuance batch. | `src/db/schema/credits.ts:130` |
-| `emission_factors` | Emissions | Versioned lookup table for fuel/electricity emission factors. | Standardized CO2e calculations by region/fuel and validity window. | `src/db/schema/emissions.ts:19` |
 | `documents` | Documentation | Central optional evidence store linked by `entity_type` + `entity_id`. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:14` |
 | `certifier_projects` | Certification | Maps local facilities to external certifier project identifiers; also holds per-facility emission-estimate config (genset kWh/L yield, three-stage energy split %). | Provider project registration and linkage, emission-estimate configuration. | `src/db/schema/certification.ts:20` |
+| `certifier_sensors` | Certification | Maps local reactors/measurement properties to external certifier sensor IDs. | Time-series telemetry submission, sensor reference reuse. | `src/db/schema/certification.ts` |
+| `certifier_project_emissions` | Certification | Facility reporting-period LCA journal rows reconciled against Isometric Project Components. | Period-emission drift checks, ADR 0005 support. | `src/db/schema/certification.ts` |
 | `certifier_ghg_statements` | Certification | Independent, period-anchored GHG Statement artifacts that roll up multiple Removals for a supplier-chosen reporting period (ADR 0004). | Period-first GHG Statement creation, verifier submission lifecycle. | `src/db/schema/certification.ts:71` |
 | `certifier_removals` | Certification | The Isometric Removal — the submission unit. N credit batches map into one; carries a nullable `ghg_statement_id` FK reconciled from a statement's `removal_ids` (ADR 0003/0004). | Removal grouping and submission, GHG-statement membership. | `src/db/schema/certification.ts:93` |
-| `certifier_sources` | Certification | Normalizes external source references by provider/type. | Stable mapping of provider-specific IDs used in submissions. | `src/db/schema/certification.ts:123` |
 | `certification_submissions` | Certification | Immutable versioned submission history with payload snapshots. A Removal is one row keyed `localEntityType:'removal'`; a GHG Statement is one row keyed `localEntityType:'ghgStatement'`. | Submission lifecycle tracking, auditability, resubmission/versioning. | `src/db/schema/certification.ts:145` |
 | `certifier_document_uploads` | Certification | Maps local documents to provider-uploaded document IDs. | Reusing uploaded evidence, avoiding duplicate uploads. | `src/db/schema/certification.ts:123` |
 | `certifier_sync_events` | Certification | Operation log of outbound/inbound certifier sync attempts. | Integration observability, retry/error handling, support debugging. | `src/db/schema/certification.ts:148` |
-| `feedstock_sc_assessments` | Compliance | Structured sustainability-criteria assessments per feedstock. | SC pass/fail evidence, assessor audit trail, validity windows. | `src/db/schema/compliance.ts:21` |
 | `stockpile_events` | Compliance | Time-bounded storage events for biochar and feedstock stockpiling. DB enforces `exception_ref` is required when duration exceeds 12 months (P0-07). | Stockpile duration auditing, risk-level tracking, exception evidence linkage. | `src/db/schema/compliance.ts` |
 | `power_procurement_evidence` | Compliance | EC1–EC5 low-carbon electricity procurement evidence keyed to facility and reporting period (P0-11). Stores hard-to-derive regulatory facts; pass/fail outcomes derived by app logic. | Low-carbon electricity claims, PPA/EAC retirement verification, COD and grid region traceability. | `src/db/schema/compliance.ts` |
-| `custody_handoffs` | Compliance | Chain-of-custody event ledger for material transfers. | Provenance proof across parties and handoff points. | `src/db/schema/compliance.ts:58` |
-| `ghg_materiality_assessments` | Compliance | Stores SSR/net-removal materiality assessments by credit batch. | Materiality threshold checks and reassessment scheduling. | `src/db/schema/compliance.ts:79` |
-| `projects` | Legacy/Core Template | Legacy multi-project container table from base template. | Project scoping in generic template flows. | `src/db/schema/projects.ts:8` |
-| `project_members` | Legacy/Core Template | Role mapping between users and projects. | Access control and collaborator management. | `src/db/schema/projects.ts:26` |
-| `items` | Legacy/Core Template | Example CRUD entity tied to projects. | Demo data patterns and template scaffolding. | `src/db/schema/items.ts:8` |
 
 ## Notable Enums
 
@@ -67,3 +64,4 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
 - Isometric requirement mapping: `docs/isometric/schema-mapping.md`
 - Conditional field triggers: `docs/isometric/condition-registry.md`
+- Database operations and migration notes: `docs/database.md`

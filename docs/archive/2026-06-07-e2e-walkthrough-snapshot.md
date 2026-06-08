@@ -9,7 +9,7 @@ questions can stay decision-focused.
 ## Walkthrough context
 
 - Source: manual browser walkthrough of every entity + certification, planned
-  in `docs/plans/2026-06-07-e2e-findings-fix-plan.md`.
+  in `docs/archive/2026-06-07-e2e-findings-fix-plan.md`.
 - Outcome: the P0/P1/P2 items and two P3s (D2 Method-B gate, C4 code-prefix
   alignment) were fixed in that pass. Two items were deferred by product
   decision and remain tracked as open questions.

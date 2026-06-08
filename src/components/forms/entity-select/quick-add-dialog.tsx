@@ -29,27 +29,6 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 };
 
 // Icon components
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M15 5L5 15M5 5l10 10"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function SpinnerIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -148,18 +127,10 @@ export function QuickAddDialog({
     >
       <div className="flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
+        <div className="flex items-center p-24 border-b border-[var(--color-border-primary)]">
           <h2 id="quick-add-dialog-title" className="title-heading-3">
             Add New {entityLabel}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-4 rounded-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
-            aria-label="Close dialog"
-          >
-            <XIcon className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Form */}

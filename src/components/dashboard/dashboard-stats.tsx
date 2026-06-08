@@ -13,11 +13,10 @@ import {
 } from "@/hooks/use-dashboard-stats";
 
 interface DashboardStatsProps {
-  projectId: string;
   facilityId?: string;
 }
 
-export function DashboardStats({ projectId, facilityId }: DashboardStatsProps) {
+export function DashboardStats({ facilityId }: DashboardStatsProps) {
   const { data: stats, isLoading, error } = useDashboardStats({ facilityId });
 
   if (error) {
@@ -55,7 +54,7 @@ export function DashboardStats({ projectId, facilityId }: DashboardStatsProps) {
         trend={deliveriesMetric.trend}
         trendValue={deliveriesMetric.trendValue}
         trendLabel="vs last period"
-        href={`/${projectId}/deliveries`}
+        href="/deliveries"
       />
 
       <StatCard
@@ -65,7 +64,7 @@ export function DashboardStats({ projectId, facilityId }: DashboardStatsProps) {
         trend={productionMetric.trend}
         trendValue={productionMetric.trendValue}
         trendLabel="vs last period"
-        href={`/${projectId}/production`}
+        href="/production-runs"
       />
 
       <StatCard
@@ -75,7 +74,7 @@ export function DashboardStats({ projectId, facilityId }: DashboardStatsProps) {
         trend={applicationsMetric.trend}
         trendValue={applicationsMetric.trendValue}
         trendLabel="vs last period"
-        href={`/${projectId}/applications`}
+        href="/applications"
       />
 
       <StatCard
@@ -85,7 +84,7 @@ export function DashboardStats({ projectId, facilityId }: DashboardStatsProps) {
         trend={creditsMetric.trend}
         trendValue={creditsMetric.trendValue}
         trendLabel="vs last period"
-        href={`/${projectId}/credits`}
+        href="/credit-batches"
       />
     </div>
   );

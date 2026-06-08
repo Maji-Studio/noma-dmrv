@@ -11,21 +11,6 @@ import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 
 // Types
-export interface TestProject {
-  id: string;
-  name: string;
-  description: string;
-  ownerId: string;
-}
-
-export interface TestItem {
-  id: string;
-  projectId: string;
-  title: string;
-  description: string;
-  status: string;
-}
-
 export interface TestFacility {
   id: string;
   code: string;
@@ -101,102 +86,6 @@ export function generateTestId(prefix: string = "e2e"): string {
 }
 
 /**
- * Create a test project with the given owner
- */
-export async function createTestProject(
-  ownerId: string,
-  overrides: Partial<Omit<TestProject, "id" | "ownerId">> = {}
-): Promise<TestProject> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    const project: TestProject = {
-      id: crypto.randomUUID(),
-      name: overrides.name || `Test Project ${generateTestId()}`,
-      description: overrides.description || "E2E test project",
-      ownerId,
-    };
-
-    await db.insert(schema.projects).values({
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      ownerId: project.ownerId,
-    });
-
-    // Also add owner as project member
-    await db.insert(schema.projectMembers).values({
-      id: crypto.randomUUID(),
-      projectId: project.id,
-      userId: ownerId,
-      role: "owner",
-    });
-
-    return project;
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Add a user to a project with a specific role
- */
-export async function addProjectMember(
-  projectId: string,
-  userId: string,
-  role: "owner" | "admin" | "member" | "viewer" = "member"
-): Promise<string> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    const memberId = crypto.randomUUID();
-
-    await db.insert(schema.projectMembers).values({
-      id: memberId,
-      projectId,
-      userId,
-      role,
-    });
-
-    return memberId;
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Create a test item in a project
- */
-export async function createTestItem(
-  projectId: string,
-  overrides: Partial<Omit<TestItem, "id" | "projectId">> = {}
-): Promise<TestItem> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    const item: TestItem = {
-      id: crypto.randomUUID(),
-      projectId,
-      title: overrides.title || `Test Item ${generateTestId()}`,
-      description: overrides.description || "E2E test item",
-      status: overrides.status || "active",
-    };
-
-    await db.insert(schema.items).values({
-      id: item.id,
-      projectId: item.projectId,
-      title: item.title,
-      description: item.description,
-      status: item.status as "active" | "completed" | "archived",
-    });
-
-    return item;
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
  * Create a test facility
  */
 export async function createTestFacility(
@@ -221,45 +110,6 @@ export async function createTestFacility(
     });
 
     return facility;
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Delete a test project and all related data
- */
-export async function deleteTestProject(projectId: string): Promise<void> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    await db.transaction(async (tx) => {
-      // Delete project members
-      await tx
-        .delete(schema.projectMembers)
-        .where(eq(schema.projectMembers.projectId, projectId));
-
-      // Delete items
-      await tx.delete(schema.items).where(eq(schema.items.projectId, projectId));
-
-      // Delete project
-      await tx.delete(schema.projects).where(eq(schema.projects.id, projectId));
-    });
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Delete test items by IDs
- */
-export async function deleteTestItems(itemIds: string[]): Promise<void> {
-  if (itemIds.length === 0) return;
-
-  const { db, pool } = createDbConnection();
-
-  try {
-    await db.delete(schema.items).where(inArray(schema.items.id, itemIds));
   } finally {
     await pool.end();
   }
@@ -528,8 +378,6 @@ export async function deleteTestApplication(applicationId: string): Promise<void
  * Bulk cleanup helper - cleans up multiple entity types
  */
 export async function bulkCleanup(entities: {
-  projectIds?: string[];
-  itemIds?: string[];
   facilityIds?: string[];
   storageLocationIds?: string[];
   supplierIds?: string[];
@@ -542,32 +390,6 @@ export async function bulkCleanup(entities: {
   try {
     await db.transaction(async (tx) => {
       // Clean up in order respecting FK constraints
-
-      // Delete project members for projects
-      if (entities.projectIds && entities.projectIds.length > 0) {
-        await tx
-          .delete(schema.projectMembers)
-          .where(inArray(schema.projectMembers.projectId, entities.projectIds));
-      }
-
-      // Delete items
-      if (entities.itemIds && entities.itemIds.length > 0) {
-        await tx.delete(schema.items).where(inArray(schema.items.id, entities.itemIds));
-      }
-
-      // Delete items for projects
-      if (entities.projectIds && entities.projectIds.length > 0) {
-        await tx
-          .delete(schema.items)
-          .where(inArray(schema.items.projectId, entities.projectIds));
-      }
-
-      // Delete projects
-      if (entities.projectIds && entities.projectIds.length > 0) {
-        await tx
-          .delete(schema.projects)
-          .where(inArray(schema.projects.id, entities.projectIds));
-      }
 
       // Delete biochar products (before formulations due to FK)
       if (entities.biocharProductIds && entities.biocharProductIds.length > 0) {
@@ -634,67 +456,17 @@ export class TestDataBuilder {
   private ownerId: string;
   private testId: string;
   private createdEntities: {
-    projectIds: string[];
-    itemIds: string[];
     facilityIds: string[];
     storageLocationIds: string[];
-    memberIds: string[];
   };
 
   constructor(ownerId: string) {
     this.ownerId = ownerId;
     this.testId = generateTestId();
     this.createdEntities = {
-      projectIds: [],
-      itemIds: [],
       facilityIds: [],
       storageLocationIds: [],
-      memberIds: [],
     };
-  }
-
-  /**
-   * Create a project owned by the builder's owner
-   */
-  async createProject(
-    name?: string,
-    description?: string
-  ): Promise<TestProject> {
-    const project = await createTestProject(this.ownerId, {
-      name: name || `Builder Project ${this.testId}`,
-      description: description || "Created by TestDataBuilder",
-    });
-    this.createdEntities.projectIds.push(project.id);
-    return project;
-  }
-
-  /**
-   * Create an item in the specified project
-   */
-  async createItem(
-    projectId: string,
-    title?: string,
-    description?: string
-  ): Promise<TestItem> {
-    const item = await createTestItem(projectId, {
-      title: title || `Builder Item ${this.testId}`,
-      description: description || "Created by TestDataBuilder",
-    });
-    this.createdEntities.itemIds.push(item.id);
-    return item;
-  }
-
-  /**
-   * Add a member to a project
-   */
-  async addMember(
-    projectId: string,
-    userId: string,
-    role: "owner" | "admin" | "member" | "viewer" = "member"
-  ): Promise<string> {
-    const memberId = await addProjectMember(projectId, userId, role);
-    this.createdEntities.memberIds.push(memberId);
-    return memberId;
   }
 
   /**
@@ -725,19 +497,14 @@ export class TestDataBuilder {
    */
   async cleanup(): Promise<void> {
     await bulkCleanup({
-      projectIds: this.createdEntities.projectIds,
-      itemIds: this.createdEntities.itemIds,
       facilityIds: this.createdEntities.facilityIds,
       storageLocationIds: this.createdEntities.storageLocationIds,
     });
 
     // Reset tracking
     this.createdEntities = {
-      projectIds: [],
-      itemIds: [],
       facilityIds: [],
       storageLocationIds: [],
-      memberIds: [],
     };
   }
 
@@ -753,106 +520,5 @@ export class TestDataBuilder {
    */
   getCreatedEntities() {
     return { ...this.createdEntities };
-  }
-}
-
-/**
- * Create a complete test scenario with project, members, and items
- */
-export async function createTestScenario(config: {
-  ownerUserId: string;
-  members?: { userId: string; role: "admin" | "member" | "viewer" }[];
-  itemCount?: number;
-}): Promise<{
-  project: TestProject;
-  items: TestItem[];
-  cleanup: () => Promise<void>;
-}> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    const projectId = crypto.randomUUID();
-    const testId = generateTestId();
-
-    // Create project
-    const project: TestProject = {
-      id: projectId,
-      name: `Scenario Project ${testId}`,
-      description: "E2E test scenario project",
-      ownerId: config.ownerUserId,
-    };
-
-    await db.insert(schema.projects).values({
-      id: project.id,
-      name: project.name,
-      description: project.description,
-      ownerId: project.ownerId,
-    });
-
-    // Add owner as project member
-    await db.insert(schema.projectMembers).values({
-      id: crypto.randomUUID(),
-      projectId: project.id,
-      userId: config.ownerUserId,
-      role: "owner",
-    });
-
-    // Add additional members
-    if (config.members) {
-      for (const member of config.members) {
-        await db.insert(schema.projectMembers).values({
-          id: crypto.randomUUID(),
-          projectId: project.id,
-          userId: member.userId,
-          role: member.role,
-        });
-      }
-    }
-
-    // Create items
-    const items: TestItem[] = [];
-    const itemCount = config.itemCount || 0;
-
-    for (let i = 0; i < itemCount; i++) {
-      const item: TestItem = {
-        id: crypto.randomUUID(),
-        projectId: project.id,
-        title: `Scenario Item ${i + 1}`,
-        description: `Test item ${i + 1} for scenario`,
-        status: "active",
-      };
-
-      await db.insert(schema.items).values({
-        id: item.id,
-        projectId: item.projectId,
-        title: item.title,
-        description: item.description,
-        status: item.status as "active" | "completed" | "archived",
-      });
-
-      items.push(item);
-    }
-
-    // Return scenario with cleanup function
-    return {
-      project,
-      items,
-      cleanup: async () => {
-        const { db: cleanupDb, pool: cleanupPool } = createDbConnection();
-        try {
-          await cleanupDb.transaction(async (tx) => {
-            await tx
-              .delete(schema.projectMembers)
-              .where(eq(schema.projectMembers.projectId, projectId));
-            await tx.delete(schema.items).where(eq(schema.items.projectId, projectId));
-            await tx.delete(schema.projects).where(eq(schema.projects.id, projectId));
-          });
-        } finally {
-          await cleanupPool.end();
-        }
-      },
-    };
-  } finally {
-    await pool.end();
   }
 }

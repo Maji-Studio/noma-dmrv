@@ -12,11 +12,9 @@ export type SchemaArea =
   | "Logistics"
   | "Application"
   | "Credits"
-  | "Emissions"
   | "Documentation"
   | "Certification"
   | "Compliance"
-  | "Legacy/Core Template"
   | "Other";
 
 export interface SchemaColumnInfo {
@@ -260,12 +258,6 @@ const TABLE_META: Record<string, TableMeta> = {
     summary: "Join table linking applications to credit batches.",
     useCases: ["Issuance traceability", "Inclusion/exclusion reviews"],
   },
-  emission_factors: {
-    area: "Emissions",
-    modulePath: "src/db/schema/emissions.ts",
-    summary: "Versioned emission factors by region/fuel/unit.",
-    useCases: ["Standardized CO2e calculations", "Methodology updates by date"],
-  },
   documents: {
     area: "Documentation",
     modulePath: "src/db/schema/documentation.ts",
@@ -277,12 +269,6 @@ const TABLE_META: Record<string, TableMeta> = {
     modulePath: "src/db/schema/certification.ts",
     summary: "Local facility to certifier project mapping.",
     useCases: ["External project registration", "Provider linkage"],
-  },
-  certifier_sources: {
-    area: "Certification",
-    modulePath: "src/db/schema/certification.ts",
-    summary: "Provider source references used by submissions.",
-    useCases: ["Stable external IDs", "Submission source normalization"],
   },
   certification_submissions: {
     area: "Certification",
@@ -301,45 +287,6 @@ const TABLE_META: Record<string, TableMeta> = {
     modulePath: "src/db/schema/certification.ts",
     summary: "Operational log for certifier sync attempts.",
     useCases: ["Integration debugging", "Retry/error monitoring"],
-  },
-  feedstock_sc_assessments: {
-    area: "Compliance",
-    modulePath: "src/db/schema/compliance.ts",
-    summary: "Structured feedstock sustainability assessments.",
-    useCases: ["SC criterion pass/fail records", "Assessment validity windows"],
-  },
-  custody_handoffs: {
-    area: "Compliance",
-    modulePath: "src/db/schema/compliance.ts",
-    summary: "Chain-of-custody ledger of transfer events.",
-    useCases: ["Material provenance records", "Transfer evidence workflow"],
-  },
-  ghg_materiality_assessments: {
-    area: "Compliance",
-    modulePath: "src/db/schema/compliance.ts",
-    summary: "Materiality assessments tied to credit batches.",
-    useCases: ["<1% materiality checks", "Reassessment scheduling"],
-  },
-  projects: {
-    area: "Legacy/Core Template",
-    modulePath: "src/db/schema/projects.ts",
-    summary: "Legacy template project container.",
-    useCases: ["Template project scoping", "Example multi-project setup"],
-    isLegacy: true,
-  },
-  project_members: {
-    area: "Legacy/Core Template",
-    modulePath: "src/db/schema/projects.ts",
-    summary: "Legacy table mapping users to project roles.",
-    useCases: ["Template team access control", "Project membership records"],
-    isLegacy: true,
-  },
-  items: {
-    area: "Legacy/Core Template",
-    modulePath: "src/db/schema/items.ts",
-    summary: "Legacy example CRUD entity.",
-    useCases: ["Template CRUD pattern example", "Project-scoped demo data"],
-    isLegacy: true,
   },
 };
 

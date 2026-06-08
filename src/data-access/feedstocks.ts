@@ -535,7 +535,12 @@ export async function deleteFeedstock(
 
   await db.transaction(async (tx) => {
     await deleteTransportLegsForEntity(tx, "feedstock", feedstockId);
-    await tx.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+    const result = await tx
+      .delete(feedstocks)
+      .where(eq(feedstocks.id, feedstockId));
+    if (result.rowCount === 0) {
+      throw new SafeError("Feedstock not found");
+    }
   });
 }
 

@@ -379,10 +379,13 @@ export async function updateReactor(
     }
   }
 
-  // Switching to Method B requires the reactor to have enough prior Method A
-  // samples. Only check when actually moving to Method B (re-saving an already
-  // eligible Method B reactor stays valid since sample counts only grow).
-  if (data.samplingMethod === "method_b" && existing.samplingMethod !== "method_b") {
+  // Method B requires the reactor to have enough prior Method A samples. Check
+  // whenever the resulting method is Method B — not only on the transition —
+  // because samples can be deleted, so an already-Method-B reactor's eligibility
+  // can regress and must be re-validated on every save.
+  const resultingSamplingMethod =
+    data.samplingMethod ?? existing.samplingMethod;
+  if (resultingSamplingMethod === "method_b") {
     const eligibility = await getMethodBEligibilityByReactor(userId, {
       reactorId,
       asOfDate: new Date().toISOString(),

@@ -6,7 +6,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { X } from "@phosphor-icons/react";
 import { Modal } from "@/components/ui";
 import { useCreateCustomerLocation } from "@/hooks/use-customers";
 
@@ -112,21 +111,13 @@ export function CustomerLocationQuickAddDialog({
       contentClassName=""
     >
       <div className="flex flex-col" data-testid="location-quick-add-dialog">
-        <div className="flex items-center justify-between p-24 border-b border-[var(--color-border-primary)]">
+        <div className="flex items-center p-24 border-b border-[var(--color-border-primary)]">
           <h2
             id="location-quick-add-dialog-title"
             className="title-heading-3"
           >
             Add Location
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-4 rounded-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
-            aria-label="Close dialog"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         <div className="flex flex-col gap-24 p-24" onKeyDown={(e) => { if (e.key === "Enter" && !createLocation.isPending && e.target instanceof HTMLInputElement) { e.preventDefault(); handleSubmit(); } }}>
