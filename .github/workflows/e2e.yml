@@ -29,6 +29,17 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
+      # Playwright builds + serves a production bundle on CI
+      # (playwright.config.ts), so NODE_ENV=production and @/config/env rejects
+      # the local-fs default as a fail-closed safeguard. No spec round-trips
+      # bytes to storage yet (real-Spaces CI coverage was deprioritized — see
+      # docs/archive/2026-05-21-e2e-spaces-integration.md), so these throwaway
+      # placeholders only satisfy Zod validation; build/boot never call S3.
+      STORAGE_PROVIDER: s3-compatible
+      STORAGE_BUCKET: e2e-build
+      STORAGE_REGION: us-east-1
+      STORAGE_ACCESS_KEY_ID: e2e-build
+      STORAGE_SECRET_ACCESS_KEY: e2e-build-placeholder
       # Isometric sandbox — OPTIONAL. The three secret values
       # (ISOMETRIC_ACCESS_TOKEN / _CLIENT_SECRET / _DEMO_PROJECT_ID) are pulled
       # from 1Password by the "Load Isometric secrets" step below — they reach
