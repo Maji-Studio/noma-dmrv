@@ -91,6 +91,41 @@ const tableRowVariants = cva(
 
 const MAX_LOADING_ROWS = 5;
 
+/**
+ * Derive a human-readable label for a column, used by the mobile card view
+ * where each cell is shown as a label/value pair. Prefers a string `header`;
+ * falls back to a humanized column id. Returns "" for structural columns
+ * (selection / actions) so their cell renders without a label.
+ */
+function columnLabel(column: { id: string; columnDef: { header: unknown } }): string {
+  const header = column.columnDef.header;
+  if (typeof header === "string") return header;
+  if (column.id === "select" || column.id === "actions") return "";
+  return column.id
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Shared Enter/Space activation for a clickable row or card. Ignores key
+ * events bubbling up from nested interactive controls (buttons, links,
+ * inputs) so they don't also fire the row-level action. `tabindex="-1"`
+ * elements are excluded (programmatically focusable, not user-interactive).
+ */
+function handleRowActivationKeyDown(
+  event: React.KeyboardEvent<HTMLElement>,
+  activate: () => void,
+) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const interactive = (event.target as HTMLElement).closest(
+    'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
+  );
+  if (interactive && interactive !== event.currentTarget) return;
+  event.preventDefault();
+  activate();
+}
+
 /* ------------------------------------------------------------------ */
 /*  Data Table Props                                                    */
 /* ------------------------------------------------------------------ */
@@ -303,7 +338,8 @@ function DataTableRoot<TData, TValue>({
     <DataTableContext.Provider value={contextValue as DataTableContextValue<unknown>}>
       <div className={cn("flex flex-col gap-16", containerClassName)}>
         {children}
-        <div className={cn("bg-[var(--color-background-white)] overflow-auto", variant === "bordered" && "border border-[var(--color-border-secondary)]")}>
+        {/* Desktop: real table (hidden on mobile in favor of the card view) */}
+        <div className={cn("hidden md:block bg-[var(--color-background-white)] overflow-auto", variant === "bordered" && "border border-[var(--color-border-secondary)]")}>
           <table
             className={cn(tableVariants({ variant: "default", size }), className)}
             aria-label={ariaLabel}
@@ -407,29 +443,10 @@ function DataTableRoot<TData, TValue>({
                     aria-label={onRowClick ? "View row details" : undefined}
                     onKeyDown={
                       onRowClick
-                        ? (event) => {
-                            if (event.key !== "Enter" && event.key !== " ") {
-                              return;
-                            }
-                            // Ignore Enter/Space bubbling up from nested
-                            // interactive controls (buttons, links, inputs) so
-                            // they don't also trigger the row-level action.
-                            // Exclude tabindex="-1" — those are only
-                            // programmatically focusable, not user-interactive.
-                            // closest() also matches the row itself (it carries
-                            // role="button"/tabIndex), so only bail when the
-                            // match is a *nested* control, not the <tr>.
-                            const interactive = (
-                              event.target as HTMLElement
-                            ).closest(
-                              'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])'
-                            );
-                            if (interactive && interactive !== event.currentTarget) {
-                              return;
-                            }
-                            event.preventDefault();
-                            onRowClick(row.original);
-                          }
+                        ? (event) =>
+                            handleRowActivationKeyDown(event, () =>
+                              onRowClick(row.original),
+                            )
                         : undefined
                     }
                     data-state={row.getIsSelected() ? "selected" : undefined}
@@ -444,6 +461,77 @@ function DataTableRoot<TData, TValue>({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: each row as a tappable stacked card. Preserves onRowClick
+            (→ side sheet) and column headers as labels, so every table benefits
+            without per-table work and no unreadable horizontal scroll. */}
+        <div className="md:hidden flex flex-col gap-12">
+          {isLoading ? (
+            Array.from({ length: loadingRows }).map((_, index) => (
+              <div
+                key={index}
+                className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
+              >
+                <div className="h-16 w-1/2 bg-[var(--color-background-medium)] animate-pulse" />
+                <div className="mt-12 h-12 w-3/4 bg-[var(--color-background-medium)] animate-pulse" />
+              </div>
+            ))
+          ) : table.getRowModel().rows.length === 0 ? (
+            <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-48 px-16 text-center text-[var(--color-text-secondary)]">
+              {emptyMessage}
+            </div>
+          ) : (
+            table.getRowModel().rows.map((row) => (
+              <div
+                key={row.id}
+                className={cn(
+                  "border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-8",
+                  row.getIsSelected() && "bg-[var(--color-interaction)]/10",
+                  onRowClick &&
+                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)]",
+                )}
+                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                role={onRowClick ? "button" : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                aria-label={onRowClick ? "View row details" : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (event) =>
+                        handleRowActivationKeyDown(event, () =>
+                          onRowClick(row.original),
+                        )
+                    : undefined
+                }
+                data-state={row.getIsSelected() ? "selected" : undefined}
+              >
+                {row.getVisibleCells().map((cell) => {
+                  const label = columnLabel(cell.column);
+                  return (
+                    <div
+                      key={cell.id}
+                      className={cn(
+                        "flex items-start gap-12 py-8 border-b border-[var(--color-border-tertiary)] last:border-0",
+                        label ? "justify-between" : "justify-end",
+                      )}
+                    >
+                      {label && (
+                        <span className="body-caption text-[var(--color-text-tertiary)] shrink-0 pt-2">
+                          {label}
+                        </span>
+                      )}
+                      <span className="body-small min-w-0 break-words text-right">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
       </div>
     </DataTableContext.Provider>
@@ -461,7 +549,14 @@ interface DataTableToolbarProps {
 
 function DataTableToolbar({ children, className }: DataTableToolbarProps) {
   return (
-    <div className={cn("flex items-center justify-between gap-16 flex-wrap", className)}>
+    <div
+      className={cn(
+        // Stack vertically on mobile so search + actions get full rows; the
+        // original single-row layout returns at sm+.
+        "flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between sm:gap-16 sm:flex-wrap",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -481,7 +576,7 @@ function DataTableSearch({ placeholder = "Search...", className }: DataTableSear
   const value = (table.getState().globalFilter as string) ?? "";
 
   return (
-    <div className={cn("relative max-w-[320px] flex-1", className)}>
+    <div className={cn("relative w-full sm:max-w-[320px] sm:flex-1", className)}>
       <MagnifyingGlass
         size={18}
         className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none"
@@ -618,7 +713,7 @@ function DataTablePagination({
           <button
             onClick={() => table.firstPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-32 w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             aria-label="Go to first page"
             type="button"
           >
@@ -628,7 +723,7 @@ function DataTablePagination({
           <button
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-32 w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             aria-label="Go to previous page"
             type="button"
           >
@@ -637,7 +732,7 @@ function DataTablePagination({
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="h-32 w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             aria-label="Go to next page"
             type="button"
           >
@@ -646,7 +741,7 @@ function DataTablePagination({
           <button
             onClick={() => table.lastPage()}
             disabled={!table.getCanNextPage()}
-            className="h-32 w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             aria-label="Go to last page"
             type="button"
           >

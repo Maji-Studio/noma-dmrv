@@ -21,12 +21,18 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { cn } from "@/lib/utils";
 
-/** Named width tokens map to the dialog widths already used in the app. */
+/**
+ * Named width tokens map to the dialog widths already used in the app.
+ * Mobile-first: every token is full-width below `sm` (the
+ * `max-w-[calc(100vw-32px)]` backstop on the popup keeps a 16px gutter), then
+ * locks to its fixed desktop width at `sm`+ so centered dialogs never overflow
+ * a phone screen.
+ */
 const WIDTH_CLASSES = {
-  sm: "w-[400px]", // confirmation prompts
-  md: "w-[560px]", // default — forms, wizards
-  lg: "w-[720px]", // dense forms / multi-column layouts
-  xl: "w-[880px]", // rich content (previews, comparisons)
+  sm: "w-full sm:w-[400px]", // confirmation prompts
+  md: "w-full sm:w-[560px]", // default — forms, wizards
+  lg: "w-full sm:w-[720px]", // dense forms / multi-column layouts
+  xl: "w-full sm:w-[880px]", // rich content (previews, comparisons)
 } as const;
 
 export type ModalWidth = keyof typeof WIDTH_CLASSES;
