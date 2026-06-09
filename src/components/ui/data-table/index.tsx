@@ -110,7 +110,8 @@ function columnLabel(column: { id: string; columnDef: { header?: unknown } }): s
 /**
  * Shared Enter/Space activation for a clickable row or card. Ignores key
  * events bubbling up from nested interactive controls (buttons, links,
- * inputs) so they don't also fire the row-level action. `tabindex="-1"`
+ * inputs, label-wrapped controls) so they don't also fire the row-level
+ * action. `tabindex="-1"`
  * elements are excluded (programmatically focusable, not user-interactive).
  */
 function handleRowActivationKeyDown(
@@ -119,7 +120,7 @@ function handleRowActivationKeyDown(
 ) {
   if (event.key !== "Enter" && event.key !== " ") return;
   const interactive = (event.target as HTMLElement).closest(
-    'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
+    'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
   );
   if (interactive && interactive !== event.currentTarget) return;
   event.preventDefault();
@@ -137,7 +138,7 @@ function handleRowActivationClick(
   activate: () => void,
 ) {
   const interactive = (event.target as HTMLElement).closest(
-    'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
+    'button, a, label, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
   );
   if (interactive && interactive !== event.currentTarget) return;
   activate();
@@ -690,6 +691,11 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
 /*  DataTable Pagination                                                */
 /* ------------------------------------------------------------------ */
 
+// Shared chrome for the first/prev/next/last nav buttons. 44px touch target
+// on mobile, condensed to 32px from `sm` up (matches the a11y touch-target rule).
+const PAGINATION_NAV_BUTTON_CLASS =
+  "h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors";
+
 interface DataTablePaginationProps {
   showRowsPerPage?: boolean;
   rowsPerPageOptions?: number[];
@@ -743,7 +749,7 @@ function DataTablePagination({
           <button
             onClick={() => table.firstPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to first page"
             type="button"
           >
@@ -753,7 +759,7 @@ function DataTablePagination({
           <button
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to previous page"
             type="button"
           >
@@ -762,7 +768,7 @@ function DataTablePagination({
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to next page"
             type="button"
           >
@@ -771,7 +777,7 @@ function DataTablePagination({
           <button
             onClick={() => table.lastPage()}
             disabled={!table.getCanNextPage()}
-            className="h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to last page"
             type="button"
           >
