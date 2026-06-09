@@ -35,12 +35,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    env:
-      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Load staging database secret from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -68,12 +74,18 @@ jobs:
     environment: staging
     needs: migrate-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    env:
-      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Load staging database secret from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -104,12 +116,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    env:
-      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Load production database secret from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -147,14 +165,20 @@ jobs:
       github.ref == 'refs/heads/staging' &&
       github.event.inputs.action == 'reset-seed-staging' &&
       github.event.inputs.confirmation == 'RESET AND SEED STAGING'
-    env:
-      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Load staging database + admin secrets from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
+          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -187,14 +211,20 @@ jobs:
       github.event.inputs.action == 'reset-production' &&
       github.event.inputs.authorized == 'true' &&
       github.event.inputs.confirmation == 'RESET PRODUCTION'
-    env:
-      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL != '' && secrets.MIGRATION_DATABASE_URL || secrets.DATABASE_URL }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Load production database + admin secrets from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
+          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

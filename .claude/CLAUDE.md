@@ -213,6 +213,8 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 - **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod), `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`, `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET` (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
 
+**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env). Local: `pnpm env:local` (`op inject` ← `.env.tpl`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Vercel: `pnpm env:vercel`. See `docs/security.md` → Secrets Management.
+
 ## Security
 
 - Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>`. If a key leaks: rotate immediately, then scrub history with `git-filter-repo` (see `docs/security.md`).
@@ -236,4 +238,6 @@ Playwright per-entity specs + full-chain smoke tests. Fixtures (`tests/e2e/fixtu
 
 ## CI/CD
 
-`migrate.yml` (auto-migrate on schema push to `main`/`staging`; manual reset/seed via `workflow_dispatch`) · `claude.yml` (AI PR review) · `e2e.yml` (Playwright) · `.coderabbit.yaml` (auto-review on `main`/`staging`).
+`migrate.yml` (auto-migrate on schema push to `main`/`staging`; manual reset/seed via `workflow_dispatch`) · `claude.yml` (AI PR review) · `e2e.yml` (Playwright) · `isometric-health.yml` (daily read-only Isometric sandbox ping) · `.coderabbit.yaml` (auto-review on `main`/`staging`).
+
+CI secrets come from 1Password via `1password/load-secrets-action` + the `OP_SERVICE_ACCOUNT_TOKEN` repo secret (only `CLAUDE_CODE_OAUTH_TOKEN` remains a plain Actions secret). See `docs/security.md` → Secrets Management.
