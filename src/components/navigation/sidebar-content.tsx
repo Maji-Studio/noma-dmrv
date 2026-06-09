@@ -85,6 +85,11 @@ const SECTION_ACCENTS = {
 const CERTIFICATION_SECTION_TITLE = "Certification";
 const CERTIFICATION_SETTINGS_HREF = "/certification/settings";
 
+// Dark vertical gradient shared by both the desktop aside and mobile drawer
+// so the two nav surfaces render identically.
+const SIDEBAR_BACKGROUND_GRADIENT =
+  "linear-gradient(180deg, rgba(15, 2, 26, 1) 0%, rgba(10, 1, 18, 1) 100%)";
+
 const navSections: NavSection[] = [
   {
     items: [
@@ -282,13 +287,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div
       className="flex flex-col h-full"
-      style={{
-        background: `linear-gradient(
-          180deg,
-          rgba(15, 2, 26, 1) 0%,
-          rgba(10, 1, 18, 1) 100%
-        )`,
-      }}
+      style={{ background: SIDEBAR_BACKGROUND_GRADIENT }}
     >
       {/* Brand header */}
       <div className="flex items-center h-56 px-16 border-b border-[var(--color-white-10)] shrink-0">
