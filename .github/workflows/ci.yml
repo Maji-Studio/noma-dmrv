@@ -11,13 +11,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fast quality gate: lint + typecheck + unit tests. No DB, no secrets —
+  # Quality gate: lint + typecheck + unit/integration tests. No secrets —
   # tests/setup.ts fills safe env defaults and the lone *.integration.test.ts
-  # self-skips without RUN_ISOMETRIC_SANDBOX_TESTS. Complements e2e.yml, whose
-  # dev-server harness does NOT surface type errors or build breakage.
+  # self-skips without RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service
+  # is provisioned because a handful of suites (applications, credit-batch,
+  # biochar-product-bin-formulation) exercise the real `@/db` connection +
+  # transactions rather than mocking the data-access layer; without it they fail
+  # with ECONNREFUSED. Complements e2e.yml, whose dev-server harness does NOT
+  # surface type errors or build breakage.
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: noma_dmrv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Overrides the tests/setup.ts default so the DB-backed suites reach the
+      # service above. vitest sets NODE_ENV=test, so the local-fs storage
+      # default and missing secrets are accepted by @/config/env.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,6 +67,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Apply schema
+        run: pnpm drizzle-kit push --force
 
       - name: Unit tests
         run: pnpm exec vitest run
