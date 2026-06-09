@@ -415,7 +415,9 @@ test.describe("Full Chain UI Smoke Test", () => {
       const reactorSearch = page.getByPlaceholder(/search/i);
       await reactorSearch.fill(`Chain Reactor ${runId}`);
       await page.waitForTimeout(500);
-      await expect(page.getByText(`Chain Reactor ${runId}`)).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole("button", { name: new RegExp(`Chain Reactor ${runId}`) }).first()
+      ).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 3. PRODUCTION RUN ─────────────────────────────────

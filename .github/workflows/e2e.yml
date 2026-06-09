@@ -6,8 +6,13 @@ on:
 
 jobs:
   playwright:
+    name: playwright (${{ matrix.shard_id }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_id: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -51,6 +56,8 @@ jobs:
       # `sandbox` (never empty) so the env-schema enum does not reject an empty
       # string.
       ISOMETRIC_ENVIRONMENT: sandbox
+      PLAYWRIGHT_WORKERS: "2"
+      PLAYWRIGHT_RETRIES: "1"
       # Exposed at job level because the `secrets` context is NOT available in
       # step-level `if:` expressions — only `env` is. The load step below gates
       # on `env.OP_SERVICE_ACCOUNT_TOKEN` so it self-skips on fork PRs.
@@ -107,13 +114,13 @@ jobs:
         run: pnpm drizzle-kit push --force
 
       - name: Run Playwright suite
-        run: pnpm test:e2e
+        run: pnpm test:e2e --shard=${{ matrix.shard_id }}/4
 
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-${{ matrix.shard_id }}-of-4
           path: |
             playwright-report
             test-results
