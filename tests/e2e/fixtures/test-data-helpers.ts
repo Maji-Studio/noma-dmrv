@@ -122,6 +122,19 @@ export async function deleteTestFacility(facilityId: string): Promise<void> {
   const { db, pool } = createDbConnection();
 
   try {
+    // Reverse FK order: certifier rows FK the facility. Removals must go before
+    // ghg_statements (removal.ghg_statement_id FKs it), and certifier_projects
+    // also FKs the facility — all must clear before the facility. See
+    // certification-helpers.ts for the canonical ordering.
+    await db
+      .delete(schema.certifierRemovals)
+      .where(eq(schema.certifierRemovals.facilityId, facilityId));
+    await db
+      .delete(schema.certifierGhgStatements)
+      .where(eq(schema.certifierGhgStatements.facilityId, facilityId));
+    await db
+      .delete(schema.certifierProjects)
+      .where(eq(schema.certifierProjects.facilityId, facilityId));
     await db.delete(schema.facilities).where(eq(schema.facilities.id, facilityId));
   } finally {
     await pool.end();
@@ -414,6 +427,21 @@ export async function bulkCleanup(entities: {
 
       // Delete facilities after dependent storage locations and products.
       if (entities.facilityIds && entities.facilityIds.length > 0) {
+        // Reverse FK order: certifier rows FK the facility. Removals must go
+        // before ghg_statements (removal.ghg_statement_id FKs it), and
+        // certifier_projects also FKs the facility — all must clear before
+        // the facility itself.
+        await tx
+          .delete(schema.certifierRemovals)
+          .where(inArray(schema.certifierRemovals.facilityId, entities.facilityIds));
+        await tx
+          .delete(schema.certifierGhgStatements)
+          .where(
+            inArray(schema.certifierGhgStatements.facilityId, entities.facilityIds)
+          );
+        await tx
+          .delete(schema.certifierProjects)
+          .where(inArray(schema.certifierProjects.facilityId, entities.facilityIds));
         await tx
           .delete(schema.facilities)
           .where(inArray(schema.facilities.id, entities.facilityIds));

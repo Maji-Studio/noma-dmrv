@@ -7,12 +7,13 @@ name: Isometric API health
 # (projects, removal templates for the demo project, component blueprints).
 # No writes. No noma DB. No app boot.
 #
-# Required repo secrets (Settings → Secrets and variables → Actions):
-#   ISOMETRIC_CLIENT_SECRET
-#   ISOMETRIC_ACCESS_TOKEN
-#   ISOMETRIC_DEMO_PROJECT_ID
-# When any are missing the workflow falls through (the test self-skips); set
-# them in the same Isometric organisation that owns the sandbox demo project.
+# Secrets come from 1Password via the "Load Isometric secrets" step below:
+#   op://Environment Variables/noma-dmrv env staging/{ISOMETRIC_CLIENT_SECRET,
+#   ISOMETRIC_ACCESS_TOKEN, ISOMETRIC_DEMO_PROJECT_ID}
+# CI authenticates with a single repo secret, OP_SERVICE_ACCOUNT_TOKEN. When it
+# is absent the load step is skipped and the integration test self-skips. Keep
+# the 1Password item in the same Isometric org that owns the sandbox demo
+# project.
 
 on:
   schedule:
@@ -29,9 +30,7 @@ jobs:
     env:
       RUN_ISOMETRIC_SANDBOX_TESTS: "1"
       ISOMETRIC_ENVIRONMENT: sandbox
-      ISOMETRIC_CLIENT_SECRET: ${{ secrets.ISOMETRIC_CLIENT_SECRET }}
-      ISOMETRIC_ACCESS_TOKEN: ${{ secrets.ISOMETRIC_ACCESS_TOKEN }}
-      ISOMETRIC_DEMO_PROJECT_ID: ${{ secrets.ISOMETRIC_DEMO_PROJECT_ID }}
+      LOAD_OP_SECRETS: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
       # Pinned Certify OpenAPI spec URL — used by the regenerate-certify-types
       # step below to detect upstream schema drift.
       ISOMETRIC_OPENAPI_URL: "https://api.isometric.com/openapi.json"
@@ -43,6 +42,19 @@ jobs:
           # no commits or pushes; keeping the token out of .git/config
           # avoids leaking it to later steps or artifacts.
           persist-credentials: false
+
+      # Skipped if OP_SERVICE_ACCOUNT_TOKEN is unset — the integration test
+      # then self-skips on missing Isometric credentials rather than erroring.
+      - name: Load Isometric secrets from 1Password
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN
+          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET
+          ISOMETRIC_DEMO_PROJECT_ID: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_DEMO_PROJECT_ID
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
