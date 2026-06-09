@@ -210,7 +210,9 @@ function WizardBody({
         confirmBusy={createMutation.isPending}
         onCancel={onClose}
         onConfirm={confirmSelection}
-        canConfirm={selectedIds.size > 0 && facilitySetupComplete}
+        canConfirm={
+          selectedIds.size > 0 && facilitySetupComplete && !selectable.isLoading
+        }
       />
     </div>
   );
