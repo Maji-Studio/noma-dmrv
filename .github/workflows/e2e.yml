@@ -40,6 +40,10 @@ jobs:
       # `sandbox` (never empty) so the env-schema enum does not reject an empty
       # string.
       ISOMETRIC_ENVIRONMENT: sandbox
+      # Exposed at job level because the `secrets` context is NOT available in
+      # step-level `if:` expressions — only `env` is. The load step below gates
+      # on `env.OP_SERVICE_ACCOUNT_TOKEN` so it self-skips on fork PRs.
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 
     steps:
       - name: Generate ephemeral auth secret
@@ -51,8 +55,8 @@ jobs:
       # Skipped on fork PRs (no OP_SERVICE_ACCOUNT_TOKEN) so the gated
       # certification specs self-skip instead of failing the load.
       - name: Load Isometric secrets from 1Password
-        if: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
-        uses: 1password/load-secrets-action@v2
+        if: ${{ env.OP_SERVICE_ACCOUNT_TOKEN != '' }}
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:

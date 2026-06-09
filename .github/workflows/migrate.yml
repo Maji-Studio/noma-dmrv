@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Load staging database secret from 1Password
-        uses: 1password/load-secrets-action@v2
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Load staging database secret from 1Password
-        uses: 1password/load-secrets-action@v2
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:
@@ -122,7 +122,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Load production database secret from 1Password
-        uses: 1password/load-secrets-action@v2
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:
@@ -171,7 +171,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Load staging database + admin secrets from 1Password
-        uses: 1password/load-secrets-action@v2
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:
@@ -217,7 +217,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Load production database + admin secrets from 1Password
-        uses: 1password/load-secrets-action@v2
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:
