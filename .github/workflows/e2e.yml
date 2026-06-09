@@ -29,20 +29,17 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
-      # Isometric sandbox — OPTIONAL. When these repo secrets are configured, the
-      # gated certification specs (workspace Settings round-trip + removal Review
-      # happy path) run against the live sandbox; when absent (e.g. fork PRs,
-      # which cannot read secrets) the specs `test.skip` cleanly. Token + secret
-      # flow through @/config/env, which treats empty as unset and enforces
-      # both-or-neither — so leaving them unconfigured stays valid. The
-      # environment is pinned to `sandbox` (never empty) so the env-schema enum
-      # does not reject an empty string. Both the Playwright process (raw
-      # template fetch) and the webServer (loadFacilityCertifierMapping /
-      # buildRemovalContext live calls) inherit these from the job env.
+      # Isometric sandbox — OPTIONAL. The three secret values
+      # (ISOMETRIC_ACCESS_TOKEN / _CLIENT_SECRET / _DEMO_PROJECT_ID) are pulled
+      # from 1Password by the "Load Isometric secrets" step below — they reach
+      # the Playwright process + webServer via $GITHUB_ENV, NOT job-level env.
+      # When OP_SERVICE_ACCOUNT_TOKEN is absent (e.g. fork PRs, which cannot read
+      # secrets) that step is skipped, the vars stay unset, and the gated
+      # certification specs `test.skip` cleanly — @/config/env treats empty as
+      # unset and enforces both-or-neither. ISOMETRIC_ENVIRONMENT is pinned to
+      # `sandbox` (never empty) so the env-schema enum does not reject an empty
+      # string.
       ISOMETRIC_ENVIRONMENT: sandbox
-      ISOMETRIC_ACCESS_TOKEN: ${{ secrets.ISOMETRIC_ACCESS_TOKEN }}
-      ISOMETRIC_CLIENT_SECRET: ${{ secrets.ISOMETRIC_CLIENT_SECRET }}
-      ISOMETRIC_DEMO_PROJECT_ID: ${{ secrets.ISOMETRIC_DEMO_PROJECT_ID }}
 
     steps:
       - name: Generate ephemeral auth secret
@@ -50,6 +47,19 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Skipped on fork PRs (no OP_SERVICE_ACCOUNT_TOKEN) so the gated
+      # certification specs self-skip instead of failing the load.
+      - name: Load Isometric secrets from 1Password
+        if: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN
+          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET
+          ISOMETRIC_DEMO_PROJECT_ID: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_DEMO_PROJECT_ID
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
