@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+
+# Cancel superseded runs on the same ref (e.g. new push to an open PR).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast quality gate: lint + typecheck + unit tests. No DB, no secrets —
+  # tests/setup.ts fills safe env defaults and the lone *.integration.test.ts
+  # self-skips without RUN_ISOMETRIC_SANDBOX_TESTS. Complements e2e.yml, whose
+  # dev-server harness does NOT surface type errors or build breakage.
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm exec vitest run
+
+  # Production build check. `next build` runs as NODE_ENV=production, so
+  # @/config/env demands s3-compatible storage + a few core vars. The values
+  # below are throwaway placeholders that ONLY satisfy Zod schema validation —
+  # no real secrets, no network or DB access (routes are dynamic/auth-gated, so
+  # the build does not query the database).
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_build
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      BETTER_AUTH_SECRET: ci-build-placeholder-secret-not-a-real-key
+      STORAGE_PROVIDER: s3-compatible
+      STORAGE_BUCKET: ci-build
+      STORAGE_REGION: us-east-1
+      STORAGE_ACCESS_KEY_ID: ci-build
+      STORAGE_SECRET_ACCESS_KEY: ci-build-placeholder
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
