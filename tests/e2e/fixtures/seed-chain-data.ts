@@ -455,8 +455,15 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .delete(schema.suppliers)
         .where(eq(schema.suppliers.id, data.supplier.id));
 
-      // Certifier projects FK to facility — must clear before the facility
-      // delete or PG raises "violates foreign key constraint".
+      // Certifier rows FK to facility — must clear before the facility delete
+      // or PG raises "violates foreign key constraint". Removals must go before
+      // ghg_statements (removal.ghg_statement_id FKs it).
+      await tx
+        .delete(schema.certifierRemovals)
+        .where(eq(schema.certifierRemovals.facilityId, data.facility.id));
+      await tx
+        .delete(schema.certifierGhgStatements)
+        .where(eq(schema.certifierGhgStatements.facilityId, data.facility.id));
       await tx
         .delete(schema.certifierProjects)
         .where(eq(schema.certifierProjects.facilityId, data.facility.id));

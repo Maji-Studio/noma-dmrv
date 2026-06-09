@@ -30,13 +30,10 @@ jobs:
     env:
       RUN_ISOMETRIC_SANDBOX_TESTS: "1"
       ISOMETRIC_ENVIRONMENT: sandbox
+      LOAD_OP_SECRETS: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
       # Pinned Certify OpenAPI spec URL — used by the regenerate-certify-types
       # step below to detect upstream schema drift.
       ISOMETRIC_OPENAPI_URL: "https://api.isometric.com/openapi.json"
-      # Exposed at job level because the `secrets` context is NOT available in
-      # step-level `if:` expressions — only `env` is. The load step below gates
-      # on `env.OP_SERVICE_ACCOUNT_TOKEN` so it self-skips when unset.
-      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,7 +46,7 @@ jobs:
       # Skipped if OP_SERVICE_ACCOUNT_TOKEN is unset — the integration test
       # then self-skips on missing Isometric credentials rather than erroring.
       - name: Load Isometric secrets from 1Password
-        if: ${{ env.OP_SERVICE_ACCOUNT_TOKEN != '' }}
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
         uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true

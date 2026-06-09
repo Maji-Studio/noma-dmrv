@@ -349,6 +349,15 @@ test.describe("Full Chain UI Smoke Test", () => {
           }
 
           if (facilityIds.length) {
+            // Reverse FK order: removals must go before ghg_statements
+            // (removal.ghg_statement_id FKs it) and all certifier rows before
+            // the facility.
+            await tx
+              .delete(schema.certifierRemovals)
+              .where(inArray(schema.certifierRemovals.facilityId, facilityIds));
+            await tx
+              .delete(schema.certifierGhgStatements)
+              .where(inArray(schema.certifierGhgStatements.facilityId, facilityIds));
             await tx
               .delete(schema.certifierProjects)
               .where(inArray(schema.certifierProjects.facilityId, facilityIds));
