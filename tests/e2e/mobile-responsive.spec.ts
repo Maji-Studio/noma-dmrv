@@ -16,7 +16,8 @@
  * fixture), seeded chain data for facility scoping. The viewport override is
  * applied at the file level so every test runs as a phone.
  */
-import { test, expect, type Page } from "./fixtures";
+import { test, expect } from "./fixtures";
+import type { Page } from "@playwright/test";
 
 // iPhone 12/13/14 logical viewport — the size the pass was verified at.
 const MOBILE_VIEWPORT = { width: 390, height: 844 };

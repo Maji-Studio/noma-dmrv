@@ -97,7 +97,7 @@ const MAX_LOADING_ROWS = 5;
  * falls back to a humanized column id. Returns "" for structural columns
  * (selection / actions) so their cell renders without a label.
  */
-function columnLabel(column: { id: string; columnDef: { header: unknown } }): string {
+function columnLabel(column: { id: string; columnDef: { header?: unknown } }): string {
   const header = column.columnDef.header;
   if (typeof header === "string") return header;
   if (column.id === "select" || column.id === "actions") return "";
@@ -550,12 +550,12 @@ function DataTableRoot<TData, TValue>({
                           {label}
                         </span>
                       )}
-                      <span className="body-small min-w-0 break-words text-right">
+                      <div className="body-small min-w-0 break-words text-right">
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext(),
                         )}
-                      </span>
+                      </div>
                     </div>
                   );
                 })}
