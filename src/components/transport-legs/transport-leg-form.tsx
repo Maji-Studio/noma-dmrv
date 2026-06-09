@@ -96,7 +96,7 @@ export function TransportLegForm({
 
       <div className="flex flex-col gap-16">
         <SectionLabel>Route</SectionLabel>
-        <div className="grid grid-cols-2 gap-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <FormField
             id="originName"
             label="Origin name"

@@ -218,7 +218,7 @@ export function SampleForm({
                 />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="samplingTime"
                   label="Sampling Time"
@@ -253,7 +253,7 @@ export function SampleForm({
                 </FormField>
               </div>
 
-              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="labName"
                   label="Lab Name"
@@ -285,7 +285,7 @@ export function SampleForm({
                 </FormField>
               </div>
 
-              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="weightGrams"
                   label="Sample Weight (g)"
@@ -333,7 +333,7 @@ export function SampleForm({
           </Accordion.Header>
           <Accordion.Panel>
             <div className="space-y-20">
-              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
                   label="Total Carbon (%)"
@@ -402,7 +402,7 @@ export function SampleForm({
             <Accordion.Trigger>Elemental Analysis</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="totalHydrogenPercent"
                 label="Hydrogen (%)"
@@ -485,7 +485,7 @@ export function SampleForm({
           </Accordion.Header>
           <Accordion.Panel>
             <div className="space-y-20">
-              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="ashContentPercent"
                   label="Ash Content (%)"
@@ -550,7 +550,7 @@ export function SampleForm({
             <Accordion.Trigger>Physical Properties</Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="bulkDensityKgPerM3"
                 label="Bulk Density (kg/m³)"
@@ -649,7 +649,7 @@ export function SampleForm({
                 />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="hToCOrgRatio"
                   label="H:C org Ratio"
@@ -700,7 +700,7 @@ export function SampleForm({
             <Accordion.Panel>
               <div className="space-y-20">
                 <SectionLabel>R₀ Reflectance</SectionLabel>
-                <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
                     label="Mean Random Reflectance R₀ (%)"
@@ -760,7 +760,7 @@ export function SampleForm({
                   <SectionLabel>TGA Non-Reactive Carbon</SectionLabel>
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-16 gap-y-20">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
                     label="Reactive Carbon (%)"
@@ -844,7 +844,7 @@ export function SampleForm({
               </label>
 
               {watchedNutrientClaimEnabled && (
-                <div className="grid grid-cols-2 gap-x-16 gap-y-20 pt-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20 pt-8">
                   <FormField
                     id="phosphorusPercent"
                     label="Phosphorus (%)"

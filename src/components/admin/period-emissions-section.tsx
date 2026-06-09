@@ -129,7 +129,8 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
       )}
 
       {!isError && rows && rows.length > 0 && (
-        <table className="w-full text-left">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left">
           <thead>
             <tr className="border-b border-[var(--color-border-tertiary)]">
               <th className="title-chapter-title text-[var(--color-text-tertiary)] pb-8">Category</th>
@@ -181,6 +182,7 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {openForm && (
@@ -366,7 +368,7 @@ function PeriodEmissionFormDialog({
 
           <div className="flex flex-col gap-16">
             <SectionLabel>LCA window</SectionLabel>
-            <div className="grid grid-cols-2 gap-16">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
               <FormField
                 id="lcaWindowStartOn"
                 label="Window start"
@@ -399,7 +401,7 @@ function PeriodEmissionFormDialog({
 
           <div className="flex flex-col gap-16">
             <SectionLabel>Value</SectionLabel>
-            <div className="grid grid-cols-2 gap-16">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
               <FormField
                 id="magnitude"
                 label="Magnitude"
