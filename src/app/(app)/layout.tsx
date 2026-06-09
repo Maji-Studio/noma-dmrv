@@ -3,7 +3,7 @@
  * Provides sidebar navigation and authenticated layout wrapper
  */
 import { requireAuth } from "@/lib/auth/server";
-import { AppSidebar } from "@/components/navigation";
+import { AppSidebar, MobileNav } from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
 
 export default async function AppLayout({
@@ -16,9 +16,13 @@ export default async function AppLayout({
 
   return (
     <FacilityProvider>
-      <div className="min-h-screen flex">
+      {/* Desktop: sidebar + main side by side. Mobile: a sticky top bar
+          stacks above a full-width main (the sidebar is hidden, its nav lives
+          in the drawer that MobileNav opens). */}
+      <div className="min-h-screen flex flex-col md:flex-row">
         <AppSidebar />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <MobileNav />
+        <main className="flex-1 min-w-0 overflow-auto">{children}</main>
       </div>
     </FacilityProvider>
   );

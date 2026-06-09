@@ -19,6 +19,7 @@ import {
   type TransportLeg,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import {
   aggregateDistributionLegs,
@@ -336,7 +337,16 @@ export async function syncBiocharProductTransportLeg(
     .innerJoin(facilities, eq(biocharProducts.facilityId, facilities.id))
     .where(eq(biocharProducts.id, biocharProductId));
 
-  if (!facility) return;
+  if (!facility) {
+    // Polymorphic entity_id is not FK-constrained, so a missing facility means
+    // an orphaned or invalid product reference. Log the id so operators can
+    // trace it; control flow is unchanged (nothing to derive without a source).
+    logger.warn(
+      { biocharProductId },
+      "skipped derived transport leg: biochar product or its facility not found",
+    );
+    return;
+  }
 
   // The destination location lives on the order in the common flow; the
   // delivery may also carry its own override. Resolve via

@@ -118,7 +118,7 @@ function CertifierMappingFields({
     : null;
 
   return (
-    <dl className="grid grid-cols-2 gap-x-16 gap-y-12 mt-16">
+    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12 mt-16">
       <Field label="Project">
         {resolvesNames && (
           <span className="body-small">{projectName ?? "—"}</span>

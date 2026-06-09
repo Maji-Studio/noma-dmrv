@@ -18,9 +18,9 @@ DROP TABLE "loss_records" CASCADE;--> statement-breakpoint
 DROP TABLE "project_members" CASCADE;--> statement-breakpoint
 DROP TABLE "projects" CASCADE;--> statement-breakpoint
 DROP TABLE "items" CASCADE;--> statement-breakpoint
-ALTER TABLE "certification_submissions" DROP CONSTRAINT "certification_submissions_source_id_certifier_sources_id_fk";
+ALTER TABLE "certification_submissions" DROP CONSTRAINT IF EXISTS "certification_submissions_source_id_certifier_sources_id_fk";
 --> statement-breakpoint
-ALTER TABLE "credit_batches" DROP CONSTRAINT "credit_batches_reversal_risk_assessment_id_reversal_risk_assessments_id_fk";
+ALTER TABLE "credit_batches" DROP CONSTRAINT IF EXISTS "credit_batches_reversal_risk_assessment_id_reversal_risk_assessments_id_fk";
 --> statement-breakpoint
 ALTER TABLE "certification_submissions" DROP COLUMN "source_id";--> statement-breakpoint
 ALTER TABLE "credit_batches" DROP COLUMN "reversal_risk_assessment_id";--> statement-breakpoint
