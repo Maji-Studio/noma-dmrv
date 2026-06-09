@@ -58,6 +58,24 @@ Never log:
 - Better Auth rate limits are enabled with stricter rules for auth-sensitive endpoints.
 - DB pool limits are centralized in `src/db/index.ts` and configurable via env.
 
+## Secrets Management
+
+Secrets live in **1Password** (vault `Environment Variables`), never in the repo. One item per environment, with fields named exactly like the env vars:
+
+- `noma-dmrv env staging`, `noma-dmrv env production` (and `dev`)
+
+Three consumers read those items:
+
+- **Local dev** — `pnpm env:local` runs `op inject -i .env.tpl -o .env`. `.env.tpl` is tracked and holds `op://Environment Variables/noma-dmrv env staging/<VAR>` references; values resolve at runtime, never committed.
+- **Vercel** — `pnpm env:vercel` (`scripts/sync-env-to-vercel.ts`) pushes the prod item into Vercel's production/preview/development scopes.
+- **GitHub Actions** — `e2e.yml`, `isometric-health.yml`, and `migrate.yml` resolve `op://` references via `1password/load-secrets-action`, authenticating with a single repo secret **`OP_SERVICE_ACCOUNT_TOKEN`** — a read-only 1Password Service Account scoped to the `Environment Variables` vault. It replaces all per-secret Actions secrets; `CLAUDE_CODE_OAUTH_TOKEN` is the only other one. Staging jobs read the staging item, production jobs the production item. The e2e/health load steps are gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs (which can't read secrets) skip cleanly.
+
+Notes:
+
+- Rotating a secret = edit the 1Password item. No GitHub or Vercel change needed.
+- Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
+- `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
+
 ## Minimal Security Test Checklist
 
 - Unauthorized API requests are blocked.
