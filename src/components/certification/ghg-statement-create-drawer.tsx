@@ -239,6 +239,7 @@ function DrawerBody({
               <StepPreview
                 query={openQuery}
                 endOn={endOn}
+                derivedStart={derivedStart}
                 facilityId={facilityId}
               />
             )}
@@ -368,10 +369,12 @@ function StepPeriod({
 function StepPreview({
   query,
   endOn,
+  derivedStart,
   facilityId,
 }: {
   query: ReturnType<typeof useOpenRemovalsForFacility>;
   endOn: string;
+  derivedStart: string | null;
   facilityId: string;
 }) {
   if (query.isLoading) {
@@ -393,11 +396,20 @@ function StepPreview({
   }
 
   // Lexical comparison is correct for YYYY-MM-DD strings. A removal with no
-  // completion date cannot be predicted in-period. Partition in one pass.
+  // completion date cannot be predicted in-period. Isometric links removals
+  // whose completion falls within [derivedStart, endOn] — `derivedStart` is the
+  // day after the previous statement (null for the first statement, where
+  // Isometric anchors to the project start). Filtering only by `endOn` would
+  // predict removals that Isometric then excludes, so apply the lower bound too.
   const inPeriod: OpenRemovalView[] = [];
   const outside: OpenRemovalView[] = [];
   for (const removal of query.data) {
-    if (removal.completedOn !== null && removal.completedOn <= endOn) {
+    const completedOn = removal.completedOn;
+    if (
+      completedOn !== null &&
+      completedOn <= endOn &&
+      (derivedStart === null || completedOn >= derivedStart)
+    ) {
       inPeriod.push(removal);
     } else {
       outside.push(removal);
@@ -410,8 +422,11 @@ function StepPreview({
         Predicted removals
         <InfoHint>
           Membership is decided server-side by Isometric and confirmed after
-          the statement is created — this is a prediction by completion date.
-          Expand a removal to see its credit batches.
+          the statement is created — this predicts it by completion date within
+          the reporting window{" "}
+          {derivedStart ? `${derivedStart} → ${endOn}` : `up to ${endOn}`}.
+          Removals before the window roll into the previous statement. Expand a
+          removal to see its credit batches.
         </InfoHint>
       </h3>
 
@@ -421,7 +436,7 @@ function StepPreview({
         </span>
         {inPeriod.length === 0 ? (
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            No open removals fall on or before this date.
+            No open removals fall within this reporting window.
           </p>
         ) : (
           <RemovalBatchesAccordion
