@@ -144,6 +144,6 @@ test.describe("Mobile responsiveness (390×844)", () => {
     await card.focus();
     await expect(card).toBeFocused();
 
-    await expectNoHorizontalOverflow(page, "/facilities (card view)");
+    await expectNoHorizontalOverflow(page, "/reactors (card view)");
   });
 });
