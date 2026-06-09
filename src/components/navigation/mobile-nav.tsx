@@ -16,12 +16,22 @@ import { usePathname } from "next/navigation";
 import { Dialog } from "@base-ui/react/dialog";
 import { List, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-media-query";
 import { SidebarContent } from "./sidebar-content";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
+  const isMobile = useIsMobile();
+
+  // The drawer (and its focus trap + scroll lock) only belongs below `md`. If
+  // the viewport grows to desktop while it's open — rotate, resize — the popup
+  // and backdrop hide via `md:hidden` but the modal's trap/lock would otherwise
+  // linger over an invisible UI. Close it the moment we leave the mobile range.
+  // Render-time correction (same approach as the route backstop below) so the
+  // close lands before commit, no effect.
+  if (!isMobile && isOpen) setIsOpen(false);
 
   // Close the drawer whenever the route changes. Most link taps already close
   // it via SidebarContent's `onNavigate`; this is the backstop for navigation
