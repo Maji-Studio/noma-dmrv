@@ -161,36 +161,38 @@ export function EnergySummary() {
           </p>
         )}
         {config && splits && yieldKwhPerL != null && gensetKwh != null && totals && (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-[var(--color-border-secondary)] text-left">
-                <th className="body-small text-[var(--color-text-secondary)] py-8">Stage</th>
-                <th className="body-small text-[var(--color-text-secondary)] py-8">Split</th>
-                <th className="body-small text-[var(--color-text-secondary)] py-8">Grid electricity (kWh)</th>
-                <th className="body-small text-[var(--color-text-secondary)] py-8">Genset energy (kWh)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {STAGES.map((stage) => {
-                const pct = splits[stage.key];
-                return (
-                  <tr
-                    key={stage.key}
-                    className="border-b border-[var(--color-border-secondary)]"
-                  >
-                    <td className="body-medium py-8">{stage.label}</td>
-                    <td className="body-medium py-8">{pct}%</td>
-                    <td className="body-medium py-8">
-                      {fmt((electricityKwh * pct) / 100)}
-                    </td>
-                    <td className="body-medium py-8">
-                      {fmt((gensetKwh * pct) / 100)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--color-border-secondary)]">
+                  <th className="body-small text-[var(--color-text-secondary)] py-8 pr-8 text-left">Stage</th>
+                  <th className="body-small text-[var(--color-text-secondary)] py-8 px-8 text-right whitespace-nowrap">Split</th>
+                  <th className="body-small text-[var(--color-text-secondary)] py-8 px-8 text-right">Grid electricity (kWh)</th>
+                  <th className="body-small text-[var(--color-text-secondary)] py-8 pl-8 text-right">Genset energy (kWh)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {STAGES.map((stage) => {
+                  const pct = splits[stage.key];
+                  return (
+                    <tr
+                      key={stage.key}
+                      className="border-b border-[var(--color-border-secondary)]"
+                    >
+                      <td className="body-medium py-8 pr-8">{stage.label}</td>
+                      <td className="body-medium py-8 px-8 text-right whitespace-nowrap">{pct}%</td>
+                      <td className="body-medium py-8 px-8 text-right whitespace-nowrap">
+                        {fmt((electricityKwh * pct) / 100)}
+                      </td>
+                      <td className="body-medium py-8 pl-8 text-right whitespace-nowrap">
+                        {fmt((gensetKwh * pct) / 100)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
