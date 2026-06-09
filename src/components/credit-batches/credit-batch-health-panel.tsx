@@ -11,7 +11,8 @@
  * Each unmet check carries a smart fix link to wherever it's actually resolved
  * (design doc §6): carbon & durability inputs on the batch's own form (anchored
  * below on this page), production lineage on production runs, transport legs on
- * deliveries. A `skipped` transport check (facility setup not done) is a
+ * biochar products (where biochar distribution legs are edited/auto-derived). A
+ * `skipped` transport check (facility setup not done) is a
  * removal/facility-level concern, so it links to certification settings and does
  * NOT count as a batch issue.
  */
@@ -48,9 +49,13 @@ function fixLinkFor(key: BatchHealthCheckKey, facilityId: string): FixLink {
         href: `/production-runs?facility=${facilityId}`,
       };
     case "transport":
+      // Biochar distribution legs auto-derive from each delivery's
+      // customer-location distance, but are edited/added on the biochar product
+      // (entityType "biochar" resolves to the product, not the delivery). The
+      // old `/deliveries?transportLeg=create` target was a dead link.
       return {
         label: "Add transport leg",
-        href: `/deliveries?transportLeg=create&facility=${facilityId}`,
+        href: `/biochar-products?facility=${facilityId}`,
       };
     case "entityReadiness":
       return {

@@ -29,6 +29,9 @@ export interface PendingLocation {
   address: string;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
+  // Road distance (km) facility → site. Feeds the auto-derived biochar
+  // distribution transport leg on delivery save.
+  distanceFromFacilityKm: number | null;
 }
 
 function formatPendingLocationSummary({
@@ -348,6 +351,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
     address: "",
     gpsLatitude: "",
     gpsLongitude: "",
+    distanceFromFacilityKm: "",
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -369,6 +373,10 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
 
     const lat = formData.gpsLatitude.trim() === "" ? null : Number(formData.gpsLatitude);
     const lng = formData.gpsLongitude.trim() === "" ? null : Number(formData.gpsLongitude);
+    const distance =
+      formData.distanceFromFacilityKm.trim() === ""
+        ? null
+        : Number(formData.distanceFromFacilityKm);
 
     if (lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) {
       setFormError("Latitude must be between -90 and 90");
@@ -376,6 +384,10 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
     }
     if (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180)) {
       setFormError("Longitude must be between -180 and 180");
+      return;
+    }
+    if (distance !== null && (!Number.isFinite(distance) || distance < 0)) {
+      setFormError("Distance from facility must be 0 or greater");
       return;
     }
 
@@ -387,6 +399,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       address: formData.address.trim(),
       gpsLatitude: lat,
       gpsLongitude: lng,
+      distanceFromFacilityKm: distance,
     });
   };
 
@@ -524,6 +537,31 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
             className={INPUT_CLASS}
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-6">
+        <label htmlFor="pending-loc-distance" className="label-medium">
+          Distance from facility (km)
+        </label>
+        <input
+          id="pending-loc-distance"
+          type="number"
+          step="any"
+          min="0"
+          value={formData.distanceFromFacilityKm}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              distanceFromFacilityKm: e.target.value,
+            }))
+          }
+          placeholder="e.g., 120"
+          className={INPUT_CLASS}
+        />
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          Road distance facility → site. Auto-fills the biochar distribution
+          transport leg used for certification.
+        </p>
       </div>
 
       <div className="flex gap-12 justify-end pt-8">
