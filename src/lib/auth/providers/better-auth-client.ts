@@ -55,9 +55,26 @@ export interface AuthSession {
 /**
  * Map Better Auth errors to user-friendly messages
  */
-function mapBetterAuthError(error: unknown): string {
+function getErrorMessage(error: unknown): string | null {
   if (error instanceof Error) {
-    const message = error.message.toLowerCase();
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+function mapBetterAuthError(error: unknown): string {
+  const rawMessage = getErrorMessage(error);
+
+  if (rawMessage) {
+    const message = rawMessage.toLowerCase();
 
     if (message.includes("email not verified")) {
       return "Please verify your email before signing in.";
@@ -78,7 +95,7 @@ function mapBetterAuthError(error: unknown): string {
       return "Invalid or expired link.";
     }
 
-    return error.message;
+    return rawMessage;
   }
 
   return "An unexpected error occurred. Please try again.";
@@ -96,6 +113,13 @@ export async function signInWithPassword(
       email,
       password,
     });
+
+    if (result.error) {
+      return {
+        success: false,
+        error: mapBetterAuthError(result.error),
+      };
+    }
 
     if (!result.data) {
       return {
