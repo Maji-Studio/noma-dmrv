@@ -331,7 +331,7 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="massKg"
             label="Wet Mass (kg)"
@@ -376,7 +376,7 @@ export function BiocharProductForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="waterAddedKg"
             label="Water Added (kg)"
@@ -471,7 +471,7 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="storageLocationId"
             label="Product Bin"

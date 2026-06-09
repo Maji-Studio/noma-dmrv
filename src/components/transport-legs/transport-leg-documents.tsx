@@ -129,7 +129,7 @@ export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
         </ul>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-16">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         {EVIDENCE_FIELDS.map(({ documentType, label }) => (
           <FormField key={documentType} id={`leg-${legId}-${documentType}`} label={label}>
             <FormFileUpload

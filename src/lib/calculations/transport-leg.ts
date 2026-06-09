@@ -142,7 +142,11 @@ export function aggregateDistributionLegs(
   let totalMassKg = 0;
   let weightedDistanceSum = 0;
   const names = new Set<string>();
-  let namedGps: { lat: number | null; lng: number | null } | null = null;
+  // GPS observed per destination name: a coordinate pair, or `null` once two
+  // rows report *differing* coords for the same name. We can't honestly report
+  // one GPS for inconsistent data, so a conflict collapses to `null` rather
+  // than letting last-seen win.
+  const gpsByName = new Map<string, { lat: number; lng: number } | null>();
 
   for (const row of rows) {
     const mass = positiveOrNull(row.loadMassKg);
@@ -152,11 +156,17 @@ export function aggregateDistributionLegs(
     weightedDistanceSum += mass * distance;
     if (row.locationName) {
       names.add(row.locationName);
-      // Only record GPS when this row actually carries coordinates, so a later
-      // row missing them doesn't clobber a valid pair found earlier for the
-      // same single destination.
+      // Only record GPS when this row actually carries coordinates, so a row
+      // missing them neither registers nor clobbers a pair found elsewhere.
       if (row.locationGpsLatitude !== null && row.locationGpsLongitude !== null) {
-        namedGps = { lat: row.locationGpsLatitude, lng: row.locationGpsLongitude };
+        const coord = { lat: row.locationGpsLatitude, lng: row.locationGpsLongitude };
+        const existing = gpsByName.get(row.locationName);
+        if (existing === undefined) {
+          gpsByName.set(row.locationName, coord);
+        } else if (existing && (existing.lat !== coord.lat || existing.lng !== coord.lng)) {
+          // Distinct coords for the same name → ambiguous; drop to null.
+          gpsByName.set(row.locationName, null);
+        }
       }
     }
   }
@@ -164,6 +174,7 @@ export function aggregateDistributionLegs(
   const weightedDistanceKm =
     totalMassKg > 0 ? weightedDistanceSum / totalMassKg : null;
   const single = names.size === 1;
+  const singleGps = single ? gpsByName.get([...names][0]) ?? null : null;
   return {
     totalMassKg,
     weightedDistanceKm,
@@ -172,7 +183,7 @@ export function aggregateDistributionLegs(
       : names.size > 1
         ? CUSTOMER_SITES_LABEL
         : null,
-    destinationGpsLatitude: single && namedGps ? namedGps.lat : null,
-    destinationGpsLongitude: single && namedGps ? namedGps.lng : null,
+    destinationGpsLatitude: singleGps ? singleGps.lat : null,
+    destinationGpsLongitude: singleGps ? singleGps.lng : null,
   };
 }

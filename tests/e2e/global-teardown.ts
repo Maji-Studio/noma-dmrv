@@ -209,21 +209,6 @@ export default async function globalTeardown() {
               )
       `);
 
-      // ─── Reversal risk assessments (FK from credit_batches, must delete after batches) ───
-      await client.query(`
-        DELETE FROM reversal_risk_assessments
-        WHERE facility_id IN (
-          SELECT id FROM facilities
-          WHERE code LIKE 'E2E-%'
-             OR name LIKE 'UI %'
-             OR name LIKE 'Chain %'
-             OR name LIKE 'Duplicate Test %'
-        )
-      `);
-
-      // ─── Loss records (polymorphic, no inbound FKs) ───
-      await client.query(`DELETE FROM loss_records WHERE code LIKE 'E2E-%'`);
-
       // ─── Applications ───
       await client.query(`
         DELETE FROM applications

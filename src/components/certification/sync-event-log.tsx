@@ -104,7 +104,8 @@ export function SyncEventLog({
           className="transition-transform duration-150 group-open:rotate-180"
         />
       </summary>
-      <table className="mt-12 w-full border-collapse text-left">
+      <div className="mt-12 overflow-x-auto">
+      <table className="w-full min-w-[520px] border-collapse text-left">
         <thead>
           <tr className="border-b border-[var(--color-border-secondary)]">
             <Th>Time</Th>
@@ -143,6 +144,7 @@ export function SyncEventLog({
           ))}
         </tbody>
       </table>
+      </div>
     </details>
   );
 }
