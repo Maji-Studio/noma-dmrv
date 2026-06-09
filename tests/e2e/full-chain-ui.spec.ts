@@ -18,7 +18,7 @@ import {
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { and, eq, ilike, inArray } from "drizzle-orm";
+import { eq, ilike, inArray } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 
 // ============================================
