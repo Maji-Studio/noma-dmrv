@@ -468,6 +468,15 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
         .delete(schema.reactors)
         .where(eq(schema.reactors.id, data.reactor.id));
 
+      // Certifier rows FK to facility — clear before the facility delete.
+      // Removals must go before ghg_statements (removal.ghg_statement_id FKs it).
+      await tx
+        .delete(schema.certifierRemovals)
+        .where(eq(schema.certifierRemovals.facilityId, data.facility.id));
+      await tx
+        .delete(schema.certifierGhgStatements)
+        .where(eq(schema.certifierGhgStatements.facilityId, data.facility.id));
+
       // Facility
       await tx
         .delete(schema.facilities)

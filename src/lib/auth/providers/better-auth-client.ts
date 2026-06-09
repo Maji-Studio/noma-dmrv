@@ -6,8 +6,25 @@
 
 import { createAuthClient } from "better-auth/react";
 
+/**
+ * Resolve the origin auth requests should target.
+ *
+ * In the browser we always use the current origin so requests stay
+ * same-origin no matter which domain served the page (e.g.
+ * staging.noma.maji.studio vs the noma-dmrv-git-*.vercel.app branch URL).
+ * Targeting NEXT_PUBLIC_APP_URL directly caused cross-origin requests and
+ * CORS preflight failures when the served domain differed from that value.
+ * On the server (SSR) we fall back to the configured app URL.
+ */
+function resolveAuthBaseURL(): string {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
+}
+
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100",
+  baseURL: resolveAuthBaseURL(),
 });
 
 export interface AuthResult<T = void> {
@@ -241,8 +258,10 @@ export async function requestPasswordReset(
 ): Promise<AuthResult> {
   try {
     // Better Auth handles password reset through the server configuration
-    // We make a direct API call to the request-password-reset endpoint
-    const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
+    // We make a direct API call to the request-password-reset endpoint.
+    // Use the same origin that served the page (see resolveAuthBaseURL) so
+    // the request stays same-origin and avoids CORS preflight failures.
+    const baseURL = resolveAuthBaseURL();
 
     // Create AbortController with timeout to prevent hanging requests
     const controller = new AbortController();

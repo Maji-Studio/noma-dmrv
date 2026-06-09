@@ -70,6 +70,41 @@ async function sendAuthEmail(args: {
   });
 }
 
+/**
+ * Build the list of origins Better Auth accepts on auth requests.
+ *
+ * Sign-in/sign-up requests are rejected unless their Origin header is trusted.
+ * trustedOrigins is Better Auth's CSRF guard — it validates the Origin header
+ * on auth mutations and gates redirect targets. Keep it least-privilege: only
+ * the exact hosts that serve THIS deployment.
+ *
+ * We intentionally do NOT wildcard a shared host:
+ *   - "*.vercel.app" would trust every app on Vercel (multi-tenant).
+ *   - "*.maji.studio" would trust every sibling subdomain (n8n.maji.studio,
+ *     staging.maji.studio, …) — an XSS or subdomain takeover on any of them
+ *     would become a trusted origin against auth.
+ *
+ * The canonical custom domain comes from NEXT_PUBLIC_APP_URL (per-environment:
+ * noma.maji.studio in prod, staging.noma.maji.studio in preview). The raw
+ * deployment URLs come from Vercel's own project-bound env vars.
+ */
+function buildTrustedOrigins(): string[] {
+  const origins = [
+    env.NEXT_PUBLIC_APP_URL,
+    // Vercel-provided URLs bound to this project/deployment, when present.
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    process.env.VERCEL_BRANCH_URL
+      ? `https://${process.env.VERCEL_BRANCH_URL}`
+      : null,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : null,
+  ].filter((origin): origin is string => Boolean(origin));
+
+  // De-duplicate while preserving order.
+  return [...new Set(origins)];
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -175,5 +210,5 @@ export const auth = betterAuth({
   },
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.NEXT_PUBLIC_APP_URL,
-  trustedOrigins: [env.NEXT_PUBLIC_APP_URL],
+  trustedOrigins: buildTrustedOrigins(),
 });

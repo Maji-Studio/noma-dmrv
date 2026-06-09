@@ -390,6 +390,69 @@ export default async function globalTeardown() {
         )
       `);
 
+      // ─── Certifier removals (FK to facilities; also FKs ghg_statements) ───
+      // Must go before certifier_ghg_statements (removal.ghg_statement_id FKs
+      // it) and before facilities. credit_batches.removal_id FKs this table and
+      // is already swept above, so removals can now be deleted.
+      await client.query(`
+        DELETE FROM certifier_removals
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
+      // ─── Certifier GHG statements (FK to facilities) ───
+      await client.query(`
+        DELETE FROM certifier_ghg_statements
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
+      // ─── Certifier project emissions (FK to facilities) ───
+      await client.query(`
+        DELETE FROM certifier_project_emissions
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
+      // ─── Stockpile events (FK to facilities) ───
+      await client.query(`
+        DELETE FROM stockpile_events
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
+      // ─── Power procurement evidence (FK to facilities) ───
+      await client.query(`
+        DELETE FROM power_procurement_evidence
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
       // ─── Facilities ───
       await client.query(`
         DELETE FROM facilities
