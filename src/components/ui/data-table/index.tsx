@@ -126,6 +126,23 @@ function handleRowActivationKeyDown(
   activate();
 }
 
+/**
+ * Shared click activation for a clickable row or card. Mirrors the keydown
+ * guard: a click that originates on (or bubbles up from) a nested interactive
+ * control must not also fire the row-level action, so the nested control's own
+ * handler is the only one that runs.
+ */
+function handleRowActivationClick(
+  event: React.MouseEvent<HTMLElement>,
+  activate: () => void,
+) {
+  const interactive = (event.target as HTMLElement).closest(
+    'button, a, input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])',
+  );
+  if (interactive && interactive !== event.currentTarget) return;
+  activate();
+}
+
 /* ------------------------------------------------------------------ */
 /*  Data Table Props                                                    */
 /* ------------------------------------------------------------------ */
@@ -432,15 +449,22 @@ function DataTableRoot<TData, TValue>({
                         hoverable: hoverable || !!onRowClick,
                         selected: row.getIsSelected(),
                       }),
-                      onRowClick && "cursor-pointer"
+                      onRowClick &&
+                        "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
                     )}
-                    onClick={() => onRowClick?.(row.original)}
+                    onClick={
+                      onRowClick
+                        ? (event) =>
+                            handleRowActivationClick(event, () =>
+                              onRowClick(row.original),
+                            )
+                        : undefined
+                    }
                     // A clickable row must be reachable and activatable by
                     // keyboard, so expose it as a focusable button when
                     // onRowClick is wired.
                     role={onRowClick ? "button" : undefined}
                     tabIndex={onRowClick ? 0 : undefined}
-                    aria-label={onRowClick ? "View row details" : undefined}
                     onKeyDown={
                       onRowClick
                         ? (event) =>
@@ -489,12 +513,18 @@ function DataTableRoot<TData, TValue>({
                   "border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-8",
                   row.getIsSelected() && "bg-[var(--color-interaction)]/10",
                   onRowClick &&
-                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)]",
+                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]",
                 )}
-                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                onClick={
+                  onRowClick
+                    ? (event) =>
+                        handleRowActivationClick(event, () =>
+                          onRowClick(row.original),
+                        )
+                    : undefined
+                }
                 role={onRowClick ? "button" : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
-                aria-label={onRowClick ? "View row details" : undefined}
                 onKeyDown={
                   onRowClick
                     ? (event) =>
