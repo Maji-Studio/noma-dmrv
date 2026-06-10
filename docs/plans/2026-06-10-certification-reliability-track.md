@@ -1,11 +1,11 @@
 # Certification reliability track
 
-> **Status: Phase 1 implemented** (2026-06-10, PR #169 — see
-> `docs/isometric/changes.md`); Phases 2–3 ready to implement. Deepens
-> three modules on the Isometric
+> **Status: Phases 1–2 implemented** (2026-06-10 — Phase 1 in PR #169,
+> Phase 2 stacked on it; see `docs/isometric/changes.md`); Phase 3 ready to
+> implement. Deepens three modules on the Isometric
 > submission path: the submission-ledger claim choreography, the registry
 > create-or-reconcile call, and a fake registry adapter for boundary tests.
-> Line references in Phases 2–3 were re-anchored 2026-06-10 after the GHG
+> Line references in Phase 3 were re-anchored 2026-06-10 after the GHG
 > entry API migration and Phase 1 landed — they will drift again; locate by
 > symbol.
 > Correctness work, not cleanup — motivated by real drift between the Removal
@@ -34,12 +34,11 @@ correctness gap, not a style gap:
    `claimSubmissionDraft` (`src/data-access/certification-submissions.ts`),
    which re-decides inside the mapping lock, and the
    `ExistingRemovalSubmission` throw/catch plumbing is deleted.
-2. **Removal's failure audit events lose the registry's response body; GHG's
-   preserve it.** `createOrReconcile` records only `errorMessage` +
-   `mapping_revision` on failure (`submit-removal.ts:845–861`);
-   `createGhgStatementRemote` preserves `IsometricApiError.body`
-   (`ghg-statements.ts:358–371`), which carries the actionable 4xx detail.
-   → Phase 2.
+2. ~~**Removal's failure audit events lose the registry's response body; GHG's
+   preserve it.**~~ **Resolved by Phase 2.** Every failed registry-create
+   sync event now carries `{ mapping_revision, body? }` — the unified
+   failure event recorded by `performRegistryCreate`
+   (`src/fn/certification/registry-create.ts`).
 3. **The supplier-reference orphan-claim behavior is untested as a boundary.**
    Existing tests mock individual functions
    (`tests/isometric-submit-removal.test.ts` mocks `createDatapoint`,
@@ -243,6 +242,35 @@ fakes (including the `undefined as never` tx handle).
 
 ## Phase 2 — Registry create-or-reconcile module
 
+> **✅ Implemented** (2026-06-10, stacked on PR #169; see
+> `docs/isometric/changes.md`). The interface below landed as specified;
+> deltas for the Phase 3 implementer:
+>
+> - The module is entered as `performRegistryCreate` with two small
+>   additions over the sketch: `supplierRefId?` (echoed into the success
+>   event for audit parity with the old removal path) and `log?` (an
+>   attempt-scoped logger; the module logs the
+>   "create failed; attempting reconciliation" warn itself).
+> - `ReconcileLookup`'s `"single"` arm carries `externalId`; the exported
+>   `supplierRefLookup` helper adapts the two-way supplier-ref
+>   reconciliation shape. The GHG three-way adapter is inlined at its one
+>   call site in `createGhgStatementRemote`.
+> - An ambiguous (`"multiple"`) lookup rejects the row + throws WITHOUT a
+>   failed sync event — parity with the pre-module GHG behavior.
+> - All module events go through `appendSyncEventBestEffort`; GHG create
+>   events moved from raw `appendSyncEvent` (which could unwind a
+>   successful create) onto the best-effort path.
+> - `finalizeGhgStatement` lost its `operation`/`source` params and its
+>   success sync event (the module records it, before
+>   `markSubmissionSubmitted`, not after).
+> - `resolveTemplateInputs` extraction skipped — `submit-removal.ts` landed
+>   at ~830 lines, comfortably under the cap.
+> - Found during migration: the resume path now reads `fixed` bindings from
+>   the stored snapshot (`readRemovalFixedInputs`) and the claim module's
+>   `resumeDraft` re-decides under the mapping lock before the CAS reset.
+> - Tests: `tests/registry-create.test.ts` (9 cases, mocked data-access +
+>   spy thunks). The registry-shaped counterparty tests remain Phase 3.
+
 **Goal:** one implementation of *POST → on failure, reconcile by lookup →
 record sync event → mark rejected or claim the orphan*, shared by removal
 creates, datapoint creates, and GHG Statement creates. **Narrow scope by
@@ -392,13 +420,13 @@ remains the live-adapter check; the fake does not replace it.
 | Phase | Depends on | Size | Status |
 |---|---|---|---|
 | 1 — ledger claim module | — | ~2–3 days incl. tests | ✅ Done (PR #169) |
-| 2 — registry create module | 1 merged (same files) | ~1–2 days | Next |
-| 3 — fake registry + boundary tests | 1+2 landed | ~2 days | — |
+| 2 — registry create module | 1 merged (same files) | ~1–2 days | ✅ Done (stacked on #169) |
+| 3 — fake registry + boundary tests | 1+2 landed | ~2 days | Next |
 
 One PR per phase, each leaving every existing test green. Behavior changes
 are limited to the two named improvements (GHG race resolution — **shipped
-in Phase 1**; removal failure-event body — Phase 2) — call each out in its
-PR description.
+in Phase 1**; removal failure-event body — **shipped in Phase 2**) — call
+each out in its PR description.
 
 ## Risks
 
