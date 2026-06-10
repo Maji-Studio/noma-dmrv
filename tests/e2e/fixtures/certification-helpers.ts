@@ -4,7 +4,7 @@
  *
  * The load-bearing gotcha (see the remodel handoff): the certify loaders
  * (`loadFacilityCertifierMapping`, `buildRemovalContext`) ALWAYS read from
- * Isometric (`listProjects` + `listRemovalTemplates`). Without sandbox creds
+ * Isometric (`listProjects` + `listGhgEntryTemplates`). Without sandbox creds
  * those return `[]`, so a linked facility / resolvable template cannot be
  * produced. These helpers therefore:
  *   - expose `SANDBOX_PROJECT_ID` so specs can `test.skip` when unconfigured;
@@ -115,7 +115,7 @@ export async function deleteCertifierMapping(facilityId: string): Promise<void> 
   }
 }
 
-// Shape of the slice of the raw `removal_templates` list response we read to
+// Shape of the slice of the raw `ghg_entry_templates` list response we read to
 // detect fixed-input binding (the list returns the full nested tree).
 interface RawRemovalTemplate {
   id?: string;
@@ -146,7 +146,7 @@ function templateHasUnboundFixedInput(t: RawRemovalTemplate): boolean {
  * fixed input. The sandbox project carries several templates, including an
  * unbound "Protocol default"; picking the first would pass the wizard's
  * Requirements step yet fail the live submit. So we scan for one whose fixed
- * inputs are all bound. (The `removal_templates` list returns the full nested
+ * inputs are all bound. (The `ghg_entry_templates` list returns the full nested
  * component/input tree, so no per-template fetch is needed.)
  */
 export async function fetchSubmittableSandboxRemovalTemplateId(
@@ -162,7 +162,7 @@ export async function fetchSubmittableSandboxRemovalTemplateId(
       : "sandbox";
   const url = `${ISOMETRIC_BASE_URLS[envName]}/projects/${encodeURIComponent(
     projectId,
-  )}/removal_templates`;
+  )}/ghg_entry_templates`;
 
   try {
     const res = await fetch(url, {

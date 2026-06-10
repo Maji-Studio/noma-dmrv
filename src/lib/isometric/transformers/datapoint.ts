@@ -6,8 +6,8 @@ import { payloadHash } from "../utils/payload-hash";
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
 type ComponentBlueprintInput = components["schemas"]["ComponentBlueprintInput"];
-type RemovalTemplateComponentInput =
-  components["schemas"]["RemovalTemplateComponentInput"];
+type GhgEntryTemplateComponentInput =
+  components["schemas"]["GhgEntryTemplateComponentInput"];
 
 export interface InputMappingEntry {
   source: keyof AggregatedProductionData;
@@ -338,7 +338,7 @@ export const MAPPING_REVISION: string = payloadHash(INPUT_MAPPING);
 export interface BuildCreateDatapointArgs {
   groupKey: string;
   componentBlueprintKey: string;
-  rtcInput: RemovalTemplateComponentInput;
+  rtcInput: GhgEntryTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
   agg: AggregatedProductionData;
   projectId: string;

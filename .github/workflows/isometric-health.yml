@@ -33,7 +33,7 @@ jobs:
       LOAD_OP_SECRETS: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
       # Pinned Certify OpenAPI spec URL — used by the regenerate-certify-types
       # step below to detect upstream schema drift.
-      ISOMETRIC_OPENAPI_URL: "https://api.isometric.com/openapi.json"
+      ISOMETRIC_OPENAPI_URL: "https://docs.isometric.com/api-reference/certify/mrv.openapi.json"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
