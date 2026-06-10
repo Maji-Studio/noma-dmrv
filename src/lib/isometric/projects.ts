@@ -40,7 +40,7 @@ export function listComponentBlueprints(): Promise<IsometricComponentBlueprint[]
   return paginateAll<IsometricComponentBlueprint>("/component_blueprints");
 }
 
-// Lists Components attached to a Project / GHG Statement / Removal, filtered
+// Lists Components attached to a Project / GHG Statement / GHG Entry, filtered
 // by scope. Used by the Posture B drift panel and the nightly coverage check
 // (ADR 0005) to reconcile `PROJECT`-scope Components — Isometric has no
 // `GET /projects/{id}` endpoint and the `Project` schema carries no
