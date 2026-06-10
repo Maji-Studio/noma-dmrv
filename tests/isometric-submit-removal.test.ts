@@ -27,7 +27,7 @@ import type {
 } from "@/data-access/certification";
 import type {
   IsometricComponentBlueprint,
-  IsometricRemovalTemplate,
+  IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import type {
   ProductionRun,
@@ -57,7 +57,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   return {
     ...actual,
     createDatapoint: vi.fn(),
-    createRemoval: vi.fn(),
+    createGhgEntry: vi.fn(),
     reconcileDatapoint: vi.fn(),
     reconcileRemoval: vi.fn(),
   };
@@ -125,7 +125,7 @@ function newLedgerRow(
 // the per-stage energy split (which need their own fixtures).
 // ---------------------------------------------------------------------------
 
-function makeTemplate(): IsometricRemovalTemplate {
+function makeTemplate(): IsometricGhgEntryTemplate {
   return {
     id: TEMPLATE_ID,
     name: "Test removal template",
@@ -153,7 +153,7 @@ function makeTemplate(): IsometricRemovalTemplate {
         ],
       },
     ],
-  } as unknown as IsometricRemovalTemplate;
+  } as unknown as IsometricGhgEntryTemplate;
 }
 
 function makeBlueprints(): IsometricComponentBlueprint[] {
@@ -407,12 +407,12 @@ describe("submitRemoval — happy path", () => {
       makeContext(),
     );
     const createDatapointFake = vi.fn(fakeExternalIds("dp"));
-    const createRemovalFake = vi.fn(fakeExternalIds("rmv"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
     vi.mocked(isometric.createDatapoint).mockImplementation(
       createDatapointFake as never,
     );
-    vi.mocked(isometric.createRemoval).mockImplementation(
-      createRemovalFake as never,
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
     );
 
     const result = await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
@@ -432,7 +432,7 @@ describe("submitRemoval — happy path", () => {
 
     // One datapoint POST (the only monitored input) + one removal POST.
     expect(createDatapointFake).toHaveBeenCalledTimes(1);
-    expect(createRemovalFake).toHaveBeenCalledTimes(1);
+    expect(createGhgEntryFake).toHaveBeenCalledTimes(1);
 
     // Datapoint payload reflects the aggregated product mass + the input's
     // unit/quantity-kind mapping. Per `INPUT_MAPPING` for
@@ -447,16 +447,16 @@ describe("submitRemoval — happy path", () => {
     expect(datapointBody.supplier_reference_id).toMatch(/^nm-/);
 
     // Removal payload wires the datapoint id back onto the component.
-    const removalBody = vi.mocked(isometric.createRemoval).mock.calls[0][0];
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
     expect(removalBody).toMatchObject({
       project_id: EXTERNAL_PROJECT_ID,
-      removal_template_id: TEMPLATE_ID,
+      ghg_entry_template_id: TEMPLATE_ID,
       started_on: "2026-01-01",
       completed_on: "2026-01-31",
     });
-    expect(removalBody.removal_template_components ?? []).toHaveLength(1);
-    expect(removalBody.removal_template_components?.[0]).toMatchObject({
-      removal_template_component_id: RTC_PRODUCT_MASS_ID,
+    expect(removalBody.ghg_entry_template_components ?? []).toHaveLength(1);
+    expect(removalBody.ghg_entry_template_components?.[0]).toMatchObject({
+      ghg_entry_template_component_id: RTC_PRODUCT_MASS_ID,
       inputs: [
         {
           __typename: "CreateComponentScalarInput",
@@ -481,7 +481,7 @@ describe("submitRemoval — happy path", () => {
     vi.mocked(isometric.createDatapoint).mockImplementation(
       fakeExternalIds("dp") as never,
     );
-    vi.mocked(isometric.createRemoval).mockImplementation(
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
       fakeExternalIds("rmv") as never,
     );
 
@@ -489,7 +489,7 @@ describe("submitRemoval — happy path", () => {
 
     // Reset the HTTP spies — the second submit must not call them.
     vi.mocked(isometric.createDatapoint).mockClear();
-    vi.mocked(isometric.createRemoval).mockClear();
+    vi.mocked(isometric.createGhgEntry).mockClear();
     // Also clear the local-persistence spies so we can assert that
     // return-existing skips them outright on the second submit.
     vi.mocked(ledger.markSubmissionSubmitted).mockClear();
@@ -509,7 +509,7 @@ describe("submitRemoval — happy path", () => {
     expect(second.externalId).toBe("rmv_1");
     expect(second.version).toBe(1);
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
-    expect(isometric.createRemoval).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     // return-existing must also skip local persistence — no ledger
     // transition, no removal-date rewrite.
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
@@ -525,7 +525,7 @@ describe("submitRemoval — happy path", () => {
     vi.mocked(isometric.createDatapoint).mockImplementation(
       fakeExternalIds("dp") as never,
     );
-    vi.mocked(isometric.createRemoval).mockImplementation(
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
       fakeExternalIds("rmv") as never,
     );
 

@@ -82,21 +82,41 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
-### GHG Entry API rename — migrate before September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
+### GHG Entry API rename — September 2026 sunset cleanup (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
-- Isometric deprecated the removal-named Certify REST surface in favour of a
-  `ghg_entry` route family. Old endpoints are removed after a 3-month
-  transition: "We intend to keep old endpoints functional for a transitional
-  period of 3 months (until September 2026), after which they will be
-  removed." — [Certify API changelog, 2026-06-04 entry](https://docs.isometric.com/api-reference/certify/api-changelog).
-- We call four deprecated surfaces today (`POST/GET /removals`,
-  `GET /projects/{id}/removal_templates`, `GET /components ?removal_id`,
-  plus deprecated payload/response fields). The type-regen script's OpenAPI
-  URL is also stale (now serves Isometric's internal spec).
-- Full inventory, verified renames, and phased plan:
+- **Migration landed 2026-06-10** (plan Phases 1–4; see
+  [`docs/isometric/changes.md`](./isometric/changes.md) → 2026-06-10). noma now
+  calls the `ghg_entry` route family; the regen pipeline points at the
+  docs-hosted Certify spec.
+- **What remains, post-sunset (after September 2026):** Isometric removes the
+  deprecated `removal*` endpoints/fields. At that point: (a) regenerate
+  `certify.d.ts` — the deprecated `Removal*` schemas + `GhgStatement.removal_ids`
+  / `Component.removal_template_component_id` keys disappear, so the test mocks
+  that still carry both old+new fields (`isometric-reconciliation.test.ts`,
+  `isometric-ghg-statement-flow.test.ts`, `isometric-ghg-statement-submit.test.ts`,
+  `project-emission-match.test.ts`) drop the deprecated keys; (b) delete the
+  🚫-marked deprecated rows from `docs/isometric/openapi-index.md`. No app-code
+  change expected — the wire layer already only calls the new routes.
+- Full inventory + verified renames + phased plan:
   [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
-- Resolve by landing plan Phases 1–4 and recording the migration in
-  `docs/isometric/changes.md`.
+
+### GHG entry / statement free-field follow-ups from the rename (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
+
+The migrated surface returns fields noma does not yet capture. Each is a new
+capability, not a blocker — tracked here so they are not lost:
+
+- **Credit allocation / buffer pool.** `GhgEntry` + `GhgStatement` now expose
+  `risk_of_reversal_percentage` and `credit_allocation`
+  (`buffer_pool_contribution_kg` / `supplier_allocation_kg`). Surfacing the
+  split on the certify panel / credit-batch detail is new UI. Relates to the
+  dropped `reversal_risk_assessments` table (see Schema section above).
+- **Reporting-period readback.** `GhgStatement.reporting_period_start_at` /
+  `_end_at` are returned; reading them back can fix the known reconciliation
+  gap where the statement wizard's "predicted to be linked" preview
+  over-promises against Isometric's server-derived period.
+- **Source `description`.** Optional human-readable label now accepted on
+  `POST /sources` / `PATCH /sources/{id}` (we pass the `Undefined` sentinel
+  today). Wire it to a real label when the Sources panel grows one.
 
 ### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
 

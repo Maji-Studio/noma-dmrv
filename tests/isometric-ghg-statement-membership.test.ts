@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideRemovalMembership } from "@/lib/isometric/utils/removal-membership";
+import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
 
 describe("decideRemovalMembership", () => {
   it("links unlinked removals mapped from Isometric removal ids", () => {

@@ -1,6 +1,10 @@
 # Isometric GHG Entry API migration
 
-> **Status: Planned** (2026-06-10). Migrates the Certify wire layer from the
+> **Status: Done** (2026-06-10). Phases 1–4 landed; see
+> [`docs/isometric/changes.md`](../isometric/changes.md) → 2026-06-10. The only
+> remaining work is the post-September-2026 sunset cleanup tracked in
+> [`docs/open-questions.md`](../open-questions.md) → `isometric/ghg-entry-migration`.
+> Migrates the Certify wire layer from the
 > deprecated removal-named endpoints to the new `ghg_entry` route family
 > announced in Isometric's 2026-06-04 API changelog. One breaking change with
 > a hard deadline; everything else in that changelog is either a free win we
