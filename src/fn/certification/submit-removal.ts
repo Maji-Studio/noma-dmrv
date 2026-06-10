@@ -190,6 +190,16 @@ const fixedSnapshotInputSchema = z.object({
   preboundDatapointId: z.string().min(1),
 });
 
+// The reporting window (`semantic.startedOn` / `completedOn`) the original
+// attempt locked. On resume the removal body's started_on/completed_on must
+// come from here, not from the live aggregation: a resumed draft posts the
+// SNAPSHOT's datapoint magnitudes, so deriving dates from a since-changed run
+// set would stamp a window that the datapoints no longer back.
+const reportingWindowSnapshotSchema = z.object({
+  startedOn: z.string().min(1),
+  completedOn: z.string().min(1),
+});
+
 export interface SubmitRemovalArgs {
   userId: string;
   removalId: string;
@@ -700,6 +710,15 @@ async function runRemovalSubmission({
   resumed,
   log,
 }: RunRemovalSubmissionArgs): Promise<RemovalSubmissionResult> {
+  // On resume the datapoint bodies and fixed bindings are snapshot truth, so
+  // the removal body's reporting window must also come from the snapshot — not
+  // the live `agg`, whose run set may have shifted while the draft was locked.
+  // On create, the snapshot was just built from this same `agg`, so the two
+  // windows are identical and the override is a no-op.
+  const effectiveAgg = resumed
+    ? { ...agg, ...readRemovalReportingWindow(row) }
+    : agg;
+
   const datapointIdsByRtcInput = new Map<string, string>();
   for (const f of fixed) {
     datapointIdsByRtcInput.set(
@@ -731,7 +750,7 @@ async function runRemovalSubmission({
     template,
     blueprintsByKey,
     datapointIdsByRtcInput,
-    agg,
+    agg: effectiveAgg,
     projectId: externalProjectId,
     supplierRefId: transport.removalSupplierRef,
   });
@@ -762,8 +781,8 @@ async function runRemovalSubmission({
   // a failure here doesn't unwind a successful submission).
   try {
     await updateRemovalDates(userId, removalId, {
-      startedOn: formatUtcDate(agg.earliestStartTime),
-      completedOn: formatUtcDate(agg.latestEndTime),
+      startedOn: formatUtcDate(effectiveAgg.earliestStartTime),
+      completedOn: formatUtcDate(effectiveAgg.latestEndTime),
     });
   } catch (err) {
     log.warn(
@@ -847,4 +866,32 @@ function readRemovalFixedInputs(
     });
   }
   return fixed;
+}
+
+// Reads the reporting window the original attempt locked into the snapshot, for
+// the resume path. Returns the two date fields `buildCreateGhgEntryRequest` and
+// `updateRemovalDates` read off `agg`, so a resumed removal stamps the window
+// the snapshot's datapoints were built for rather than a since-drifted live
+// one. Fail-loud like the other snapshot readers: a missing/malformed window
+// (pre-dating this field) means the snapshot drifted, so refuse to resume.
+function readRemovalReportingWindow(row: CertificationSubmissionRow): {
+  earliestStartTime: Date;
+  latestEndTime: Date;
+} {
+  const snapshot = row.payloadSnapshot as {
+    semantic?: { startedOn?: unknown; completedOn?: unknown } | null;
+  } | null;
+  const parsed = reportingWindowSnapshotSchema.safeParse(snapshot?.semantic);
+  const earliestStartTime = parsed.success
+    ? new Date(parsed.data.startedOn)
+    : new Date(NaN);
+  const latestEndTime = parsed.success
+    ? new Date(parsed.data.completedOn)
+    : new Date(NaN);
+  if (Number.isNaN(earliestStartTime.getTime()) || Number.isNaN(latestEndTime.getTime())) {
+    throw new SafeError(
+      "Stale submission cannot be resumed because its reporting-window snapshot does not match the current schema.",
+    );
+  }
+  return { earliestStartTime, latestEndTime };
 }
