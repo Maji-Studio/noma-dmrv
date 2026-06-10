@@ -10,10 +10,10 @@ import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import {
   listComponentBlueprints,
   listProjects,
-  listRemovalTemplates,
+  listGhgEntryTemplates,
   type IsometricComponentBlueprint,
   type IsometricProject,
-  type IsometricRemovalTemplate,
+  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
 
@@ -43,7 +43,7 @@ vi.mock("@/lib/isometric", async () => {
   return {
     ...actual,
     listProjects: vi.fn(),
-    listRemovalTemplates: vi.fn(),
+    listGhgEntryTemplates: vi.fn(),
     listComponentBlueprints: vi.fn(),
   };
 });
@@ -54,7 +54,7 @@ const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetLegs = vi.mocked(getTransportLegsForEntities);
 const mockedListProjects = vi.mocked(listProjects);
-const mockedListTemplates = vi.mocked(listRemovalTemplates);
+const mockedListTemplates = vi.mocked(listGhgEntryTemplates);
 const mockedListBlueprints = vi.mocked(listComponentBlueprints);
 
 const USER_ID = "user-1";
@@ -88,7 +88,7 @@ function project(id: string): IsometricProject {
 function template(
   id: string,
   blueprintKeys: string[] = [],
-): IsometricRemovalTemplate {
+): IsometricGhgEntryTemplate {
   return {
     id,
     name: `Template ${id}`,
@@ -104,7 +104,7 @@ function template(
         })),
       },
     ],
-  } as unknown as IsometricRemovalTemplate;
+  } as unknown as IsometricGhgEntryTemplate;
 }
 
 function blueprint(key: string): IsometricComponentBlueprint {
@@ -324,7 +324,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 function transportTemplate(
   id: string,
   omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
-): IsometricRemovalTemplate {
+): IsometricGhgEntryTemplate {
   const categories = [
     {
       key: "biomass-feedstock-transport",
@@ -368,7 +368,7 @@ function transportTemplate(
         },
       ],
     })),
-  } as unknown as IsometricRemovalTemplate;
+  } as unknown as IsometricGhgEntryTemplate;
 }
 
 describe("requiredTransportCategories", () => {

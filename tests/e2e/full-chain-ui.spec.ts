@@ -602,9 +602,14 @@ test.describe("Full Chain UI Smoke Test", () => {
         await firstAppLabel.click();
       }
 
-      await page.selectOption('select[name="durabilityOption"]', "200_year");
-      // H:Corg ratio is required for 200-year durability
-      await page.fill('input[name="hToCorgRatio"]', "0.4");
+      // Durability is snapshotted from the facility default (200_year) and
+      // rendered read-only; H:Corg is derived from linked samples server-side.
+      await expect(
+        page.locator('input[name="durabilityOption"]')
+      ).toHaveValue("200_year");
+      await expect(
+        page.locator('[role="dialog"]').getByText("200-Year (H:Corg)")
+      ).toBeVisible();
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);

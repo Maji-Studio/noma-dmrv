@@ -4,8 +4,10 @@
 > submission path: the submission-ledger claim choreography, the registry
 > create-or-reconcile call, and a fake registry adapter for boundary tests.
 > Correctness work, not cleanup — motivated by real drift between the Removal
-> and GHG Statement pipelines, and by the planned move to multiple
-> users/operator groups (more concurrency on exactly these paths).
+> and GHG Statement pipelines, reachable at today's scale. A future move to
+> multiple users/operator groups (not yet committed — see
+> `auth/facility-access-model` in `docs/open-questions.md`) would only raise
+> the concurrency stakes on these same paths.
 > **Phase 1 interface settled 2026-06-10** via a design-it-twice review
 > (four independent designs — minimal / flexible / common-caller /
 > ports-and-adapters — compared and hybridized; decisions recorded in
@@ -46,8 +48,10 @@ correctness gap, not a style gap:
    instead of POSTing again* — is asserted only against hand-wired mocks, never
    against a registry-shaped counterparty.
 
-Multi-tenancy raises the stakes on all three: more users means concurrent
-submits stop being a two-tabs edge case.
+All three are reachable at today's scale — two tabs, a double-click, or a
+retry is enough. If multiple users/operator groups ever land (an open
+product question, tracked as `auth/facility-access-model` in
+`docs/open-questions.md`), the stakes only rise.
 
 ## Vocabulary
 
@@ -156,13 +160,19 @@ claimSubmissionDraft<H>(userId: string, args: {
   is Postgres locking/visibility (`FOR UPDATE` queueing, READ COMMITTED
   visibility, advisory-lock semantics, cross-module interleaving with
   mirror/unlink/admin-repoint flows) — an in-memory adapter is more likely
-  to lie than help. Internal seam; test against real Postgres.
+  to lie than help. Internal seam; test against real Postgres. Recorded as
+  [ADR 0008](../adr/0008-submission-ledger-internal-seam.md).
 - **Deferred: telemetry.** The proven extension path (from the review's
   "flexible" design) is an opt-in `stepResume` config plus a return-type
   overload so only opted-in callers see `resume-poll-existing`/
   `resume-re-put`. Add it when telemetry migrates, not before. Until then
-  `submit-telemetry.ts` keeps using the relocated primitives, which stay
-  exported for it alone.
+  `submit-telemetry.ts` keeps using the relocated primitives — with the
+  boundary explicit in code, not convention: the primitives are **not
+  re-exported from any barrel**, each carries a
+  `// TODO(telemetry-migration): module-private once submit-telemetry adopts
+  claimSubmissionDraft — do not add importers` comment, and
+  `submit-telemetry.ts` stays their only importer (verify with a grep in the
+  migration PRs).
 
 **Implementation order:**
 
@@ -170,8 +180,10 @@ claimSubmissionDraft<H>(userId: string, args: {
    `certification-submissions.ts` (`getLatestSubmission[InTx]`,
    `insertDraftSubmission*`, `resetSubmissionToDraft*`,
    `lockAndVerifyMapping`, the unique-violation guard, `LOCK_TTL_MS`), then
-   implement `claimSubmissionDraft` on top. Primitives become module-private
-   except where telemetry still needs them.
+   implement `claimSubmissionDraft` on top. Primitives become module-private;
+   the ones telemetry still needs stay exported under the explicit boundary
+   described in the telemetry-deferral decision above (no barrel re-export,
+   `TODO(telemetry-migration)` comment, single permitted importer).
 2. **DB-backed tests** for `claimSubmissionDraft` using the existing
    Postgres test harness (vitest + `.env.test` `DATABASE_URL` via
    `tests/setup.ts`; per-run fixture style of

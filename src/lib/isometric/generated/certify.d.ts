@@ -136,7 +136,7 @@ export interface paths {
         head?: never;
         /**
          * Patch Component
-         * @description Creates a component in the Isometric system. Associated removals will be recalculated, if they are not in an immutable state.
+         * @description Updates a component in the Isometric system. Associated GHG entries will be recalculated, if they are not in an immutable state.
          */
         patch: operations["patch_component_components__id__patch"];
         trace?: never;
@@ -254,6 +254,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/datapoints/{id}/ghg_entry_template_components": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Datapoint Ghg Entry Template Components
+         * @description Lists GHG entry template components that use this datapoint
+         */
+        get: operations["get_datapoint_ghg_entry_template_components_datapoints__id__ghg_entry_template_components_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/datapoints/{id}/removal_template_components": {
         parameters: {
             query?: never;
@@ -263,6 +283,7 @@ export interface paths {
         };
         /**
          * Get Datapoint Removal Template Components
+         * @deprecated
          * @description Lists removal template components that use this datapoint
          */
         get: operations["get_datapoint_removal_template_components_datapoints__id__removal_template_components_get"];
@@ -401,6 +422,72 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/ghg_entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ghg Entries */
+        get: operations["get_ghg_entries_ghg_entries_get"];
+        put?: never;
+        /** Post Ghg Entry */
+        post: operations["post_ghg_entry_ghg_entries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ghg_entries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ghg Entry */
+        get: operations["get_ghg_entry_ghg_entries__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Ghg Entry
+         * @description This endpoint deletes a GHG entry - this is irreversible and the entry cannot be recovered.
+         *
+         *     It will return an error if the GHG entry is not in DRAFT status.
+         */
+        delete: operations["delete_ghg_entry_ghg_entries__id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Ghg Entry
+         * @description Updates a GHG entry in the Isometric system. The GHG entry will be recalculated, if it is not in an immutable state.
+         */
+        patch: operations["patch_ghg_entry_ghg_entries__id__patch"];
+        trace?: never;
+    };
+    "/ghg_entries/{id}/component_attributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ghg Entry Components */
+        get: operations["get_ghg_entry_components_ghg_entries__id__component_attributions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Ghg Entry Components
+         * @description Change component attributions for the GHG entry.
+         */
+        patch: operations["patch_ghg_entry_components_ghg_entries__id__component_attributions_patch"];
         trace?: never;
     };
     "/ghg_statement_components": {
@@ -547,6 +634,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/measurement_samples/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Measurement Sample
+         * @description Deletes a measurement sample in the Isometric system.
+         */
+        delete: operations["delete_measurement_sample_measurement_samples__id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organisation": {
         parameters: {
             query?: never;
@@ -658,6 +765,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/project_components/{component_id}/ghg_entry_attributions/{ghg_entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Project Component Ghg Entry Attribution
+         * @description Removes all attribution of a project component to a GHG entry.
+         */
+        delete: operations["delete_project_component_ghg_entry_attribution_project_components__component_id__ghg_entry_attributions__ghg_entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/project_components/{component_id}/removal_attributions/{removal_id}": {
         parameters: {
             query?: never;
@@ -670,9 +797,30 @@ export interface paths {
         post?: never;
         /**
          * Delete Project Component Removal Attribution
+         * @deprecated
          * @description Removes all attribution of a project component to a removal.
          */
         delete: operations["delete_project_component_removal_attribution_project_components__component_id__removal_attributions__removal_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/project_components/{id}/ghg_entry_attributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Project Component Ghg Entry Attribution
+         * @description Manually attributes or removes attribution of a project component to a GHG entry.
+         */
+        post: operations["post_project_component_ghg_entry_attribution_project_components__id__ghg_entry_attributions_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -689,6 +837,7 @@ export interface paths {
         put?: never;
         /**
          * Post Project Component Removal Attribution
+         * @deprecated
          * @description Manually attributes or removes attribution of a project component to a removal.
          */
         post: operations["post_project_component_removal_attribution_project_components__id__removal_attributions_post"];
@@ -730,6 +879,46 @@ export interface paths {
          * @description Lists all monitoring requirements for a project.
          */
         get: operations["get_project_monitoring_requirements_projects__id__monitoring_requirements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/ghg_entry_templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ghg Entry Templates
+         * @description Lists all GHG entry templates within the given project
+         */
+        get: operations["get_ghg_entry_templates_projects__project_id__ghg_entry_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/ghg_entry_templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ghg Entry Template
+         * @description Gets a single GHG entry template within the given project
+         */
+        get: operations["get_ghg_entry_template_projects__project_id__ghg_entry_templates__id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -814,6 +1003,7 @@ export interface paths {
         };
         /**
          * Get Removal Templates
+         * @deprecated
          * @description Lists all removal templates within the given project
          */
         get: operations["get_removal_templates_projects__project_id__removal_templates_get"];
@@ -834,6 +1024,7 @@ export interface paths {
         };
         /**
          * Get Removal Template
+         * @deprecated
          * @description Gets a single removal template within the given project
          */
         get: operations["get_removal_template_projects__project_id__removal_templates__id__get"];
@@ -924,10 +1115,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Removals */
+        /**
+         * Get Removals
+         * @deprecated
+         */
         get: operations["get_removals_removals_get"];
         put?: never;
-        /** Post Removal */
+        /**
+         * Post Removal
+         * @deprecated
+         */
         post: operations["post_removal_removals_post"];
         delete?: never;
         options?: never;
@@ -942,12 +1139,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Removal */
+        /**
+         * Get Removal
+         * @deprecated
+         */
         get: operations["get_removal_removals__id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Removal
+         * @deprecated
          * @description This endpoint deletes a removal - this is irreversible and the removal cannot be recovered.
          *
          *     It will return an error if the removal is not in DRAFT status.
@@ -957,6 +1158,7 @@ export interface paths {
         head?: never;
         /**
          * Patch Removal
+         * @deprecated
          * @description Updates a removal in the Isometric system. The removal will be recalculated, if it is are not in an immutable state.
          */
         patch: operations["patch_removal_removals__id__patch"];
@@ -969,7 +1171,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Removal Components */
+        /**
+         * Get Removal Components
+         * @deprecated
+         */
         get: operations["get_removal_components_removals__id__component_attributions_get"];
         put?: never;
         post?: never;
@@ -978,6 +1183,7 @@ export interface paths {
         head?: never;
         /**
          * Patch Removal Components
+         * @deprecated
          * @description Change component attributions for the removal.
          */
         patch: operations["patch_removal_components_removals__id__component_attributions_patch"];
@@ -1212,6 +1418,8 @@ export interface components {
              */
             application_date: string;
             average_application_rate: components["schemas"]["ScalarQuantity"];
+            /** Ghg Entry Id */
+            ghg_entry_id: string | null;
             /**
              * Id
              * @example bse_1F1FDSGPE1S0374B
@@ -1260,6 +1468,11 @@ export interface components {
             /** Display Name */
             display_name: string;
             /**
+             * Ghg Entry Template Component Id
+             * @description The ID of the GHG entry template component, if this component was created via a template. May be null if the component was created directly, or if the template has been deleted.
+             */
+            ghg_entry_template_component_id: string | null;
+            /**
              * Id
              * @example cmp_1EP2SB7MZ1S036PY
              * @example cmp_1EP2SB7MZ1S036PY
@@ -1273,6 +1486,7 @@ export interface components {
             inputs: (components["schemas"]["ComponentListInput"] | components["schemas"]["ComponentScalarInput"])[];
             /**
              * Removal Template Component Id
+             * @deprecated
              * @description The ID of the removal template component, if this component was created via a template. May be null if the component was created directly, or if the template has been deleted.
              */
             removal_template_component_id: string | null;
@@ -1299,6 +1513,18 @@ export interface components {
              */
             component_id: string;
             /**
+             * Ghg Entry Id
+             * @example rmv_1EEM6NJXX1S0EXKD
+             * @example rmv_1EEM6NJXX1S0EXKD
+             * @example rmv_1E3V4J2EWSBX5E82
+             */
+            ghg_entry_id: string;
+            /**
+             * Ghg Entry Template Component Id
+             * @description The ID of the GHG entry template component, if this component was created via a template. May be null if the component was created directly, or if the template has been deleted.
+             */
+            ghg_entry_template_component_id: string | null;
+            /**
              * Id
              * @example rvc_1EADHFQHM1S0TVMN
              * @example rvc_1EADHFQHM1S0TVMN
@@ -1307,6 +1533,8 @@ export interface components {
             id: string;
             /**
              * Removal Id
+             * @deprecated
+             * @description Deprecated, please use `ghg_entry_id` instead. The ID of the removal GHG entry that this component attribution is associated with.
              * @example rmv_1EEM6NJXX1S0EXKD
              * @example rmv_1EEM6NJXX1S0EXKD
              * @example rmv_1E3V4J2EWSBX5E82
@@ -1314,7 +1542,8 @@ export interface components {
             removal_id: string;
             /**
              * Removal Template Component Id
-             * @description The ID of the removal template component, if this component was created via a template. May be null if the component was created directly, or if the template has been deleted.
+             * @deprecated
+             * @description Deprecated, please use `ghg_entry_template_component_id` instead. The ID of the removal template component, if this component was created via a template. May be null if the component was created directly, or if the template has been deleted.
              */
             removal_template_component_id: string | null;
         };
@@ -1421,7 +1650,7 @@ export interface components {
             datapoint_ids: string[];
             /**
              * Input Key
-             * @description Will match an input key in the component blueprint.
+             * @description An input key from the component blueprint.
              */
             input_key: string;
         };
@@ -1444,7 +1673,7 @@ export interface components {
             datapoint_id: string;
             /**
              * Input Key
-             * @description Will match an input key in the component blueprint.
+             * @description An input key from the component blueprint.
              */
             input_key: string;
         };
@@ -1544,7 +1773,7 @@ export interface components {
             datapoint_ids: string[];
             /**
              * Input Key
-             * @description Must match an input key in the component blueprint.
+             * @description An input key from the component blueprint.
              */
             input_key: string;
         };
@@ -1612,7 +1841,7 @@ export interface components {
             datapoint_id: string;
             /**
              * Input Key
-             * @description Must match an input key in the component blueprint.
+             * @description An input key from the component blueprint.
              */
             input_key: string;
         };
@@ -1686,6 +1915,11 @@ export interface components {
              * @description The content type of the file that will be uploaded. This must also be passed as a `Content-Type` header during the upload. The pre-signed URL will only accept a file of this content-type. See the [list of supported filetypes](/api-reference/certify/uploading-sources#supported-filetypes).
              */
             content_type: string;
+            /**
+             * Description
+             * @description An optional description of the source document.
+             */
+            description?: string | null;
             /** Display Name */
             display_name: string;
             /**
@@ -1765,6 +1999,52 @@ export interface components {
              * @description The original filename of the file that will be uploaded. This is used for display purposes only and does not affect the upload process.
              */
             file_name: string;
+        };
+        /** CreateGhgEntryRequest */
+        CreateGhgEntryRequest: {
+            /**
+             * Completed On
+             * Format: date
+             * @description The date by which activities related to this GHG entry finished.
+             */
+            completed_on: string;
+            /**
+             * Feedstock Type Id
+             * @description The ID of the feedstock type that will be used for this GHG entry.
+             */
+            feedstock_type_id?: string | null;
+            /**
+             * Ghg Entry Template Components
+             * @description Component input values keyed by GHG entry template component.
+             */
+            ghg_entry_template_components?: components["schemas"]["GhgEntryTemplateComponentInputs"][];
+            /**
+             * Ghg Entry Template Id
+             * @description ID of the GHG entry template to instantiate the GHG entry from.
+             * @example rvt_1EVC8RZFE1S0BAT6
+             * @example rvt_1EVC8RZFE1S0BAT6
+             * @example rvt_1ECDZGE2DSBX88EX
+             */
+            ghg_entry_template_id: string;
+            /**
+             * Project Id
+             * @description The ID of the project to associate this GHG entry to.
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /**
+             * Started On
+             * Format: date
+             * @description The date at which activities related to this GHG entry started.
+             */
+            started_on: string;
+            /**
+             * Supplier Reference Id
+             * @description A string that must be unique for all resources created by a specific supplier. It can be used by a client to identify the correct objects in their system.
+             */
+            supplier_reference_id: string;
         };
         /** CreateGhgStatementComponentRequest */
         CreateGhgStatementComponentRequest: {
@@ -2132,6 +2412,24 @@ export interface components {
              */
             supplier_reference_id: string | components["schemas"]["Undefined"];
         };
+        /** CreditAllocation */
+        CreditAllocation: {
+            /**
+             * Buffer Pool Contribution Kg
+             * @description The number of credits (in kg CO₂e) contributed to the buffer pool, computed as risk_of_reversal_percentage × total issuable credits.
+             */
+            buffer_pool_contribution_kg: number;
+            /**
+             * Supplier Allocation Kg
+             * @description The number of credits (in kg CO₂e) issued to the supplier, computed as total issuable credits minus buffer pool contribution.
+             */
+            supplier_allocation_kg: number;
+        };
+        /**
+         * CreditType
+         * @enum {string}
+         */
+        CreditType: "REDUCTION" | "REMOVAL";
         /** DataUploadSubmission */
         DataUploadSubmission: {
             /**
@@ -2198,7 +2496,7 @@ export interface components {
          * @description Represents the locked status of a Datapoint. Locked Datapoints cannot be updated: if an updated version of a data input is required then a new Datapoint must be created.
          * @enum {string}
          */
-        DatapointLockedStatus: "not_locked" | "locked_library_datapoint" | "locked_time_series_datapoint" | "locked_measurement_sample_datapoint" | "locked_forestry_field_measurement_datapoint" | "locked_model_output_datapoint" | "locked_model_input_datapoint" | "locked_used_in_verified_removal";
+        DatapointLockedStatus: "not_locked" | "locked_library_datapoint" | "locked_time_series_datapoint" | "locked_measurement_sample_datapoint" | "locked_forestry_field_measurement_datapoint" | "locked_model_output_datapoint" | "locked_model_input_datapoint" | "locked_material_datapoint" | "locked_activity_datapoint" | "locked_used_in_verified_removal";
         /** DatapointQuantityInput */
         DatapointQuantityInput: {
             /** Magnitude */
@@ -2281,11 +2579,213 @@ export interface components {
          * Frequency
          * @enum {string}
          */
-        Frequency: "na" | "once" | "optional" | "if_needed" | "every_1_days" | "every_1_months" | "every_2_weeks" | "every_3_months" | "every_6_months" | "every_2_years" | "every_5_years";
+        Frequency: "na" | "once" | "optional" | "if_needed" | "every_1_days" | "every_1_months" | "every_2_weeks" | "every_3_months" | "every_6_months" | "every_1_years" | "every_2_years" | "every_5_years";
+        /** GhgEntry */
+        GhgEntry: {
+            /**
+             * Co2E Net Removed Kg
+             * @description The CO₂e removed by this GHG entry once uncertainty discounting has been applied
+             */
+            co2e_net_removed_kg: number;
+            /**
+             * Co2E Net Removed Standard Deviation Kg
+             * @description The standard deviation of the CO₂e net removed and therefore the uncertainty discount applied to the GHG entry
+             */
+            co2e_net_removed_standard_deviation_kg: number | null;
+            /**
+             * Co2E Net Removed Without Discount Kg
+             * @description The CO₂e removed by this GHG entry before any uncertainty discounting has been applied
+             */
+            co2e_net_removed_without_discount_kg: number;
+            /**
+             * Completed On
+             * Format: date
+             */
+            completed_on: string;
+            /** @description The split of issuable credits between the supplier and buffer pool. Null when risk_of_reversal_percentage is not set. */
+            credit_allocation: components["schemas"]["CreditAllocation"] | null;
+            /**
+             * @example REMOVAL
+             * @example REMOVAL
+             * @example REDUCTION
+             */
+            credit_type: components["schemas"]["CreditType"];
+            /**
+             * Feedstock Type Id
+             * @description The feedstock type ID that this entry is associated with.
+             */
+            feedstock_type_id: string | null;
+            /**
+             * Ghg Statement Id
+             * @description The GHG statement ID that this entry is associated with. If null, the entry is in draft and has not been submitted for verification.
+             */
+            ghg_statement_id: string | null;
+            /**
+             * Id
+             * @example rmv_1EEM6NJXX1S0EXKD
+             * @example rmv_1EEM6NJXX1S0EXKD
+             * @example rmv_1E3V4J2EWSBX5E82
+             */
+            id: string;
+            /**
+             * Risk Of Reversal Percentage
+             * @description The percentage of credits contributed to the buffer pool due to risk of reversal.
+             */
+            risk_of_reversal_percentage: number | null;
+            /**
+             * Started On
+             * Format: date
+             */
+            started_on: string;
+            /** Supplier Reference Id */
+            supplier_reference_id: string | null;
+        };
+        /** GhgEntryComponentToAttribute */
+        GhgEntryComponentToAttribute: {
+            /**
+             * Attribution Factor
+             * @description A float in range of (0, 1] for the fraction of the CO2e flux of the component that is to be attributed to this GHG entry. 1.0 means all of the component should be attributed. If not supplied, defaults to 1.0.
+             * @default 1
+             */
+            attribution_factor: number;
+            /**
+             * Component Group Key
+             * @description Key of a component group that this component should be applied to in the GHG entry.
+             * @example bio-oil-storage
+             * @example energy-use
+             * @example dac-process
+             */
+            component_group_key: string;
+            /**
+             * Component Id
+             * @description ID of the component to add to the GHG entry.
+             * @example cmp_1EP2SB7MZ1S036PY
+             * @example cmp_1EP2SB7MZ1S036PY
+             * @example cmp_1EHK4R6QJSBXFC5N
+             */
+            component_id: string;
+        };
+        /** GhgEntryTemplate */
+        GhgEntryTemplate: {
+            /**
+             * @example REMOVAL
+             * @example REMOVAL
+             * @example REDUCTION
+             */
+            credit_type: components["schemas"]["CreditType"];
+            /** Display Name */
+            display_name: string;
+            /** Groups */
+            groups: components["schemas"]["GhgEntryTemplateComponentGroup"][];
+            /**
+             * Id
+             * @example rvt_1EVC8RZFE1S0BAT6
+             * @example rvt_1EVC8RZFE1S0BAT6
+             * @example rvt_1ECDZGE2DSBX88EX
+             */
+            id: string;
+            /**
+             * Project Id
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1CTWZQGKE1S0VAXA
+             * @example prj_1E0QTWB22SBX34D1
+             */
+            project_id: string;
+            /** Supplier Reference Id */
+            supplier_reference_id: string | null;
+        };
+        /** GhgEntryTemplateComponent */
+        GhgEntryTemplateComponent: {
+            /** Blueprint Key */
+            blueprint_key: string;
+            /** Description */
+            description: string | null;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Ghg Entry Template Component Group Id
+             * @example rtg_1EGQ9DZXZ1S05S28
+             * @example rtg_1EGQ9DZXZ1S05S28
+             * @example rtg_1CWEFDQ7GSBX1X5C
+             */
+            ghg_entry_template_component_group_id: string;
+            /**
+             * Ghg Entry Template Id
+             * @example rvt_1EVC8RZFE1S0BAT6
+             * @example rvt_1EVC8RZFE1S0BAT6
+             * @example rvt_1ECDZGE2DSBX88EX
+             */
+            ghg_entry_template_id: string;
+            /**
+             * Id
+             * @example rtc_1DAA58EDM1S0AMPN
+             * @example rtc_1DAA58EDM1S0AMPN
+             * @example rtc_1CQAKRCVQSBXKKTM
+             */
+            id: string;
+            /**
+             * Inputs
+             * @description Inputs for this GHG entry template component based on its component blueprint, including any customized display names and fixed input datapoints.
+             */
+            inputs: components["schemas"]["GhgEntryTemplateComponentInput"][];
+        };
+        /** GhgEntryTemplateComponentGroup */
+        GhgEntryTemplateComponentGroup: {
+            /** Components */
+            components: components["schemas"]["GhgEntryTemplateComponent"][];
+            /** Description */
+            description: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * @example rtg_1EGQ9DZXZ1S05S28
+             * @example rtg_1EGQ9DZXZ1S05S28
+             * @example rtg_1CWEFDQ7GSBX1X5C
+             */
+            id: string;
+            /** Key */
+            key: string;
+        };
+        /** GhgEntryTemplateComponentInput */
+        GhgEntryTemplateComponentInput: {
+            /** Datapoint Id */
+            datapoint_id: string | null;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Input Key
+             * @description The key which identifies an specific input to the component blueprint.
+             */
+            input_key: string;
+            /** @description The type of datapoint value that the input requires. Units compatible with this type can be found in the component blueprint library. */
+            quantity_kind: components["schemas"]["QuantityKindType"];
+            type: components["schemas"]["ComponentInputType"];
+        };
+        /** GhgEntryTemplateComponentInputs */
+        GhgEntryTemplateComponentInputs: {
+            /**
+             * Ghg Entry Template Component Id
+             * @description The ID of the GHG entry template component to provide
+             * @example rtc_1DAA58EDM1S0AMPN
+             * @example rtc_1DAA58EDM1S0AMPN
+             * @example rtc_1CQAKRCVQSBXKKTM
+             */
+            ghg_entry_template_component_id: string;
+            /**
+             * Inputs
+             * @description A list of values for component inputs. Inputs and their keys can be found on the GHG entry template at the `GET /projects/{project_id}/ghg_entry_templates` endpoint.
+             */
+            inputs: (components["schemas"]["CreateComponentListInput"] | components["schemas"]["CreateComponentScalarInput"])[];
+        };
         /** GhgStatement */
         GhgStatement: {
+            /** @description The split of issuable credits between the supplier and buffer pool. None if any entry's risk_of_reversal_percentage is not set. */
+            credit_allocation: components["schemas"]["CreditAllocation"] | null;
             /** Credits Issued At */
             credits_issued_at: string | null;
+            /** Ghg Entry Ids */
+            ghg_entry_ids: string[];
             /** Ghg Statement Report Url */
             ghg_statement_report_url: string | null;
             /**
@@ -2297,7 +2797,7 @@ export interface components {
             id: string;
             /**
              * Pending Total Co2E Removed Kg
-             * @description If the GHG statement has pending changes, this is the net CO₂e removed by the removals in the GHG statement, including any changes that are pending. If the GHG statement has no pending changes, this is None.
+             * @description If the GHG statement has pending changes, this is the net CO₂e removed by the entries in the GHG statement, including any changes that are pending. If the GHG statement has no pending changes, this is None.
              */
             pending_total_co2e_removed_kg: number | null;
             /**
@@ -2307,7 +2807,10 @@ export interface components {
              * @example prj_1E0QTWB22SBX34D1
              */
             project_id: string;
-            /** Removal Ids */
+            /**
+             * Removal Ids
+             * @deprecated
+             */
             removal_ids: string[];
             /**
              * Reporting Period End At
@@ -2355,6 +2858,7 @@ export interface components {
         IsometricIDPathParam_GhgEntry_: components["schemas"]["IsometricIDRequestParam_GhgEntry_"];
         IsometricIDPathParam_GhgStatement_: components["schemas"]["IsometricIDRequestParam_GhgStatement_"];
         IsometricIDPathParam_MeasurementLocation_: components["schemas"]["IsometricIDRequestParam_MeasurementLocation_"];
+        IsometricIDPathParam_MeasurementSample_: components["schemas"]["IsometricIDRequestParam_MeasurementSample_"];
         IsometricIDPathParam_MonitoringRequirement_: components["schemas"]["IsometricIDRequestParam_MonitoringRequirement_"];
         IsometricIDPathParam_MonitoringSubmission_: components["schemas"]["IsometricIDRequestParam_MonitoringSubmission_"];
         IsometricIDPathParam_ProductionBatch_: components["schemas"]["IsometricIDRequestParam_ProductionBatch_"];
@@ -2367,6 +2871,7 @@ export interface components {
         IsometricIDQueryParam_GhgEntryTemplate_: components["schemas"]["IsometricIDRequestParam_GhgEntryTemplate_"];
         IsometricIDQueryParam_GhgEntry_: components["schemas"]["IsometricIDRequestParam_GhgEntry_"];
         IsometricIDQueryParam_GhgStatement_: components["schemas"]["IsometricIDRequestParam_GhgStatement_"];
+        IsometricIDQueryParam_MeasurementSample_: components["schemas"]["IsometricIDRequestParam_MeasurementSample_"];
         IsometricIDQueryParam_Project_: components["schemas"]["IsometricIDRequestParam_Project_"];
         IsometricIDQueryParam_StorageLocation_: components["schemas"]["IsometricIDRequestParam_StorageLocation_"];
         IsometricIDQueryParam_StorageUnit_: components["schemas"]["IsometricIDRequestParam_StorageUnit_"];
@@ -2430,6 +2935,12 @@ export interface components {
          * @example mlc_1GF73PG90SBXKEX1
          */
         IsometricIDRequestParam_MeasurementLocation_: string;
+        /**
+         * @example mts_1D7HS15KD1S03M0Z
+         * @example mts_1D7HS15KD1S03M0Z
+         * @example mts_1FN0MEX2ZSBX40DT
+         */
+        IsometricIDRequestParam_MeasurementSample_: string;
         /**
          * @example mnr_1DJJQY5C61S0R519
          * @example mnr_1DJJQY5C61S0R519
@@ -2535,6 +3046,13 @@ export interface components {
         MeasurementTypeKey: "biochar_production_batch" | "biochar_soil" | "pyrolysis_reactor" | "ew_soil" | "ew_porewater" | "ew_field_biomass" | "ew_mineral_feedstock" | "ew_ion_exchange_resin";
         /** MeasurementValue */
         MeasurementValue: {
+            /**
+             * Datapoint Id
+             * @example dtp_1DVKHKS101S0Q61Q
+             * @example dtp_1DVKHKS101S0Q61Q
+             * @example dtp_1DJN8P57VSBXASFX
+             */
+            datapoint_id: string;
             measurement_property: components["schemas"]["MeasurementProperty"];
             value: components["schemas"]["ScalarQuantity"];
         };
@@ -2653,6 +3171,30 @@ export interface components {
         PaginatedListResource_FeedstockType_: {
             /** Nodes */
             nodes: components["schemas"]["FeedstockType"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[GhgEntryTemplateComponent] */
+        PaginatedListResource_GhgEntryTemplateComponent_: {
+            /** Nodes */
+            nodes: components["schemas"]["GhgEntryTemplateComponent"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[GhgEntryTemplate] */
+        PaginatedListResource_GhgEntryTemplate_: {
+            /** Nodes */
+            nodes: components["schemas"]["GhgEntryTemplate"][];
+            page_info: components["schemas"]["PageInfo"];
+            /** Total Count */
+            total_count: number;
+        };
+        /** PaginatedListResource[GhgEntry] */
+        PaginatedListResource_GhgEntry_: {
+            /** Nodes */
+            nodes: components["schemas"]["GhgEntry"][];
             page_info: components["schemas"]["PageInfo"];
             /** Total Count */
             total_count: number;
@@ -2874,6 +3416,52 @@ export interface components {
              */
             supplier_reference_id: string | components["schemas"]["Undefined"];
         };
+        /** PatchGhgEntryComponentAttributionsRequest */
+        PatchGhgEntryComponentAttributionsRequest: {
+            /**
+             * Components To Add
+             * @description Components to be attributed to the GHG entry.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            components_to_add: components["schemas"]["GhgEntryComponentToAttribute"][] | components["schemas"]["Undefined"];
+            /**
+             * Components To Remove
+             * @description Components to be fully removed from the GHG entry.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            components_to_remove: string[] | components["schemas"]["Undefined"];
+        };
+        /** PatchGhgEntryRequest */
+        PatchGhgEntryRequest: {
+            /**
+             * Completed On
+             * @description The date by which activities related to this GHG entry finished.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            completed_on: string | components["schemas"]["Undefined"];
+            /**
+             * Feedstock Type Id
+             * @description ID of the feedstock type for the GHG entry.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            feedstock_type_id: string | components["schemas"]["Undefined"];
+            /**
+             * Started On
+             * @description The date at which activities related to this GHG entry started.
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            started_on: string | components["schemas"]["Undefined"];
+        };
         /** PatchRemovalComponentAttributionsRequest */
         PatchRemovalComponentAttributionsRequest: {
             /**
@@ -2938,6 +3526,13 @@ export interface components {
         };
         /** PatchSourceRequest */
         PatchSourceRequest: {
+            /**
+             * Description
+             * @default {
+             *       "__typename": "Undefined"
+             *     }
+             */
+            description: string | components["schemas"]["Undefined"] | null;
             /**
              * Display Name
              * @default {
@@ -3091,19 +3686,17 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Process Key */
-            process_key: string;
             risk_of_reversal: components["schemas"]["RiskOfReversal"] | null;
             /** Short Description */
             short_description: string | null;
         };
         /**
          * ProjectComponentAmortizationStrategy
-         * @description Strategies which control how Project Emissions are automatically amortized and attributed to GHG Statement and Removals
+         * @description Strategies which control how Project Emissions are automatically amortized and attributed to GHG Statement and GHG entries
          *
          *     ESTIMATED_PROJECT_TONNAGE - Automatic amortization ensuring full amortization in proportion to the project's estimated gross removal.
          *
-         *     MANUAL - No automatic amortization. All GHG Statement and Removal attributions are performed manually.
+         *     MANUAL - No automatic amortization. All GHG Statement and GHG entry attributions are performed manually.
          *
          *     CUSTOM_TIME_PERIOD - Automatic amortization ensuring full amortization by a specified target date.
          *
@@ -3137,7 +3730,7 @@ export interface components {
          * QuantityKindQualifierType
          * @enum {string}
          */
-        QuantityKindQualifierType: "base_saturation_ca_2plus" | "base_saturation_k_plus" | "base_saturation_mg_2plus" | "base_saturation_na_plus" | "base_saturation_major_cations" | "max_limit" | "min_limit" | "flue_stack_emissions" | "pyrolysis_reactor_emissions" | "material_condition_dry" | "material_condition_wet" | "hydrogen_to_organic_carbon_ratio" | "inertinite_fraction" | "poorly_carbonized_fraction" | "semi_inertinite_fraction" | "ash_content" | "loss_on_ignition" | "porosity" | "volatile_matter" | "radiation_normalization_method_gamma_activity_concentration_idx" | "cation_exchange_capacity" | "potential_acidity" | "gross_alpha" | "gross_beta" | "radiation_normalization_method_ec_rp112_standard_room_model" | "anion_cl_1minus" | "anion_no3_1minus" | "anion_po4_3minus" | "anion_so4_2minus" | "cation_ca_2plus" | "cation_k_1plus" | "cation_mg_2plus" | "cation_na_1plus" | "heptacdd_1234678" | "heptacdf_1234678" | "heptacdf_1234789" | "hexacdd_123478" | "hexacdf_123478" | "hexacdd_123678" | "hexacdf_123678" | "hexacdd_123789" | "hexacdf_123789" | "pentacdd_12378" | "pentacdf_12378" | "hexacdf_234678" | "pentacdf_23478" | "tetracdd_2378" | "tetracdf_2378" | "compound_ch4" | "compound_co" | "compound_co2" | "compound_cao" | "compound_h2" | "compound_h2o" | "compound_h2s" | "compound_k2o" | "compound_mgo" | "compound_n2" | "compound_n2o" | "compound_na2o" | "compound_o2" | "compound_p2o5" | "compound_so4" | "acenaphthene" | "acenaphthylene" | "anthracene" | "benz_a_anthracene" | "benzo_a_pyrene" | "benzo_b_fluoranthene" | "benzo_e_pyrene" | "benzo_ghi_perylene" | "benzo_j_fluoranthene" | "benzo_k_fluoranthene" | "cfc_11" | "cfc_111" | "cfc_1112" | "cfc_1112a" | "cfc_112" | "cfc_112a" | "cfc_113" | "cfc_113a" | "cfc_114" | "cfc_114a" | "cfc_115" | "cfc_12" | "cfc_13" | "cfc_211" | "cfc_212" | "cfc_213" | "cfc_214" | "cfc_215" | "cfc_216" | "cfc_217" | "chrysene" | "dibenz_ah_anthracene" | "e_r316c" | "fluoranthene" | "fluorene" | "hcfc_121" | "hcfc_122" | "hcfc_122a" | "hcfc_123" | "hcfc_123a" | "hcfc_124" | "hcfc_124a" | "hcfc_131" | "hcfc_132" | "hcfc_132a" | "hcfc_132c" | "hcfc_133" | "hcfc_133a" | "hcfc_141" | "hcfc_141b" | "hcfc_142" | "hcfc_142b" | "hcfc_151" | "hcfc_21" | "hcfc_22" | "hcfc_221" | "hcfc_222" | "hcfc_223" | "hcfc_224" | "hcfc_225" | "hcfc_225ca" | "hcfc_225cb" | "hcfc_226" | "hcfc_231" | "hcfc_232" | "hcfc_233" | "hcfc_234" | "hcfc_235" | "hcfc_241" | "hcfc_242" | "hcfc_243" | "hcfc_244" | "hcfc_251" | "hcfc_252" | "hcfc_253" | "hcfc_261" | "hcfc_262" | "hcfc_271" | "hcfc_31" | "hcfo_1233zd_e" | "hcfo_1233zd_z" | "hfc_125" | "hfc_134" | "hfc_134a" | "hfc_143" | "hfc_143a" | "hfc_152" | "hfc_152a" | "hfc_161" | "hfc_227ca" | "hfc_227ea" | "hfc_23" | "hfc_236cb" | "hfc_236ea" | "hfc_236fa" | "hfc_245ca" | "hfc_245cb" | "hfc_245ea" | "hfc_245eb" | "hfc_245fa" | "hfc_263fb" | "hfc_272ca" | "hfc_32" | "hfc_329p" | "hfc_365mfc" | "hfc_41" | "hfc_43_10mee" | "indeno_123_cd_pyrene" | "naphthalene" | "octacdd" | "octacdf" | "pcb_101" | "pcb_105" | "pcb_114" | "pcb_118" | "pcb_123" | "pcb_126" | "pcb_138" | "pcb_153" | "pcb_156" | "pcb_157" | "pcb_167" | "pcb_169" | "pcb_180" | "pcb_189" | "pcb_28" | "pcb_52" | "pcb_77" | "pcb_81" | "phenanthrene" | "pyrene" | "z_r316c" | "cfc" | "hcfc" | "hfc" | "i_teq_nato_ccms_lower_bound" | "i_teq_nato_ccms_upper_bound" | "total_16_epa_pah_excl_loq" | "total_6_ndl_pcb_lower_bound" | "total_6_ndl_pcb_upper_bound" | "total_7_indicator_pcb_lower_bound" | "total_7_indicator_pcb_upper_bound" | "total_8_efsa_pah_excl_loq" | "who_2005_pcb_teq_lower_bound" | "who_2005_pcb_teq_upper_bound" | "who_2005_pcdd_f_pcb_teq_lower_bound" | "who_2005_pcdd_f_pcb_teq_upper_bound" | "who_2005_pcdd_f_teq_lower_bound" | "who_2005_pcdd_f_teq_upper_bound" | "element_al" | "element_as" | "element_b" | "element_ba" | "element_ca" | "element_cd" | "element_ce" | "element_co" | "element_cr" | "element_cs" | "element_cu" | "element_eu" | "element_fe" | "element_h" | "element_hf" | "element_hg" | "element_k" | "element_la" | "element_lu" | "element_mg" | "element_mn" | "element_mo" | "element_n" | "element_na" | "element_nb" | "element_nd" | "element_ni" | "element_o" | "element_p" | "element_pb" | "element_rb" | "element_s" | "element_sb" | "element_sc" | "element_se" | "element_si" | "element_sn" | "element_sr" | "element_ta" | "element_tb" | "element_th" | "element_ti" | "element_tl" | "element_u" | "element_v" | "element_w" | "element_y" | "element_yb" | "element_zn" | "element_zr" | "alkalinity" | "dissolved_inorganic_carbon" | "dissolved_organic_carbon" | "fixed_carbon" | "particulate_inorganic_carbon" | "particulate_organic_carbon" | "soil_inorganic_carbon" | "soil_organic_carbon" | "soil_organic_matter" | "total_carbon" | "total_inorganic_carbon" | "total_organic_carbon" | "ghg_aggregate_co2e" | "biochar" | "crop_yield" | "mineral_albite" | "mineral_andesine" | "mineral_augite" | "mineral_diopside" | "mineral_hematite" | "mineral_labradorite" | "mineral_maghemite" | "mineral_montmorillonite" | "mineral_orthoclase" | "mineral_pigeonite" | "mineral_quartz" | "mineral_rutile" | "mineral_category_asbestiform" | "mineral_category_asbestos" | "clay" | "sand" | "silt" | "fullness_empty" | "fullness_filled" | "genus_abarema" | "genus_acacia" | "genus_albizia" | "genus_amaioua" | "genus_ambelania" | "genus_anacardium" | "genus_andira" | "genus_aniba" | "genus_annona" | "genus_apeiba" | "genus_aspidosperma" | "genus_astrocaryum" | "genus_attalea" | "genus_bactris" | "genus_banara" | "genus_bauhinia" | "genus_bellucia" | "genus_bombax" | "genus_bowdichia" | "genus_brosimum" | "genus_brunfelsia" | "genus_buchenavia" | "genus_byrsonima" | "genus_caraipa" | "genus_cariniana" | "genus_caryocar" | "genus_casearia" | "genus_cassia" | "genus_cecropia" | "genus_cheiloclinium" | "genus_clarisia" | "genus_clitoria" | "genus_clusia" | "genus_coccoloba" | "genus_combretum" | "genus_commiphora" | "genus_copaifera" | "genus_cordia" | "genus_couepia" | "genus_couma" | "genus_couratari" | "genus_croton" | "genus_cupania" | "genus_cybianthus" | "genus_dimorphandra" | "genus_dinizia" | "genus_diospyros" | "genus_diplotropis" | "genus_duguetia" | "genus_duroia" | "genus_emmotum" | "genus_endopleura" | "genus_erisma" | "genus_erythroxylum" | "genus_eschweilera" | "genus_eugenia" | "genus_euphorbia" | "genus_faramea" | "genus_ficus" | "genus_garcinia" | "genus_gardenia" | "genus_genipa" | "genus_goupia" | "genus_guarea" | "genus_guatteria" | "genus_handroanthus" | "genus_heisteria" | "genus_himatanthus" | "genus_hirtella" | "genus_hymenaea" | "genus_inga" | "genus_iryanthera" | "genus_isertia" | "genus_jacaranda" | "genus_lacmellea" | "genus_lecythis" | "genus_licania" | "genus_licaria" | "genus_lonchocarpus" | "genus_luehea" | "genus_mabea" | "genus_machaerium" | "genus_macoubea" | "genus_macrolobium" | "genus_manilkara" | "genus_maprounea" | "genus_maquira" | "genus_margaritaria" | "genus_matayba" | "genus_miconia" | "genus_micrandra" | "genus_micropholis" | "genus_mouriri" | "genus_myrcia" | "genus_myrciaria" | "genus_naucleopsis" | "genus_nectandra" | "genus_neea" | "genus_ocotea" | "genus_ormosia" | "genus_ouratea" | "genus_pachira" | "genus_pagamea" | "genus_palicourea" | "genus_parahancornia" | "genus_parkia" | "genus_perebea" | "genus_philocosmos" | "genus_piper" | "genus_piptadenia" | "genus_platonia" | "genus_pourouma" | "genus_pouteria" | "genus_pradosia" | "genus_protium" | "genus_pseudobombax" | "genus_pseudolmedia" | "genus_pseudopiptadenia" | "genus_psychotria" | "genus_pterocarpus" | "genus_rauvolfia" | "genus_rhabdodendron" | "genus_rinorea" | "genus_rinoreocarpus" | "genus_sacoglottis" | "genus_salix" | "genus_samanea" | "genus_senegalia" | "genus_senna" | "genus_simaba" | "genus_siparuna" | "genus_sloanea" | "genus_solanum" | "genus_sorocea" | "genus_sparattosperma" | "genus_sterculia" | "genus_stryphnodendron" | "genus_swartzia" | "genus_tabebuia" | "genus_tabernaemontana" | "genus_tachigali" | "genus_talisia" | "genus_tapirira" | "genus_terminalia" | "genus_ternstroemia" | "genus_theobroma" | "genus_toulicia" | "genus_tovomita" | "genus_trattinnickia" | "genus_trichilia" | "genus_triplaris" | "genus_unonopsis" | "genus_vatairea" | "genus_vernonia" | "genus_virola" | "genus_vismia" | "genus_vitex" | "genus_vochysia" | "genus_xylopia" | "genus_zygia" | "species_abarema_cochleata" | "species_abuta_grandifolia" | "species_acacia_mangium" | "species_acacia_polyacantha" | "species_acridocarpus_katangensis" | "species_afzelia_quanzensis" | "species_albizia_antunesiana" | "species_albizia_versicolor" | "species_alchornea_glandulosa" | "species_alexa_grandiflora" | "species_alibertia_edulis" | "species_allantoma_lineata" | "species_allophylus_africanus" | "species_amaioua_guianensis" | "species_ambelania_acida" | "species_anacardium_giganteum" | "species_anacardium_parvifolium" | "species_anadenanthera_colubrina" | "species_andira_inermis" | "species_andira_surinamensis" | "species_anisophyllea_boehmii" | "species_annona_exsucca" | "species_annona_glabra" | "species_annona_senegalensis" | "species_antidesma_venosum" | "species_aparisthmium_cordatum" | "species_apeiba_echinata" | "species_apeiba_membranacea" | "species_apeiba_petoumo" | "species_apeiba_tibourbou" | "species_apuleia_leiocarpa" | "species_aspidosperma_album" | "species_aspidosperma_nitidum" | "species_aspidosperma_oblongum" | "species_astrocaryum_aculeatum" | "species_astronium_fraxinifolium" | "species_astronium_graveolens" | "species_astronium_lecointei" | "species_attalea_maripa" | "species_azanza_garckeana" | "species_bactris_major" | "species_bactris_maraja" | "species_bagassa_guianensis" | "species_balanites_aegyptiaca" | "species_banara_guianensis" | "species_bauhinia_longipedicellata" | "species_bauhinia_petersiana" | "species_bauhinia_ungulata" | "species_bertholletia_excelsa" | "species_bixa_arborea" | "species_bixa_orellana" | "species_bobgunnia_madagascariensis" | "species_boscia_angustifolia" | "species_bowdichia_nitida" | "species_brachystegia_boehmii" | "species_brachystegia_bussei" | "species_brachystegia_gossweileri" | "species_brachystegia_microphylla" | "species_brachystegia_spiciformis" | "species_brachystegia_stipulata" | "species_brachystegia_taxifolia" | "species_brachystegia_wangermeeana" | "species_bridelia_cathartica" | "species_bridelia_duvigneaudii" | "species_brosimum_guianense" | "species_brosimum_lactescens" | "species_brosimum_rubescens" | "species_buchenavia_tomentosa" | "species_byrsonima_arthropoda" | "species_byrsonima_coccolobifolia" | "species_byrsonima_crassifolia" | "species_byrsonima_crispa" | "species_byrsonima_poeppigiana" | "species_byrsonima_stipulacea" | "species_calophyllum_brasiliense" | "species_calycophyllum_spruceanum" | "species_caraipa_densifolia" | "species_caraipa_punctulata" | "species_carapa_guianensis" | "species_carapa_procera" | "species_carica_papaya" | "species_cariniana_micrantha" | "species_carya_cordiformis" | "species_caryocar_glabrum" | "species_caryocar_villosum" | "species_casearia_arborea" | "species_casearia_decandra" | "species_casearia_sylvestris" | "species_cassia_fastuosa" | "species_cassia_grandis" | "species_cassia_leiandra" | "species_cassia_lucens" | "species_cassia_spruceana" | "species_castanea_mollissima" | "species_cecropia_distachya" | "species_cecropia_obtusa" | "species_cecropia_pachystachya" | "species_cecropia_purpurascens" | "species_cecropia_sciadophylla" | "species_cedrela_fissilis" | "species_cedrela_odorata" | "species_ceiba_pentandra" | "species_ceiba_samauma" | "species_ceiba_speciosa" | "species_cenostigma_tocantinum" | "species_chloroleucon_tortum" | "species_chrysophyllum_sparsiflorum" | "species_clarisia_biflora" | "species_clarisia_racemosa" | "species_clitoria_fairchildiana" | "species_clusia_grandiflora" | "species_colubrina_glandulosa" | "species_combretum_adenogonium" | "species_combretum_collinum" | "species_combretum_molle" | "species_combretum_zeyheri" | "species_commiphora_glandulosa" | "species_connarus_perrottetii" | "species_copaifera_langsdorffii" | "species_copaifera_martii" | "species_copaifera_reticulata" | "species_cordia_alliodora" | "species_cordia_nodosa" | "species_cordia_superba" | "species_couepia_bracteosa" | "species_couepia_glabra" | "species_couma_utilis" | "species_couratari_guianensis" | "species_couratari_macrosperma" | "species_couratari_multiflora" | "species_couroupita_guianensis" | "species_couroupita_subsessilis" | "species_coussapoa_latifolia" | "species_coutarea_hexandra" | "species_craterosiphon_quarrei" | "species_croton_matourensis" | "species_croton_urucurana" | "species_cupania_latifolia" | "species_cupania_scrobiculata" | "species_dalbergia_boehmii" | "species_dalbergia_nitidula" | "species_dendrobangia_boliviana" | "species_dendropanax_cuneatus" | "species_dialium_guianense" | "species_dichrostachys_cinerea" | "species_didymopanax_morototoni" | "species_dinizia_excelsa" | "species_diospyros_bacotana" | "species_diospyros_capreifolia" | "species_diospyros_katangensis" | "species_diospyros_mespiliformis" | "species_diospyros_mweroensis" | "species_diplorhynchus_condylocarpon" | "species_dipteryx_alata" | "species_dipteryx_odorata" | "species_drypetes_variabilis" | "species_ecclinusa_guianensis" | "species_ecclinusa_ramiflora" | "species_ekebergia_benguelensis" | "species_emmotum_fagifolium" | "species_enterolobium_contortisiliquum" | "species_enterolobium_schomburgkii" | "species_enterolobium_timbouva" | "species_eriotheca_globosa" | "species_erisma_bicolor" | "species_erisma_calcaratum" | "species_erisma_uncinatum" | "species_erythrina_abyssinica" | "species_erythrina_africana" | "species_erythrina_falcata" | "species_erythrophleum_africanum" | "species_eschweilera_coriacea" | "species_eschweilera_ovata" | "species_eugenia_cupulata" | "species_eugenia_flavescens" | "species_eugenia_punicifolia" | "species_euplassa_inaequalis" | "species_euterpe_oleracea" | "species_ficus_amazonica" | "species_ficus_anthelmintica" | "species_ficus_dekdekena" | "species_ficus_insipida" | "species_ficus_mathewsii" | "species_ficus_maxima" | "species_ficus_sansibarica" | "species_ficus_stuhlmannii" | "species_ficus_sur" | "species_ficus_trigona" | "species_fusaea_longifolia" | "species_galipea_trifoliata" | "species_garcinia_huillensis" | "species_garcinia_macrophylla" | "species_garcinia_pachyclada" | "species_geissospermum_sericeum" | "species_genipa_americana" | "species_glycydendron_amazonicum" | "species_goupia_glabra" | "species_guapira_opposita" | "species_guapira_venosa" | "species_guarea_guidonia" | "species_guarea_kunthiana" | "species_guatteria_foliosa" | "species_guatteria_punctata" | "species_guatteria_schomburgkiana" | "species_guatteria_sellowiana" | "species_guazuma_ulmifolia" | "species_gustavia_augusta" | "species_handroanthus_impetiginosus" | "species_handroanthus_ochraceus" | "species_handroanthus_serratifolius" | "species_haplocoelum_foliolosum" | "species_helicostylis_tomentosa" | "species_hevea_brasiliensis" | "species_hexalobus_monopetalus" | "species_himatanthus_articulatus" | "species_hirtella_glandulosa" | "species_homalolepis_cedron" | "species_humiria_balsamifera" | "species_hydrochorea_pedicellaris" | "species_hymenaea_courbaril" | "species_hymenaea_intermedia" | "species_hymenaea_parvifolia" | "species_hymenocardia_acida" | "species_hymenolobium_petraeum" | "species_hymenopus_heteromorphus" | "species_inga_alba" | "species_inga_cayennensis" | "species_inga_disticha" | "species_inga_edulis" | "species_inga_heterophylla" | "species_inga_lateriflora" | "species_inga_laurina" | "species_inga_marginata" | "species_inga_paraensis" | "species_inga_sessilis" | "species_inga_stenoptera" | "species_inga_thibaudiana" | "species_inga_vera" | "species_iryanthera_juruensis" | "species_isoberlinia_angolensis" | "species_jacaranda_copaia" | "species_jacaratia_spinosa" | "species_juglans_nigra" | "species_julbernardia_globiflora" | "species_julbernardia_paniculata" | "species_kigelia_africana" | "species_lacistema_pubescens" | "species_lacmellea_gracilis" | "species_laetia_procera" | "species_lafoensia_pacari" | "species_lannea_discolor" | "species_lannea_versicolor" | "species_lecythis_lurida" | "species_lecythis_pisonis" | "species_lecythis_zabucajo" | "species_libidibia_ferrea" | "species_licania_apetala" | "species_licania_canescens" | "species_licania_egleri" | "species_licania_heteromorpha" | "species_licania_octandra" | "species_lindackeria_paludosa" | "species_lophanthera_lactescens" | "species_luehea_speciosa" | "species_mabea_fistulifera" | "species_mabea_nitida" | "species_mabea_speciosa" | "species_machaerium_acutifolium" | "species_macrolobium_acaciifolium" | "species_macrolobium_angustifolium" | "species_maesopsis_eminii" | "species_manilkara_bidentata" | "species_maprounea_guianensis" | "species_maquira_guianensis" | "species_margaritaria_nobilis" | "species_markhamia_obtusifolia" | "species_matayba_arborescens" | "species_matayba_guianensis" | "species_mezilaurus_itauba" | "species_miconia_cuspidata" | "species_miconia_dispar" | "species_miconia_ferruginata" | "species_miconia_minutiflora" | "species_micropholis_egensis" | "species_minquartia_guianensis" | "species_monotes_adenophyllus" | "species_monotes_glandulosus" | "species_monotes_katangensis" | "species_monteverdia_guyanensis" | "species_moquilea_minutiflora" | "species_mouriri_acutiflora" | "species_multidentia_crassa" | "species_myrcia_cuprea" | "species_myrcia_splendens" | "species_myrcia_sylvatica" | "species_myrsine_umbellata" | "species_nectandra_cuspidata" | "species_ochna_schweinfurthiana" | "species_ochroma_pyramidale" | "species_ocotea_glomerata" | "species_ocotea_guianensis" | "species_oenocarpus_bacaba" | "species_oenocarpus_distichus" | "species_olax_obtusifolia" | "species_ormosia_coccinea" | "species_ormosia_coutinhoi" | "species_ormosia_nobilis" | "species_ormosia_paraensis" | "species_ouratea_castaneifolia" | "species_ouratea_discophora" | "species_ouratea_racemiformis" | "species_pachira_aquatica" | "species_palicourea_rigida" | "species_panopsis_sessilifolia" | "species_parahancornia_fasciculata" | "species_parinari_curatellifolia" | "species_parkia_gigantocarpa" | "species_parkia_multijuga" | "species_parkia_nitida" | "species_parkia_pendula" | "species_parkia_platycephala" | "species_peltogyne_venosa" | "species_peltophorum_dubium" | "species_pericopsis_angolensis" | "species_philocosmos_mwelerianus" | "species_piliostigma_thonningii" | "species_piptadenia_gonoacantha" | "species_pithecolobium_tortum" | "species_platymiscium_trinitatis" | "species_platypodium_elegans" | "species_poeppigia_procera" | "species_populus_hybrid" | "species_pourouma_guianensis" | "species_pourouma_minor" | "species_pourouma_mollis" | "species_pouteria_caimito" | "species_pouteria_cladantha" | "species_pouteria_macrophylla" | "species_pouteria_pachyphylla" | "species_pouteria_reticulata" | "species_pouteria_venosa" | "species_protium_altissimum" | "species_protium_hebetatum" | "species_protium_heptaphyllum" | "species_protium_robustum" | "species_pseudobombax_munguba" | "species_pseudolachnostylis_maprouneifolia" | "species_pseudolmedia_macrophylla" | "species_pseudopiptadenia_contorta" | "species_psidium_guajava" | "species_psorospermum_febrifugum" | "species_pterocarpus_angolensis" | "species_pterocarpus_rohrii" | "species_pterocarpus_rotundifolius" | "species_pterocarpus_santalinoides" | "species_pterocarpus_tinctorius" | "species_qualea_paraensis" | "species_quercus_bicolor" | "species_rauvolfia_paraensis" | "species_rinoreocarpus_ulei" | "species_robinia_pseudoacacia" | "species_rothmannia_engleriana" | "species_sacoglottis_guianensis" | "species_samanea_tubulosa" | "species_sapindus_saponaria" | "species_sapium_glandulosum" | "species_sapium_marmieri" | "species_schizolobium_amazonicum" | "species_schizolobium_parahyba" | "species_sclerocarya_birrea" | "species_securidaca_longipedunculata" | "species_senegalia_polyphylla" | "species_senna_alata" | "species_senna_macrophylla" | "species_senna_multijuga" | "species_simaba_guianensis" | "species_simarouba_amara" | "species_socratea_exorrhiza" | "species_sorocea_guilleminiana" | "species_spondias_mombin" | "species_sterculia_apetala" | "species_sterculia_striata" | "species_stryphnodendron_pulcherrimum" | "species_swartzia_laurifolia" | "species_swartzia_psilonema" | "species_swietenia_macrophylla" | "species_symmeria_paniculata" | "species_symphonia_globulifera" | "species_syzygium_cumini" | "species_tabebuia_roseoalba" | "species_tachigali_alba" | "species_tachigali_aurea" | "species_tachigali_glauca" | "species_talisia_mollis" | "species_talisia_veraluciana" | "species_tapirira_guianensis" | "species_terminalia_congesta" | "species_terminalia_corrugata" | "species_terminalia_grandis" | "species_terminalia_lucida" | "species_terminalia_tetraphylla" | "species_theobroma_speciosum" | "species_thyrsodium_spruceanum" | "species_tovomita_fructipendula" | "species_trattinnickia_burserifolia" | "species_trattinnickia_rhoifolia" | "species_trema_micrantha" | "species_triplaris_americana" | "species_triplaris_weigeltiana" | "species_unknown" | "species_vatairea_erythrocarpa" | "species_vatairea_fusca" | "species_vatairea_guianensis" | "species_vatairea_macrocarpa" | "species_virola_multinervia" | "species_virola_sebifera" | "species_virola_surinamensis" | "species_vismia_guianensis" | "species_xylopia_frutescens" | "species_zanthoxylum_rhoifolium" | "percentile_10" | "percentile_50" | "percentile_80" | "percentile_90" | "percentile_97";
+        QuantityKindQualifierType: "base_saturation_ca_2plus" | "base_saturation_k_plus" | "base_saturation_mg_2plus" | "base_saturation_na_plus" | "base_saturation_major_cations" | "max_limit" | "min_limit" | "flue_stack_emissions" | "pyrolysis_reactor_emissions" | "high_boiling_residue" | "material_condition_dry" | "material_condition_wet" | "hydrogen_to_organic_carbon_ratio" | "inertinite_fraction" | "poorly_carbonized_fraction" | "semi_inertinite_fraction" | "mass_transferred" | "aggregated_container_contents" | "approximate_quantity_recovered" | "ash_content" | "loss_on_ignition" | "nameplate_charge" | "porosity" | "volatile_matter" | "radiation_normalization_method_gamma_activity_concentration_idx" | "cation_exchange_capacity" | "potential_acidity" | "capacity" | "gross_alpha" | "gross_beta" | "radiation_normalization_method_ec_rp112_standard_room_model" | "anion_cl_1minus" | "anion_no3_1minus" | "anion_po4_3minus" | "anion_so4_2minus" | "cation_ca_2plus" | "cation_k_1plus" | "cation_mg_2plus" | "cation_na_1plus" | "heptacdd_1234678" | "heptacdf_1234678" | "heptacdf_1234789" | "hexacdd_123478" | "hexacdf_123478" | "hexacdd_123678" | "hexacdf_123678" | "hexacdd_123789" | "hexacdf_123789" | "pentacdd_12378" | "pentacdf_12378" | "hexacdf_234678" | "pentacdf_23478" | "tetracdd_2378" | "tetracdf_2378" | "compound_ch4" | "compound_co" | "compound_co2" | "compound_cao" | "compound_h2" | "compound_h2o" | "compound_h2s" | "compound_k2o" | "compound_mgo" | "compound_n2" | "compound_n2o" | "compound_na2o" | "compound_o2" | "compound_p2o5" | "compound_so4" | "acenaphthene" | "acenaphthylene" | "anthracene" | "benz_a_anthracene" | "benzo_a_pyrene" | "benzo_b_fluoranthene" | "benzo_e_pyrene" | "benzo_ghi_perylene" | "benzo_j_fluoranthene" | "benzo_k_fluoranthene" | "cfc_11" | "cfc_111" | "cfc_1112" | "cfc_1112a" | "cfc_112" | "cfc_112a" | "cfc_113" | "cfc_113a" | "cfc_114" | "cfc_114a" | "cfc_115" | "cfc_12" | "cfc_13" | "cfc_211" | "cfc_212" | "cfc_213" | "cfc_214" | "cfc_215" | "cfc_216" | "cfc_217" | "chrysene" | "dibenz_ah_anthracene" | "e_r316c" | "fluoranthene" | "fluorene" | "hcfc_121" | "hcfc_122" | "hcfc_122a" | "hcfc_123" | "hcfc_123a" | "hcfc_124" | "hcfc_124a" | "hcfc_131" | "hcfc_132" | "hcfc_132a" | "hcfc_132c" | "hcfc_133" | "hcfc_133a" | "hcfc_141" | "hcfc_141b" | "hcfc_142" | "hcfc_142b" | "hcfc_151" | "hcfc_21" | "hcfc_22" | "hcfc_221" | "hcfc_222" | "hcfc_223" | "hcfc_224" | "hcfc_225" | "hcfc_225ca" | "hcfc_225cb" | "hcfc_226" | "hcfc_231" | "hcfc_232" | "hcfc_233" | "hcfc_234" | "hcfc_235" | "hcfc_241" | "hcfc_242" | "hcfc_243" | "hcfc_244" | "hcfc_251" | "hcfc_252" | "hcfc_253" | "hcfc_261" | "hcfc_262" | "hcfc_271" | "hcfc_31" | "hcfo_1233zd_e" | "hcfo_1233zd_z" | "hfc_125" | "hfc_134" | "hfc_134a" | "hfc_143" | "hfc_143a" | "hfc_152" | "hfc_152a" | "hfc_161" | "hfc_227ca" | "hfc_227ea" | "hfc_23" | "hfc_236cb" | "hfc_236ea" | "hfc_236fa" | "hfc_245ca" | "hfc_245cb" | "hfc_245ea" | "hfc_245eb" | "hfc_245fa" | "hfc_263fb" | "hfc_272ca" | "hfc_32" | "hfc_329p" | "hfc_365mfc" | "hfc_41" | "hfc_43_10mee" | "indeno_123_cd_pyrene" | "naphthalene" | "octacdd" | "octacdf" | "pcb_101" | "pcb_105" | "pcb_114" | "pcb_118" | "pcb_123" | "pcb_126" | "pcb_138" | "pcb_153" | "pcb_156" | "pcb_157" | "pcb_167" | "pcb_169" | "pcb_180" | "pcb_189" | "pcb_28" | "pcb_52" | "pcb_77" | "pcb_81" | "phenanthrene" | "pyrene" | "z_r316c" | "cfc" | "hcfc" | "hfc" | "i_teq_nato_ccms_lower_bound" | "i_teq_nato_ccms_upper_bound" | "total_16_epa_pah_excl_loq" | "total_6_ndl_pcb_lower_bound" | "total_6_ndl_pcb_upper_bound" | "total_7_indicator_pcb_lower_bound" | "total_7_indicator_pcb_upper_bound" | "total_8_efsa_pah_excl_loq" | "who_2005_pcb_teq_lower_bound" | "who_2005_pcb_teq_upper_bound" | "who_2005_pcdd_f_pcb_teq_lower_bound" | "who_2005_pcdd_f_pcb_teq_upper_bound" | "who_2005_pcdd_f_teq_lower_bound" | "who_2005_pcdd_f_teq_upper_bound" | "element_al" | "element_as" | "element_b" | "element_ba" | "element_ca" | "element_cd" | "element_ce" | "element_co" | "element_cr" | "element_cs" | "element_cu" | "element_eu" | "element_fe" | "element_h" | "element_hf" | "element_hg" | "element_k" | "element_la" | "element_lu" | "element_mg" | "element_mn" | "element_mo" | "element_n" | "element_na" | "element_nb" | "element_nd" | "element_ni" | "element_o" | "element_p" | "element_pb" | "element_rb" | "element_s" | "element_sb" | "element_sc" | "element_se" | "element_si" | "element_sn" | "element_sr" | "element_ta" | "element_tb" | "element_th" | "element_ti" | "element_tl" | "element_u" | "element_v" | "element_w" | "element_y" | "element_yb" | "element_zn" | "element_zr" | "alkalinity" | "dissolved_inorganic_carbon" | "dissolved_organic_carbon" | "fixed_carbon" | "particulate_inorganic_carbon" | "particulate_organic_carbon" | "soil_inorganic_carbon" | "soil_organic_carbon" | "soil_organic_matter" | "total_carbon" | "total_inorganic_carbon" | "total_organic_carbon" | "ghg_aggregate_co2e" | "biochar" | "crop_yield" | "mineral_albite" | "mineral_andesine" | "mineral_augite" | "mineral_diopside" | "mineral_hematite" | "mineral_labradorite" | "mineral_maghemite" | "mineral_montmorillonite" | "mineral_orthoclase" | "mineral_pigeonite" | "mineral_quartz" | "mineral_rutile" | "mineral_category_asbestiform" | "mineral_category_asbestos" | "clay" | "sand" | "silt" | "fullness_empty" | "fullness_filled" | "genus_abarema" | "genus_acacia" | "genus_albizia" | "genus_amaioua" | "genus_ambelania" | "genus_anacardium" | "genus_andira" | "genus_aniba" | "genus_annona" | "genus_apeiba" | "genus_aspidosperma" | "genus_astrocaryum" | "genus_attalea" | "genus_bactris" | "genus_banara" | "genus_bauhinia" | "genus_bellucia" | "genus_bombax" | "genus_bowdichia" | "genus_brosimum" | "genus_brunfelsia" | "genus_buchenavia" | "genus_byrsonima" | "genus_caraipa" | "genus_cariniana" | "genus_caryocar" | "genus_casearia" | "genus_cassia" | "genus_cecropia" | "genus_cheiloclinium" | "genus_clarisia" | "genus_clitoria" | "genus_clusia" | "genus_coccoloba" | "genus_combretum" | "genus_commiphora" | "genus_copaifera" | "genus_cordia" | "genus_couepia" | "genus_couma" | "genus_couratari" | "genus_croton" | "genus_cupania" | "genus_cybianthus" | "genus_dimorphandra" | "genus_dinizia" | "genus_diospyros" | "genus_diplotropis" | "genus_duguetia" | "genus_duroia" | "genus_emmotum" | "genus_endopleura" | "genus_erisma" | "genus_erythroxylum" | "genus_eschweilera" | "genus_eugenia" | "genus_euphorbia" | "genus_faramea" | "genus_ficus" | "genus_garcinia" | "genus_gardenia" | "genus_genipa" | "genus_goupia" | "genus_guarea" | "genus_guatteria" | "genus_handroanthus" | "genus_heisteria" | "genus_himatanthus" | "genus_hirtella" | "genus_hymenaea" | "genus_inga" | "genus_iryanthera" | "genus_isertia" | "genus_jacaranda" | "genus_lacmellea" | "genus_lecythis" | "genus_licania" | "genus_licaria" | "genus_lonchocarpus" | "genus_luehea" | "genus_mabea" | "genus_machaerium" | "genus_macoubea" | "genus_macrolobium" | "genus_manilkara" | "genus_maprounea" | "genus_maquira" | "genus_margaritaria" | "genus_matayba" | "genus_miconia" | "genus_micrandra" | "genus_micropholis" | "genus_mouriri" | "genus_myrcia" | "genus_myrciaria" | "genus_naucleopsis" | "genus_nectandra" | "genus_neea" | "genus_ocotea" | "genus_ormosia" | "genus_ouratea" | "genus_pachira" | "genus_pagamea" | "genus_palicourea" | "genus_parahancornia" | "genus_parkia" | "genus_perebea" | "genus_philocosmos" | "genus_piper" | "genus_piptadenia" | "genus_platonia" | "genus_pourouma" | "genus_pouteria" | "genus_pradosia" | "genus_protium" | "genus_pseudobombax" | "genus_pseudolmedia" | "genus_pseudopiptadenia" | "genus_psychotria" | "genus_pterocarpus" | "genus_rauvolfia" | "genus_rhabdodendron" | "genus_rinorea" | "genus_rinoreocarpus" | "genus_sacoglottis" | "genus_salix" | "genus_samanea" | "genus_senegalia" | "genus_senna" | "genus_simaba" | "genus_siparuna" | "genus_sloanea" | "genus_solanum" | "genus_sorocea" | "genus_sparattosperma" | "genus_sterculia" | "genus_stryphnodendron" | "genus_swartzia" | "genus_tabebuia" | "genus_tabernaemontana" | "genus_tachigali" | "genus_talisia" | "genus_tapirira" | "genus_terminalia" | "genus_ternstroemia" | "genus_theobroma" | "genus_toulicia" | "genus_tovomita" | "genus_trattinnickia" | "genus_trichilia" | "genus_triplaris" | "genus_unonopsis" | "genus_vatairea" | "genus_vernonia" | "genus_virola" | "genus_vismia" | "genus_vitex" | "genus_vochysia" | "genus_xylopia" | "genus_zygia" | "species_abarema_cochleata" | "species_abuta_grandifolia" | "species_acacia_mangium" | "species_acacia_polyacantha" | "species_acridocarpus_katangensis" | "species_afzelia_quanzensis" | "species_albizia_antunesiana" | "species_albizia_versicolor" | "species_alchornea_glandulosa" | "species_alexa_grandiflora" | "species_alibertia_edulis" | "species_allantoma_lineata" | "species_allophylus_africanus" | "species_amaioua_guianensis" | "species_ambelania_acida" | "species_anacardium_giganteum" | "species_anacardium_parvifolium" | "species_anadenanthera_colubrina" | "species_andira_inermis" | "species_andira_surinamensis" | "species_anisophyllea_boehmii" | "species_annona_exsucca" | "species_annona_glabra" | "species_annona_senegalensis" | "species_antidesma_venosum" | "species_aparisthmium_cordatum" | "species_apeiba_echinata" | "species_apeiba_membranacea" | "species_apeiba_petoumo" | "species_apeiba_tibourbou" | "species_apuleia_leiocarpa" | "species_aspidosperma_album" | "species_aspidosperma_nitidum" | "species_aspidosperma_oblongum" | "species_astrocaryum_aculeatum" | "species_astronium_fraxinifolium" | "species_astronium_graveolens" | "species_astronium_lecointei" | "species_attalea_maripa" | "species_azanza_garckeana" | "species_bactris_major" | "species_bactris_maraja" | "species_bagassa_guianensis" | "species_balanites_aegyptiaca" | "species_banara_guianensis" | "species_bauhinia_longipedicellata" | "species_bauhinia_petersiana" | "species_bauhinia_ungulata" | "species_bertholletia_excelsa" | "species_bixa_arborea" | "species_bixa_orellana" | "species_bobgunnia_madagascariensis" | "species_boscia_angustifolia" | "species_bowdichia_nitida" | "species_brachystegia_boehmii" | "species_brachystegia_bussei" | "species_brachystegia_gossweileri" | "species_brachystegia_microphylla" | "species_brachystegia_spiciformis" | "species_brachystegia_stipulata" | "species_brachystegia_taxifolia" | "species_brachystegia_wangermeeana" | "species_bridelia_cathartica" | "species_bridelia_duvigneaudii" | "species_brosimum_guianense" | "species_brosimum_lactescens" | "species_brosimum_rubescens" | "species_buchenavia_tomentosa" | "species_byrsonima_arthropoda" | "species_byrsonima_coccolobifolia" | "species_byrsonima_crassifolia" | "species_byrsonima_crispa" | "species_byrsonima_poeppigiana" | "species_byrsonima_stipulacea" | "species_calophyllum_brasiliense" | "species_calycophyllum_spruceanum" | "species_caraipa_densifolia" | "species_caraipa_punctulata" | "species_carapa_guianensis" | "species_carapa_procera" | "species_carica_papaya" | "species_cariniana_micrantha" | "species_carya_cordiformis" | "species_caryocar_glabrum" | "species_caryocar_villosum" | "species_casearia_arborea" | "species_casearia_decandra" | "species_casearia_sylvestris" | "species_cassia_fastuosa" | "species_cassia_grandis" | "species_cassia_leiandra" | "species_cassia_lucens" | "species_cassia_spruceana" | "species_castanea_mollissima" | "species_cecropia_distachya" | "species_cecropia_obtusa" | "species_cecropia_pachystachya" | "species_cecropia_purpurascens" | "species_cecropia_sciadophylla" | "species_cedrela_fissilis" | "species_cedrela_odorata" | "species_ceiba_pentandra" | "species_ceiba_samauma" | "species_ceiba_speciosa" | "species_cenostigma_tocantinum" | "species_chloroleucon_tortum" | "species_chrysophyllum_sparsiflorum" | "species_clarisia_biflora" | "species_clarisia_racemosa" | "species_clitoria_fairchildiana" | "species_clusia_grandiflora" | "species_colubrina_glandulosa" | "species_combretum_adenogonium" | "species_combretum_collinum" | "species_combretum_molle" | "species_combretum_zeyheri" | "species_commiphora_glandulosa" | "species_connarus_perrottetii" | "species_copaifera_langsdorffii" | "species_copaifera_martii" | "species_copaifera_reticulata" | "species_cordia_alliodora" | "species_cordia_nodosa" | "species_cordia_superba" | "species_couepia_bracteosa" | "species_couepia_glabra" | "species_couma_utilis" | "species_couratari_guianensis" | "species_couratari_macrosperma" | "species_couratari_multiflora" | "species_couroupita_guianensis" | "species_couroupita_subsessilis" | "species_coussapoa_latifolia" | "species_coutarea_hexandra" | "species_craterosiphon_quarrei" | "species_croton_matourensis" | "species_croton_urucurana" | "species_cupania_latifolia" | "species_cupania_scrobiculata" | "species_dalbergia_boehmii" | "species_dalbergia_nitidula" | "species_dendrobangia_boliviana" | "species_dendropanax_cuneatus" | "species_dialium_guianense" | "species_dichrostachys_cinerea" | "species_didymopanax_morototoni" | "species_dinizia_excelsa" | "species_diospyros_bacotana" | "species_diospyros_capreifolia" | "species_diospyros_katangensis" | "species_diospyros_mespiliformis" | "species_diospyros_mweroensis" | "species_diplorhynchus_condylocarpon" | "species_dipteryx_alata" | "species_dipteryx_odorata" | "species_drypetes_variabilis" | "species_ecclinusa_guianensis" | "species_ecclinusa_ramiflora" | "species_ekebergia_benguelensis" | "species_emmotum_fagifolium" | "species_enterolobium_contortisiliquum" | "species_enterolobium_schomburgkii" | "species_enterolobium_timbouva" | "species_eriotheca_globosa" | "species_erisma_bicolor" | "species_erisma_calcaratum" | "species_erisma_uncinatum" | "species_erythrina_abyssinica" | "species_erythrina_africana" | "species_erythrina_falcata" | "species_erythrophleum_africanum" | "species_eschweilera_coriacea" | "species_eschweilera_ovata" | "species_eugenia_cupulata" | "species_eugenia_flavescens" | "species_eugenia_punicifolia" | "species_euplassa_inaequalis" | "species_euterpe_oleracea" | "species_ficus_amazonica" | "species_ficus_anthelmintica" | "species_ficus_dekdekena" | "species_ficus_insipida" | "species_ficus_mathewsii" | "species_ficus_maxima" | "species_ficus_sansibarica" | "species_ficus_stuhlmannii" | "species_ficus_sur" | "species_ficus_trigona" | "species_fusaea_longifolia" | "species_galipea_trifoliata" | "species_garcinia_huillensis" | "species_garcinia_macrophylla" | "species_garcinia_pachyclada" | "species_geissospermum_sericeum" | "species_genipa_americana" | "species_glycydendron_amazonicum" | "species_goupia_glabra" | "species_guapira_opposita" | "species_guapira_venosa" | "species_guarea_guidonia" | "species_guarea_kunthiana" | "species_guatteria_foliosa" | "species_guatteria_punctata" | "species_guatteria_schomburgkiana" | "species_guatteria_sellowiana" | "species_guazuma_ulmifolia" | "species_gustavia_augusta" | "species_handroanthus_impetiginosus" | "species_handroanthus_ochraceus" | "species_handroanthus_serratifolius" | "species_haplocoelum_foliolosum" | "species_helicostylis_tomentosa" | "species_hevea_brasiliensis" | "species_hexalobus_monopetalus" | "species_himatanthus_articulatus" | "species_hirtella_glandulosa" | "species_homalolepis_cedron" | "species_humiria_balsamifera" | "species_hydrochorea_pedicellaris" | "species_hymenaea_courbaril" | "species_hymenaea_intermedia" | "species_hymenaea_parvifolia" | "species_hymenocardia_acida" | "species_hymenolobium_petraeum" | "species_hymenopus_heteromorphus" | "species_inga_alba" | "species_inga_cayennensis" | "species_inga_disticha" | "species_inga_edulis" | "species_inga_heterophylla" | "species_inga_lateriflora" | "species_inga_laurina" | "species_inga_marginata" | "species_inga_paraensis" | "species_inga_sessilis" | "species_inga_stenoptera" | "species_inga_thibaudiana" | "species_inga_vera" | "species_iryanthera_juruensis" | "species_isoberlinia_angolensis" | "species_jacaranda_copaia" | "species_jacaratia_spinosa" | "species_juglans_nigra" | "species_julbernardia_globiflora" | "species_julbernardia_paniculata" | "species_kigelia_africana" | "species_lacistema_pubescens" | "species_lacmellea_gracilis" | "species_laetia_procera" | "species_lafoensia_pacari" | "species_lannea_discolor" | "species_lannea_versicolor" | "species_lecythis_lurida" | "species_lecythis_pisonis" | "species_lecythis_zabucajo" | "species_libidibia_ferrea" | "species_licania_apetala" | "species_licania_canescens" | "species_licania_egleri" | "species_licania_heteromorpha" | "species_licania_octandra" | "species_lindackeria_paludosa" | "species_lophanthera_lactescens" | "species_luehea_speciosa" | "species_mabea_fistulifera" | "species_mabea_nitida" | "species_mabea_speciosa" | "species_machaerium_acutifolium" | "species_macrolobium_acaciifolium" | "species_macrolobium_angustifolium" | "species_maesopsis_eminii" | "species_manilkara_bidentata" | "species_maprounea_guianensis" | "species_maquira_guianensis" | "species_margaritaria_nobilis" | "species_markhamia_obtusifolia" | "species_matayba_arborescens" | "species_matayba_guianensis" | "species_mezilaurus_itauba" | "species_miconia_cuspidata" | "species_miconia_dispar" | "species_miconia_ferruginata" | "species_miconia_minutiflora" | "species_micropholis_egensis" | "species_minquartia_guianensis" | "species_monotes_adenophyllus" | "species_monotes_glandulosus" | "species_monotes_katangensis" | "species_monteverdia_guyanensis" | "species_moquilea_minutiflora" | "species_mouriri_acutiflora" | "species_multidentia_crassa" | "species_myrcia_cuprea" | "species_myrcia_splendens" | "species_myrcia_sylvatica" | "species_myrsine_umbellata" | "species_nectandra_cuspidata" | "species_ochna_schweinfurthiana" | "species_ochroma_pyramidale" | "species_ocotea_glomerata" | "species_ocotea_guianensis" | "species_oenocarpus_bacaba" | "species_oenocarpus_distichus" | "species_olax_obtusifolia" | "species_ormosia_coccinea" | "species_ormosia_coutinhoi" | "species_ormosia_nobilis" | "species_ormosia_paraensis" | "species_ouratea_castaneifolia" | "species_ouratea_discophora" | "species_ouratea_racemiformis" | "species_pachira_aquatica" | "species_palicourea_rigida" | "species_panopsis_sessilifolia" | "species_parahancornia_fasciculata" | "species_parinari_curatellifolia" | "species_parkia_gigantocarpa" | "species_parkia_multijuga" | "species_parkia_nitida" | "species_parkia_pendula" | "species_parkia_platycephala" | "species_peltogyne_venosa" | "species_peltophorum_dubium" | "species_pericopsis_angolensis" | "species_philocosmos_mwelerianus" | "species_piliostigma_thonningii" | "species_piptadenia_gonoacantha" | "species_pithecolobium_tortum" | "species_platymiscium_trinitatis" | "species_platypodium_elegans" | "species_poeppigia_procera" | "species_populus_hybrid" | "species_pourouma_guianensis" | "species_pourouma_minor" | "species_pourouma_mollis" | "species_pouteria_caimito" | "species_pouteria_cladantha" | "species_pouteria_macrophylla" | "species_pouteria_pachyphylla" | "species_pouteria_reticulata" | "species_pouteria_venosa" | "species_protium_altissimum" | "species_protium_hebetatum" | "species_protium_heptaphyllum" | "species_protium_robustum" | "species_pseudobombax_munguba" | "species_pseudolachnostylis_maprouneifolia" | "species_pseudolmedia_macrophylla" | "species_pseudopiptadenia_contorta" | "species_psidium_guajava" | "species_psorospermum_febrifugum" | "species_pterocarpus_angolensis" | "species_pterocarpus_rohrii" | "species_pterocarpus_rotundifolius" | "species_pterocarpus_santalinoides" | "species_pterocarpus_tinctorius" | "species_qualea_paraensis" | "species_quercus_bicolor" | "species_rauvolfia_paraensis" | "species_rinoreocarpus_ulei" | "species_robinia_pseudoacacia" | "species_rothmannia_engleriana" | "species_sacoglottis_guianensis" | "species_samanea_tubulosa" | "species_sapindus_saponaria" | "species_sapium_glandulosum" | "species_sapium_marmieri" | "species_schizolobium_amazonicum" | "species_schizolobium_parahyba" | "species_sclerocarya_birrea" | "species_securidaca_longipedunculata" | "species_senegalia_polyphylla" | "species_senna_alata" | "species_senna_macrophylla" | "species_senna_multijuga" | "species_simaba_guianensis" | "species_simarouba_amara" | "species_socratea_exorrhiza" | "species_sorocea_guilleminiana" | "species_spondias_mombin" | "species_sterculia_apetala" | "species_sterculia_striata" | "species_stryphnodendron_pulcherrimum" | "species_swartzia_laurifolia" | "species_swartzia_psilonema" | "species_swietenia_macrophylla" | "species_symmeria_paniculata" | "species_symphonia_globulifera" | "species_syzygium_cumini" | "species_tabebuia_roseoalba" | "species_tachigali_alba" | "species_tachigali_aurea" | "species_tachigali_glauca" | "species_talisia_mollis" | "species_talisia_veraluciana" | "species_tapirira_guianensis" | "species_terminalia_congesta" | "species_terminalia_corrugata" | "species_terminalia_grandis" | "species_terminalia_lucida" | "species_terminalia_tetraphylla" | "species_theobroma_speciosum" | "species_thyrsodium_spruceanum" | "species_tovomita_fructipendula" | "species_trattinnickia_burserifolia" | "species_trattinnickia_rhoifolia" | "species_trema_micrantha" | "species_triplaris_americana" | "species_triplaris_weigeltiana" | "species_unknown" | "species_vatairea_erythrocarpa" | "species_vatairea_fusca" | "species_vatairea_guianensis" | "species_vatairea_macrocarpa" | "species_virola_multinervia" | "species_virola_sebifera" | "species_virola_surinamensis" | "species_vismia_guianensis" | "species_xylopia_frutescens" | "species_zanthoxylum_rhoifolium" | "percentile_10" | "percentile_50" | "percentile_80" | "percentile_90" | "percentile_97";
         /**
          * QuantityKindType
          * @enum {string}
@@ -3165,6 +3758,8 @@ export interface components {
              * Format: date
              */
             completed_on: string;
+            /** @description The split of issuable credits between the supplier and buffer pool. Null when risk_of_reversal_percentage is not set. */
+            credit_allocation: components["schemas"]["CreditAllocation"] | null;
             /**
              * Feedstock Type Id
              * @description The feedstock type ID that this removal is associated with.
@@ -3182,6 +3777,11 @@ export interface components {
              * @example rmv_1E3V4J2EWSBX5E82
              */
             id: string;
+            /**
+             * Risk Of Reversal Percentage
+             * @description The percentage of credits contributed to the buffer pool due to risk of reversal.
+             */
+            risk_of_reversal_percentage: number | null;
             /**
              * Started On
              * Format: date
@@ -3314,7 +3914,7 @@ export interface components {
          * RiskOfReversal
          * @enum {string}
          */
-        RiskOfReversal: "no_observable_risk" | "very_low_v2" | "very_low" | "low" | "medium" | "high";
+        RiskOfReversal: "no_observable_risk" | "very_low_v2" | "very_low" | "low" | "medium" | "high" | "risk_assessment_driven";
         /** ScalarQuantity */
         ScalarQuantity: {
             /** Magnitude */
@@ -3360,6 +3960,8 @@ export interface components {
         };
         /** Source */
         Source: {
+            /** Description */
+            description: string | null;
             /** Display Name */
             display_name: string | null;
             /**
@@ -3549,6 +4151,22 @@ export interface components {
              * @constant
              */
             __typename: "Undefined";
+        };
+        /** UpdateProjectComponentGhgEntryAttributionRequest */
+        UpdateProjectComponentGhgEntryAttributionRequest: {
+            /**
+             * Attribution Factor
+             * @description A scalar between 0 and 1 for the fraction of the CO2e flux of the project component that is to be attributed to this GHG entry.
+             */
+            attribution_factor: number;
+            /**
+             * Ghg Entry Id
+             * @description ID of the GHG entry to attribute the project component to.
+             * @example rmv_1EEM6NJXX1S0EXKD
+             * @example rmv_1EEM6NJXX1S0EXKD
+             * @example rmv_1E3V4J2EWSBX5E82
+             */
+            ghg_entry_id: string;
         };
         /** UpdateProjectComponentRemovalAttributionRequest */
         UpdateProjectComponentRemovalAttributionRequest: {
@@ -3813,7 +4431,9 @@ export interface operations {
                 scope?: components["schemas"]["ComponentScope"] | null;
                 ghg_statement_id?: components["schemas"]["IsometricIDQueryParam_GhgStatement_"] | null;
                 project_id?: components["schemas"]["IsometricIDQueryParam_Project_"] | null;
-                removal_id?: components["schemas"]["IsometricIDQueryParam_GhgEntry_"] | null;
+                ghg_entry_id?: components["schemas"]["IsometricIDQueryParam_GhgEntry_"] | null;
+                /** @deprecated */
+                removal_id?: components["schemas"]["IsometricIDRequestParam_GhgEntry_"] | null;
                 last?: number;
                 before?: string | null;
                 first?: number;
@@ -4103,9 +4723,14 @@ export interface operations {
                 display_name_contains?: string | null;
                 project_id?: components["schemas"]["IsometricIDQueryParam_Project_"] | null;
                 quantity_kind?: components["schemas"]["QuantityKindType"] | null;
-                used_in_removal?: components["schemas"]["IsometricIDQueryParam_GhgEntry_"] | null;
+                measurement_sample_id?: components["schemas"]["IsometricIDQueryParam_MeasurementSample_"] | null;
+                used_in_ghg_entry?: components["schemas"]["IsometricIDQueryParam_GhgEntry_"] | null;
+                /** @deprecated */
+                used_in_removal?: components["schemas"]["IsometricIDRequestParam_GhgEntry_"] | null;
                 used_in_ghg_statement?: components["schemas"]["IsometricIDQueryParam_GhgStatement_"] | null;
-                used_in_removal_template?: components["schemas"]["IsometricIDQueryParam_GhgEntryTemplate_"] | null;
+                used_in_ghg_entry_template?: components["schemas"]["IsometricIDQueryParam_GhgEntryTemplate_"] | null;
+                /** @deprecated */
+                used_in_removal_template?: components["schemas"]["IsometricIDRequestParam_GhgEntryTemplate_"] | null;
                 used_in_scope?: components["schemas"]["ComponentScope"] | null;
                 last?: number;
                 before?: string | null;
@@ -4307,6 +4932,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedListResource_Component_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_datapoint_ghg_entry_template_components_datapoints__id__ghg_entry_template_components_get: {
+        parameters: {
+            query?: {
+                last?: number;
+                before?: string | null;
+                first?: number;
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Datapoint_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_GhgEntryTemplateComponent_"];
                 };
             };
             /** @description Validation Error */
@@ -4678,6 +5342,261 @@ export interface operations {
             };
         };
     };
+    get_ghg_entries_ghg_entries_get: {
+        parameters: {
+            query?: {
+                supplier_reference_id?: string | null;
+                last?: number;
+                before?: string | null;
+                first?: number;
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_GhgEntry_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_ghg_entry_ghg_entries_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGhgEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GhgEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ghg_entry_ghg_entries__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_GhgEntry_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GhgEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_ghg_entry_ghg_entries__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_GhgEntry_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_ghg_entry_ghg_entries__id__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_GhgEntry_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGhgEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GhgEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ghg_entry_components_ghg_entries__id__component_attributions_get: {
+        parameters: {
+            query?: {
+                last?: number;
+                before?: string | null;
+                first?: number;
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_GhgEntry_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_ComponentAttribution_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_ghg_entry_components_ghg_entries__id__component_attributions_patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_GhgEntry_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchGhgEntryComponentAttributionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GhgEntry"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     post_ghg_statement_component_ghg_statement_components_post: {
         parameters: {
             query?: never;
@@ -5001,7 +5920,12 @@ export interface operations {
     };
     get_measurement_samples_measurement_samples_get: {
         parameters: {
-            query?: never;
+            query?: {
+                last?: number;
+                before?: string | null;
+                first?: number;
+                after?: string | null;
+            };
             header: {
                 /** @description A secret token identifying the client connecting to the API */
                 "x-client-secret": string;
@@ -5055,6 +5979,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeasurementSample"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_measurement_sample_measurement_samples__id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_MeasurementSample_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -5311,6 +6267,39 @@ export interface operations {
             };
         };
     };
+    delete_project_component_ghg_entry_attribution_project_components__component_id__ghg_entry_attributions__ghg_entry_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                component_id: components["schemas"]["IsometricIDPathParam_Component_"];
+                ghg_entry_id: components["schemas"]["IsometricIDPathParam_GhgEntry_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_project_component_removal_attribution_project_components__component_id__removal_attributions__removal_id__delete: {
         parameters: {
             query?: never;
@@ -5332,6 +6321,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_project_component_ghg_entry_attribution_project_components__id__ghg_entry_attributions_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_Component_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectComponentGhgEntryAttributionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GhgEntry"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -5447,6 +6474,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedListResource_ProjectMonitoringRequirement_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ghg_entry_templates_projects__project_id__ghg_entry_templates_get: {
+        parameters: {
+            query?: {
+                last?: number;
+                before?: string | null;
+                first?: number;
+                after?: string | null;
+            };
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedListResource_GhgEntryTemplate_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ghg_entry_template_projects__project_id__ghg_entry_templates__id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
+                id: components["schemas"]["IsometricIDPathParam_GhgEntryTemplate_"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GhgEntryTemplate"];
                 };
             };
             /** @description Validation Error */

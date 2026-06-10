@@ -7,13 +7,13 @@ import {
 } from "@/lib/isometric/utils/reconciliation";
 import {
   findDatapointBySupplierRef,
-  findRemovalBySupplierRef,
+  findGhgEntryBySupplierRef,
 } from "@/lib/isometric/submissions";
 import { findDraftGhgStatementsByPeriod } from "@/lib/isometric/ghg-statements";
 
 vi.mock("@/lib/isometric/submissions", () => ({
   findDatapointBySupplierRef: vi.fn(),
-  findRemovalBySupplierRef: vi.fn(),
+  findGhgEntryBySupplierRef: vi.fn(),
 }));
 
 vi.mock("@/lib/isometric/ghg-statements", () => ({
@@ -21,7 +21,7 @@ vi.mock("@/lib/isometric/ghg-statements", () => ({
 }));
 
 const mockedFindDatapoint = vi.mocked(findDatapointBySupplierRef);
-const mockedFindRemoval = vi.mocked(findRemovalBySupplierRef);
+const mockedFindRemoval = vi.mocked(findGhgEntryBySupplierRef);
 const mockedFindGhg = vi.mocked(findDraftGhgStatementsByPeriod);
 
 describe("Isometric reconciliation helpers", () => {
@@ -64,7 +64,9 @@ function ghgStatement(id: string): GhgStatement {
     id,
     project_id: "prj_1",
     verifier: null,
+    ghg_entry_ids: [],
     removal_ids: [],
+    credit_allocation: null,
     ghg_statement_report_url: null,
     status: "DRAFT",
     reporting_period_start_at: "2026-01-01",

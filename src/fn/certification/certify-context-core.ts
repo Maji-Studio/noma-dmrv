@@ -42,10 +42,10 @@ import {
   collectTransportEntityIds,
   listComponentBlueprints,
   listProjects,
-  listRemovalTemplates,
+  listGhgEntryTemplates,
   type IsometricComponentBlueprint,
   type IsometricProject,
-  type IsometricRemovalTemplate,
+  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
@@ -123,7 +123,7 @@ export interface RemovalCertifyContext {
   removalId: string | null;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
-  defaultTemplate: IsometricRemovalTemplate | null;
+  defaultTemplate: IsometricGhgEntryTemplate | null;
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -167,7 +167,7 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
 }
 
 function deriveRequiredTransportCategories(
-  template: IsometricRemovalTemplate,
+  template: IsometricGhgEntryTemplate,
 ): TransportCategory[] {
   const seen = new Set<TransportCategory>();
   for (const group of template.groups) {
@@ -416,7 +416,7 @@ async function loadLinkedGhgStatementStatus(
 export interface FacilityCertifierFacts {
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
-  defaultTemplate: IsometricRemovalTemplate | null;
+  defaultTemplate: IsometricGhgEntryTemplate | null;
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -458,7 +458,7 @@ export async function loadFacilityCertifierFacts(
 
   const [projects, templates] = await Promise.all([
     safeListIfConfigured(() => listProjects()),
-    safeListIfConfigured(() => listRemovalTemplates(mapping.externalProjectId)),
+    safeListIfConfigured(() => listGhgEntryTemplates(mapping.externalProjectId)),
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;

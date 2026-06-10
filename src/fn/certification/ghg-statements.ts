@@ -90,7 +90,7 @@ export interface CreateGhgStatementResult {
   ghgStatementId: string;
   externalId: string;
   // Local removal ids Isometric linked into the statement, reconciled from
-  // its server-side `removal_ids`.
+  // its server-side `ghg_entry_ids`.
   linkedRemovalIds: string[];
   // Drift notes surfaced to the operator (predicted-but-unlinked removals,
   // Isometric removals with no local record, removals owned elsewhere).
@@ -157,7 +157,7 @@ const RECENT_SYNC_EVENTS_LIMIT = 10;
 // Creates a GHG Statement for a supplier-chosen reporting-period end.
 // Isometric's create API accepts only `{ project_id, end_on }` and links
 // Removals to the statement server-side by date range — so this is
-// period-first: after the POST the actual `removal_ids` are reconciled back
+// period-first: after the POST the actual `ghg_entry_ids` are reconciled back
 // onto local `certifier_removals.ghg_statement_id`.
 export async function createGhgStatementDraft(
   input: CreateGhgStatementInput,
@@ -461,7 +461,7 @@ async function finalizeGhgStatement(args: {
     const reconciled = await reconcileRemovalMembership(
       userId,
       statement.id,
-      remote.removal_ids,
+      remote.ghg_entry_ids,
       tx,
     );
     await updateGhgStatementReportingWindow(
@@ -682,7 +682,7 @@ export async function refreshGhgStatementStatus(
     await reconcileRemovalMembership(
       userId,
       submission.localEntityId,
-      remote.removal_ids,
+      remote.ghg_entry_ids,
     );
     return remote;
   });
@@ -860,7 +860,7 @@ function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
     submittedToVerifierAt: remote.submitted_at,
     creditsIssuedAt: remote.credits_issued_at,
     verifier: remote.verifier,
-    [SUBMISSION_METADATA_KEYS.removalIds]: remote.removal_ids,
+    [SUBMISSION_METADATA_KEYS.removalIds]: remote.ghg_entry_ids,
   };
 }
 
