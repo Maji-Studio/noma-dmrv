@@ -1140,9 +1140,14 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
   action — repeated real API calls and a degraded page instead of a calm
   "project not resolvable" state. Surfaced in CI when fake-project specs ran
   with real creds loaded; same behavior would hit prod on a stale/revoked link.
-- **Resolve via:** treat non-retryable 4xx (404/422) from project-scoped
-  listings as "link not resolvable" — return an empty/flagged result instead of
-  throwing, and surface a warning chip on the registry-connection card (M).
+- **Already handled:** `ghg-statements-list.tsx` derives `mappingFailed` from
+  the failing summary query and shows a warning banner, and
+  `deriveRemovalReadiness` (`src/lib/certification/readiness.ts`) already
+  blocks readiness when `!facts.hasMapping`.
+- **Still open:** `safeListIfConfigured` (`src/fn/certification/shared.ts`),
+  the project-scoped listing path — treat 404/422 as non-retryable, return an
+  empty/flagged result instead of throwing, and surface a warning chip on the
+  registry-connection card (M).
 
 ### Hermetic local stub for the Isometric client (`testing/isometric-stub`) — opened 2026-06-10
 
@@ -1155,31 +1160,14 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
 
 ### Unprompted "Link Isometric project" modal after facility create, CI prod build only (`facilities/phantom-link-dialog`) — opened 2026-06-10
 
-- In the first hermetic CI run (PR #167, run 27265121281, shard 1), the
-  `facilities.spec.ts` "admin can create a facility" test failed on both
-  attempts: artifacts show `FacilityCertifierDialog` ("Link Isometric project")
-  open over `/facilities` immediately after the create succeeded, aria-hiding
-  the page so the heading role-query failed. The trace records no click that
-  opens it, and static analysis finds no mount outside
-  `facility-certifier-section.tsx` (Settings page, click-gated `editOpen`).
-  Not reproducible locally in dev mode, with or without Isometric creds; the
-  test passed in all prior CI runs (which loaded creds).
-- **Why it matters:** if the modal really opens unprompted on production
-  builds, that's a user-facing bug, not a test bug.
-- **Replication attempts (all passed — GitHub-runner-only, 6/6 failures
-  there):** local dev build (with and without Isometric creds), local prod
-  build hermetic, prod + empty freshly-pushed DB, and full shard-1 set (51
-  tests, 2 workers, retries, empty DB, `CI=1`). The dialog is
-  `FacilityCertifierDialog` (trace DOM: `facility-certifier-dialog-title`,
-  empty project options), whose ONLY JSX mount is click-gated `editOpen` in
-  `facility-certifier-section.tsx` — rendered solely on
-  `/certification/settings`, yet it appears on `/facilities` ~0.5s after
-  facility create, amid the sidebar-wide RSC re-prefetch triggered by the
-  `?facility=` URL swap. Prime suspects: Next 16 PPR/prefetch interaction
-  under slow CI CPU.
+- `FacilityCertifierDialog` opens unprompted over `/facilities` after facility
+  create, on GitHub-runner production builds only (6/6 there, 0 local repros).
+  Needs reproduction and a bisect; if real, it's a user-facing bug. Full CI
+  forensics (PR #167 run analysis, trace/DOM evidence, replication matrix)
+  archived in
+  [docs/archive/2026-06-10-phantom-link-dialog-investigation.md](archive/2026-06-10-phantom-link-dialog-investigation.md).
 - **Interim quarantine:** `facilities.spec.ts` dismisses the modal if present
-  (loud `phantom-link-dialog` test annotation) so the suite stays green while
-  keeping the real assertion. Remove the workaround when this is resolved.
+  (loud `phantom-link-dialog` test annotation); remove when resolved.
 - **Resolve via:** CI-side instrumentation — temporary `--trace on` first
   attempt, or a debug step dumping the React owner chain of the dialog node
   when present (component names need a non-minified build to be readable) (M).
