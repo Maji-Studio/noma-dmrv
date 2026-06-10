@@ -6,6 +6,10 @@
 > Correctness work, not cleanup — motivated by real drift between the Removal
 > and GHG Statement pipelines, and by the planned move to multiple
 > users/operator groups (more concurrency on exactly these paths).
+> **Phase 1 interface settled 2026-06-10** via a design-it-twice review
+> (four independent designs — minimal / flexible / common-caller /
+> ports-and-adapters — compared and hybridized; decisions recorded in
+> Phase 1 below).
 
 ## Why now
 
@@ -67,81 +71,137 @@ Terms per `CONTEXT.md` (domain) and the architecture glossary:
 re-resolve payload → re-decide → insert/reset draft*. The Removal path's
 defensiveness becomes the only path; GHG Statements inherit it.
 
-**New module:** `src/data-access/submission-ledger.ts` (data-access layer —
-it owns the transaction; `decideSubmissionClaim` stays in
-`lib/isometric/utils/` as its pure core). Keeps `certification.ts` under the
-1000-line cap rather than growing it.
+**New module:** `src/data-access/certification-submissions.ts` — a new file,
+not a section of `certification.ts` (already ~940 lines, near the 1000-line
+cap). The low-level ledger primitives move here; `decideSubmissionClaim`
+stays in `lib/isometric/utils/` as the pure core.
 
-**Interface (sketch — refine during implementation):**
+**Interface (settled 2026-06-10 — single entry point):**
 
 ```ts
-type ClaimOutcome =
-  | { kind: "claimed-new"; row: CertificationSubmissionRow; supersedePreviousId: string | null }
-  | { kind: "claimed-resume"; row: CertificationSubmissionRow }
-  | { kind: "existing"; externalId: string; version: number }
-  | { kind: "blocked-in-flight" }
-  | { kind: "blocked-rejected-with-external" }
-  | { kind: "invalid-changed-hash" };
+// src/data-access/certification-submissions.ts
 
-claimSubmissionDraft(userId, {
-  key: { provider, submissionType, localEntityType, localEntityId },
-  policy: SubmissionClaimPolicy,
-  mappingGuard: MappingGuard,
-  lockTtlMs: number,
-  // Runs INSIDE the lock. May acquire extra locks (mirror locks) and
-  // re-resolve inputs; returns the authoritative snapshot + hash the
-  // in-lock re-decision uses. Trivial (return precomputed) for GHG.
-  resolvePayload: (tx: Tx) => Promise<{ payloadSnapshot: unknown; payloadHash: string }>,
+type NewVersionReason =
+  | "first" | "submitted-hash-changed" | "rejected-hash-changed" | "after-superseded";
+
+type ClaimOutcome =
+  | { kind: "claimed"; row: CertificationSubmissionRow;
+      resumed: boolean;                       // true ⇒ reset prior draft; its STORED
+                                              // payloadSnapshot is authoritative
+      supersedePreviousId: string | null;     // forward to markSubmissionSubmitted
+      reason: NewVersionReason | "resumed" }  // logging only (removal's warn case)
+  | { kind: "existing"; externalId: string; version: number }
+  | { kind: "blocked";
+      reason: "in-flight" | "rejected-with-external"
+            | "invalid-changed-hash" | "state-changed" };
+
+claimSubmissionDraft<H>(userId: string, args: {
+  key: SubmissionKey;                  // { provider, submissionType, localEntityType, localEntityId }
+  guard: MappingClaimGuard;            // template arm by presence (GHG omits it)
+  policy: SubmissionClaimPolicy;       // "supersede" | "invalid-changed-hash"
+  tentativeInputs: H;                  // precomputed before any lock; drives the fast path
+  hashOf: (inputs: H) => string;       // module computes tentative AND final hashes itself
+  mirrorDocumentIds?: string[];        // v1's only extra locks: source mirror locks
+                                       // (lib/isometric/utils/source-lock.ts); module
+                                       // acquires them sorted, after the mapping lock
+  resolve?: (tx: Tx, tentative: H) => Promise<H>;  // in-lock re-resolution; return
+                                       // `tentative` unchanged when nothing shifted
+  buildSnapshot: (args: {              // SYNCHRONOUS, receives no tx — structurally
+    inputs: H;                         // no I/O between the decision and the insert
+    nextVersion: number;               // exists ONLY here — version-embedded supplier
+    supersedePreviousId: string | null;//   refs cannot be built pre-decision
+    reason: NewVersionReason;
+  }) => { payloadSnapshot: unknown; metadata?: Record<string, unknown> | null };
 }): Promise<ClaimOutcome>
 ```
 
-Design points:
+**Invariants** (part of the interface):
 
-- **Outcomes, not throws.** `decideSubmissionClaim`'s contract says callers
-  translate decisions into domain messages — keep that. The module returns
-  typed outcomes; each pipeline maps `blocked-in-flight` etc. onto its own
-  `SafeError` copy. (The removal-specific `ExistingRemovalSubmission`
-  throw-to-escape-transaction trick becomes internal to the module.)
-- **The double-decide is implementation.** Callers can no longer skip it.
-  The in-lock re-decision uses the hash returned by `resolvePayload`, which
-  is how the Removal's sources-changed → recompute-hash path
-  (`submit-removal.ts:593–625`) fits: its `resolvePayload` acquires mirror
-  locks, re-resolves source IDs, and rebuilds template inputs when they
-  shifted. GHG's `resolvePayload` just returns the precomputed payload.
-- **Resume goes through the same interface.** `claimed-resume` wraps
-  `resetSubmissionToDraftWithMappingLock`; callers stop calling the
-  data-access primitives directly. The primitives
-  (`insertDraftSubmissionWithMappingLock*`, `resetSubmissionToDraft*`) become
-  internal to the ledger module — exported only for the telemetry path until
-  it migrates (see below).
+- Choreography, fixed internally: unlocked read → tentative decide
+  (fast path for `blocked`/`existing`/resume) → tx → mapping lock `FOR
+  UPDATE` + guard verify → mirror locks (sorted) → `resolve` → final hash via
+  `hashOf` → in-lock re-read + authoritative re-decide → `buildSnapshot` →
+  insert → commit. An insert is unreachable without the in-lock re-decision.
+- Resume (`resumed: true`) goes through the CAS reset under the same mapping
+  guard and **never** calls `resolve`/`buildSnapshot` — the stored
+  `payloadSnapshot` is the truth.
+- No network I/O anywhere inside; the module ends at a claimed draft row.
+- Mapping-guard violations **throw `SafeError`** with module-owned wording
+  (generic facility-config races, same prose for every pipeline). Everything
+  that is a *claim decision* comes back as an outcome; callers translate
+  `blocked.reason` to their own domain wording.
+- In-lock divergence that can't be absorbed (re-decide says resume after we
+  prepared a create) → `blocked: "state-changed"`; callers say
+  "reload and retry". **No self-healing resume** — rejected in review: it
+  makes resume semantics depend on payload-shape assumptions the module
+  cannot verify.
+- `LOCK_TTL_MS`, the version-race 23505 backstop (normalized to
+  `blocked: "in-flight"`; any other constraint propagates raw), the resume
+  CAS predicate, and the `ExistingRemovalSubmission` abort-tx trick all
+  become module-internal. No `now`/`lockTtlMs` injection on the interface —
+  TTL-boundary tests manipulate the seeded row's `lockedAt` directly.
 
-**Migrate:** `submitRemoval` (`submit-removal.ts:508–765`) and
-`createGhgStatementDraft` (`ghg-statements.ts:237–313`).
+**Decisions recorded** (2026-06-10 review):
+
+- **Outcomes, not thrown domain states** for claim decisions — matches the
+  pure core's contract; the throws-with-caller-supplied-messages alternative
+  just passes the same translation table inward for no depth gain.
+- **`hashOf` required** — the inserted hash is always `hashOf(final inputs)`
+  computed by the module; a caller cannot smuggle a stale hash past the
+  re-decision.
+- **`mirrorDocumentIds`, not generic `lockKeys`** — the only extra locks
+  today are source mirror locks; generalize only when a second lock consumer
+  exists.
+- **Rejected: ports & adapters** over the ledger. The load-bearing behavior
+  is Postgres locking/visibility (`FOR UPDATE` queueing, READ COMMITTED
+  visibility, advisory-lock semantics, cross-module interleaving with
+  mirror/unlink/admin-repoint flows) — an in-memory adapter is more likely
+  to lie than help. Internal seam; test against real Postgres.
+- **Deferred: telemetry.** The proven extension path (from the review's
+  "flexible" design) is an opt-in `stepResume` config plus a return-type
+  overload so only opted-in callers see `resume-poll-existing`/
+  `resume-re-put`. Add it when telemetry migrates, not before. Until then
+  `submit-telemetry.ts` keeps using the relocated primitives, which stay
+  exported for it alone.
+
+**Implementation order:**
+
+1. **Extract** the low-level ledger primitives from `certification.ts` into
+   `certification-submissions.ts` (`getLatestSubmission[InTx]`,
+   `insertDraftSubmission*`, `resetSubmissionToDraft*`,
+   `lockAndVerifyMapping`, the unique-violation guard, `LOCK_TTL_MS`), then
+   implement `claimSubmissionDraft` on top. Primitives become module-private
+   except where telemetry still needs them.
+2. **DB-backed tests** for `claimSubmissionDraft` using the existing
+   Postgres test harness (vitest + `.env.test` `DATABASE_URL` via
+   `tests/setup.ts`; per-run fixture style of
+   `tests/applications-mutations.test.ts` /
+   `tests/isometric-mapping-lock.test.ts`) — **no new fake DB**. Cases:
+   two concurrent claims on one key → exactly one `claimed`, one
+   `blocked: "in-flight"`, one row (the GHG drift regression test);
+   `resolve` returning shifted inputs → row carries the recomputed hash and
+   the locked decision's version; latest flipped to submitted-with-same-hash
+   while the claimant is parked on the mapping lock → `existing`, no orphan
+   draft, tx rolled back; resume CAS won (TTL-stale `lockedAt`) and lost
+   (fresh `lockedAt`); guard repoint mid-claim → thrown `SafeError`.
+3. **Migrate GHG first** — replace the outside-lock decision path at
+   `ghg-statements.ts:244–313`. Smallest consumer, and it lands the
+   correctness fix exactly where the drift is.
+4. **Migrate Removal second** — replace `submit-removal.ts:508–765`,
+   deleting the custom in-lock re-decision block (`:627–668`) and the
+   `ExistingRemovalSubmission` throw/catch plumbing.
 
 **Explicit behavior change (the point of the phase):** a concurrent duplicate
-GHG Statement create now resolves to `existing`/`blocked-in-flight` instead
-of a unique-constraint error.
+GHG Statement create now resolves to `existing` / `blocked: "in-flight"`
+instead of a unique-constraint error.
 
-**Deferred consumer:** `submitTelemetry` (`submit-telemetry.ts:234–356`) uses
-the same primitives but its claim outcomes (`resume-poll-existing`,
-`resume-re-put`) drive step-journaled recovery per ADR 0006, not a simple
-draft claim. Migrate it only if the interface absorbs those kinds without
-contortion; otherwise leave it on the exported primitives and record the
-follow-up in `docs/open-questions.md`. Do **not** force it into the first
-abstraction.
-
-**Tests:**
-- Existing `tests/isometric-submission-claim.test.ts` (pure core) unchanged.
-- New `tests/submission-ledger.test.ts`: choreography against an in-memory
-  tx fake in the style of `tests/isometric-mapping-lock.test.ts` — including
-  the race case: latest changes between the unlocked read and the in-lock
-  re-read → outcome flips to `existing` / `blocked-in-flight`; and the
-  sources-changed case: `resolvePayload` returns a different hash → insert
-  uses the recomputed hash and re-decided version.
-- `tests/isometric-submit-removal.test.ts` and
-  `tests/isometric-ghg-statement-flow.test.ts` stay green (mock surface moves
-  from the primitives to `claimSubmissionDraft` — keep assertions on
-  versions, supersede links, and idempotent returns identical).
+**Tests staying green:** `tests/isometric-submission-claim.test.ts` (pure
+core) unchanged; `tests/isometric-submit-removal.test.ts` and
+`tests/isometric-ghg-statement-flow.test.ts` keep their assertions on
+versions, supersede links, and idempotent returns — their mock surface moves
+from the primitives to `claimSubmissionDraft` (one function), replacing the
+hand-rolled in-memory ledger fakes (including the `undefined as never` tx
+handle at `isometric-submit-removal.test.ts:342`).
 
 ## Phase 2 — Registry create-or-reconcile module
 

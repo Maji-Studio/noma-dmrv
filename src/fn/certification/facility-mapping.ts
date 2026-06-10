@@ -45,8 +45,8 @@ export interface FacilityCertifierMapping {
 // `loadFacilityCertifierMapping` does. A non-admin reading the current mapping
 // must not pull the management payload (available project list, link hints,
 // template options). The trade-off: the read-only view shows the persisted
-// identifiers + protocol on the row, not the human-friendly project/template
-// names (those are only resolvable from the management list).
+// identifiers on the row, not the human-friendly project/template names
+// (those are only resolvable from the management list).
 export interface FacilityCertifierSummary {
   mapping: CertifierProjectRow | null;
   isProduction: boolean;
@@ -142,7 +142,6 @@ export async function saveFacilityCertifierMapping(
       provider: ISOMETRIC_PROVIDER,
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
-      protocolVersion: parsed.protocolVersion ?? null,
       defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
       externalFacilityId: parsed.externalFacilityId ?? null,
     });
