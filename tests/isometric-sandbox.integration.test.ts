@@ -12,7 +12,7 @@
  *   - `ISOMETRIC_DEMO_PROJECT_ID` set (no hard-coded fallback; same
  *     guardrail as scripts/isometric-smoke.ts)
  *
- * Out of scope: write paths (POST /datapoints, POST /removals,
+ * Out of scope: write paths (POST /datapoints, POST /ghg_entries,
  * POST /ghg_statements). Sandbox templates currently have unmapped
  * monitored inputs and unbound fixed constants — see
  * `docs/open-questions.md` → `phase-3-input-coverage` /
@@ -66,16 +66,55 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
     );
 
     it(
-      "lists removal templates for the demo project",
+      "lists GHG entry templates for the demo project",
       async () => {
-        const { listRemovalTemplates } = await import("@/lib/isometric");
+        const { listGhgEntryTemplates } = await import("@/lib/isometric");
         const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID as string;
-        const templates = await listRemovalTemplates(demoId);
+        const templates = await listGhgEntryTemplates(demoId);
         expect(templates.length).toBeGreaterThan(0);
         for (const template of templates) {
           expect(typeof template.id).toBe("string");
           expect(template.id.length).toBeGreaterThan(0);
+          // Post-rename surface exposes credit_type; ours are REMOVAL.
+          expect(template.credit_type).toBe("REMOVAL");
         }
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "lists GHG entries via the renamed /ghg_entries route (rmv_ id shape preserved)",
+      async () => {
+        const { isometric } = await import("@/lib/isometric");
+        // Old Removals are the same resources, now retrievable via
+        // /ghg_entries; their ids keep the rmv_ prefix after the rename.
+        let count = 0;
+        for await (const entry of isometric.paginate<{ id: string }>(
+          "/ghg_entries",
+          { pageSize: 5 },
+        )) {
+          expect(entry.id).toMatch(/^rmv_/);
+          if (++count >= 5) break;
+        }
+        // A fresh sandbox project may have zero entries; the assertion above
+        // only fires when data exists. Reaching here proves the route resolves.
+        expect(count).toBeGreaterThanOrEqual(0);
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    // Env-gated: set ISOMETRIC_KNOWN_GHG_ENTRY_SUPPLIER_REF to the
+    // supplier_reference_id of a Removal created BEFORE the 2026-06-04 rename
+    // to prove old objects resolve through the new /ghg_entries route.
+    it.skipIf(!process.env.ISOMETRIC_KNOWN_GHG_ENTRY_SUPPLIER_REF)(
+      "resolves a pre-rename Removal by supplier_reference_id through /ghg_entries",
+      async () => {
+        const { findGhgEntryBySupplierRef } = await import("@/lib/isometric");
+        const ref = process.env
+          .ISOMETRIC_KNOWN_GHG_ENTRY_SUPPLIER_REF as string;
+        const entry = await findGhgEntryBySupplierRef(ref);
+        expect(entry).not.toBeNull();
+        expect(entry?.id).toMatch(/^rmv_/);
       },
       TEST_TIMEOUT_MS,
     );

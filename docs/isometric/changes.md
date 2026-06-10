@@ -4,6 +4,56 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-10 (GHG entry API migration: removal→ghg_entry wire rename)
+
+Migrates the Certify wire layer from the deprecated removal-named endpoints to
+the new `ghg_entry` route family per Isometric's
+[2026-06-04 changelog](https://docs.isometric.com/api-reference/certify/api-changelog)
+("GHG entry API rename released across Certify REST endpoints"). The old
+endpoints stay functional until **September 2026**, then are removed. Verified
+against the live Certify spec (62 paths / 187 schemas) on 2026-06-10.
+
+- **Regen pipeline fixed first.** `regenerate-certify-types` defaulted to
+  `https://api.isometric.com/openapi.json`, which now serves Isometric's
+  internal FastAPI spec (no Certify routes), so `certify.d.ts` was stale
+  (pre-rename). Repointed to the docs-hosted Certify spec
+  `https://docs.isometric.com/api-reference/certify/mrv.openapi.json`
+  (`package.json`, `.github/workflows/isometric-health.yml`,
+  `docs/isometric/update-playbook.md`) and regenerated. New + deprecated
+  schemas coexist during the transition.
+- **Wire renames** (`src/lib/isometric/`): `POST/GET /removals` →
+  `/ghg_entries`; `/projects/{id}/removal_templates` → `/ghg_entry_templates`;
+  `GET /components?removal_id=` → `?ghg_entry_id=`; create-payload fields
+  `removal_template_id`/`removal_template_components`/`removal_template_component_id`
+  → `ghg_entry_template_*`; `GhgStatement.removal_ids` (read) →
+  `ghg_entry_ids` (required; old field now `deprecated: true`). Symbols/files
+  renamed: `createRemoval`→`createGhgEntry`,
+  `findRemovalBySupplierRef`→`findGhgEntryBySupplierRef`,
+  `listRemovalTemplates`→`listGhgEntryTemplates`,
+  `buildCreateRemovalRequest`→`buildCreateGhgEntryRequest`,
+  `transformers/removal.ts`→`transformers/ghg-entry.ts`,
+  `utils/removal-membership.ts`→`utils/ghg-entry-membership.ts`, and the
+  `Removal*`/`RemovalTemplate*` type aliases → `GhgEntry*`/`GhgEntryTemplate*`.
+- **Wire-only rename decision.** App-layer + DB naming (`certifier_removals`,
+  `credit_batches.removal_id`, `defaultRemovalTemplateId`, ledger
+  `'removal'` keys, the `decideRemovalMembership` / `reconcileRemoval` domain
+  fns) stays "Removal" — our templates are `credit_type: REMOVAL`, so it
+  remains the correct domain word. No DB/data migration; all `rmv_`/`rvt_`/
+  `ggs_` ids unchanged, and old Removals resolve through `/ghg_entries` by the
+  same `supplier_reference_id`. `listGhgEntryTemplates` now warns on any
+  non-REMOVAL `credit_type`. Rejected: full domain rename (no behavioural gain
+  on a biochar-only product, ~50 files of churn). Revisit only if we ever
+  submit `REDUCTION`-type entries.
+- **Tests.** New fetch-mocked contract test
+  (`src/lib/isometric/submissions.test.ts`) pins
+  `findGhgEntryBySupplierRef` to `GET /ghg_entries?supplier_reference_id=`;
+  sandbox read suite migrated to `ghg_entry_templates` (asserts
+  `credit_type`) + a `GET /ghg_entries` `rmv_`-shape test + an env-gated
+  pre-rename supplier-ref lookup. Free fields now exposed on the migrated
+  surface (`credit_type`, `risk_of_reversal_percentage`, `credit_allocation`,
+  statement reporting-period readback, source `description`) are tracked as
+  follow-ups in `docs/open-questions.md`; not adopted here.
+
 ## 2026-06-08 (Schema slim-down: drop unused protocol-stub tables)
 
 Schema-only cleanup; no behaviour change. Dropped tables/columns that were

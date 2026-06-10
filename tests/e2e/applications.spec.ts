@@ -7,7 +7,11 @@
  * Chain: Delivery → Application → Credit Batch
  */
 import { test, expect } from "./fixtures";
-import { waitForSideSheet, waitForSideSheetClose } from "./fixtures/page-helpers";
+import {
+  selectEntity,
+  waitForSideSheet,
+  waitForSideSheetClose,
+} from "./fixtures/page-helpers";
 
 test.describe("Application + Credit Batch UI CRUD", () => {
   test("create application via UI form", async ({
@@ -39,9 +43,11 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       seededData.customerLocation.id
     );
 
-    await page.selectOption(
-      'select[name="biocharProductId"]',
-      seededData.biocharProduct.id
+    await selectEntity(
+      page,
+      "Biochar Product",
+      seededData.biocharProduct.id,
+      seededData.biocharProduct.code
     );
     await page.selectOption('select[name="packaging"]', "loose");
     await page.fill('input[name="quantityKg"]', "100");
@@ -136,11 +142,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       await firstAppLabel.click();
     }
 
-    // Durability section (defaults to 200_year)
-    await page.selectOption('select[name="durabilityOption"]', "200_year");
-    // H:Corg ratio is required for 200-year durability (conditionally rendered)
-    await page.waitForSelector('input[name="hToCorgRatio"]', { timeout: 5000 });
-    await page.fill('input[name="hToCorgRatio"]', "0.4");
+    // Durability is snapshotted from the facility default and rendered read-only.
 
     // Submit
     await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();

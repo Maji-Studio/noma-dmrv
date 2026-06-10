@@ -16,7 +16,7 @@
  * `tests/isometric-sandbox.integration.test.ts` (live API).
  *
  * `loadFacilityCertifierMapping` always reads from Isometric
- * (`listProjects` + `listRemovalTemplates(externalProjectId)`), so the
+ * (`listProjects` + `listGhgEntryTemplates(externalProjectId)`), so the
  * inserted `externalProjectId` must be a real sandbox project.
  * Playwright loads `.env.test` only — we additionally pull `.env.local`
  * (without overriding) so a developer with sandbox creds + an
@@ -44,7 +44,9 @@ const UNLINK_GUARD_MESSAGE =
 
 const RUN_ID = crypto.randomUUID().slice(0, 8);
 
-test.describe("Facility ↔ Isometric project mapping", () => {
+// @live — talks to the real Isometric sandbox; excluded from PR CI (e2e.yml
+// runs --grep-invert @live) and exercised by the nightly e2e-live workflow.
+test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => {
   test.skip(
     !SANDBOX_PROJECT_ID,
     "ISOMETRIC_DEMO_PROJECT_ID is required for the facility certifier mapping E2E (set in .env.local or .env.test).",

@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     createDatapoint,
     patchDatapoint,
     findDatapointBySupplierRef,
-    listRemovalTemplates,
+    listGhgEntryTemplates,
     listComponentBlueprints,
   } = await import("../src/lib/isometric");
   const { lookupInputMapping } = await import(
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
         `Inspecting default removal templates on demo project ${demoExternalProjectId} (read-only)…\n`,
       );
       const [templates, blueprints] = await Promise.all([
-        listRemovalTemplates(demoExternalProjectId),
+        listGhgEntryTemplates(demoExternalProjectId),
         listComponentBlueprints(),
       ]);
       const blueprintByKey = new Map(blueprints.map((bp) => [bp.key, bp]));
@@ -244,7 +244,7 @@ async function main(): Promise<void> {
         `Bootstrapping fixed-input constants on template ${bootstrapTemplateId!} (project ${demoExternalProjectId})…\n`,
       );
       const [templates, blueprints] = await Promise.all([
-        listRemovalTemplates(demoExternalProjectId),
+        listGhgEntryTemplates(demoExternalProjectId),
         listComponentBlueprints(),
       ]);
       const blueprintByKey = new Map(blueprints.map((bp) => [bp.key, bp]));
@@ -457,7 +457,7 @@ async function main(): Promise<void> {
       console.log(`demo_project_count: ${filtered.length}`);
       for (const statement of filtered) {
         console.log(
-          `  ${statement.id} status=${statement.status} period=${statement.reporting_period_start_at}..${statement.reporting_period_end_at} removals=${statement.removal_ids.length}`,
+          `  ${statement.id} status=${statement.status} period=${statement.reporting_period_start_at}..${statement.reporting_period_end_at} ghg_entries=${statement.ghg_entry_ids.length}`,
         );
       }
       return;

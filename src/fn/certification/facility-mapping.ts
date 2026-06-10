@@ -14,9 +14,9 @@ import { requireAdminAction } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
   listProjects,
-  listRemovalTemplates,
+  listGhgEntryTemplates,
   type IsometricProject,
-  type IsometricRemovalTemplate,
+  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import {
   facilityEmissionConfigSchema,
@@ -31,7 +31,7 @@ import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
   availableProjects: IsometricProject[];
-  availableTemplates: IsometricRemovalTemplate[];
+  availableTemplates: IsometricGhgEntryTemplate[];
   linkHints: Array<{
     externalProjectId: string;
     linkedFacilities: LinkedFacilitySummary[];
@@ -41,12 +41,12 @@ export interface FacilityCertifierMapping {
 
 // Read-only registry-link summary for non-managing viewers. DB-only — it
 // deliberately does NOT hit the Isometric API (`listProjects` /
-// `listRemovalTemplates`) or the cross-facility link query that
+// `listGhgEntryTemplates`) or the cross-facility link query that
 // `loadFacilityCertifierMapping` does. A non-admin reading the current mapping
 // must not pull the management payload (available project list, link hints,
 // template options). The trade-off: the read-only view shows the persisted
-// identifiers + protocol on the row, not the human-friendly project/template
-// names (those are only resolvable from the management list).
+// identifiers on the row, not the human-friendly project/template names
+// (those are only resolvable from the management list).
 export interface FacilityCertifierSummary {
   mapping: CertifierProjectRow | null;
   isProduction: boolean;
@@ -80,7 +80,7 @@ export async function loadFacilityCertifierMapping(
 
     const availableTemplates = mapping
       ? await safeListIfConfigured(() =>
-          listRemovalTemplates(mapping.externalProjectId),
+          listGhgEntryTemplates(mapping.externalProjectId),
         )
       : [];
 
@@ -129,10 +129,20 @@ export async function saveFacilityCertifierMapping(
       throw new SafeError("Selected project does not exist on Isometric.");
     }
     if (parsed.defaultRemovalTemplateId) {
-      const templates = await listRemovalTemplates(parsed.externalProjectId);
-      if (!templates.some((t) => t.id === parsed.defaultRemovalTemplateId)) {
+      const templates = await listGhgEntryTemplates(parsed.externalProjectId);
+      const selectedTemplate = templates.find(
+        (t) => t.id === parsed.defaultRemovalTemplateId,
+      );
+      if (!selectedTemplate) {
         throw new SafeError(
           "Selected template does not belong to the chosen project.",
+        );
+      }
+      // We only submit biochar REMOVAL credits; a REDUCTION template bound
+      // here would mislabel every future GHG entry created from it.
+      if (selectedTemplate.credit_type !== "REMOVAL") {
+        throw new SafeError(
+          "Selected template is not a REMOVAL template. Only REMOVAL templates can be used for biochar submissions.",
         );
       }
     }
@@ -142,7 +152,6 @@ export async function saveFacilityCertifierMapping(
       provider: ISOMETRIC_PROVIDER,
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
-      protocolVersion: parsed.protocolVersion ?? null,
       defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
       externalFacilityId: parsed.externalFacilityId ?? null,
     });
@@ -162,9 +171,9 @@ export async function deleteFacilityCertifierMapping(
 
 export async function loadIsometricProjectTemplates(
   externalProjectId: string,
-): Promise<ActionResult<IsometricRemovalTemplate[]>> {
+): Promise<ActionResult<IsometricGhgEntryTemplate[]>> {
   return withAction(async () => {
-    return listRemovalTemplates(externalProjectId);
+    return listGhgEntryTemplates(externalProjectId);
   });
 }
 

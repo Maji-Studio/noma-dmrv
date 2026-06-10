@@ -113,9 +113,6 @@ function CertifierMappingFields({
   templateName?: string | null;
 }) {
   const resolvesNames = projectName !== undefined;
-  const protocolUrl = mapping.protocolVersion
-    ? isometricRegistry.protocol(mapping.protocolSlug, mapping.protocolVersion)
-    : null;
 
   return (
     <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-12 mt-16">
@@ -163,23 +160,6 @@ function CertifierMappingFields({
             }
           >
             {mapping.defaultRemovalTemplateId ?? "Not set"}
-          </span>
-        )}
-      </Field>
-      <Field label="Protocol">
-        {protocolUrl ? (
-          <a
-            href={protocolUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="body-small underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-          >
-            {mapping.protocolSlug} {mapping.protocolVersion} ↗
-          </a>
-        ) : (
-          <span className="body-small">
-            {mapping.protocolSlug}
-            {mapping.protocolVersion ? ` ${mapping.protocolVersion}` : ""}
           </span>
         )}
       </Field>

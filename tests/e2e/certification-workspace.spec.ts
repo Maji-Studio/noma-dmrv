@@ -104,7 +104,9 @@ test.describe("Certification workspace — section navigation", () => {
   });
 });
 
-test.describe("Certification workspace — Settings", () => {
+// @live — talks to the real Isometric sandbox; excluded from PR CI (e2e.yml
+// runs --grep-invert @live) and exercised by the nightly e2e-live workflow.
+test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
   test.skip(
     !SANDBOX_PROJECT_ID,
     "ISOMETRIC_DEMO_PROJECT_ID is required to seed a linked facility for the Settings round-trip (set in .env.local or CI secrets).",

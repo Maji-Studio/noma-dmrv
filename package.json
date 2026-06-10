@@ -24,6 +24,7 @@
     "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
     "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin",
     "env:local": "op inject -i .env.tpl -o .env",
+    "env:check": "tsx scripts/check-env-drift.ts",
     "env:vercel": "pnpm env:prod && pnpm env:preview",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",
     "env:preview": "tsx scripts/sync-env-to-vercel.ts --1p-env=staging --vercel-env=preview",
@@ -31,10 +32,10 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:integration": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run tests/**/*.integration.test.ts",
-    "test:e2e": "playwright test --workers=1 --retries=2",
+    "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "isometric:coverage-check": "tsx scripts/isometric-coverage-check.ts",
-    "regenerate-certify-types": "openapi-typescript ${ISOMETRIC_OPENAPI_URL:-https://api.isometric.com/openapi.json} -o src/lib/isometric/generated/certify.d.ts"
+    "regenerate-certify-types": "openapi-typescript ${ISOMETRIC_OPENAPI_URL:-https://docs.isometric.com/api-reference/certify/mrv.openapi.json} -o src/lib/isometric/generated/certify.d.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1049.0",

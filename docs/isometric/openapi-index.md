@@ -1,9 +1,16 @@
 # Isometric OpenAPI Index
 
 > **Non-authoritative.** Pulled from the Isometric MCP
-> (`openapi_documents_list_objects`) on **2026-05-19**. Both APIs are
-> pinned to `v0` per [`versions.json`](./versions.json). Re-pull before
-> relying on any row — see [How to refresh](#how-to-refresh).
+> (`openapi_documents_list_objects`) on **2026-05-19**; the removal→ghg_entry
+> rows below refreshed against the live Certify spec on **2026-06-10** (see
+> [`changes.md`](./changes.md) → 2026-06-10). Both APIs are pinned to `v0` per
+> [`versions.json`](./versions.json). Re-pull before relying on any row — see
+> [How to refresh](#how-to-refresh).
+>
+> **2026-06-04 rename:** the `removal*` operations/schemas were renamed to
+> `ghg_entry*` (old forms `deprecated: true`, functional until **September
+> 2026**). noma calls the new routes; the deprecated rows are kept below
+> marked 🚫 so the sunset is tracked.
 
 Annotated index of every operation, schema, server, and security scheme
 exposed by Isometric's two public APIs (`certify` / `registry`),
@@ -35,18 +42,20 @@ Title: *Isometric Certify Data Ingestion API* · Version: `v0`
 |---|---|---|---|
 | GET | `/organisation` | ⬜ | Not called directly; `client.ts` reads `ISOMETRIC_ORG_ID` from env |
 
-#### Projects, removal templates, monitoring, storage locations
+#### Projects, GHG entry templates, monitoring, storage locations
 
 | Method | Path | Status | Notes |
 |---|---|---|---|
-| GET | `/projects` | ✅ | `src/lib/isometric/projects.ts:10` |
+| GET | `/projects` | ✅ | `src/lib/isometric/projects.ts:15` |
 | GET | `/projects/{id}/monitoring_requirements` | ⬜ | Phase 5 |
 | GET | `/projects/{project_id}/monitoring_requirements/{requirement_id}` | ⬜ | Phase 5 |
 | GET | `/projects/{project_id}/monitoring_requirements/{id}/submissions` | ⬜ | Phase 5 |
 | POST | `/projects/{project_id}/monitoring_requirements/{id}/submissions` | ⬜ | Phase 5 (time-series MonitoringSubmission) |
 | DELETE | `/projects/{project_id}/monitoring_requirements/{monitoring_requirement_id}/submissions/{id}` | ⬜ | Phase 5 |
-| GET | `/projects/{project_id}/removal_templates` | ✅ | `projects.ts:17` |
-| GET | `/projects/{project_id}/removal_templates/{id}` | ⬜ | Indirectly via the list call above; not yet needed |
+| GET | `/projects/{project_id}/ghg_entry_templates` | ✅ | `projects.ts:23` (`listGhgEntryTemplates`) |
+| GET | `/projects/{project_id}/ghg_entry_templates/{id}` | ⬜ | Indirectly via the list call above; not yet needed |
+| GET | `/projects/{project_id}/removal_templates` | 🚫 | Deprecated 2026-06-04 → `ghg_entry_templates`; sunset Sept 2026 |
+| GET | `/projects/{project_id}/removal_templates/{id}` | 🚫 | Deprecated 2026-06-04 → `ghg_entry_templates/{id}` |
 | GET | `/projects/{project_id}/storage_locations` | ⬜ | Phase 5 (soil-storage module) |
 | POST | `/projects/{project_id}/storage_locations` | ⬜ | Phase 5 |
 | GET | `/projects/{project_id}/storage_locations/{id}` | ⬜ | Phase 5 |
@@ -66,33 +75,37 @@ Title: *Isometric Certify Data Ingestion API* · Version: `v0`
 | PATCH | `/components/{id}` | ⬜ | Phase 4 supersede path (deferred) |
 | DELETE | `/components/{id}` | ⬜ | — |
 | POST | `/project_components` | ⬜ | Phase 4 |
-| POST | `/project_components/{id}/removal_attributions` | ⬜ | Phase 4 |
-| DELETE | `/project_components/{component_id}/removal_attributions/{removal_id}` | ⬜ | Phase 4 |
+| POST | `/project_components/{id}/ghg_entry_attributions` | ⬜ | Phase 4 (renamed 2026-06-04 from `removal_attributions`) |
+| DELETE | `/project_components/{component_id}/ghg_entry_attributions/{ghg_entry_id}` | ⬜ | Phase 4 (renamed 2026-06-04) |
 | POST | `/ghg_statement_components` | ⬜ | Phase 4 |
 
 #### Datapoints
 
 | Method | Path | Status | Notes |
 |---|---|---|---|
-| GET | `/datapoints` | ✅ | `submissions.ts:66` (filtered by `supplier_reference_id`) |
+| GET | `/datapoints` | ✅ | `submissions.ts:87` (filtered by `supplier_reference_id`) |
 | POST | `/datapoints` | ✅ | `submissions.ts:21` |
 | GET | `/datapoints/{id}` | ⬜ | — |
-| PATCH | `/datapoints/{id}` | ✅ | `submissions.ts:28` |
+| PATCH | `/datapoints/{id}` | ✅ | `submissions.ts:25` |
 | DELETE | `/datapoints/{id}` | ⬜ | — |
 | GET | `/datapoints/{id}/components` | ⬜ | — |
-| GET | `/datapoints/{id}/removal_template_components` | ⬜ | Useful for template introspection; not yet needed |
+| GET | `/datapoints/{id}/ghg_entry_template_components` | ⬜ | Template introspection; not yet needed (renamed 2026-06-04) |
 
-#### Removals
+#### GHG entries (formerly Removals)
+
+> Renamed 2026-06-04. noma's removal flow POSTs/looks up via `/ghg_entries`;
+> ids keep the `rmv_` prefix. Deprecated `/removals*` forms sunset Sept 2026.
 
 | Method | Path | Status | Notes |
 |---|---|---|---|
-| GET | `/removals` | ✅ | `submissions.ts:60` (filtered by `supplier_reference_id`) |
-| POST | `/removals` | ✅ | `submissions.ts:32` |
-| GET | `/removals/{id}` | ⬜ | — |
-| PATCH | `/removals/{id}` | ⬜ | Phase 4 supersede branch (deferred) |
-| DELETE | `/removals/{id}` | ⬜ | — |
-| GET | `/removals/{id}/component_attributions` | ⬜ | — |
-| PATCH | `/removals/{id}/component_attributions` | ⬜ | Phase 4 |
+| GET | `/ghg_entries` | ✅ | `submissions.ts:63` (`findGhgEntryBySupplierRef`, filtered by `supplier_reference_id`) |
+| POST | `/ghg_entries` | ✅ | `submissions.ts:33` (`createGhgEntry`) |
+| GET | `/ghg_entries/{id}` | ⬜ | — |
+| PATCH | `/ghg_entries/{id}` | ⬜ | Phase 4 supersede branch (deferred) |
+| DELETE | `/ghg_entries/{id}` | ⬜ | — |
+| GET | `/ghg_entries/{id}/component_attributions` | ⬜ | — |
+| PATCH | `/ghg_entries/{id}/component_attributions` | ⬜ | Phase 4 |
+| — | `/removals`, `/removals/{id}`, `/removals/{id}/component_attributions` | 🚫 | Deprecated 2026-06-04; functional until Sept 2026, then removed |
 
 #### GHG statements
 
@@ -171,16 +184,16 @@ Title: *Isometric Certify Data Ingestion API* · Version: `v0`
 
 | Method | Path | Status | Notes |
 |---|---|---|---|
-| GET | `/processes` | 🚫 | Deprecated by Isometric; use `GET /projects/{id}/removal_templates` instead |
+| GET | `/processes` | 🚫 | Deprecated by Isometric; use `GET /projects/{id}/ghg_entry_templates` instead |
 
 ### Schemas
 
 <details>
 <summary>Certify schemas (~150 total) — grouped by domain</summary>
 
-- **Removals / templates** — `Removal`, `RemovalTemplate`, `RemovalTemplateComponent`, `RemovalTemplateComponentGroup`, `RemovalTemplateComponentInput`, `RemovalTemplateComponentInputs`, `CreateRemovalRequest`, `CreateRemovalStep`, `CreateRemovalComponentLink`, `PatchRemovalRequest`, `PatchRemovalComponentAttributionsRequest`, `PaginatedListResource_Removal_`, `PaginatedListResource_RemovalTemplate_`, `PaginatedListResource_RemovalTemplateComponent_`. *Used by `transformers/removal.ts` + `submissions.ts`.*
+- **GHG entries / templates** (renamed 2026-06-04) — `GhgEntry`, `GhgEntryTemplate`, `GhgEntryTemplateComponent`, `GhgEntryTemplateComponentGroup`, `GhgEntryTemplateComponentInput`, `GhgEntryTemplateComponentInputs`, `CreateGhgEntryRequest`, `PaginatedListResource_GhgEntry_`, `PaginatedListResource_GhgEntryTemplate_`, `PaginatedListResource_GhgEntryTemplateComponent_`. *Used by `transformers/ghg-entry.ts` + `submissions.ts`.* Deprecated forms (`Removal`, `RemovalTemplate*`, `CreateRemovalRequest`, `PatchRemovalRequest`, …) still emitted by the spec until Sept 2026 but unreferenced in noma.
 - **Datapoints** — `Datapoint`, `DatapointType`, `DatapointQuantityInput`, `DatapointLockedStatus`, `CreateDatapointRequest`, `PatchDatapointRequest`, `PaginatedListResource_Datapoint_`. *Used by `transformers/datapoint.ts` + `submissions.ts`.*
-- **Components** — `Component`, `ComponentAttribution`, `ComponentBlueprint`, `ComponentBlueprintExpression`, `ComponentBlueprintExpressionInput`, `ComponentBlueprintExpressionInputType`, `ComponentBlueprintInput`, `ComponentInputType`, `ComponentListInput`, `ComponentScalarInput`, `ComponentScope`, `ComponentToAttribute`, `ComponentType`, `AddComponentToRemoval`, `CreateComponentRequest`, `CreateComponentListInput`, `CreateComponentScalarInput`, `CreateRemovalComponentLink`, `PatchComponentRequest`, `PaginatedListResource_Component_`, `PaginatedListResource_ComponentAttribution_`, `PaginatedListResource_ComponentBlueprint_`. *Used by `transformers/removal.ts`.*
+- **Components** — `Component`, `ComponentAttribution`, `ComponentBlueprint`, `ComponentBlueprintExpression`, `ComponentBlueprintExpressionInput`, `ComponentBlueprintExpressionInputType`, `ComponentBlueprintInput`, `ComponentInputType`, `ComponentListInput`, `ComponentScalarInput`, `ComponentScope`, `ComponentToAttribute`, `ComponentType`, `AddComponentToRemoval`, `CreateComponentRequest`, `CreateComponentListInput`, `CreateComponentScalarInput`, `CreateRemovalComponentLink`, `PatchComponentRequest`, `PaginatedListResource_Component_`, `PaginatedListResource_ComponentAttribution_`, `PaginatedListResource_ComponentBlueprint_`. *Used by `transformers/ghg-entry.ts`.*
 - **GHG statements** — `GhgStatement`, `GhgStatementStatus`, `CreateGhgStatementRequest`, `CreateGhgStatementComponentRequest`, `ResubmitGhgStatementRequest`, `SubmitGhgStatementRequest`, `PaginatedListResource_GhgStatement_`. *Used by `ghg-statements.ts`.*
 - **Sources** — `Source`, `SourceType`, `SourcePrivateUrlInfo`, `SourcePublicUrlInfo`, `CreateDocumentSourceRequest`, `CreateSourceResponse`, `PatchSourceRequest`, `SignedUploadUrlRequest`, `PaginatedListResource_Source_`. *Phase 3.5.*
 - **Project / monitoring / storage locations** — `Project`, `Process`, `ProcessStep`, `MonitoringPhase`, `MonitoringSubmission`, `ProjectMonitoringRequirement`, `CreateMonitoringSubmissionRequest`, `StorageLocation`, `StorageMethod`, `CreateStorageLocationRequest`, `PatchStorageLocationRequest`, `PaginatedListResource_Process_`, `PaginatedListResource_Project_`, `PaginatedListResource_ProjectMonitoringRequirement_`, `PaginatedListResource_MonitoringSubmission_`, `PaginatedListResource_StorageLocation_`. *Partially used (project/template list); rest is Phase 5.*
@@ -330,7 +343,7 @@ Same as Certify — `HTTPBearer` plus `X-Client-Secret` on every request.
 Cross-reference these tables against the canonical phase docs:
 
 - ~~**Phase 3.5**~~ — ✅ Shipped 2026-05-26. `POST /sources`, `GET /sources?supplier_reference_id=…`, `POST /sources/{id}/signed_upload_url`, `PATCH /sources/{id}` are wired in `src/lib/isometric/sources.ts` + `src/fn/certification/sources.ts`. See [`integration-plan.md`](./integration-plan.md) Phase status row and [`changes.md`](./changes.md) 2026-05-26.
-- **Phase 4** — `PATCH /removals/{id}`, `PATCH /components/{id}`,
+- **Phase 4** — `PATCH /ghg_entries/{id}`, `PATCH /components/{id}`,
   `POST /project_components`, `POST /ghg_statement_components`,
   component-attribution endpoints. Deferred until a production signal
   forces a supersede-vs-patch decision. See
