@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certifierGhgStatements,
@@ -381,54 +381,16 @@ export async function deleteCertifierProject(
 // =====================================================================
 // Submission ledger
 // =====================================================================
+//
+// The claim choreography (latest read → decide → mapping lock → re-decide →
+// insert/reset draft) lives in `./certification-submissions` —
+// `claimSubmissionDraft` is the single entry point. This file keeps the
+// post-claim transitions (submitted / rejected / terminal), the batched and
+// by-id reads, and the sync-event journal.
 
 export type CertificationSubmissionRow =
   typeof certificationSubmissions.$inferSelect;
 export type CertifierSyncEventRow = typeof certifierSyncEvents.$inferSelect;
-
-export interface SubmissionKey {
-  provider: CertifierProvider;
-  submissionType: string;
-  localEntityType: string;
-  localEntityId: string;
-}
-
-export async function getLatestSubmission(
-  userId: string,
-  key: SubmissionKey,
-): Promise<CertificationSubmissionRow | null> {
-  requireAuth(userId);
-  return getLatestSubmissionWithExecutor(db, key);
-}
-
-export async function getLatestSubmissionInTx(
-  userId: string,
-  tx: Tx,
-  key: SubmissionKey,
-): Promise<CertificationSubmissionRow | null> {
-  requireAuth(userId);
-  return getLatestSubmissionWithExecutor(tx, key);
-}
-
-async function getLatestSubmissionWithExecutor(
-  executor: Tx | typeof db,
-  key: SubmissionKey,
-): Promise<CertificationSubmissionRow | null> {
-  const [row] = await executor
-    .select()
-    .from(certificationSubmissions)
-    .where(
-      and(
-        eq(certificationSubmissions.provider, key.provider),
-        eq(certificationSubmissions.submissionType, key.submissionType),
-        eq(certificationSubmissions.localEntityType, key.localEntityType),
-        eq(certificationSubmissions.localEntityId, key.localEntityId),
-      ),
-    )
-    .orderBy(desc(certificationSubmissions.version))
-    .limit(1);
-  return row ?? null;
-}
 
 // Batched sibling of getLatestSubmission — one round-trip for N local
 // entities. DISTINCT ON keeps the highest-version row per localEntityId, the
@@ -476,174 +438,6 @@ export async function getSubmissionById(
   return row ?? null;
 }
 
-export interface InsertDraftSubmissionInput extends SubmissionKey {
-  version: number;
-  payloadSnapshot: unknown;
-  payloadHash: string;
-  metadata?: Record<string, unknown> | null;
-}
-
-export async function insertDraftSubmission(
-  userId: string,
-  input: InsertDraftSubmissionInput,
-): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
-  // Unique-violation (23505) on (provider, submissionType, localEntityType,
-  // localEntityId, version) means another draft is already in flight for
-  // this tuple; the guard surfaces it as a SafeError so the orchestrator's
-  // branch-b path is consistent with concurrent inserts losing the race.
-  return withUniqueViolationGuard(() =>
-    db.transaction(async (tx) => insertDraftSubmissionRow(tx, input)),
-  );
-}
-
-export interface MappingClaimGuard {
-  facilityId: string;
-  provider: CertifierProvider;
-  expectedExternalProjectId: string;
-  expectedExternalFacilityId?: string | null;
-  expectedDefaultRemovalTemplateId?: string | null;
-}
-
-async function lockAndVerifyMapping(
-  executor: Tx,
-  guard: MappingClaimGuard,
-): Promise<void> {
-  const [current] = await executor
-    .select({
-      externalProjectId: certifierProjects.externalProjectId,
-      externalFacilityId: certifierProjects.externalFacilityId,
-      defaultRemovalTemplateId: certifierProjects.defaultRemovalTemplateId,
-    })
-    .from(certifierProjects)
-    .where(
-      and(
-        eq(certifierProjects.facilityId, guard.facilityId),
-        eq(certifierProjects.provider, guard.provider),
-      ),
-    )
-    .for("update")
-    .limit(1);
-
-  if (!current) {
-    throw new SafeError(
-      "Facility is no longer linked to a certifier project. Re-link in facility settings before submitting.",
-    );
-  }
-  if (current.externalProjectId !== guard.expectedExternalProjectId) {
-    throw new SafeError(
-      "Facility was repointed to a different certifier project mid-submission. Refresh and retry.",
-    );
-  }
-  if (
-    guard.expectedExternalFacilityId !== undefined &&
-    current.externalFacilityId !== guard.expectedExternalFacilityId
-  ) {
-    throw new SafeError(
-      "Facility was repointed to a different certifier facility mid-submission. Refresh and retry.",
-    );
-  }
-  if (
-    guard.expectedDefaultRemovalTemplateId !== undefined &&
-    current.defaultRemovalTemplateId !== guard.expectedDefaultRemovalTemplateId
-  ) {
-    throw new SafeError(
-      "Facility's default removal template changed mid-submission. Refresh and retry.",
-    );
-  }
-}
-
-// Single source of truth for the draft-insert row shape. Every public
-// submit-path inserts through here, so a future column change touches one
-// site, not three.
-async function insertDraftSubmissionRow(
-  tx: Tx,
-  input: InsertDraftSubmissionInput,
-): Promise<CertificationSubmissionRow> {
-  const [row] = await tx
-    .insert(certificationSubmissions)
-    .values({
-      provider: input.provider,
-      submissionType: input.submissionType,
-      localEntityType: input.localEntityType,
-      localEntityId: input.localEntityId,
-      version: input.version,
-      status: "draft",
-      payloadSnapshot: input.payloadSnapshot as Record<string, unknown>,
-      payloadHash: input.payloadHash,
-      lockedAt: sql`now()`,
-      metadata: (input.metadata ?? null) as Record<string, unknown> | null,
-    })
-    .returning();
-  return row;
-}
-
-// The (provider, submissionType, localEntityType, localEntityId, version)
-// unique constraint — a 23505 on THIS index means a concurrent submit already
-// claimed the same version. The table carries a second unique index
-// (`cert_submissions_external_unique`); a violation there is a different bug
-// and must not be relabeled as "already in progress".
-const SUBMISSION_ENTITY_VERSION_CONSTRAINT =
-  "cert_submissions_entity_version_unique";
-
-// Maps the Postgres unique-violation (23505) on the entity-version constraint
-// into a SafeError. Centralized so every public submit entry point reports the
-// same user-facing message. Any other 23505 (or non-23505 error) propagates
-// unchanged so genuinely different failures aren't masked.
-async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505" &&
-      (err as { constraint?: string }).constraint ===
-        SUBMISSION_ENTITY_VERSION_CONSTRAINT
-    ) {
-      throw new SafeError("Submission already in progress");
-    }
-    throw err;
-  }
-}
-
-// Composable variant: caller provides a `prepare` callback that runs inside
-// the transaction after the mapping lock is held, so it can acquire
-// additional advisory locks and recompute hash-covered fields (Phase 3.5:
-// per-document mirror locks bracketing source-id resolution). The callback
-// returns the finalized InsertDraftSubmissionInput which is then inserted in
-// the same transaction.
-//
-// The mapping lock is always acquired FIRST so every submit path shares one
-// lock order (`mapping → caller-supplied locks`), preventing an ABBA
-// deadlock with admin flows that touch certifier_projects and
-// certifier_document_uploads in the opposite order.
-export async function insertDraftSubmissionWithMappingLockAndLocks(
-  userId: string,
-  guard: MappingClaimGuard,
-  prepare: (tx: Tx) => Promise<InsertDraftSubmissionInput>,
-): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
-  return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(tx, guard);
-    const input = await prepare(tx);
-    return withUniqueViolationGuard(() => insertDraftSubmissionRow(tx, input));
-  });
-}
-
-export async function insertDraftSubmissionWithMappingLock(
-  userId: string,
-  input: InsertDraftSubmissionInput,
-  guard: MappingClaimGuard,
-): Promise<CertificationSubmissionRow> {
-  return insertDraftSubmissionWithMappingLockAndLocks(
-    userId,
-    guard,
-    async () => input,
-  );
-}
-
 export async function markSubmissionSubmitted(
   userId: string,
   id: string,
@@ -689,65 +483,6 @@ export async function markSubmissionRejected(
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', ${args.errorMessage}::text)`,
     })
     .where(eq(certificationSubmissions.id, id));
-}
-
-export async function resetSubmissionToDraft(
-  userId: string,
-  id: string,
-): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
-  const [row] = await db
-    .update(certificationSubmissions)
-    .set({
-      status: "draft",
-      lockedAt: sql`now()`,
-      updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
-    })
-    .where(eq(certificationSubmissions.id, id))
-    .returning();
-  if (!row) throw new SafeError("Submission not found");
-  return row;
-}
-
-export async function resetSubmissionToDraftWithMappingLock(
-  userId: string,
-  id: string,
-  guard: MappingClaimGuard,
-  lockTtlMs: number,
-): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
-  return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(tx, guard);
-    // Compare-and-swap: only a row that is NOT a freshly-locked draft is
-    // resumable. If a concurrent caller already claimed it (flipping it to a
-    // fresh draft), this UPDATE matches zero rows — so two callers cannot
-    // both resume the same submission and double-POST to the registry.
-    const [row] = await tx
-      .update(certificationSubmissions)
-      .set({
-        status: "draft",
-        lockedAt: sql`now()`,
-        updatedAt: sql`now()`,
-        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - 'lastError'`,
-      })
-      .where(
-        and(
-          eq(certificationSubmissions.id, id),
-          or(
-            ne(certificationSubmissions.status, "draft"),
-            isNull(certificationSubmissions.lockedAt),
-            lt(
-              certificationSubmissions.lockedAt,
-              sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
-            ),
-          ),
-        ),
-      )
-      .returning();
-    if (!row) throw new SafeError("Submission already in progress");
-    return row;
-  });
 }
 
 // Accumulates per-step recovery IDs into `payload_snapshot.journaled`

@@ -4,16 +4,21 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import {
   appendSubmissionJournal,
-  getLatestSubmission,
-  insertDraftSubmissionWithMappingLock,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraftWithMappingLock,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
-  type MappingClaimGuard,
 } from "@/data-access/certification";
+// Telemetry-boundary imports (see certification-submissions.ts): this file
+// is the single permitted importer of the relocated claim primitives until
+// the journaled-step recovery (ADR 0006) migrates onto claimSubmissionDraft.
+import {
+  getLatestSubmission,
+  insertDraftSubmissionWithMappingLock,
+  resetSubmissionToDraftWithMappingLock,
+  type MappingClaimGuard,
+} from "@/data-access/certification-submissions";
 import {
   ensureSensorForReactor,
   listSensorsForReactors,
