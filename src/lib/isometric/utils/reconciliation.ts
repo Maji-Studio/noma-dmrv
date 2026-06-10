@@ -1,6 +1,6 @@
 import {
   findDatapointBySupplierRef,
-  findRemovalBySupplierRef,
+  findGhgEntryBySupplierRef,
 } from "../submissions";
 import {
   findDraftGhgStatementsByPeriod,
@@ -19,8 +19,8 @@ export type GhgStatementReconciliation =
 export async function reconcileRemoval(args: {
   supplierRefId: string;
 }): Promise<SupplierRefReconciliation> {
-  const removal = await findRemovalBySupplierRef(args.supplierRefId);
-  return removal ? { found: true, externalId: removal.id } : { found: false };
+  const ghgEntry = await findGhgEntryBySupplierRef(args.supplierRefId);
+  return ghgEntry ? { found: true, externalId: ghgEntry.id } : { found: false };
 }
 
 export async function reconcileDatapoint(args: {

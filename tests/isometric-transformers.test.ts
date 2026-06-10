@@ -4,14 +4,14 @@ import {
   buildCreateDatapointRequest,
   lookupInputMapping,
 } from "@/lib/isometric/transformers/datapoint";
-import { buildCreateRemovalRequest } from "@/lib/isometric/transformers/removal";
+import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 type ComponentBlueprint = components["schemas"]["ComponentBlueprint"];
 type ComponentBlueprintInput = components["schemas"]["ComponentBlueprintInput"];
-type RemovalTemplate = components["schemas"]["RemovalTemplate"];
-type RemovalTemplateComponentInput =
-  components["schemas"]["RemovalTemplateComponentInput"];
+type GhgEntryTemplate = components["schemas"]["GhgEntryTemplate"];
+type GhgEntryTemplateComponentInput =
+  components["schemas"]["GhgEntryTemplateComponentInput"];
 
 const PROJECT_ID = "prj_TEST";
 const SUPPLIER_REF = "nm-test-001";
@@ -67,8 +67,8 @@ function blueprintInput(
 }
 
 function rtcInput(
-  overrides: Partial<RemovalTemplateComponentInput>,
-): RemovalTemplateComponentInput {
+  overrides: Partial<GhgEntryTemplateComponentInput>,
+): GhgEntryTemplateComponentInput {
   return {
     datapoint_id: null,
     display_name: "Test input",
@@ -332,7 +332,7 @@ describe("buildCreateDatapointRequest", () => {
   });
 });
 
-// --- buildCreateRemovalRequest ---
+// --- buildCreateGhgEntryRequest ---
 
 const blueprintMass: ComponentBlueprint = {
   description: "mass blueprint",
@@ -368,8 +368,9 @@ const blueprintListInput: ComponentBlueprint = {
 
 function template(
   components: { id: string; blueprint_key: string; inputs: { input_key: string }[] }[],
-): RemovalTemplate {
+): GhgEntryTemplate {
   return {
+    credit_type: "REMOVAL",
     display_name: "Test template",
     id: "rvt_TEST",
     project_id: PROJECT_ID,
@@ -388,23 +389,23 @@ function template(
           inputs: c.inputs.map((i) =>
             rtcInput({ input_key: i.input_key, quantity_kind: "mass" }),
           ),
-          removal_template_component_group_id: "rtg_1",
-          removal_template_id: "rvt_TEST",
+          ghg_entry_template_component_group_id: "rtg_1",
+          ghg_entry_template_id: "rvt_TEST",
         })),
       },
     ],
   };
 }
 
-describe("buildCreateRemovalRequest", () => {
-  it("assembles a CreateRemovalRequest with one scalar input wired to its datapoint", () => {
+describe("buildCreateGhgEntryRequest", () => {
+  it("assembles a CreateGhgEntryRequest with one scalar input wired to its datapoint", () => {
     const tmpl = template([
       { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
     ]);
     const blueprints = new Map([["mass_blueprint", blueprintMass]]);
     const datapointIds = new Map([["rtc_A::mass", "dtp_1"]]);
 
-    const result = buildCreateRemovalRequest({
+    const result = buildCreateGhgEntryRequest({
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
@@ -414,15 +415,15 @@ describe("buildCreateRemovalRequest", () => {
     });
 
     expect(result.project_id).toBe(PROJECT_ID);
-    expect(result.removal_template_id).toBe("rvt_TEST");
+    expect(result.ghg_entry_template_id).toBe("rvt_TEST");
     expect(result.supplier_reference_id).toBe(SUPPLIER_REF);
     expect(result.started_on).toBe("2026-01-01");
     expect(result.completed_on).toBe("2026-01-31");
 
-    const components = result.removal_template_components ?? [];
+    const components = result.ghg_entry_template_components ?? [];
     expect(components).toHaveLength(1);
     const comp = components[0]!;
-    expect(comp.removal_template_component_id).toBe("rtc_A");
+    expect(comp.ghg_entry_template_component_id).toBe("rtc_A");
     expect(comp.inputs).toHaveLength(1);
     const input = comp.inputs[0]!;
     expect(input.__typename).toBe("CreateComponentScalarInput");
@@ -443,7 +444,7 @@ describe("buildCreateRemovalRequest", () => {
     const blueprints = new Map([["list_blueprint", blueprintListInput]]);
     const datapointIds = new Map([["rtc_L::feedstock_mass", "dtp_99"]]);
 
-    const result = buildCreateRemovalRequest({
+    const result = buildCreateGhgEntryRequest({
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
@@ -452,7 +453,7 @@ describe("buildCreateRemovalRequest", () => {
       supplierRefId: SUPPLIER_REF,
     });
 
-    const components = result.removal_template_components ?? [];
+    const components = result.ghg_entry_template_components ?? [];
     const input = components[0]!.inputs[0]!;
     expect(input.__typename).toBe("CreateComponentListInput");
     if (input.__typename === "CreateComponentListInput") {
@@ -466,7 +467,7 @@ describe("buildCreateRemovalRequest", () => {
       { id: "rtc_X", blueprint_key: "missing_bp", inputs: [{ input_key: "mass" }] },
     ]);
     expect(() =>
-      buildCreateRemovalRequest({
+      buildCreateGhgEntryRequest({
         template: tmpl,
         blueprintsByKey: new Map(),
         datapointIdsByRtcInput: new Map(),
@@ -488,7 +489,7 @@ describe("buildCreateRemovalRequest", () => {
     const blueprints = new Map([["mass_blueprint", blueprintMass]]);
 
     expect(() =>
-      buildCreateRemovalRequest({
+      buildCreateGhgEntryRequest({
         template: tmpl,
         blueprintsByKey: blueprints,
         datapointIdsByRtcInput: new Map(),
@@ -506,7 +507,7 @@ describe("buildCreateRemovalRequest", () => {
     const blueprints = new Map([["mass_blueprint", blueprintMass]]);
 
     expect(() =>
-      buildCreateRemovalRequest({
+      buildCreateGhgEntryRequest({
         template: tmpl,
         blueprintsByKey: blueprints,
         datapointIdsByRtcInput: new Map(),
@@ -521,7 +522,7 @@ describe("buildCreateRemovalRequest", () => {
     const tmpl = template([
       { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
     ]);
-    const result = buildCreateRemovalRequest({
+    const result = buildCreateGhgEntryRequest({
       template: tmpl,
       blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
       datapointIdsByRtcInput: new Map([["rtc_A::mass", "dtp_1"]]),

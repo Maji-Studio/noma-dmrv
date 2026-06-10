@@ -766,6 +766,7 @@ export async function setDocumentSourceVisibility(
         },
         () =>
           patchSource(existing.externalDocumentId, {
+            description: undefinedField,
             display_name: undefinedField,
             is_public: parsed.isPublic,
             published_at: undefinedField,

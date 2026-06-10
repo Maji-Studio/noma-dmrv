@@ -108,10 +108,14 @@ export function FacilityCertifierDialog({
   }));
 
   const templates = liveTemplates ?? loaderData.availableTemplates;
-  const templateOptions = templates.map((t) => ({
-    value: t.id,
-    label: `${t.display_name} — ${t.id}`,
-  }));
+  // Only REMOVAL templates are valid bindings — the save action rejects
+  // anything else, so don't offer REDUCTION templates in the first place.
+  const templateOptions = templates
+    .filter((t) => t.credit_type === "REMOVAL")
+    .map((t) => ({
+      value: t.id,
+      label: `${t.display_name} — ${t.id}`,
+    }));
 
   const linkedHintForSelected = watchedProjectId
     ? linkedFacilitiesByProject.get(watchedProjectId)
