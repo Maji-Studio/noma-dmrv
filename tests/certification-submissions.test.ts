@@ -480,6 +480,47 @@ describe("claimSubmissionDraft — resume", () => {
     expect(outcome).toEqual({ kind: "blocked", reason: "in-flight" });
   });
 
+  it("resolves to existing — not a draft revert — when the row flips to submitted while parked in the resume path", async () => {
+    const fixture = await createFixture();
+    const seeded = await seedRow(fixture.key, {
+      version: 1,
+      status: "draft",
+      payloadHash: "hash:v-original",
+      lockedAt: new Date(Date.now() - STALE_LOCK_OFFSET_MS),
+    });
+
+    let claimPromise!: Promise<ClaimOutcome>;
+    await whileHoldingMappingLock(fixture.facilityId, async () => {
+      // Tentative decide sees the stale draft → resume path → parks on the
+      // mapping lock inside the resume transaction.
+      claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      await sleep(PARK_DELAY_MS);
+      // A concurrent claimant resumed the draft AND completed: the row is
+      // now submitted with our hash. The broad CAS predicate alone
+      // (status != draft) would happily revert it to draft — only the
+      // in-lock re-decision prevents that.
+      await db
+        .update(certificationSubmissions)
+        .set({
+          status: "submitted",
+          externalId: fixture.ext("winner"),
+          lockedAt: null,
+        })
+        .where(eq(certificationSubmissions.id, seeded.id));
+    });
+
+    const outcome = await claimPromise;
+    expect(outcome).toEqual({
+      kind: "existing",
+      externalId: fixture.ext("winner"),
+      version: 1,
+    });
+    const rows = await listRows(fixture.key);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("submitted");
+    expect(rows[0].lockedAt).toBeNull();
+  });
+
   it("loses the resume CAS to a concurrent claimant that re-locked the row", async () => {
     const fixture = await createFixture();
     const seeded = await seedRow(fixture.key, {

@@ -82,6 +82,28 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
+
+- **When a registry create's reconcile lookup finds MULTIPLE candidates**
+  (today only reachable for GHG Statements — several DRAFT statements for one
+  `(project, end_on)`), `performRegistryCreate`
+  (`src/fn/certification/registry-create.ts`) rejects the ledger row and
+  throws the caller's ambiguity message **without writing a failed sync
+  event**. Deliberate Phase 2 parity with the pre-module GHG behavior; the
+  reliability-track plan limited behavior changes to its two named ones.
+- Not blind: the rejection reason survives in the ledger row's
+  `metadata.lastError`, and the row status flips to `rejected`. But the
+  statement's `certifier_sync_events` timeline just stops — the detail panel's
+  "recent sync events" list shows nothing for the failed attempt.
+- Phase 3's boundary test pins the current behavior by assertion
+  (`tests/registry-boundary-ghg-statement.test.ts`, "rejects with the
+  ambiguity message…") with a pointer here — flip that assertion when this is
+  resolved.
+- Resolve via: decide whether ambiguity should append a `status: "failed"`
+  sync event (operation `ghg_statement:create`, errorMessage = the ambiguity
+  wording, no response body) for audit-timeline completeness. One-line change
+  in `reconcileToResult` + the pinned assertion; no migration.
+
 ### GHG Entry API rename — September 2026 sunset cleanup (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
 - **Migration landed 2026-06-10** (plan Phases 1–4; see

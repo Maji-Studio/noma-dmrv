@@ -1,8 +1,8 @@
 # Certification reliability track
 
-> **Status: Phases 1–2 implemented** (2026-06-10 — Phase 1 in PR #169,
-> Phase 2 stacked on it; see `docs/isometric/changes.md`); Phase 3 ready to
-> implement. Deepens three modules on the Isometric
+> **Status: all three phases implemented** (2026-06-10 — Phase 1 in PR
+> #169, Phase 2 stacked on it, Phase 3 stacked on Phase 2; see
+> `docs/isometric/changes.md`). Deepens three modules on the Isometric
 > submission path: the submission-ledger claim choreography, the registry
 > create-or-reconcile call, and a fake registry adapter for boundary tests.
 > Line references in Phase 3 were re-anchored 2026-06-10 after the GHG
@@ -349,6 +349,34 @@ finds orphan (claimed, `:reconciled` event); POST fails + reconcile misses
 
 ## Phase 3 — Fake registry adapter
 
+> **✅ Implemented** (2026-06-10, stacked on Phase 2; see
+> `docs/isometric/changes.md`). Landed as specified; deltas from the sketch:
+>
+> - The fake's client-module replacement lives IN the fixture
+>   (`createFakeClientModule(actual)`, called from each test file's
+>   `vi.mock` factory) rather than a separate shared helper — the factory
+>   passes the actual module through so `IsometricApiError` stays the real
+>   class for `instanceof` checks. Per-test state via
+>   `installFakeRegistry()` in `beforeEach`.
+> - Tests split per pipeline: `tests/registry-boundary-removal.test.ts`
+>   (boundary tests 1, 2, 4, 5 + a same-attempt recovery case where the
+>   post-failure lookup works immediately) and
+>   `tests/registry-boundary-ghg-statement.test.ts` (test 3, both arms).
+> - "Submit fails" in tests 1/2/3 is produced by pairing the POST's
+>   `drop-after-commit` with a `reject-before-commit` 503 on the lookup
+>   route — otherwise `performRegistryCreate` reconciles the orphan within
+>   the same attempt and nothing is left to resume. The resume is then
+>   reached by back-dating `lockedAt` past the TTL, like the claim module's
+>   own DB suite.
+> - Besides the client: the removal tests mock the context loader and
+>   sources resolver (per the out-of-scope decisions); the GHG tests mock
+>   only the auth session (`withAction`). Everything else — claim module,
+>   ledger + sync-event writes, statement get-or-create, finalize
+>   reconciliation — runs real against Postgres.
+> - The fake enforces unique `supplier_reference_id` on POST (422 + body)
+>   and additionally exposes a request log, so "never re-POSTed" is
+>   asserted both ways (registry state + POST counts).
+
 **Goal:** make the registry seam real (two adapters) so the recovery paths
 Phases 1–2 concentrated can be tested as a boundary — the registry as a
 stateful counterparty, not a pile of per-function mocks.
@@ -421,7 +449,7 @@ remains the live-adapter check; the fake does not replace it.
 |---|---|---|---|
 | 1 — ledger claim module | — | ~2–3 days incl. tests | ✅ Done (PR #169) |
 | 2 — registry create module | 1 merged (same files) | ~1–2 days | ✅ Done (stacked on #169) |
-| 3 — fake registry + boundary tests | 1+2 landed | ~2 days | Next |
+| 3 — fake registry + boundary tests | 1+2 landed | ~2 days | ✅ Done (stacked on Phase 2) |
 
 One PR per phase, each leaving every existing test green. Behavior changes
 are limited to the two named improvements (GHG race resolution — **shipped
