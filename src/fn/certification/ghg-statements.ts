@@ -68,10 +68,7 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import {
-  performRegistryCreate,
-  type ReconcileLookup,
-} from "./registry-create";
+import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
 import {
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
@@ -330,12 +327,7 @@ async function createGhgStatementRemote(args: {
     create: () => createGhgStatement(requestPayload).then((r) => r.id),
     reconcile: () =>
       reconcileGhgStatement({ projectId: externalProjectId, endOn }).then(
-        (r): ReconcileLookup =>
-          r.found === "single"
-            ? { found: "single", externalId: r.externalId }
-            : r.found === "multiple"
-              ? { found: "multiple" }
-              : { found: "none" },
+        ghgStatementLookup,
       ),
     ambiguousMessage: MULTIPLE_DRAFTS_MESSAGE,
     failureMessagePrefix: "GHG statement create failed",

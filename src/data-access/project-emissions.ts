@@ -16,6 +16,7 @@
 
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { isPgUniqueViolation } from "@/db/errors";
 import {
   certifierProjectEmissions,
   certifierSyncEvents,
@@ -44,19 +45,11 @@ const ISOMETRIC = "isometric" as const;
 // Postgres unique_violation code — mapped here (vs propagating as a raw
 // driver error) so the operator sees actionable guidance instead of "An
 // unexpected error occurred" from the withAction wrapper.
-const PG_UNIQUE_VIOLATION = "23505";
 const PROJECT_EMISSION_UNIQUE_CONSTRAINT =
   "certifier_project_emissions_facility_period_category_unique";
 
 function isUniqueViolation(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const e = err as { code?: unknown; constraint?: unknown };
-  if (e.code !== PG_UNIQUE_VIOLATION) return false;
-  // node-postgres surfaces the constraint name on `.constraint` (matching the
-  // sibling guard in data-access/certification.ts). Match it exactly — the
-  // previous `.constraint_name` read was always undefined here, so the guard
-  // relabeled *any* 23505 as this conflict and masked unrelated violations.
-  return e.constraint === PROJECT_EMISSION_UNIQUE_CONSTRAINT;
+  return isPgUniqueViolation(err, PROJECT_EMISSION_UNIQUE_CONSTRAINT);
 }
 
 const PROJECT_EMISSION_CONFLICT_MESSAGE =
