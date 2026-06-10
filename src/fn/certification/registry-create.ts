@@ -1,7 +1,10 @@
 import { markSubmissionRejected } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
-import { IsometricApiError } from "@/lib/isometric";
+import {
+  IsometricApiError,
+  type GhgStatementReconciliation,
+} from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 
@@ -36,6 +39,22 @@ export function supplierRefLookup(
   return result.found
     ? { found: "single", externalId: result.externalId }
     : { found: "none" };
+}
+
+// Adapts the GHG Statement reconciliation shape to the module's three-way
+// lookup. Unlike the supplier-ref shape this genuinely uses all three arms —
+// a period can hold multiple drafts ("multiple") — and drops the carried
+// `status`/`ids` the create choreography does not need.
+export function ghgStatementLookup(
+  result: GhgStatementReconciliation,
+): ReconcileLookup {
+  if (result.found === "single") {
+    return { found: "single", externalId: result.externalId };
+  }
+  if (result.found === "multiple") {
+    return { found: "multiple" };
+  }
+  return { found: "none" };
 }
 
 export interface RegistryCreateResult {

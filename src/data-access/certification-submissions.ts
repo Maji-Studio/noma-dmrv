@@ -17,6 +17,7 @@
  */
 import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
+import { isPgUniqueViolation } from "@/db/errors";
 import {
   certificationSubmissions,
   certifierProjects,
@@ -509,14 +510,7 @@ const SUBMISSION_ENTITY_VERSION_CONSTRAINT =
   "cert_submissions_entity_version_unique";
 
 function isEntityVersionUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: string }).code === "23505" &&
-    (err as { constraint?: string }).constraint ===
-      SUBMISSION_ENTITY_VERSION_CONSTRAINT
-  );
+  return isPgUniqueViolation(err, SUBMISSION_ENTITY_VERSION_CONSTRAINT);
 }
 
 // Maps the entity-version 23505 into a SafeError for the telemetry-boundary
