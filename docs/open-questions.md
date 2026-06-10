@@ -1153,6 +1153,24 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
   (started from Playwright globalSetup) serving canned project/template
   responses, so the certification flows run hermetically everywhere (M).
 
+### Unprompted "Link Isometric project" modal after facility create, CI prod build only (`facilities/phantom-link-dialog`) — opened 2026-06-10
+
+- In the first hermetic CI run (PR #167, run 27265121281, shard 1), the
+  `facilities.spec.ts` "admin can create a facility" test failed on both
+  attempts: artifacts show `FacilityCertifierDialog` ("Link Isometric project")
+  open over `/facilities` immediately after the create succeeded, aria-hiding
+  the page so the heading role-query failed. The trace records no click that
+  opens it, and static analysis finds no mount outside
+  `facility-certifier-section.tsx` (Settings page, click-gated `editOpen`).
+  Not reproducible locally in dev mode, with or without Isometric creds; the
+  test passed in all prior CI runs (which loaded creds).
+- **Why it matters:** if the modal really opens unprompted in prod builds,
+  that's a user-facing bug, not a test bug — don't paper over it with a
+  dismiss-if-present workaround until the trigger is understood.
+- **Resolve via:** reproduce against a local production build
+  (`pnpm build && pnpm start -p 3100`, no Isometric env), or rerun CI and pull
+  the fresh trace; if it reproduces, bisect the dialog mount (S–M).
+
 ### Playwright hygiene (`testing/e2e-hygiene`) — opened 2026-06-10
 
 - `waitForLoadState("networkidle")` is used throughout `full-chain-ui.spec.ts`
