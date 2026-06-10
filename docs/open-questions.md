@@ -1213,3 +1213,68 @@ Sizing: (S) small, (M) medium, (L) large.
   consistently.
 - **Resolve via:** thread the attempt-scoped `log` child (which already carries
   `submissionAttemptId`) through those boundary logs, or include both ids (S).
+
+## E2E robustness follow-ups (opened 2026-06-10)
+
+Deferred from the e2e-reliability pass that split live-sandbox specs out of PR
+CI (`@live` tag → nightly `e2e-live.yml`) and fixed the stale full-chain
+selectors (EntitySelect migration, auto-matched credit-batch applications).
+
+### Graceful degrade for invalid Isometric project links (`certification/invalid-project-422`) — opened 2026-06-10
+
+- A facility linked to a project id the registry rejects (404/422) makes
+  `safeListIfConfigured` re-throw, and React Query retries the failing server
+  action — repeated real API calls and a degraded page instead of a calm
+  "project not resolvable" state. Surfaced in CI when fake-project specs ran
+  with real creds loaded; same behavior would hit prod on a stale/revoked link.
+- **Resolve via:** treat non-retryable 4xx (404/422) from project-scoped
+  listings as "link not resolvable" — return an empty/flagged result instead of
+  throwing, and surface a warning chip on the registry-connection card (M).
+
+### Hermetic local stub for the Isometric client (`testing/isometric-stub`) — opened 2026-06-10
+
+- `BASE_URLS` in `src/lib/isometric/client.ts` is hardcoded, so the @live specs
+  can only run against the real sandbox; devs without `ISOMETRIC_DEMO_PROJECT_ID`
+  silently skip them, which is how the Settings/mapping specs drifted unnoticed.
+- **Resolve via:** a test-only base-URL override + a small fixture stub server
+  (started from Playwright globalSetup) serving canned project/template
+  responses, so the certification flows run hermetically everywhere (M).
+
+### Unprompted "Link Isometric project" modal after facility create, CI prod build only (`facilities/phantom-link-dialog`) — opened 2026-06-10
+
+- In the first hermetic CI run (PR #167, run 27265121281, shard 1), the
+  `facilities.spec.ts` "admin can create a facility" test failed on both
+  attempts: artifacts show `FacilityCertifierDialog` ("Link Isometric project")
+  open over `/facilities` immediately after the create succeeded, aria-hiding
+  the page so the heading role-query failed. The trace records no click that
+  opens it, and static analysis finds no mount outside
+  `facility-certifier-section.tsx` (Settings page, click-gated `editOpen`).
+  Not reproducible locally in dev mode, with or without Isometric creds; the
+  test passed in all prior CI runs (which loaded creds).
+- **Why it matters:** if the modal really opens unprompted on production
+  builds, that's a user-facing bug, not a test bug.
+- **Replication attempts (all passed — GitHub-runner-only, 6/6 failures
+  there):** local dev build (with and without Isometric creds), local prod
+  build hermetic, prod + empty freshly-pushed DB, and full shard-1 set (51
+  tests, 2 workers, retries, empty DB, `CI=1`). The dialog is
+  `FacilityCertifierDialog` (trace DOM: `facility-certifier-dialog-title`,
+  empty project options), whose ONLY JSX mount is click-gated `editOpen` in
+  `facility-certifier-section.tsx` — rendered solely on
+  `/certification/settings`, yet it appears on `/facilities` ~0.5s after
+  facility create, amid the sidebar-wide RSC re-prefetch triggered by the
+  `?facility=` URL swap. Prime suspects: Next 16 PPR/prefetch interaction
+  under slow CI CPU.
+- **Interim quarantine:** `facilities.spec.ts` dismisses the modal if present
+  (loud `phantom-link-dialog` test annotation) so the suite stays green while
+  keeping the real assertion. Remove the workaround when this is resolved.
+- **Resolve via:** CI-side instrumentation — temporary `--trace on` first
+  attempt, or a debug step dumping the React owner chain of the dialog node
+  when present (component names need a non-minified build to be readable) (M).
+
+### Playwright hygiene (`testing/e2e-hygiene`) — opened 2026-06-10
+
+- `waitForLoadState("networkidle")` is used throughout `full-chain-ui.spec.ts`
+  (slow-by-design with polling queries); shard 1 carries all `certification-*`
+  files because sharding distributes by file. Consider `fullyParallel: true`
+  (shard by test) after confirming no in-file ordering deps, replacing
+  networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).
