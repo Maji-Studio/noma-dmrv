@@ -162,7 +162,7 @@ export async function claimSubmissionDraft<H>(
         version: tentative.version,
       };
     case "resume":
-      return resumeDraft(args.guard, tentative.resumeRowId);
+      return resumeDraft(args, tentativeHash);
     case "resume-poll-existing":
     case "resume-re-put":
       // Only reachable when `dataUploadResume` is passed to the pure core,
@@ -176,13 +176,62 @@ export async function claimSubmissionDraft<H>(
 // Resume goes through the CAS reset under the same mapping guard and never
 // calls `resolve`/`buildSnapshot` — the stored payloadSnapshot is the truth.
 // A lost CAS means a concurrent claimant already re-locked the row.
-async function resumeDraft(
-  guard: MappingClaimGuard,
-  rowId: string,
+//
+// The pre-lock decision that routed us here is advisory: between that read and
+// acquiring the mapping lock a concurrent caller may have finished, superseded,
+// or re-locked the row. So we re-read latest and re-decide UNDER the lock —
+// mirroring createDraft's authoritative re-decide — and only CAS when the row
+// is still genuinely resumable. Without it the broad CAS predicate
+// (`status != draft`) could revert a freshly `submitted`/`accepted` row.
+async function resumeDraft<H>(
+  args: ClaimSubmissionDraftArgs<H>,
+  tentativeHash: string,
 ): Promise<ClaimOutcome> {
   return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(tx, guard);
-    const row = await resetSubmissionToDraftCas(tx, rowId, LOCK_TTL_MS);
+    await lockAndVerifyMapping(tx, args.guard);
+
+    const latest = await getLatestSubmissionWithExecutor(tx, args.key);
+    const decided = decideSubmissionClaim({
+      latest,
+      payloadHash: tentativeHash,
+      now: Date.now(),
+      lockTtlMs: LOCK_TTL_MS,
+      policy: args.policy,
+    });
+
+    switch (decided.kind) {
+      case "blocked-in-flight":
+        return { kind: "blocked", reason: "in-flight" };
+      case "blocked-rejected-with-external":
+        return { kind: "blocked", reason: "rejected-with-external" };
+      case "invalid-changed-hash":
+        return { kind: "blocked", reason: "invalid-changed-hash" };
+      case "return-existing":
+        return {
+          kind: "existing",
+          externalId: decided.externalId,
+          version: decided.version,
+        };
+      case "create-new-version":
+        // The row advanced out of a resumable state (superseded, or a
+        // submitted/accepted row whose hash changed). Don't mint a new version
+        // under the resume path — let the caller reload and retry, which
+        // re-enters createDraft cleanly.
+        return { kind: "blocked", reason: "state-changed" };
+      case "resume-poll-existing":
+      case "resume-re-put":
+        // Only reachable with `dataUploadResume`, which this module never
+        // passes (telemetry is deferred — see plan).
+        throw new Error(`Unreachable claim kind: ${decided.kind}`);
+      case "resume":
+        break;
+    }
+
+    const row = await resetSubmissionToDraftCas(
+      tx,
+      decided.resumeRowId,
+      LOCK_TTL_MS,
+    );
     if (!row) return { kind: "blocked", reason: "in-flight" };
     return {
       kind: "claimed",
