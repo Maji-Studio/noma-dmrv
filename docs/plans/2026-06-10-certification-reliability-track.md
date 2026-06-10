@@ -1,6 +1,7 @@
 # Certification reliability track
 
-> **Status: Planned** (2026-06-10). Deepens three modules on the Isometric
+> **Status: Approved — Phase 1 ready to implement** (2026-06-10). Deepens
+> three modules on the Isometric
 > submission path: the submission-ledger claim choreography, the registry
 > create-or-reconcile call, and a fake registry adapter for boundary tests.
 > Correctness work, not cleanup — motivated by real drift between the Removal
