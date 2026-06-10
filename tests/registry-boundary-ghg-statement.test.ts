@@ -243,9 +243,10 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
     });
 
     // Phase 2 parity: the ambiguous rejection records NO failed sync event —
-    // the rejection itself carries the message. Tracked as a possible audit
-    // gap in docs/open-questions.md; flip this assertion if that decision
-    // changes.
+    // the rejection itself carries the message. Undecided whether that audit
+    // silence should stay (docs/open-questions.md,
+    // `isometric/ambiguous-lookup-audit-silence`); flip this assertion when
+    // it's resolved.
     const events = await db
       .select()
       .from(certifierSyncEvents)
