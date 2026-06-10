@@ -71,6 +71,15 @@ export const certifierProjects = pgTable(
       table.facilityId,
       table.provider
     ),
+    // A project may be shared across facilities (above), but the Isometric
+    // facility id (fcl_…) is the real 1:1 anchor: two noma facilities pointing
+    // at the same Isometric facility would cross-contaminate telemetry. NULL
+    // externalFacilityId is allowed for many facilities (Postgres treats NULL
+    // tuples as distinct) — only non-null ids must be unique per provider.
+    unique('certifier_projects_provider_external_facility_unique').on(
+      table.provider,
+      table.externalFacilityId
+    ),
   ]
 );
 

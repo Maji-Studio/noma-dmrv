@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/ui";
@@ -69,17 +69,26 @@ export function FacilityCertifierDialog({
   const toast = useToast();
   const saveMutation = useSaveFacilityCertifierMapping();
 
+  // Acknowledgment that this project is intentionally being shared with another
+  // facility. Sharing a project stays allowed (operators register multiple
+  // sites under one registry project), but it now requires an explicit opt-in
+  // rather than passing silently. Not persisted — a per-open UI gate.
+  const [acknowledgeSharedProject, setAcknowledgeSharedProject] =
+    useState(false);
+
   const watchedProjectId = watch("externalProjectId");
   const { data: liveTemplates, isLoading: templatesLoading } =
     useIsometricProjectTemplates(watchedProjectId || null);
 
-  // When the project changes, clear project-scoped registry identifiers.
-  // A stale template or facility id from the previous Isometric project would
-  // fail validation or send telemetry to the wrong facility.
+  // When the project changes, clear project-scoped registry identifiers and
+  // reset the share acknowledgment. A stale template or facility id from the
+  // previous Isometric project would fail validation or send telemetry to the
+  // wrong facility, and the ack must be re-confirmed for the new project.
   useEffect(() => {
     if (!watchedProjectId || mapping?.externalProjectId !== watchedProjectId) {
       setValue("defaultRemovalTemplateId", "");
       setValue("externalFacilityId", "");
+      setAcknowledgeSharedProject(false);
     }
   }, [watchedProjectId, mapping?.externalProjectId, setValue]);
 
@@ -105,7 +114,23 @@ export function FacilityCertifierDialog({
     label: `${t.display_name} — ${t.id}`,
   }));
 
+  const linkedHintForSelected = watchedProjectId
+    ? linkedFacilitiesByProject.get(watchedProjectId)
+    : undefined;
+  // Selected project is already linked to a different facility → sharing it
+  // requires an explicit opt-in before save.
+  const requiresShareAck = (linkedHintForSelected?.length ?? 0) > 0;
+  const blockedOnShareAck = requiresShareAck && !acknowledgeSharedProject;
+
   const onSubmit = async (data: SaveMappingInput) => {
+    if (requiresShareAck && !acknowledgeSharedProject) {
+      setError("root.serverError", {
+        type: "manual",
+        message:
+          "Confirm you intend to share this project with another facility.",
+      });
+      return;
+    }
     try {
       await saveMutation.mutateAsync(data);
       toast.success("Certifier mapping saved");
@@ -119,10 +144,6 @@ export function FacilityCertifierDialog({
     }
   };
 
-  const linkedHintForSelected = watchedProjectId
-    ? linkedFacilitiesByProject.get(watchedProjectId)
-    : undefined;
-
   const templateHelperText = (() => {
     if (!watchedProjectId) return "Pick a project to load templates.";
     if (templatesLoading) return "Loading templates…";
@@ -134,7 +155,10 @@ export function FacilityCertifierDialog({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      onOpen={() => reset(defaultValues)}
+      onOpen={() => {
+        reset(defaultValues);
+        setAcknowledgeSharedProject(false);
+      }}
       ariaLabelledBy="facility-certifier-dialog-title"
       width="md"
     >
@@ -164,11 +188,6 @@ export function FacilityCertifierDialog({
           label="Isometric project"
           required
           error={errors.externalProjectId?.message}
-          helperText={
-            linkedHintForSelected
-              ? `Already linked to: ${linkedHintForSelected.join(", ")}`
-              : undefined
-          }
         >
           <FormSelect
             id="externalProjectId"
@@ -178,6 +197,32 @@ export function FacilityCertifierDialog({
             {...register("externalProjectId")}
           />
         </FormField>
+
+        {requiresShareAck && (
+          <div className="flex flex-col gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber-subtle)] p-16">
+            <p className="body-small text-[var(--color-text-primary)]">
+              This project is already linked to{" "}
+              <strong className="font-semibold">
+                {linkedHintForSelected?.join(", ")}
+              </strong>
+              . Submissions from both facilities will target the same Isometric
+              project. The Isometric facility ID below stays unique per facility.
+            </p>
+            <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-3 shrink-0"
+                checked={acknowledgeSharedProject}
+                onChange={(e) =>
+                  setAcknowledgeSharedProject(e.target.checked)
+                }
+              />
+              <span>
+                I intend to share this project across facilities.
+              </span>
+            </label>
+          </div>
+        )}
 
         <FormField
           id="defaultRemovalTemplateId"
@@ -239,6 +284,7 @@ export function FacilityCertifierDialog({
         <FormActions
           onCancel={onClose}
           isSubmitting={isSubmitting || saveMutation.isPending}
+          submitDisabled={blockedOnShareAck}
           submitLabel={mapping ? "Save changes" : "Link project"}
         />
       </form>

@@ -15,13 +15,14 @@ on:
         type: choice
         options:
           - reset-seed-staging
+          - reset-empty-staging
           - reset-production
       authorized:
         description: "Check only after explicit approval to wipe production"
         required: false
         type: boolean
       confirmation:
-        description: "Type RESET AND SEED STAGING or RESET PRODUCTION to confirm"
+        description: "Type RESET AND SEED STAGING, RESET STAGING (EMPTY), or RESET PRODUCTION to confirm"
         required: true
         type: string
 
@@ -200,6 +201,53 @@ jobs:
 
       - name: Reset and seed staging database
         run: pnpm db:reset && pnpm db:seed && pnpm db:verify-schema
+
+  # ── Manual reset (no seed): staging — start from scratch ───────────────
+  reset-empty-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/staging' &&
+      github.event.inputs.action == 'reset-empty-staging' &&
+      github.event.inputs.confirmation == 'RESET STAGING (EMPTY)'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Load staging database + admin secrets from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
+          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Log staging database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
+      # No seed: drops all data, re-applies tracked migrations, ensures the
+      # admin user (so you can still sign in) — an empty start-from-scratch DB.
+      - name: Reset staging database (empty, no demo data)
+        run: pnpm db:reset && pnpm db:verify-schema
 
   # ── Manual reset: production ────────────────────────────────────────────
   reset-production:

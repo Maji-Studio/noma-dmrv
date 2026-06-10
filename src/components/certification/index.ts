@@ -4,6 +4,7 @@ export {
   FacilityCertifierDialog,
   UnlinkConfirmDialog,
 } from "./facility-certifier-dialog";
+export { FacilityCertifierLinkLoader } from "./facility-certifier-link-loader";
 export { CertifyPanel } from "./certify-panel";
 export { SourcesPanel } from "./sources-panel";
 export { RemovalsList } from "./removals-list";
