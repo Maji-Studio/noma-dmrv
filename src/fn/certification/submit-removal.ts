@@ -1,5 +1,4 @@
 import {
-  markSubmissionRejected,
   markSubmissionSubmitted,
   type CertificationSubmissionRow,
   type CertifierProjectRow,
@@ -40,6 +39,7 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import {
   collectCandidateDocumentIdsForRemoval,
   resolveSourceIdsForRemoval,
@@ -176,6 +176,18 @@ const datapointTransportSchema = z.object({
 const removalTransportSnapshotSchema = z.object({
   removalSupplierRef: z.string().min(1),
   datapointBodies: z.array(datapointTransportSchema),
+});
+
+// The `fixed` entries inside payload_snapshot.semantic.inputs. On resume these
+// are the version-stamped bindings the original attempt locked — read back so a
+// resumed submission never mixes the live template's fixed bindings with the
+// stored transport snapshot (a stale-locked draft resumes regardless of hash,
+// so live `fixed` may have drifted from what the snapshot was built against).
+const fixedSnapshotInputSchema = z.object({
+  rtcId: z.string().min(1),
+  inputKey: z.string().min(1),
+  kind: z.literal("fixed"),
+  preboundDatapointId: z.string().min(1),
 });
 
 export interface SubmitRemovalArgs {
@@ -634,12 +646,18 @@ export async function submitRemoval(
       // from the tentative `datapointBodyByKey` if a concurrent
       // mirror/unlink shifted the source set during lock acquisition).
       const transport = readRemovalTransport(claimed.row);
+      // On resume, the fixed bindings must come from the SAME snapshot as the
+      // transport — not the live `fixed` recomputed above, which may have
+      // drifted from the version the snapshot was built against.
+      const effectiveFixed = claimed.resumed
+        ? readRemovalFixedInputs(claimed.row)
+        : fixed;
       return runRemovalSubmission({
         userId,
         removalId,
         row: claimed.row,
         transport,
-        fixed,
+        fixed: effectiveFixed,
         template: defaultTemplate,
         blueprintsByKey,
         agg,
@@ -692,17 +710,19 @@ async function runRemovalSubmission({
 
   for (const dp of transport.datapointBodies) {
     const supplierRefId = dp.body.supplier_reference_id;
-    const externalId = await createOrReconcile({
+    const { externalId } = await performRegistryCreate({
       userId,
-      removalId,
-      row,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: removalId,
+      submissionRowId: row.id,
       operation: `datapoint:create:${dp.inputKey}`,
       requestPayload: dp.body,
       supplierRefId,
       resumed,
       create: () => createDatapoint(dp.body).then((d) => d.id),
-      reconcile: () => reconcileDatapoint({ supplierRefId }),
+      reconcile: () => reconcileDatapoint({ supplierRefId }).then(supplierRefLookup),
       failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
+      log,
     });
     datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, externalId);
   }
@@ -715,18 +735,22 @@ async function runRemovalSubmission({
     projectId: externalProjectId,
     supplierRefId: transport.removalSupplierRef,
   });
-  const externalRemovalId = await createOrReconcile({
+  const { externalId: externalRemovalId } = await performRegistryCreate({
     userId,
-    removalId,
-    row,
+    entityType: REMOVAL_ENTITY_TYPE,
+    entityId: removalId,
+    submissionRowId: row.id,
     operation: "removal:create",
     requestPayload: removalBody,
     supplierRefId: transport.removalSupplierRef,
     resumed,
     create: () => createGhgEntry(removalBody).then((r) => r.id),
     reconcile: () =>
-      reconcileRemoval({ supplierRefId: transport.removalSupplierRef }),
+      reconcileRemoval({ supplierRefId: transport.removalSupplierRef }).then(
+        supplierRefLookup,
+      ),
     failureMessagePrefix: "Removal POST failed",
+    log,
   });
 
   await markSubmissionSubmitted(userId, row.id, {
@@ -769,103 +793,6 @@ async function runRemovalSubmission({
   return { removalId, externalId: externalRemovalId, version: row.version };
 }
 
-interface CreateOrReconcileArgs {
-  userId: string;
-  removalId: string;
-  row: CertificationSubmissionRow;
-  operation: string;
-  requestPayload: unknown;
-  supplierRefId: string;
-  resumed: boolean;
-  create: () => Promise<string>;
-  reconcile: () => Promise<
-    { found: true; externalId: string } | { found: false }
-  >;
-  failureMessagePrefix: string;
-}
-
-async function createOrReconcile(args: CreateOrReconcileArgs): Promise<string> {
-  const baseEvent = {
-    provider: ISOMETRIC_PROVIDER,
-    entityType: REMOVAL_ENTITY_TYPE,
-    entityId: args.removalId,
-  } as const;
-
-  const recordReconciled = async (externalId: string) => {
-    await appendSyncEventBestEffort(
-      args.userId,
-      {
-        ...baseEvent,
-        operation: `${args.operation}:reconciled`,
-        status: "succeeded",
-        requestPayload: args.requestPayload,
-        responsePayload: {
-          id: externalId,
-          source: "reconciliation",
-          mapping_revision: MAPPING_REVISION,
-        },
-      },
-      { submissionId: args.row.id },
-    );
-  };
-
-  if (args.resumed) {
-    const reconciled = await args.reconcile();
-    if (reconciled.found) {
-      await recordReconciled(reconciled.externalId);
-      return reconciled.externalId;
-    }
-  }
-
-  try {
-    const externalId = await args.create();
-    await appendSyncEventBestEffort(
-      args.userId,
-      {
-        ...baseEvent,
-        operation: args.operation,
-        status: "succeeded",
-        requestPayload: args.requestPayload,
-        responsePayload: {
-          id: externalId,
-          supplier_reference_id: args.supplierRefId,
-          mapping_revision: MAPPING_REVISION,
-        },
-      },
-      { submissionId: args.row.id },
-    );
-    return externalId;
-  } catch (err) {
-    const reconciled = await args.reconcile();
-    if (reconciled.found) {
-      await recordReconciled(reconciled.externalId);
-      return reconciled.externalId;
-    }
-
-    const message = err instanceof Error ? err.message : String(err);
-    // ADR 0005 / B3 — failure events historically carried only
-    // `errorMessage`; embed `mapping_revision` in `responsePayload` so the
-    // audit trail still names which mapping revision produced the failed
-    // payload.
-    await appendSyncEventBestEffort(
-      args.userId,
-      {
-        ...baseEvent,
-        operation: args.operation,
-        status: "failed",
-        requestPayload: args.requestPayload,
-        responsePayload: { mapping_revision: MAPPING_REVISION },
-        errorMessage: message,
-      },
-      { submissionId: args.row.id },
-    );
-    await markSubmissionRejected(args.userId, args.row.id, {
-      errorMessage: message,
-    });
-    throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
-  }
-}
-
 function readRemovalTransport(
   row: CertificationSubmissionRow,
 ): RemovalTransportSnapshot {
@@ -880,4 +807,44 @@ function readRemovalTransport(
     removalSupplierRef: parsed.data.removalSupplierRef,
     datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
   };
+}
+
+// Reads the locked `fixed` bindings back out of the stored snapshot for the
+// resume path. Mirrors readRemovalTransport's fail-loud stance: a `kind:"fixed"`
+// entry that no longer matches the schema means the snapshot drifted, so refuse
+// to resume rather than emit a GHG entry referencing a wrong/absent datapoint.
+function readRemovalFixedInputs(
+  row: CertificationSubmissionRow,
+): ResolvedFixedInput[] {
+  const snapshot = row.payloadSnapshot as {
+    semantic?: { inputs?: unknown } | null;
+  } | null;
+  const inputs = snapshot?.semantic?.inputs;
+  if (!Array.isArray(inputs)) {
+    throw new SafeError(
+      "Stale submission cannot be resumed because its payload snapshot does not match the current schema.",
+    );
+  }
+  const fixed: ResolvedFixedInput[] = [];
+  for (const entry of inputs) {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      (entry as { kind?: unknown }).kind !== "fixed"
+    ) {
+      continue;
+    }
+    const parsed = fixedSnapshotInputSchema.safeParse(entry);
+    if (!parsed.success) {
+      throw new SafeError(
+        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
+      );
+    }
+    fixed.push({
+      removalTemplateComponentId: parsed.data.rtcId,
+      inputKey: parsed.data.inputKey,
+      preboundDatapointId: parsed.data.preboundDatapointId,
+    });
+  }
+  return fixed;
 }
