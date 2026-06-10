@@ -1,6 +1,7 @@
 # Certification reliability track
 
-> **Status: Approved — Phase 1 ready to implement** (2026-06-10). Deepens
+> **Status: Phase 1 implemented** (2026-06-10, see
+> `docs/isometric/changes.md`); Phases 2–3 ready to implement. Deepens
 > three modules on the Isometric
 > submission path: the submission-ledger claim choreography, the registry
 > create-or-reconcile call, and a fake registry adapter for boundary tests.

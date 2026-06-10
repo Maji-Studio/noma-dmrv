@@ -4,6 +4,34 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-10 (submission-ledger claim module — reliability track Phase 1)
+
+Implements Phase 1 of
+[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+the claim choreography (*read latest → tentative decide → mapping lock →
+re-resolve → authoritative re-decide → insert/reset draft*) now lives in one
+module, `src/data-access/certification-submissions.ts`, entered only through
+`claimSubmissionDraft`. The Removal path's in-lock defensiveness is now the
+only path; GHG Statements inherit it.
+
+- **Behavior change (the point of the phase)** — a concurrent duplicate GHG
+  Statement create now resolves to `existing` / `blocked: "in-flight"`
+  instead of a raw `cert_submissions_entity_version_unique` constraint error.
+- **Seam decision** — internal data-access seam, DB-backed tests against
+  real Postgres; no port, no in-memory ledger fake (ADR 0008).
+- **Telemetry deferred** — `submit-telemetry.ts` keeps the relocated
+  primitives (`getLatestSubmission`, `insertDraftSubmissionWithMappingLock`,
+  `resetSubmissionToDraftWithMappingLock`) under an explicit boundary: no
+  barrel re-export, `TODO(telemetry-migration)` comments, single permitted
+  importer (grep-verified).
+- **Tests** — new `tests/certification-submissions.test.ts` (16 DB-backed
+  cases incl. real-interleaving concurrency: duplicate-claim race, in-lock
+  flip to `existing`, resume CAS won/lost, mid-claim repoint). Pipeline
+  tests stub `claimSubmissionDraft` via the shared
+  `tests/fixtures/fake-claim.ts` (real pure core over an in-memory store);
+  the hand-rolled per-primitive ledger fakes — including the
+  `undefined as never` tx handle — are retired.
+
 ## 2026-06-10 (GHG entry API migration: removal→ghg_entry wire rename)
 
 Migrates the Certify wire layer from the deprecated removal-named endpoints to
