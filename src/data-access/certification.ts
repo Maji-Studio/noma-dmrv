@@ -189,6 +189,34 @@ export async function upsertCertifierProject(
       .for("update")
       .limit(1);
 
+    // The Isometric facility id (fcl_…) is a 1:1 anchor — two noma facilities
+    // sharing one would cross-contaminate telemetry. A DB unique constraint
+    // (provider, external_facility_id) is the backstop; this in-transaction
+    // probe turns the raw 23505 into a clear, actionable message. Projects may
+    // still be shared across facilities — only the fcl_ id is locked.
+    if (values.externalFacilityId) {
+      const [collision] = await tx
+        .select({
+          code: facilities.code,
+          name: facilities.name,
+        })
+        .from(certifierProjects)
+        .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
+        .where(
+          and(
+            eq(certifierProjects.provider, input.provider),
+            eq(certifierProjects.externalFacilityId, values.externalFacilityId),
+            ne(certifierProjects.facilityId, input.facilityId),
+          ),
+        )
+        .limit(1);
+      if (collision) {
+        throw new SafeError(
+          `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code} — ${collision.name}. Each Isometric facility maps to exactly one facility here.`,
+        );
+      }
+    }
+
     const mappingIdentifiersChanged =
       existing &&
       (existing.externalProjectId !== values.externalProjectId ||

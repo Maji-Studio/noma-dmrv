@@ -27,6 +27,7 @@ import { spawnSync } from "child_process";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { fetchItemFieldNames } from "./env-tpl-utils";
 
 const ITEM_PREFIX = "noma-dmrv env";
 
@@ -244,6 +245,52 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
     console.error(`Failed to process template: ${error}`);
     process.exit(1);
   }
+}
+
+/**
+ * Warn about variables that exist in the 1Password item but are NOT referenced
+ * by .env.tpl — they will silently NOT be synced. Surfacing them at sync time
+ * lets the operator notice a newly-added secret and add it to the template
+ * before continuing (or Ctrl+C and readjust). Field names only; never values.
+ * Best-effort: a lookup failure warns but does not abort the sync.
+ */
+function warnUntrackedOnePasswordVars(
+  opEnv: string,
+  syncedNames: Set<string>
+): void {
+  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
+  let itemFields: Set<string>;
+  try {
+    itemFields = fetchItemFieldNames(itemSuffix);
+  } catch (error) {
+    console.warn(
+      `\n  (Could not check for untracked 1Password vars: ${
+        error instanceof Error ? error.message : String(error)
+      })`
+    );
+    return;
+  }
+
+  const untracked = [...itemFields]
+    .filter((name) => !syncedNames.has(name))
+    .sort();
+
+  if (untracked.length === 0) {
+    console.log(
+      `\n  .env.tpl covers every field in "${ITEM_PREFIX} ${itemSuffix}" — nothing untracked.`
+    );
+    return;
+  }
+
+  console.warn(
+    `\n  ⚠️  ${untracked.length} variable(s) in 1Password ("${ITEM_PREFIX} ${itemSuffix}") are NOT in .env.tpl`
+  );
+  console.warn("      and will NOT be synced to Vercel:");
+  for (const name of untracked) console.warn(`        ${name}`);
+  console.warn(
+    `      To include one, add to .env.tpl:\n` +
+      `        NAME="op://Environment Variables/${ITEM_PREFIX} staging/NAME"`
+  );
 }
 
 function isPublic(name: string): boolean {
@@ -477,6 +524,10 @@ async function main() {
   console.log("All prerequisites met");
 
   const envVars = fetchFromOnePassword(flags.opEnv);
+
+  // Surface any 1Password fields the template doesn't cover, so a newly-added
+  // secret doesn't silently miss the sync.
+  warnUntrackedOnePasswordVars(flags.opEnv, new Set(envVars.keys()));
 
   uploadToVercel(
     envVars,

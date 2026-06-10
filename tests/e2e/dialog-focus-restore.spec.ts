@@ -17,6 +17,8 @@ test.describe("Dialog focus restore", () => {
     seededData,
     cleanupTestData,
   }) => {
+    // Referenced only to trigger the fixture's teardown lifecycle; the value
+    // itself is intentionally unused.
     void cleanupTestData;
     const page = adminPage;
 

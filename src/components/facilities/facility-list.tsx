@@ -32,7 +32,11 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { FacilityCertifierSummary } from "@/components/certification";
+import { useIsAdmin } from "@/hooks/use-is-admin";
+import {
+  FacilityCertifierLinkLoader,
+  FacilityCertifierSummary,
+} from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
@@ -52,6 +56,13 @@ export function FacilityList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // After creating a facility, admins are offered the optional certifier link
+  // for the new facility (skippable; editable later in Settings).
+  const [linkCertifierFacilityId, setLinkCertifierFacilityId] = useState<
+    string | null
+  >(null);
+
+  const isAdmin = useIsAdmin();
 
   const filters: Partial<FacilityFilterData> = useMemo(
     () => ({
@@ -89,9 +100,15 @@ export function FacilityList() {
   const handleCreate = async (data: FacilityFormData) => {
     setCreateError(null);
     try {
-      await createFacility.mutateAsync(data);
+      const facility = await createFacility.mutateAsync(data);
       setSideSheet(null);
       toast.success("Facility created successfully");
+      // Offer the optional certifier link for the new facility. Admin-only
+      // (saving the mapping is admin-gated); non-admins create unlinked and an
+      // admin links later in Settings.
+      if (isAdmin) {
+        setLinkCertifierFacilityId(facility.id);
+      }
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create facility");
     }
@@ -424,6 +441,14 @@ export function FacilityList() {
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Facility"}
           />
         </EntitySideSheet>
+      )}
+
+      {linkCertifierFacilityId && (
+        <FacilityCertifierLinkLoader
+          facilityId={linkCertifierFacilityId}
+          isOpen
+          onClose={() => setLinkCertifierFacilityId(null)}
+        />
       )}
     </div>
   );
