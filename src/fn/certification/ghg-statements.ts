@@ -5,20 +5,22 @@ import {
   attachReportDocument,
   clearTerminalStatusForResubmit,
   getCertifierProjectByFacility,
-  getLatestSubmission,
   getLatestSubmissionsForEntities,
   getSubmissionById,
-  insertDraftSubmissionWithMappingLock,
   listRecentSyncEvents,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraftWithMappingLock,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type CertifierSyncEventRow,
   type Tx,
 } from "@/data-access/certification";
+import {
+  claimSubmissionDraft,
+  getLatestSubmission,
+  type ClaimBlockedReason,
+} from "@/data-access/certification-submissions";
 import {
   countRemovalsByGhgStatementIds,
   getCertifierGhgStatementById,
@@ -41,7 +43,6 @@ import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
   createGhgStatement,
-  decideSubmissionClaim,
   getGhgStatement,
   IsometricApiError,
   payloadHash,
@@ -56,10 +57,7 @@ import {
   ghgSubmitFingerprintChanged,
   type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
-import {
-  isLockedInFlight as computeIsLockedInFlight,
-  LOCK_TTL_MS,
-} from "@/lib/isometric/utils/lock";
+import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
   SUBMISSION_METADATA_KEYS,
   getMetadataValue,
@@ -151,6 +149,21 @@ export interface OpenRemovalView {
 const MULTIPLE_DRAFTS_MESSAGE =
   "Multiple draft GHG statements exist for this project and period in Isometric.";
 
+// Domain wording for the claim module's blocked outcomes (the module owns
+// only the mapping-guard wording; claim decisions are translated here).
+const GHG_CLAIM_BLOCKED_MESSAGES: Record<
+  ClaimBlockedReason,
+  string
+> = {
+  "in-flight": "GHG statement creation already in progress.",
+  "rejected-with-external":
+    "This GHG statement was rejected by the verifier. Resolve it in the Isometric registry before retrying.",
+  "invalid-changed-hash":
+    "The reporting period changed for an already-created GHG statement.",
+  "state-changed":
+    "Submission state changed while creating the GHG statement. Reload and retry.",
+};
+
 // How many recent sync events to surface in a statement's detail panel.
 const RECENT_SYNC_EVENTS_LIMIT = 10;
 
@@ -232,84 +245,43 @@ export async function createGhgStatementDraft(
       ghgStatementId: statement.id,
       endOn: parsed.reportingPeriodEndOn,
     };
-    const semanticHash = payloadHash(semanticPayload);
-
-    const latest = await getLatestSubmission(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-      localEntityId: statement.id,
-    });
-
-    const claim = decideSubmissionClaim({
-      latest,
-      payloadHash: semanticHash,
-      now: Date.now(),
-      lockTtlMs: LOCK_TTL_MS,
-      policy: { onSubmittedHashChanged: "invalid-changed-hash" },
-    });
 
     // `statement.id` is stable per (facility, period), so on a repeat create
-    // `latest` is the prior ledger row and the claim genuinely resolves the
-    // race: an in-flight create blocks, an already-created one returns its
-    // external id, a stale or failed draft resumes. On a first create
-    // `latest` is null and the claim is `create-new-version`.
+    // the ledger's latest row is the prior attempt and the claim genuinely
+    // resolves the race: an in-flight create blocks, an already-created one
+    // returns its external id, a stale or failed draft resumes. The module
+    // re-decides inside the mapping lock, so a concurrent duplicate create
+    // resolves to `existing`/`blocked` instead of dying on the
+    // entity-version unique constraint. The guard's template arm is omitted
+    // — a GHG Statement has no template.
+    const claimed = await claimSubmissionDraft(userId, {
+      key: {
+        provider: ISOMETRIC_PROVIDER,
+        submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+        localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+        localEntityId: statement.id,
+      },
+      guard: mappingGuard,
+      policy: { onSubmittedHashChanged: "invalid-changed-hash" },
+      tentativeInputs: semanticPayload,
+      hashOf: payloadHash,
+      buildSnapshot: ({ inputs }) => ({ payloadSnapshot: { semantic: inputs } }),
+    });
+
     let row: CertificationSubmissionRow;
-    switch (claim.kind) {
-      case "blocked-in-flight":
-        throw new SafeError("GHG statement creation already in progress.");
-      case "blocked-rejected-with-external":
-        throw new SafeError(
-          "This GHG statement was rejected by the verifier. Resolve it in the Isometric registry before retrying.",
-        );
-      case "invalid-changed-hash":
-        throw new SafeError(
-          "The reporting period changed for an already-created GHG statement.",
-        );
-      case "return-existing":
+    switch (claimed.kind) {
+      case "blocked":
+        throw new SafeError(GHG_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
+      case "existing":
         return {
           ghgStatementId: statement.id,
-          externalId: claim.externalId,
+          externalId: claimed.externalId,
           linkedRemovalIds: [],
           warnings: [],
         };
-      case "resume":
-        // …WithMappingLock locks certifier_projects and verifies the
-        // externalProjectId still matches what we read above. Without it, a
-        // concurrent repoint between the project read and the remote POST
-        // would create the registry statement under the old project while
-        // the facility now points elsewhere. The defaultRemovalTemplateId
-        // arm of the guard is skipped — a GHG Statement has no template.
-        row = await resetSubmissionToDraftWithMappingLock(
-          userId,
-          claim.resumeRowId,
-          mappingGuard,
-          LOCK_TTL_MS,
-        );
+      case "claimed":
+        row = claimed.row;
         break;
-      case "create-new-version":
-        row = await insertDraftSubmissionWithMappingLock(
-          userId,
-          {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-            localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-            localEntityId: statement.id,
-            version: claim.nextVersion,
-            payloadSnapshot: { semantic: semanticPayload },
-            payloadHash: semanticHash,
-          },
-          mappingGuard,
-        );
-        break;
-      case "resume-poll-existing":
-      case "resume-re-put":
-        // Phase 5 Slice A claim kinds; only reachable when callers pass
-        // `dataUploadResume`. GHG-statement creation does not — kept here
-        // for exhaustiveness so TS narrows the union end-to-end.
-        throw new SafeError(
-          "Unexpected resume kind for GHG statement creation.",
-        );
     }
 
     return createGhgStatementRemote({

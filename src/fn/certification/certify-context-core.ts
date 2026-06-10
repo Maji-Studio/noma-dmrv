@@ -1,10 +1,10 @@
 import { env } from "@/config/env";
 import {
   getCertifierProjectByFacility,
-  getLatestSubmission,
   type CertificationSubmissionRow,
   type CertifierProjectRow,
 } from "@/data-access/certification";
+import { getLatestSubmission } from "@/data-access/certification-submissions";
 import {
   getCertifierRemovalById,
   getCreditBatchesByRemovalId,
