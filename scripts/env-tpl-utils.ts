@@ -28,8 +28,8 @@ export function parseTemplate(): TemplateEntry[] {
   let template: string;
   try {
     template = readFileSync(templatePath, "utf-8");
-  } catch {
-    throw new Error("Failed to read .env.tpl");
+  } catch (error) {
+    throw new Error(`Failed to read .env.tpl at ${templatePath}: ${error}`);
   }
 
   const entries: TemplateEntry[] = [];

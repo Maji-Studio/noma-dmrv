@@ -101,7 +101,7 @@ parsed from the deprecated response fields.)
 `src/lib/isometric/generated/certify.d.ts` predates 2026-06-04 (zero
 `ghg_entry` occurrences). The correct Certify spec URL:
 
-```
+```text
 https://docs.isometric.com/api-reference/certify/mrv.openapi.json
 ```
 

@@ -344,11 +344,16 @@ export async function submitRemoval(
   if (!ctx.defaultTemplate) {
     throw new SafeError("Set a default removal template before submitting.");
   }
-  // Pin the narrowed (non-null) template into a const so closures created
-  // below see the narrowed type without re-checking — TS loses narrowing of
-  // a property access (`ctx.defaultTemplate`) when it crosses into an
-  // async callback.
+  // Pin the narrowed (non-null) template into a const — TS loses narrowing of
+  // a property access (`ctx.defaultTemplate`) inside async callbacks below.
   const defaultTemplate = ctx.defaultTemplate;
+  // The save path validates this too, but the template lives on Isometric and
+  // can change credit_type after binding — a REDUCTION template must never mislabel a GHG entry.
+  if (defaultTemplate.credit_type !== "REMOVAL") {
+    throw new SafeError(
+      "The facility's default template is not a REMOVAL template. Rebind a REMOVAL template in facility settings before submitting.",
+    );
+  }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     throw new SafeError(
       `Cannot submit: blueprints out of sync with Certify (${ctx.unresolvedBlueprintKeys.join(", ")}). Refresh in facility settings.`,
