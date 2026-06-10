@@ -67,12 +67,19 @@ Secrets live in **1Password** (vault `Environment Variables`), never in the repo
 Three consumers read those items:
 
 - **Local dev** — `pnpm env:local` runs `op inject -i .env.tpl -o .env`. `.env.tpl` is tracked and holds `op://Environment Variables/noma-dmrv env staging/<VAR>` references; values resolve at runtime, never committed.
-- **Vercel** — `pnpm env:vercel` (`scripts/sync-env-to-vercel.ts`) pushes the prod item into Vercel's production/preview/development scopes.
+- **Vercel** — `pnpm env:vercel`
+  (`scripts/sync-env-to-vercel.ts`) pushes the production item into Vercel
+  Production and the staging item into Vercel Preview. Vercel Development is not
+  synced.
 - **GitHub Actions** — `e2e.yml`, `isometric-health.yml`, and `migrate.yml` resolve `op://` references via `1password/load-secrets-action`, authenticating with a single repo secret **`OP_SERVICE_ACCOUNT_TOKEN`** — a read-only 1Password Service Account scoped to the `Environment Variables` vault. It replaces all per-secret Actions secrets; `CLAUDE_CODE_OAUTH_TOKEN` is the only other one. Staging jobs read the staging item, production jobs the production item. The e2e/health load steps are gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs (which can't read secrets) skip cleanly.
 
 Notes:
 
 - Rotating a secret = edit the 1Password item. No GitHub or Vercel change needed.
+- Vercel Production/Preview secrets are synced as sensitive, while
+  `NEXT_PUBLIC_*` variables are synced as non-sensitive. Local
+  `vercel build --target=preview` cannot reconstruct sensitive values from
+  Vercel; use local env injection for local builds.
 - Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
 - `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
 

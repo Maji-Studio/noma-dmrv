@@ -97,7 +97,9 @@ test.describe("Product bin ↔ formulation filtering", () => {
   async function openProductBinDropdown(page: Page) {
     const dialog = page.locator('[role="dialog"]');
     const label = dialog.locator("label").filter({ hasText: "Product Bin" }).first();
-    const fieldContainer = label.locator("..");
+    const fieldContainer = label.locator(
+      "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+    );
     await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
     await page.waitForSelector('[data-testid="entity-select-listbox"]', { timeout: 10000 });
   }
