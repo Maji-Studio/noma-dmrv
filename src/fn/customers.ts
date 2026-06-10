@@ -394,6 +394,7 @@ export async function createCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      isDefault: validated.isDefault,
     });
 
     return { success: true, data: location };
@@ -437,6 +438,7 @@ export async function updateCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      isDefault: validated.isDefault,
     });
 
     // The distance feeds derived biochar distribution legs; recompute the legs
