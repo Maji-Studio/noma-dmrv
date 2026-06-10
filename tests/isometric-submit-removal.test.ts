@@ -23,8 +23,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   CertificationSubmissionRow,
   CertifierProjectRow,
-  InsertDraftSubmissionInput,
 } from "@/data-access/certification";
+import type { InsertDraftSubmissionInput } from "@/data-access/certification-submissions";
 import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
@@ -40,6 +40,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 vi.mock("@/data-access/certification");
+vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/fn/certification/certify-context-core");
 // Phase 3.5: submitRemoval now resolves mirrored Source IDs before
@@ -64,10 +65,12 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
 });
 
 import * as ledger from "@/data-access/certification";
+import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as isometric from "@/lib/isometric";
 import { submitRemoval } from "@/fn/certification/submit-removal";
+import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
 
 // ---------------------------------------------------------------------------
 // Constants used by the fakes + assertions.
@@ -130,6 +133,8 @@ function makeTemplate(): IsometricGhgEntryTemplate {
     id: TEMPLATE_ID,
     name: "Test removal template",
     display_name: "Test removal template",
+    // submitRemoval refuses non-REMOVAL templates (credit_type guard).
+    credit_type: "REMOVAL",
     groups: [
       {
         id: "grp-1",
@@ -320,39 +325,25 @@ beforeEach(() => {
   storedRows = [];
   nextLedgerRowId = 1;
 
-  vi.mocked(ledger.getLatestSubmission).mockImplementation(async () =>
-    storedLatest(),
-  );
-  vi.mocked(ledger.getLatestSubmissionInTx).mockImplementation(async () =>
-    storedLatest(),
-  );
-  vi.mocked(ledger.insertDraftSubmissionWithMappingLock).mockImplementation(
-    async (_userId, input) => {
-      const row = newLedgerRow(input);
-      storedRows.push(row);
-      return row;
-    },
-  );
-  // Phase 3.5: locked variant — the prepare callback runs to recompute
-  // source IDs under the per-document lock. In tests there's no real tx;
-  // pass `undefined as never` because the callback only forwards it to
-  // `resolveSourceIdsForRemoval`, which is mocked.
-  vi.mocked(ledger.insertDraftSubmissionWithMappingLockAndLocks).mockImplementation(
-    async (_userId, _guard, prepare) => {
-      const input = await prepare(undefined as never);
-      const row = newLedgerRow(input);
-      storedRows.push(row);
-      return row;
-    },
-  );
-  vi.mocked(ledger.resetSubmissionToDraftWithMappingLock).mockImplementation(
-    async (_userId, rowId) => {
-      const row = storedRows.find((r) => r.id === rowId);
-      if (!row) throw new Error(`Test ledger missing row ${rowId}`);
-      row.status = "draft";
-      row.lockedAt = new Date();
-      return row;
-    },
+  // The claim choreography is one mocked function backed by the in-memory
+  // ledger + the real pure decision core; lock/CAS/re-resolution behavior
+  // is the module's own concern (DB-backed tests).
+  vi.mocked(ledgerClaim.claimSubmissionDraft).mockImplementation(
+    makeClaimSubmissionDraftFake({
+      latest: () => storedLatest(),
+      insert: (input) => {
+        const row = newLedgerRow(input);
+        storedRows.push(row);
+        return row;
+      },
+      resetToDraft: (rowId) => {
+        const row = storedRows.find((r) => r.id === rowId);
+        if (!row) throw new Error(`Test ledger missing row ${rowId}`);
+        row.status = "draft";
+        row.lockedAt = new Date();
+        return row;
+      },
+    }),
   );
   vi.mocked(ledger.markSubmissionSubmitted).mockImplementation(
     async (_userId, id, args) => {

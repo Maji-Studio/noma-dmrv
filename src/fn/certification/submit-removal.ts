@@ -1,19 +1,17 @@
 import {
-  getLatestSubmission,
-  getLatestSubmissionInTx,
-  insertDraftSubmissionWithMappingLockAndLocks,
   markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraftWithMappingLock,
   type CertificationSubmissionRow,
   type CertifierProjectRow,
-  type MappingClaimGuard,
 } from "@/data-access/certification";
+import {
+  claimSubmissionDraft,
+  type ClaimBlockedReason,
+  type MappingClaimGuard,
+} from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
-import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
-import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import { z } from "zod";
@@ -26,7 +24,6 @@ import {
   buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
-  decideSubmissionClaim,
   enrichWithFacilityConfig,
   enrichWithTransportLegs,
   payloadHash,
@@ -55,14 +52,18 @@ import {
   REMOVAL_SUBMISSION_TYPE,
 } from "./shared";
 
-class ExistingRemovalSubmission extends Error {
-  constructor(
-    readonly externalId: string,
-    readonly version: number,
-  ) {
-    super("Removal submission already exists");
-  }
-}
+// Domain wording for the claim module's blocked outcomes (the module owns
+// only the mapping-guard wording; claim decisions are translated here).
+const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
+  "in-flight": "A Removal submission for this removal is already in progress.",
+  "rejected-with-external":
+    "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
+  // Removal policy is `supersede`; invalid-changed-hash is unreachable but
+  // kept so future policy changes are explicit.
+  "invalid-changed-hash": "Unexpected submission state for this removal.",
+  "state-changed":
+    "Submission state changed while preparing the removal. Reload and retry.",
+};
 
 // Reads the four Phase 3.7 emission-estimate columns off the facility's
 // certifier_projects row. Throws if any is unset — they must be configured
@@ -344,11 +345,16 @@ export async function submitRemoval(
   if (!ctx.defaultTemplate) {
     throw new SafeError("Set a default removal template before submitting.");
   }
-  // Pin the narrowed (non-null) template into a const so closures created
-  // below see the narrowed type without re-checking — TS loses narrowing of
-  // a property access (`ctx.defaultTemplate`) when it crosses into an
-  // async callback.
+  // Pin the narrowed (non-null) template into a const — TS loses narrowing of
+  // a property access (`ctx.defaultTemplate`) inside async callbacks below.
   const defaultTemplate = ctx.defaultTemplate;
+  // The save path validates this too, but the template lives on Isometric and
+  // can change credit_type after binding — a REDUCTION template must never mislabel a GHG entry.
+  if (defaultTemplate.credit_type !== "REMOVAL") {
+    throw new SafeError(
+      "The facility's default template is not a REMOVAL template. Rebind a REMOVAL template in facility settings before submitting.",
+    );
+  }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     throw new SafeError(
       `Cannot submit: blueprints out of sync with Certify (${ctx.unresolvedBlueprintKeys.join(", ")}). Refresh in facility settings.`,
@@ -500,267 +506,149 @@ export async function submitRemoval(
       `${a.rtcId}::${a.inputKey}`.localeCompare(`${b.rtcId}::${b.inputKey}`),
     ),
   };
-  const semanticHash = payloadHash(semanticPayload);
   const memberCreditBatchIds = ctx.memberBatches
     .map((b) => b.id)
     .sort((a, b) => a.localeCompare(b));
 
-  const latest = await getLatestSubmission(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: REMOVAL_SUBMISSION_TYPE,
-    localEntityType: REMOVAL_ENTITY_TYPE,
-    localEntityId: removalId,
-  });
-
-  const claim = decideSubmissionClaim({
-    latest,
-    payloadHash: semanticHash,
-    now: Date.now(),
-    lockTtlMs: LOCK_TTL_MS,
+  // Claim a ledger draft through the submission-ledger module. The module
+  // holds the mapping lock plus the per-document mirror locks while it
+  // re-resolves source IDs and re-decides the claim — the interlock with
+  // unlinkDocumentSource and mirrorDocumentToSource (which acquire the same
+  // per-(provider, documentId) advisory locks). Without it, a concurrent
+  // unlink could delete a mapping between the unlocked source-id read above
+  // and the snapshot insert, orphaning the audit-trail reference.
+  const claimed = await claimSubmissionDraft(userId, {
+    key: {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: REMOVAL_SUBMISSION_TYPE,
+      localEntityType: REMOVAL_ENTITY_TYPE,
+      localEntityId: removalId,
+    },
+    guard: mappingGuard,
     policy: { onSubmittedHashChanged: "supersede" },
-  });
+    tentativeInputs: { semanticPayload, monitored, datapointBodyByKey },
+    hashOf: (inputs) => payloadHash(inputs.semanticPayload),
+    mirrorDocumentIds: candidateDocumentIds,
+    resolve: async (tx, tentative) => {
+      // Re-resolve inside the lock. mirror and unlink are now serialized
+      // against us, so this result is the authoritative source set. Common
+      // case: it matches the tentative set and everything built above
+      // remains valid; the rare path rebuilds the template inputs once.
+      const lockedSourceIds = await resolveSourceIdsForRemoval(
+        userId,
+        { candidateDocumentIds },
+        tx,
+      );
+      const sourceIdsChanged =
+        lockedSourceIds.length !== sourceIds.length ||
+        lockedSourceIds.some((id, i) => id !== sourceIds[i]);
+      if (!sourceIdsChanged) return tentative;
 
-  switch (claim.kind) {
-    case "blocked-in-flight":
-      throw new SafeError(
-        "A Removal submission for this removal is already in progress.",
-      );
-    case "blocked-rejected-with-external":
-      throw new SafeError(
-        "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
-      );
-    case "invalid-changed-hash":
-      // Removal policy is `supersede`; this branch is unreachable but kept
-      // for exhaustiveness so future policy changes are explicit.
-      throw new SafeError("Unexpected submission state for this removal.");
-    case "return-existing":
-      return {
-        removalId,
-        externalId: claim.externalId,
-        version: claim.version,
-      };
-    case "resume": {
-      const row = await resetSubmissionToDraftWithMappingLock(
-        userId,
-        claim.resumeRowId,
-        mappingGuard,
-        LOCK_TTL_MS,
-      );
-      const transport = readRemovalTransport(row);
-      return runRemovalSubmission({
-        userId,
-        removalId,
-        row,
-        transport,
-        fixed,
+      const finalResolved = resolveTemplateInputs({
         template: defaultTemplate,
         blueprintsByKey,
         agg,
         externalProjectId,
-        supersedePreviousId: null,
-        resumed: true,
-        log,
+        sourceIds: lockedSourceIds,
+        allowPeriodInputStub,
       });
-    }
-    case "create-new-version": {
-      if (claim.reason === "rejected-hash-changed") {
+      return {
+        semanticPayload: {
+          ...tentative.semanticPayload,
+          sourceIds: lockedSourceIds,
+        },
+        monitored: finalResolved.monitored,
+        datapointBodyByKey: finalResolved.datapointBodyByKey,
+      };
+    },
+    buildSnapshot: ({ inputs, nextVersion }) => {
+      const removalSupplierRef = buildRemovalSupplierRef({
+        removalId,
+        role: "removal",
+        version: nextVersion,
+      });
+
+      const finalDatapointBodies = inputs.monitored.map((m) => {
+        const supplierRefId = buildRemovalSupplierRef({
+          removalId,
+          role: "datapoint",
+          version: nextVersion,
+          inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
+        });
+        const draftKey = `${m.removalTemplateComponentId}::${m.inputKey}`;
+        const draft = inputs.datapointBodyByKey.get(draftKey);
+        if (!draft) {
+          // monitored and datapointBodyByKey are produced by the same
+          // resolveTemplateInputs pass, so a miss means the two fell out of
+          // sync — fail loudly rather than emit a Datapoint body missing
+          // its resolved fields.
+          throw new SafeError(
+            `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
+          );
+        }
+        return {
+          rtcId: m.removalTemplateComponentId,
+          inputKey: m.inputKey,
+          body: { ...draft, supplier_reference_id: supplierRefId },
+        };
+      });
+
+      return {
+        payloadSnapshot: {
+          // ADR 0005 / B3 — content hash of INPUT_MAPPING that produced
+          // this payload, surfaced at the top level so an audit query
+          // (`WHERE payload_snapshot->>'__mappingRevision' = ?`) can
+          // correlate a registry-side issue back to a specific noma
+          // mapping revision in git.
+          __mappingRevision: MAPPING_REVISION,
+          semantic: inputs.semanticPayload,
+          memberCreditBatchIds,
+          transport: {
+            removalSupplierRef,
+            datapointBodies: finalDatapointBodies,
+          },
+        },
+      };
+    },
+  });
+
+  switch (claimed.kind) {
+    case "blocked":
+      throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
+    case "existing":
+      return {
+        removalId,
+        externalId: claimed.externalId,
+        version: claimed.version,
+      };
+    case "claimed": {
+      if (claimed.reason === "rejected-hash-changed") {
         log.warn(
-          { submissionId: latest!.id },
+          { submissionId: claimed.row.id },
           "removal retry will create a new version after rejected row with changed hash",
         );
       }
-      // Build the draft snapshot inside a transaction that holds per-
-      // document mirror locks. Inside the lock we re-resolve source IDs,
-      // and if they shifted vs. the tentative set the hash gets recomputed
-      // before insert. This is the interlock with unlinkDocumentSource and
-      // mirrorDocumentToSource — those acquire the same per-(provider,
-      // documentId) advisory locks, so they block while submit is
-      // resolving + inserting, and submit blocks while they're mutating.
-      // Without this, a concurrent unlink could delete the mapping between
-      // the unlocked source-id read above and the snapshot insert,
-      // orphaning the audit-trail reference.
-      let lockedSupersedePreviousId: string | null = claim.supersedePreviousId;
-      let draftRow: CertificationSubmissionRow;
-      try {
-        draftRow = await insertDraftSubmissionWithMappingLockAndLocks(
-          userId,
-          mappingGuard,
-          async (tx) => {
-          await acquireMirrorLocksSorted(tx, candidateDocumentIds);
-
-          // Re-resolve inside the lock. mirror and unlink are now serialized
-          // against us, so this result is the authoritative source set.
-          const lockedSourceIds = await resolveSourceIdsForRemoval(
-            userId,
-            { candidateDocumentIds },
-            tx,
-          );
-
-          // Common case: the locked re-read matches the tentative set;
-          // semanticPayload / hash / datapointBodies built above remain
-          // valid. The rare path rebuilds the template inputs once with
-          // the locked source set.
-          const sourceIdsChanged =
-            lockedSourceIds.length !== sourceIds.length ||
-            lockedSourceIds.some((id, i) => id !== sourceIds[i]);
-
-          const finalSemanticPayload = sourceIdsChanged
-            ? { ...semanticPayload, sourceIds: lockedSourceIds }
-            : semanticPayload;
-          const finalHash = sourceIdsChanged
-            ? payloadHash(finalSemanticPayload)
-            : semanticHash;
-          const finalResolved = sourceIdsChanged
-            ? resolveTemplateInputs({
-                template: defaultTemplate,
-                blueprintsByKey,
-                agg,
-                externalProjectId,
-                sourceIds: lockedSourceIds,
-                allowPeriodInputStub,
-              })
-            : null;
-          const finalMonitored = finalResolved?.monitored ?? monitored;
-          const finalDatapointBodyByKey =
-            finalResolved?.datapointBodyByKey ?? datapointBodyByKey;
-
-          const lockedLatest = await getLatestSubmissionInTx(userId, tx, {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: removalId,
-          });
-          const lockedClaim = decideSubmissionClaim({
-            latest: lockedLatest,
-            payloadHash: finalHash,
-            now: Date.now(),
-            lockTtlMs: LOCK_TTL_MS,
-            policy: { onSubmittedHashChanged: "supersede" },
-          });
-
-          switch (lockedClaim.kind) {
-            case "blocked-in-flight":
-              throw new SafeError(
-                "A Removal submission for this removal is already in progress.",
-              );
-            case "blocked-rejected-with-external":
-              throw new SafeError(
-                "This Removal was rejected by the verifier. Resolve the rejection in the Isometric registry before retrying.",
-              );
-            case "invalid-changed-hash":
-              throw new SafeError("Unexpected submission state for this removal.");
-            case "return-existing":
-              throw new ExistingRemovalSubmission(
-                lockedClaim.externalId,
-                lockedClaim.version,
-              );
-            case "resume":
-              throw new SafeError(
-                "Submission state changed while preparing the removal. Reload and retry.",
-              );
-            case "create-new-version":
-              break;
-            case "resume-poll-existing":
-            case "resume-re-put":
-              throw new SafeError(
-                "Unexpected resume kind for removal submission.",
-              );
-          }
-
-          lockedSupersedePreviousId = lockedClaim.supersedePreviousId;
-          const removalSupplierRef = buildRemovalSupplierRef({
-            removalId,
-            role: "removal",
-            version: lockedClaim.nextVersion,
-          });
-
-          const finalDatapointBodies = finalMonitored.map((m) => {
-            const supplierRefId = buildRemovalSupplierRef({
-              removalId,
-              role: "datapoint",
-              version: lockedClaim.nextVersion,
-              inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
-            });
-            const draftKey = `${m.removalTemplateComponentId}::${m.inputKey}`;
-            const draft = finalDatapointBodyByKey.get(draftKey);
-            if (!draft) {
-              // finalMonitored and finalDatapointBodyByKey are produced by the
-              // same resolveTemplateInputs pass, so a miss means the two fell
-              // out of sync — fail loudly rather than emit a Datapoint body
-              // missing its resolved fields.
-              throw new SafeError(
-                `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
-              );
-            }
-            return {
-              rtcId: m.removalTemplateComponentId,
-              inputKey: m.inputKey,
-              body: { ...draft, supplier_reference_id: supplierRefId },
-            };
-          });
-
-          return {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: REMOVAL_SUBMISSION_TYPE,
-            localEntityType: REMOVAL_ENTITY_TYPE,
-            localEntityId: removalId,
-            version: lockedClaim.nextVersion,
-            payloadSnapshot: {
-              // ADR 0005 / B3 — content hash of INPUT_MAPPING that
-              // produced this payload, surfaced at the top level so an
-              // audit query (`WHERE payload_snapshot->>'__mappingRevision'
-              // = ?`) can correlate a registry-side issue back to a
-              // specific noma mapping revision in git.
-              __mappingRevision: MAPPING_REVISION,
-              semantic: finalSemanticPayload,
-              memberCreditBatchIds,
-              transport: {
-                removalSupplierRef,
-                datapointBodies: finalDatapointBodies,
-              },
-            },
-            payloadHash: finalHash,
-          };
-          },
-        );
-      } catch (err) {
-        if (err instanceof ExistingRemovalSubmission) {
-          return {
-            removalId,
-            externalId: err.externalId,
-            version: err.version,
-          };
-        }
-        throw err;
-      }
-
-      // Pull the transport snapshot back from the row we just inserted —
-      // it carries the locked-source-id version of the datapoint bodies
-      // (which may differ from the tentative `datapointBodyByKey` if a
-      // concurrent mirror/unlink shifted the source set during the lock
-      // acquisition).
-      const transport = readRemovalTransport(draftRow);
+      // The transport snapshot comes off the claimed row: on resume it is
+      // the prior attempt's stored truth; on create it carries the
+      // locked-source-id version of the datapoint bodies (which may differ
+      // from the tentative `datapointBodyByKey` if a concurrent
+      // mirror/unlink shifted the source set during lock acquisition).
+      const transport = readRemovalTransport(claimed.row);
       return runRemovalSubmission({
         userId,
         removalId,
-        row: draftRow,
+        row: claimed.row,
         transport,
         fixed,
         template: defaultTemplate,
         blueprintsByKey,
         agg,
         externalProjectId,
-        supersedePreviousId: lockedSupersedePreviousId,
-        resumed: false,
+        supersedePreviousId: claimed.supersedePreviousId,
+        resumed: claimed.resumed,
         log,
       });
     }
-    case "resume-poll-existing":
-    case "resume-re-put":
-      // Phase 5 Slice A claim kinds; only reachable when callers pass
-      // `dataUploadResume`. Removal submission does not — kept here for
-      // exhaustiveness so TS narrows the union end-to-end.
-      throw new SafeError("Unexpected resume kind for removal submission.");
   }
 }
 
