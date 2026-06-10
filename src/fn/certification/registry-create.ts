@@ -195,6 +195,11 @@ async function reconcileToResult(
       responsePayload: {
         id: lookup.externalId,
         source: "reconciliation",
+        // Mirror the fresh-create path's correlation key so reconciled/orphan
+        // claims cross-reference the same supplier ref in the audit trail.
+        ...(args.supplierRefId
+          ? { supplier_reference_id: args.supplierRefId }
+          : {}),
         mapping_revision: MAPPING_REVISION,
       },
     },
