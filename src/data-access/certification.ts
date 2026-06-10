@@ -160,6 +160,37 @@ async function hasBlockingFacilitySubmission(
   return removalHit.length > 0 || ghgHit.length > 0;
 }
 
+// DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The
+// serial in-transaction probe in upsertCertifierProject cannot see a concurrent
+// upsert (each only row-locks its own facility), so the unique index fires for
+// the loser. Relabel that one 23505 as a clear SafeError; every other error
+// (including the entity-version 23505 handled elsewhere) propagates unchanged.
+const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
+  "certifier_projects_provider_external_facility_unique";
+
+async function withExternalFacilityConflictGuard<T>(
+  externalFacilityId: string | null,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code?: string }).code === "23505" &&
+      (err as { constraint?: string }).constraint ===
+        CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT
+    ) {
+      throw new SafeError(
+        `Isometric facility ID ${externalFacilityId} is already linked to another facility. Each Isometric facility maps to exactly one facility here.`,
+      );
+    }
+    throw err;
+  }
+}
+
 export async function upsertCertifierProject(
   userId: string,
   input: UpsertCertifierProjectInput,
@@ -176,82 +207,91 @@ export async function upsertCertifierProject(
     metadata: input.metadata ?? null,
   };
 
-  return db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(certifierProjects)
-      .where(
-        and(
-          eq(certifierProjects.facilityId, input.facilityId),
-          eq(certifierProjects.provider, input.provider),
-        ),
-      )
-      .for("update")
-      .limit(1);
-
-    // The Isometric facility id (fcl_…) is a 1:1 anchor — two noma facilities
-    // sharing one would cross-contaminate telemetry. A DB unique constraint
-    // (provider, external_facility_id) is the backstop; this in-transaction
-    // probe turns the raw 23505 into a clear, actionable message. Projects may
-    // still be shared across facilities — only the fcl_ id is locked.
-    if (values.externalFacilityId) {
-      const [collision] = await tx
-        .select({
-          code: facilities.code,
-          name: facilities.name,
-        })
+  const runUpsert = () =>
+    db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
         .from(certifierProjects)
-        .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
         .where(
           and(
+            eq(certifierProjects.facilityId, input.facilityId),
             eq(certifierProjects.provider, input.provider),
-            eq(certifierProjects.externalFacilityId, values.externalFacilityId),
-            ne(certifierProjects.facilityId, input.facilityId),
           ),
         )
+        .for("update")
         .limit(1);
-      if (collision) {
-        throw new SafeError(
-          `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code} — ${collision.name}. Each Isometric facility maps to exactly one facility here.`,
-        );
-      }
-    }
 
-    const mappingIdentifiersChanged =
-      existing &&
-      (existing.externalProjectId !== values.externalProjectId ||
-        existing.externalFacilityId !== values.externalFacilityId);
-    if (mappingIdentifiersChanged) {
-      const blocked = await hasBlockingFacilitySubmission(
-        tx,
-        input.facilityId,
-        input.provider,
-      );
-      if (blocked) {
-        throw new SafeError(
-          "Cannot change certifier project or facility ID: this facility has certifier submissions. Supersede or reject them first.",
-        );
+      // The Isometric facility id (fcl_…) is a 1:1 anchor — two noma facilities
+      // sharing one would cross-contaminate telemetry. A DB unique constraint
+      // (provider, external_facility_id) is the backstop; this in-transaction
+      // probe turns the raw 23505 into a clear, actionable message naming the
+      // colliding facility. Projects may still be shared across facilities —
+      // only the fcl_ id is locked. Two concurrent upserts can each pass this
+      // probe (each row-locks only its own facility), so the DB constraint
+      // still fires for one — withExternalFacilityConflictGuard catches it.
+      if (values.externalFacilityId) {
+        const [collision] = await tx
+          .select({
+            code: facilities.code,
+            name: facilities.name,
+          })
+          .from(certifierProjects)
+          .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
+          .where(
+            and(
+              eq(certifierProjects.provider, input.provider),
+              eq(
+                certifierProjects.externalFacilityId,
+                values.externalFacilityId,
+              ),
+              ne(certifierProjects.facilityId, input.facilityId),
+            ),
+          )
+          .limit(1);
+        if (collision) {
+          throw new SafeError(
+            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code} — ${collision.name}. Each Isometric facility maps to exactly one facility here.`,
+          );
+        }
       }
-    }
 
-    const [row] = await tx
-      .insert(certifierProjects)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [certifierProjects.facilityId, certifierProjects.provider],
-        set: {
-          externalProjectId: values.externalProjectId,
-          protocolSlug: values.protocolSlug,
-          protocolVersion: values.protocolVersion,
-          defaultRemovalTemplateId: values.defaultRemovalTemplateId,
-          externalFacilityId: values.externalFacilityId,
-          metadata: values.metadata,
-          updatedAt: sql`now()`,
-        },
-      })
-      .returning();
-    return row;
-  });
+      const mappingIdentifiersChanged =
+        existing &&
+        (existing.externalProjectId !== values.externalProjectId ||
+          existing.externalFacilityId !== values.externalFacilityId);
+      if (mappingIdentifiersChanged) {
+        const blocked = await hasBlockingFacilitySubmission(
+          tx,
+          input.facilityId,
+          input.provider,
+        );
+        if (blocked) {
+          throw new SafeError(
+            "Cannot change certifier project or facility ID: this facility has certifier submissions. Supersede or reject them first.",
+          );
+        }
+      }
+
+      const [row] = await tx
+        .insert(certifierProjects)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [certifierProjects.facilityId, certifierProjects.provider],
+          set: {
+            externalProjectId: values.externalProjectId,
+            protocolSlug: values.protocolSlug,
+            protocolVersion: values.protocolVersion,
+            defaultRemovalTemplateId: values.defaultRemovalTemplateId,
+            externalFacilityId: values.externalFacilityId,
+            metadata: values.metadata,
+            updatedAt: sql`now()`,
+          },
+        })
+        .returning();
+      return row;
+    });
+
+  return withExternalFacilityConflictGuard(values.externalFacilityId, runUpsert);
 }
 
 export interface FacilityEmissionConfigInput {
