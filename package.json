@@ -35,6 +35,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "isometric:coverage-check": "tsx scripts/isometric-coverage-check.ts",
+    "storage:smoke": "NODE_ENV=test tsx scripts/storage-smoke.ts",
     "regenerate-certify-types": "openapi-typescript ${ISOMETRIC_OPENAPI_URL:-https://docs.isometric.com/api-reference/certify/mrv.openapi.json} -o src/lib/isometric/generated/certify.d.ts"
   },
   "dependencies": {
