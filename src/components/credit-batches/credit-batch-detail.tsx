@@ -56,7 +56,9 @@ export function CreditBatchDetail({
   applications = [],
 }: CreditBatchDetailProps) {
   const { data: creditBatch, isLoading, error } = useCreditBatch(creditBatchId);
-  const { data: allBatches } = useCreditBatches();
+  // Scope to this batch's facility — overlap validation is per-facility, and
+  // credit batches must never be read across the facility boundary.
+  const { data: allBatches } = useCreditBatches(creditBatch?.facilityId);
   const updateCreditBatch = useUpdateCreditBatch();
   const toast = useToast();
   const [updateError, setUpdateError] = useState<string | null>(null);

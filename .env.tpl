@@ -34,6 +34,9 @@ ADMIN_EMAIL="op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL"
 # -----------------------------------------------------------------------------
 ISOMETRIC_CLIENT_SECRET="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET"
 ISOMETRIC_ACCESS_TOKEN="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN"
+# sandbox in the staging 1Password item, production in the production item — the
+# sync rewrites the item, not the field, so one line serves both environments.
+ISOMETRIC_ENVIRONMENT="op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ENVIRONMENT"
 
 # -----------------------------------------------------------------------------
 # Storage (S3-compatible object storage)

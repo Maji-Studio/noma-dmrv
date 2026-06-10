@@ -1,0 +1,1 @@
+ALTER TABLE "certifier_projects" ADD CONSTRAINT "certifier_projects_provider_external_facility_unique" UNIQUE("provider","external_facility_id");

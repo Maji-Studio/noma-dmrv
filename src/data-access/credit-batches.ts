@@ -288,9 +288,14 @@ async function validateApplicationIds(
 }
 
 /**
- * Get all credit batches with facility info and application count
+ * Get credit batches for a single facility, with facility info and application
+ * count. Facility-scoped: credit batches belong to exactly one facility and
+ * must never leak across the facility boundary.
  */
-export async function getCreditBatches(userId: string): Promise<CreditBatchWithRelations[]> {
+export async function getCreditBatches(
+  userId: string,
+  facilityId: string
+): Promise<CreditBatchWithRelations[]> {
   requireAuth(userId);
   const batches = await db
     .select({
@@ -299,6 +304,7 @@ export async function getCreditBatches(userId: string): Promise<CreditBatchWithR
     })
     .from(creditBatches)
     .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
+    .where(eq(creditBatches.facilityId, facilityId))
     .orderBy(desc(creditBatches.createdAt));
 
   // Get application counts and IDs for each batch

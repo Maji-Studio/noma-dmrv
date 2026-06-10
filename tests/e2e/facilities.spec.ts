@@ -125,7 +125,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
 
     // Verify the new reactor appears in the filtered list.
     await expect(
-      page.getByRole("button", { name: new RegExp(reactorIdentifier) }).first()
+      page.getByRole("button", { name: reactorIdentifier }).first()
     ).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;
