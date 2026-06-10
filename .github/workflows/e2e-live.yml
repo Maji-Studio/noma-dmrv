@@ -1,18 +1,24 @@
-name: E2E
+name: E2E Live (Isometric sandbox)
+
+# Runs ONLY the @live-tagged Playwright specs — the ones that talk to the real
+# Isometric sandbox (project mapping, certification Settings round-trip, full
+# New-Removal submit). They are excluded from the PR-blocking E2E workflow
+# (e2e.yml runs --grep-invert "@live") so a registry outage or sandbox latency
+# can never block a merge; this nightly run keeps the live coverage honest.
+#
+# Failures here mean "our integration drifted or the sandbox changed", not
+# "this PR is broken" — triage them like the daily isometric-health.yml ping.
 
 on:
-  pull_request:
+  schedule:
+    # 05:30 UTC daily — after the isometric-health.yml ping, before EU morning.
+    - cron: "30 5 * * *"
   workflow_dispatch:
 
 jobs:
-  playwright:
-    name: playwright (${{ matrix.shard_id }}/4)
+  playwright-live:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard_id: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -34,26 +40,18 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
-      # Playwright builds + serves a production bundle on CI
-      # (playwright.config.ts), so NODE_ENV=production and @/config/env rejects
-      # the local-fs default as a fail-closed safeguard. No spec round-trips
-      # bytes to storage yet (real-Spaces CI coverage was deprioritized — see
-      # docs/archive/2026-05-21-e2e-spaces-integration.md), so these throwaway
-      # placeholders only satisfy Zod validation; build/boot never call S3.
+      # Same throwaway storage placeholders as e2e.yml — they only satisfy the
+      # fail-closed env validation for the production build; no spec touches S3.
       STORAGE_PROVIDER: s3-compatible
       STORAGE_BUCKET: e2e-build
       STORAGE_REGION: us-east-1
       STORAGE_ACCESS_KEY_ID: e2e-build
       STORAGE_SECRET_ACCESS_KEY: e2e-build-placeholder
-      # Isometric — PR CI is HERMETIC: no sandbox credentials are loaded, so
-      # the isometric client is not configured, the app degrades to its
-      # not_configured paths, and zero external HTTP calls are made. Specs that
-      # need the live sandbox are tagged @live (and additionally test.skip on
-      # missing ISOMETRIC_DEMO_PROJECT_ID); they run in e2e-live.yml on a
-      # nightly schedule instead. ISOMETRIC_ENVIRONMENT is pinned to `sandbox`
-      # (never empty) so the env-schema enum does not reject an empty string.
       ISOMETRIC_ENVIRONMENT: sandbox
-      PLAYWRIGHT_WORKERS: "2"
+      # Live sandbox calls are slow (paginated template/project fetches at
+      # 200–700ms each); a single worker avoids hammering the sandbox and the
+      # higher timeout absorbs registry latency without flaking.
+      PLAYWRIGHT_WORKERS: "1"
       PLAYWRIGHT_RETRIES: "1"
 
     steps:
@@ -62,6 +60,16 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Load Isometric secrets from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN
+          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET
+          ISOMETRIC_DEMO_PROJECT_ID: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_DEMO_PROJECT_ID
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -81,8 +89,6 @@ jobs:
         id: playwright-version
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      # Browser binaries are ~130MB; `playwright install` skips the download on
-      # a cache hit (system deps via --with-deps still install either way).
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -105,16 +111,14 @@ jobs:
       - name: Apply schema
         run: pnpm drizzle-kit push --force
 
-      # @live specs (real Isometric sandbox) are excluded here and covered by
-      # the nightly e2e-live.yml workflow.
-      - name: Run Playwright suite
-        run: pnpm test:e2e --shard=${{ matrix.shard_id }}/4 --grep-invert "@live"
+      - name: Run @live Playwright specs
+        run: pnpm test:e2e --grep "@live"
 
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts-${{ matrix.shard_id }}-of-4
+          name: playwright-live-artifacts
           path: |
             playwright-report
             test-results
