@@ -57,7 +57,66 @@ Also removed the same day (not Isometric-related): the legacy Next.js-starter
 `[projectId]` route tree, data-access, fn, hooks, components, and `requireProjectMember`
 guard. Pure starter-template residue; the app is facility-scoped.
 
+## Architecture
+
+### Facility-access model — build it for real when multi-tenancy starts (`auth/facility-access-model`, opened 2026-06-10)
+
+- **Decision needed:** when a second facility/operator group (or self-serve
+  registration) is committed, design and ship a real facility-access model —
+  membership tables, scoped guards in `data-access/`, and scoped option
+  queries (the known unscoped example: `getSupplierOptions`,
+  `src/data-access/suppliers.ts:198`).
+- **Why it matters:** today's shared-data model is intentional and documented
+  (`docs/auth.md` §current model, `docs/security.md`); `requireAuth` is a
+  userId-truthiness check at ~211 call sites. The moment data must be
+  partitioned by operator group, this becomes P0.
+- **Explicitly rejected (2026-06-10 architecture review):** shipping a no-op
+  `requireAccess(userId, { facility })` seam ahead of the real model. A
+  guard that looks scoped but enforces nothing is churn now and false
+  confidence later — call sites would read as protected while the
+  implementation is a stub. Do the real model once, when the requirement is
+  concrete.
+- **To resolve:** product decision on multi-tenancy timeline; then a design
+  doc (membership grain: user↔facility vs user↔org↔facility, admin override
+  semantics, migration for existing rows).
+
 ## Isometric Certify integration
+
+### GHG Entry API rename — September 2026 sunset cleanup (`isometric/ghg-entry-migration`, opened 2026-06-10)
+
+- **Migration landed 2026-06-10** (plan Phases 1–4; see
+  [`docs/isometric/changes.md`](./isometric/changes.md) → 2026-06-10). noma now
+  calls the `ghg_entry` route family; the regen pipeline points at the
+  docs-hosted Certify spec.
+- **What remains, post-sunset (after September 2026):** Isometric removes the
+  deprecated `removal*` endpoints/fields. At that point: (a) regenerate
+  `certify.d.ts` — the deprecated `Removal*` schemas + `GhgStatement.removal_ids`
+  / `Component.removal_template_component_id` keys disappear, so the test mocks
+  that still carry both old+new fields (`isometric-reconciliation.test.ts`,
+  `isometric-ghg-statement-flow.test.ts`, `isometric-ghg-statement-submit.test.ts`,
+  `project-emission-match.test.ts`) drop the deprecated keys; (b) delete the
+  🚫-marked deprecated rows from `docs/isometric/openapi-index.md`. No app-code
+  change expected — the wire layer already only calls the new routes.
+- Full inventory + verified renames + phased plan:
+  [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
+
+### GHG entry / statement free-field follow-ups from the rename (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
+
+The migrated surface returns fields noma does not yet capture. Each is a new
+capability, not a blocker — tracked here so they are not lost:
+
+- **Credit allocation / buffer pool.** `GhgEntry` + `GhgStatement` now expose
+  `risk_of_reversal_percentage` and `credit_allocation`
+  (`buffer_pool_contribution_kg` / `supplier_allocation_kg`). Surfacing the
+  split on the certify panel / credit-batch detail is new UI. Relates to the
+  dropped `reversal_risk_assessments` table (see Schema section above).
+- **Reporting-period readback.** `GhgStatement.reporting_period_start_at` /
+  `_end_at` are returned; reading them back can fix the known reconciliation
+  gap where the statement wizard's "predicted to be linked" preview
+  over-promises against Isometric's server-derived period.
+- **Source `description`.** Optional human-readable label now accepted on
+  `POST /sources` / `PATCH /sources/{id}` (we pass the `Undefined` sentinel
+  today). Wire it to a real label when the Sources panel grows one.
 
 ### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
 
@@ -347,6 +406,34 @@ once Slice A is in production and operator demand surfaces.
 - Resolve via: re-check the docs page in the next update-playbook
   pass; close this entry when the intro enumerates biochar alongside
   DAC.
+
+### Isometric Certify API — no facilities LIST endpoint (forces paste-only `fcl_…`) (`isometric/facilities-list-endpoint`, opened 2026-06-10, filed 2026-06-10)
+
+- **Status:** filed with Isometric via `mcp__isometric__submit_feedback`
+  (missing capability) on 2026-06-10. Remains open here until a read endpoint
+  exists.
+- The Certify API exposes **no way to enumerate facilities** — verified against
+  the live operation list (`mcp__isometric__openapi_documents_list_objects`,
+  certify): no `GET /facilities`, no `GET /projects/{project_id}/facilities`,
+  no `POST /facilities`. The facility id (`fcl_…`) appears only as a stored
+  scalar field on other resources.
+- **Why it matters:** the facility certifier mapping's "Isometric facility
+  (telemetry)" field (`externalFacilityId`) is therefore a free-text paste —
+  operators create the facility in the Certify UI, then hand-copy the `fcl_…`
+  id into noma (`facility-certifier-dialog.tsx`). Error-prone (typo →
+  telemetry submitted against the wrong facility), and it's the one mapping
+  field with no validation against a real list. We wanted a dropdown; the
+  missing LIST capability blocks it. (Creation being UI-only is fine and
+  intentional — the gap is purely the missing read.)
+- **Resolve via:** when Isometric ships a read endpoint (ideally
+  `GET /projects/{project_id}/facilities` returning id + display name), wire the
+  dropdown by mirroring the existing template-picker chain:
+  `listFacilitiesByProject()` in `src/lib/isometric/projects.ts` → a
+  `useIsometricProjectFacilities(projectId)` hook (pattern:
+  `useIsometricProjectTemplates`) → swap the free-text `externalFacilityId`
+  `FormInput` for a `FormSelect` in `facility-certifier-dialog.tsx`. Re-check
+  the certify OpenAPI operation list on the next update-playbook pass; close
+  this entry once the endpoint exists.
 
 ### Phase 4 deferrals
 
@@ -1126,3 +1213,68 @@ Sizing: (S) small, (M) medium, (L) large.
   consistently.
 - **Resolve via:** thread the attempt-scoped `log` child (which already carries
   `submissionAttemptId`) through those boundary logs, or include both ids (S).
+
+## E2E robustness follow-ups (opened 2026-06-10)
+
+Deferred from the e2e-reliability pass that split live-sandbox specs out of PR
+CI (`@live` tag → nightly `e2e-live.yml`) and fixed the stale full-chain
+selectors (EntitySelect migration, auto-matched credit-batch applications).
+
+### Graceful degrade for invalid Isometric project links (`certification/invalid-project-422`) — opened 2026-06-10
+
+- A facility linked to a project id the registry rejects (404/422) makes
+  `safeListIfConfigured` re-throw, and React Query retries the failing server
+  action — repeated real API calls and a degraded page instead of a calm
+  "project not resolvable" state. Surfaced in CI when fake-project specs ran
+  with real creds loaded; same behavior would hit prod on a stale/revoked link.
+- **Resolve via:** treat non-retryable 4xx (404/422) from project-scoped
+  listings as "link not resolvable" — return an empty/flagged result instead of
+  throwing, and surface a warning chip on the registry-connection card (M).
+
+### Hermetic local stub for the Isometric client (`testing/isometric-stub`) — opened 2026-06-10
+
+- `BASE_URLS` in `src/lib/isometric/client.ts` is hardcoded, so the @live specs
+  can only run against the real sandbox; devs without `ISOMETRIC_DEMO_PROJECT_ID`
+  silently skip them, which is how the Settings/mapping specs drifted unnoticed.
+- **Resolve via:** a test-only base-URL override + a small fixture stub server
+  (started from Playwright globalSetup) serving canned project/template
+  responses, so the certification flows run hermetically everywhere (M).
+
+### Unprompted "Link Isometric project" modal after facility create, CI prod build only (`facilities/phantom-link-dialog`) — opened 2026-06-10
+
+- In the first hermetic CI run (PR #167, run 27265121281, shard 1), the
+  `facilities.spec.ts` "admin can create a facility" test failed on both
+  attempts: artifacts show `FacilityCertifierDialog` ("Link Isometric project")
+  open over `/facilities` immediately after the create succeeded, aria-hiding
+  the page so the heading role-query failed. The trace records no click that
+  opens it, and static analysis finds no mount outside
+  `facility-certifier-section.tsx` (Settings page, click-gated `editOpen`).
+  Not reproducible locally in dev mode, with or without Isometric creds; the
+  test passed in all prior CI runs (which loaded creds).
+- **Why it matters:** if the modal really opens unprompted on production
+  builds, that's a user-facing bug, not a test bug.
+- **Replication attempts (all passed — GitHub-runner-only, 6/6 failures
+  there):** local dev build (with and without Isometric creds), local prod
+  build hermetic, prod + empty freshly-pushed DB, and full shard-1 set (51
+  tests, 2 workers, retries, empty DB, `CI=1`). The dialog is
+  `FacilityCertifierDialog` (trace DOM: `facility-certifier-dialog-title`,
+  empty project options), whose ONLY JSX mount is click-gated `editOpen` in
+  `facility-certifier-section.tsx` — rendered solely on
+  `/certification/settings`, yet it appears on `/facilities` ~0.5s after
+  facility create, amid the sidebar-wide RSC re-prefetch triggered by the
+  `?facility=` URL swap. Prime suspects: Next 16 PPR/prefetch interaction
+  under slow CI CPU.
+- **Interim quarantine:** `facilities.spec.ts` dismisses the modal if present
+  (loud `phantom-link-dialog` test annotation) so the suite stays green while
+  keeping the real assertion. Remove the workaround when this is resolved.
+- **Resolve via:** CI-side instrumentation — temporary `--trace on` first
+  attempt, or a debug step dumping the React owner chain of the dialog node
+  when present (component names need a non-minified build to be readable) (M).
+
+### Playwright hygiene (`testing/e2e-hygiene`) — opened 2026-06-10
+
+- `waitForLoadState("networkidle")` is used throughout `full-chain-ui.spec.ts`
+  (slow-by-design with polling queries); shard 1 carries all `certification-*`
+  files because sharding distributes by file. Consider `fullyParallel: true`
+  (shard by test) after confirming no in-file ordering deps, replacing
+  networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).

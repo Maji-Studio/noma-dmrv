@@ -59,6 +59,31 @@ test.describe("Facility + Reactor UI CRUD", () => {
       timeout: 10000,
     });
 
+    // CI-only anomaly — docs/open-questions.md → "facilities/phantom-link-dialog".
+    // On GitHub runners (6/6 attempts; never reproduced locally across dev/prod
+    // builds, empty/seeded DBs, solo/sharded runs) a "Link Isometric project"
+    // modal mounts unprompted ~0.5s after the create succeeds. The created
+    // facility IS in the list (trace-verified), but the modal aria-hides the
+    // page so role queries fail. Dismiss it with a loud annotation so this test
+    // keeps guarding what it exists to guard; remove once the open-questions
+    // entry is resolved.
+    const phantomDialog = page
+      .getByRole("dialog")
+      .filter({ hasText: "Link Isometric project" });
+    const phantomAppeared = await phantomDialog
+      .waitFor({ state: "visible", timeout: 1500 })
+      .then(() => true)
+      .catch(() => false);
+    if (phantomAppeared) {
+      test.info().annotations.push({
+        type: "phantom-link-dialog",
+        description:
+          "Unprompted 'Link Isometric project' modal after facility create — see docs/open-questions.md",
+      });
+      await phantomDialog.getByRole("button", { name: "Close" }).click();
+      await expect(phantomDialog).toBeHidden();
+    }
+
     // Search for the new facility (list may be paginated with many entries)
     const searchBox = page.getByPlaceholder(/search/i);
     await searchBox.fill(facilityName);
@@ -123,8 +148,10 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Wait for debounce + server round-trip
     await page.waitForTimeout(1500);
 
-    // Verify the new reactor appears in the filtered list
-    await expect(page.getByText(reactorIdentifier)).toBeVisible({ timeout: 10000 });
+    // Verify the new reactor appears in the filtered list.
+    await expect(
+      page.getByRole("button", { name: reactorIdentifier }).first()
+    ).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;
   });

@@ -6,12 +6,10 @@
  *
  * Usage:
  *   pnpm env:prod                   # Sync prod → production
- *   pnpm env:preview                # Sync prod → preview
- *   pnpm env:dev                    # Sync prod → development
- *   pnpm env:vercel                 # Sync all three environments
+ *   pnpm env:preview                # Sync staging → preview
+ *   pnpm env:vercel                 # Sync production + preview
  *
  * Advanced:
- *   tsx scripts/sync-env-to-vercel.ts --1p-env=dev --vercel-env=development
  *   tsx scripts/sync-env-to-vercel.ts --dry-run --1p-env=prod
  *   tsx scripts/sync-env-to-vercel.ts --yes     # Skip confirmation (CI/CD)
  *
@@ -21,14 +19,15 @@
  *   3. Vercel CLI authenticated (pnpm vercel login)
  *   4. Vercel project linked (pnpm vercel link)
  *   5. 1Password items exist:
- *      - op://Environment Variables/noma-dmrv env dev/...
- *      - op://Environment Variables/noma-dmrv env prod/...
+ *      - op://Environment Variables/noma-dmrv env staging/...
+ *      - op://Environment Variables/noma-dmrv env production/...
  */
 
 import { spawnSync } from "child_process";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { fetchItemFieldNames } from "./env-tpl-utils";
 
 const ITEM_PREFIX = "noma-dmrv env";
 
@@ -77,16 +76,25 @@ function parseFlags(): CliFlags {
     }
   }
 
-  if (!["dev", "prod", "staging", "production"].includes(opEnv)) {
+  if (!["prod", "staging", "production"].includes(opEnv)) {
     console.error(
-      `Invalid --1p-env: ${opEnv} (must be dev, prod, staging, or production)`
+      `Invalid --1p-env: ${opEnv} (must be prod, staging, or production)`
     );
     process.exit(1);
   }
 
-  if (!["production", "preview", "development"].includes(vercelEnv)) {
+  if (!["production", "preview"].includes(vercelEnv)) {
     console.error(
-      `Invalid --vercel-env: ${vercelEnv} (must be production, preview, or development)`
+      `Invalid --vercel-env: ${vercelEnv} (must be production or preview)`
+    );
+    process.exit(1);
+  }
+
+  const normalizedOpEnv = opEnv === "prod" ? "production" : opEnv;
+  const expectedOpEnv = vercelEnv === "preview" ? "staging" : "production";
+  if (normalizedOpEnv !== expectedOpEnv) {
+    console.error(
+      `Invalid environment mapping: --vercel-env=${vercelEnv} must use --1p-env=${expectedOpEnv}`
     );
     process.exit(1);
   }
@@ -100,18 +108,16 @@ Sync environment variables from 1Password to Vercel
 
 Usage:
   pnpm env:prod                    Sync prod -> production
-  pnpm env:preview                 Sync prod -> preview
-  pnpm env:dev                     Sync prod -> development
-  pnpm env:vercel                  Sync all three environments
+  pnpm env:preview                 Sync staging -> preview
+  pnpm env:vercel                  Sync production + preview
 
 Advanced:
-  tsx scripts/sync-env-to-vercel.ts --1p-env=dev --vercel-env=development
   tsx scripts/sync-env-to-vercel.ts --dry-run --1p-env=prod
   tsx scripts/sync-env-to-vercel.ts --yes    Skip confirmation (CI/CD)
 
 Flags:
-  --1p-env=<dev|prod|staging|production>       1Password item (default: prod)
-  --vercel-env=<production|preview|development>  Vercel environment (default: production)
+  --1p-env=<prod|staging|production>          1Password item (default: prod)
+  --vercel-env=<production|preview>           Vercel environment (default: production)
   --dry-run                                    Preview changes without applying
   --yes, -y                                    Skip confirmation prompt
   --reveal-values                              Show cleartext values for NEXT_PUBLIC_* vars
@@ -182,9 +188,12 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
     process.exit(1);
   }
 
-  // Replace the default "dev" environment with the requested one
+  // Replace any checked-in item environment with the requested one.
   const modifiedTemplate = template.replace(
-    new RegExp(`${ITEM_PREFIX} (dev|prod|production|staging|\\{\\{ENV\\}\\})`, "g"),
+    new RegExp(
+      `${ITEM_PREFIX} (dev|prod|production|staging|\\{\\{ENV\\}\\})`,
+      "g"
+    ),
     itemName
   );
 
@@ -236,6 +245,52 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
     console.error(`Failed to process template: ${error}`);
     process.exit(1);
   }
+}
+
+/**
+ * Warn about variables that exist in the 1Password item but are NOT referenced
+ * by .env.tpl — they will silently NOT be synced. Surfacing them at sync time
+ * lets the operator notice a newly-added secret and add it to the template
+ * before continuing (or Ctrl+C and readjust). Field names only; never values.
+ * Best-effort: a lookup failure warns but does not abort the sync.
+ */
+function warnUntrackedOnePasswordVars(
+  opEnv: string,
+  syncedNames: Set<string>
+): void {
+  const itemSuffix = opEnv === "prod" ? "production" : opEnv;
+  let itemFields: Set<string>;
+  try {
+    itemFields = fetchItemFieldNames(itemSuffix);
+  } catch (error) {
+    console.warn(
+      `\n  (Could not check for untracked 1Password vars: ${
+        error instanceof Error ? error.message : String(error)
+      })`
+    );
+    return;
+  }
+
+  const untracked = [...itemFields]
+    .filter((name) => !syncedNames.has(name))
+    .sort();
+
+  if (untracked.length === 0) {
+    console.log(
+      `\n  .env.tpl covers every field in "${ITEM_PREFIX} ${itemSuffix}" — nothing untracked.`
+    );
+    return;
+  }
+
+  console.warn(
+    `\n  ⚠️  ${untracked.length} variable(s) in 1Password ("${ITEM_PREFIX} ${itemSuffix}") are NOT in .env.tpl`
+  );
+  console.warn("      and will NOT be synced to Vercel:");
+  for (const name of untracked) console.warn(`        ${name}`);
+  console.warn(
+    `      To include one, add to .env.tpl:\n` +
+      `        NAME="op://Environment Variables/${ITEM_PREFIX} staging/NAME"`
+  );
 }
 
 function isPublic(name: string): boolean {
@@ -332,15 +387,12 @@ function performSync(varsToSync: EnvVar[], vercelEnv: string): void {
   let errorCount = 0;
   const errors: Array<{ name: string; error: string }> = [];
 
-  for (const { name, value } of varsToSync) {
-    const result = spawnSync(
-      "vercel",
-      ["env", "add", name, vercelEnv, "--force"],
-      {
-        input: value,
-        encoding: "utf-8",
-      }
-    );
+  for (const { name, value, isSecret } of varsToSync) {
+    const args = buildVercelEnvAddArgs(name, vercelEnv, isSecret);
+    const result = spawnSync("vercel", args, {
+      input: value,
+      encoding: "utf-8",
+    });
 
     if (result.status === 0) {
       console.log(`  ${name} -> ${vercelEnv}`);
@@ -350,7 +402,11 @@ function performSync(varsToSync: EnvVar[], vercelEnv: string): void {
       errorCount++;
       errors.push({
         name,
-        error: result.stderr || result.error?.message || "Unknown error",
+        error:
+          result.stderr ||
+          result.stdout ||
+          result.error?.message ||
+          "Unknown error",
       });
     }
   }
@@ -373,8 +429,79 @@ function performSync(varsToSync: EnvVar[], vercelEnv: string): void {
     console.error("\nSync completed with errors");
     process.exit(1);
   } else {
+    verifyVercelSync(varsToSync, vercelEnv);
     console.log("\nAll variables synced successfully!");
   }
+}
+
+function buildVercelEnvAddArgs(
+  name: string,
+  vercelEnv: string,
+  isSecret: boolean
+): string[] {
+  const args = ["env", "add", name, vercelEnv];
+
+  // Vercel CLI 54 requires an explicit git-branch argument for non-interactive
+  // Preview writes. An empty branch means "all Preview branches", matching the
+  // interactive prompt's empty response.
+  if (vercelEnv === "preview") {
+    args.push("");
+  }
+
+  args.push("--force", "--yes", isSecret ? "--sensitive" : "--no-sensitive");
+  return args;
+}
+
+function parseVercelJson(stdout: string): unknown {
+  const jsonStart = stdout.indexOf("{");
+  if (jsonStart === -1) {
+    throw new Error("Vercel CLI did not return JSON");
+  }
+  return JSON.parse(stdout.slice(jsonStart));
+}
+
+function verifyVercelSync(varsToSync: EnvVar[], vercelEnv: string): void {
+  console.log(`\nVerifying Vercel ${vercelEnv} environment...`);
+
+  const result = spawnSync(
+    "vercel",
+    ["env", "ls", vercelEnv, "--format", "json"],
+    { encoding: "utf-8" }
+  );
+
+  if (result.status !== 0) {
+    console.error("Failed to verify Vercel environment variables");
+    console.error(result.stderr || result.stdout || "Unknown error");
+    process.exit(1);
+  }
+
+  let parsed: { envs?: Array<{ key?: string }> };
+  try {
+    parsed = parseVercelJson(result.stdout) as {
+      envs?: Array<{ key?: string }>;
+    };
+  } catch (error) {
+    console.error(`Failed to parse Vercel env list: ${error}`);
+    process.exit(1);
+  }
+
+  const remoteNames = new Set((parsed.envs ?? []).map((env) => env.key));
+  const missing = varsToSync
+    .map((envVar) => envVar.name)
+    .filter((name) => !remoteNames.has(name));
+
+  if (missing.length > 0) {
+    console.error(
+      `Vercel ${vercelEnv} verification failed; missing variables: ${missing.join(
+        ", "
+      )}`
+    );
+    process.exit(1);
+  }
+
+  console.log(
+    `  Verified ${varsToSync.length} variables in Vercel ${vercelEnv}`
+  );
 }
 
 async function main() {
@@ -397,6 +524,10 @@ async function main() {
   console.log("All prerequisites met");
 
   const envVars = fetchFromOnePassword(flags.opEnv);
+
+  // Surface any 1Password fields the template doesn't cover, so a newly-added
+  // secret doesn't silently miss the sync.
+  warnUntrackedOnePasswordVars(flags.opEnv, new Set(envVars.keys()));
 
   uploadToVercel(
     envVars,

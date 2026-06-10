@@ -6,6 +6,16 @@ config({ path: ".env.test" });
 
 // Validate that tests only target localhost to prevent accidentally running against staging/production
 const baseURL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3100";
+const DEFAULT_CI_WORKERS = 2;
+const DEFAULT_CI_RETRIES = 1;
+const ciWorkers = positiveIntegerFromEnv("PLAYWRIGHT_WORKERS", DEFAULT_CI_WORKERS);
+const ciRetries = positiveIntegerFromEnv("PLAYWRIGHT_RETRIES", DEFAULT_CI_RETRIES);
+
+function positiveIntegerFromEnv(name: string, fallback: number) {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 try {
   const url = new URL(baseURL);
   if (!["http:", "https:"].includes(url.protocol) || !["localhost", "127.0.0.1"].includes(url.hostname)) {
@@ -22,10 +32,10 @@ try {
 export default defineConfig({
   testDir: "./tests/e2e",
   globalTeardown: "./tests/e2e/global-teardown.ts",
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: process.env.CI ? ciRetries : 0,
+  workers: process.env.CI ? ciWorkers : undefined,
   reporter: "html",
 
   // Global per-test timeout. CI uses a production build (fast page loads), local uses dev mode (Turbopack compilation can be slow on first hit).

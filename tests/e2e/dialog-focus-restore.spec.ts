@@ -14,10 +14,15 @@ import { test, expect } from "./fixtures";
 test.describe("Dialog focus restore", () => {
   test("returns focus to the trigger after a Modal closes", async ({
     adminPage,
+    seededData,
+    cleanupTestData,
   }) => {
+    // Referenced only to trigger the fixture's teardown lifecycle; the value
+    // itself is intentionally unused.
+    void cleanupTestData;
     const page = adminPage;
 
-    await page.goto("/facilities");
+    await page.goto(`/facilities?facility=${seededData.facility.id}`);
     await expect(page.getByText("Active Facilities")).toBeVisible({
       timeout: 15000,
     });
@@ -25,7 +30,10 @@ test.describe("Dialog focus restore", () => {
     // The trash button on a facility card opens a Modal-based
     // DeleteConfirmDialog. It is icon-only but carries an aria-label
     // ("Delete facility <code>"), so locate it by accessible name.
-    const firstCard = page.locator("article").first();
+    const firstCard = page
+      .locator("article")
+      .filter({ hasText: seededData.facility.code })
+      .first();
     await expect(firstCard).toBeVisible();
     const deleteTrigger = firstCard.getByRole("button", { name: /delete/i });
     await deleteTrigger.click();

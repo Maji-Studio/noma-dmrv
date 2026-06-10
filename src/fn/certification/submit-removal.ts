@@ -25,7 +25,7 @@ import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
   createDatapoint,
-  createRemoval,
+  createGhgEntry,
   decideSubmissionClaim,
   enrichWithFacilityConfig,
   enrichWithTransportLegs,
@@ -35,13 +35,13 @@ import {
   type CreateDatapointRequest,
   type FacilityEmissionConfig,
   type IsometricComponentBlueprint,
-  type IsometricRemovalTemplate,
+  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import {
   buildCreateDatapointRequest,
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
-import { buildCreateRemovalRequest } from "@/lib/isometric/transformers/removal";
+import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   collectCandidateDocumentIdsForRemoval,
@@ -201,7 +201,7 @@ interface ResolvedTemplateInputs {
 // fixed input, or on a null aggregated source; blocks zero-stub inputs in
 // production. Pure over its inputs — no I/O.
 function resolveTemplateInputs(args: {
-  template: IsometricRemovalTemplate;
+  template: IsometricGhgEntryTemplate;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: ReturnType<typeof enrichWithFacilityConfig>;
   externalProjectId: string;
@@ -770,9 +770,9 @@ interface RunRemovalSubmissionArgs {
   row: CertificationSubmissionRow;
   transport: RemovalTransportSnapshot;
   fixed: ResolvedFixedInput[];
-  template: IsometricRemovalTemplate;
+  template: IsometricGhgEntryTemplate;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
-  agg: Parameters<typeof buildCreateRemovalRequest>[0]["agg"];
+  agg: Parameters<typeof buildCreateGhgEntryRequest>[0]["agg"];
   externalProjectId: string;
   supersedePreviousId: string | null;
   resumed: boolean;
@@ -819,7 +819,7 @@ async function runRemovalSubmission({
     datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, externalId);
   }
 
-  const removalBody = buildCreateRemovalRequest({
+  const removalBody = buildCreateGhgEntryRequest({
     template,
     blueprintsByKey,
     datapointIdsByRtcInput,
@@ -835,7 +835,7 @@ async function runRemovalSubmission({
     requestPayload: removalBody,
     supplierRefId: transport.removalSupplierRef,
     resumed,
-    create: () => createRemoval(removalBody).then((r) => r.id),
+    create: () => createGhgEntry(removalBody).then((r) => r.id),
     reconcile: () =>
       reconcileRemoval({ supplierRefId: transport.removalSupplierRef }),
     failureMessagePrefix: "Removal POST failed",

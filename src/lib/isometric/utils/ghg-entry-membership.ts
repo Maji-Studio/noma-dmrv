@@ -1,8 +1,9 @@
 /**
  * Pure GHG-statement ↔ Removal membership reconciliation.
  *
- * Isometric decides which Removals a GHG Statement absorbs server-side (by
- * reporting-period date range) and returns them as `GhgStatement.removal_ids`.
+ * Isometric decides which GHG entries (our Removals) a GHG Statement absorbs
+ * server-side (by reporting-period date range) and returns them as
+ * `GhgStatement.ghg_entry_ids` (the old `removal_ids` field is deprecated).
  * This decides how that remote membership maps onto local `certifier_removals`
  * rows: which to stamp, which are already linked, and where the two sides
  * have drifted. It never steals a removal already owned by another statement.
@@ -12,7 +13,7 @@
  */
 
 export interface RemovalMembershipInput {
-  /** Isometric removal ids the statement absorbed (`GhgStatement.removal_ids`). */
+  /** Isometric ghg_entry ids the statement absorbed (`GhgStatement.ghg_entry_ids`). */
   externalRemovalIds: string[];
   /** Isometric removal id → local certifier_removals id, from the ledger. */
   externalToLocal: Map<string, string>;

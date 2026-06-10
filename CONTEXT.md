@@ -73,6 +73,22 @@ end date, Isometric derives the start. Distinct from the LCA window
 (≈1 year for the Sifuri Halisi project), within which many monthly
 credit batches and several GHG Statements fall.
 
+**Submission ledger**:
+The local journal (`certificationSubmissions`) of every outbound registry
+submission — one row per (entity, version), status *draft → submitted →
+accepted / rejected / superseded*. Every submit attempt is decided against
+the ledger's latest row, never against the registry directly.
+_Avoid_: sync log, submission history.
+
+**Claim**:
+The decision of what a submission attempt may do against the **submission
+ledger**: create a new version, resume a stale draft, return the existing
+result idempotently, or block. On the create path the claim is decided
+twice — once unlocked (tentative) and once inside the mapping lock
+(authoritative) — so concurrent attempts resolve to an idempotent outcome
+rather than a constraint error.
+_Avoid_: lock (the claim is a decision; the lock is one of its inputs).
+
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
 supplier's operational data, supplied per submission.

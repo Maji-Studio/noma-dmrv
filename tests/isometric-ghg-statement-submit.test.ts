@@ -148,7 +148,9 @@ function makeRemoteStatement(
     id: EXTERNAL_STATEMENT_ID,
     project_id: EXTERNAL_PROJECT_ID,
     verifier: null,
+    ghg_entry_ids: [EXTERNAL_REMOVAL_ID],
     removal_ids: [EXTERNAL_REMOVAL_ID],
+    credit_allocation: null,
     ghg_statement_report_url: null,
     status: "DRAFT",
     reporting_period_start_at: "2026-01-01",
@@ -339,7 +341,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("createGhgStatementDraft — happy path", () => {
-  it("inserts a v=1 draft, POSTs /ghg_statements, reconciles removal_ids, and marks the ledger submitted", async () => {
+  it("inserts a v=1 draft, POSTs /ghg_statements, reconciles ghg_entry_ids, and marks the ledger submitted", async () => {
     const remote = makeRemoteStatement();
     vi.mocked(isometric.createGhgStatement).mockResolvedValue(remote);
     vi.mocked(isometric.getGhgStatement).mockResolvedValue(remote);
@@ -374,7 +376,7 @@ describe("createGhgStatementDraft — happy path", () => {
       localEntityId: STATEMENT_ID,
     });
 
-    // Removal membership reconciled from the server-side removal_ids; the
+    // Removal membership reconciled from the server-side ghg_entry_ids; the
     // server-derived reporting window was persisted onto the local row.
     expect(ghgDA.reconcileRemovalMembership).toHaveBeenCalledWith(
       "user-test-1",
