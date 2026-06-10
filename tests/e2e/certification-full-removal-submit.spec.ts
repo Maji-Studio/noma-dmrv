@@ -46,7 +46,9 @@ const LIVE_SUBMIT_TIMEOUT_MS = 60_000;
 // Opt-in switch for the real sandbox submit (see file header). Off by default.
 const RUN_LIVE_SUBMIT = process.env.E2E_LIVE_SUBMIT === "1";
 
-test.describe("Certification — full New-Removal submit", () => {
+// @live — talks to the real Isometric sandbox; excluded from PR CI (e2e.yml
+// runs --grep-invert @live) and exercised by the nightly e2e-live workflow.
+test.describe("Certification — full New-Removal submit", { tag: "@live" }, () => {
   test.skip(
     !SANDBOX_PROJECT_ID,
     "requires Isometric sandbox creds (ISOMETRIC_DEMO_PROJECT_ID)",
