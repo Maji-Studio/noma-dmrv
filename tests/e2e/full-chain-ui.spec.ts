@@ -502,8 +502,10 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.customerLocation.id
       );
 
-      await page.selectOption(
-        'select[name="biocharProductId"]',
+      // Biochar Product is a FormEntitySelect (custom dropdown), not a native <select>
+      await selectEntityById(
+        page,
+        "Biochar Product",
         seededData.biocharProduct.id
       );
       await page.selectOption('select[name="packaging"]', "loose");
@@ -591,25 +593,10 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="startDate"]', today);
       await page.fill('input[name="endDate"]', today);
 
-      // Select application checkbox if available
-      const appCheckboxes = page.locator('input[type="checkbox"]');
-      const checkboxCount = await appCheckboxes.count();
-      if (checkboxCount > 0) {
-        const firstAppLabel = page
-          .locator("label")
-          .filter({ has: page.locator('input[type="checkbox"]') })
-          .first();
-        await firstAppLabel.click();
-      }
-
-      // Durability is snapshotted from the facility default (200_year) and
-      // rendered read-only; H:Corg is derived from linked samples server-side.
-      await expect(
-        page.locator('input[name="durabilityOption"]')
-      ).toHaveValue("200_year");
-      await expect(
-        page.locator('[role="dialog"]').getByText("200-Year (H:Corg)")
-      ).toBeVisible();
+      // Applications auto-match from the date range + facility (no manual
+      // selection), and durability is snapshotted from the facility default
+      // via a hidden input — neither is interactable anymore. The application
+      // created above (dated today) falls inside the range and auto-matches.
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);
