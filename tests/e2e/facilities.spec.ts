@@ -123,8 +123,10 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Wait for debounce + server round-trip
     await page.waitForTimeout(1500);
 
-    // Verify the new reactor appears in the filtered list
-    await expect(page.getByText(reactorIdentifier)).toBeVisible({ timeout: 10000 });
+    // Verify the new reactor appears in the filtered list.
+    await expect(
+      page.getByRole("button", { name: new RegExp(reactorIdentifier) }).first()
+    ).toBeVisible({ timeout: 10000 });
 
     void cleanupTestData;
   });
