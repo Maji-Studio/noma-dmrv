@@ -22,8 +22,34 @@ export const storageLocationTypes = [
 
 export type StorageLocationType = (typeof storageLocationTypes)[number];
 
+/**
+ * Bin types that hold raw inputs and must be scoped to a single feedstock type.
+ * Used to gate the feedstock-type requirement and the feedstock quick-add filter.
+ */
+export const FEEDSTOCK_BIN_TYPES = ["feedstock_bin", "ingredient_bin"] as const;
+
+export function isFeedstockBinType(
+  type: StorageLocationType | undefined | null
+): type is (typeof FEEDSTOCK_BIN_TYPES)[number] {
+  return !!type && (FEEDSTOCK_BIN_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Short descriptions shown beneath the bin-type picker so operators can tell
+ * apart the otherwise-ambiguous feedstock vs. ingredient distinction.
+ */
+export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, string> = {
+  feedstock_bin: "Holds raw biomass before pyrolysis (e.g. wood chips, husks).",
+  ingredient_bin: "Holds non-biomass additives blended into a formulation (e.g. minerals, binders).",
+  biochar_bin: "Holds finished biochar after production, before blending or packing.",
+  product_bin: "Holds a packed, sellable product — optionally tied to one formulation.",
+};
+
 const FORMULATION_PRODUCT_BIN_MESSAGE =
   "formulationId is only allowed for product_bin storageMethod";
+
+const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
+  "Feedstock and ingredient bins must be restricted to one feedstock type";
 
 // ============================================
 // Storage Location Form Schema (Client-side validation)
@@ -69,6 +95,13 @@ export const storageLocationFormSchema = z.object({
       code: "custom",
       path: ["formulationId"],
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
+    });
+  }
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedstockTypeId"],
+      message: FEEDSTOCK_TYPE_REQUIRED_MESSAGE,
     });
   }
 });

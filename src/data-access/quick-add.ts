@@ -252,6 +252,8 @@ export interface CreateStorageLocationData {
   type: StorageLocationType;
   facilityId: string;
   capacityKg?: number | null;
+  feedstockTypeId?: string | null;
+  formulationId?: string | null;
 }
 
 /**
@@ -283,6 +285,8 @@ export async function createStorageLocation(
         type: data.type,
         facilityId: data.facilityId,
         capacityKg: data.capacityKg ?? null,
+        feedstockTypeId: data.feedstockTypeId ?? null,
+        formulationId: data.formulationId ?? null,
       })
       .returning();
 

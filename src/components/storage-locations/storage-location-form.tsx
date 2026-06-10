@@ -12,18 +12,12 @@ import {
   storageLocationFormSchema,
   storageLocationTypes,
   formatStorageLocationType,
+  isFeedstockBinType,
+  STORAGE_LOCATION_TYPE_DESCRIPTIONS,
   type StorageLocationFormData,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
 import type { StorageLocation } from "@/db/schema/facilities";
-
-const storageTypeOptions: readonly { value: string; label: string }[] =
-  storageLocationTypes.map((type) => ({
-    value: type,
-    label: formatStorageLocationType(type),
-  }));
-
-const FEEDSTOCK_BIN_TYPES: readonly string[] = ["feedstock_bin", "ingredient_bin"];
 
 interface StorageLocationFormProps {
   storageLocation?: StorageLocation;
@@ -33,6 +27,10 @@ interface StorageLocationFormProps {
   submitLabel?: string;
   /** Pre-selected storage type (used by quick-add dialog) */
   defaultType?: StorageLocationType;
+  /** Restricts the type picker to these bin types (e.g. feedstock + ingredient) */
+  allowedTypes?: readonly StorageLocationType[];
+  /** Pre-selects the feedstock type the parent flow is working with */
+  defaultFeedstockTypeId?: string;
 }
 
 export function StorageLocationForm({
@@ -42,9 +40,17 @@ export function StorageLocationForm({
   isSubmitting = false,
   submitLabel,
   defaultType,
+  allowedTypes,
+  defaultFeedstockTypeId,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
   const { facilityId: contextFacilityId } = useFacilityContext();
+
+  const typeChoices = allowedTypes ?? storageLocationTypes;
+  const storageTypeOptions = typeChoices.map((type) => ({
+    value: type,
+    label: formatStorageLocationType(type),
+  }));
 
   const {
     register,
@@ -58,7 +64,7 @@ export function StorageLocationForm({
       type: storageLocation?.type ?? defaultType ?? undefined,
       facilityId: storageLocation?.facilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
-      feedstockTypeId: storageLocation?.feedstockTypeId ?? "",
+      feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? "",
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
@@ -66,8 +72,11 @@ export function StorageLocationForm({
   });
 
   const watchedType = useWatch({ control, name: "type" });
-  const showFeedstockType = !!watchedType && FEEDSTOCK_BIN_TYPES.includes(watchedType);
+  const showFeedstockType = isFeedstockBinType(watchedType);
   const showFormulation = watchedType === "product_bin";
+  const typeDescription = watchedType
+    ? STORAGE_LOCATION_TYPE_DESCRIPTIONS[watchedType]
+    : undefined;
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
@@ -75,7 +84,7 @@ export function StorageLocationForm({
 
   const handleFormSubmit = handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;
-    if (!normalized.type || !FEEDSTOCK_BIN_TYPES.includes(normalized.type)) {
+    if (!isFeedstockBinType(normalized.type)) {
       normalized.feedstockTypeId = null;
     }
     if (normalized.type !== "product_bin") {
@@ -87,7 +96,13 @@ export function StorageLocationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField id="type" label="Storage Type" error={errors.type?.message} required>
+        <FormField
+          id="type"
+          label="Storage Type"
+          error={errors.type?.message}
+          helperText={typeDescription}
+          required
+        >
           <FormSelect
             id="type"
             placeholder="Select storage type..."
@@ -152,6 +167,7 @@ export function StorageLocationForm({
             entityType="feedstockType"
             placeholder="Select feedstock type..."
             disabled={isSubmitting}
+            required
             helperText="Restricts this bin to one feedstock type"
           />
         </div>
