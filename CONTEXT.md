@@ -83,10 +83,7 @@ _Avoid_: sync log, submission history.
 **Claim**:
 The decision of what a submission attempt may do against the **submission
 ledger**: create a new version, resume a stale draft, return the existing
-result idempotently, or block. On the create path the claim is decided
-twice — once unlocked (tentative) and once inside the mapping lock
-(authoritative) — so concurrent attempts resolve to an idempotent outcome
-rather than a constraint error.
+result idempotently, or block.
 _Avoid_: lock (the claim is a decision; the lock is one of its inputs).
 
 **Monitored input**:

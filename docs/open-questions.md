@@ -64,8 +64,8 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **Decision needed:** when a second facility/operator group (or self-serve
   registration) is committed, design and ship a real facility-access model —
   membership tables, scoped guards in `data-access/`, and scoped option
-  queries (the known unscoped example: `getSupplierOptions`,
-  `src/data-access/suppliers.ts:198`).
+  queries (the known unscoped example: `getSupplierOptions` in
+  `src/data-access/suppliers.ts`).
 - **Why it matters:** today's shared-data model is intentional and documented
   (`docs/auth.md` §current model, `docs/security.md`); `requireAuth` is a
   userId-truthiness check at ~211 call sites. The moment data must be
