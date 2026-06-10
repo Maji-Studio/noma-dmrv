@@ -27,11 +27,13 @@ export interface PendingLocation {
   stateRegion?: string | null;
   city?: string | null;
   address: string;
-  gpsLatitude: number | null;
-  gpsLongitude: number | null;
+  gpsLatitude: number;
+  gpsLongitude: number;
   // Road distance (km) facility → site. Feeds the auto-derived biochar
   // distribution transport leg on delivery save.
   distanceFromFacilityKm: number | null;
+  // Marks this as the customer's default destination.
+  isDefault: boolean;
 }
 
 function formatPendingLocationSummary({
@@ -352,6 +354,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
     gpsLatitude: "",
     gpsLongitude: "",
     distanceFromFacilityKm: "",
+    isDefault: false,
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -370,19 +373,23 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       setFormError("Location address is required");
       return;
     }
+    if (formData.gpsLatitude.trim() === "" || formData.gpsLongitude.trim() === "") {
+      setFormError("GPS latitude and longitude are required");
+      return;
+    }
 
-    const lat = formData.gpsLatitude.trim() === "" ? null : Number(formData.gpsLatitude);
-    const lng = formData.gpsLongitude.trim() === "" ? null : Number(formData.gpsLongitude);
+    const lat = Number(formData.gpsLatitude);
+    const lng = Number(formData.gpsLongitude);
     const distance =
       formData.distanceFromFacilityKm.trim() === ""
         ? null
         : Number(formData.distanceFromFacilityKm);
 
-    if (lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) {
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
       setFormError("Latitude must be between -90 and 90");
       return;
     }
-    if (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180)) {
+    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
       setFormError("Longitude must be between -180 and 180");
       return;
     }
@@ -400,6 +407,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       gpsLatitude: lat,
       gpsLongitude: lng,
       distanceFromFacilityKm: distance,
+      isDefault: formData.isDefault,
     });
   };
 
@@ -563,6 +571,21 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
           transport leg used for certification.
         </p>
       </div>
+
+      <label htmlFor="pending-loc-default" className="flex items-center gap-12 cursor-pointer">
+        <input
+          type="checkbox"
+          id="pending-loc-default"
+          className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+          checked={formData.isDefault}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, isDefault: e.target.checked }))
+          }
+        />
+        <span className="body-medium text-[var(--color-text-primary)]">
+          Set as default destination
+        </span>
+      </label>
 
       <div className="flex gap-12 justify-end pt-8">
         <button

@@ -157,9 +157,13 @@ export const supplierLocationFormSchema = z.object({
   country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
   stateRegion: z.string().max(100, "State/Region must be less than 100 characters").optional().or(z.literal("")),
   city: z.string().max(100, "City must be less than 100 characters").optional().or(z.literal("")),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   address: z.string().max(500, "Address must be less than 500 characters").optional().or(z.literal("")),
+  // Road distance (km) from this location to the delivery facility.
+  distanceFromFacilityKm: optionalPositiveNumber,
+  // Marks this as the supplier's default source location.
+  isDefault: z.boolean().optional().default(false),
 });
 
 /**
@@ -181,6 +185,8 @@ export const updateSupplierLocationSchema = z.object({
   gpsLatitude: latitudeSchema,
   gpsLongitude: longitudeSchema,
   address: z.string().max(500).optional().nullable().or(z.literal("")),
+  distanceFromFacilityKm: optionalPositiveNumber,
+  isDefault: z.boolean().optional(),
 });
 
 /**

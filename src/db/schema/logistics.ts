@@ -98,6 +98,13 @@ export const deliveries = pgTable(
       () => customerLocations.id
     ),
 
+    // Per-delivery road-distance override (km) for the distribution transport
+    // leg. Defaults to the destination customer location's distance; set here
+    // only when this trip's routing differs. Mirrors the feedstock-side
+    // transportDistanceKm override.
+    distanceKmOverride: real('distance_km_override'),
+    distanceNote: text('distance_note'),
+
     // --- Product Batch ---
     biocharProductId: uuid('biochar_product_id').references(
       () => biocharProducts.id
@@ -149,6 +156,10 @@ export const deliveries = pgTable(
     check(
       'deliveries_truck_mass_arrival_gte_departure',
       sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnDepartureKg} is null or ${table.truckMassOnArrivalKg} >= ${table.truckMassOnDepartureKg}`
+    ),
+    check(
+      'deliveries_distance_km_override_non_negative',
+      sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} >= 0`
     ),
   ]
 );

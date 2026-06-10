@@ -12,7 +12,7 @@ import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, FormTextarea } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -106,6 +106,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       biocharProductId: delivery?.biocharProductId ?? undefined,
       driverId: delivery?.driverId ?? undefined,
       vehicleId: delivery?.vehicleId ?? undefined,
+      distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
+      distanceNote: delivery?.distanceNote ?? "",
     },
   });
 
@@ -290,6 +292,50 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
         </div>
+      </div>
+
+      {/* Transport Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Transport
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="distanceKmOverride"
+            label="Distance override (km)"
+            error={errors.distanceKmOverride?.message}
+            helperText="Leave blank to use the destination's stored distance. Set only when this trip's routing differs."
+          >
+            <FormInput
+              id="distanceKmOverride"
+              type="number"
+              step="any"
+              min="0"
+              placeholder="e.g., 140"
+              disabled={isSubmitting}
+              error={!!errors.distanceKmOverride}
+              {...register("distanceKmOverride", {
+                setValueAs: numericValue,
+              })}
+            />
+          </FormField>
+        </div>
+
+        <FormField
+          id="distanceNote"
+          label="Distance note"
+          error={errors.distanceNote?.message}
+          helperText="Why this delivery's distance differs (optional)"
+        >
+          <FormTextarea
+            id="distanceNote"
+            placeholder="e.g., detour via the coastal road due to bridge closure"
+            disabled={isSubmitting}
+            error={!!errors.distanceNote}
+            {...register("distanceNote")}
+          />
+        </FormField>
       </div>
 
       {/* Form Actions */}

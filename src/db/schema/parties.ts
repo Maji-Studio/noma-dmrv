@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, index, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, doublePrecision, index, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { users } from './auth';
 
 // ============================================
@@ -81,10 +81,18 @@ export const customerLocations = pgTable(
     // Stored as operational route metadata; certifier transport is recorded on
     // cargo entities, not deliveries.
     distanceFromFacilityKm: real('distance_from_facility_km'),
+    // Marks the customer's primary destination. At most one per customer
+    // (enforced by the partial unique index below).
+    isDefault: boolean('is_default').notNull().default(false),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('customer_locations_customer_id_idx').on(table.customerId),
+    // One default location per customer (partial — only default rows are unique).
+    uniqueIndex('customer_locations_one_default_per_customer')
+      .on(table.customerId)
+      .where(sql`${table.isDefault} = true`),
     check(
       'customer_locations_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
@@ -118,11 +126,21 @@ export const supplierLocations = pgTable(
     gpsLatitude: doublePrecision('gps_latitude'),
     gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
+    // Road distance (km) from this supplier location to the delivery facility.
+    // Per-location override of the supplier-level default distance.
+    distanceFromFacilityKm: real('distance_from_facility_km'),
+    // Marks the supplier's primary source. At most one per supplier
+    // (enforced by the partial unique index below).
+    isDefault: boolean('is_default').notNull().default(false),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
     index('supplier_locations_supplier_id_idx').on(table.supplierId),
+    // One default location per supplier (partial — only default rows are unique).
+    uniqueIndex('supplier_locations_one_default_per_supplier')
+      .on(table.supplierId)
+      .where(sql`${table.isDefault} = true`),
     check(
       'supplier_locations_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
@@ -130,6 +148,10 @@ export const supplierLocations = pgTable(
     check(
       'supplier_locations_gps_longitude_range',
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
+    ),
+    check(
+      'supplier_locations_distance_from_facility_km_non_negative',
+      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
     ),
   ]
 );
