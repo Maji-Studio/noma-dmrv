@@ -82,6 +82,22 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### GHG Entry API rename — migrate before September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
+
+- Isometric deprecated the removal-named Certify REST surface in favour of a
+  `ghg_entry` route family. Old endpoints are removed after a 3-month
+  transition: "We intend to keep old endpoints functional for a transitional
+  period of 3 months (until September 2026), after which they will be
+  removed." — [Certify API changelog, 2026-06-04 entry](https://docs.isometric.com/api-reference/certify/api-changelog).
+- We call four deprecated surfaces today (`POST/GET /removals`,
+  `GET /projects/{id}/removal_templates`, `GET /components ?removal_id`,
+  plus deprecated payload/response fields). The type-regen script's OpenAPI
+  URL is also stale (now serves Isometric's internal spec).
+- Full inventory, verified renames, and phased plan:
+  [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
+- Resolve by landing plan Phases 1–4 and recording the migration in
+  `docs/isometric/changes.md`.
+
 ### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
 
 - **Non-overlapping reporting periods are enforced in `createGhgStatementDraft`**
@@ -370,6 +386,34 @@ once Slice A is in production and operator demand surfaces.
 - Resolve via: re-check the docs page in the next update-playbook
   pass; close this entry when the intro enumerates biochar alongside
   DAC.
+
+### Isometric Certify API — no facilities LIST endpoint (forces paste-only `fcl_…`) (`isometric/facilities-list-endpoint`, opened 2026-06-10, filed 2026-06-10)
+
+- **Status:** filed with Isometric via `mcp__isometric__submit_feedback`
+  (missing capability) on 2026-06-10. Remains open here until a read endpoint
+  exists.
+- The Certify API exposes **no way to enumerate facilities** — verified against
+  the live operation list (`mcp__isometric__openapi_documents_list_objects`,
+  certify): no `GET /facilities`, no `GET /projects/{project_id}/facilities`,
+  no `POST /facilities`. The facility id (`fcl_…`) appears only as a stored
+  scalar field on other resources.
+- **Why it matters:** the facility certifier mapping's "Isometric facility
+  (telemetry)" field (`externalFacilityId`) is therefore a free-text paste —
+  operators create the facility in the Certify UI, then hand-copy the `fcl_…`
+  id into noma (`facility-certifier-dialog.tsx`). Error-prone (typo →
+  telemetry submitted against the wrong facility), and it's the one mapping
+  field with no validation against a real list. We wanted a dropdown; the
+  missing LIST capability blocks it. (Creation being UI-only is fine and
+  intentional — the gap is purely the missing read.)
+- **Resolve via:** when Isometric ships a read endpoint (ideally
+  `GET /projects/{project_id}/facilities` returning id + display name), wire the
+  dropdown by mirroring the existing template-picker chain:
+  `listFacilitiesByProject()` in `src/lib/isometric/projects.ts` → a
+  `useIsometricProjectFacilities(projectId)` hook (pattern:
+  `useIsometricProjectTemplates`) → swap the free-text `externalFacilityId`
+  `FormInput` for a `FormSelect` in `facility-certifier-dialog.tsx`. Re-check
+  the certify OpenAPI operation list on the next update-playbook pass; close
+  this entry once the endpoint exists.
 
 ### Phase 4 deferrals
 

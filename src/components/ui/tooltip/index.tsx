@@ -48,7 +48,10 @@ function Tooltip({ content, children, side = "top", className }: TooltipProps) {
           }
         />
         <BaseTooltip.Portal>
-          <BaseTooltip.Positioner side={side} sideOffset={SIDE_OFFSET_PX}>
+          {/* z-60 keeps tooltips above modals/slide-overs (z-50), which portal
+              to the same <body> stacking context. Without it the popup opens
+              on hover but paints behind the dialog and is never visible. */}
+          <BaseTooltip.Positioner side={side} sideOffset={SIDE_OFFSET_PX} className="z-[60]">
             <BaseTooltip.Popup
               className={cn(
                 "max-w-[280px] px-12 py-8",

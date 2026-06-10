@@ -47,7 +47,6 @@ export function FacilityCertifierDialog({
     facilityId,
     externalProjectId: mapping?.externalProjectId ?? "",
     protocolSlug: mapping?.protocolSlug ?? "biochar",
-    protocolVersion: mapping?.protocolVersion ?? "",
     defaultRemovalTemplateId: mapping?.defaultRemovalTemplateId ?? "",
     externalFacilityId: mapping?.externalFacilityId ?? "",
     confirmProduction: false,
@@ -237,20 +236,6 @@ export function FacilityCertifierDialog({
             error={!!errors.defaultRemovalTemplateId}
             disabled={!watchedProjectId || templatesLoading}
             {...register("defaultRemovalTemplateId")}
-          />
-        </FormField>
-
-        <FormField
-          id="protocolVersion"
-          label="Protocol version"
-          error={errors.protocolVersion?.message}
-          helperText="Optional. Use the registry minor version, e.g. 1.2."
-        >
-          <FormInput
-            id="protocolVersion"
-            error={!!errors.protocolVersion}
-            placeholder="1.2"
-            {...register("protocolVersion")}
           />
         </FormField>
 
