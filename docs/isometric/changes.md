@@ -4,6 +4,50 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-10 (registry create-or-reconcile module — reliability track Phase 2)
+
+Implements Phase 2 of
+[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+one implementation of *POST → on failure, reconcile by lookup → record sync
+event → claim the orphan or mark rejected* in
+`src/fn/certification/registry-create.ts` (`performRegistryCreate`), shared
+by datapoint creates, removal creates, and GHG Statement creates.
+`submit-removal.ts`'s local `createOrReconcile` is deleted;
+`createGhgStatementRemote`'s hand-rolled catch arm is replaced and its two
+`finalizeGhgStatement` continuations collapse into one call site (the module
+returns `source: "create" | "reconciliation"`).
+
+- **Behavior change (the point of the phase)** — removal/datapoint failure
+  sync events now preserve the registry's response body
+  (`IsometricApiError.body`, the actionable 4xx detail) alongside
+  `mapping_revision`; previously only GHG kept the body and only removal
+  kept the revision. Unified failed-event `responsePayload` shape:
+  `{ mapping_revision, body? }`.
+- **GHG create gains reconcile-first on resume** — a resumed GHG Statement
+  draft now looks up `(project, end_on)` BEFORE POSTing (the removal path's
+  double-submit guard); previously it re-POSTed and relied on the catch-arm
+  reconcile.
+- **GHG create audit events** unified onto the removal shape: best-effort
+  writes (a failed audit insert no longer unwinds a successful create),
+  `requestPayload` + `mapping_revision` on success events, `:reconciled`
+  operation suffix for reconciled claims (recorded before
+  `markSubmissionSubmitted`, no longer after).
+- **Out of scope by decision** — sources mirroring (signed-URL refresh
+  shape) and telemetry (ADR 0006 journaled-step recovery) stay on their own
+  shapes.
+- **Resume-path correctness (found during migration)** — `submitRemoval` now
+  reads the `fixed` (pre-bound) datapoint bindings back out of the resumed
+  row's `payloadSnapshot.semantic.inputs` instead of mixing live-template
+  bindings with the stored transport snapshot; and the claim module's
+  `resumeDraft` re-decides under the mapping lock (mirroring `createDraft`)
+  so the CAS reset can no longer revert a row a concurrent claimant just
+  flipped to `submitted`.
+- **Tests** — new `tests/registry-create.test.ts` (9 cases: fresh create,
+  resumed reconcile-first hit/miss, POST-fails-orphan-found,
+  POST-fails-lookup-misses (body preserved, row rejected), ambiguous
+  multiple → reject + message, best-effort audit, `supplierRefLookup`
+  adapter). Existing pipeline tests unchanged and green.
+
 ## 2026-06-10 (submission-ledger claim module — reliability track Phase 1)
 
 Implements Phase 1 of
