@@ -41,18 +41,22 @@ function logCreditBatchError(message: string, error: unknown): void {
 }
 
 /**
- * Get all credit batches
+ * Get credit batches for a facility
  */
-export async function getCreditBatchesFn(): Promise<
-  ActionResult<CreditBatchWithRelations[]>
-> {
+export async function getCreditBatchesFn(
+  facilityId: string,
+): Promise<ActionResult<CreditBatchWithRelations[]>> {
   try {
     const user = await getUser();
     if (!user || !user.id) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const creditBatches = await getCreditBatchesData(user.id);
+    const validatedFacilityId = z.string().uuid().parse(facilityId);
+    const creditBatches = await getCreditBatchesData(
+      user.id,
+      validatedFacilityId,
+    );
     return { success: true, data: creditBatches };
   } catch (error) {
     logCreditBatchError("Failed to get credit batches", error);

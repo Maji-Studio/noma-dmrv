@@ -34,7 +34,6 @@ export const saveMappingSchema = z.object({
   facilityId: z.string().uuid(),
   externalProjectId: z.string().min(1, "Pick an Isometric project"),
   protocolSlug: z.string().min(1),
-  protocolVersion: emptyToNull.or(z.string().min(1)).nullable().optional(),
   defaultRemovalTemplateId: emptyToNull
     .or(z.string().min(1))
     .nullable()

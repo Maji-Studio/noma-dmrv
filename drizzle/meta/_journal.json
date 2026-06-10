@@ -267,6 +267,13 @@
       "when": 1780911821105,
       "tag": "0037_sour_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781024503264,
+      "tag": "0038_messy_bromley",
+      "breakpoints": true
     }
   ]
 }

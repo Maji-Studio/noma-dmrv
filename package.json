@@ -24,6 +24,7 @@
     "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
     "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin",
     "env:local": "op inject -i .env.tpl -o .env",
+    "env:check": "tsx scripts/check-env-drift.ts",
     "env:vercel": "pnpm env:prod && pnpm env:preview",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",
     "env:preview": "tsx scripts/sync-env-to-vercel.ts --1p-env=staging --vercel-env=preview",

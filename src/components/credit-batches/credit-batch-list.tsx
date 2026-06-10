@@ -103,8 +103,10 @@ export function CreditBatchList({
   const applicationFacilityId =
     sideSheet?.entity?.facilityId ?? contextFacilityId ?? undefined;
 
-  // Data fetching
-  const { data: creditBatches, isLoading, error } = useCreditBatches();
+  // Data fetching — facility-scoped so batches never leak across facilities
+  const { data: creditBatches, isLoading, error } = useCreditBatches(
+    contextFacilityId ?? undefined
+  );
   const { data: scopedApplications = [] } =
     useCreditBatchApplicationOptions(applicationFacilityId);
   const createCreditBatch = useCreateCreditBatch();

@@ -6,6 +6,11 @@
 
 import { createAuthClient } from "better-auth/react";
 
+/** Abort the password-reset request if it hangs longer than this (ms). */
+const PASSWORD_RESET_TIMEOUT_MS = 10000;
+/** Path the reset-password email link should redirect the user back to. */
+const PASSWORD_RESET_REDIRECT_PATH = "/reset-password";
+
 /**
  * Resolve the origin auth requests should target.
  *
@@ -289,7 +294,10 @@ export async function requestPasswordReset(
 
     // Create AbortController with timeout to prevent hanging requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      PASSWORD_RESET_TIMEOUT_MS
+    );
 
     try {
       const response = await fetch(`${baseURL}/api/auth/request-password-reset`, {
@@ -299,7 +307,7 @@ export async function requestPasswordReset(
         },
         body: JSON.stringify({
           email,
-          redirectTo: "/reset-password",
+          redirectTo: PASSWORD_RESET_REDIRECT_PATH,
         }),
         credentials: "same-origin",
         signal: controller.signal,
