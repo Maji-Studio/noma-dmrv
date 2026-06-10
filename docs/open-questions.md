@@ -1126,3 +1126,37 @@ Sizing: (S) small, (M) medium, (L) large.
   consistently.
 - **Resolve via:** thread the attempt-scoped `log` child (which already carries
   `submissionAttemptId`) through those boundary logs, or include both ids (S).
+
+## E2E robustness follow-ups (opened 2026-06-10)
+
+Deferred from the e2e-reliability pass that split live-sandbox specs out of PR
+CI (`@live` tag → nightly `e2e-live.yml`) and fixed the stale full-chain
+selectors (EntitySelect migration, auto-matched credit-batch applications).
+
+### Graceful degrade for invalid Isometric project links (`certification/invalid-project-422`) — opened 2026-06-10
+
+- A facility linked to a project id the registry rejects (404/422) makes
+  `safeListIfConfigured` re-throw, and React Query retries the failing server
+  action — repeated real API calls and a degraded page instead of a calm
+  "project not resolvable" state. Surfaced in CI when fake-project specs ran
+  with real creds loaded; same behavior would hit prod on a stale/revoked link.
+- **Resolve via:** treat non-retryable 4xx (404/422) from project-scoped
+  listings as "link not resolvable" — return an empty/flagged result instead of
+  throwing, and surface a warning chip on the registry-connection card (M).
+
+### Hermetic local stub for the Isometric client (`testing/isometric-stub`) — opened 2026-06-10
+
+- `BASE_URLS` in `src/lib/isometric/client.ts` is hardcoded, so the @live specs
+  can only run against the real sandbox; devs without `ISOMETRIC_DEMO_PROJECT_ID`
+  silently skip them, which is how the Settings/mapping specs drifted unnoticed.
+- **Resolve via:** a test-only base-URL override + a small fixture stub server
+  (started from Playwright globalSetup) serving canned project/template
+  responses, so the certification flows run hermetically everywhere (M).
+
+### Playwright hygiene (`testing/e2e-hygiene`) — opened 2026-06-10
+
+- `waitForLoadState("networkidle")` is used throughout `full-chain-ui.spec.ts`
+  (slow-by-design with polling queries); shard 1 carries all `certification-*`
+  files because sharding distributes by file. Consider `fullyParallel: true`
+  (shard by test) after confirming no in-file ordering deps, replacing
+  networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).

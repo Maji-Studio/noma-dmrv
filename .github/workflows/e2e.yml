@@ -45,23 +45,16 @@ jobs:
       STORAGE_REGION: us-east-1
       STORAGE_ACCESS_KEY_ID: e2e-build
       STORAGE_SECRET_ACCESS_KEY: e2e-build-placeholder
-      # Isometric sandbox — OPTIONAL. The three secret values
-      # (ISOMETRIC_ACCESS_TOKEN / _CLIENT_SECRET / _DEMO_PROJECT_ID) are pulled
-      # from 1Password by the "Load Isometric secrets" step below — they reach
-      # the Playwright process + webServer via $GITHUB_ENV, NOT job-level env.
-      # When OP_SERVICE_ACCOUNT_TOKEN is absent (e.g. fork PRs, which cannot read
-      # secrets) that step is skipped, the vars stay unset, and the gated
-      # certification specs `test.skip` cleanly — @/config/env treats empty as
-      # unset and enforces both-or-neither. ISOMETRIC_ENVIRONMENT is pinned to
-      # `sandbox` (never empty) so the env-schema enum does not reject an empty
-      # string.
+      # Isometric — PR CI is HERMETIC: no sandbox credentials are loaded, so
+      # the isometric client is not configured, the app degrades to its
+      # not_configured paths, and zero external HTTP calls are made. Specs that
+      # need the live sandbox are tagged @live (and additionally test.skip on
+      # missing ISOMETRIC_DEMO_PROJECT_ID); they run in e2e-live.yml on a
+      # nightly schedule instead. ISOMETRIC_ENVIRONMENT is pinned to `sandbox`
+      # (never empty) so the env-schema enum does not reject an empty string.
       ISOMETRIC_ENVIRONMENT: sandbox
       PLAYWRIGHT_WORKERS: "2"
       PLAYWRIGHT_RETRIES: "1"
-      # Exposed at job level because the `secrets` context is NOT available in
-      # step-level `if:` expressions — only `env` is. The load step below gates
-      # on `env.OP_SERVICE_ACCOUNT_TOKEN` so it self-skips on fork PRs.
-      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 
     steps:
       - name: Generate ephemeral auth secret
@@ -69,19 +62,6 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # Skipped on fork PRs (no OP_SERVICE_ACCOUNT_TOKEN) so the gated
-      # certification specs self-skip instead of failing the load.
-      - name: Load Isometric secrets from 1Password
-        if: ${{ env.OP_SERVICE_ACCOUNT_TOKEN != '' }}
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
-        with:
-          export-env: true
-        env:
-          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN
-          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET
-          ISOMETRIC_DEMO_PROJECT_ID: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_DEMO_PROJECT_ID
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -96,6 +76,18 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Browser binaries are ~130MB; `playwright install` skips the download on
+      # a cache hit (system deps via --with-deps still install either way).
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -113,8 +105,10 @@ jobs:
       - name: Apply schema
         run: pnpm drizzle-kit push --force
 
+      # @live specs (real Isometric sandbox) are excluded here and covered by
+      # the nightly e2e-live.yml workflow.
       - name: Run Playwright suite
-        run: pnpm test:e2e --shard=${{ matrix.shard_id }}/4
+        run: pnpm test:e2e --shard=${{ matrix.shard_id }}/4 --grep-invert "@live"
 
       - name: Upload Playwright artifacts
         if: always()
