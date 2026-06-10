@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { isPgUniqueViolation } from "@/db/errors";
 import {
   certifierGhgStatements,
   certifierProjects,
@@ -175,14 +176,7 @@ async function withExternalFacilityConflictGuard<T>(
   try {
     return await fn();
   } catch (err) {
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: string }).code === "23505" &&
-      (err as { constraint?: string }).constraint ===
-        CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT
-    ) {
+    if (isPgUniqueViolation(err, CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT)) {
       throw new SafeError(
         `Isometric facility ID ${externalFacilityId} is already linked to another facility. Each Isometric facility maps to exactly one facility here.`,
       );
