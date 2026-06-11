@@ -128,6 +128,16 @@ guard. Pure starter-template residue; the app is facility-scoped.
   and whether storage-site transfers become first-class custody events in the
   chain-of-custody trail.
 
+### Split `src/db/seed-data.ts` into domain seed modules (`db/seed-modularization`, opened 2026-06-11)
+
+- **Problem:** `seed-data.ts` is ~1,390 lines, past the project's 1,000-line
+  cap, and keeps growing as each new domain (latest: transport legs) appends
+  its block to the single transaction.
+- **To resolve:** extract per-domain modules (e.g. `src/db/seeds/transport.ts`
+  exporting `createTransportLegsSeed(tx, ids)`) and leave `seed-data.ts` as a
+  thin orchestrator. Mechanical but touchy — the blocks share the `ids` map —
+  so do it as a dedicated refactor PR, not a drive-by (M).
+
 ### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
 
 - **Deferred, not rejected** (ADR 0010): the `organizationId`-on-every-table
