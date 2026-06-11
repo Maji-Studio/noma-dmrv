@@ -285,7 +285,6 @@ export async function createProductionRunFn(
           biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
           biocharStorageLocationId: validated.biocharStorageLocationId || null,
           feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
-          plcDataFileUrl: validated.plcDataFileUrl || null,
         })
     );
 
@@ -382,7 +381,6 @@ export async function updateProductionRunFn(
       biocharMoisturePercent: validated.biocharMoisturePercent,
       biocharStorageLocationId: validated.biocharStorageLocationId,
       feedstockStorageLocationId: validated.feedstockStorageLocationId,
-      plcDataFileUrl: validated.plcDataFileUrl,
     });
 
     return { success: true, data: run };

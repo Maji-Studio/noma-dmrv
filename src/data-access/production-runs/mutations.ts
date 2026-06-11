@@ -103,7 +103,6 @@ export async function createProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-    plcDataFileUrl?: string | null;
   }
 ): Promise<ProductionRunWithRelations> {
   requireAuth(userId);
@@ -178,7 +177,6 @@ export async function createProductionRun(
         biocharDryMassKg: biocharDryMass,
         biocharStorageLocationId: data.biocharStorageLocationId ?? null,
         feedstockStorageLocationId: data.feedstockStorageLocationId ?? null,
-        plcDataFileUrl: data.plcDataFileUrl ?? null,
       })
       .returning();
 
@@ -239,7 +237,6 @@ export async function updateProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-    plcDataFileUrl?: string | null;
   }
 ): Promise<ProductionRunWithRelations> {
   requireAuth(userId);
@@ -330,7 +327,6 @@ export async function updateProductionRun(
 
   if (data.biocharStorageLocationId !== undefined) updateData.biocharStorageLocationId = data.biocharStorageLocationId;
   if (data.feedstockStorageLocationId !== undefined) updateData.feedstockStorageLocationId = data.feedstockStorageLocationId;
-  if (data.plcDataFileUrl !== undefined) updateData.plcDataFileUrl = data.plcDataFileUrl;
 
   const feedstockFieldsChanged =
     data.feedstockStorageLocationId !== undefined ||

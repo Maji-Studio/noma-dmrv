@@ -13,6 +13,7 @@ export const DOCUMENT_TYPES = [
   "photo",
   "video",
   "pdf",
+  "sensor_data",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -65,6 +66,7 @@ export const UPLOAD_RULES: Record<DocumentType, UploadRule> = {
   photo: { maxBytes: 25 * MB, mimeTypes: IMAGE_MIMES },
   video: { maxBytes: 100 * MB, mimeTypes: VIDEO_MIMES },
   pdf: { maxBytes: 50 * MB, mimeTypes: PDF_MIMES },
+  sensor_data: { maxBytes: 25 * MB, mimeTypes: TABULAR_MIMES },
 };
 
 export function isAllowedMime(
