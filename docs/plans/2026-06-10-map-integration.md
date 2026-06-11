@@ -1,9 +1,14 @@
 # Map Integration — Address / Point / Lat-Lng Input, Auto-Distance, Carbon Viewer
 
-> **Status: Phase 1 in progress** (2026-06-11) — geo foundation (env, schema,
-> `src/lib/geo/`, actions/hooks), `PositionPicker` + `DistanceCalcField`, and
-> Tier 1/2 form wiring landed; derive-path provenance resolution and e2e
-> coverage in flight. Originally planned 2026-06-10 from a grilling session
+> **Status: Phase 1 code-complete** (2026-06-11) — geo foundation (env, schema,
+> `src/lib/geo/`, actions/hooks), `PositionPicker` + `DistanceCalcField`,
+> Tier 1/2 form wiring (incl. transport-leg 2× picker + CALC), derive-path
+> provenance + source-aware priority resolution, and hermetic e2e coverage all
+> landed. Outstanding: real `OPENROUTESERVICE_API_KEY` /
+> `NEXT_PUBLIC_MAPTILER_KEY` in 1Password (until then `.env.local` runs
+> `GEO_PROVIDER=stub`); plain pickers for feedstock / feedstock-delivery /
+> soil-temp deferred (those forms have no GPS fields today — would need new
+> schema+fn+data-access columns). Originally planned 2026-06-10 from a grilling session
 > against the
 > existing geographic substrate (GPS columns on 9+ entities, three distance
 > fields, the polymorphic `transport_legs` table, GPS Zod helpers). Decision
