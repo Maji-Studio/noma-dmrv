@@ -65,7 +65,7 @@ export function SupplierLocationForm({
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as SupplierLocationFormData);
+    return onSubmit(data);
   });
 
   return (

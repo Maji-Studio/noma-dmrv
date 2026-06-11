@@ -31,10 +31,11 @@ import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
 import { WetMassWarning } from "./wet-mass-warning";
+import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
-const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = "feedstock_bin,ingredient_bin";
+const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
 // ============================================
 // Component
@@ -479,6 +480,8 @@ export function FeedstockForm({
             storageLocationDialog.close();
           }}
           defaultBinType={defaultStorageBinType}
+          allowedTypes={FEEDSTOCK_BIN_TYPES}
+          defaultFeedstockTypeId={watchedFeedstockTypeId || undefined}
           facilityId={watchedFacilityId}
         />
       )}

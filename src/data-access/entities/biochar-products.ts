@@ -9,7 +9,7 @@
  * what has left the bin.
  */
 
-import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { biocharProducts, deliveries, formulations, orders } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -73,7 +73,7 @@ export async function getBiocharProducts(params: {
   const { userId, search, facilityId, limit } = params;
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(biocharProducts.archivedAt)];
 
   if (facilityId) {
     conditions.push(eq(biocharProducts.facilityId, facilityId));
@@ -89,7 +89,7 @@ export async function getBiocharProducts(params: {
     );
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const results = await db
     .select(selection)

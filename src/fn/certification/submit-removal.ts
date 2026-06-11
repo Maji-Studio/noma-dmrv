@@ -893,5 +893,10 @@ function readRemovalReportingWindow(row: CertificationSubmissionRow): {
       "Stale submission cannot be resumed because its reporting-window snapshot does not match the current schema.",
     );
   }
+  if (earliestStartTime.getTime() > latestEndTime.getTime()) {
+    throw new SafeError(
+      "Stale submission cannot be resumed because its reporting-window snapshot has an inverted window (start after end).",
+    );
+  }
   return { earliestStartTime, latestEndTime };
 }

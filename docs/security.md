@@ -83,6 +83,29 @@ Notes:
 - Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
 - `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
 
+## Dependency Supply Chain
+
+Two layers of protection against compromised npm packages (configured 2026-06-11):
+
+**Release-age cooldown** — `pnpm-workspace.yaml` sets `minimumReleaseAge: 4320` (3 days, in minutes). The resolver ignores versions published less than 3 days ago, so `pnpm update`/`pnpm install` never picks up a freshly published (potentially compromised) release. Most registry compromises are detected and yanked within hours. No workflow change: run `pnpm update` whenever — it just sees a 3-day-delayed registry.
+
+**Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the only packages permitted to run install scripts (the most common malware payload vector). New packages needing build scripts must be added there deliberately.
+
+**Dependabot (security-only)** — Dependabot alerts + security updates are enabled on the repo. `.github/dependabot.yml` sets `open-pull-requests-limit: 0`, which disables routine version-bump PRs; only security-fix PRs are opened. Severity filtering (e.g. critical-only) is done via auto-triage rules in repo Settings → Advanced Security → Dependabot, not in `dependabot.yml`.
+
+Handling a security PR that needs code changes:
+
+- CI green → merge as-is.
+- CI red → `gh pr checkout <n>`, fix the code, push to the same branch (Dependabot stops rebasing once you push). Bump + adaptation merge together.
+- Major migration → close the Dependabot PR and do it as normal feature work; Dependabot auto-closes once the lockfile is no longer vulnerable.
+
+If a patched version is younger than the 3-day cooldown, add a temporary per-package exception instead of lowering the global setting:
+
+```yaml
+minimumReleaseAgeExclude:
+  - vulnerable-pkg # remove after updating
+```
+
 ## Minimal Security Test Checklist
 
 - Unauthorized API requests are blocked.

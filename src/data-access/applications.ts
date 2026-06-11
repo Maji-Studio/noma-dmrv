@@ -1,4 +1,4 @@
-import { desc, eq, count, sum, ne, and, SQL, sql } from "drizzle-orm";
+import { desc, eq, count, sum, ne, and, isNull, SQL, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
@@ -200,13 +200,14 @@ export async function getApplications(
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
-  const conditions: SQL[] = [];
+  // Applications carry no archived_at — hide them via their archived delivery
+  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
 
   if (options?.facilityId) {
     conditions.push(eq(deliveries.facilityId, options.facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
@@ -260,12 +261,12 @@ export async function getApplicationDeliveryOptions(
 ): Promise<ApplicationDeliveryOptionData[]> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [rawDeliveries, appliedRows] = await Promise.all([
     db

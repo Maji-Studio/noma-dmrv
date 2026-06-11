@@ -40,6 +40,9 @@ export const feedstockDeliveries = pgTable(
     // --- Documentation ---
     notes: text('notes'),
 
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -130,6 +133,9 @@ export const feedstocks = pgTable(
 
     // --- Documentation ---
     notes: text('notes'),
+
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

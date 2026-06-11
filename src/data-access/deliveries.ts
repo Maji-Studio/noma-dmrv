@@ -3,7 +3,7 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
 import { db } from "@/db";
 import {
   deliveries,
@@ -90,6 +90,7 @@ type DeliveryColumnAvailability = {
   truckMassOnDepartureKg: boolean;
   distanceKmOverride: boolean;
   distanceNote: boolean;
+  archivedAt: boolean;
 };
 
 let deliveryColumnAvailabilityPromise: Promise<DeliveryColumnAvailability> | null = null;
@@ -106,7 +107,8 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
             'truck_mass_on_arrival_kg',
             'truck_mass_on_departure_kg',
             'distance_km_override',
-            'distance_note'
+            'distance_note',
+            'archived_at'
           )
       `)
       .then(({ rows }) => {
@@ -117,6 +119,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
           truckMassOnDepartureKg: columns.has("truck_mass_on_departure_kg"),
           distanceKmOverride: columns.has("distance_km_override"),
           distanceNote: columns.has("distance_note"),
+          archivedAt: columns.has("archived_at"),
         };
       });
   }
@@ -153,9 +156,17 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
       : sql<string | null>`null`.as("distance_note"),
     driverId: deliveries.driverId,
     vehicleId: deliveries.vehicleId,
+    archivedAt: columns.archivedAt
+      ? deliveries.archivedAt
+      : sql<Date | null>`null`.as("archived_at"),
     createdAt: deliveries.createdAt,
     updatedAt: deliveries.updatedAt,
   };
+}
+
+/** Archived-row filter, skipped while the column has not been migrated yet. */
+function activeDeliveriesCondition(columns: DeliveryColumnAvailability): SQL[] {
+  return columns.archivedAt ? [isNull(deliveries.archivedAt)] : [];
 }
 
 /**
@@ -181,8 +192,8 @@ export async function getDeliveries(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived deliveries (facility archive cascade) are hidden
+  const conditions: SQL[] = [...activeDeliveriesCondition(deliveryColumns)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -209,7 +220,7 @@ export async function getDeliveries(
     conditions.push(lte(deliveries.deliveryDate, toDate));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -344,6 +355,7 @@ export async function getDeliveryWithRelations(
     distanceNote: deliveryRow.distanceNote,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
+    archivedAt: deliveryRow.archivedAt,
     createdAt: deliveryRow.createdAt,
     updatedAt: deliveryRow.updatedAt,
     order: deliveryRow.orderId
@@ -391,8 +403,9 @@ export async function getDeliveryStats(
   filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }
 ): Promise<DeliveryStats> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [...activeDeliveriesCondition(deliveryColumns)];
 
   if (filters?.facilityId) {
     conditions.push(eq(deliveries.facilityId, filters.facilityId));
@@ -406,7 +419,7 @@ export async function getDeliveryStats(
     conditions.push(lte(deliveries.deliveryDate, filters.toDate));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Get aggregate stats
   const [stats] = await db
@@ -449,13 +462,14 @@ export async function getDeliveriesForSelect(
   orderId?: string
 ): Promise<Array<{ id: string; code: string; deliveryDate: Date; status: string; orderCode: string | null }>> {
   requireAuth(userId);
+  const deliveryColumns = await getDeliveryColumnAvailability();
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [...activeDeliveriesCondition(deliveryColumns)];
   if (orderId) {
     conditions.push(eq(deliveries.orderId, orderId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   return db
     .select({

@@ -19,6 +19,10 @@ interface StorageLocationQuickAddDialogProps {
   onSuccess: (entity: EntityOption) => void;
   /** Pre-selected bin type based on feedstock category */
   defaultBinType?: StorageLocationType;
+  /** Restricts the type picker to these bin types (e.g. feedstock + ingredient) */
+  allowedTypes?: readonly StorageLocationType[];
+  /** Pre-selects the feedstock type the parent flow is working with */
+  defaultFeedstockTypeId?: string;
   /** Facility ID (required for creation) */
   facilityId: string;
 }
@@ -28,6 +32,8 @@ export function StorageLocationQuickAddDialog({
   onClose,
   onSuccess,
   defaultBinType,
+  allowedTypes,
+  defaultFeedstockTypeId,
   facilityId,
 }: StorageLocationQuickAddDialogProps) {
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<StorageLocationFormData>({
@@ -38,6 +44,7 @@ export function StorageLocationQuickAddDialog({
         type: data.type,
         facilityId: data.facilityId || facilityId,
         capacityKg: data.capacityKg ?? null,
+        feedstockTypeId: data.feedstockTypeId ?? null,
         formulationId: data.formulationId ?? null,
       }),
     onSuccess,
@@ -58,6 +65,8 @@ export function StorageLocationQuickAddDialog({
         isSubmitting={isSubmitting}
         submitLabel="Create Bin"
         defaultType={defaultBinType}
+        allowedTypes={allowedTypes}
+        defaultFeedstockTypeId={defaultFeedstockTypeId}
       />
     </QuickAddDialogShell>
   );

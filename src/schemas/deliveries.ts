@@ -134,6 +134,7 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
   }
 
   validateTruckMasses(value, ctx);
+  validateDistanceOverride(value, ctx);
 });
 
 // ============================================
