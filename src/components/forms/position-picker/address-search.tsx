@@ -71,7 +71,8 @@ export function AddressSearch({
         break;
       case "ArrowUp":
         event.preventDefault();
-        setActiveIndex((index) => (index - 1 + hits.length) % hits.length);
+        // -1 (no selection) and 0 both wrap to the last item.
+        setActiveIndex((index) => (index <= 0 ? hits.length - 1 : index - 1));
         break;
       case "Enter":
         if (activeIndex >= 0) {

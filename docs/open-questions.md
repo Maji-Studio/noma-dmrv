@@ -67,6 +67,20 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **To resolve:** revisit when a client asks for white-labeling; scope is
   wildcard domain routing, per-org theme tokens, branded Resend templates.
 
+### Facility-wide monitoring dashboard / live map (`coc/facility-dashboard`, opened 2026-06-11)
+
+- **Recorded as future, out of scope (2026-06-11 chain-of-custody-views
+  grilling):** the Maji concept canvas also contains a one-screen
+  monitoring dashboard (KPIs, geospatial panel, mini-Sankey, sensors,
+  credit ledger), a facility-wide live map spanning all batches/routes,
+  and an outward-facing public provenance showcase. The credit-batch
+  anchor (`docs/plans/2026-06-11-chain-of-custody-views.md`, ADR 0011)
+  deliberately covers only batch-scoped provenance.
+- **To resolve:** revisit after Phase 3 ships — decide whether the
+  existing dashboard route grows a geospatial/mass-balance panel, and
+  whether a buyer-facing shareable page is wanted (different audience,
+  different auth surface).
+
 ### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
 
 - **Deferred, not rejected** (ADR 0010): the `organizationId`-on-every-table
