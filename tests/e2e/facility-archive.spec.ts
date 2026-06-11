@@ -53,7 +53,7 @@ test.describe("Facility cascading archive", () => {
   });
 
   test.afterAll(async () => {
-    cla; // Guard each step — beforeAll may have failed partway through, and an
+    // Guard each step — beforeAll may have failed partway through, and an
     // unguarded teardown throw would mask the original error.
     if (bin) await deleteTestStorageLocation(bin.id);
     if (facility) await deleteTestFacility(facility.id);

@@ -225,11 +225,11 @@ export interface ChainGraphOptions {
   highlightedNodeId?: string | null;
 }
 
-function buildGraph(
-  data: ChainOfCustodyData,
+function layoutGraph(
+  lineageNodes: LineageGraphNode[],
+  edges: Edge[],
   options: ChainGraphOptions
 ): { nodes: Node[]; edges: Edge[] } {
-  const lineageNodes = buildLineageNodes(data);
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph(DAGRE_CONFIG);
@@ -238,7 +238,6 @@ function buildGraph(
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
   }
 
-  const edges = buildLineageEdges(data);
   for (const edge of edges) {
     g.setEdge(edge.source, edge.target);
   }
@@ -280,5 +279,37 @@ export function useChainGraph(
     return { nodes: [], edges: [] };
   }
 
-  return buildGraph(data, options);
+  return layoutGraph(buildLineageNodes(data), buildLineageEdges(data), options);
+}
+
+/**
+ * Batch roll-up DAG: the member applications' lineage graphs merged into one
+ * fan-out (plan decision 2). Nodes and edges dedupe by id, so a production
+ * run / lot / feedstock shared by several applications appears once with all
+ * its downstream branches attached.
+ */
+export function useBatchChainGraph(
+  lineages: ChainOfCustodyData[] | undefined,
+  options: ChainGraphOptions = {}
+) {
+  if (!lineages || lineages.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  const nodeById = new Map<string, LineageGraphNode>();
+  const edgeById = new Map<string, Edge>();
+  for (const lineage of lineages) {
+    for (const node of buildLineageNodes(lineage)) {
+      if (!nodeById.has(node.id)) nodeById.set(node.id, node);
+    }
+    for (const lineageEdge of buildLineageEdges(lineage)) {
+      if (!edgeById.has(lineageEdge.id)) edgeById.set(lineageEdge.id, lineageEdge);
+    }
+  }
+
+  return layoutGraph(
+    Array.from(nodeById.values()),
+    Array.from(edgeById.values()),
+    options
+  );
 }
