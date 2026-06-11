@@ -1,6 +1,27 @@
 # Map Integration — Address / Point / Lat-Lng Input, Auto-Distance, Carbon Viewer
 
-> **Status: Phase 1 COMPLETE** (2026-06-11) — geo foundation (env, schema,
+> **Status: Phase 2 COMPLETE** (2026-06-11) — the "Carbon in Transit" viewer
+> shipped on `feat/map-integration-phase-2`: geo payload contract
+> (`data-access/chain-of-custody-geo.ts` — position sources own /
+> leg-origin / facility-inherited / none + chain legs with provenance),
+> viewer-time ORS road polylines cached in `geo_route_cache` (read-through,
+> rounded-endpoint key; unroutable legs fall back to a dashed bowed arc —
+> chips always show the leg's *stored* distanceKm), the full concept-build
+> map treatment (brand basemap + SAT, brutalist markers, marching-ants flow
+> arcs, node-card popups, legend, transport-legs + not-geolocated rails,
+> dashed-red warning banner, empty state), Lineage / Map / Split view
+> segment persisted in `?view=`, and two-way DAG ⇄ map cross-highlighting.
+> Shared map theme extracted to `src/components/map/` (PositionPicker now
+> consumes it). Both map surfaces also degrade gracefully when WebGL is
+> unavailable (headless browsers) instead of crashing to the error
+> boundary. Gates green: lint 0 errors, vitest 494, CI-style production
+> build, hermetic e2e (carbon-viewer 5/5 + position-picker 5/5 +
+> chain-of-custody 4/4). Still deferred (now recorded for a future phase,
+> not Phase 2): plain pickers for feedstock / feedstock-delivery /
+> soil-temp (those forms expose no GPS fields; need schema + fn +
+> data-access columns first).
+>
+> **Phase 1 COMPLETE** (2026-06-11) — geo foundation (env, schema,
 > `src/lib/geo/`, actions/hooks), `PositionPicker` + `DistanceCalcField`,
 > Tier 1/2 form wiring (incl. transport-leg 2× picker + CALC), derive-path
 > provenance + source-aware priority resolution, and hermetic e2e coverage
