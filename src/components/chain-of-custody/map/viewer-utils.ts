@@ -115,12 +115,16 @@ export function legLineCoordinates(
 
 /**
  * Distance-chip anchor: a point part-way along the polyline, staggered by
- * leg index so chips on neighbouring arcs don't collide.
+ * leg index so chips on neighbouring arcs don't collide. Throws on an empty
+ * polyline — callers always pass `legLineCoordinates` output (≥ 2 points).
  */
 export function chipAnchor(
   coordinates: [number, number][],
   legIndex: number
 ): [number, number] {
+  if (coordinates.length === 0) {
+    throw new Error("chipAnchor requires a non-empty coordinates array");
+  }
   const fraction =
     CHIP_BASE_FRACTION + (legIndex % CHIP_STAGGER_STEPS) * CHIP_STAGGER_FRACTION;
   const index = Math.min(

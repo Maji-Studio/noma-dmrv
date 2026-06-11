@@ -388,11 +388,15 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.locator('[role="dialog"]').locator('button:has-text("Create Facility")').click();
       await waitForSideSheetClose(page);
 
-      // Search for the new facility (list may be paginated)
+      // Search for the new facility (list may be paginated). Scope to the list
+      // card's heading — the sidebar FacilitySelector falls back to the first
+      // facility, which is this one, so a bare getByText matches twice.
       const facilitySearch = page.getByPlaceholder(/search/i);
       await facilitySearch.fill(`Chain Facility ${runId}`);
       await page.waitForTimeout(500);
-      await expect(page.getByText(`Chain Facility ${runId}`)).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole("heading", { name: `Chain Facility ${runId}` }),
+      ).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 2. REACTOR ────────────────────────────────────────

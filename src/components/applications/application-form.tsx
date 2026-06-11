@@ -15,8 +15,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { FormField, FormInput, FormSelect, PositionPicker } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormField, FormInput, FormSelect, PositionPicker, FormActions } from "@/components/forms";
 import {
   applicationFormSchema,
   applicationMethods,
@@ -514,17 +513,12 @@ export function ApplicationForm({
         </div>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }
