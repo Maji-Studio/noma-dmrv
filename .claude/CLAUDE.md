@@ -126,7 +126,7 @@ const log = logger.child({ requestId });   // bindings merged into every record
 
 ### Object Storage — `@/lib/storage`
 
-File uploads (lab reports, COAs, photos, calibration certs) use **real S3-compatible storage** with a presigned PUT/GET flow.
+File uploads (lab reports, COAs, photos, calibration certs, production readings CSVs) use **real S3-compatible storage** with a presigned PUT/GET flow.
 - `STORAGE_PROVIDER=s3-compatible` (prod — DO Spaces / AWS S3) or `local-fs` (dev/test, served by `/api/storage-local/[...key]`)
 - Production rejects `local-fs` at env-validation time. Use `<FormFileUpload>` (`@/components/forms/form-file-upload`) for upload UI. See `docs/storage.md`.
 

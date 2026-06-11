@@ -107,14 +107,6 @@ export const productionRunFormSchema = z.object({
   biocharMoisturePercent: optionalPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-
-  // Metadata
-  plcDataFileUrl: z
-    .string()
-    .max(2000, "URL must be less than 2000 characters")
-    .optional()
-    .nullable()
-    .or(z.literal("")),
 });
 
 // ============================================
@@ -187,7 +179,6 @@ export const updateProductionRunSchema = z.object({
   biocharMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  plcDataFileUrl: z.string().max(2000).optional().nullable(),
 });
 
 /**

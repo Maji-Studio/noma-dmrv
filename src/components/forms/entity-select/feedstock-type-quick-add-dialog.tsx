@@ -49,7 +49,7 @@ export function FeedstockTypeQuickAddDialog({
         onCancel={onClose}
         isSubmitting={isSubmitting}
         submitLabel="Create Feedstock Type"
-        hint="Feedstock types will be sourced from the Isometric registry in the future. Add the agricultural or forestry residue used in Dark Earth Carbon operations for now."
+        hint="Add the agricultural or forestry residue used in Dark Earth Carbon operations. The Isometric tab shows the registry's catalogue for cross-reference (read-only)."
       />
     </QuickAddDialogShell>
   );
