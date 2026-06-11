@@ -2,7 +2,7 @@
  * Application options for searchable entity selection.
  */
 
-import { ilike, or, eq, and, type SQL } from "drizzle-orm";
+import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, deliveries, facilities } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -48,7 +48,8 @@ export async function getApplicationsEntity(params: {
 }): Promise<EntityOption[]> {
   const { search, facilityId, limit } = params;
 
-  const conditions: SQL[] = [];
+  // Applications carry no archived_at — hide them via their archived delivery
+  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
 
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
@@ -66,7 +67,7 @@ export async function getApplicationsEntity(params: {
     );
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const results = await db
     .select({

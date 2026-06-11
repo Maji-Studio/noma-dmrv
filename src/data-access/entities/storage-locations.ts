@@ -5,7 +5,7 @@
  * stored product), computed from five aggregate subqueries joined per location.
  */
 
-import { ilike, or, eq, and, inArray, sql, type SQL } from "drizzle-orm";
+import { ilike, or, eq, and, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   storageLocations,
@@ -183,7 +183,7 @@ export async function getStorageLocations(params: {
     params;
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(storageLocations.archivedAt)];
 
   if (facilityId) {
     conditions.push(eq(storageLocations.facilityId, facilityId));
@@ -239,7 +239,7 @@ export async function getStorageLocations(params: {
     );
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const results = await db
     .select({

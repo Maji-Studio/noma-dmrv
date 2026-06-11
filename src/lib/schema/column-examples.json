@@ -216,7 +216,6 @@
     "biochar_storage_location_id": "stl_001",
     "feedstock_storage_location_id": "stl_002",
     "emission_factors_used": "{\"diesel\": 2.68}",
-    "plc_data_file_url": "/files/plc/pr-2025-0031.csv",
     "createdAt": "2025-06-12T06:00:00Z",
     "updatedAt": "2025-06-12T15:00:00Z"
   },

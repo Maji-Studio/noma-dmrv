@@ -22,24 +22,8 @@ const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable
 // GPS Coordinate Validation
 // ============================================
 
-/**
- * GPS latitude validation (-90 to 90)
- */
-const requiredLatitudeSchema = z
-  .number()
-  .min(-90, "Latitude must be between -90 and 90")
-  .max(90, "Latitude must be between -90 and 90");
-
-/**
- * GPS longitude validation (-180 to 180)
- */
-const requiredLongitudeSchema = z
-  .number()
-  .min(-180, "Longitude must be between -180 and 180")
-  .max(180, "Longitude must be between -180 and 180");
-
-const optionalLatitudeSchema = requiredLatitudeSchema.nullable().optional();
-const optionalLongitudeSchema = requiredLongitudeSchema.nullable().optional();
+const optionalLatitudeSchema = requiredLat.nullable().optional();
+const optionalLongitudeSchema = requiredLng.nullable().optional();
 const customerLocationTextSchema = z
   .string()
   .min(1, "Location is required")

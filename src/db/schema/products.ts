@@ -112,6 +112,9 @@ export const biocharProducts = pgTable('biochar_products', {
   // Set to productionDate + 12 months. Checked at delivery creation to block expired product.
   expiresAt: timestamp('expires_at'),
 
+  // Stamped by the facility archive cascade; NULL = active
+  archivedAt: timestamp('archived_at'),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

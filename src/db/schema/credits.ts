@@ -109,6 +109,9 @@ export const creditBatches = pgTable(
     companyVerificationRef: text('company_verification_ref'), // 3+ years active ag company proof
     mixingTimelineDays: integer('mixing_timeline_days'), // Days until mixed with soil
 
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

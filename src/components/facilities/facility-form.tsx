@@ -20,6 +20,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
+import { FacilityIsometricConnector } from "@/components/certification";
 
 const DEFAULT_DURABILITY_OPTION: DurabilityOption = "200_year";
 
@@ -216,6 +217,14 @@ export function FacilityForm({
           />
         </FormField>
       </div>
+
+      {/* Registry connection — edit-mode only (needs a facility id; the
+          post-create link dialog covers new facilities). Self-contained:
+          saves immediately via its own admin-gated action, independent of
+          this form's submit. */}
+      {isEditMode && facility && (
+        <FacilityIsometricConnector facilityId={facility.id} />
+      )}
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
