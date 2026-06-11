@@ -92,6 +92,8 @@ export async function getOrdersForSelectFn(
       customerName: string | null;
       biocharProductCode: string | null;
       quantityKg: number;
+      destinationGpsLatitude: number | null;
+      destinationGpsLongitude: number | null;
     }>
   >
 > {

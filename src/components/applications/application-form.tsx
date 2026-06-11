@@ -15,7 +15,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { FormField, FormInput, FormSelect } from "@/components/forms";
+import { FormField, FormInput, FormSelect, PositionPicker } from "@/components/forms";
 import { Button } from "@/components/ui";
 import {
   applicationFormSchema,
@@ -190,6 +190,7 @@ export function ApplicationForm({
     handleSubmit,
     control,
     setError,
+    setValue,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -215,6 +216,8 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
+  const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
+  const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
 
   const deliveryOptions = deliveries.map((d) => ({
     value: d.id,
@@ -431,45 +434,20 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="gpsLatitude"
-            label="GPS Latitude"
-            error={errors.gpsLatitude?.message}
-            helperText="Between -90 and 90"
-          >
-            <FormInput
-              id="gpsLatitude"
-              type="number"
-              step="any"
-              placeholder="e.g., -3.3349"
-              disabled={isSubmitting}
-              error={!!errors.gpsLatitude}
-              {...register("gpsLatitude", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="gpsLongitude"
-            label="GPS Longitude"
-            error={errors.gpsLongitude?.message}
-            helperText="Between -180 and 180"
-          >
-            <FormInput
-              id="gpsLongitude"
-              type="number"
-              step="any"
-              placeholder="e.g., 37.3404"
-              disabled={isSubmitting}
-              error={!!errors.gpsLongitude}
-              {...register("gpsLongitude", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
+        <PositionPicker
+          idPrefix="gps"
+          label="Field position"
+          accent="pink"
+          latitude={gpsLatitude ?? null}
+          longitude={gpsLongitude ?? null}
+          onPositionChange={({ lat, lng }) => {
+            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+          }}
+          latitudeError={errors.gpsLatitude?.message}
+          longitudeError={errors.gpsLongitude?.message}
+          disabled={isSubmitting}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
