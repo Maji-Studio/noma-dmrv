@@ -83,6 +83,15 @@ export const facilityEmissionConfigSchema = z
     stageSplitBiocharPct: requiredNumber("Biochar processing split is required").pipe(
       z.number().min(0).max(100, "Split must be between 0 and 100"),
     ),
+    defaultSoilTemperatureC: emptyToNull
+      .or(
+        z.coerce
+          .number()
+          .min(-50, "Soil temperature must be between -50 and 60 °C")
+          .max(60, "Soil temperature must be between -50 and 60 °C"),
+      )
+      .nullable()
+      .optional(),
   })
   .superRefine((value, ctx) => {
     const sum =

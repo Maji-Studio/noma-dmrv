@@ -309,6 +309,13 @@
       "when": 1781170493083,
       "tag": "0043_nice_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1781189346493,
+      "tag": "0044_lonely_oracle",
+      "breakpoints": true
     }
   ]
 }
