@@ -1,0 +1,479 @@
+"use client";
+
+/**
+ * Carbon Transit map — the MapLibre half of the Carbon Viewer. Loaded via
+ * next/dynamic (ssr: false) from carbon-transit-panel.tsx — never imported
+ * directly, so maplibre-gl stays out of the shared client bundle.
+ *
+ * Suppliers fan into the facility, the facility fans out to fields. Legs are
+ * real road polylines when route geometry resolved (solid + marching-ants
+ * overlay) and dashed bowed arcs otherwise; chips at the line apex carry the
+ * leg's STORED distance (the carbon number — never the polyline's length).
+ *
+ * The map instance lifecycle is the project's legitimate useEffect exception
+ * (imperative DOM library). Event handlers reach React state through refs so
+ * the map is created exactly once.
+ */
+
+import "maplibre-gl/dist/maplibre-gl.css";
+import "./carbon-viewer.css";
+import maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
+import {
+  DEFAULT_MAP_CENTER,
+  DEFAULT_MAP_ZOOM,
+  maptilerStyleUrl,
+  SAT_RASTER_SATURATION,
+  SAT_TILE_ATTRIBUTION,
+  SAT_TILE_URL,
+} from "@/config/geo";
+import { applyBrandRecolor, MapControls } from "@/components/map";
+import type { ChainOfCustodyGeoData } from "@/data-access/chain-of-custody-geo";
+import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
+import {
+  ANTS_DASH_SEQUENCE,
+  ANTS_INTERVAL_MS,
+  DASH_LINE_WIDTH,
+  FALLBACK_DASHARRAY,
+  FIT_DURATION_MS,
+  FIT_MAX_ZOOM,
+  FIT_PADDING,
+  FIT_PADDING_RIGHT_WITH_RAIL,
+  HIGHLIGHT_EASE_DURATION_MS,
+  HIGHLIGHT_HOLD_MS,
+  LEG_LINE_OPACITY,
+  LEG_LINE_WIDTH,
+  LEGS_BASE_LAYER_ID,
+  LEGS_DASH_LAYER_ID,
+  LEGS_SOURCE_ID,
+  POPUP_OFFSET_PX,
+  POPUP_WIDTH_PX,
+  SAT_LAYER_ID,
+  SAT_SOURCE_ID,
+  type ViewerMarkerKind,
+} from "./viewer-constants";
+import {
+  createDistanceChipElement,
+  createPopupCardElement,
+  createSiteMarkerElement,
+  type PopupCardInput,
+} from "./viewer-elements";
+import { chipAnchor, legLineCoordinates, resolveLegEndpoints } from "./viewer-utils";
+
+// Inlined at build time — public, domain-locked key (browser-safe).
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+
+const SAT_TILE_SIZE = 256;
+const FALLBACK_LAYER_ID = `${LEGS_BASE_LAYER_ID}-fallback`;
+
+/** Popup body per chain node id (codes + detail lines from the lineage DAG). */
+export type PopupContentByNodeId = Record<
+  string,
+  Pick<PopupCardInput, "typeLabel" | "status" | "detailLines">
+>;
+
+export interface CarbonTransitMapProps {
+  geo: ChainOfCustodyGeoData;
+  /** Road polylines per leg id; absent/null entries draw the dashed arc. */
+  routeGeometries: RouteGeometryByRequestId | undefined;
+  popupContent: PopupContentByNodeId;
+  /** Side rail visible (map view) — widens the fit padding on the right. */
+  railVisible: boolean;
+  /** Cross-link from the DAG; nonce re-triggers for repeat clicks. */
+  highlight: { nodeId: string; nonce: number } | null;
+  onMarkerClick?: (nodeId: string) => void;
+}
+
+interface PlottedNode {
+  nodeId: string;
+  kind: ViewerMarkerKind;
+  code: string;
+  sub: string | null;
+  lat: number;
+  lng: number;
+}
+
+/** Marker set: facility + feedstock origins + the application field. */
+function plottedNodes(geo: ChainOfCustodyGeoData): PlottedNode[] {
+  const nodes: PlottedNode[] = [];
+  if (geo.facility.lat != null && geo.facility.lng != null) {
+    nodes.push({
+      nodeId: `facility:${geo.facility.id}`,
+      kind: "facility",
+      code: geo.facility.code,
+      sub: geo.facility.name,
+      lat: geo.facility.lat,
+      lng: geo.facility.lng,
+    });
+  }
+  for (const node of geo.nodes) {
+    if (node.lat == null || node.lng == null) continue;
+    if (node.positionSource !== "own" && node.positionSource !== "leg_origin") continue;
+    if (node.kind === "feedstock") {
+      nodes.push({
+        nodeId: node.id,
+        kind: "supplier",
+        code: node.code,
+        sub: node.sub,
+        lat: node.lat,
+        lng: node.lng,
+      });
+    } else if (node.kind === "application") {
+      nodes.push({
+        nodeId: node.id,
+        kind: "field",
+        code: node.code,
+        sub: node.sub,
+        lat: node.lat,
+        lng: node.lng,
+      });
+    }
+  }
+  return nodes;
+}
+
+function token(name: string, fallback: string): string {
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+  );
+}
+
+export default function CarbonTransitMap({
+  geo,
+  routeGeometries,
+  popupContent,
+  railVisible,
+  highlight,
+  onMarkerClick,
+}: CarbonTransitMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const chipsRef = useRef<maplibregl.Marker[]>([]);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const pinnedRef = useRef<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest props for handlers that live as long as the map instance.
+  const onMarkerClickRef = useRef(onMarkerClick);
+  const railVisibleRef = useRef(railVisible);
+  const [styleReady, setStyleReady] = useState(false);
+  const [satOn, setSatOn] = useState(false);
+  // WebGL can be unavailable (headless browsers, exhausted contexts) — the
+  // viewer degrades to the rails instead of crashing the page.
+  const [mapFailed, setMapFailed] = useState(false);
+
+  useEffect(() => {
+    onMarkerClickRef.current = onMarkerClick;
+    railVisibleRef.current = railVisible;
+  });
+
+  const fitToMarkers = (animate: boolean) => {
+    const map = mapRef.current;
+    if (!map || markersRef.current.length === 0) return;
+    const bounds = new maplibregl.LngLatBounds();
+    for (const marker of markersRef.current) {
+      bounds.extend(marker.getLngLat());
+    }
+    map.fitBounds(bounds, {
+      padding: {
+        ...FIT_PADDING,
+        right: railVisibleRef.current ? FIT_PADDING_RIGHT_WITH_RAIL : FIT_PADDING.right,
+      },
+      maxZoom: FIT_MAX_ZOOM,
+      duration: animate ? FIT_DURATION_MS : 0,
+    });
+  };
+
+  // Map instance lifecycle — the legitimate imperative-DOM exception.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !MAPTILER_KEY) return;
+
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: maptilerStyleUrl(MAPTILER_KEY),
+        center: DEFAULT_MAP_CENTER,
+        zoom: DEFAULT_MAP_ZOOM,
+        attributionControl: { compact: true },
+        dragRotate: false,
+      });
+    } catch {
+      // maplibre throws "Failed to initialize WebGL" when no context exists.
+      // Deferred so the effect never sets state synchronously (React Compiler).
+      queueMicrotask(() => setMapFailed(true));
+      return;
+    }
+    mapRef.current = map;
+    popupRef.current = new maplibregl.Popup({
+      closeButton: false,
+      offset: POPUP_OFFSET_PX,
+      className: "cvm-pop",
+      maxWidth: `${POPUP_WIDTH_PX + 8}px`,
+    });
+
+    map.once("load", () => {
+      applyBrandRecolor(map);
+
+      // SAT raster first so the leg layers added after naturally sit above it.
+      map.addSource(SAT_SOURCE_ID, {
+        type: "raster",
+        tiles: [SAT_TILE_URL],
+        tileSize: SAT_TILE_SIZE,
+        attribution: SAT_TILE_ATTRIBUTION,
+      });
+      map.addLayer({
+        id: SAT_LAYER_ID,
+        type: "raster",
+        source: SAT_SOURCE_ID,
+        layout: { visibility: "none" },
+        paint: { "raster-saturation": SAT_RASTER_SATURATION },
+      });
+
+      const inbound = token("--clr-orange", "#FF8359");
+      const outbound = token("--clr-pink", "#A6216E");
+      const ink = token("--clr-dark-purple", "#0F021A");
+      const colorByKind = [
+        "match",
+        ["get", "kind"],
+        "inbound",
+        inbound,
+        outbound,
+      ] as maplibregl.ExpressionSpecification;
+
+      map.addSource(LEGS_SOURCE_ID, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      // Routed legs: solid base + marching-ants overlay conveying direction.
+      map.addLayer({
+        id: LEGS_BASE_LAYER_ID,
+        type: "line",
+        source: LEGS_SOURCE_ID,
+        filter: ["==", ["get", "routed"], true],
+        paint: {
+          "line-color": colorByKind,
+          "line-width": LEG_LINE_WIDTH,
+          "line-opacity": LEG_LINE_OPACITY,
+        },
+      });
+      // Unrouted legs: dashed bowed arc — an estimated path, not a road.
+      map.addLayer({
+        id: FALLBACK_LAYER_ID,
+        type: "line",
+        source: LEGS_SOURCE_ID,
+        filter: ["==", ["get", "routed"], false],
+        paint: {
+          "line-color": colorByKind,
+          "line-width": LEG_LINE_WIDTH,
+          "line-opacity": LEG_LINE_OPACITY,
+          "line-dasharray": FALLBACK_DASHARRAY,
+        },
+      });
+      map.addLayer({
+        id: LEGS_DASH_LAYER_ID,
+        type: "line",
+        source: LEGS_SOURCE_ID,
+        filter: ["==", ["get", "routed"], true],
+        paint: {
+          "line-color": ink,
+          "line-width": DASH_LINE_WIDTH,
+          "line-dasharray": ANTS_DASH_SEQUENCE[0],
+        },
+      });
+
+      setStyleReady(true);
+    });
+
+    // Marching ants — cycling the dasharray makes the gaps appear to travel.
+    let antsStep = 0;
+    const antsTimer = setInterval(() => {
+      if (!map.getLayer(LEGS_DASH_LAYER_ID)) return;
+      antsStep = (antsStep + 1) % ANTS_DASH_SEQUENCE.length;
+      map.setPaintProperty(
+        LEGS_DASH_LAYER_ID,
+        "line-dasharray",
+        ANTS_DASH_SEQUENCE[antsStep]
+      );
+    }, ANTS_INTERVAL_MS);
+
+    // Split-view toggles change the panel width under the map.
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
+
+    map.on("click", () => {
+      // Clicks on the basemap unpin; marker clicks stopPropagation.
+      pinnedRef.current = null;
+      popupRef.current?.remove();
+    });
+
+    return () => {
+      clearInterval(antsTimer);
+      resizeObserver.disconnect();
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      popupRef.current = null;
+      markersRef.current = [];
+      chipsRef.current = [];
+      mapRef.current = null;
+      map.remove();
+    };
+  }, []);
+
+  // Sync legs + markers + chips with the chain data.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+
+    const { plottable } = resolveLegEndpoints(geo);
+    const features = plottable.map((entry, index) => {
+      const { coordinates, routed } = legLineCoordinates(
+        entry,
+        routeGeometries?.[entry.leg.id]
+      );
+      return {
+        type: "Feature" as const,
+        properties: {
+          kind: entry.leg.kind,
+          routed,
+          legId: entry.leg.id,
+          distanceKm: entry.leg.distanceKm,
+          chipAnchor: chipAnchor(coordinates, index),
+        },
+        geometry: { type: "LineString" as const, coordinates },
+      };
+    });
+    const source = map.getSource(LEGS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    source?.setData({ type: "FeatureCollection", features });
+
+    popupRef.current?.remove();
+    pinnedRef.current = null;
+    for (const marker of markersRef.current) marker.remove();
+    for (const chip of chipsRef.current) chip.remove();
+    markersRef.current = [];
+    chipsRef.current = [];
+
+    for (const feature of features) {
+      const chip = new maplibregl.Marker({
+        element: createDistanceChipElement(feature.properties.distanceKm),
+      })
+        .setLngLat(feature.properties.chipAnchor)
+        .addTo(map);
+      chipsRef.current.push(chip);
+    }
+
+    const openPopup = (node: PlottedNode) => {
+      const popup = popupRef.current;
+      if (!popup) return;
+      const content = popupContent[node.nodeId];
+      popup
+        .setLngLat([node.lng, node.lat])
+        .setDOMContent(
+          createPopupCardElement({
+            kind: node.kind,
+            typeLabel: content?.typeLabel ?? node.kind,
+            code: node.code,
+            status: content?.status ?? null,
+            detailLines: content?.detailLines ?? (node.sub ? [node.sub] : []),
+          })
+        )
+        .addTo(map);
+    };
+
+    for (const node of plottedNodes(geo)) {
+      const element = createSiteMarkerElement(node);
+      element.addEventListener("mouseenter", () => {
+        if (!pinnedRef.current) openPopup(node);
+      });
+      element.addEventListener("mouseleave", () => {
+        if (!pinnedRef.current) popupRef.current?.remove();
+      });
+      const togglePin = (event: Event) => {
+        event.stopPropagation();
+        pinnedRef.current = pinnedRef.current === node.nodeId ? null : node.nodeId;
+        if (pinnedRef.current) openPopup(node);
+        else popupRef.current?.remove();
+        onMarkerClickRef.current?.(node.nodeId);
+      };
+      element.addEventListener("click", togglePin);
+      element.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          togglePin(event);
+        }
+      });
+      const marker = new maplibregl.Marker({ element })
+        .setLngLat([node.lng, node.lat])
+        .addTo(map);
+      markersRef.current.push(marker);
+    }
+
+    fitToMarkers(false);
+  }, [geo, routeGeometries, popupContent, styleReady]);
+
+  // Cross-link highlight from the DAG (ungeolocated nodes resolve to facility).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !highlight || !styleReady) return;
+
+    const elements = markersRef.current.map((marker) => marker.getElement());
+    for (const element of elements) element.classList.remove("cvm-hl");
+
+    const target =
+      elements.find((element) => element.dataset.nodeId === highlight.nodeId) ??
+      elements.find((element) => element.dataset.nodeId?.startsWith("facility:"));
+    if (!target) return;
+
+    target.classList.add("cvm-hl");
+    const marker = markersRef.current[elements.indexOf(target)];
+    map.easeTo({ center: marker.getLngLat(), duration: HIGHLIGHT_EASE_DURATION_MS });
+
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(
+      () => target.classList.remove("cvm-hl"),
+      HIGHLIGHT_HOLD_MS
+    );
+  }, [highlight, styleReady]);
+
+  const toggleSat = () => {
+    const map = mapRef.current;
+    if (!map?.getLayer(SAT_LAYER_ID)) return;
+    const next = !satOn;
+    setSatOn(next);
+    map.setLayoutProperty(SAT_LAYER_ID, "visibility", next ? "visible" : "none");
+  };
+
+  if (mapFailed) {
+    return (
+      <div
+        className="flex h-full flex-col items-center justify-center gap-6 bg-[var(--color-background-light)] px-16 text-center"
+        data-testid="carbon-viewer-no-map"
+      >
+        <span className="label-button uppercase text-[var(--color-text-secondary)]">
+          Map unavailable
+        </span>
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          The browser could not start the map renderer (WebGL). Transport legs
+          are listed in the rail.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`cvm-map relative h-full w-full${satOn ? " cvm-sat" : ""}`}>
+      <div
+        ref={containerRef}
+        className="h-full w-full bg-[var(--color-background-white)]"
+        data-testid="carbon-viewer-map"
+      />
+      <MapControls
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+        onFit={() => fitToMarkers(true)}
+        satOn={satOn}
+        onToggleSat={toggleSat}
+      />
+    </div>
+  );
+}
