@@ -145,6 +145,13 @@ export const updateStorageLocationSchema = z.object({
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
   }
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedstockTypeId"],
+      message: FEEDSTOCK_TYPE_REQUIRED_MESSAGE,
+    });
+  }
 });
 
 /**

@@ -66,6 +66,9 @@ export const productionRuns = pgTable(
     feedstockMoisturePercent: real('feedstock_moisture_percent'),
     feedstockMassDryKg: real('feedstock_mass_dry_kg'),
 
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

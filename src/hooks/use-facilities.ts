@@ -15,10 +15,12 @@ import {
   getFacilityReactorsFn,
   getFacilityStorageLocationsFn,
   getFacilityCountriesFn,
+  getFacilityArchiveImpactFn,
   checkFacilityCodeFn,
   createFacilityFn,
   updateFacilityFn,
-  deleteFacilityFn,
+  archiveFacilityFn,
+  restoreFacilityFn,
 } from "@/fn/facilities";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
@@ -42,6 +44,8 @@ export const facilityKeys = {
   countries: () => [...facilityKeys.all, "countries"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...facilityKeys.all, "codeCheck", code, excludeId] as const,
+  archiveImpact: (id: string) =>
+    [...facilityKeys.all, "archiveImpact", id] as const,
 };
 
 // ============================================
@@ -351,108 +355,89 @@ export function useUpdateFacility(
 }
 
 /**
- * Hook to delete a facility
- * Supports optimistic updates for immediate UI feedback
- *
- * @param callbacks - Optional callbacks for mutation lifecycle events
- * @param options - Options including optimistic update toggle (default: true)
+ * Hook to load the archive-impact preview for a facility
+ * (child counts + registry-submission warning for the confirm dialog)
  */
-export function useDeleteFacility(
-  callbacks?: MutationCallbacks<void, string>,
-  options?: OptimisticUpdateOptions
-) {
-  const queryClient = useQueryClient();
-  const { optimistic = true } = options ?? {};
-
-  return useMutation({
-    mutationFn: async (facilityId: string) => {
-      const result = await deleteFacilityFn({ facilityId });
+export function useFacilityArchiveImpact(facilityId: string | null) {
+  return useQuery({
+    queryKey: facilityKeys.archiveImpact(facilityId ?? ""),
+    queryFn: async () => {
+      const result = await getFacilityArchiveImpactFn(facilityId!);
       if (!result.success) {
         throw new Error(result.error);
       }
-      return;
+      return result.data;
+    },
+    enabled: !!facilityId,
+    staleTime: 0, // always fresh — drives a destructive-action confirm dialog
+  });
+}
+
+/**
+ * Hook to archive a facility (soft delete, cascades to child data).
+ * Archiving hides the facility's children from every entity list in the app,
+ * so on success the entire query cache is invalidated.
+ */
+export function useArchiveFacility(
+  callbacks?: MutationCallbacks<Facility, string>
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (facilityId: string) => {
+      const result = await archiveFacilityFn({ facilityId });
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
     },
     onMutate: async (facilityId) => {
-      if (!optimistic) {
-        await callbacks?.onMutate?.(facilityId);
-        return;
-      }
-
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: facilityKeys.lists(),
-      });
-
-      // Snapshot previous values for rollback
-      const previousFacility = queryClient.getQueryData<Facility>(
-        facilityKeys.detail(facilityId)
-      );
-      const previousLists = queryClient.getQueriesData<PaginatedFacilities>({
-        queryKey: facilityKeys.lists(),
-      });
-
-      // Optimistically remove facility from all list caches
-      previousLists.forEach(([queryKey]) => {
-        queryClient.setQueryData<PaginatedFacilities>(queryKey, (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.filter((item) => item.id !== facilityId),
-            total: Math.max(0, old.total - 1),
-          };
-        });
-      });
-
       await callbacks?.onMutate?.(facilityId);
-
-      // Return context with snapshots for rollback
-      return { previousFacility, previousLists };
     },
-    onSuccess: async (_, facilityId) => {
-      // Remove specific facility from cache
-      queryClient.removeQueries({ queryKey: facilityKeys.detail(facilityId) });
-      queryClient.removeQueries({
-        queryKey: facilityKeys.detailWithRelations(facilityId),
-      });
-      queryClient.removeQueries({ queryKey: facilityKeys.reactors(facilityId) });
-      queryClient.removeQueries({
-        queryKey: facilityKeys.storageLocations(facilityId),
-      });
-      // Invalidate lists for consistency
-      queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
-      // Invalidate countries in case the deleted facility was the only one in its country
-      queryClient.invalidateQueries({ queryKey: facilityKeys.countries() });
+    onSuccess: async (data, facilityId) => {
+      // The cascade touches nearly every entity type — invalidate everything
+      queryClient.invalidateQueries();
 
-      await callbacks?.onSuccess?.(undefined, facilityId);
+      await callbacks?.onSuccess?.(data, facilityId);
     },
-    onError: async (error, facilityId, context) => {
-      // Rollback to previous values on error
-      if (optimistic && context) {
-        const { previousFacility, previousLists } = context as {
-          previousFacility?: Facility;
-          previousLists?: [readonly unknown[], PaginatedFacilities | undefined][];
-        };
-
-        if (previousFacility) {
-          queryClient.setQueryData(
-            facilityKeys.detail(facilityId),
-            previousFacility
-          );
-        }
-
-        previousLists?.forEach(([queryKey, data]) => {
-          if (data) {
-            queryClient.setQueryData(queryKey, data);
-          }
-        });
-      }
-
+    onError: async (error, facilityId) => {
       await callbacks?.onError?.(error, facilityId);
     },
     onSettled: async (data, error, facilityId) => {
-      // Refetch lists to ensure consistency
-      queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
+      await callbacks?.onSettled?.(data, error, facilityId);
+    },
+  });
+}
 
+/**
+ * Hook to restore an archived facility and its archived child data
+ */
+export function useRestoreFacility(
+  callbacks?: MutationCallbacks<Facility, string>
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (facilityId: string) => {
+      const result = await restoreFacilityFn({ facilityId });
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onMutate: async (facilityId) => {
+      await callbacks?.onMutate?.(facilityId);
+    },
+    onSuccess: async (data, facilityId) => {
+      // Restored children reappear across every entity type — invalidate everything
+      queryClient.invalidateQueries();
+
+      await callbacks?.onSuccess?.(data, facilityId);
+    },
+    onError: async (error, facilityId) => {
+      await callbacks?.onError?.(error, facilityId);
+    },
+    onSettled: async (data, error, facilityId) => {
       await callbacks?.onSettled?.(data, error, facilityId);
     },
   });

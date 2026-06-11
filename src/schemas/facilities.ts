@@ -216,11 +216,16 @@ export const updateFacilitySchema = z.object({
 );
 
 /**
- * Schema for deleting a facility
+ * Schema for archiving a facility (soft delete, cascades to child data)
  */
-export const deleteFacilitySchema = z.object({
+export const archiveFacilitySchema = z.object({
   facilityId: z.string().uuid("Invalid facility ID"),
 });
+
+/**
+ * Schema for restoring an archived facility
+ */
+export const restoreFacilitySchema = archiveFacilitySchema;
 
 // ============================================
 // Filter/Query Schemas
@@ -239,6 +244,9 @@ export const facilityFilterSchema = z.object({
 
   // Filter by country
   country: z.string().max(100).optional(),
+
+  // false (default) = active facilities only; true = archived facilities only
+  archived: z.boolean().default(false),
 
   // Filter by durability option
   durabilityOption: z.enum(durabilityOptions).optional(),
@@ -287,7 +295,7 @@ export type { GpsCoordinates } from "./helpers";
 export type FacilityFormData = z.infer<typeof facilityFormSchema>;
 export type CreateFacilityData = z.infer<typeof createFacilitySchema>;
 export type UpdateFacilityData = z.infer<typeof updateFacilitySchema>;
-export type DeleteFacilityData = z.infer<typeof deleteFacilitySchema>;
+export type ArchiveFacilityData = z.infer<typeof archiveFacilitySchema>;
 export type FacilityFilterData = z.infer<typeof facilityFilterSchema>;
 export type FacilitySelectData = z.infer<typeof facilitySelectSchema>;
 

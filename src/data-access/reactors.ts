@@ -4,7 +4,7 @@
  * Includes Method B eligibility calculation
  */
 
-import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   reactors,
@@ -68,8 +68,8 @@ export async function getReactors(
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived reactors (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(reactors.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -94,7 +94,7 @@ export async function getReactors(
     conditions.push(eq(reactors.reactorType, reactorType));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -128,6 +128,7 @@ export async function getReactors(
       samplingMethod: reactors.samplingMethod,
       nominalThroughputTph: reactors.nominalThroughputTph,
       specifications: reactors.specifications,
+      archivedAt: reactors.archivedAt,
       createdAt: reactors.createdAt,
       updatedAt: reactors.updatedAt,
       facilityCode: facilities.code,
@@ -157,6 +158,7 @@ export async function getReactors(
         samplingMethod: reactor.samplingMethod,
         nominalThroughputTph: reactor.nominalThroughputTph,
         specifications: reactor.specifications,
+        archivedAt: reactor.archivedAt,
         createdAt: reactor.createdAt,
         updatedAt: reactor.updatedAt,
         facilityCode: reactor.facilityCode ?? "",
@@ -195,6 +197,7 @@ export async function getReactorById(
       samplingMethod: reactors.samplingMethod,
       nominalThroughputTph: reactors.nominalThroughputTph,
       specifications: reactors.specifications,
+      archivedAt: reactors.archivedAt,
       createdAt: reactors.createdAt,
       updatedAt: reactors.updatedAt,
       facilityCode: facilities.code,
@@ -222,6 +225,7 @@ export async function getReactorById(
     samplingMethod: reactor.samplingMethod,
     nominalThroughputTph: reactor.nominalThroughputTph,
     specifications: reactor.specifications,
+    archivedAt: reactor.archivedAt,
     createdAt: reactor.createdAt,
     updatedAt: reactor.updatedAt,
     facilityCode: reactor.facilityCode ?? "",
@@ -253,7 +257,7 @@ export async function getReactorsByFacility(
   return db
     .select()
     .from(reactors)
-    .where(eq(reactors.facilityId, facilityId))
+    .where(and(eq(reactors.facilityId, facilityId), isNull(reactors.archivedAt)))
     .orderBy(asc(reactors.code));
 }
 
@@ -288,14 +292,14 @@ export async function createReactor(
     throw new SafeError("A reactor with this code already exists");
   }
 
-  // Verify facility exists
+  // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, data.facilityId));
+    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new SafeError("Facility not found or archived");
   }
 
   // A brand-new reactor has zero prior samples, so it can never satisfy the
@@ -367,15 +371,15 @@ export async function updateReactor(
     }
   }
 
-  // If facilityId is being changed, verify new facility exists
+  // If facilityId is being changed, verify new facility exists and is active
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(eq(facilities.id, data.facilityId));
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
     if (!facility) {
-      throw new SafeError("Facility not found");
+      throw new SafeError("Facility not found or archived");
     }
   }
 
@@ -477,6 +481,7 @@ export async function getReactorTypes(userId: string): Promise<string[]> {
   const results = await db
     .selectDistinct({ reactorType: reactors.reactorType })
     .from(reactors)
+    .where(isNull(reactors.archivedAt))
     .orderBy(asc(reactors.reactorType));
 
   return results.map((r) => r.reactorType);

@@ -11,6 +11,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNull,
   lte,
   sql,
   SQL,
@@ -66,8 +67,8 @@ export async function getProductionRuns(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived runs (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(productionRuns.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -94,7 +95,7 @@ export async function getProductionRuns(
     conditions.push(lte(productionRuns.date, endDate.toISOString().split('T')[0]));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -328,12 +329,12 @@ export async function getProductionRunStats(
 ): Promise<ProductionRunStats> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(productionRuns.archivedAt)];
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [stats] = await db
     .select({
@@ -395,7 +396,7 @@ export async function getFacilityEnergyTotals(
       preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
     })
     .from(productionRuns)
-    .where(eq(productionRuns.facilityId, facilityId));
+    .where(and(eq(productionRuns.facilityId, facilityId), isNull(productionRuns.archivedAt)));
 
   return {
     runCount: Number(row.runCount),
@@ -485,5 +486,6 @@ export async function getProductionRunOptions(
       status: productionRuns.status,
     })
     .from(productionRuns)
+    .where(isNull(productionRuns.archivedAt))
     .orderBy(desc(productionRuns.date));
 }

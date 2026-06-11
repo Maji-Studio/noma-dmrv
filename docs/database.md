@@ -110,9 +110,32 @@ export async function listFeedstocksForFacility(
 
 Prefer explicit facility filters for operational records. For global option lists, document why the query is intentionally unscoped.
 
+## Soft Delete — Facility Archive
+
+Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilities.ts`) stamps `archived_at` on the facility **and all 11 operational facility-scoped tables in one transaction**; `restoreFacility` clears the stamps. `NULL` = active. The pattern's invariants:
+
+- **Facility cascade is the only writer of `archived_at`.** A child row is archived iff its facility is archived. The cascade stamps only rows where `archived_at IS NULL` so a future per-entity archive can't be clobbered; restore clears indiscriminately (safe under the current single-writer rule).
+- **Every list / picker / options / stats query filters `isNull(table.archivedAt)`.** Detail-by-id reads do **not** filter — existing references to archived rows must still hydrate. When adding a new read query to a stamped table, seed the conditions array with the `isNull` filter.
+- **Grandchildren have no own column** (samples, readings, applications, transport legs, …) — they hide transitively through their archived parent (applications filter via `deliveries.archived_at` in joins).
+- **Certifier mirror tables are deliberately unstamped** (`certifier_projects`, `certifier_project_emissions`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state, and all their reads are facility-scoped, so they hide transitively. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
+- **Writes reject archived parents**: child creates/moves check the facility with `isNull(facilities.archivedAt)` and fail with "Facility not found or archived".
+- **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
+
+Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (migration `drizzle/0041`).
+
 ## Migrations
 
 Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
+
+### CI migration strategy (`.github/workflows/migrate.yml`)
+
+- Pushing schema-affecting changes to `staging` or `main` automatically runs `pnpm db:migrate` against the matching database, followed by `pnpm db:verify-schema`, which diffs the live database against the Drizzle schema definitions and fails the run on drift.
+- Destructive operations (reset + seed staging, reset staging empty, reset production) are never automatic — they run only via manual `workflow_dispatch` with a typed confirmation phrase.
+- Database credentials come from 1Password via `load-secrets-action` (see `docs/security.md`).
+
+### Migration files are immutable once applied
+
+**Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that already ran the original — CI reports "migrations applied successfully" while the new DDL never executes, and the drift only surfaces in the `db:verify-schema` step. If more schema changes are needed after a migration has been merged or applied, generate a new migration with `pnpm db:generate`. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it is a no-op on databases that already have the objects.
 
 Recent notable migrations:
 

@@ -1,10 +1,11 @@
 "use client";
 
 import {
+  Archive,
+  ArrowCounterClockwise,
   Factory,
   MapPin,
   PencilSimple,
-  Trash,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { FacilityWithRelations } from "@/data-access/facilities";
@@ -14,15 +15,18 @@ interface FacilityCardProps {
   facility: FacilityWithRelations;
   onView: (facility: FacilityWithRelations) => void;
   onEdit: (facility: FacilityWithRelations) => void;
-  onDelete: (facilityId: string) => void;
+  onArchive: (facilityId: string) => void;
+  onRestore: (facilityId: string) => void;
 }
 
 export function FacilityCard({
   facility,
   onView,
   onEdit,
-  onDelete,
+  onArchive,
+  onRestore,
 }: FacilityCardProps) {
+  const isArchived = facility.archivedAt != null;
   return (
     <article
       className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-border-primary)] cursor-pointer"
@@ -35,8 +39,16 @@ export function FacilityCard({
             <Factory size={12} weight="bold" />
             {facility.code}
           </span>
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {facility.country}
+          <span className="flex items-center gap-8">
+            {isArchived && (
+              <span className="inline-flex items-center gap-6 border border-[var(--color-border-primary)] bg-[var(--color-background-secondary)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+                <Archive size={12} weight="bold" />
+                Archived
+              </span>
+            )}
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              {facility.country}
+            </span>
           </span>
         </div>
 
@@ -79,19 +91,33 @@ export function FacilityCard({
         </span>
 
         <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
-          <Button size="small" variant="default" onClick={() => onEdit(facility)}>
-            <PencilSimple size={16} />
-            Edit
-          </Button>
-          <Button
-            size="small"
-            variant="default"
-            aria-label={`Delete facility ${facility.code}`}
-            className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-            onClick={() => onDelete(facility.id)}
-          >
-            <Trash size={16} />
-          </Button>
+          {isArchived ? (
+            <Button
+              size="small"
+              variant="default"
+              aria-label={`Restore facility ${facility.code}`}
+              onClick={() => onRestore(facility.id)}
+            >
+              <ArrowCounterClockwise size={16} />
+              Restore
+            </Button>
+          ) : (
+            <>
+              <Button size="small" variant="default" onClick={() => onEdit(facility)}>
+                <PencilSimple size={16} />
+                Edit
+              </Button>
+              <Button
+                size="small"
+                variant="default"
+                aria-label={`Archive facility ${facility.code}`}
+                className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
+                onClick={() => onArchive(facility.id)}
+              >
+                <Archive size={16} />
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </article>

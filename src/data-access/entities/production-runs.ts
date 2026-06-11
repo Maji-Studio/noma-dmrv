@@ -2,7 +2,7 @@
  * Production-run options for searchable entity selection.
  */
 
-import { ilike, eq, and, type SQL } from "drizzle-orm";
+import { ilike, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, facilities, storageLocations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -30,7 +30,7 @@ export async function getProductionRunsEntity(params: {
 }): Promise<EntityOption[]> {
   const { search, facilityId, status, limit } = params;
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(productionRuns.archivedAt)];
 
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
@@ -45,7 +45,7 @@ export async function getProductionRunsEntity(params: {
     conditions.push(ilike(productionRuns.code, searchPattern));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const results = await db
     .select({

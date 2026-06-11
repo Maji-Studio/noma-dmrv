@@ -79,26 +79,20 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Architecture
 
-### Facility-access model — build it for real when multi-tenancy starts (`auth/facility-access-model`, opened 2026-06-10)
+### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
 
-- **Decision needed:** when a second facility/operator group (or self-serve
-  registration) is committed, design and ship a real facility-access model —
-  membership tables, scoped guards in `data-access/`, and scoped option
-  queries (the known unscoped example: `getSupplierOptions` in
-  `src/data-access/suppliers.ts`).
-- **Why it matters:** today's shared-data model is intentional and documented
-  (`docs/auth.md` §current model, `docs/security.md`); `requireAuth` is a
-  userId-truthiness check at ~211 call sites. The moment data must be
-  partitioned by operator group, this becomes P0.
-- **Explicitly rejected (2026-06-10 architecture review):** shipping a no-op
-  `requireAccess(userId, { facility })` seam ahead of the real model. A
-  guard that looks scoped but enforces nothing is churn now and false
-  confidence later — call sites would read as protected while the
-  implementation is a stub. Do the real model once, when the requirement is
-  concrete.
-- **To resolve:** product decision on multi-tenancy timeline; then a design
-  doc (membership grain: user↔facility vs user↔org↔facility, admin override
-  semantics, migration for existing rows).
+- **Decision deferred (2026-06-11 multi-tenancy grilling):** at launch each
+  Organization gets the org-scoped app with its name/logo in the chrome —
+  no per-org subdomains, theming, or branded invitation emails.
+- **To resolve:** revisit when a client asks for white-labeling; scope is
+  wildcard domain routing, per-org theme tokens, branded Resend templates.
+
+### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
+
+- **Deferred, not rejected** (ADR 0010): the `organizationId`-on-every-table
+  schema is RLS-ready with zero schema change. Add RLS policies +
+  per-transaction `SET LOCAL` if a client contractually requires hard
+  isolation guarantees beyond data-access-layer enforcement.
 
 ## Isometric Certify integration
 
