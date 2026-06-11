@@ -50,6 +50,14 @@ export function FeedstockTypeForm({
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
   const [activeTab, setActiveTab] = useState<TabKey>("general");
+  // Mount the registry browser lazily on first open, then keep it mounted so
+  // its local state (search, scroll) survives tab switches.
+  const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
+
+  const selectTab = (key: TabKey) => {
+    setActiveTab(key);
+    if (key === "isometric") setHasOpenedIsometric(true);
+  };
 
   // Roving tabindex (inactive tabs are tabIndex=-1), so arrow keys are the
   // only keyboard path between tabs.
@@ -58,7 +66,7 @@ export function FeedstockTypeForm({
     event.preventDefault();
     const delta = event.key === "ArrowRight" ? 1 : -1;
     const nextKey = TABS[(index + delta + TABS.length) % TABS.length].key;
-    setActiveTab(nextKey);
+    selectTab(nextKey);
     document.getElementById(getTabId(nextKey))?.focus();
   };
 
@@ -98,7 +106,7 @@ export function FeedstockTypeForm({
               aria-selected={isActive ? "true" : "false"}
               aria-controls={getPanelId(key)}
               tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveTab(key)}
+              onClick={() => selectTab(key)}
               onKeyDown={(event) => handleTabKeyDown(event, index)}
               className="flex shrink-0 items-center h-[40px] px-16 label-button transition-colors cursor-pointer"
               style={{
@@ -189,8 +197,8 @@ export function FeedstockTypeForm({
         aria-labelledby={getTabId("isometric")}
         className={cn(activeTab !== "isometric" && "hidden")}
       >
-        {/* Only fetch once the tab has been opened. */}
-        {activeTab === "isometric" && <IsometricFeedstockBrowser />}
+        {/* Only fetch once the tab has first been opened. */}
+        {hasOpenedIsometric && <IsometricFeedstockBrowser />}
       </div>
     </div>
   );
