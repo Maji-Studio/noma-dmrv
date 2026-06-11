@@ -219,6 +219,7 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 
 - Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>`. If a key leaks: rotate immediately, then scrub history with `git-filter-repo` (see `docs/security.md`).
 - Log `userId`, never `email`. Review PR diffs for accidental secret exposure.
+- Supply chain: 3-day `minimumReleaseAge` cooldown + `allowBuilds` script gating (`pnpm-workspace.yaml`), security-only Dependabot. See `docs/security.md` → Dependency Supply Chain.
 
 ## Documentation Standards
 
