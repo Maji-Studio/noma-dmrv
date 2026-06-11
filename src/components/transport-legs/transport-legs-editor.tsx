@@ -18,6 +18,7 @@ import type {
   TransportEntityTypeValue,
   TransportLegFormData,
 } from "@/schemas/transport-legs";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
 
@@ -170,7 +171,14 @@ export function TransportLegsEditor({
                       " → " +
                       (leg.destinationName?.trim() || "—")}
                   </td>
-                  <td className="py-8 pr-12">{leg.distanceKm} km</td>
+                  <td className="py-8 pr-12">
+                    {leg.distanceKm} km
+                    {leg.distanceSource && (
+                      <span className="text-[var(--color-text-tertiary)]">
+                        {" "}· {DISTANCE_SOURCE_LABELS[leg.distanceSource]}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
                     {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "—"}

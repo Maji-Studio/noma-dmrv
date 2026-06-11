@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { optionalDistanceSource } from "./distance-source";
 import {
   emptyToNull,
   optionalPositiveNumber,
@@ -71,8 +72,11 @@ export const feedstockFormSchema = z.object({
   // Optional transport
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   // Road distance (km) for the feedstock transport leg — autofills from the
-  // supplier's distance-to-facility, overridable per delivery.
+  // supplier's distance-to-facility, overridable per delivery. Both fields are
+  // transient (not feedstock columns) — they flow into the derived transport
+  // leg at sync time.
   transportDistanceKm: optionalPositiveNumber,
+  transportDistanceSource: optionalDistanceSource,
 
   // --- Material ---
   feedstockTypeId: z
@@ -125,6 +129,7 @@ export const updateFeedstockSchema = z.object({
   supplierId: z.string().uuid().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   transportDistanceKm: optionalPositiveNumber,
+  transportDistanceSource: optionalDistanceSource,
   feedstockTypeId: z.string().uuid().optional(),
   massWetKg: z.number().min(0).optional(),
   moistureContentPercent: z.number().min(0).max(100).optional(),

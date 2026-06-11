@@ -25,6 +25,7 @@ import {
   aggregateDistributionLegs,
   deriveTransportLeg,
   isDerivedLegPersistable,
+  positiveOrNull,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
 import { requireAuth } from "./utils";
@@ -289,6 +290,7 @@ export async function replaceDerivedTransportLeg(
     destinationGpsLatitude: derived.destinationGpsLatitude,
     destinationGpsLongitude: derived.destinationGpsLongitude,
     distanceKm: derived.distanceKm as number,
+    distanceSource: derived.distanceSource,
     transportMethodType: derived.transportMethodType,
     calculationMethodType: derived.calculationMethodType,
     vehicleType: derived.vehicleType,
@@ -317,8 +319,10 @@ export async function replaceDerivedTransportLeg(
  * invariant means we store ONE aggregated leg. Aggregation is exact for the
  * distance-based method (`Σ distanceⱼ × massⱼ`): we store the total delivered
  * mass and the mass-weighted-average distance, so `avgDist × totalMass`
- * reproduces `Σ(distⱼ · massⱼ)`. Deliveries missing a positive distance (no
- * `customer_locations.distance_from_facility_km`) or mass are skipped. Call
+ * reproduces `Σ(distⱼ · massⱼ)`. Per delivery, `deliveries.distance_km_override`
+ * beats the destination location's stored distance, and each distance carries
+ * its `distance_source`; the aggregated leg gets the weakest contributing
+ * source. Deliveries missing a positive distance or mass are skipped. Call
  * after every delivery create/update/delete. Manual legs are untouched.
  */
 export async function syncBiocharProductTransportLeg(
@@ -354,7 +358,10 @@ export async function syncBiocharProductTransportLeg(
   const rows = await db
     .select({
       loadMassKg: deliveries.deliveredWetMassKg,
-      distanceKm: customerLocations.distanceFromFacilityKm,
+      deliveryDistanceKmOverride: deliveries.distanceKmOverride,
+      deliveryDistanceSource: deliveries.distanceSource,
+      locationDistanceKm: customerLocations.distanceFromFacilityKm,
+      locationDistanceSource: customerLocations.distanceSource,
       locationName: customerLocations.name,
       locationGpsLatitude: customerLocations.gpsLatitude,
       locationGpsLongitude: customerLocations.gpsLongitude,
@@ -370,7 +377,24 @@ export async function syncBiocharProductTransportLeg(
     )
     .where(eq(deliveries.biocharProductId, biocharProductId));
 
-  const agg = aggregateDistributionLegs(rows);
+  // Per delivery: its own distance override (+ source) beats the destination
+  // location's stored distance (+ source) — map-integration plan, decision 3.
+  const agg = aggregateDistributionLegs(
+    rows.map((row) => {
+      const override = positiveOrNull(row.deliveryDistanceKmOverride);
+      return {
+        loadMassKg: row.loadMassKg,
+        distanceKm: override ?? row.locationDistanceKm,
+        distanceSource:
+          override != null
+            ? (row.deliveryDistanceSource ?? "manual")
+            : row.locationDistanceSource,
+        locationName: row.locationName,
+        locationGpsLatitude: row.locationGpsLatitude,
+        locationGpsLongitude: row.locationGpsLongitude,
+      };
+    }),
+  );
 
   const derived = deriveTransportLeg({
     origin: {
@@ -386,6 +410,7 @@ export async function syncBiocharProductTransportLeg(
     vehicle: null,
     loadMassKg: agg.totalMassKg > 0 ? agg.totalMassKg : null,
     storedDistanceKm: agg.weightedDistanceKm,
+    storedDistanceSource: agg.distanceSource,
   });
 
   // When no delivery qualifies, `derived` is not persistable and the replace

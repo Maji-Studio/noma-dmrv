@@ -25,6 +25,7 @@ import {
   useSaveFacilityCertifierMapping,
 } from "@/hooks/use-certification";
 import type { FacilityCertifierMapping } from "@/fn/certification/facility-mapping";
+import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import { ProductionConfirmation } from "./production-confirmation";
 import { ConfirmActionDialog } from "./confirm-action-dialog";
 
@@ -46,7 +47,7 @@ export function FacilityCertifierDialog({
   const defaultValues: SaveMappingInput = {
     facilityId,
     externalProjectId: mapping?.externalProjectId ?? "",
-    protocolSlug: mapping?.protocolSlug ?? "biochar",
+    protocolSlug: mapping?.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     defaultRemovalTemplateId: mapping?.defaultRemovalTemplateId ?? "",
     externalFacilityId: mapping?.externalFacilityId ?? "",
     confirmProduction: false,

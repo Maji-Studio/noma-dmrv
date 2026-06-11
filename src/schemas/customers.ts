@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { optionalDistanceSource } from "./distance-source";
 import {
   optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
@@ -91,6 +92,7 @@ export const customerLocationFormSchema = z.object({
   // Operational road distance (km) from the origin facility. Certifier
   // transport is recorded on cargo entities, not deliveries.
   distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
   // Marks this as the customer's default destination.
   isDefault: z.boolean().optional().default(false),
 });
@@ -151,6 +153,7 @@ export const createCustomerLocationSchema = z.object({
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
   isDefault: z.boolean().optional().default(false),
 });
 
@@ -167,6 +170,7 @@ export const updateCustomerLocationSchema = z.object({
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationTextSchema.optional(),
   distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
   isDefault: z.boolean().optional(),
 });
 

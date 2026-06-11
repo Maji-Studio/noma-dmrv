@@ -22,31 +22,36 @@ import {
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 
-async function getArchivedStamps(facilityId: string, storageLocationId: string) {
-  const { db, pool } = createDbConnection();
-  try {
-    const [facility] = await db
-      .select({ archivedAt: schema.facilities.archivedAt })
-      .from(schema.facilities)
-      .where(eq(schema.facilities.id, facilityId));
-    const [bin] = await db
-      .select({ archivedAt: schema.storageLocations.archivedAt })
-      .from(schema.storageLocations)
-      .where(eq(schema.storageLocations.id, storageLocationId));
-    return {
-      facilityArchivedAt: facility?.archivedAt ?? null,
-      binArchivedAt: bin?.archivedAt ?? null,
-    };
-  } finally {
-    await pool.end();
-  }
+// One pool for the whole spec — getArchivedStamps runs inside expect.poll, and
+// opening/closing a pool per tick churns connections.
+type DbConnection = ReturnType<typeof createDbConnection>;
+
+async function getArchivedStamps(
+  db: DbConnection["db"],
+  facilityId: string,
+  storageLocationId: string,
+) {
+  const [facility] = await db
+    .select({ archivedAt: schema.facilities.archivedAt })
+    .from(schema.facilities)
+    .where(eq(schema.facilities.id, facilityId));
+  const [bin] = await db
+    .select({ archivedAt: schema.storageLocations.archivedAt })
+    .from(schema.storageLocations)
+    .where(eq(schema.storageLocations.id, storageLocationId));
+  return {
+    facilityArchivedAt: facility?.archivedAt ?? null,
+    binArchivedAt: bin?.archivedAt ?? null,
+  };
 }
 
 test.describe("Facility cascading archive", () => {
   let facility: TestFacility;
   let bin: TestStorageLocation;
+  let connection: DbConnection;
 
   test.beforeAll(async () => {
+    connection = createDbConnection();
     facility = await createTestFacility();
     bin = await createTestStorageLocation(facility.id, { type: "feedstock_bin" });
   });
@@ -54,6 +59,7 @@ test.describe("Facility cascading archive", () => {
   test.afterAll(async () => {
     await deleteTestStorageLocation(bin.id);
     await deleteTestFacility(facility.id);
+    await connection.pool.end();
   });
 
   test("archive hides the facility and cascades to children; restore reverses it", async ({
@@ -91,7 +97,7 @@ test.describe("Facility cascading archive", () => {
     await expect
       .poll(
         async () => {
-          const stamps = await getArchivedStamps(facility.id, bin.id);
+          const stamps = await getArchivedStamps(connection.db, facility.id, bin.id);
           return stamps.facilityArchivedAt !== null && stamps.binArchivedAt !== null;
         },
         { timeout: 15000 }
@@ -111,9 +117,15 @@ test.describe("Facility cascading archive", () => {
       timeout: 30000,
     });
 
-    const restored = await getArchivedStamps(facility.id, bin.id);
-    expect(restored.facilityArchivedAt).toBeNull();
-    expect(restored.binArchivedAt).toBeNull();
+    await expect
+      .poll(
+        async () => {
+          const restored = await getArchivedStamps(connection.db, facility.id, bin.id);
+          return restored.facilityArchivedAt === null && restored.binArchivedAt === null;
+        },
+        { timeout: 15000 }
+      )
+      .toBe(true);
 
     // --- Back on the active list it is visible again ---
     await page.getByRole("button", { name: "Archived", exact: true }).click();

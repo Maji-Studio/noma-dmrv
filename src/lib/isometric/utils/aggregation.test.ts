@@ -18,6 +18,7 @@ function leg(
     destinationGpsLongitude: null,
     destinationName: null,
     distanceKm: 10,
+    distanceSource: null,
     transportMethodType: "road",
     vehicleType: "truck",
     modelYear: null,

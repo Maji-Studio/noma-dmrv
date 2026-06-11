@@ -1,12 +1,14 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  DistanceCalcField,
   FormActions,
   FormField,
   FormInput,
   FormSelect,
+  PositionPicker,
   ServerError,
   SectionLabel,
 } from "@/components/forms";
@@ -16,6 +18,10 @@ import {
   type TransportLegFormData,
   type TransportMethodValue,
 } from "@/schemas/transport-legs";
+import {
+  DISTANCE_SOURCE_LABELS,
+  type DistanceSourceValue,
+} from "@/schemas/distance-source";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegDocuments } from "./transport-leg-documents";
@@ -46,6 +52,7 @@ function legToFormDefaults(leg: TransportLeg | null | undefined) {
     destinationGpsLongitude: leg?.destinationGpsLongitude ?? null,
     destinationName: leg?.destinationName ?? "",
     distanceKm: leg?.distanceKm ?? undefined,
+    distanceSource: (leg?.distanceSource ?? "manual") as DistanceSourceValue,
     transportMethodType: (leg?.transportMethodType ??
       "road") as TransportMethodValue,
     vehicleType: leg?.vehicleType ?? "",
@@ -73,11 +80,39 @@ export function TransportLegForm({
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(transportLegFormSchema),
     defaultValues: legToFormDefaults(leg),
   });
+
+  // Provenance: hand-editing the distance reverts a CALC'd map estimate to
+  // manual — the operator can explicitly re-mark it as document-backed.
+  const distanceSource = useWatch({
+    control,
+    name: "distanceSource",
+  }) as DistanceSourceValue;
+  const distanceSourceOptions = (
+    distanceSource === "map_estimate"
+      ? (["map_estimate", "manual", "document"] as const)
+      : (["manual", "document"] as const)
+  ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
+
+  // CALC endpoints: this leg's own origin/destination pickers.
+  const originLat = useWatch({ control, name: "originGpsLatitude" }) as number | null | undefined;
+  const originLng = useWatch({ control, name: "originGpsLongitude" }) as number | null | undefined;
+  const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
+  const destinationLng = useWatch({ control, name: "destinationGpsLongitude" }) as number | null | undefined;
+  const distanceKm = useWatch({ control, name: "distanceKm" }) as number | null | undefined;
+
+  const originPoint =
+    originLat != null && originLng != null ? { lat: originLat, lng: originLng } : null;
+  const destinationPoint =
+    destinationLat != null && destinationLng != null
+      ? { lat: destinationLat, lng: destinationLng }
+      : null;
 
   const submit = handleSubmit(async (data) => {
     await onSubmit(data as TransportLegFormData);
@@ -121,20 +156,72 @@ export function TransportLegForm({
               {...register("destinationName")}
             />
           </FormField>
-          <FormField
+          <PositionPicker
+            idPrefix="origin"
+            label="Origin position"
+            accent="orange"
+            latitude={originLat ?? null}
+            longitude={originLng ?? null}
+            onPositionChange={({ lat, lng }) => {
+              setValue("originGpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
+              setValue("originGpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
+            }}
+            latitudeError={errors.originGpsLatitude?.message}
+            longitudeError={errors.originGpsLongitude?.message}
+            disabled={isSubmitting}
+          />
+          <PositionPicker
+            idPrefix="destination"
+            label="Destination position"
+            accent="pink"
+            latitude={destinationLat ?? null}
+            longitude={destinationLng ?? null}
+            onPositionChange={({ lat, lng }) => {
+              setValue("destinationGpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
+              setValue("destinationGpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
+            }}
+            latitudeError={errors.destinationGpsLatitude?.message}
+            longitudeError={errors.destinationGpsLongitude?.message}
+            disabled={isSubmitting}
+          />
+          <DistanceCalcField
             id="distanceKm"
             label="Distance (km)"
             required
-            error={errors.distanceKm?.message}
             certifyRequired={isTransportLegCertifyField("distanceKm")}
+            error={errors.distanceKm?.message}
+            disabled={isSubmitting}
+            // The provenance select next to this field is the source UI.
+            showSourceBadge={false}
+            distanceKm={distanceKm}
+            distanceSource={distanceSource}
+            onDistanceChange={(km, source) => {
+              setValue("distanceKm", km ?? undefined, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              // CALC always claims map_estimate; a hand edit only degrades a
+              // map estimate — an explicit Document/Manual marking survives.
+              if (source === "map_estimate" || distanceSource === "map_estimate") {
+                setValue("distanceSource", source ?? "manual", { shouldDirty: true });
+              }
+            }}
+            origin={originPoint}
+            destination={destinationPoint}
+            originLabel="origin position"
+            destinationLabel="destination position"
+          />
+          <FormField
+            id="distanceSource"
+            label="Distance source"
+            error={errors.distanceSource?.message}
+            helperText="Mark as Document when the distance comes from the bill of lading or weigh ticket."
           >
-            <FormInput
-              id="distanceKm"
-              type="number"
-              step="any"
-              min={0}
-              error={!!errors.distanceKm}
-              {...register("distanceKm")}
+            <FormSelect
+              id="distanceSource"
+              options={distanceSourceOptions}
+              error={!!errors.distanceSource}
+              {...register("distanceSource")}
             />
           </FormField>
           <FormField

@@ -12,6 +12,7 @@ import {
   feedstockTypes,
   facilities,
   storageLocations,
+  supplierLocations,
   suppliers,
   vehicles,
   productionRunFeedstocks,
@@ -19,7 +20,7 @@ import {
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import { requireAuth } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
+import { deriveTransportLeg, positiveOrNull } from "@/lib/calculations/transport-leg";
 import {
   deleteTransportLegsForEntity,
   replaceDerivedTransportLeg,
@@ -597,13 +598,18 @@ export async function getFeedstockOptions(
 /**
  * Recompute and persist the feedstock's single transport leg from records we
  * already hold (supplier origin + facility destination + vehicle + wet cargo
- * mass). Distance uses `distanceKmOverride` when provided, else the supplier's
- * stored distance-to-facility. Call after every feedstock create/update.
+ * mass). Distance resolves in priority order — feedstock-form override → the
+ * supplier's DEFAULT location distance → supplier-level distance-to-facility —
+ * and the leg inherits the winning level's `distanceSource` (map-integration
+ * plan, decision 3). Call after every feedstock create/update.
  */
 export async function syncFeedstockTransportLeg(
   userId: string,
   feedstockId: string,
-  distanceKmOverride?: number | null,
+  distanceOverride?: {
+    distanceKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+  },
 ): Promise<void> {
   requireAuth(userId);
 
@@ -613,6 +619,9 @@ export async function syncFeedstockTransportLeg(
       supplierGpsLatitude: suppliers.gpsLatitude,
       supplierGpsLongitude: suppliers.gpsLongitude,
       supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
+      supplierDistanceSource: suppliers.distanceSource,
+      locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
+      locationDistanceSource: supplierLocations.distanceSource,
       facilityName: facilities.name,
       facilityGpsLatitude: facilities.gpsLatitude,
       facilityGpsLongitude: facilities.gpsLongitude,
@@ -622,11 +631,27 @@ export async function syncFeedstockTransportLeg(
     })
     .from(feedstocks)
     .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
+    .leftJoin(
+      supplierLocations,
+      and(
+        eq(supplierLocations.supplierId, suppliers.id),
+        eq(supplierLocations.isDefault, true),
+      ),
+    )
     .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
     .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
     .where(eq(feedstocks.id, feedstockId));
 
   if (!row) return;
+
+  // Stored level: the default supplier location wins over the supplier-level
+  // default; each carries its own provenance.
+  const locationDistance = positiveOrNull(row.locationDistanceFromFacilityKm);
+  const storedDistanceKm = locationDistance ?? row.supplierDistanceToFacilityKm;
+  const storedDistanceSource =
+    locationDistance != null
+      ? row.locationDistanceSource
+      : row.supplierDistanceSource;
 
   const derived = deriveTransportLeg({
     origin: {
@@ -641,8 +666,10 @@ export async function syncFeedstockTransportLeg(
     },
     vehicle: { vehicleType: row.vehicleType, modelYear: row.vehicleModelYear },
     loadMassKg: row.loadMassKg,
-    storedDistanceKm: row.supplierDistanceToFacilityKm,
-    distanceKmOverride,
+    storedDistanceKm,
+    storedDistanceSource,
+    distanceKmOverride: distanceOverride?.distanceKm,
+    distanceSourceOverride: distanceOverride?.distanceSource,
   });
 
   await replaceDerivedTransportLeg(userId, "feedstock", feedstockId, derived);

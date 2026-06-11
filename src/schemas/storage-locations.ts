@@ -145,7 +145,11 @@ export const updateStorageLocationSchema = z.object({
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
   }
-  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+  // Partial update: only flag an explicit clear (null). When feedstockTypeId is
+  // omitted, the data-access layer validates the invariant against the merged
+  // existing row — flagging here would reject type-only updates of bins that
+  // already carry a feedstock type.
+  if (isFeedstockBinType(data.type) && data.feedstockTypeId === null) {
     ctx.addIssue({
       code: "custom",
       path: ["feedstockTypeId"],
