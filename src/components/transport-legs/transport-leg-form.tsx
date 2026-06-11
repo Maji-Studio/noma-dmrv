@@ -287,6 +287,7 @@ export function TransportLegForm({
       </div>
 
       <FormActions
+        sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         submitLabel={isEditMode ? "Save changes" : "Add transport leg"}

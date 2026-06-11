@@ -4,9 +4,8 @@ import { formatTimezoneLabel } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, PositionPicker } from "@/components/forms";
+import { FormField, FormInput, PositionPicker, FormActions } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
-import { Button } from "@/components/ui";
 import {
   facilityFormSchema,
   timezones,
@@ -219,17 +218,12 @@ export function FacilityForm({
         <FacilityIsometricConnector facilityId={facility.id} />
       )}
 
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

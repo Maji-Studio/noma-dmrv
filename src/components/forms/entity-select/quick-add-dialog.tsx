@@ -175,15 +175,7 @@ export function QuickAddDialog({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-16 justify-end pt-16">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
-            >
-              Cancel
-            </button>
+          <div className="flex gap-16 justify-start pt-16">
             <button
               type="submit"
               disabled={isSubmitting}
@@ -191,6 +183,14 @@ export function QuickAddDialog({
             >
               {isSubmitting && <SpinnerIcon className="w-4 h-4" />}
               {isSubmitting ? "Creating..." : `Create ${entityLabel}`}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
+            >
+              Cancel
             </button>
           </div>
         </form>

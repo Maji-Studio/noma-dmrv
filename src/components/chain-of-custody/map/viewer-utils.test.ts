@@ -86,17 +86,16 @@ describe("resolveLegEndpoints", () => {
 
   it("never anchors a leg on a facility-inherited node position", () => {
     const data = geo({
-      facility: { id: "fac-1", code: "FAC-1", name: "Facility", lat: null, lng: null },
       nodes: [
         {
           id: "feedstock:feedstock-1",
           kind: "feedstock",
           entityId: "feedstock-1",
           code: "FS-1",
-          lat: null,
-          lng: null,
-          positionSource: "none",
-          inheritedFromFacility: false,
+          lat: FACILITY.lat,
+          lng: FACILITY.lng,
+          positionSource: "facility",
+          inheritedFromFacility: true,
           sub: null,
         },
       ],
