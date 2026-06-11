@@ -5,7 +5,7 @@
  * superRefine.
  */
 
-import type { GeocodeResult, GeoPoint, GeoProvider } from "./types";
+import type { GeocodeResult, GeoPoint, GeoProvider, RouteGeometry } from "./types";
 
 const EARTH_RADIUS_KM = 6371;
 /** Crude road-vs-crow-flies factor so stub distances look plausible. */
@@ -69,4 +69,37 @@ export const stubProvider: GeoProvider = {
   async routeDistanceKm(origin: GeoPoint, destination: GeoPoint): Promise<number> {
     return stubRouteDistanceKm(origin, destination);
   },
+
+  async routeGeometry(origin: GeoPoint, destination: GeoPoint): Promise<RouteGeometry> {
+    return stubRouteGeometry(origin, destination);
+  },
 };
+
+/** Points sampled along the stub polyline (enough to read as a curve). */
+const STUB_GEOMETRY_STEPS = 12;
+/** Perpendicular bow applied to the stub route, degrees (visibly not straight). */
+const STUB_GEOMETRY_BOW = 0.04;
+
+/**
+ * Deterministic quadratic-bezier polyline between two points — exported so
+ * e2e specs can assert the exact geometry the viewer draws.
+ */
+export function stubRouteGeometry(origin: GeoPoint, destination: GeoPoint): RouteGeometry {
+  const dx = destination.lng - origin.lng;
+  const dy = destination.lat - origin.lat;
+  const length = Math.hypot(dx, dy) || 1;
+  const bow = Math.min(STUB_GEOMETRY_BOW, length * 0.2);
+  const controlLng = (origin.lng + destination.lng) / 2 - (dy / length) * bow;
+  const controlLat = (origin.lat + destination.lat) / 2 + (dx / length) * bow;
+
+  const coordinates: [number, number][] = [];
+  for (let i = 0; i <= STUB_GEOMETRY_STEPS; i++) {
+    const t = i / STUB_GEOMETRY_STEPS;
+    const u = 1 - t;
+    coordinates.push([
+      u * u * origin.lng + 2 * u * t * controlLng + t * t * destination.lng,
+      u * u * origin.lat + 2 * u * t * controlLat + t * t * destination.lat,
+    ]);
+  }
+  return { coordinates, distanceKm: stubRouteDistanceKm(origin, destination) };
+}

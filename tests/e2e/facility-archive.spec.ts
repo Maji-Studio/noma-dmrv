@@ -26,11 +26,7 @@ import * as schema from "../../src/db/schema";
 // opening/closing a pool per tick churns connections.
 type DbConnection = ReturnType<typeof createDbConnection>;
 
-async function getArchivedStamps(
-  db: DbConnection["db"],
-  facilityId: string,
-  storageLocationId: string,
-) {
+async function getArchivedStamps(db: DbConnection["db"], facilityId: string, storageLocationId: string) {
   const [facility] = await db
     .select({ archivedAt: schema.facilities.archivedAt })
     .from(schema.facilities)
@@ -57,14 +53,14 @@ test.describe("Facility cascading archive", () => {
   });
 
   test.afterAll(async () => {
-    await deleteTestStorageLocation(bin.id);
-    await deleteTestFacility(facility.id);
-    await connection.pool.end();
+    cla; // Guard each step — beforeAll may have failed partway through, and an
+    // unguarded teardown throw would mask the original error.
+    if (bin) await deleteTestStorageLocation(bin.id);
+    if (facility) await deleteTestFacility(facility.id);
+    if (connection?.pool) await connection.pool.end();
   });
 
-  test("archive hides the facility and cascades to children; restore reverses it", async ({
-    adminPage,
-  }) => {
+  test("archive hides the facility and cascades to children; restore reverses it", async ({ adminPage }) => {
     const page = adminPage;
 
     // --- Facility is visible in the active list ---
@@ -76,9 +72,7 @@ test.describe("Facility cascading archive", () => {
     await expect(page.getByRole("heading", { name: facility.name })).toBeVisible({ timeout: 10000 });
 
     // --- Archive via the card action + confirm dialog ---
-    await page
-      .getByRole("button", { name: `Archive facility ${facility.code}` })
-      .click();
+    await page.getByRole("button", { name: `Archive facility ${facility.code}` }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Archive Facility")).toBeVisible();
@@ -100,7 +94,7 @@ test.describe("Facility cascading archive", () => {
           const stamps = await getArchivedStamps(connection.db, facility.id, bin.id);
           return stamps.facilityArchivedAt !== null && stamps.binArchivedAt !== null;
         },
-        { timeout: 15000 }
+        { timeout: 15000 },
       )
       .toBe(true);
 
@@ -110,9 +104,7 @@ test.describe("Facility cascading archive", () => {
     await expect(page.getByText("Archived Facilities")).toBeVisible();
 
     // --- Restore brings facility + children back ---
-    await page
-      .getByRole("button", { name: `Restore facility ${facility.code}` })
-      .click();
+    await page.getByRole("button", { name: `Restore facility ${facility.code}` }).click();
     await expect(page.getByRole("heading", { name: facility.name })).not.toBeVisible({
       timeout: 30000,
     });
@@ -123,7 +115,7 @@ test.describe("Facility cascading archive", () => {
           const restored = await getArchivedStamps(connection.db, facility.id, bin.id);
           return restored.facilityArchivedAt === null && restored.binArchivedAt === null;
         },
-        { timeout: 15000 }
+        { timeout: 15000 },
       )
       .toBe(true);
 

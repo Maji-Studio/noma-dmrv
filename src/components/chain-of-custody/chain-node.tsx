@@ -13,6 +13,8 @@ export interface ChainNodeData {
   href: string | null;
   status?: string | null;
   detailLines: string[];
+  /** Cross-link highlight (map marker / rail selection). */
+  highlighted?: boolean;
   [key: string]: unknown;
 }
 
@@ -39,11 +41,12 @@ function StatusPill({ status }: { status: string | null | undefined }) {
 }
 
 export function ChainNode({ data }: NodeProps) {
-  const { label, code, icon: Icon, accent, href, status, detailLines } =
+  const { label, code, icon: Icon, accent, href, status, detailLines, highlighted } =
     data as unknown as ChainNodeData;
 
   const card = (
     <div
+      data-highlighted={highlighted ? "true" : undefined}
       className={`
         group flex border bg-[var(--color-background-white)] transition-colors
         ${href ? "cursor-pointer" : "cursor-default"}
@@ -55,6 +58,12 @@ export function ChainNode({ data }: NodeProps) {
         borderLeftWidth: "3px",
         borderLeftStyle: "solid",
         borderLeftColor: accent,
+        ...(highlighted
+          ? {
+              borderColor: accent,
+              boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 28%, transparent)`,
+            }
+          : null),
       }}
     >
       <div className="flex-1 flex flex-col gap-10 p-12">

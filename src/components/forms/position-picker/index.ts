@@ -1,2 +1,3 @@
 export { PositionPicker, type PositionValue } from "./position-picker";
-export type { PickerAccent } from "./map-theme";
+// Back-compat alias — the accent union moved to the shared map module.
+export type { MapAccent as PickerAccent } from "@/components/map";

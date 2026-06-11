@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
 
 /**
  * Action schemas for the geo server actions (`src/fn/geo.ts`). These are
@@ -31,3 +32,18 @@ export const routeDistanceRequestSchema = z.object({
 });
 
 export type RouteDistanceRequest = z.infer<typeof routeDistanceRequestSchema>;
+
+export const routeGeometriesRequestSchema = z.object({
+  legs: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        origin: geoPointSchema,
+        destination: geoPointSchema,
+      })
+    )
+    .min(1)
+    .max(ROUTE_GEOMETRY_MAX_LEGS),
+});
+
+export type RouteGeometriesRequest = z.infer<typeof routeGeometriesRequestSchema>;

@@ -22,7 +22,7 @@ import { GEOCODE_DEBOUNCE_MS } from "@/config/geo";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useGeoCapabilities, useReverseGeocode } from "@/hooks/use-geo";
 import { AddressSearch } from "./address-search";
-import type { PickerAccent } from "./map-theme";
+import type { MapAccent } from "@/components/map";
 
 // Inlined at build time — public, domain-locked key (browser-safe).
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -63,7 +63,7 @@ interface PositionPickerProps {
   disabled?: boolean;
   required?: boolean;
   /** Marker color per entity family: orange=supplier, purple=facility, pink=field. */
-  accent?: PickerAccent;
+  accent?: MapAccent;
 }
 
 function formatCoord(value: number | null): string {
@@ -119,8 +119,11 @@ export function PositionPicker({
     setDraft((current) => ({ ...current, [axis]: raw }));
     const parsed = parseDraft(raw);
     if (parsed === undefined) return; // unparseable in-flight text — wait
-    const next = axis === "lat" ? { lat: parsed, lng } : { lat, lng: parsed };
-    if (next.lat !== lat || next.lng !== lng) {
+    // Compose from `synced` (not props) so a quick edit on the other axis
+    // isn't clobbered while its prop echo is still in flight.
+    const next =
+      axis === "lat" ? { lat: parsed, lng: synced.lng } : { lat: synced.lat, lng: parsed };
+    if (next.lat !== synced.lat || next.lng !== synced.lng) {
       // Keep `synced` ahead of the prop echo so the draft isn't clobbered.
       setSynced(next);
       onPositionChange(next);

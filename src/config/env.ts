@@ -175,7 +175,8 @@ const envSchema = z.object({
   // `pnpm build && pnpm start`) with GEO_PROVIDER=stub by design — same
   // precedent as the storage placeholder env there. Real deployments never
   // run with CI set at runtime, so the safeguard still holds where it matters.
-  if (data.NODE_ENV === "production" && !process.env.CI && data.GEO_PROVIDER === "stub") {
+  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
+  if (data.NODE_ENV === "production" && !isCI && data.GEO_PROVIDER === "stub") {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["GEO_PROVIDER"],

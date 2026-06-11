@@ -13,7 +13,6 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
 import {
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
@@ -26,9 +25,10 @@ import {
 import {
   applyBrandRecolor,
   createMarkerElement,
+  MapControls,
   OWN_LAYER_PREFIX,
-  type PickerAccent,
-} from "./map-theme";
+  type MapAccent,
+} from "@/components/map";
 
 // Inlined at build time — public, domain-locked key (browser-safe).
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -41,15 +41,6 @@ const EASE_DURATION_MS = 600;
 /** ~0.1 m precision — more than enough to pin a site. */
 const COORD_DECIMALS = 6;
 
-/** Map control buttons (concept: vertical stack of square buttons, top-left). */
-const CONTROL_BUTTON_CLASS =
-  "flex size-36 items-center justify-center label-button uppercase " +
-  "bg-[var(--color-background-white)] text-[var(--clr-dark-purple)] " +
-  "border-b border-[var(--clr-dark-purple-30)] last:border-b-0 " +
-  "hover:bg-[var(--clr-dark-purple)] hover:text-[var(--color-background-white)] " +
-  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)] " +
-  "cursor-pointer transition-colors";
-
 function round(value: number): number {
   return Number(value.toFixed(COORD_DECIMALS));
 }
@@ -57,7 +48,7 @@ function round(value: number): number {
 export interface PositionPickerMapProps {
   latitude: number | null;
   longitude: number | null;
-  accent: PickerAccent;
+  accent: MapAccent;
   disabled?: boolean;
   /** Fired on map click and marker drag-end. */
   onPick: (lat: number, lng: number) => void;
@@ -80,6 +71,9 @@ export default function PositionPickerMap({
   /** Last position emitted by the map itself — skip easeTo for round-trips. */
   const lastPickRef = useRef<{ lat: number; lng: number } | null>(null);
   const [satOn, setSatOn] = useState(false);
+  // WebGL can be unavailable (headless browsers, exhausted contexts) — the
+  // picker degrades to manual lat/lng inputs instead of crashing the form.
+  const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
     onPickRef.current = onPick;
@@ -96,14 +90,22 @@ export default function PositionPickerMap({
         ? { center: [longitude, latitude] as [number, number], zoom: FOCUSED_MAP_ZOOM }
         : { center: DEFAULT_MAP_CENTER, zoom: DEFAULT_MAP_ZOOM };
 
-    const map = new maplibregl.Map({
-      container,
-      style: maptilerStyleUrl(MAPTILER_KEY),
-      center: initial.center,
-      zoom: initial.zoom,
-      attributionControl: { compact: true },
-      dragRotate: false,
-    });
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: maptilerStyleUrl(MAPTILER_KEY),
+        center: initial.center,
+        zoom: initial.zoom,
+        attributionControl: { compact: true },
+        dragRotate: false,
+      });
+    } catch {
+      // maplibre throws "Failed to initialize WebGL" when no context exists.
+      // Deferred so the effect never sets state synchronously (React Compiler).
+      queueMicrotask(() => setMapFailed(true));
+      return;
+    }
     mapRef.current = map;
 
     map.once("load", () => {
@@ -197,6 +199,23 @@ export default function PositionPickerMap({
     map.setLayoutProperty(SAT_LAYER_ID, "visibility", next ? "visible" : "none");
   };
 
+  if (mapFailed) {
+    return (
+      <div
+        className="flex h-full flex-col items-center justify-center gap-6 bg-[var(--color-background-light)] px-16 text-center"
+        data-testid="position-picker-map-failed"
+      >
+        <span className="label-button uppercase text-[var(--color-text-secondary)]">
+          Map preview unavailable
+        </span>
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          The browser could not start the map renderer (WebGL). Manual
+          coordinates below still work.
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="relative h-full w-full">
       <div
@@ -204,37 +223,12 @@ export default function PositionPickerMap({
         className="h-full w-full bg-[var(--color-background-white)]"
         data-testid="position-picker-map"
       />
-      <div className="absolute left-8 top-8 flex flex-col border border-[var(--clr-dark-purple-30)] shadow-[0_1px_4px_var(--color-black-10)]">
-        <button
-          type="button"
-          aria-label="Zoom in"
-          className={CONTROL_BUTTON_CLASS}
-          onClick={() => mapRef.current?.zoomIn()}
-        >
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          className={CONTROL_BUTTON_CLASS}
-          onClick={() => mapRef.current?.zoomOut()}
-        >
-          −
-        </button>
-        <button
-          type="button"
-          aria-label="Toggle satellite imagery"
-          aria-pressed={satOn}
-          className={cn(
-            CONTROL_BUTTON_CLASS,
-            satOn &&
-              "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
-          )}
-          onClick={toggleSat}
-        >
-          SAT
-        </button>
-      </div>
+      <MapControls
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+        satOn={satOn}
+        onToggleSat={toggleSat}
+      />
     </div>
   );
 }
