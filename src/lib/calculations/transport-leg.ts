@@ -12,8 +12,20 @@
  * blueprint and Certify applies it — we never store or submit a factor.
  */
 
+import type { DistanceSourceValue } from "@/schemas/distance-source";
+
 /** Destination label used when a product's deliveries span multiple sites. */
 const CUSTOMER_SITES_LABEL = "Customer sites";
+
+// Weakest-source ranking for aggregated legs: a missing source (pre-provenance
+// row) is weaker than manual, manual weaker than a routed estimate, document
+// evidence strongest. The aggregate can never claim more than its weakest input.
+const DISTANCE_SOURCE_BY_RANK = [null, "manual", "map_estimate", "document"] as const;
+
+function distanceSourceRank(source: DistanceSourceValue | null | undefined): number {
+  const rank = DISTANCE_SOURCE_BY_RANK.indexOf(source ?? null);
+  return rank === -1 ? 0 : rank;
+}
 
 export interface TransportPartyRef {
   name?: string | null;
@@ -32,8 +44,12 @@ export interface DeriveTransportLegInput {
   loadMassKg?: number | null;
   /** Stored default distance (km) from the partner entity. */
   storedDistanceKm?: number | null;
+  /** Provenance of the stored distance (null on pre-provenance rows). */
+  storedDistanceSource?: DistanceSourceValue | null;
   /** User-supplied distance (km); overrides the stored default when valid. */
   distanceKmOverride?: number | null;
+  /** Provenance of the override; an override without one was hand-typed. */
+  distanceSourceOverride?: DistanceSourceValue | null;
 }
 
 export interface DerivedTransportLeg {
@@ -45,6 +61,8 @@ export interface DerivedTransportLeg {
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
   distanceKm: number | null;
+  /** Inherited from whichever distance won the priority resolution. */
+  distanceSource: DistanceSourceValue | null;
   // Transport — road, distance-based only
   transportMethodType: "road";
   calculationMethodType: "distance_based";
@@ -55,7 +73,7 @@ export interface DerivedTransportLeg {
   missing: string[];
 }
 
-function positiveOrNull(value: number | null | undefined): number | null {
+export function positiveOrNull(value: number | null | undefined): number | null {
   return value != null && Number.isFinite(value) && value > 0 ? value : null;
 }
 
@@ -73,6 +91,16 @@ export function deriveTransportLeg(
   const stored = positiveOrNull(input.storedDistanceKm);
   const distanceKm = override ?? stored;
 
+  // The leg inherits the WINNING distance's provenance. An override without an
+  // explicit source was hand-typed (manual); a stored distance keeps its
+  // recorded source, including null for pre-provenance rows (never fabricated).
+  const distanceSource: DistanceSourceValue | null =
+    override != null
+      ? (input.distanceSourceOverride ?? "manual")
+      : stored != null
+        ? (input.storedDistanceSource ?? null)
+        : null;
+
   const loadMass = positiveOrNull(loadMassKg);
 
   const missing: string[] = [];
@@ -87,6 +115,7 @@ export function deriveTransportLeg(
     destinationGpsLatitude: destination?.gpsLatitude ?? null,
     destinationGpsLongitude: destination?.gpsLongitude ?? null,
     distanceKm,
+    distanceSource,
     transportMethodType: "road",
     calculationMethodType: "distance_based",
     vehicleType: vehicle?.vehicleType ?? null,
@@ -111,6 +140,8 @@ export interface DistributionLegRow {
   loadMassKg: number | null;
   /** Road distance facility → destination, km. */
   distanceKm: number | null;
+  /** Provenance of that distance (delivery override's or the location's). */
+  distanceSource: DistanceSourceValue | null;
   /** Destination (customer-location) name, when known. */
   locationName: string | null;
   locationGpsLatitude: number | null;
@@ -122,6 +153,12 @@ export interface AggregatedDistributionLeg {
   totalMassKg: number;
   /** Mass-weighted-average distance, or null when nothing qualifies. */
   weightedDistanceKm: number | null;
+  /**
+   * Weakest contributing source: null if any contributor is unknown, else
+   * `manual` if any is manual, else `map_estimate` if any is a map estimate,
+   * `document` only when every contributor is document-backed.
+   */
+  distanceSource: DistanceSourceValue | null;
   /** Single destination's name, "Customer sites" for many, null for none. */
   destinationName: string | null;
   destinationGpsLatitude: number | null;
@@ -141,6 +178,7 @@ export function aggregateDistributionLegs(
 ): AggregatedDistributionLeg {
   let totalMassKg = 0;
   let weightedDistanceSum = 0;
+  let weakestSourceRank = Infinity;
   const names = new Set<string>();
   // GPS observed per destination name: a coordinate pair, or `null` once two
   // rows report *differing* coords for the same name. We can't honestly report
@@ -154,6 +192,7 @@ export function aggregateDistributionLegs(
     if (mass === null || distance === null) continue;
     totalMassKg += mass;
     weightedDistanceSum += mass * distance;
+    weakestSourceRank = Math.min(weakestSourceRank, distanceSourceRank(row.distanceSource));
     if (row.locationName) {
       names.add(row.locationName);
       // Only record GPS when this row actually carries coordinates, so a row
@@ -173,11 +212,14 @@ export function aggregateDistributionLegs(
 
   const weightedDistanceKm =
     totalMassKg > 0 ? weightedDistanceSum / totalMassKg : null;
+  const distanceSource =
+    totalMassKg > 0 ? DISTANCE_SOURCE_BY_RANK[weakestSourceRank] ?? null : null;
   const single = names.size === 1;
   const singleGps = single ? gpsByName.get([...names][0]) ?? null : null;
   return {
     totalMassKg,
     weightedDistanceKm,
+    distanceSource,
     destinationName: single
       ? [...names][0]
       : names.size > 1

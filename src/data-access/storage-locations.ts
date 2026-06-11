@@ -19,7 +19,11 @@ import {
   applications,
   type StorageLocation,
 } from "@/db/schema";
-import type { StorageLocationFilterData } from "@/schemas/storage-locations";
+import {
+  isFeedstockBinType,
+  type StorageLocationFilterData,
+  type StorageLocationType,
+} from "@/schemas/storage-locations";
 
 // ============================================
 // Types
@@ -646,6 +650,15 @@ export async function createStorageLocation(
     }
   }
 
+  // The Zod create schema enforces this for form/fn flows; repeat it here so
+  // direct data-access callers (seeds, scripts) can't create a bin the update
+  // path's invariant check would then refuse to touch.
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    throw new SafeError(
+      "Feedstock and ingredient bins must be restricted to one feedstock type"
+    );
+  }
+
   // A formulation only makes sense on a product bin; ignore it for other types.
   const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
   if (formulationId) {
@@ -667,7 +680,10 @@ export async function createStorageLocation(
       type: data.type,
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
-      feedstockTypeId: data.feedstockTypeId ?? null,
+      // Only meaningful on feedstock/ingredient bins, like formulationId below.
+      feedstockTypeId: isFeedstockBinType(data.type)
+        ? data.feedstockTypeId ?? null
+        : null,
       formulationId,
       storageMethod: data.storageMethod ?? null,
       storageDescription: data.storageDescription ?? null,
@@ -749,6 +765,31 @@ export async function updateStorageLocation(
   }
 
   const effectiveType = data.type ?? existing.type;
+
+  // The Zod update schema can only see the payload — when `type` is omitted it
+  // cannot tell this is a feedstock/ingredient bin, so an update could clear
+  // feedstockTypeId on one. Enforce the invariant against the effective row.
+  const effectiveFeedstockTypeId =
+    data.feedstockTypeId !== undefined
+      ? data.feedstockTypeId
+      : existing.feedstockTypeId;
+  if (
+    isFeedstockBinType(effectiveType as StorageLocationType) &&
+    !effectiveFeedstockTypeId
+  ) {
+    throw new SafeError(
+      "Feedstock and ingredient bins must be restricted to one feedstock type"
+    );
+  }
+
+  // A feedstock type only makes sense on a feedstock/ingredient bin — clear it
+  // when the (effective) type is anything else, same as formulationId below.
+  const normalizedFeedstockTypeId = isFeedstockBinType(
+    effectiveType as StorageLocationType
+  )
+    ? effectiveFeedstockTypeId ?? null
+    : null;
+
   const normalizedFormulationId =
     effectiveType === "product_bin"
       ? (data.formulationId !== undefined
@@ -790,12 +831,14 @@ export async function updateStorageLocation(
     }
   }
 
-  const dataWithoutFormulation = { ...data };
-  delete dataWithoutFormulation.formulationId;
+  const dataWithoutNormalized = { ...data };
+  delete dataWithoutNormalized.formulationId;
+  delete dataWithoutNormalized.feedstockTypeId;
   const [updated] = await db
     .update(storageLocations)
     .set({
-      ...dataWithoutFormulation,
+      ...dataWithoutNormalized,
+      feedstockTypeId: normalizedFeedstockTypeId,
       formulationId: normalizedFormulationId,
       updatedAt: new Date(),
     })

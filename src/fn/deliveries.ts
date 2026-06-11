@@ -31,6 +31,7 @@ import {
   updateDeliverySchema,
   deliveryFilterSchema,
 } from "@/schemas/deliveries";
+import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 // A biochar product's distribution transport leg is auto-derived from the
@@ -271,6 +272,10 @@ export async function createDeliveryFn(
           truckMassOnArrivalKg: validated.truckMassOnArrivalKg ?? null,
           truckMassOnDepartureKg: validated.truckMassOnDepartureKg ?? null,
           distanceKmOverride: validated.distanceKmOverride ?? null,
+          distanceSource: resolveDistanceSource(
+            validated.distanceKmOverride ?? null,
+            validated.distanceSource,
+          ),
           distanceNote: validated.distanceNote || null,
         });
       }
@@ -329,6 +334,10 @@ export async function updateDeliveryFn(
       truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
       truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
       distanceKmOverride: validated.distanceKmOverride,
+      distanceSource: resolveDistanceSource(
+        validated.distanceKmOverride,
+        validated.distanceSource,
+      ),
       distanceNote: validated.distanceNote || null,
     });
 

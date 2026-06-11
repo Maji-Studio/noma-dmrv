@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import { boolean, check, doublePrecision, index, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { users } from './auth';
+import { distanceSource } from './common';
 
 // ============================================
 // Suppliers - Biomass/feedstock suppliers
@@ -24,6 +25,8 @@ export const suppliers = pgTable(
     // Road distance (km) from this supplier to the delivery facility. Autofills
     // a feedstock transport leg's distance (overridable). Stored, not computed.
     distanceToFacilityKm: real('distance_to_facility_km'),
+    // Provenance of distanceToFacilityKm (null when no distance stored).
+    distanceSource: distanceSource('distance_source'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -81,6 +84,8 @@ export const customerLocations = pgTable(
     // Stored as operational route metadata; certifier transport is recorded on
     // cargo entities, not deliveries.
     distanceFromFacilityKm: real('distance_from_facility_km'),
+    // Provenance of distanceFromFacilityKm (null when no distance stored).
+    distanceSource: distanceSource('distance_source'),
     // Marks the customer's primary destination. At most one per customer
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),
@@ -129,6 +134,8 @@ export const supplierLocations = pgTable(
     // Road distance (km) from this supplier location to the delivery facility.
     // Per-location override of the supplier-level default distance.
     distanceFromFacilityKm: real('distance_from_facility_km'),
+    // Provenance of distanceFromFacilityKm (null when no distance stored).
+    distanceSource: distanceSource('distance_source'),
     // Marks the supplier's primary source. At most one per supplier
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),

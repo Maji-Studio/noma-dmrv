@@ -480,6 +480,7 @@ export async function createCustomerLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
@@ -528,6 +529,7 @@ export async function createCustomerLocation(
         gpsLongitude: data.gpsLongitude ?? null,
         address: data.address ?? null,
         distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
         isDefault: makeDefault,
       })
       .returning();
@@ -551,6 +553,7 @@ export async function updateCustomerLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
@@ -575,6 +578,7 @@ export async function updateCustomerLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     isDefault?: boolean;
     updatedAt: Date;
   } = {
@@ -589,6 +593,7 @@ export async function updateCustomerLocation(
   if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
   if (data.address !== undefined) updateData.address = data.address;
   if (data.distanceFromFacilityKm !== undefined) updateData.distanceFromFacilityKm = data.distanceFromFacilityKm;
+  if (data.distanceSource !== undefined) updateData.distanceSource = data.distanceSource;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   return db.transaction(async (tx) => {

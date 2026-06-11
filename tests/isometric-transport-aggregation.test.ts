@@ -23,6 +23,7 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     destinationGpsLongitude: null,
     destinationName: null,
     distanceKm,
+    distanceSource: null,
     transportMethodType: "road",
     vehicleType: null,
     modelYear: null,
