@@ -32,6 +32,32 @@ A per-facility configured value (genset yield, stage-split percentages)
 used to derive submission data noma does not measure directly. Distinct
 from a measured value.
 
+### Materials & formulation
+
+**Feedstock type**:
+The single catalog of input materials — covering both pyrolysis biomass
+(wood chips, hardwood) and blend ingredients (compost, mineral, lime).
+**Usage** is declared first when creating one: *pyrolysis* or *blend*.
+Pyrolysis-usage entries are selected from the certifier's registry
+catalogue when Isometric is the organization's certifier
+(certifier-validated); blend-usage entries are general, internal-only,
+and are **never submitted** to a registry.
+_Avoid_: ingredient, material (the catalog is one thing; usage
+disambiguates).
+
+**Ingredient bin**:
+A storage bin holding a **blend-usage feedstock type**, drawn on when a
+biochar product is mixed per a formulation. A bin declares its feedstock
+type at creation; the biochar product form proposes only bins whose
+type matches the selected formulation's lines.
+
+**Bin movement**:
+A single recorded change to a storage bin's stock — an intake, draw,
+transfer, write-off, or adjustment — carrying its mass, actor, time,
+and reason. Bin stock is the consequence of its movements; nothing
+changes stock except a movement.
+_Avoid_: stock change, log entry, audit record.
+
 ### Submission & registry
 
 **Credit batch**:
