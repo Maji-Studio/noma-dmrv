@@ -21,6 +21,10 @@ export {
   type ListComponentsArgs,
 } from "./projects";
 export {
+  listFeedstockTypes,
+  type IsometricFeedstockType,
+} from "./feedstock-types";
+export {
   createDatapoint,
   patchDatapoint,
   createGhgEntry,

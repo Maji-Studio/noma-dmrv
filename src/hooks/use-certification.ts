@@ -17,6 +17,7 @@ import {
   loadFacilityCertifierSummary,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
+  loadIsometricFeedstockTypes,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
   loadRemovalCertifyContext,
@@ -53,6 +54,8 @@ export const certificationKeys = {
     [...certificationKeys.all, "facility-summary", facilityId] as const,
   projectTemplates: (externalProjectId: string) =>
     [...certificationKeys.all, "project-templates", externalProjectId] as const,
+  feedstockTypes: () =>
+    [...certificationKeys.all, "feedstock-types"] as const,
   certifyContextForCreditBatch: (creditBatchId: string) =>
     [
       ...certificationKeys.all,
@@ -162,6 +165,21 @@ export function useIsometricProjectTemplates(externalProjectId: string | null) {
       return result.data;
     },
     enabled: !!externalProjectId,
+    staleTime: PROJECT_TEMPLATES_STALE_MS,
+  });
+}
+
+// Registry feedstock-type catalogue (account-global, browse-only). Rarely
+// changes — share the longer templates stale window.
+export function useIsometricFeedstockTypes(enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.feedstockTypes(),
+    queryFn: async () => {
+      const result = await loadIsometricFeedstockTypes();
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled,
     staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
 }
