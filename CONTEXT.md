@@ -101,6 +101,31 @@ A placeholder mapping that emits `0` for a **monitored input** noma
 cannot yet source. A template carrying any zero stub must not be used
 against a production registry project.
 
+### Tenancy
+
+**Organization**:
+A biochar operator company onboarded onto noma — the tenant boundary.
+An Organization owns one or more **facilities**; all facility-scoped
+data belongs to exactly one Organization through its facility.
+_Avoid_: client (collides with client components / API clients), tenant
+(infrastructure word, not domain word), company.
+
+**Platform Admin**:
+A noma platform operator (Maji / Dark Earth staff). Creates and manages
+**Organizations** and their users, and may enter any Organization's
+workspace with full read/write — organization isolation is policy
+toward other organizations, not toward the platform. Replaces the old
+global `admin` role.
+_Avoid_: superadmin, root.
+
+**Member**:
+A user's belonging to an **Organization**, carrying one org role —
+*Owner* (first user, full control, an org never loses its last owner),
+*Admin* (manages members and org settings; registry-facing submissions
+are Admin-and-up), or *Member* (day-to-day MRV data entry). A user may
+hold memberships in several Organizations, though one is the norm.
+_Avoid_: teammate, seat.
+
 ## Relationships
 
 - The LCA window contains many monthly **Credit batches**
