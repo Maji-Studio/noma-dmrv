@@ -19,7 +19,10 @@ import type {
 } from "@/data-access/chain-of-custody-geo";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
-import { useChainOfCustodyGeo } from "@/hooks/use-chain-of-custody";
+import {
+  useChainOfCustodyGeo,
+  useCreditBatchChainGeo,
+} from "@/hooks/use-chain-of-custody";
 import { useRouteGeometries } from "@/hooks/use-geo";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import { buildLineageNodes } from "../use-chain-graph";
@@ -52,10 +55,18 @@ const CarbonTransitMap = dynamic(() => import("./carbon-transit-map"), {
   ),
 });
 
+/** Which anchor the panel plots: a single application or a batch roll-up. */
+export type ChainGeoSource =
+  | { kind: "application"; id: string }
+  | { kind: "creditBatch"; id: string };
+
 export interface CarbonTransitPanelProps {
-  applicationId: string;
-  /** The lineage payload the page already holds — feeds marker popups. */
-  chainData: ChainOfCustodyData | undefined;
+  source: ChainGeoSource;
+  /**
+   * The lineage payload(s) the page already holds — feeds marker popups.
+   * One entry for an application anchor; one per member for a batch.
+   */
+  lineages: ChainOfCustodyData[] | undefined;
   /** map = full side rails; split = collapsed not-geolocated chip box. */
   view: "map" | "split";
   /** Cross-link highlight from the DAG (nonce re-triggers repeat clicks). */
@@ -65,21 +76,27 @@ export interface CarbonTransitPanelProps {
 }
 
 function buildPopupContent(
-  chainData: ChainOfCustodyData | undefined
+  lineages: ChainOfCustodyData[] | undefined
 ): PopupContentByNodeId {
   const content: PopupContentByNodeId = {};
-  if (!chainData) return content;
-  for (const node of buildLineageNodes(chainData)) {
-    content[node.id] = {
-      typeLabel: LINEAGE_NODE_STYLES[node.kind].label,
-      status: node.status ?? null,
-      detailLines: node.detailLines,
-    };
+  if (!lineages || lineages.length === 0) return content;
+  for (const chainData of lineages) {
+    for (const node of buildLineageNodes(chainData)) {
+      if (content[node.id]) continue;
+      content[node.id] = {
+        typeLabel: LINEAGE_NODE_STYLES[node.kind].label,
+        status: node.status ?? null,
+        detailLines: [node.date, node.stat, ...node.detailLines].filter(
+          (line): line is string => Boolean(line)
+        ),
+      };
+    }
   }
-  content[`facility:${chainData.facility.id}`] = {
+  const facility = lineages[0].facility;
+  content[`facility:${facility.id}`] = {
     typeLabel: "Facility",
     status: null,
-    detailLines: [chainData.facility.name],
+    detailLines: [facility.name],
   };
   return content;
 }
@@ -90,20 +107,33 @@ function legAnchorNodeId(geo: ChainOfCustodyGeoData, leg: ChainGeoLeg): string {
     const feedstock = geo.nodes.find((node) => node.entityId === leg.entityId);
     if (feedstock) return feedstock.id;
   } else {
-    const application = geo.nodes.find((node) => node.kind === "application");
-    if (application) return application.id;
+    // Single-application chain: anchor outbound on the application. A batch
+    // roll-up has N applications, so anchor on the leg's own product instead.
+    const applications = geo.nodes.filter((node) => node.kind === "application");
+    if (applications.length === 1) return applications[0].id;
+    const product = geo.nodes.find(
+      (node) => node.kind === "biocharProduct" && node.entityId === leg.entityId
+    );
+    if (product) return product.id;
   }
   return `facility:${geo.facility.id}`;
 }
 
 export function CarbonTransitPanel({
-  applicationId,
-  chainData,
+  source,
+  lineages,
   view,
   highlight,
   onNodeSelect,
 }: CarbonTransitPanelProps) {
-  const { data: geo, isLoading, isError, error } = useChainOfCustodyGeo(applicationId);
+  const applicationGeo = useChainOfCustodyGeo(
+    source.kind === "application" ? source.id : null
+  );
+  const batchGeo = useCreditBatchChainGeo(
+    source.kind === "creditBatch" ? source.id : null
+  );
+  const { data: geo, isLoading, isError, error } =
+    source.kind === "application" ? applicationGeo : batchGeo;
 
   const plottableLegs = geo ? resolveLegEndpoints(geo).plottable : [];
   const { data: routeGeometries } = useRouteGeometries(
@@ -148,7 +178,7 @@ export function CarbonTransitPanel({
     geo.nodes.some(
       (node) => node.positionSource === "own" || node.positionSource === "leg_origin"
     );
-  const popupContent = buildPopupContent(chainData);
+  const popupContent = buildPopupContent(lineages);
 
   return (
     <div

@@ -267,15 +267,7 @@ export function CustomerLocationQuickAddDialog({
             </div>
           </div>
 
-          <div className="flex gap-16 justify-end pt-16">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={createLocation.isPending}
-              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
-            >
-              Cancel
-            </button>
+          <div className="flex gap-16 justify-start pt-16">
             <button
               type="button"
               onClick={handleSubmit}
@@ -284,6 +276,14 @@ export function CustomerLocationQuickAddDialog({
               data-testid="location-submit-button"
             >
               {createLocation.isPending ? "Adding..." : "Add Location"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={createLocation.isPending}
+              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
+            >
+              Cancel
             </button>
           </div>
         </div>

@@ -26,8 +26,20 @@ export const geoKeys = {
   geocode: (query: string) => [...geoKeys.all, "geocode", query] as const,
   reverse: (point: GeoPointInput) =>
     [...geoKeys.all, "reverse", point.lat, point.lng] as const,
-  routeGeometries: (legIds: string[]) =>
-    [...geoKeys.all, "route-geometries", ...legIds] as const,
+  // Keyed by id AND endpoint coords: a facility/supplier/customer GPS edit
+  // moves a leg's endpoints without changing its id, and must not be served
+  // road geometry cached for the old positions.
+  routeGeometries: (legs: RouteGeometriesRequest["legs"]) =>
+    [
+      ...geoKeys.all,
+      "route-geometries",
+      ...legs
+        .map(
+          (leg) =>
+            `${leg.id}:${leg.origin.lat},${leg.origin.lng}>${leg.destination.lat},${leg.destination.lng}`,
+        )
+        .sort(),
+    ] as const,
 };
 
 /** Whether CALC / address search can succeed (server key present or stub). */
@@ -101,9 +113,8 @@ const ROUTE_GEOMETRY_STALE_TIME_MS = 30 * 60 * 1000;
  * fallback). Pass null while legs are still loading.
  */
 export function useRouteGeometries(request: RouteGeometriesRequest | null) {
-  const legIds = request?.legs.map((leg) => leg.id).sort() ?? [];
   return useQuery({
-    queryKey: geoKeys.routeGeometries(legIds),
+    queryKey: geoKeys.routeGeometries(request?.legs ?? []),
     queryFn: async (): Promise<RouteGeometryByRequestId> => {
       const result = await routeGeometriesFn(request!);
       if (!result.success) {

@@ -8,6 +8,8 @@ interface TransportLegsSummaryProps {
   entityId: string;
   /** Override the section title. Defaults based on entityType. */
   title?: string;
+  /** Override the no-legs message (e.g. for auto-derived categories). */
+  emptyMessage?: string;
 }
 
 /**
@@ -18,12 +20,14 @@ export function TransportLegsSummary({
   entityType,
   entityId,
   title,
+  emptyMessage,
 }: TransportLegsSummaryProps) {
   return (
     <TransportLegsEditor
       entityType={entityType}
       entityId={entityId}
       title={title}
+      emptyMessage={emptyMessage}
       readOnly
     />
   );

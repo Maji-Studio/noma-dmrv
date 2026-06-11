@@ -12,6 +12,10 @@ export interface ChainNodeData {
   accent: string;
   href: string | null;
   status?: string | null;
+  /** Formatted event date — the card's primary line (code is secondary). */
+  date: string | null;
+  /** Headline quantity (mass in/out at this step). */
+  stat: string | null;
   detailLines: string[];
   /** Cross-link highlight (map marker / rail selection). */
   highlighted?: boolean;
@@ -41,8 +45,18 @@ function StatusPill({ status }: { status: string | null | undefined }) {
 }
 
 export function ChainNode({ data }: NodeProps) {
-  const { label, code, icon: Icon, accent, href, status, detailLines, highlighted } =
-    data as unknown as ChainNodeData;
+  const {
+    label,
+    code,
+    icon: Icon,
+    accent,
+    href,
+    status,
+    date,
+    stat,
+    detailLines,
+    highlighted,
+  } = data as unknown as ChainNodeData;
 
   const card = (
     <div
@@ -66,7 +80,7 @@ export function ChainNode({ data }: NodeProps) {
           : null),
       }}
     >
-      <div className="flex-1 flex flex-col gap-10 p-12">
+      <div className="flex-1 flex flex-col gap-8 p-12">
         <div className="flex items-start justify-between gap-10">
           <div className="min-w-0 flex items-center gap-8">
             <Icon
@@ -85,10 +99,24 @@ export function ChainNode({ data }: NodeProps) {
           <StatusPill status={status} />
         </div>
 
-        <p className="title-heading-3 break-words">{code}</p>
+        {/* Date leads; the record code is secondary identification. */}
+        <div>
+          <p className="title-heading-3 break-words">{date ?? code}</p>
+          {date ? (
+            <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-text-secondary)]">
+              {code}
+            </p>
+          ) : null}
+        </div>
+
+        {stat ? (
+          <p className="font-mono text-[13px] font-medium text-[var(--color-text-primary)]">
+            {stat}
+          </p>
+        ) : null}
 
         {detailLines.length > 0 ? (
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-4">
             {detailLines.map((line, index) => (
               <li
                 key={index}

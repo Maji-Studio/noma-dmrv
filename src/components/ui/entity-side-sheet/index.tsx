@@ -71,14 +71,13 @@ interface EntitySideSheetProps {
    * Optional view-mode body extension. When provided, renders below the
    * default `sections` so callers can mount interactive content (extra
    * cards, dialog openers). Edit/create modes still use `children`.
+   *
+   * Note: there is intentionally no edit-mode equivalent — nothing may render
+   * after the form's CTA row. Edit-mode extensions (child-entity editors)
+   * must be passed as the form component's `children` so they render between
+   * the fields and the CTA.
    */
   viewModeChildren?: React.ReactNode;
-  /**
-   * Optional edit-mode body extension. When provided, renders below the form
-   * (`children`) in edit/create mode — e.g. for managing child entities that
-   * belong to the editing flow rather than the read-only view.
-   */
-  editModeChildren?: React.ReactNode;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** The form component rendered in edit/create mode */
@@ -113,7 +112,6 @@ function EntitySideSheet({
   subtitle,
   sections,
   viewModeChildren,
-  editModeChildren,
   editLabel = "Edit",
   children,
   size = "wide",
@@ -168,7 +166,7 @@ function EntitySideSheet({
         {/* Body */}
         <SlideOverPanel.Body
           className={isViewMode ? "flex flex-col gap-32" : undefined}
-          noPaddingBottom={!isViewMode && !editModeChildren}
+          noPaddingBottom={!isViewMode}
         >
           {isViewMode ? (
             <>
@@ -190,12 +188,7 @@ function EntitySideSheet({
               {viewModeChildren}
             </>
           ) : (
-            <>
-              {children}
-              {editModeChildren ? (
-                <div className="mt-24">{editModeChildren}</div>
-              ) : null}
-            </>
+            children
           )}
         </SlideOverPanel.Body>
 

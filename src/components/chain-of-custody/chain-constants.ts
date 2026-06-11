@@ -10,12 +10,15 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 export const NODE_WIDTH = 260;
-export const NODE_HEIGHT = 168;
+// Layout estimate for dagre — sized for the tallest card (feedstock: date +
+// code + stat + up to five detail lines), so real cards never overlap.
+export const NODE_HEIGHT = 212;
 
 export const DAGRE_CONFIG = {
   rankdir: "LR" as const,
   nodesep: 48,
-  ranksep: 120,
+  // Wide enough that edge mass labels sit clear of both ranks' cards.
+  ranksep: 140,
 };
 
 export type LineageNodeKind =

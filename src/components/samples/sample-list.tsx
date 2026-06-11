@@ -510,14 +510,6 @@ export function SampleList() {
             </div>
           ) : null
         }
-        editModeChildren={
-          displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
-            <TransportLegsEditor
-              entityType="sample"
-              entityId={displaySideSheet.entity.id}
-            />
-          ) : null
-        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <SampleForm
@@ -527,7 +519,14 @@ export function SampleList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
-        />
+        >
+          {displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
+            <TransportLegsEditor
+              entityType="sample"
+              entityId={displaySideSheet.entity.id}
+            />
+          ) : null}
+        </SampleForm>
       </EntitySideSheet>
     </div>
   );

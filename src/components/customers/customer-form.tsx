@@ -9,8 +9,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash, MapPin } from "@phosphor-icons/react";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormField, FormInput, FormTextarea, FormActions } from "@/components/forms";
 import { customerFormSchema, type CustomerFormData } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
@@ -225,17 +224,12 @@ export function CustomerForm({
         </div>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }
@@ -585,20 +579,20 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
         </span>
       </label>
 
-      <div className="flex gap-12 justify-end pt-8">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-36 px-12 border border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] text-[var(--text-s)]"
-        >
-          Cancel
-        </button>
+      <div className="flex gap-12 justify-start pt-8">
         <button
           type="button"
           onClick={handleAdd}
           className="h-36 px-12 bg-[var(--color-interaction)] text-white hover:opacity-90 text-[var(--text-s)]"
         >
           Add Location
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-36 px-12 border border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] text-[var(--text-s)]"
+        >
+          Cancel
         </button>
       </div>
     </div>

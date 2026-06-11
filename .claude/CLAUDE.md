@@ -18,6 +18,8 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 
 Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
 
+Domain language lives in **`CONTEXT.md`** (repo root) — a pure glossary of canonical terms (Removal, Credit batch, Roll-up, Evidence method, …) with no implementation detail. Its definitions override casual usage; consult it before naming things or writing requirements/docs, and keep it free of implementation notes when updating it.
+
 ## Essential Commands
 
 | Command | Purpose |
@@ -179,7 +181,7 @@ See `TEMPLATE_USAGE.md`. Reference entity pattern = **facilities** (schemas / da
 
 ## Chain of Custody
 
-Application-first lineage graph tracing the upstream rollback from a selected application to feedstock batches. 7 node types (Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application); color groups Production (orange) / Infrastructure (purple) / Distribution (rose); Dagre LR layout, minimap, zoom. Standard layered pattern (`data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`). Docs: `docs/chain-of-custody.md`.
+Credit-batch anchored lineage page (ADR 0011): dual selector (`?batch=` / `?application=` deep links). Batch roll-up = member applications' rollbacks merged, runs deduped — views **DAG | Map | Sankey** (the Sankey is an honest dry-mass balance with explicit labeled exits: ineligible feedstock / conversion loss / in storage; `src/lib/chain-of-custody/sankey.ts`). Application drill-down — views **Lineage | Map | Split | Trail** (Trail = dated custody steps + attesting evidence: documents, samples, transport-leg provenance). 7 node types (Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application); color groups Production (orange) / Infrastructure (purple) / Distribution (rose); Dagre LR layout, minimap, zoom. Standard layered pattern (`data-access/chain-of-custody{,-batch,-trail}.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`). Docs: `docs/chain-of-custody.md`.
 
 ## Production Run Extensions
 
@@ -236,7 +238,7 @@ Playwright per-entity specs + full-chain smoke tests. Fixtures (`tests/e2e/fixtu
 
 ## Key Docs Index
 
-`docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
+`CONTEXT.md` (domain glossary — repo root) · `docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
 
 ## CI/CD
 

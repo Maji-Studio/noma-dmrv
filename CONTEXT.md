@@ -27,10 +27,51 @@ the diesel consumed in **litres**; genset energy in kWh is derived from
 litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
+**Reactor-day file**:
+The telemetry export unit the PLC logger produces — one CSV per
+reactor per calendar day, minute-interval rows keyed by time-of-day
+only, with the reactor code and date carried in the filename. A
+production run's readings are the slice of one or more reactor-day
+files inside the run's window.
+_Avoid_: sensor dump, log file.
+
+**Channel mapping**:
+The per-reactor declaration of which **reactor-day file** column feeds
+each protocol-relevant reading — temperature, pressure, gas flow. Set
+once per reactor, re-confirmed only when a file's header drifts from
+it; an import never proceeds on a guessed mapping.
+_Avoid_: column config, CSV schema.
+
 **Emission estimate**:
-A per-facility configured value (genset yield, stage-split percentages)
-used to derive submission data noma does not measure directly. Distinct
-from a measured value.
+A per-facility configured value (genset yield, stage-split percentages,
+default soil temperature) used to derive submission data noma does not
+measure directly. Distinct from a measured value.
+
+### Materials & formulation
+
+**Feedstock type**:
+The single catalog of input materials — covering both pyrolysis biomass
+(wood chips, hardwood) and blend ingredients (compost, mineral, lime).
+**Usage** is declared first when creating one: *pyrolysis* or *blend*.
+Pyrolysis-usage entries are selected from the certifier's registry
+catalogue when Isometric is the organization's certifier
+(certifier-validated); blend-usage entries are general, internal-only,
+and are **never submitted** to a registry.
+_Avoid_: ingredient, material (the catalog is one thing; usage
+disambiguates).
+
+**Ingredient bin**:
+A storage bin holding a **blend-usage feedstock type**, drawn on when a
+biochar product is mixed per a formulation. A bin declares its feedstock
+type at creation; the biochar product form proposes only bins whose
+type matches the selected formulation's lines.
+
+**Bin movement**:
+A single recorded change to a storage bin's stock — an intake, draw,
+transfer, write-off, or adjustment — carrying its mass, actor, time,
+and reason. Bin stock is the consequence of its movements; nothing
+changes stock except a movement.
+_Avoid_: stock change, log entry, audit record.
 
 ### Submission & registry
 
@@ -134,6 +175,36 @@ _Avoid_: volume flow.
 The pyrolysis mass not retained in biochar (syngas, vapour, ash) —
 expected process physics, not an error or a leak.
 _Avoid_: shrinkage, waste.
+
+**Truck weighing**:
+The gross-mass measurement of a transport vehicle before and after
+unloading at a custody transfer point — feedstock arriving at the
+facility, or biochar arriving at the application site. The difference
+attests the transported wet mass; calibrated scale tickets are retained
+verification evidence. Not specific to deliveries.
+_Avoid_: truck weighing at delivery site (over-narrow).
+
+**Evidence method**:
+The per-application declaration of which of the certifier's two
+acceptable proofs of biochar spreading the record satisfies — *visual*
+(geotagged, timestamped photos/videos of stockpile, spreading,
+incorporation) or *boundary* (a GIS field-boundary reference plus
+logbook records). Exactly one method is declared per application;
+what counts as missing evidence follows from the declared method.
+_Avoid_: proof type, documentation mode.
+
+**Geotag flag**:
+The recorded outcome of checking an evidence photo's embedded GPS and
+timestamp. A photo without them is accepted but flagged — the gap
+surfaces as evidence health, never as an upload error.
+_Avoid_: validation failure (the photo is not rejected).
+
+**Distance override**:
+A per-trip distance recorded on a delivery only when that trip's
+routing differs from the destination's stored distance. Absence means
+the stored distance governs — so later corrections to the stored
+distance keep propagating.
+_Avoid_: treating the override as the primary distance value.
 
 ### Tenancy
 

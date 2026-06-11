@@ -104,14 +104,13 @@ export const orsProvider: GeoProvider = {
   async geocode(address: string): Promise<GeocodeResult[]> {
     const key = requireKey();
     const params = new URLSearchParams({
-      api_key: key,
       text: address,
       size: String(GEOCODE_MAX_RESULTS),
     });
     const body = (await orsFetch(
       "geocode",
       `${ORS_BASE_URL}/geocode/search?${params}`,
-      { method: "GET" }
+      { method: "GET", headers: { Authorization: key } }
     )) as PeliasResponse;
 
     return (body.features ?? [])
@@ -129,7 +128,6 @@ export const orsProvider: GeoProvider = {
   async reverseGeocode(point: GeoPoint): Promise<string | null> {
     const key = requireKey();
     const params = new URLSearchParams({
-      api_key: key,
       "point.lat": String(point.lat),
       "point.lon": String(point.lng),
       size: "1",
@@ -137,7 +135,7 @@ export const orsProvider: GeoProvider = {
     const body = (await orsFetch(
       "reverse-geocode",
       `${ORS_BASE_URL}/geocode/reverse?${params}`,
-      { method: "GET" }
+      { method: "GET", headers: { Authorization: key } }
     )) as PeliasResponse;
 
     return body.features?.[0]?.properties?.label ?? null;

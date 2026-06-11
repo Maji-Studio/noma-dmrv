@@ -9,12 +9,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
+  FormActions,
   FormField,
   FormInput,
   FormTextarea,
   PositionPicker,
 } from "@/components/forms";
-import { Button } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   supplierLocationFormSchema,
@@ -249,22 +249,13 @@ export function SupplierLocationForm({
         </label>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      <FormActions
+        sticky={false}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }
