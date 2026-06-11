@@ -238,7 +238,7 @@ Playwright per-entity specs + full-chain smoke tests. Fixtures (`tests/e2e/fixtu
 
 ## Key Docs Index
 
-`docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
+`CONTEXT.md` (domain glossary — repo root) · `docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
 
 ## CI/CD
 
