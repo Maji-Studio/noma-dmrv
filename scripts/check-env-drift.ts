@@ -11,8 +11,10 @@
  * For each (template, 1Password item) pair it reports:
  *   - fields present in 1Password but NOT referenced in the template
  *     → newly-set secrets you probably want to add to the template
- *   - template op:// references whose field is MISSING from 1Password
- *     → broken references that will fail `op inject`
+ *   - OPTIONAL template refs whose field is MISSING from 1Password
+ *     → advisory: the tolerant sync scripts skip these with a warning
+ *   - REQUIRED template refs whose field is MISSING from 1Password
+ *     → broken: the sync scripts refuse to run, and the app cannot boot
  *
  * Prints field NAMES only — never secret values.
  *
@@ -21,14 +23,16 @@
  *
  * Prerequisites: 1Password CLI authenticated (`op signin`).
  *
- * Exit code: 0 when no broken references; 1 when a template ref is missing from
- * 1Password (CI-usable). Fields-in-1Password-not-in-template are advisory and
- * do not fail the check on their own.
+ * Exit code: 0 unless a REQUIRED ref is missing from 1Password (CI-usable).
+ * Untracked-in-template and missing-optional findings are advisory and do not
+ * fail the check on their own.
  */
 
 import { spawnSync } from "child_process";
 import {
   ITEM_PREFIX,
+  REQUIRED_DEPLOYED_VARS,
+  REQUIRED_LOCAL_VARS,
   VAULT,
   fetchItemFieldNames,
   parseTemplate,
@@ -37,9 +41,9 @@ import {
 
 /** Each 1Password item is reconciled against the template that consumes it. */
 const CHECKS = [
-  { env: "staging", templateFile: ".env.tpl" },
-  { env: "production", templateFile: ".env.tpl" },
-  { env: "local", templateFile: ".env.local.tpl" },
+  { env: "staging", templateFile: ".env.tpl", required: REQUIRED_DEPLOYED_VARS },
+  { env: "production", templateFile: ".env.tpl", required: REQUIRED_DEPLOYED_VARS },
+  { env: "local", templateFile: ".env.local.tpl", required: REQUIRED_LOCAL_VARS },
 ] as const;
 
 function check1PasswordAuth(): void {
@@ -61,7 +65,7 @@ function main(): void {
   let hasBrokenRefs = false;
   let hasUntracked = false;
 
-  for (const { env, templateFile } of CHECKS) {
+  for (const { env, templateFile, required } of CHECKS) {
     const template = parseTemplate(templateFile);
     const templateFields = templateOpFieldNames(templateFile);
     const literals = template.filter((e) => e.opField === null).map((e) => e.name);
@@ -80,19 +84,29 @@ function main(): void {
     );
 
     const untracked = [...itemFields].filter((n) => !templateFields.has(n)).sort();
-    const broken = [...templateFields].filter((n) => !itemFields.has(n)).sort();
+    const missing = [...templateFields].filter((n) => !itemFields.has(n)).sort();
+    const missingOptional = missing.filter((n) => !required.has(n));
+    const missingRequired = missing.filter((n) => required.has(n));
 
     if (untracked.length > 0) {
       hasUntracked = true;
-      console.log("  ⚠️  In 1Password but NOT in .env.tpl (consider adding):");
+      console.log(`  ⚠️  In 1Password but NOT in ${templateFile} (consider adding):`);
       for (const name of untracked) console.log(`        ${name}`);
     }
-    if (broken.length > 0) {
-      hasBrokenRefs = true;
-      console.log("  ❌  In .env.tpl but MISSING from 1Password (broken ref):");
-      for (const name of broken) console.log(`        ${name}`);
+    if (missingOptional.length > 0) {
+      console.log(
+        `  ⚠️  In ${templateFile} but MISSING from 1Password (optional — sync skips with a warning):`
+      );
+      for (const name of missingOptional) console.log(`        ${name}`);
     }
-    if (untracked.length === 0 && broken.length === 0) {
+    if (missingRequired.length > 0) {
+      hasBrokenRefs = true;
+      console.log(
+        `  ❌  In ${templateFile} but MISSING from 1Password (REQUIRED — sync refuses to run):`
+      );
+      for (const name of missingRequired) console.log(`        ${name}`);
+    }
+    if (untracked.length === 0 && missing.length === 0) {
       console.log("  ✅  In sync");
     }
     console.log("");
@@ -107,10 +121,12 @@ function main(): void {
   }
 
   if (hasBrokenRefs) {
-    console.error("Drift check failed: .env.tpl references fields missing from 1Password.");
+    console.error(
+      "Drift check failed: a template references REQUIRED fields missing from 1Password."
+    );
     process.exit(1);
   }
-  console.log("No broken references.");
+  console.log("No broken required references.");
 }
 
 main();
