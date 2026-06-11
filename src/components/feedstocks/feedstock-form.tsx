@@ -170,6 +170,11 @@ export function FeedstockForm({
     if (suggestedDistanceKm != null) {
       setValue("transportDistanceKm", suggestedDistanceKm);
       setValue("transportDistanceSource", suggestedDistanceSource);
+    } else {
+      // Suggestion gone (e.g. switched to a supplier without a stored
+      // distance) — clear the previous autofill so it can't persist.
+      setValue("transportDistanceKm", undefined);
+      setValue("transportDistanceSource", null);
     }
   }, [suggestedDistanceKm, suggestedDistanceSource, dirtyFields.transportDistanceKm, setValue]);
 

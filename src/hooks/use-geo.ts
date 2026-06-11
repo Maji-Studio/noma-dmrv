@@ -2,13 +2,19 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { GeocodeResult } from "@/lib/geo/types";
+import type { RouteGeometryByRequestId } from "@/data-access/geo-route-cache";
 import {
   geocodeAddressFn,
   getGeoCapabilitiesFn,
   reverseGeocodeFn,
   routeDistanceFn,
+  routeGeometriesFn,
 } from "@/fn/geo";
-import type { GeoPointInput, RouteDistanceRequest } from "@/schemas/geo";
+import type {
+  GeoPointInput,
+  RouteDistanceRequest,
+  RouteGeometriesRequest,
+} from "@/schemas/geo";
 
 const GEOCODE_MIN_QUERY_LENGTH = 3;
 /** Geocode hits for the same query string never change mid-session. */
@@ -20,6 +26,8 @@ export const geoKeys = {
   geocode: (query: string) => [...geoKeys.all, "geocode", query] as const,
   reverse: (point: GeoPointInput) =>
     [...geoKeys.all, "reverse", point.lat, point.lng] as const,
+  routeGeometries: (legIds: string[]) =>
+    [...geoKeys.all, "route-geometries", ...legIds] as const,
 };
 
 /** Whether CALC / address search can succeed (server key present or stub). */
@@ -82,5 +90,28 @@ export function useRouteDistance() {
       }
       return result.data;
     },
+  });
+}
+
+/** Roads don't move — geometry for a leg set is stable for the session. */
+const ROUTE_GEOMETRY_STALE_TIME_MS = 30 * 60 * 1000;
+
+/**
+ * Carbon Viewer: road polylines per transport leg (null = straight dashed
+ * fallback). Pass null while legs are still loading.
+ */
+export function useRouteGeometries(request: RouteGeometriesRequest | null) {
+  const legIds = request?.legs.map((leg) => leg.id).sort() ?? [];
+  return useQuery({
+    queryKey: geoKeys.routeGeometries(legIds),
+    queryFn: async (): Promise<RouteGeometryByRequestId> => {
+      const result = await routeGeometriesFn(request!);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    enabled: request !== null && request.legs.length > 0,
+    staleTime: ROUTE_GEOMETRY_STALE_TIME_MS,
   });
 }

@@ -22,6 +22,18 @@ export interface GeoCapabilities {
   routingConfigured: boolean;
 }
 
+/**
+ * Road route polyline (map-integration Phase 2). Illustrative only — the
+ * carbon number stays the leg's stored `distanceKm`; this geometry is never
+ * written onto a transport leg.
+ */
+export interface RouteGeometry {
+  /** Polyline as [lng, lat] pairs (GeoJSON order, MapLibre-ready). */
+  coordinates: [number, number][];
+  /** Routed distance of THIS polyline, km (not the leg's stored distance). */
+  distanceKm: number;
+}
+
 export interface GeoProvider {
   /** Forward-geocode a free-text address into candidate positions. */
   geocode(address: string): Promise<GeocodeResult[]>;
@@ -33,4 +45,6 @@ export interface GeoProvider {
   reverseGeocode(point: GeoPoint): Promise<string | null>;
   /** Road distance in km between two points (routed estimate, not measured). */
   routeDistanceKm(origin: GeoPoint, destination: GeoPoint): Promise<number>;
+  /** Road route polyline between two points (viewer-time, cacheable). */
+  routeGeometry(origin: GeoPoint, destination: GeoPoint): Promise<RouteGeometry>;
 }
