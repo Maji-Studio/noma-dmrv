@@ -1,7 +1,9 @@
 # =============================================================================
-# noma-dmrv Environment Variables (1Password Template)
+# noma-dmrv DEPLOYED Environment Variables (1Password Template)
 # =============================================================================
-# Run: pnpm env:local to inject values from 1Password
+# Source of truth for what syncs to Vercel (pnpm env:vercel reads this file;
+# staging item -> preview, production item -> production). For machine-local
+# values use .env.local.tpl + pnpm env:local instead.
 
 # -----------------------------------------------------------------------------
 # Database (PostgreSQL via Drizzle ORM)

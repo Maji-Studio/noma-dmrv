@@ -214,7 +214,7 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET` (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
 - **Geo / maps (all optional — graceful degradation):** `OPENROUTESERVICE_API_KEY` (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public, domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic test fixtures, rejected in prod)
 
-**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env). Local: `pnpm env:local` (`op inject` ← `.env.tpl`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Vercel: `pnpm env:vercel`. See `docs/security.md` → Secrets Management.
+**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env: `local`/`staging`/`production`). Local: `pnpm env:local` (`op inject` ← `.env.local.tpl` → `.env.local`). Deployed: `.env.tpl` (staging/production refs) feeds `pnpm env:vercel` only. CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Drift: `pnpm env:check`. See `docs/security.md` → Secrets Management.
 
 ## Security
 
