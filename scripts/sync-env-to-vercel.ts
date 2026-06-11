@@ -27,7 +27,11 @@ import { spawnSync } from "child_process";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { fetchItemFieldNames } from "./env-tpl-utils";
+import {
+  REQUIRED_DEPLOYED_VARS,
+  fetchItemFieldNames,
+  filterTemplateToItem,
+} from "./env-tpl-utils";
 
 const ITEM_PREFIX = "noma-dmrv env";
 
@@ -202,10 +206,44 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
     process.exit(1);
   }
 
+  // op inject hard-fails on ANY missing field, but most .env.tpl vars are
+  // optional (geo keys, Resend, Isometric). Skip unresolvable optional refs;
+  // fail only when a var the deployment cannot boot without is missing.
+  let injectTemplate = modifiedTemplate;
+  try {
+    const itemFields = fetchItemFieldNames(itemSuffix);
+    const { filtered, skipped, missingRequired } = filterTemplateToItem(
+      modifiedTemplate,
+      itemFields,
+      REQUIRED_DEPLOYED_VARS
+    );
+    if (missingRequired.length > 0) {
+      console.error(
+        `Required field(s) missing from 1Password item "${itemName}": ` +
+          missingRequired.join(", ")
+      );
+      console.error("Add them to the item before syncing to Vercel.");
+      process.exit(1);
+    }
+    if (skipped.length > 0) {
+      console.warn(
+        `  ⚠️  Skipping ${skipped.length} optional variable(s) with no field in "${itemName}":`
+      );
+      for (const name of skipped) console.warn(`        ${name}`);
+    }
+    injectTemplate = filtered;
+  } catch (error) {
+    console.warn(
+      `  (Could not pre-check item fields, falling back to strict inject: ${
+        error instanceof Error ? error.message : String(error)
+      })`
+    );
+  }
+
   // Write to temp file for op inject
   const tempFile = join(tmpdir(), `noma-dmrv-env-${Date.now()}.tpl`);
   try {
-    writeFileSync(tempFile, modifiedTemplate, "utf-8");
+    writeFileSync(tempFile, injectTemplate, "utf-8");
 
     const result = spawnSync("bash", ["-c", `cat "${tempFile}" | op inject`], {
       encoding: "utf-8",
