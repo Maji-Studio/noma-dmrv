@@ -7,6 +7,9 @@ export {
   saveFacilityEmissionConfig,
   type FacilityCertifierSummary,
 } from "./facility-mapping";
+// Read-only browse of the registry feedstock-type catalogue (browse-only,
+// no local record) for the feedstock-type form's Isometric tab.
+export { loadIsometricFeedstockTypes } from "./feedstock-types";
 // Read-only integration status for Settings → Health (admin-gated, no secrets).
 export {
   loadCertificationHealth,
