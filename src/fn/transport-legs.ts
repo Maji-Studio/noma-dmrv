@@ -16,6 +16,7 @@ import {
   type CreateTransportLegData,
   type UpdateTransportLegData,
 } from "@/schemas/transport-legs";
+import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { TransportLeg } from "@/db/schema";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
@@ -40,7 +41,12 @@ export async function createTransportLegFn(
 ): Promise<ActionResult<TransportLeg>> {
   return withAction(async (userId) => {
     const parsed = createTransportLegSchema.parse(input);
-    return createTransportLeg(userId, parsed);
+    return createTransportLeg(userId, {
+      ...parsed,
+      // Explicit/manual legs own their distance + provenance; a leg saved
+      // without one was hand-typed.
+      distanceSource: resolveDistanceSource(parsed.distanceKm, parsed.distanceSource) ?? null,
+    });
   });
 }
 
@@ -49,7 +55,10 @@ export async function updateTransportLegFn(
 ): Promise<ActionResult<TransportLeg>> {
   return withAction(async (userId) => {
     const { id, ...rest } = updateTransportLegSchema.parse(input);
-    return updateTransportLeg(userId, id, rest);
+    return updateTransportLeg(userId, id, {
+      ...rest,
+      distanceSource: resolveDistanceSource(rest.distanceKm, rest.distanceSource) ?? null,
+    });
   });
 }
 

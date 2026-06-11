@@ -92,6 +92,9 @@ const FORMULATION_PRODUCT_BIN_MESSAGE =
 const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
   "Feedstock and ingredient bins must be restricted to one feedstock type";
 
+const FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE =
+  "feedstockTypeId is only allowed for feedstock and ingredient bins";
+
 export const storageLocationQuickAddSchema = z.object({
   name: z
     .string()
@@ -123,6 +126,13 @@ export const storageLocationQuickAddSchema = z.object({
       code: "custom",
       path: ["feedstockTypeId"],
       message: FEEDSTOCK_TYPE_REQUIRED_MESSAGE,
+    });
+  }
+  if (!isFeedstockBinType(data.type) && data.feedstockTypeId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedstockTypeId"],
+      message: FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE,
     });
   }
 });

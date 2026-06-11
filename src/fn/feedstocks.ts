@@ -30,6 +30,7 @@ import {
   updateFeedstockSchema,
   feedstockFilterSchema,
 } from "@/schemas/feedstocks";
+import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 // ============================================
@@ -155,11 +156,13 @@ export async function createFeedstockFn(
     // produce one feedstock row per bin; each gets its own leg, mass-weighted).
     await Promise.all(
       result.feedstocks.map((feedstock) =>
-        syncFeedstockTransportLeg(
-          user.id,
-          feedstock.id,
-          data.transportDistanceKm,
-        ),
+        syncFeedstockTransportLeg(user.id, feedstock.id, {
+          distanceKm: data.transportDistanceKm,
+          distanceSource: resolveDistanceSource(
+            data.transportDistanceKm,
+            data.transportDistanceSource,
+          ),
+        }),
       ),
     );
 
@@ -189,13 +192,19 @@ export async function updateFeedstockFn(
     const user = await getUser();
     if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    // transportDistanceKm is not a feedstock column — it drives the derived
-    // transport leg, so strip it before the feedstock update spread.
-    const { feedstockId, transportDistanceKm, ...updateData } =
+    // transportDistanceKm/-Source are not feedstock columns — they drive the
+    // derived transport leg, so strip them before the feedstock update spread.
+    const { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData } =
       updateFeedstockSchema.parse(input);
     const data = await updateFeedstock(user.id, feedstockId, updateData);
 
-    await syncFeedstockTransportLeg(user.id, feedstockId, transportDistanceKm);
+    await syncFeedstockTransportLeg(user.id, feedstockId, {
+      distanceKm: transportDistanceKm,
+      distanceSource: resolveDistanceSource(
+        transportDistanceKm,
+        transportDistanceSource,
+      ),
+    });
 
     return { success: true, data };
   } catch (error) {
