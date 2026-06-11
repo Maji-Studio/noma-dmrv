@@ -105,8 +105,11 @@ against a production registry project.
 
 **Organization**:
 A biochar operator company onboarded onto noma — the tenant boundary.
-An Organization owns one or more **facilities**; all facility-scoped
-data belongs to exactly one Organization through its facility.
+An Organization owns one or more **facilities**, and **every domain
+record belongs to exactly one Organization** — including master data
+(suppliers, customers, vehicles, drivers, feedstock types). Nothing is
+shared across Organizations; new Organizations are seeded with a
+starter catalog instead.
 _Avoid_: client (collides with client components / API clients), tenant
 (infrastructure word, not domain word), company.
 

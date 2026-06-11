@@ -44,7 +44,7 @@ jobs:
       BETTER_AUTH_SECRET: ci-storage-smoke-placeholder-secret-unused-0000
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # Read-only smoke run — no commits/pushes. Keep GITHUB_TOKEN out of
           # .git/config so it can't leak to later steps or artifacts.
@@ -67,13 +67,13 @@ jobs:
 
       - name: Setup pnpm
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 9
 
       - name: Setup Node.js
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
