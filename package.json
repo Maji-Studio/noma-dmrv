@@ -23,7 +23,7 @@
     "db:seed": "tsx src/db/seed-data.ts",
     "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
     "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin",
-    "env:local": "op inject -i .env.tpl -o .env",
+    "env:local": "op inject -f -i .env.local.tpl -o .env.local",
     "env:check": "tsx scripts/check-env-drift.ts",
     "env:vercel": "pnpm env:prod && pnpm env:preview",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",
