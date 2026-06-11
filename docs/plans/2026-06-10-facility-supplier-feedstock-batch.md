@@ -1,9 +1,13 @@
 # Plan — facility / supplier / feedstock feature batch
 
-**Opened:** 2026-06-10 · **Status:** E ✅ · C ✅ · B ✅ · D ⬜ · A ⬜
+**Opened:** 2026-06-10 · **Status:** E ✅ · C ✅ · B ✅ · D ✅ · A ⬜
 
-Five independent workstreams, each shipped on its own branch off `staging` as a
-separate PR. Sequence: **E → C → B → D → A**. E, C, and B are done; D, A remain.
+~~Five independent workstreams, each on its own branch off `staging`.~~
+**2026-06-11 consolidation:** C merged via PR #175; all remaining unmerged work
+(E, B, D, C follow-ups, sensor-docs commit) now lives on one branch,
+`feat/facility-supplier-feedstock-batch` (off `origin/staging`), which PRs to
+`staging` as a single batch. Old per-workstream branches deleted locally. Only A
+remains.
 
 ## Locked decisions
 
@@ -53,14 +57,19 @@ changing project clears template/fcl_ id with an inline warning. Added
 credentials from an empty project list → disabled empty-state). "Advanced binding →
 Certification Settings ↗" link in the section header.
 
-### D. Feedstock-type General/Isometric tabs — ⬜ no migration
-Tabbed `components/feedstock-types/feedstock-type-form.tsx`: **General** (existing,
-minus the Registry URL field) + **Isometric** (read-only browse). Build
-`listFeedstockTypes()` in `lib/isometric/` — `GET /feedstock_types` exists in
-`lib/isometric/generated/certify.d.ts` but has no wrapper → `fn/` → hook →
-read-only list (name, category, id), gated on the selected facility being connected.
-Browse-only. The `feedstock_types.registry_url` column + `CreateFeedstockTypeData.registryUrl`
-stay; removing the form field is UI-only.
+### D. Feedstock-type General/Isometric tabs — ✅ DONE
+Commit `596b105` on `feat/facility-supplier-feedstock-batch`. No migration. Tabbed
+`feedstock-type-form.tsx` (General = editable local record minus the Registry URL
+field; form stays mounted across tab switches so RHF state survives) + new
+`isometric-feedstock-browser.tsx` (read-only registry catalogue, gated on the
+selected facility's registry link via `useFacilityCertifierSummary`). New
+`listFeedstockTypes()` in `lib/isometric/feedstock-types.ts` →
+`fn/certification/feedstock-types.ts` (`loadIsometricFeedstockTypes`, uses
+`safeListIfConfigured`) → `useIsometricFeedstockTypes`. Note: the registry
+`FeedstockType` has no `category` field (only id, name, supplier_reference_id) —
+the list shows those instead. `registry_url` column + `registryUrl` schema field
+kept (UI-only removal; edit-mode passes the persisted value through). Quick-add
+hint updated.
 
 ### A. Facility cascading archive — ⬜ biggest, own PR, do last
 Add `archived_at timestamptz NULL` (+ maybe `archived_by`) to `facilities` + the 15
