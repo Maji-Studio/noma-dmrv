@@ -196,12 +196,19 @@ export const orsProvider: GeoProvider = {
     const feature = body.features?.[0];
     const coordinates = feature?.geometry?.coordinates;
     const meters = feature?.properties?.summary?.distance;
-    if (
-      !Array.isArray(coordinates) ||
-      coordinates.length < 2 ||
-      typeof meters !== "number" ||
-      !Number.isFinite(meters)
-    ) {
+    // Per-tuple check: a malformed polyline would be persisted into
+    // geo_route_cache and break map rendering on every later view.
+    const hasValidCoordinates =
+      Array.isArray(coordinates) &&
+      coordinates.length >= 2 &&
+      coordinates.every(
+        (pair) =>
+          Array.isArray(pair) &&
+          pair.length >= 2 &&
+          Number.isFinite(pair[0]) &&
+          Number.isFinite(pair[1])
+      );
+    if (!hasValidCoordinates || typeof meters !== "number" || !Number.isFinite(meters)) {
       throw new SafeError("No road route found between these points.");
     }
     return {
