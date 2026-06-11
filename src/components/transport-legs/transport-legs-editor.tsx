@@ -29,11 +29,15 @@ interface TransportLegsEditorProps {
   title?: string;
   /** Read-only: list legs without add/edit/delete affordances (view mode). */
   readOnly?: boolean;
+  /** Override the no-legs message (e.g. for auto-derived categories). */
+  emptyMessage?: string;
 }
 
+// Feedstock and biochar legs are auto-derived (supplier distance / delivery
+// aggregation) and only ever rendered read-only; sample → lab stays manual.
 const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
   feedstock: "Transport: feedstock → processing",
-  biochar: "Transport: biochar → storage",
+  biochar: "Transport: biochar distribution",
   sample: "Transport: sample → lab",
 };
 
@@ -53,6 +57,7 @@ export function TransportLegsEditor({
   entityId,
   title,
   readOnly = false,
+  emptyMessage,
 }: TransportLegsEditorProps) {
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
@@ -144,9 +149,10 @@ export function TransportLegsEditor({
         <TableSkeleton columns={readOnly ? 4 : 5} rows={2} />
       ) : !hasLegs && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          {readOnly
-            ? "No transport legs recorded yet."
-            : 'No transport legs recorded yet. Click "Add leg" to record one.'}
+          {emptyMessage ??
+            (readOnly
+              ? "No transport legs recorded yet."
+              : 'No transport legs recorded yet. Click "Add leg" to record one.')}
         </p>
       ) : hasLegs ? (
         <div className="overflow-x-auto">

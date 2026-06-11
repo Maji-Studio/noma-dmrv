@@ -16,9 +16,15 @@ warning with the member application's code).
 
 ## Anchors and readings
 
-A **dual header selector** accepts a credit batch *or* an application (shared
-`EntitySelect`); `?batch=` / `?application=` deep links both work, so
-unbatched applications (pre-assembly QA) stay reachable. With both params
+The header carries a **credit batch selector** (shared `EntitySelect`) plus a
+**production-run filter** (`RunFilterSelect`) whose options are derived from
+the loaded batch's lineages — the runs below the batch, never an unscoped
+fetch. The run filter narrows the roll-up (DAG, Map, and a client-side
+recomputed Sankey — batch-level facts like ineligible mass and net tCO₂e
+don't decompose per run, so the filtered Sankey omits them) and deep-links as
+`?run=`. The application drill-down opens by clicking an application card in
+the batch DAG or via the `?application=` deep link (so unbatched applications
+— pre-assembly QA — stay reachable). With both `?batch=` and `?application=`
 present the page is a drill-down inside the batch context and a "Batch
 roll-up" button leads back.
 
@@ -38,6 +44,10 @@ roll-up" button leads back.
     *in storage / undelivered* exits before "Applied". The terminal node is
     the batch's applied mass; net tCO₂e is a label, not a ribbon.
     Inconsistent residuals clamp to zero and surface as warnings.
+    The diagram sits on a React Flow canvas (same zoom/pan/controls chrome as
+    the DAG); clicking a column or exit opens an info tooltip (mass, share of
+    intake, record count) with a "See details" link through to the backing
+    entity route — the Sankey doubles as navigation.
 - **Application (drill-down)** — view segment `Lineage | Map | Split | Trail`
   (the Phase 2 page unchanged, plus the Trail):
   - **Trail** — one merged reading of the concept canvas's "pipeline" and
@@ -58,16 +68,27 @@ roll-up" button leads back.
 | Server Action | `src/fn/chain-of-custody.ts` | Validates ids; application, batch, batch-geo, and trail actions |
 | React Query Hook | `src/hooks/use-chain-of-custody.ts` | Caches by application / batch id (`trail`, `batch`, `batch-geo` keys) |
 | Selector Search | `src/data-access/entities/` | `application` + `creditBatch` support in the shared `EntitySelect` |
-| Components | `src/components/chain-of-custody/` | Page, dual selector, DAG (`use-chain-graph.ts` incl. `useBatchChainGraph`), `sankey/`, `trail/`, `map/` |
+| Components | `src/components/chain-of-custody/` | Page, batch selector + run filter (`run-filter-select.tsx`), DAG (`use-chain-graph.ts` incl. `useBatchChainGraph`), `sankey/`, `trail/`, `map/` |
 | Route | `src/app/(app)/chain-of-custody/page.tsx` | Page entry point |
 
 ## Graph Behavior
 
+- Card hierarchy is **date-first**: the event date is the card's primary line,
+  the record code is secondary, then a headline mass stat ("960 kg biochar
+  out"), then detail lines. Dateless records (reactors) fall back to the code.
+- **Edges are labeled with the mass moving along them** (kg between records,
+  t dry into the application), so hand-offs read directly off the graph.
+  Per-step CO₂e isn't recorded along the lineage — net removal lives on the
+  Sankey's header label.
 - `Feedstock` nodes show feedstock type, supplier, inbound delivery, and consumed mass.
-- `Production Run` shows run date plus feedstock and biochar dry mass.
-- `Biochar Product`, `Order`, `Delivery`, and `Application` show record-level details rather than aggregate counts.
+- `Production Run` shows feedstock-in and biochar-out dry mass.
+- `Biochar Product` shows the unsold remainder ("N kg in storage") when its
+  mass exceeds the rollback's ordered quantity.
 - `Reactor` is shown as a sibling upstream input into the production run.
 - Batch DAG: same node vocabulary; shared upstream entities dedupe by node id.
+- MiniMap nodes are tinted by their group accent (nodes carry
+  `initialWidth`/`initialHeight` so the MiniMap can size them — React Flow
+  never writes `measured` back onto user nodes).
 
 ## Carbon Viewer — "Geography: carbon in transit"
 
@@ -110,8 +131,9 @@ Test files: `tests/e2e/chain-of-custody.spec.ts`,
 
 Coverage includes:
 
-- Dual-selector empty state before an anchor is selected
-- Selecting an application / a credit batch through the shared entity selector
+- Batch-selector empty state before an anchor is selected (run filter hidden)
+- Selecting a credit batch through the shared entity selector; narrowing by
+  production run via the derived run filter (`?run=` URL persistence + clear)
 - Opening the page directly with `application` / `batch` query parameters
 - Rendering the rollback graph through feedstock and reactor nodes
 - Batch roll-up render with shared-run dedupe (one run node, N applications)

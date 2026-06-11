@@ -415,7 +415,7 @@ export function EntitySelect({
           </span>
           <ChevronDown
             className={cn(
-              "w-4 h-4 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
+              "size-16 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
               isOpen && "rotate-180"
             )}
           />
@@ -428,7 +428,7 @@ export function EntitySelect({
             data-testid="entity-select-clear"
             className="absolute right-[32px] p-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
           >
-            <XIcon className="w-4 h-4" />
+            <XIcon className="size-16" />
           </button>
         )}
       </div>
@@ -443,7 +443,7 @@ export function EntitySelect({
           {showSearch && (
             <div className="p-8 border-b border-[var(--color-border-primary)]">
               <div className="relative">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-tertiary)]" />
+                <SearchIcon className="absolute left-12 top-1/2 -translate-y-1/2 size-16 text-[var(--color-text-tertiary)]" />
                 <input
                   ref={inputRef}
                   type="text"
@@ -453,7 +453,7 @@ export function EntitySelect({
                   placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
                   aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
                   data-testid="entity-select-search"
-                  className="w-full h-[40px] pl-10 pr-4 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
+                  className="w-full h-[40px] pl-36 pr-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
                 />
               </div>
             </div>
@@ -469,7 +469,7 @@ export function EntitySelect({
           >
             {isLoading ? (
               <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
-                <SpinnerIcon className="w-4 h-4" />
+                <SpinnerIcon className="size-16" />
                 <span className="text-[var(--text-s)]">Loading...</span>
               </li>
             ) : fetchError ? (
@@ -524,7 +524,7 @@ export function EntitySelect({
                     "bg-[var(--color-background-medium)]"
                 )}
               >
-                <PlusIcon className="w-4 h-4" />
+                <PlusIcon className="size-16" />
                 <span className="text-[var(--text-s)]">
                   {createLabel || defaultCreateLabel}
                 </span>

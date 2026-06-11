@@ -86,7 +86,9 @@ function buildPopupContent(
       content[node.id] = {
         typeLabel: LINEAGE_NODE_STYLES[node.kind].label,
         status: node.status ?? null,
-        detailLines: node.detailLines,
+        detailLines: [node.date, node.stat, ...node.detailLines].filter(
+          (line): line is string => Boolean(line)
+        ),
       };
     }
   }

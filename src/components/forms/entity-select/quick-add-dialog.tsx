@@ -181,7 +181,7 @@ export function QuickAddDialog({
               disabled={isSubmitting}
               className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
             >
-              {isSubmitting && <SpinnerIcon className="w-4 h-4" />}
+              {isSubmitting && <SpinnerIcon className="size-16" />}
               {isSubmitting ? "Creating..." : `Create ${entityLabel}`}
             </button>
             <button

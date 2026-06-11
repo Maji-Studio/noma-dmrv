@@ -115,11 +115,10 @@ async function seedApplicationLineage(seededData: SeededChainData) {
   }
 }
 
-// The header carries two EntitySelects (credit batch + application) — scope
-// by the wrapping testid, the trigger testid itself is not unique.
+// Scope by the wrapping testid — the trigger testid itself is not unique.
 async function selectEntity(
   page: Page,
-  wrapperTestId: "chain-batch-select" | "chain-application-select",
+  wrapperTestId: "chain-batch-select",
   entityId: string,
   entityCode: string
 ) {
@@ -130,14 +129,6 @@ async function selectEntity(
   await expect(page.getByTestId("entity-select-listbox")).toBeVisible();
   await page.getByTestId("entity-select-search").fill(entityCode);
   await page.getByTestId(`entity-option-${entityId}`).click();
-}
-
-async function selectApplication(
-  page: Page,
-  applicationId: string,
-  applicationCode: string
-) {
-  await selectEntity(page, "chain-application-select", applicationId, applicationCode);
 }
 
 /**
@@ -304,7 +295,7 @@ async function seedBatchChain(seededData: SeededChainData) {
 }
 
 test.describe("Chain of Custody Visualization", () => {
-  test("page loads with the dual-selector empty state", async ({
+  test("page loads with the batch-selector empty state", async ({
     adminPage,
     cleanupTestData,
   }) => {
@@ -317,20 +308,18 @@ test.describe("Chain of Custody Visualization", () => {
     ).toBeVisible();
     await expect(
       adminPage.getByText(
-        /Select a credit batch or an application above to view its chain of custody/i
+        /Select a credit batch above to view its chain of custody/i
       )
     ).toBeVisible();
     await expect(
       adminPage.getByTestId("chain-batch-select").getByTestId("entity-select-trigger")
     ).toBeVisible();
-    await expect(
-      adminPage
-        .getByTestId("chain-application-select")
-        .getByTestId("entity-select-trigger")
-    ).toBeVisible();
+    // The run filter is derived from the batch, so it only renders once a
+    // batch anchors the page.
+    await expect(adminPage.getByTestId("chain-run-select")).toHaveCount(0);
   });
 
-  test("selecting an application renders its rollback graph", async ({
+  test("application deep link renders its full rollback graph", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -338,12 +327,10 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const lineage = await seedApplicationLineage(seededData);
 
-    await adminPage.goto("/chain-of-custody");
-    await selectApplication(adminPage, lineage.application.id, lineage.application.code);
-
-    await expect(adminPage).toHaveURL(
-      new RegExp(`/chain-of-custody\\?.*application=${lineage.application.id}`)
+    await adminPage.goto(
+      `/chain-of-custody?application=${lineage.application.id}`
     );
+
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
     });
@@ -506,6 +493,46 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     await expect(adminPage).toHaveURL(
       new RegExp(`batch=${batch.ids.creditBatch}`)
     );
+  });
+
+  test("production run filter narrows the batch roll-up", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const batch = await seedBatchChain(seededData);
+
+    await adminPage.goto(`/chain-of-custody?batch=${batch.ids.creditBatch}`);
+    await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
+      timeout: 15000,
+    });
+
+    // The filter lists only runs derived from the batch's lineages.
+    await adminPage.getByTestId("chain-run-select-trigger").click();
+    await adminPage
+      .getByTestId(`chain-run-option-${batch.ids.productionRun}`)
+      .click();
+
+    await expect(adminPage).toHaveURL(
+      new RegExp(`run=${batch.ids.productionRun}`)
+    );
+    // The shared run flows into both member applications, so both survive
+    // the narrowing.
+    await expect(
+      adminPage.locator(
+        `[data-testid="rf__node-application:${batch.ids.applicationA}"]`
+      )
+    ).toBeVisible({ timeout: 10000 });
+    await expect(
+      adminPage.locator(
+        `[data-testid="rf__node-application:${batch.ids.applicationB}"]`
+      )
+    ).toBeVisible();
+
+    // Clearing the filter returns the full roll-up.
+    await adminPage.getByTestId("chain-run-select-clear").click();
+    await expect(adminPage).not.toHaveURL(/run=/);
   });
 
   test("sankey balances dry mass with explicit labeled exits", async ({
