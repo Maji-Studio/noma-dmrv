@@ -35,6 +35,23 @@ export const GEO_ROUTE_RATE_LIMIT = {
   windowMs: 60_000,
 } as const;
 
+// Viewer-time route polylines (Carbon Viewer). One request covers a whole
+// chain's legs; cache hits cost no ORS quota, so the window can stay tight.
+export const GEO_ROUTE_GEOMETRY_RATE_LIMIT = {
+  key: "geo:route-geometry",
+  max: 30,
+  windowMs: 60_000,
+} as const;
+
+/** Hard cap on legs per route-geometry request (bounds worst-case ORS fan-out). */
+export const ROUTE_GEOMETRY_MAX_LEGS = 20;
+
+/**
+ * Decimals route-cache endpoints are rounded to before lookup/insert
+ * (~1 m precision — float noise can't fragment the cache).
+ */
+export const ROUTE_CACHE_COORD_DECIMALS = 5;
+
 // ---------------------------------------------------------------------------
 // MapTiler basemap (browser-safe, domain-locked public key)
 // ---------------------------------------------------------------------------
