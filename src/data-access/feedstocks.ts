@@ -597,8 +597,9 @@ export async function getFeedstockOptions(
 
 /**
  * Recompute and persist the feedstock's single transport leg from records we
- * already hold (supplier origin + facility destination + vehicle + wet cargo
- * mass). Distance resolves in priority order — feedstock-form override → the
+ * already hold (supplier origin — default location's name/GPS preferred —
+ * + facility destination + vehicle + wet cargo mass). Distance resolves in
+ * priority order — feedstock-form override → the
  * supplier's DEFAULT location distance → supplier-level distance-to-facility —
  * and the leg inherits the winning level's `distanceSource` (map-integration
  * plan, decision 3). Call after every feedstock create/update.
@@ -620,6 +621,9 @@ export async function syncFeedstockTransportLeg(
       supplierGpsLongitude: suppliers.gpsLongitude,
       supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
       supplierDistanceSource: suppliers.distanceSource,
+      locationName: supplierLocations.name,
+      locationGpsLatitude: supplierLocations.gpsLatitude,
+      locationGpsLongitude: supplierLocations.gpsLongitude,
       locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
       locationDistanceSource: supplierLocations.distanceSource,
       facilityName: facilities.name,
@@ -653,11 +657,17 @@ export async function syncFeedstockTransportLeg(
       ? row.locationDistanceSource
       : row.supplierDistanceSource;
 
+  // Origin identity mirrors the distance priority: the default supplier
+  // location is the actual pickup point, so its name/GPS beat the supplier's.
+  // GPS falls back as a pair — a lone latitude or longitude is unusable.
+  const locationHasGps =
+    row.locationGpsLatitude != null && row.locationGpsLongitude != null;
+
   const derived = deriveTransportLeg({
     origin: {
-      name: row.supplierName,
-      gpsLatitude: row.supplierGpsLatitude,
-      gpsLongitude: row.supplierGpsLongitude,
+      name: row.locationName ?? row.supplierName,
+      gpsLatitude: locationHasGps ? row.locationGpsLatitude : row.supplierGpsLatitude,
+      gpsLongitude: locationHasGps ? row.locationGpsLongitude : row.supplierGpsLongitude,
     },
     destination: {
       name: row.facilityName,
