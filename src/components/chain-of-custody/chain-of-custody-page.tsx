@@ -3,12 +3,14 @@
  *
  * The page re-anchors on the credit batch — the unit whose provenance
  * verification actually cares about — with the single application's rollback
- * as the drill-down. Dual header selector: a credit batch resolves to the
- * roll-up readings (merged DAG | transit Map | mass-balance Sankey); an
- * application goes straight to the drill-down (Lineage | Map | Split | Trail
- * — the Phase 2 page unchanged, plus the Trail). `?batch=` / `?application=`
- * deep links both work; both present = drill-down within the batch context
- * (a back-to-roll-up affordance keeps the batch reachable).
+ * as the drill-down. Header selectors: a credit batch resolves to the
+ * roll-up readings (merged DAG | transit Map | mass-balance Sankey), and a
+ * production-run filter (derived from the batch's lineages) narrows the
+ * roll-up to one run's flow. The application drill-down (Lineage | Map |
+ * Split | Trail) opens by clicking an application card or via the
+ * `?application=` deep link; `?batch=` + `?application=` together =
+ * drill-down within the batch context (a back-to-roll-up affordance keeps
+ * the batch reachable). `?run=` deep-links the run filter.
  */
 "use client";
 
@@ -30,12 +32,14 @@ import "@xyflow/react/dist/base.css";
 import { ArrowLeft, TreeStructure } from "@phosphor-icons/react/dist/ssr";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { cn } from "@/lib/utils";
+import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
 import {
   useChainOfCustody,
   useCreditBatchChain,
 } from "@/hooks/use-chain-of-custody";
 import { ChainNode } from "./chain-node";
 import { CarbonTransitPanel } from "./map";
+import { RunFilterSelect, type RunFilterOption } from "./run-filter-select";
 import { BatchSankey } from "./sankey";
 import { ApplicationTrail } from "./trail";
 import { useBatchChainGraph, useChainGraph } from "./use-chain-graph";
@@ -62,6 +66,9 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
 
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
 const DEFAULT_BATCH_VIEW: BatchViewMode = "dag";
+
+// Shared width for the batch / run selector wrappers in the page header.
+const SELECTOR_WRAPPER_CLASS = "w-[320px] max-w-full";
 
 function parseApplicationView(raw: string | null): ApplicationViewMode {
   return APPLICATION_VIEW_MODES.some((mode) => mode.value === raw)
@@ -150,7 +157,10 @@ function ChainFlowGraph({ nodes, edges, warnings, onNodeClick }: ChainFlowGraphP
         <MiniMap
           className="!rounded-none !border-[var(--color-border-secondary)] !shadow-none"
           maskColor="rgba(0,0,0,0.08)"
-          nodeColor="var(--color-background-medium)"
+          nodeColor={(node) =>
+            (node.data as { accent?: string }).accent ??
+            "var(--color-background-medium)"
+          }
         />
       </ReactFlow>
     </>
@@ -197,6 +207,7 @@ export function ChainOfCustodyPage() {
   const searchParams = useSearchParams();
   const selectedApplicationId = searchParams.get("application");
   const selectedBatchId = searchParams.get("batch");
+  const selectedRunId = searchParams.get("run");
   // Application wins: with both params present the page is a drill-down
   // inside the batch context (plan decision 5).
   const anchor: "application" | "batch" | "none" = selectedApplicationId
@@ -237,10 +248,63 @@ export function ChainOfCustodyPage() {
       highlightedNodeId: selection?.nodeId ?? null,
     }
   );
-  const batchLineages =
+  // The run filter narrows the roll-up to lineages flowing through one
+  // production run — a derived subset of the batch, never a wider fetch.
+  const filteredBatchLineages =
     anchor === "batch"
-      ? batchData?.lineages.map((lineage) => lineage.chain)
+      ? batchData?.lineages.filter(
+          (lineage) =>
+            !selectedRunId ||
+            lineage.chain.productionRun?.id === selectedRunId
+        )
       : undefined;
+  const batchLineages = filteredBatchLineages?.map((lineage) => lineage.chain);
+  const runOptions: RunFilterOption[] = (() => {
+    const byRun = new Map<string, RunFilterOption>();
+    for (const lineage of batchData?.lineages ?? []) {
+      const run = lineage.chain.productionRun;
+      if (!run) continue;
+      const existing = byRun.get(run.id);
+      if (existing) {
+        existing.applicationCount += 1;
+      } else {
+        byRun.set(run.id, {
+          id: run.id,
+          code: run.code,
+          date: run.date,
+          applicationCount: 1,
+        });
+      }
+    }
+    return Array.from(byRun.values()).sort((a, b) =>
+      a.code.localeCompare(b.code)
+    );
+  })();
+  // Run-filtered warnings re-merge from the subset (batch warnings are
+  // app-prefixed batch-wide strings, so the unfiltered set would leak
+  // out-of-scope applications into the narrowed view).
+  const batchWarnings = selectedRunId
+    ? Array.from(
+        new Set(
+          (filteredBatchLineages ?? []).flatMap((lineage) =>
+            lineage.chain.warnings.map(
+              (warning) => `${lineage.chain.application.code}: ${warning}`
+            )
+          )
+        )
+      )
+    : (batchData?.warnings ?? []);
+  // Batch-level facts (ineligible mass, tCO₂e) don't decompose per run, so a
+  // filtered sankey recomputes from the subset without them.
+  const filteredSankey =
+    selectedRunId && batchLineages
+      ? buildBatchSankey(batchLineages, {
+          ineligibleFeedstockMassKg: null,
+          totalCo2eStoredTons: null,
+          totalCo2eEmissionsTons: null,
+          totalCo2eCounterfactualTons: null,
+        })
+      : null;
   const { nodes: batchNodes, edges: batchEdges } = useBatchChainGraph(
     batchLineages,
     {
@@ -261,6 +325,7 @@ export function ChainOfCustodyPage() {
     setSelection(null);
     updateParams((params) => {
       params.delete("application");
+      params.delete("run");
       params.delete("view");
       if (creditBatchId) {
         params.set("batch", creditBatchId);
@@ -270,15 +335,13 @@ export function ChainOfCustodyPage() {
     });
   };
 
-  const handleApplicationChange = (applicationId: string | undefined) => {
+  const handleRunChange = (runId: string | undefined) => {
     setSelection(null);
     updateParams((params) => {
-      params.delete("batch");
-      params.delete("view");
-      if (applicationId) {
-        params.set("application", applicationId);
+      if (runId) {
+        params.set("run", runId);
       } else {
-        params.delete("application");
+        params.delete("run");
       }
     });
   };
@@ -423,12 +486,19 @@ export function ChainOfCustodyPage() {
         </CenteredMessage>
       );
     }
+    if (selectedRunId && (filteredBatchLineages?.length ?? 0) === 0) {
+      return (
+        <CenteredMessage>
+          No lineage in this batch flows through the selected production run.
+        </CenteredMessage>
+      );
+    }
     if (batchView === "dag") {
       return (
         <ChainFlowGraph
           nodes={batchNodes}
           edges={batchEdges}
-          warnings={batchData.warnings}
+          warnings={batchWarnings}
           onNodeClick={handleBatchNodeClick}
         />
       );
@@ -444,7 +514,12 @@ export function ChainOfCustodyPage() {
         />
       );
     }
-    return <BatchSankey sankey={batchData.sankey} batchCode={batchData.batch.code} />;
+    return (
+      <BatchSankey
+        sankey={filteredSankey ?? batchData.sankey}
+        batchCode={batchData.batch.code}
+      />
+    );
   })();
 
   return (
@@ -461,8 +536,9 @@ export function ChainOfCustodyPage() {
               <div>
                 <h1 className="title-heading-2">Chain of Custody</h1>
                 <p className="body-small text-[var(--color-text-secondary)] mt-2">
-                  Select a credit batch to roll up its provenance, or an
-                  application to trace a single rollback.
+                  Select a credit batch to roll up its provenance, narrow it by
+                  production run, or click an application card to trace a
+                  single rollback.
                 </p>
               </div>
             </div>
@@ -481,7 +557,7 @@ export function ChainOfCustodyPage() {
 
           <div className="flex flex-wrap items-end justify-between gap-16">
             <div className="flex flex-wrap items-end gap-16">
-              <div className="w-full max-w-[320px] min-w-[240px]" data-testid="chain-batch-select">
+              <div className={SELECTOR_WRAPPER_CLASS} data-testid="chain-batch-select">
                 <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
                   Credit Batch
                 </p>
@@ -494,25 +570,25 @@ export function ChainOfCustodyPage() {
                   className="bg-[var(--color-background-white)]"
                 />
               </div>
-              <div className="w-full max-w-[320px] min-w-[240px]" data-testid="chain-application-select">
-                <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
-                  Application
-                </p>
-                <EntitySelect
-                  entityType="application"
-                  value={selectedApplicationId ?? undefined}
-                  onChange={handleApplicationChange}
-                  placeholder="Search application code"
-                  alwaysShowSearch
-                  className="bg-[var(--color-background-white)]"
-                />
-              </div>
+              {anchor === "batch" ? (
+                <div className={SELECTOR_WRAPPER_CLASS} data-testid="chain-run-select">
+                  <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
+                    Production Run
+                  </p>
+                  <RunFilterSelect
+                    runs={runOptions}
+                    value={selectedRunId}
+                    onChange={handleRunChange}
+                    disabled={batchLoading || runOptions.length === 0}
+                  />
+                </div>
+              ) : null}
               {anchor === "application" && selectedBatchId ? (
                 <button
                   type="button"
                   onClick={backToBatch}
                   data-testid="chain-back-to-batch"
-                  className="flex h-[44px] cursor-pointer items-center gap-8 border-[1.5px] border-[var(--clr-dark-purple-20)] px-14 font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
+                  className="flex h-40 cursor-pointer items-center gap-8 border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
                 >
                   <ArrowLeft size={14} weight="bold" />
                   Batch roll-up
@@ -534,7 +610,7 @@ export function ChainOfCustodyPage() {
                     aria-pressed={activeView === mode.value}
                     onClick={() => handleViewChange(mode.value, defaultView)}
                     className={cn(
-                      "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-14 py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
+                      "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
                       activeView === mode.value
                         ? "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
                         : "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
@@ -551,8 +627,7 @@ export function ChainOfCustodyPage() {
         <div className="flex-1 min-h-0 relative">
           {anchor === "none" ? (
             <CenteredMessage>
-              Select a credit batch or an application above to view its chain
-              of custody.
+              Select a credit batch above to view its chain of custody.
             </CenteredMessage>
           ) : anchor === "application" ? (
             applicationBody

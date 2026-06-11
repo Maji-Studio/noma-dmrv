@@ -11,6 +11,8 @@ import {
   getCreditBatchChainGeoFn,
 } from "@/fn/chain-of-custody";
 
+const STALE_TIME_MS = 30_000;
+
 export const chainOfCustodyKeys = {
   all: ["chain-of-custody"] as const,
   detail: (applicationId: string) =>
@@ -36,7 +38,7 @@ export function useChainOfCustody(applicationId: string | null) {
       return result.data;
     },
     enabled: !!applicationId,
-    staleTime: 30000,
+    staleTime: STALE_TIME_MS,
   });
 }
 
@@ -51,7 +53,7 @@ export function useChainOfCustodyGeo(applicationId: string | null) {
       return result.data;
     },
     enabled: !!applicationId,
-    staleTime: 30000,
+    staleTime: STALE_TIME_MS,
   });
 }
 
@@ -66,7 +68,7 @@ export function useApplicationTrail(applicationId: string | null) {
       return result.data;
     },
     enabled: !!applicationId,
-    staleTime: 30000,
+    staleTime: STALE_TIME_MS,
   });
 }
 
@@ -81,7 +83,7 @@ export function useCreditBatchChain(creditBatchId: string | null) {
       return result.data;
     },
     enabled: !!creditBatchId,
-    staleTime: 30000,
+    staleTime: STALE_TIME_MS,
   });
 }
 
@@ -96,6 +98,6 @@ export function useCreditBatchChainGeo(creditBatchId: string | null) {
       return result.data;
     },
     enabled: !!creditBatchId,
-    staleTime: 30000,
+    staleTime: STALE_TIME_MS,
   });
 }
