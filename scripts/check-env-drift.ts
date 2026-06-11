@@ -1,16 +1,18 @@
 /**
- * Check for drift between 1Password and .env.tpl
+ * Check for drift between 1Password and the env templates.
  *
- * `.env.tpl` is the single source of truth for which variables get synced to
- * Vercel (see sync-env-to-vercel.ts — it only uploads what the template
- * references). A variable can therefore exist in 1Password yet never reach
- * Vercel because nobody added it to the template. This script surfaces that gap.
+ * `.env.tpl` is the single source of truth for what syncs to Vercel
+ * (sync-env-to-vercel.ts only uploads what it references) — checked against
+ * the staging and production items. `.env.local.tpl` feeds `pnpm env:local`
+ * (machine-local .env.local) — checked against the local item. A variable can
+ * exist in 1Password yet never reach Vercel/dev because nobody added it to
+ * the matching template; this script surfaces that gap.
  *
- * For each 1Password item (staging + production) it reports:
- *   - fields present in 1Password but NOT referenced in .env.tpl
+ * For each (template, 1Password item) pair it reports:
+ *   - fields present in 1Password but NOT referenced in the template
  *     → newly-set secrets you probably want to add to the template
- *   - .env.tpl op:// references whose field is MISSING from 1Password
- *     → broken references that will fail `op inject` during a sync
+ *   - template op:// references whose field is MISSING from 1Password
+ *     → broken references that will fail `op inject`
  *
  * Prints field NAMES only — never secret values.
  *
@@ -33,7 +35,12 @@ import {
   templateOpFieldNames,
 } from "./env-tpl-utils";
 
-const ENVS = ["staging", "production"] as const;
+/** Each 1Password item is reconciled against the template that consumes it. */
+const CHECKS = [
+  { env: "staging", templateFile: ".env.tpl" },
+  { env: "production", templateFile: ".env.tpl" },
+  { env: "local", templateFile: ".env.local.tpl" },
+] as const;
 
 function check1PasswordAuth(): void {
   const result = spawnSync("op", ["whoami"], { encoding: "utf-8" });
@@ -48,24 +55,17 @@ function check1PasswordAuth(): void {
 }
 
 function main(): void {
-  console.log("Checking drift between 1Password and .env.tpl\n");
+  console.log("Checking drift between 1Password and the env templates\n");
   check1PasswordAuth();
-
-  const template = parseTemplate();
-  const templateFields = templateOpFieldNames();
-  const literals = template.filter((e) => e.opField === null).map((e) => e.name);
-
-  console.log(
-    `.env.tpl: ${template.length} variables ` +
-      `(${templateFields.size} from 1Password, ${literals.length} literal${
-        literals.length ? `: ${literals.join(", ")}` : ""
-      })\n`
-  );
 
   let hasBrokenRefs = false;
   let hasUntracked = false;
 
-  for (const env of ENVS) {
+  for (const { env, templateFile } of CHECKS) {
+    const template = parseTemplate(templateFile);
+    const templateFields = templateOpFieldNames(templateFile);
+    const literals = template.filter((e) => e.opField === null).map((e) => e.name);
+
     let itemFields: Set<string>;
     try {
       itemFields = fetchItemFieldNames(env);
@@ -73,7 +73,11 @@ function main(): void {
       console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
-    console.log(`── 1Password item: ${ITEM_PREFIX} ${env} (${itemFields.size} fields) ──`);
+    console.log(
+      `── ${templateFile} (${template.length} vars` +
+        `${literals.length ? `, ${literals.length} literal: ${literals.join(", ")}` : ""}) ` +
+        `↔ 1Password item: ${ITEM_PREFIX} ${env} (${itemFields.size} fields) ──`
+    );
 
     const untracked = [...itemFields].filter((n) => !templateFields.has(n)).sort();
     const broken = [...templateFields].filter((n) => !itemFields.has(n)).sort();
@@ -96,9 +100,9 @@ function main(): void {
 
   if (hasUntracked) {
     console.log(
-      "Add any wanted variables to .env.tpl as:\n" +
-        `  NAME="op://${VAULT}/${ITEM_PREFIX} staging/NAME"\n` +
-        "then run: pnpm env:vercel\n"
+      "Add any wanted variables to the matching template as:\n" +
+        `  NAME="op://${VAULT}/${ITEM_PREFIX} <env>/NAME"\n` +
+        "then run: pnpm env:vercel (.env.tpl) or pnpm env:local (.env.local.tpl)\n"
     );
   }
 
