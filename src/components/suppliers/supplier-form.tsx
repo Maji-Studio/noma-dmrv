@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
@@ -51,7 +51,7 @@ export function SupplierForm({
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm({
@@ -74,10 +74,19 @@ export function SupplierForm({
   const defaultSubmitLabel = isEditMode ? "Update Supplier" : "Create Supplier";
 
   // Preprocessed Zod fields have `unknown` input types — narrow the watches.
-  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
-  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
-  const distanceToFacilityKm = watch("distanceToFacilityKm") as number | null | undefined;
-  const distanceSource = watch("distanceSource");
+  const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as
+    | number
+    | null
+    | undefined;
+  const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as
+    | number
+    | null
+    | undefined;
+  const distanceToFacilityKm = useWatch({
+    control,
+    name: "distanceToFacilityKm",
+  }) as number | null | undefined;
+  const distanceSource = useWatch({ control, name: "distanceSource" });
 
   // CALC endpoints: supplier point → the globally selected facility.
   const { selectedFacility } = useFacilityContext();
