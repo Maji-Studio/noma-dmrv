@@ -170,8 +170,12 @@ const envSchema = z.object({
   // local-fs in production-like environments. In dev/test it's optional and the
   // local-fs provider falls back to an ephemeral random secret with a warning.
 
-  // Production fail-closed: never serve stubbed geo answers in prod.
-  if (data.NODE_ENV === "production" && data.GEO_PROVIDER === "stub") {
+  // Production fail-closed: never serve stubbed geo answers in prod. CI is
+  // carved out because hermetic e2e builds a production bundle (e2e.yml:
+  // `pnpm build && pnpm start`) with GEO_PROVIDER=stub by design — same
+  // precedent as the storage placeholder env there. Real deployments never
+  // run with CI set at runtime, so the safeguard still holds where it matters.
+  if (data.NODE_ENV === "production" && !process.env.CI && data.GEO_PROVIDER === "stub") {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["GEO_PROVIDER"],
