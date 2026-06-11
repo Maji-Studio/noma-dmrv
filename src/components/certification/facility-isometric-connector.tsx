@@ -27,6 +27,10 @@ import {
   useSaveFacilityCertifierMapping,
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
+import {
+  DEFAULT_PROTOCOL_LABEL,
+  DEFAULT_PROTOCOL_SLUG,
+} from "@/config/certification";
 import { EnvBanner } from "./env-banner";
 
 // Carry the edited facility through to Settings — the facility side-sheet can
@@ -156,6 +160,7 @@ export function FacilityIsometricConnector({
   const handleSelect = (value: string) => {
     setSelectedProjectId(value);
     setAcknowledgeSharedProject(false);
+    setConfirmProduction(false);
     setServerError(null);
   };
 
@@ -165,7 +170,7 @@ export function FacilityIsometricConnector({
       await saveMutation.mutateAsync({
         facilityId,
         externalProjectId: selected,
-        protocolSlug: mapping?.protocolSlug ?? "biochar",
+        protocolSlug: mapping?.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
         defaultRemovalTemplateId: null,
         externalFacilityId: null,
         confirmProduction,
@@ -245,8 +250,8 @@ export function FacilityIsometricConnector({
 
       {!mapping && availableProjects.length > 0 && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          New connections use the Biochar protocol by default — change it in
-          Certification → Settings after connecting.
+          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default
+          — change it in Certification → Settings after connecting.
         </p>
       )}
 

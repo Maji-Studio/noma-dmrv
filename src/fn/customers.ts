@@ -37,6 +37,7 @@ import {
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
+import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 // ============================================
@@ -394,6 +395,10 @@ export async function createCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceFromFacilityKm ?? null,
+        validated.distanceSource,
+      ),
       isDefault: validated.isDefault,
     });
 
@@ -438,6 +443,10 @@ export async function updateCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceFromFacilityKm,
+        validated.distanceSource,
+      ),
       isDefault: validated.isDefault,
     });
 

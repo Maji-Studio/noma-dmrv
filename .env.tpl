@@ -1,7 +1,14 @@
 # =============================================================================
-# noma-dmrv Environment Variables (1Password Template)
+# noma-dmrv DEPLOYED Environment Variables (1Password Template)
 # =============================================================================
-# Run: pnpm env:local to inject values from 1Password
+# Source of truth for what syncs to Vercel (pnpm env:vercel reads this file;
+# staging item -> preview, production item -> production). For machine-local
+# values use .env.local.tpl + pnpm env:local instead.
+#
+# OPTIONAL variables (everything outside REQUIRED_DEPLOYED_VARS in
+# scripts/env-tpl-utils.ts — i.e. not the DB/auth/app-url trio or the
+# s3-compatible storage set) may be absent from a 1Password item: the sync
+# skips them with a warning instead of failing.
 
 # -----------------------------------------------------------------------------
 # Database (PostgreSQL via Drizzle ORM)
@@ -46,6 +53,17 @@ STORAGE_BUCKET="op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET"
 STORAGE_REGION="op://Environment Variables/noma-dmrv env staging/STORAGE_REGION"
 STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID"
 STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
+
+# -----------------------------------------------------------------------------
+# Geo / Maps (map integration — ADR 0009)
+# Both keys are OPTIONAL: without them the app still runs; CALC/address search
+# and the map preview degrade gracefully. OPENROUTESERVICE_API_KEY is
+# server-only (geocoding + routing); NEXT_PUBLIC_MAPTILER_KEY is a public,
+# domain-locked basemap key. GEO_PROVIDER is not templated — it defaults to
+# "ors"; "stub" is for hermetic tests only (.env.test) and is rejected in prod.
+# -----------------------------------------------------------------------------
+OPENROUTESERVICE_API_KEY="op://Environment Variables/noma-dmrv env staging/OPENROUTESERVICE_API_KEY"
+NEXT_PUBLIC_MAPTILER_KEY="op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_MAPTILER_KEY"
 
 # -----------------------------------------------------------------------------
 # App Configuration

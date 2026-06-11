@@ -14,26 +14,6 @@ Each entry follows this shape:
 
 ## Schema
 
-### Wire per-location / per-delivery distance into transport-leg derivation (`parties/distance-derivation`) — opened 2026-06-10
-
-- **Context:** the location-distance + default-location work added
-  `supplier_locations.distance_from_facility_km`, `customer_locations.is_default`
-  / `supplier_locations.is_default`, and a per-delivery
-  `deliveries.distance_km_override` (+ `distance_note`). These are stored and
-  editable, but the certifier transport-leg math does **not** yet prefer them.
-- **Decision needed:** make `deriveTransportLeg` /
-  `syncBiocharProductTransportLeg` (`src/lib/calculations/transport-leg.ts`,
-  `src/lib/isometric/.../transport-legs.ts`) resolve distance in priority order
-  — feedstock side: feedstock `transportDistanceKm` → supplier location
-  (default) distance → supplier-level `distance_to_facility_km`; distribution
-  side: `deliveries.distance_km_override` → destination customer location
-  (default) `distance_from_facility_km`.
-- **Why it matters:** until wired, the new per-location distance and the
-  per-delivery override are operational metadata only and do not affect
-  certification emissions. The fields exist so the UI/data are ready; the
-  derivation change is a separate, riskier pass (touches credit math) and
-  should get its own review + e2e coverage.
-
 ### Dropped protocol-stub tables — re-add when each feature is built (opened 2026-06-08)
 
 Removed in migration `drizzle/0037_sour_lethal_legion.sql`. These tables were
@@ -86,6 +66,20 @@ guard. Pure starter-template residue; the app is facility-scoped.
   no per-org subdomains, theming, or branded invitation emails.
 - **To resolve:** revisit when a client asks for white-labeling; scope is
   wildcard domain routing, per-org theme tokens, branded Resend templates.
+
+### Facility-wide monitoring dashboard / live map (`coc/facility-dashboard`, opened 2026-06-11)
+
+- **Recorded as future, out of scope (2026-06-11 chain-of-custody-views
+  grilling):** the Maji concept canvas also contains a one-screen
+  monitoring dashboard (KPIs, geospatial panel, mini-Sankey, sensors,
+  credit ledger), a facility-wide live map spanning all batches/routes,
+  and an outward-facing public provenance showcase. The credit-batch
+  anchor (`docs/plans/2026-06-11-chain-of-custody-views.md`, ADR 0011)
+  deliberately covers only batch-scoped provenance.
+- **To resolve:** revisit after Phase 3 ships — decide whether the
+  existing dashboard route grows a geospatial/mass-balance panel, and
+  whether a buyer-facing shareable page is wanted (different audience,
+  different auth surface).
 
 ### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
 

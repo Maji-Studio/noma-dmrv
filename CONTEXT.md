@@ -101,6 +101,40 @@ A placeholder mapping that emits `0` for a **monitored input** noma
 cannot yet source. A template carrying any zero stub must not be used
 against a production registry project.
 
+### Provenance & lineage
+
+**Rollback**:
+The upstream trace from one **application** to its originating feedstock
+batches, through the custody path Feedstock (+ Reactor) → Production Run
+→ Biochar Product → Order → Delivery → Application.
+_Avoid_: trace-back, upstream graph.
+
+**Roll-up**:
+The merged lineage of one **credit batch** — every member application's
+**rollback** combined, production runs deduped, applied-biochar scoped.
+Mirrors how a **Removal** aggregates runs. The chain-of-custody page is
+anchored on this; a single application's rollback is its drill-down.
+_Avoid_: aggregate view, batch graph.
+
+**Trail**:
+The dated, evidence-annotated reading of one application's **rollback** —
+each custody step with its date and what attests it (documents, samples,
+distance provenance). One reading, not two: it merges what a "timeline"
+and an "attestation ledger" would each show.
+_Avoid_: timeline, ledger, audit log.
+
+**Mass balance**:
+The dry-mass flow reading of a **credit batch**: feedstock → production
+runs → biochar lots → applied, with every loss drawn as an explicit
+labeled exit — **ineligible feedstock**, **conversion loss**, in-storage
+mass. Ribbon widths always mean dry kg; columns are never normalized.
+_Avoid_: volume flow.
+
+**Conversion loss**:
+The pyrolysis mass not retained in biochar (syngas, vapour, ash) —
+expected process physics, not an error or a leak.
+_Avoid_: shrinkage, waste.
+
 ### Tenancy
 
 **Organization**:

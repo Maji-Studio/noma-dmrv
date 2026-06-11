@@ -12,7 +12,7 @@ import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import { DistanceCalcField, FormField, FormInput, FormTextarea } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -64,7 +64,7 @@ interface DeliveryFormProps {
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel }: DeliveryFormProps) {
   const isEditMode = !!delivery;
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
 
   // Fetch orders for dropdown
   const { data: ordersData } = useOrdersForSelect(contextFacilityId ?? undefined, {
@@ -107,12 +107,27 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       driverId: delivery?.driverId ?? undefined,
       vehicleId: delivery?.vehicleId ?? undefined,
       distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
+      distanceSource: delivery?.distanceSource ?? null,
       distanceNote: delivery?.distanceNote ?? "",
     },
   });
 
   const watchWetMass = watch("deliveredWetMassKg");
   const watchMoisture = watch("moistureContentPercent");
+  const watchOrderId = watch("orderId");
+  const distanceKmOverride = watch("distanceKmOverride") as number | null | undefined;
+  const distanceSource = watch("distanceSource");
+
+  // CALC endpoints: selected facility → the selected order's customer location.
+  const facilityPoint =
+    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
+      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
+      : null;
+  const selectedOrder = orders.find((o) => o.id === watchOrderId);
+  const destinationPoint =
+    selectedOrder?.destinationGpsLatitude != null && selectedOrder?.destinationGpsLongitude != null
+      ? { lat: selectedOrder.destinationGpsLatitude, lng: selectedOrder.destinationGpsLongitude }
+      : null;
 
   // Auto-calculate dry mass from wet mass and moisture using shared utility
   const calculatedDryMass =
@@ -301,25 +316,26 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
+          <DistanceCalcField
             id="distanceKmOverride"
             label="Distance override (km)"
             error={errors.distanceKmOverride?.message}
             helperText="Leave blank to use the destination's stored distance. Set only when this trip's routing differs."
-          >
-            <FormInput
-              id="distanceKmOverride"
-              type="number"
-              step="any"
-              min="0"
-              placeholder="e.g., 140"
-              disabled={isSubmitting}
-              error={!!errors.distanceKmOverride}
-              {...register("distanceKmOverride", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
+            disabled={isSubmitting}
+            distanceKm={distanceKmOverride}
+            distanceSource={distanceSource}
+            onDistanceChange={(km, source) => {
+              setValue("distanceKmOverride", km ?? undefined, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("distanceSource", source, { shouldDirty: true });
+            }}
+            origin={facilityPoint}
+            destination={destinationPoint}
+            originLabel="selected facility"
+            destinationLabel="order's destination"
+          />
         </div>
 
         <FormField

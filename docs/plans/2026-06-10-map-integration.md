@@ -1,6 +1,44 @@
 # Map Integration — Address / Point / Lat-Lng Input, Auto-Distance, Carbon Viewer
 
-> **Status: Planned** (2026-06-10). Output of a grilling session against the
+> **Status: Phase 2 COMPLETE** (2026-06-11) — the "Carbon in Transit" viewer
+> shipped on `feat/map-integration-phase-2`: geo payload contract
+> (`data-access/chain-of-custody-geo.ts` — position sources own /
+> leg-origin / facility-inherited / none + chain legs with provenance),
+> viewer-time ORS road polylines cached in `geo_route_cache` (read-through,
+> rounded-endpoint key; unroutable legs fall back to a dashed bowed arc —
+> chips always show the leg's *stored* distanceKm), the full concept-build
+> map treatment (brand basemap + SAT, brutalist markers, marching-ants flow
+> arcs, node-card popups, legend, transport-legs + not-geolocated rails,
+> dashed-red warning banner, empty state), Lineage / Map / Split view
+> segment persisted in `?view=`, and two-way DAG ⇄ map cross-highlighting.
+> Shared map theme extracted to `src/components/map/` (PositionPicker now
+> consumes it). Both map surfaces also degrade gracefully when WebGL is
+> unavailable (headless browsers) instead of crashing to the error
+> boundary. Gates green: lint 0 errors, vitest 494, CI-style production
+> build, hermetic e2e (carbon-viewer 5/5 + position-picker 5/5 +
+> chain-of-custody 4/4). Still deferred (now recorded for a future phase,
+> not Phase 2): plain pickers for feedstock / feedstock-delivery /
+> soil-temp (those forms expose no GPS fields; need schema + fn +
+> data-access columns first).
+>
+> **Phase 1 COMPLETE** (2026-06-11) — geo foundation (env, schema,
+> `src/lib/geo/`, actions/hooks), `PositionPicker` + `DistanceCalcField`,
+> Tier 1/2 form wiring (incl. transport-leg 2× picker + CALC), derive-path
+> provenance + source-aware priority resolution, and hermetic e2e coverage
+> all landed on `feat/map-integration-phase-1`. All gates green (lint,
+> vitest, position-picker e2e 5/5, CI-style production build) and the
+> credit-math diff passed its dedicated review — fixes in `cfc874f` and
+> `cd43a0b`; the create-vs-update `?? null` asymmetry around
+> `resolveDistanceSource` and the `manual` fallback for sourceless overrides
+> were review-flagged and **kept as intentional** (see the invariant header
+> in `src/schemas/distance-source.ts`). Real `OPENROUTESERVICE_API_KEY` /
+> `NEXT_PUBLIC_MAPTILER_KEY` synced from 1Password 2026-06-11;
+> `GEO_PROVIDER=stub` remains only in `.env.test` (hermetic e2e) and CI.
+> **Deferred from §8 Tier 2:** plain pickers for feedstock /
+> feedstock-delivery / soil-temp — those forms have no GPS fields today
+> (new schema+fn+data-access columns required); decide whether to fold into
+> Phase 2. **Next: Phase 2 — "Carbon in Transit" viewer.** Originally
+> planned 2026-06-10 from a grilling session against the
 > existing geographic substrate (GPS columns on 9+ entities, three distance
 > fields, the polymorphic `transport_legs` table, GPS Zod helpers). Decision
 > rationale for the provider boundary lives in
@@ -251,6 +289,10 @@ hooks → components → route → e2e).
      form (CALC on the override field, no picker — endpoints come from the
      facility + resolved location); plain `PositionPicker` (no CALC) on
      feedstock, feedstock-delivery, application, soil-temp measurement.
+     *As shipped:* application got its picker; feedstock /
+     feedstock-delivery / soil-temp were **deferred** — those forms expose
+     no GPS fields today, so each needs new schema + fn + data-access
+     columns first (revisit with Phase 2).
 9. **Derive path — source-aware priority resolution** (decision 3).
    Update `syncFeedstockTransportLeg` and `syncBiocharProductTransportLeg`
    (+ `deriveTransportLeg` / `aggregateDistributionLegs`) to resolve
