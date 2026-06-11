@@ -5,12 +5,17 @@
  */
 "use client";
 
-import { nullableNumericValue } from "@/lib/form-utils";
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import {
+  DistanceCalcField,
+  FormField,
+  FormInput,
+  FormTextarea,
+  PositionPicker,
+} from "@/components/forms";
 import { Button } from "@/components/ui";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   supplierFormSchema,
   type SupplierFormData,
@@ -46,6 +51,8 @@ export function SupplierForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierFormSchema),
@@ -60,10 +67,28 @@ export function SupplierForm({
       contactPhone: supplier?.contactPhone ?? "",
       sourceRegion: supplier?.sourceRegion ?? "",
       distanceToFacilityKm: supplier?.distanceToFacilityKm ?? undefined,
+      distanceSource: supplier?.distanceSource ?? null,
     },
   });
 
   const defaultSubmitLabel = isEditMode ? "Update Supplier" : "Create Supplier";
+
+  // Preprocessed Zod fields have `unknown` input types — narrow the watches.
+  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
+  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
+  const distanceToFacilityKm = watch("distanceToFacilityKm") as number | null | undefined;
+  const distanceSource = watch("distanceSource");
+
+  // CALC endpoints: supplier point → the globally selected facility.
+  const { selectedFacility } = useFacilityContext();
+  const supplierPoint =
+    gpsLatitude != null && gpsLongitude != null
+      ? { lat: gpsLatitude, lng: gpsLongitude }
+      : null;
+  const facilityPoint =
+    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
+      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
+      : null;
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as SupplierFormData);
@@ -136,43 +161,21 @@ export function SupplierForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="gpsLatitude"
-            label="GPS Latitude"
-            error={errors.gpsLatitude?.message}
-            helperText="-90 to 90"
-            required
-          >
-            <FormInput
-              id="gpsLatitude"
-              type="number"
-              step="any"
-              placeholder="e.g., -3.3349"
-              disabled={isSubmitting}
-              error={!!errors.gpsLatitude}
-              {...register("gpsLatitude", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-
-          <FormField
-            id="gpsLongitude"
-            label="GPS Longitude"
-            error={errors.gpsLongitude?.message}
-            helperText="-180 to 180"
-            required
-          >
-            <FormInput
-              id="gpsLongitude"
-              type="number"
-              step="any"
-              placeholder="e.g., 37.3404"
-              disabled={isSubmitting}
-              error={!!errors.gpsLongitude}
-              {...register("gpsLongitude", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-        </div>
+        <PositionPicker
+          idPrefix="gps"
+          label="Supplier position"
+          accent="orange"
+          required
+          latitude={gpsLatitude ?? null}
+          longitude={gpsLongitude ?? null}
+          onPositionChange={({ lat, lng }) => {
+            setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
+          }}
+          latitudeError={errors.gpsLatitude?.message}
+          longitudeError={errors.gpsLongitude?.message}
+          disabled={isSubmitting}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
@@ -193,23 +196,26 @@ export function SupplierForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
+          <DistanceCalcField
             id="distanceToFacilityKm"
             label="Default distance to facility (km)"
             error={errors.distanceToFacilityKm?.message}
             helperText="Road distance to the delivery facility. Used when a supplier location has no distance of its own; autofills a feedstock's transport leg (overridable per delivery)."
-          >
-            <FormInput
-              id="distanceToFacilityKm"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 85"
-              disabled={isSubmitting}
-              error={!!errors.distanceToFacilityKm}
-              {...register("distanceToFacilityKm", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
+            disabled={isSubmitting}
+            distanceKm={distanceToFacilityKm}
+            distanceSource={distanceSource}
+            onDistanceChange={(km, source) => {
+              setValue("distanceToFacilityKm", km ?? undefined, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("distanceSource", source, { shouldDirty: true });
+            }}
+            origin={supplierPoint}
+            destination={facilityPoint}
+            originLabel="supplier position"
+            destinationLabel="selected facility"
+          />
         </div>
       </div>
 

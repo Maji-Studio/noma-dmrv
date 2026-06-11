@@ -148,8 +148,6 @@ export const distanceSource = pgEnum('distance_source', [
   'document', // backed by a bill of lading / weigh ticket
 ]);
 
-export type DistanceSource = (typeof distanceSource.enumValues)[number];
-
 // Emissions calculation method (Transportation Emissions Accounting Module v1.1)
 // Section 3.2: Energy Usage Method (preferred), Section 3.3: Distance-Based Method
 export const emissionsCalculationMethod = pgEnum('emissions_calculation_method', [

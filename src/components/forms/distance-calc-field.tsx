@@ -19,14 +19,11 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { useGeoCapabilities, useRouteDistance } from "@/hooks/use-geo";
-import type { DistanceSource } from "@/db/schema/common";
+import {
+  DISTANCE_SOURCE_LABELS,
+  type DistanceSourceValue,
+} from "@/schemas/distance-source";
 import type { GeoPoint } from "@/lib/geo/types";
-
-const SOURCE_LABEL: Record<DistanceSource, string> = {
-  map_estimate: "Map estimate",
-  manual: "Manual",
-  document: "Document",
-};
 
 interface DistanceCalcFieldProps {
   id: string;
@@ -36,8 +33,8 @@ interface DistanceCalcFieldProps {
   required?: boolean;
   disabled?: boolean;
   distanceKm: number | null | undefined;
-  distanceSource: DistanceSource | null | undefined;
-  onDistanceChange: (km: number | null, source: DistanceSource | null) => void;
+  distanceSource: DistanceSourceValue | null | undefined;
+  onDistanceChange: (km: number | null, source: DistanceSourceValue | null) => void;
   /** Resolved CALC endpoints — null while the endpoint has no coordinates. */
   origin: GeoPoint | null;
   destination: GeoPoint | null;
@@ -170,7 +167,7 @@ export function DistanceCalcField({
             className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
             data-testid={`${id}-distance-source`}
           >
-            Source: {SOURCE_LABEL[source]}
+            Source: {DISTANCE_SOURCE_LABELS[source]}
           </p>
         )}
       </div>
