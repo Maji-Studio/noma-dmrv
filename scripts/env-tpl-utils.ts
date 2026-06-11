@@ -22,14 +22,14 @@ export interface TemplateEntry {
   opField: string | null;
 }
 
-/** Parse .env.tpl into its declared variables. */
-export function parseTemplate(): TemplateEntry[] {
-  const templatePath = join(process.cwd(), ".env.tpl");
+/** Parse an env template (default .env.tpl) into its declared variables. */
+export function parseTemplate(templateFile = ".env.tpl"): TemplateEntry[] {
+  const templatePath = join(process.cwd(), templateFile);
   let template: string;
   try {
     template = readFileSync(templatePath, "utf-8");
   } catch (error) {
-    throw new Error(`Failed to read .env.tpl at ${templatePath}: ${error}`);
+    throw new Error(`Failed to read ${templateFile} at ${templatePath}: ${error}`);
   }
 
   const entries: TemplateEntry[] = [];
@@ -48,10 +48,10 @@ export function parseTemplate(): TemplateEntry[] {
   return entries;
 }
 
-/** The set of env-var fields .env.tpl pulls from 1Password (op:// refs only). */
-export function templateOpFieldNames(): Set<string> {
+/** The set of env-var fields a template pulls from 1Password (op:// refs only). */
+export function templateOpFieldNames(templateFile = ".env.tpl"): Set<string> {
   return new Set(
-    parseTemplate()
+    parseTemplate(templateFile)
       .filter((e) => e.opField !== null)
       .map((e) => e.opField as string)
   );
