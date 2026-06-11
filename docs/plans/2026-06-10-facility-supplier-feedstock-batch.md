@@ -1,13 +1,14 @@
 # Plan — facility / supplier / feedstock feature batch
 
-**Opened:** 2026-06-10 · **Status:** E ✅ · C ✅ · B ✅ · D ✅ · A ⬜
+**Opened:** 2026-06-10 · **Status:** E ✅ · C ✅ · B ✅ · D ✅ · A ✅ — **ALL DONE**
 
 ~~Five independent workstreams, each on its own branch off `staging`.~~
 **2026-06-11 consolidation:** C merged via PR #175; all remaining unmerged work
 (E, B, D, C follow-ups, sensor-docs commit) now lives on one branch,
 `feat/facility-supplier-feedstock-batch` (off `origin/staging`), which PRs to
-`staging` as a single batch. Old per-workstream branches deleted locally. Only A
-remains.
+`staging` as a single batch. Old per-workstream branches deleted locally.
+**2026-06-11 (later):** A landed on the same consolidated branch (commit
+`dfce8d2`) per the user's go-ahead — the batch PR ships all five workstreams.
 
 ## Locked decisions
 
@@ -71,18 +72,38 @@ the list shows those instead. `registry_url` column + `registryUrl` schema field
 kept (UI-only removal; edit-mode passes the persisted value through). Quick-add
 hint updated.
 
-### A. Facility cascading archive — ⬜ biggest, own PR, do last
-Add `archived_at timestamptz NULL` (+ maybe `archived_by`) to `facilities` + the 15
-directly-facility-scoped tables; grandchildren hidden transitively via archived
-parent (no own column) unless proven wrong. Replace the existing block-on-children
-`deleteFacility` (`data-access/facilities.ts`, `fn/facilities.ts`,
-`useDeleteFacility`, `components/facilities/facility-list.tsx`) with `archiveFacility`
-(stamps facility + descendants in one tx) + `restoreFacility`. **Laborious/risky
-part:** add `AND archived_at IS NULL` to every list/picker query across
-`data-access/*`; `FacilityContext` + facility pickers skip archived — keep this
-sweep isolated. Archive-with-warning when registry removals exist (decision 6). Add
-an e2e guard that archived facilities/children disappear from lists. Reseed, not
-backfill.
+### A. Facility cascading archive — ✅ DONE
+Commit `dfce8d2` on `feat/facility-supplier-feedstock-batch`. Migration
+`drizzle/0041_outgoing_paper_doll.sql` (12 additive `ADD COLUMN archived_at`,
+applied to dev via `db:push`). Implementation deviations from the sketch above,
+all deliberate:
+- `archived_at` went on `facilities` + the **11 operational** facility-scoped
+  tables (reactors, storage_locations, feedstock_deliveries, feedstocks,
+  production_runs, biochar_products, orders, deliveries, credit_batches,
+  stockpile_events, power_procurement_evidence). The 4 certifier mirror tables
+  (`certifier_projects/_project_emissions/_ghg_statements/_removals`) were left
+  unstamped — they mirror registry state, every read is facility-scoped (hidden
+  transitively once the FacilitySelector drops the archived facility), and
+  stamping them risked implying filters that would break registry reconciliation.
+  No `archived_by` (single-admin reality; add later if needed).
+- `archiveFacility`/`restoreFacility` (one tx, stamp/clear) + `getFacilityArchiveImpact`
+  (child counts + `hasBlockingFacilitySubmission` reuse → warning, not block, per
+  decision 6) in `data-access/facilities.ts` → `fn/facilities.ts` →
+  `useArchiveFacility`/`useRestoreFacility`/`useFacilityArchiveImpact` (archive/restore
+  invalidate the whole query cache — the cascade touches every entity type).
+- Sweep: `isNull(archivedAt)` on every list/options/stats query + all
+  `entities/*` pickers (applications filter via `deliveries.archived_at` — no own
+  column); child-create facility checks now reject archived parents
+  ("Facility not found or archived"); `getFacilities` gained an `archived` filter
+  (active-only default → FacilityProvider/selector skip archived automatically);
+  deliveries reuse `getDeliveryColumnAvailability` for graceful pre-migration
+  degradation. Facility codes stay reserved while archived (restore would
+  collide otherwise).
+- UI: `ArchiveFacilityDialog` (impact preview + registry warning), card archive
+  button (was delete), "Archived" list toggle with badge + Restore.
+- E2E: `tests/e2e/facility-archive.spec.ts` (archive → hidden + child stamped at
+  DB level → archived view → restore). `dialog-focus-restore.spec.ts` retargeted
+  to the archive trigger. Learnings recorded in `docs/troubleshooting.md`.
 
 ## ⚠️ Hazards (carried from this session — read before editing)
 

@@ -110,6 +110,19 @@ export async function listFeedstocksForFacility(
 
 Prefer explicit facility filters for operational records. For global option lists, document why the query is intentionally unscoped.
 
+## Soft Delete — Facility Archive
+
+Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilities.ts`) stamps `archived_at` on the facility **and all 11 operational facility-scoped tables in one transaction**; `restoreFacility` clears the stamps. `NULL` = active. The pattern's invariants:
+
+- **Facility cascade is the only writer of `archived_at`.** A child row is archived iff its facility is archived. The cascade stamps only rows where `archived_at IS NULL` so a future per-entity archive can't be clobbered; restore clears indiscriminately (safe under the current single-writer rule).
+- **Every list / picker / options / stats query filters `isNull(table.archivedAt)`.** Detail-by-id reads do **not** filter — existing references to archived rows must still hydrate. When adding a new read query to a stamped table, seed the conditions array with the `isNull` filter.
+- **Grandchildren have no own column** (samples, readings, applications, transport legs, …) — they hide transitively through their archived parent (applications filter via `deliveries.archived_at` in joins).
+- **Certifier mirror tables are deliberately unstamped** (`certifier_projects`, `certifier_project_emissions`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state, and all their reads are facility-scoped, so they hide transitively. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
+- **Writes reject archived parents**: child creates/moves check the facility with `isNull(facilities.archivedAt)` and fail with "Facility not found or archived".
+- **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
+
+Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (migration `drizzle/0041`).
+
 ## Migrations
 
 Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
