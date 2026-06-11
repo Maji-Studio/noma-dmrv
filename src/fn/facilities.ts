@@ -8,8 +8,10 @@
 import { z } from "zod";
 import type { Facility } from "@/db/schema";
 import {
+  archiveFacility,
   createFacility,
-  deleteFacility,
+  getFacilityArchiveImpact,
+  restoreFacility,
   getFacilities as getFacilitiesData,
   getFacilityById as getFacilityByIdData,
   getFacilityWithRelations as getFacilityWithRelationsData,
@@ -20,11 +22,13 @@ import {
   updateFacility,
   type PaginatedFacilities,
   type FacilityDetail,
+  type FacilityArchiveImpact,
 } from "@/data-access/facilities";
 import { getUser } from "@/lib/auth/server";
 import {
+  archiveFacilitySchema,
   createFacilitySchema,
-  deleteFacilitySchema,
+  restoreFacilitySchema,
   updateFacilitySchema,
   facilityFilterSchema,
 } from "@/schemas/facilities";
@@ -350,25 +354,50 @@ export async function updateFacilityFn(
 }
 
 // ============================================
-// Delete Operations
+// Archive Operations (soft delete, reversible)
 // ============================================
 
 /**
- * Delete a facility
+ * Preview what archiving a facility would affect (child counts + registry warning)
  */
-export async function deleteFacilityFn(
-  data: z.infer<typeof deleteFacilitySchema>
-): Promise<ActionResult<void>> {
+export async function getFacilityArchiveImpactFn(
+  facilityId: string
+): Promise<ActionResult<FacilityArchiveImpact>> {
   try {
     const user = await getUser();
     if (!user?.id) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const validated = deleteFacilitySchema.parse(data);
-    await deleteFacility(user.id, validated.facilityId);
+    const impact = await getFacilityArchiveImpact(user.id, facilityId);
+    return { success: true, data: impact };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load archive impact",
+    };
+  }
+}
 
-    return { success: true, data: undefined };
+/**
+ * Archive a facility and all attached child data (reversible)
+ */
+export async function archiveFacilityFn(
+  data: z.infer<typeof archiveFacilitySchema>
+): Promise<ActionResult<Facility>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = archiveFacilitySchema.parse(data);
+    const facility = await archiveFacility(user.id, validated.facilityId);
+
+    return { success: true, data: facility };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -379,7 +408,38 @@ export async function deleteFacilityFn(
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to delete facility",
+        error instanceof Error ? error.message : "Failed to archive facility",
+    };
+  }
+}
+
+/**
+ * Restore an archived facility and its archived child data
+ */
+export async function restoreFacilityFn(
+  data: z.infer<typeof restoreFacilitySchema>
+): Promise<ActionResult<Facility>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = restoreFacilitySchema.parse(data);
+    const facility = await restoreFacility(user.id, validated.facilityId);
+
+    return { success: true, data: facility };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to restore facility",
     };
   }
 }

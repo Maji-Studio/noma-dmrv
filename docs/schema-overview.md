@@ -4,6 +4,8 @@ Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
 Current shape: 45 table exports across 14 schema files.
 
+**Facility archive (soft delete):** `facilities` and the 11 operational facility-scoped tables (`reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence`) carry a nullable `archived_at` stamped by the facility archive cascade; `NULL` = active. Grandchildren and certifier mirror tables hide transitively. See `docs/database.md` → "Soft Delete — Facility Archive".
+
 | Table | Area | What it does | Use cases | Links |
 |---|---|---|---|---|
 | `users` | Auth | Stores user identity, role, and profile metadata. | Sign-up, login identity, role-based permissions. | `src/db/schema/auth.ts:12` |

@@ -1,0 +1,16 @@
+# Security updates only — no routine version-bump PRs.
+# open-pull-requests-limit: 0 disables version updates for the ecosystem
+# while Dependabot security updates (enabled in repo settings) still open
+# PRs for vulnerable dependencies.
+version: 2
+updates:
+  - package-ecosystem: "npm" # covers pnpm-lock.yaml
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0

@@ -131,6 +131,11 @@ _Avoid_: teammate, seat.
 
 ## Relationships
 
+- An **Organization** owns one or more facilities; every domain record
+  belongs to exactly one **Organization**
+- A user holds one or more **Memberships**, each in one **Organization**
+  with one org role; a **Platform Admin** needs no Membership to act
+  inside an Organization
 - The LCA window contains many monthly **Credit batches**
 - **N Credit batches** group into one **Removal** (default 1:1 per month)
 - A **Credit batch** aggregates many **Production runs**

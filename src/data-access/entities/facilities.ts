@@ -2,7 +2,7 @@
  * Facility options for searchable entity selection.
  */
 
-import { ilike, or, eq, type SQL } from "drizzle-orm";
+import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -13,15 +13,18 @@ export async function getFacilities(params: {
 }): Promise<EntityOption[]> {
   const { search, limit } = params;
 
-  let whereClause: SQL | undefined;
+  const conditions: SQL[] = [isNull(facilities.archivedAt)];
   if (search) {
     const searchPattern = `%${search}%`;
-    whereClause = or(
-      ilike(facilities.code, searchPattern),
-      ilike(facilities.name, searchPattern),
-      ilike(facilities.location, searchPattern)
+    conditions.push(
+      or(
+        ilike(facilities.code, searchPattern),
+        ilike(facilities.name, searchPattern),
+        ilike(facilities.location, searchPattern)
+      )!
     );
   }
+  const whereClause = and(...conditions);
 
   const results = await db
     .select({

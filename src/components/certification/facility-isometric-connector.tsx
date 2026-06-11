@@ -243,6 +243,13 @@ export function FacilityIsometricConnector({
         </div>
       )}
 
+      {!mapping && availableProjects.length > 0 && (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          New connections use the Biochar protocol by default — change it in
+          Certification → Settings after connecting.
+        </p>
+      )}
+
       {clearsAdvancedBinding && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
           Changing the project clears the default removal template and

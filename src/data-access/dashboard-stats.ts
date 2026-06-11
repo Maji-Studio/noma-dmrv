@@ -2,7 +2,7 @@
  * Dashboard Stats data access
  * Database queries for dashboard statistics
  */
-import { and, count, eq, gte, lt } from "drizzle-orm";
+import { and, count, eq, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, productionRuns, applications, creditBatches } from "@/db/schema";
 
@@ -53,31 +53,25 @@ async function getDeliveriesStats(
 ): Promise<MetricStat> {
   const { currentStart, previousStart, previousEnd } = getDateRanges(periodDays);
 
-  const baseWhere = facilityId ? eq(deliveries.facilityId, facilityId) : undefined;
+  // Always exclude archived rows (facility archive cascade)
+  const baseWhere = facilityId
+    ? and(isNull(deliveries.archivedAt), eq(deliveries.facilityId, facilityId))
+    : isNull(deliveries.archivedAt);
 
   const [[currentResult], [previousResult]] = await Promise.all([
     db
       .select({ count: count() })
       .from(deliveries)
-      .where(
-        baseWhere
-          ? and(baseWhere, gte(deliveries.createdAt, currentStart))
-          : gte(deliveries.createdAt, currentStart)
-      ),
+      .where(and(baseWhere, gte(deliveries.createdAt, currentStart))),
     db
       .select({ count: count() })
       .from(deliveries)
       .where(
-        baseWhere
-          ? and(
-              baseWhere,
-              gte(deliveries.createdAt, previousStart),
-              lt(deliveries.createdAt, previousEnd)
-            )
-          : and(
-              gte(deliveries.createdAt, previousStart),
-              lt(deliveries.createdAt, previousEnd)
-            )
+        and(
+          baseWhere,
+          gte(deliveries.createdAt, previousStart),
+          lt(deliveries.createdAt, previousEnd)
+        )
       ),
   ]);
 
@@ -96,33 +90,26 @@ async function getActiveProductionRunsStats(
 ): Promise<MetricStat> {
   const { previousStart, previousEnd } = getDateRanges(periodDays);
 
-  const baseWhere = facilityId ? eq(productionRuns.facilityId, facilityId) : undefined;
+  // Always exclude archived rows (facility archive cascade)
+  const baseWhere = facilityId
+    ? and(isNull(productionRuns.archivedAt), eq(productionRuns.facilityId, facilityId))
+    : isNull(productionRuns.archivedAt);
 
   const [[currentResult], [previousResult]] = await Promise.all([
     db
       .select({ count: count() })
       .from(productionRuns)
-      .where(
-        baseWhere
-          ? and(baseWhere, eq(productionRuns.status, "running"))
-          : eq(productionRuns.status, "running")
-      ),
+      .where(and(baseWhere, eq(productionRuns.status, "running"))),
     db
       .select({ count: count() })
       .from(productionRuns)
       .where(
-        baseWhere
-          ? and(
-              baseWhere,
-              eq(productionRuns.status, "running"),
-              gte(productionRuns.createdAt, previousStart),
-              lt(productionRuns.createdAt, previousEnd)
-            )
-          : and(
-              eq(productionRuns.status, "running"),
-              gte(productionRuns.createdAt, previousStart),
-              lt(productionRuns.createdAt, previousEnd)
-            )
+        and(
+          baseWhere,
+          eq(productionRuns.status, "running"),
+          gte(productionRuns.createdAt, previousStart),
+          lt(productionRuns.createdAt, previousEnd)
+        )
       ),
   ]);
 
@@ -141,38 +128,29 @@ async function getPendingApplicationsStats(
 ): Promise<MetricStat> {
   const { previousStart, previousEnd } = getDateRanges(periodDays);
 
-  // Build facility filter via deliveries join
+  // Facility filter via deliveries join; applications carry no archived_at —
+  // archived ones are hidden through their archived delivery
   const facilityWhere = facilityId
-    ? eq(deliveries.facilityId, facilityId)
-    : undefined;
+    ? and(isNull(deliveries.archivedAt), eq(deliveries.facilityId, facilityId))
+    : isNull(deliveries.archivedAt);
 
   const [[currentResult], [previousResult]] = await Promise.all([
     db
       .select({ count: count() })
       .from(applications)
       .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(
-        facilityWhere
-          ? and(eq(applications.status, "applied"), facilityWhere)
-          : eq(applications.status, "applied")
-      ),
+      .where(and(eq(applications.status, "applied"), facilityWhere)),
     db
       .select({ count: count() })
       .from(applications)
       .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
       .where(
-        facilityWhere
-          ? and(
-              eq(applications.status, "applied"),
-              facilityWhere,
-              gte(applications.createdAt, previousStart),
-              lt(applications.createdAt, previousEnd)
-            )
-          : and(
-              eq(applications.status, "applied"),
-              gte(applications.createdAt, previousStart),
-              lt(applications.createdAt, previousEnd)
-            )
+        and(
+          eq(applications.status, "applied"),
+          facilityWhere,
+          gte(applications.createdAt, previousStart),
+          lt(applications.createdAt, previousEnd)
+        )
       ),
   ]);
 
@@ -191,33 +169,26 @@ async function getIssuedCreditsStats(
 ): Promise<MetricStat> {
   const { currentStart, previousStart, previousEnd } = getDateRanges(periodDays);
 
-  const baseWhere = facilityId ? eq(creditBatches.facilityId, facilityId) : undefined;
+  // Always exclude archived rows (facility archive cascade)
+  const baseWhere = facilityId
+    ? and(isNull(creditBatches.archivedAt), eq(creditBatches.facilityId, facilityId))
+    : isNull(creditBatches.archivedAt);
 
   const [[currentResult], [previousResult]] = await Promise.all([
     db
       .select({ count: count() })
       .from(creditBatches)
-      .where(
-        baseWhere
-          ? and(baseWhere, eq(creditBatches.status, "issued"), gte(creditBatches.createdAt, currentStart))
-          : and(eq(creditBatches.status, "issued"), gte(creditBatches.createdAt, currentStart))
-      ),
+      .where(and(baseWhere, eq(creditBatches.status, "issued"), gte(creditBatches.createdAt, currentStart))),
     db
       .select({ count: count() })
       .from(creditBatches)
       .where(
-        baseWhere
-          ? and(
-              baseWhere,
-              eq(creditBatches.status, "issued"),
-              gte(creditBatches.createdAt, previousStart),
-              lt(creditBatches.createdAt, previousEnd)
-            )
-          : and(
-              eq(creditBatches.status, "issued"),
-              gte(creditBatches.createdAt, previousStart),
-              lt(creditBatches.createdAt, previousEnd)
-            )
+        and(
+          baseWhere,
+          eq(creditBatches.status, "issued"),
+          gte(creditBatches.createdAt, previousStart),
+          lt(creditBatches.createdAt, previousEnd)
+        )
       ),
   ]);
 

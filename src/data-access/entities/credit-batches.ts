@@ -2,7 +2,7 @@
  * Credit-batch options for searchable entity selection.
  */
 
-import { ilike, or, eq, and, type SQL } from "drizzle-orm";
+import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, facilities } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -14,7 +14,7 @@ export async function getCreditBatchesEntity(params: {
 }): Promise<EntityOption[]> {
   const { search, facilityId, limit } = params;
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(creditBatches.archivedAt)];
 
   if (facilityId) {
     conditions.push(eq(creditBatches.facilityId, facilityId));
@@ -30,7 +30,7 @@ export async function getCreditBatchesEntity(params: {
     );
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const results = await db
     .select({
