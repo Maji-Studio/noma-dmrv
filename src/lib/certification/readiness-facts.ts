@@ -28,6 +28,7 @@ export function toRemovalReadinessFacts(
     missingDefaultTemplateId: ctx.missingDefaultTemplateId,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     hasSubmittableRuns: ctx.hasSubmittableRuns,
+    productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     requiredTransport: ctx.requiredTransportCategories.map((category) => {
       const bucket = ctx.transportCoverage[category];
