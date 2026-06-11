@@ -114,6 +114,16 @@ Prefer explicit facility filters for operational records. For global option list
 
 Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
 
+### CI migration strategy (`.github/workflows/migrate.yml`)
+
+- Pushing schema-affecting changes to `staging` or `main` automatically runs `pnpm db:migrate` against the matching database, followed by `pnpm db:verify-schema`, which diffs the live database against the Drizzle schema definitions and fails the run on drift.
+- Destructive operations (reset + seed staging, reset staging empty, reset production) are never automatic — they run only via manual `workflow_dispatch` with a typed confirmation phrase.
+- Database credentials come from 1Password via `load-secrets-action` (see `docs/security.md`).
+
+### Migration files are immutable once applied
+
+**Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that already ran the original — CI reports "migrations applied successfully" while the new DDL never executes, and the drift only surfaces in the `db:verify-schema` step. If more schema changes are needed after a migration has been merged or applied, generate a new migration with `pnpm db:generate`. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it is a no-op on databases that already have the objects.
+
 Recent notable migrations:
 
 | Migration | Notes |

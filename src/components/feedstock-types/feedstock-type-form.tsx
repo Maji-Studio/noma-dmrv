@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,17 @@ export function FeedstockTypeForm({
   const isEditMode = !!feedstockType;
   const [activeTab, setActiveTab] = useState<TabKey>("general");
 
+  // Roving tabindex (inactive tabs are tabIndex=-1), so arrow keys are the
+  // only keyboard path between tabs.
+  const handleTabKeyDown = (event: KeyboardEvent, index: number) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const delta = event.key === "ArrowRight" ? 1 : -1;
+    const nextKey = TABS[(index + delta + TABS.length) % TABS.length].key;
+    setActiveTab(nextKey);
+    document.getElementById(getTabId(nextKey))?.focus();
+  };
+
   const {
     register,
     handleSubmit,
@@ -76,7 +87,7 @@ export function FeedstockTypeForm({
         role="tablist"
         aria-label="Feedstock type sections"
       >
-        {TABS.map(({ key, label }) => {
+        {TABS.map(({ key, label }, index) => {
           const isActive = key === activeTab;
           return (
             <button
@@ -88,6 +99,7 @@ export function FeedstockTypeForm({
               aria-controls={getPanelId(key)}
               tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveTab(key)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
               className="flex shrink-0 items-center h-[40px] px-16 label-button transition-colors cursor-pointer"
               style={{
                 color: isActive
