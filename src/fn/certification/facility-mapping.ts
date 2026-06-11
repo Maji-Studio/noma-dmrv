@@ -37,6 +37,10 @@ export interface FacilityCertifierMapping {
     linkedFacilities: LinkedFacilitySummary[];
   }>;
   isProduction: boolean;
+  // Whether Isometric API credentials are present. Lets the UI distinguish
+  // "Isometric isn't configured" (availableProjects forced empty by
+  // safeListIfConfigured) from a configured account with no projects.
+  isConfigured: boolean;
 }
 
 // Read-only registry-link summary for non-managing viewers. DB-only — it
@@ -100,6 +104,7 @@ export async function loadFacilityCertifierMapping(
         linkedFacilities: hintsByProject.get(project.id) ?? [],
       })),
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+      isConfigured: Boolean(env.ISOMETRIC_ACCESS_TOKEN),
     };
   });
 }
