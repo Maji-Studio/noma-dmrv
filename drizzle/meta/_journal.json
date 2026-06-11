@@ -295,6 +295,13 @@
       "when": 1781159340362,
       "tag": "0041_outgoing_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1781162869103,
+      "tag": "0042_fresh_richard_fisk",
+      "breakpoints": true
     }
   ]
 }

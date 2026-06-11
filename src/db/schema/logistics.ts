@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   deliveryStatus,
+  distanceSource,
   emissionsCalculationMethod,
   packagingType,
   transportEntityType,
@@ -106,6 +107,8 @@ export const deliveries = pgTable(
     // only when this trip's routing differs. Mirrors the feedstock-side
     // transportDistanceKm override.
     distanceKmOverride: real('distance_km_override'),
+    // Provenance of distanceKmOverride (null when no override stored).
+    distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
 
     // --- Product Batch ---
@@ -192,6 +195,11 @@ export const transportLegs = pgTable(
     destinationGpsLongitude: doublePrecision('destination_gps_longitude'),
     destinationName: text('destination_name'),
     distanceKm: real('distance_km').notNull(),
+    // Provenance of distanceKm. On a derived leg this is inherited from the
+    // level that won the distance-priority resolution (NOT a blanket
+    // supplier/customer default); on an aggregated distribution leg it is the
+    // weakest contributing source. Orthogonal to isDerived.
+    distanceSource: distanceSource('distance_source'),
 
     // --- Transport Details ---
     transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft

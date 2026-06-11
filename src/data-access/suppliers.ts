@@ -152,6 +152,7 @@ export async function getSuppliers(
       contactPhone: suppliers.contactPhone,
       sourceRegion: suppliers.sourceRegion,
       distanceToFacilityKm: suppliers.distanceToFacilityKm,
+      distanceSource: suppliers.distanceSource,
       createdAt: suppliers.createdAt,
       updatedAt: suppliers.updatedAt,
     })
