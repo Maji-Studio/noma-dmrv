@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
@@ -13,9 +13,8 @@ import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
 import { useEntityById } from "@/hooks/use-entities";
-import { Button } from "@/components/ui";
 import {
   biocharProductFormSchema,
   PURE_PRODUCT_BIN_FILTER,
@@ -144,6 +143,12 @@ interface BiocharProductFormProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  /**
+   * Extension content (e.g. transport-legs editor) rendered between the form
+   * fields and the CTA row — outside the `<form>` element, so it may contain
+   * its own forms. Nothing ever renders after the CTA.
+   */
+  children?: React.ReactNode;
 }
 
 export function BiocharProductForm({
@@ -152,7 +157,9 @@ export function BiocharProductForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  children,
 }: BiocharProductFormProps) {
+  const formId = useId();
   const isEditMode = !!product;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
@@ -284,7 +291,8 @@ export function BiocharProductForm({
       : null;
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-24">
+    <div className="space-y-24">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
       {/* Transfer Flow Preview */}
       <div className="space-y-12">
         <SectionLabel>Transfer Preview</SectionLabel>
@@ -518,18 +526,18 @@ export function BiocharProductForm({
 
       {/* Ingredient Bins */}
       <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
+      </form>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
-    </form>
+      {/* Extension content (e.g. transport legs) — always before the CTA */}
+      {children}
+
+      <FormActions
+        formId={formId}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
+    </div>
   );
 }

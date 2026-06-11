@@ -381,6 +381,15 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
                 facilityRuns.map((r) => r.id)
               )
             );
+          // Delete in-process production samples linked to production runs
+          await tx
+            .delete(schema.productionSamples)
+            .where(
+              inArray(
+                schema.productionSamples.productionRunId,
+                facilityRuns.map((r) => r.id)
+              )
+            );
           // Delete production run feedstocks
           await tx
             .delete(schema.productionRunFeedstocks)

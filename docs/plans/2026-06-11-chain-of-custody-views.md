@@ -1,8 +1,11 @@
 # Chain-of-Custody Views — Credit-Batch Anchor, Sankey, Trail
 
-> **Status: PLANNED** (2026-06-11) — grilling session against the Maji
-> concept canvas (`~/Downloads/Maji noma dMRV/`, five chain-of-custody
-> treatments + map styles). Sequenced **after** map-integration Phase 2
+> **Status: IMPLEMENTED** (2026-06-11, branch `feat/chain-of-custody-views`) —
+> shipped per the Phase 3 sketch below; see `docs/chain-of-custody.md` for the
+> as-built reference. Originally planned via a grilling session against the Maji
+> concept canvas (external design reference, not checked into the repo —
+> five chain-of-custody treatments + map styles). Sequenced **after**
+> map-integration Phase 2
 > (`2026-06-10-map-integration.md`) lands — everything Phase 2 builds
 > becomes this plan's drill-down level unchanged. Anchor decision:
 > [ADR 0011](../adr/0011-credit-batch-anchored-chain-of-custody.md).

@@ -416,14 +416,6 @@ export function BiocharProductList() {
             />
           ) : null
         }
-        editModeChildren={
-          displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
-            <TransportLegsEditor
-              entityType="biochar"
-              entityId={displaySideSheet.entity.id}
-            />
-          ) : null
-        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <BiocharProductForm
@@ -433,7 +425,14 @@ export function BiocharProductList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Product"}
-        />
+        >
+          {displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
+            <TransportLegsEditor
+              entityType="biochar"
+              entityId={displaySideSheet.entity.id}
+            />
+          ) : null}
+        </BiocharProductForm>
       </EntitySideSheet>
     </div>
   );

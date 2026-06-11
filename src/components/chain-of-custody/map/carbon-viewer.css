@@ -196,7 +196,7 @@
   font-size: 9px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  border: 1.5px solid currentColor;
+  border: 1.5px solid currentcolor;
   padding: 3px 7px;
   white-space: nowrap;
 }
