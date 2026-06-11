@@ -71,6 +71,7 @@ export const documentationType = pgEnum('documentation_type', [
   'photo',
   'video',
   'pdf',
+  'sensor_data',
 ]);
 
 export const documentVisibility = pgEnum('document_visibility', [
