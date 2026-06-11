@@ -26,8 +26,8 @@ import type {
   CertificationSubmissionRow,
   CertifierProjectRow,
   DocumentRow,
-  InsertDraftSubmissionInput,
 } from "@/data-access/certification";
+import type { InsertDraftSubmissionInput } from "@/data-access/certification-submissions";
 import type {
   CertifierGhgStatementRow,
   ReconcileResult,
@@ -39,6 +39,7 @@ import type { GhgStatement } from "@/lib/isometric";
 // ---------------------------------------------------------------------------
 
 vi.mock("@/data-access/certification");
+vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(),
@@ -76,7 +77,9 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
 });
 
 import * as ledger from "@/data-access/certification";
+import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as ghgDA from "@/data-access/certifier-ghg-statements";
+import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
 import * as facilitiesDA from "@/data-access/facilities";
 import * as authServer from "@/lib/auth/server";
 import * as isometric from "@/lib/isometric";
@@ -234,25 +237,29 @@ beforeEach(() => {
     storedStatements[0] ?? null,
   );
 
-  // Ledger ops — same in-memory simulation as the Removal test.
-  vi.mocked(ledger.getLatestSubmission).mockImplementation(async () =>
+  // Ledger ops — same in-memory simulation as the Removal test. The claim
+  // choreography is one mocked function backed by the in-memory ledger +
+  // the real pure decision core; lock/CAS/re-resolution behavior is the
+  // module's own concern (DB-backed tests).
+  vi.mocked(ledgerClaim.getLatestSubmission).mockImplementation(async () =>
     storedLatestForStatement(),
   );
-  vi.mocked(ledger.insertDraftSubmissionWithMappingLock).mockImplementation(
-    async (_userId, input) => {
-      const row = newLedgerRow(input);
-      storedLedger.push(row);
-      return row;
-    },
-  );
-  vi.mocked(ledger.resetSubmissionToDraftWithMappingLock).mockImplementation(
-    async (_userId, rowId) => {
-      const row = storedLedger.find((r) => r.id === rowId);
-      if (!row) throw new Error(`Test ledger missing row ${rowId}`);
-      row.status = "draft";
-      row.lockedAt = new Date();
-      return row;
-    },
+  vi.mocked(ledgerClaim.claimSubmissionDraft).mockImplementation(
+    makeClaimSubmissionDraftFake({
+      latest: () => storedLatestForStatement(),
+      insert: (input) => {
+        const row = newLedgerRow(input);
+        storedLedger.push(row);
+        return row;
+      },
+      resetToDraft: (rowId) => {
+        const row = storedLedger.find((r) => r.id === rowId);
+        if (!row) throw new Error(`Test ledger missing row ${rowId}`);
+        row.status = "draft";
+        row.lockedAt = new Date();
+        return row;
+      },
+    }),
   );
   vi.mocked(ledger.markSubmissionSubmitted).mockImplementation(
     async (_userId, id, args) => {

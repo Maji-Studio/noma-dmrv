@@ -24,6 +24,20 @@ export type DeliveryStatus = (typeof deliveryStatuses)[number];
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
+const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
+
+function validateDistanceOverride(
+  value: { distanceKmOverride?: number | null },
+  ctx: z.RefinementCtx
+) {
+  if (value.distanceKmOverride != null && value.distanceKmOverride < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["distanceKmOverride"],
+      message: "Distance must be >= 0",
+    });
+  }
+}
 
 function validateTruckMasses(
   value: {
@@ -71,6 +85,9 @@ const deliveryFormBaseSchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  // Per-delivery road-distance override (km) + reason for the distribution leg.
+  distanceKmOverride: optionalNumber,
+  distanceNote: optionalNote,
 });
 
 /**
@@ -145,6 +162,8 @@ export const createDeliverySchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  distanceKmOverride: optionalNumber,
+  distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -167,6 +186,7 @@ export const createDeliverySchema = z.object({
   }
 
   validateTruckMasses(value, ctx);
+  validateDistanceOverride(value, ctx);
 });
 
 /**
@@ -193,6 +213,8 @@ export const updateDeliverySchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  distanceKmOverride: optionalNumber,
+  distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -215,6 +237,7 @@ export const updateDeliverySchema = z.object({
   }
 
   validateTruckMasses(value, ctx);
+  validateDistanceOverride(value, ctx);
 });
 
 /**

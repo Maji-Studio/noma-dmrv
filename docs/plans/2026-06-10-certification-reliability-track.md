@@ -1,8 +1,13 @@
 # Certification reliability track
 
-> **Status: Planned** (2026-06-10). Deepens three modules on the Isometric
+> **Status: all three phases implemented** (2026-06-10 — Phase 1 in PR
+> #169, Phase 2 stacked on it, Phase 3 stacked on Phase 2; see
+> `docs/isometric/changes.md`). Deepens three modules on the Isometric
 > submission path: the submission-ledger claim choreography, the registry
 > create-or-reconcile call, and a fake registry adapter for boundary tests.
+> Line references in Phase 3 were re-anchored 2026-06-10 after the GHG
+> entry API migration and Phase 1 landed — they will drift again; locate by
+> symbol.
 > Correctness work, not cleanup — motivated by real drift between the Removal
 > and GHG Statement pipelines, reachable at today's scale. A future move to
 > multiple users/operator groups (not yet committed — see
@@ -21,32 +26,27 @@ deep, pure, and fully tested. But the **choreography around them is
 copy-pasted with drift** across three pipelines, and the drift is a
 correctness gap, not a style gap:
 
-1. **Removal re-decides the claim inside the mapping lock; GHG Statement does
-   not.** `submitRemoval` re-reads the latest ledger row and re-runs
-   `decideSubmissionClaim` inside the locked transaction
-   (`src/fn/certification/submit-removal.ts:627–668`), so a concurrent
-   duplicate submit resolves gracefully (`return-existing` via
-   `ExistingRemovalSubmission`). `createGhgStatementDraft` inserts its draft
-   using the **unlocked, tentative** claim
-   (`src/fn/certification/ghg-statements.ts:290–303`) — a concurrent
-   duplicate create races to the same `(entity, version)` and the loser dies
-   on the unique constraint
-   (`SUBMISSION_ENTITY_VERSION_CONSTRAINT`,
-   `src/data-access/certification.ts:546`) with a raw DB error instead of an
-   idempotent result.
-2. **Removal's failure audit events lose the registry's response body; GHG's
-   preserve it.** `createOrReconcile` records only `errorMessage` +
-   `mapping_revision` on failure (`submit-removal.ts:962–973`);
-   `createGhgStatementRemote` preserves `IsometricApiError.body`
-   (`ghg-statements.ts:384–398`), which carries the actionable 4xx detail.
+1. ~~**Removal re-decides the claim inside the mapping lock; GHG Statement
+   does not.**~~ **Resolved by Phase 1.** The described drift — GHG
+   inserting its draft from the unlocked tentative claim and a concurrent
+   duplicate create dying on `SUBMISSION_ENTITY_VERSION_CONSTRAINT` with a
+   raw DB error — no longer exists: both pipelines now claim through
+   `claimSubmissionDraft` (`src/data-access/certification-submissions.ts`),
+   which re-decides inside the mapping lock, and the
+   `ExistingRemovalSubmission` throw/catch plumbing is deleted.
+2. ~~**Removal's failure audit events lose the registry's response body; GHG's
+   preserve it.**~~ **Resolved by Phase 2.** Every failed registry-create
+   sync event now carries `{ mapping_revision, body? }` — the unified
+   failure event recorded by `performRegistryCreate`
+   (`src/fn/certification/registry-create.ts`).
 3. **The supplier-reference orphan-claim behavior is untested as a boundary.**
    Existing tests mock individual functions
-   (`tests/isometric-submit-removal.test.ts:42–62` mocks `createDatapoint`,
+   (`tests/isometric-submit-removal.test.ts` mocks `createDatapoint`,
    `reconcileRemoval`, etc. separately), so the property that actually
    protects against double-submitting a Removal — *POST succeeds server-side,
    client sees a network error, the retry reconciles by supplier reference
    instead of POSTing again* — is asserted only against hand-wired mocks, never
-   against a registry-shaped counterparty.
+   against a registry-shaped counterparty. → Phase 3.
 
 All three are reachable at today's scale — two tabs, a double-click, or a
 retry is enough. If multiple users/operator groups ever land (an open
@@ -70,6 +70,31 @@ Terms per `CONTEXT.md` (domain) and the architecture glossary:
 ---
 
 ## Phase 1 — Submission-ledger claim module
+
+> **✅ Implemented** (2026-06-10, PR #169). The interface below landed as
+> specified; the section is kept as the module's contract reference.
+> Deltas from the sketch, for Phase 2/3 implementers:
+>
+> - `LOCK_TTL_MS` stayed in `src/lib/isometric/utils/lock.ts` (it also
+>   feeds `isLockedInFlight`, and lib must not import from data-access);
+>   the module imports it. The interface goal holds — callers never pass
+>   `now`/`lockTtlMs`.
+> - `getLatestSubmissionInTx` and the plain (guardless)
+>   `insertDraftSubmission` / `resetSubmissionToDraft` variants had no
+>   remaining callers and were **deleted**, not relocated.
+> - `getLatestSubmission` moved to the new module as a **permanent public
+>   read API** (status loaders, certify-context) — it is not under the
+>   telemetry boundary.
+> - Telemetry-boundary importers: `src/fn/certification/submit-telemetry.ts`
+>   (the single permitted `src/` importer) plus
+>   `tests/isometric-mapping-lock.test.ts` (the primitives' own unit test).
+> - Pipeline tests stub the claim via shared
+>   `tests/fixtures/fake-claim.ts` — the real pure core over an in-memory
+>   store; the module-owned lock/CAS/`resolve` behavior is deliberately not
+>   simulated there (DB-backed suite covers it).
+> - DB-backed suite: `tests/certification-submissions.test.ts` (16 cases);
+>   `tests/setup.ts` pins `DB_POOL_MAX=10` because the app default of one
+>   connection starves the parked-claim concurrency orchestration.
 
 **Goal:** one module owns the choreography *read latest → decide → lock →
 re-resolve payload → re-decide → insert/reset draft*. The Removal path's
@@ -209,13 +234,42 @@ instead of a unique-constraint error.
 
 **Tests staying green:** `tests/isometric-submission-claim.test.ts` (pure
 core) unchanged; `tests/isometric-submit-removal.test.ts` and
-`tests/isometric-ghg-statement-flow.test.ts` keep their assertions on
-versions, supersede links, and idempotent returns — their mock surface moves
-from the primitives to `claimSubmissionDraft` (one function), replacing the
-hand-rolled in-memory ledger fakes (including the `undefined as never` tx
-handle at `isometric-submit-removal.test.ts:342`).
+`tests/isometric-ghg-statement-submit.test.ts` keep their assertions on
+versions, supersede links, and idempotent returns — their mock surface moved
+from the primitives to `claimSubmissionDraft` (one function, via
+`tests/fixtures/fake-claim.ts`), replacing the hand-rolled in-memory ledger
+fakes (including the `undefined as never` tx handle).
 
 ## Phase 2 — Registry create-or-reconcile module
+
+> **✅ Implemented** (2026-06-10, stacked on PR #169; see
+> `docs/isometric/changes.md`). The interface below landed as specified;
+> deltas for the Phase 3 implementer:
+>
+> - The module is entered as `performRegistryCreate` with two small
+>   additions over the sketch: `supplierRefId?` (echoed into the success
+>   event for audit parity with the old removal path) and `log?` (an
+>   attempt-scoped logger; the module logs the
+>   "create failed; attempting reconciliation" warn itself).
+> - `ReconcileLookup`'s `"single"` arm carries `externalId`; the exported
+>   `supplierRefLookup` helper adapts the two-way supplier-ref
+>   reconciliation shape. The GHG three-way adapter is inlined at its one
+>   call site in `createGhgStatementRemote`.
+> - An ambiguous (`"multiple"`) lookup rejects the row + throws WITHOUT a
+>   failed sync event — parity with the pre-module GHG behavior.
+> - All module events go through `appendSyncEventBestEffort`; GHG create
+>   events moved from raw `appendSyncEvent` (which could unwind a
+>   successful create) onto the best-effort path.
+> - `finalizeGhgStatement` lost its `operation`/`source` params and its
+>   success sync event (the module records it, before
+>   `markSubmissionSubmitted`, not after).
+> - `resolveTemplateInputs` extraction skipped — `submit-removal.ts` landed
+>   at ~830 lines, comfortably under the cap.
+> - Found during migration: the resume path now reads `fixed` bindings from
+>   the stored snapshot (`readRemovalFixedInputs`) and the claim module's
+>   `resumeDraft` re-decides under the mapping lock before the CAS reset.
+> - Tests: `tests/registry-create.test.ts` (9 cases, mocked data-access +
+>   spy thunks). The registry-shaped counterparty tests remain Phase 3.
 
 **Goal:** one implementation of *POST → on failure, reconcile by lookup →
 record sync event → mark rejected or claim the orphan*, shared by removal
@@ -230,8 +284,12 @@ composes the isometric client with data-access sync-event/ledger writes,
 which data-access must not import).
 
 **Interface (sketch):** generalize the existing `createOrReconcile`
-(`submit-removal.ts:884–979`), extending its reconcile result to cover GHG's
-three-way outcome:
+(`submit-removal.ts:787`, post-Phase-1), extending its reconcile result to
+cover GHG's three-way outcome. Wire vocabulary is post-GHG-entry-migration:
+the create wrappers are `createDatapoint` / `createGhgEntry`
+(`src/lib/isometric/submissions.ts`), the reconcile lookups are
+`reconcileDatapoint` / `reconcileRemoval` / `reconcileGhgStatement`
+(`src/lib/isometric/utils/reconciliation.ts`):
 
 ```ts
 type ReconcileLookup =
@@ -255,23 +313,33 @@ performRegistryCreate({
 Design points:
 
 - **Returns `source`** so `createGhgStatementRemote`'s two
-  `finalizeGhgStatement` continuations (`ghg-statements.ts:373–410`) collapse
-  into one call site.
+  `finalizeGhgStatement` continuations (`ghg-statements.ts:346` and `:375`)
+  collapse into one call site.
 - **Unify on the better failure event:** preserve `IsometricApiError.body` in
   the failed sync event's `responsePayload` for *all* callers (GHG behavior
-  today, `ghg-statements.ts:387–397`), keeping `mapping_revision` (removal
-  behavior today, `submit-removal.ts:958–969`). This is a deliberate audit
+  today, `createGhgStatementRemote`'s catch arm, `ghg-statements.ts:358–371`),
+  keeping `mapping_revision` (removal behavior today, `createOrReconcile`'s
+  failure event, `submit-removal.ts:845–861`). This is a deliberate audit
   improvement for the removal path, not an accident of unification.
 - Keep the `:reconciled` sync-event convention from the removal path
-  (`submit-removal.ts:906–922`) for every reconciled claim, GHG included.
+  (`recordReconciled`, `submit-removal.ts:794–810`) for every reconciled
+  claim, GHG included.
 
 **Migrate:** the two `createOrReconcile` call sites in
-`runRemovalSubmission` (`submit-removal.ts:805–842`) and
-`createGhgStatementRemote` (`ghg-statements.ts:329–411`). Delete the local
-`createOrReconcile`. `submit-removal.ts` drops well below 900 lines as a side
-effect; if Phases 1+2 leave `resolveTemplateInputs` as the file's main bulk,
-extract it to `src/lib/isometric/transformers/template-inputs.ts` (it is
-already pure) — optional, do only if the file is still unwieldy.
+`runRemovalSubmission` (`submit-removal.ts:695` and `:718`) and
+`createGhgStatementRemote` (`ghg-statements.ts:301–383`). Delete the local
+`createOrReconcile`. Phase 1 already brought `submit-removal.ts` to ~880
+lines; this drops it further. If Phases 1+2 leave `resolveTemplateInputs` as
+the file's main bulk, extract it to
+`src/lib/isometric/transformers/template-inputs.ts` (it is already pure) —
+optional, do only if the file is still unwieldy.
+
+**Interaction with Phase 1 (landed):** `claimSubmissionDraft` returns
+`resumed` and `supersedePreviousId` on a `claimed` outcome — `resumed` feeds
+`performRegistryCreate`'s reconcile-first switch, and `supersedePreviousId`
+still flows to `markSubmissionSubmitted` after the registry call succeeds.
+Both pipelines already pass these through; Phase 2 only replaces the
+POST-side plumbing between the claim and the mark-submitted transition.
 
 **Tests:** new `tests/registry-create.test.ts` covering: fresh create
 success; resumed → reconcile-first hit (no POST); POST fails + reconcile
@@ -281,23 +349,56 @@ finds orphan (claimed, `:reconciled` event); POST fails + reconcile misses
 
 ## Phase 3 — Fake registry adapter
 
+> **✅ Implemented** (2026-06-10, stacked on Phase 2; see
+> `docs/isometric/changes.md`). Landed as specified; deltas from the sketch:
+>
+> - The fake's client-module replacement lives IN the fixture
+>   (`createFakeClientModule(actual)`, called from each test file's
+>   `vi.mock` factory) rather than a separate shared helper — the factory
+>   passes the actual module through so `IsometricApiError` stays the real
+>   class for `instanceof` checks. Per-test state via
+>   `installFakeRegistry()` in `beforeEach`.
+> - Tests split per pipeline: `tests/registry-boundary-removal.test.ts`
+>   (boundary tests 1, 2, 4, 5 + a same-attempt recovery case where the
+>   post-failure lookup works immediately) and
+>   `tests/registry-boundary-ghg-statement.test.ts` (test 3, both arms).
+> - "Submit fails" in tests 1/2/3 is produced by pairing the POST's
+>   `drop-after-commit` with a `reject-before-commit` 503 on the lookup
+>   route — otherwise `performRegistryCreate` reconciles the orphan within
+>   the same attempt and nothing is left to resume. The resume is then
+>   reached by back-dating `lockedAt` past the TTL, like the claim module's
+>   own DB suite.
+> - Besides the client: the removal tests mock the context loader and
+>   sources resolver (per the out-of-scope decisions); the GHG tests mock
+>   only the auth session (`withAction`). Everything else — claim module,
+>   ledger + sync-event writes, statement get-or-create, finalize
+>   reconciliation — runs real against Postgres.
+> - The fake enforces unique `supplier_reference_id` on POST (422 + body)
+>   and additionally exposes a request log, so "never re-POSTed" is
+>   asserted both ways (registry state + POST counts).
+
 **Goal:** make the registry seam real (two adapters) so the recovery paths
 Phases 1–2 concentrated can be tested as a boundary — the registry as a
 stateful counterparty, not a pile of per-function mocks.
 
 **Placement:** fake the client, not the wrappers. The seam is the `isometric`
 client object (`src/lib/isometric/client.ts:308` — `get/post/patch/delete/
-paginate`). The function-level wrappers (`createDatapoint`,
-`createRemoval`, `createGhgStatement`, `findRemovalBySupplierRef`, …) are
-thin and stay real in tests, so supplier-reference query semantics and
-pagination are exercised, not simulated.
+paginate`). The function-level wrappers — post-GHG-entry-migration names:
+`createDatapoint` / `createGhgEntry` (`submissions.ts`),
+`createGhgStatement` (`ghg-statements.ts`), `findGhgEntryBySupplierRef` /
+`findDatapointBySupplierRef` (`submissions.ts`) — are thin and stay real in
+tests, so supplier-reference query semantics and pagination are exercised,
+not simulated.
 
 **New module:** `tests/fixtures/fake-registry.ts` — an in-memory registry
 that:
 
-- stores removals, datapoints, and GHG statements with server-assigned IDs;
-- honors `?supplier_reference_id=` filtering on `/removals` and
-  `/datapoints`, and draft-statement lookup by `(project_id, end_on)`;
+- stores ghg entries (removals), datapoints, and GHG statements with
+  server-assigned IDs;
+- honors `?supplier_reference_id=` filtering on `/ghg_entries` and
+  `/datapoints` (the post-rename route family — the deprecated
+  removal-named routes need no fake), and draft-statement lookup by
+  `(project_id, end_on)`;
 - enforces the registry-shaped invariants the recovery code depends on:
   duplicate `supplier_reference_id` POSTs, multiple draft statements for one
   period;
@@ -311,6 +412,14 @@ that:
 Wire it via `vi.mock("@/lib/isometric/client")` in a shared helper. Keep it
 deliberately small — only the routes the certification pipelines touch; grow
 it per-test, never speculatively.
+
+**Interaction with Phase 1 (landed):** the boundary tests should run the
+REAL `claimSubmissionDraft` against the DB-backed test harness
+(`tests/setup.ts` + `.env.test`, fixture style of
+`tests/certification-submissions.test.ts`) with only the client faked — that
+is what makes them end-to-end. The value-shaped
+`tests/fixtures/fake-claim.ts` is for pure-mock pipeline tests only; do not
+stack it under the fake registry.
 
 **New boundary tests** (the payoff):
 
@@ -336,15 +445,16 @@ remains the live-adapter check; the fake does not replace it.
 
 ## Sequencing & estimates
 
-| Phase | Depends on | Size |
-|---|---|---|
-| 1 — ledger claim module | — | ~2–3 days incl. tests |
-| 2 — registry create module | independent of 1 (touches different lines); land after 1 to avoid rebasing the same files | ~1–2 days |
-| 3 — fake registry + boundary tests | smaller surface once 1+2 land | ~2 days |
+| Phase | Depends on | Size | Status |
+|---|---|---|---|
+| 1 — ledger claim module | — | ~2–3 days incl. tests | ✅ Done (PR #169) |
+| 2 — registry create module | 1 merged (same files) | ~1–2 days | ✅ Done (stacked on #169) |
+| 3 — fake registry + boundary tests | 1+2 landed | ~2 days | ✅ Done (stacked on Phase 2) |
 
 One PR per phase, each leaving every existing test green. Behavior changes
-are limited to the two named improvements (GHG race resolution; removal
-failure-event body) — call both out in the PR descriptions.
+are limited to the two named improvements (GHG race resolution — **shipped
+in Phase 1**; removal failure-event body — **shipped in Phase 2**) — call
+each out in its PR description.
 
 ## Risks
 

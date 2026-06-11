@@ -270,6 +270,8 @@ export async function createDeliveryFn(
           moistureContentPercent: validated.moistureContentPercent ?? null,
           truckMassOnArrivalKg: validated.truckMassOnArrivalKg ?? null,
           truckMassOnDepartureKg: validated.truckMassOnDepartureKg ?? null,
+          distanceKmOverride: validated.distanceKmOverride ?? null,
+          distanceNote: validated.distanceNote || null,
         });
       }
     );
@@ -326,6 +328,8 @@ export async function updateDeliveryFn(
       moistureContentPercent: validated.moistureContentPercent,
       truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
       truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
+      distanceKmOverride: validated.distanceKmOverride,
+      distanceNote: validated.distanceNote,
     });
 
     await resyncBiocharLegs(user.id, [
