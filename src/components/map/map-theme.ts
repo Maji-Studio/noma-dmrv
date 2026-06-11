@@ -4,6 +4,9 @@
  * "Design reference"): white land on orange-tinted paper, hairline plum
  * boundaries, all labels hidden — the map reads as a diagram, not a road map.
  *
+ * Shared by every map surface (PositionPicker preview, Carbon Viewer) so the
+ * picker reads as a small crop of the viewer map.
+ *
  * MapLibre paints onto a canvas, so CSS variables can't be referenced in
  * paint properties directly; colors are resolved from the design tokens at
  * runtime via getComputedStyle (client-only module).
@@ -11,10 +14,10 @@
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 
-export type PickerAccent = "orange" | "purple" | "pink";
+export type MapAccent = "orange" | "purple" | "pink";
 
 /** Marker accent per entity family (concept token mapping). */
-const ACCENT_TOKEN: Record<PickerAccent, string> = {
+export const MAP_ACCENT_TOKEN: Record<MapAccent, string> = {
   orange: "--clr-orange", // supplier / inbound
   purple: "--clr-purple", // facility / infrastructure
   pink: "--clr-pink", // field / outbound (pink on light bg, not rose)
@@ -24,8 +27,8 @@ const ACCENT_TOKEN: Record<PickerAccent, string> = {
 const MARKER_SIZE_PX = 12;
 const MARKER_BORDER = "1.5px solid var(--clr-dark-purple)";
 
-/** Layers this component adds itself — never recolored or hidden. */
-export const OWN_LAYER_PREFIX = "pp-";
+/** Layers map surfaces add themselves — never recolored or hidden. */
+export const OWN_LAYER_PREFIX = "noma-";
 
 interface MapThemeColors {
   /** Sea / background — orange-tinted paper. */
@@ -104,12 +107,12 @@ export function applyBrandRecolor(map: MapLibreMap): void {
 }
 
 /** Square accent marker element (DOM marker, draggable by MapLibre). */
-export function createMarkerElement(accent: PickerAccent): HTMLDivElement {
+export function createMarkerElement(accent: MapAccent): HTMLDivElement {
   const el = document.createElement("div");
   el.dataset.testid = "position-picker-marker";
   el.style.width = `${MARKER_SIZE_PX}px`;
   el.style.height = `${MARKER_SIZE_PX}px`;
-  el.style.background = `var(${ACCENT_TOKEN[accent]})`;
+  el.style.background = `var(${MAP_ACCENT_TOKEN[accent]})`;
   el.style.border = MARKER_BORDER;
   el.style.boxSizing = "border-box";
   el.style.cursor = "grab";
