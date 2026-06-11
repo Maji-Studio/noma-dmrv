@@ -198,6 +198,7 @@ export async function saveFacilityEmissionConfig(
       stageSplitBiomassPct: parsed.stageSplitBiomassPct,
       stageSplitPyrolysisPct: parsed.stageSplitPyrolysisPct,
       stageSplitBiocharPct: parsed.stageSplitBiocharPct,
+      defaultSoilTemperatureC: parsed.defaultSoilTemperatureC ?? null,
     });
   });
 }

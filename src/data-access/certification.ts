@@ -298,6 +298,7 @@ export interface FacilityEmissionConfigInput {
   stageSplitBiomassPct: number;
   stageSplitPyrolysisPct: number;
   stageSplitBiocharPct: number;
+  defaultSoilTemperatureC?: number | null;
 }
 
 // Updates only the four Phase 3.7 emission-estimate columns on an
@@ -316,6 +317,7 @@ export async function updateFacilityEmissionConfig(
       stageSplitBiomassPct: input.stageSplitBiomassPct,
       stageSplitPyrolysisPct: input.stageSplitPyrolysisPct,
       stageSplitBiocharPct: input.stageSplitBiocharPct,
+      defaultSoilTemperatureC: input.defaultSoilTemperatureC ?? null,
       updatedAt: sql`now()`,
     })
     .where(

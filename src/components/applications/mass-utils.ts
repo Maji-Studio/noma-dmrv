@@ -11,8 +11,41 @@ export interface ApplicationDeliveryOption {
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
   moistureContentPercent: number | null;
+  defaultSoilTemperatureC: number | null;
+  facilityDefaultSoilTemperatureC: number | null;
   /** Total kg already applied from this delivery across all applications */
   alreadyAppliedWetKg: number;
+}
+
+export interface ApplicationSoilTemperatureDefault {
+  soilTemperatureSource: "global_database";
+  soilTemperatureC: number;
+}
+
+export function resolveApplicationSoilTemperatureDefault({
+  delivery,
+}: {
+  delivery:
+    | Pick<
+        ApplicationDeliveryOption,
+        "defaultSoilTemperatureC" | "facilityDefaultSoilTemperatureC"
+      >
+    | null
+    | undefined;
+}): ApplicationSoilTemperatureDefault | null {
+  const soilTemperatureC =
+    delivery?.defaultSoilTemperatureC ??
+    delivery?.facilityDefaultSoilTemperatureC ??
+    null;
+
+  if (soilTemperatureC == null) {
+    return null;
+  }
+
+  return {
+    soilTemperatureSource: "global_database",
+    soilTemperatureC,
+  };
 }
 
 /**
