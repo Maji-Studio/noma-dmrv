@@ -182,6 +182,7 @@ export function CreditBatchDetail({
           onSubmit={handleUpdate}
           isSubmitting={updateCreditBatch.isPending}
           submitLabel="Save changes"
+          stickyActions={false}
         />
       </section>
     </div>

@@ -1,10 +1,13 @@
 /**
  * FormActions
- * Sticky form footer with Cancel + Submit buttons.
- * Used by all entity forms for consistent action placement.
+ * Form footer with Submit + Cancel buttons — the single CTA row pattern for
+ * all entity forms: left-aligned, primary action first, nothing after it.
+ * Sticky by default (side-sheet forms); pass `sticky={false}` for nested
+ * inline forms (e.g. transport legs, child-entity editors).
  */
 
 import { Button } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 interface FormActionsProps {
   onCancel?: () => void;
@@ -13,6 +16,15 @@ interface FormActionsProps {
   defaultSubmitLabel?: string;
   /** Block submit while a precondition is unmet (e.g. an unchecked ack). */
   submitDisabled?: boolean;
+  /**
+   * Associate the submit button with a `<form id>` rendered elsewhere.
+   * Lets the CTA row live outside the form element so extension content
+   * (child-entity editors) can render between the fields and the CTA
+   * without nesting forms.
+   */
+  formId?: string;
+  /** Sticky footer (default) — disable for nested inline forms. */
+  sticky?: boolean;
 }
 
 export function FormActions({
@@ -21,17 +33,31 @@ export function FormActions({
   submitLabel,
   defaultSubmitLabel = "Save",
   submitDisabled = false,
+  formId,
+  sticky = true,
 }: FormActionsProps) {
   return (
-    <div className="sticky bottom-0 -mx-24 px-24 py-20 bg-[var(--color-background-white)] flex items-center justify-end gap-16 border-t border-[var(--color-border-secondary)]">
+    <div
+      className={cn(
+        "flex items-center justify-start gap-16 border-t border-[var(--color-border-secondary)]",
+        sticky
+          ? "sticky bottom-0 -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
+          : "pt-20"
+      )}
+    >
+      <Button
+        type="submit"
+        variant="primary"
+        form={formId}
+        disabled={isSubmitting || submitDisabled}
+      >
+        {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
+      </Button>
       {onCancel && (
         <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
       )}
-      <Button type="submit" variant="primary" disabled={isSubmitting || submitDisabled}>
-        {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-      </Button>
     </div>
   );
 }

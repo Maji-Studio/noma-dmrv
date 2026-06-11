@@ -433,18 +433,6 @@ export function ProductionRunList() {
               />
             </>
           ) : undefined}
-          editModeChildren={sideSheet.entity ? (
-            <>
-              <ProductionRunReadingTable productionRunId={sideSheet.entity.id} />
-              <ProductionSampleTable productionRunId={sideSheet.entity.id} />
-              <ProductionIncidentTable
-                productionRunId={sideSheet.entity.id}
-                facilityId={sideSheet.entity.facilityId}
-                defaultReactorId={sideSheet.entity.reactorId}
-                defaultOperatorId={sideSheet.entity.operatorId}
-              />
-            </>
-          ) : undefined}
           sections={sideSheet.entity ? [
             {
               title: "General",
@@ -515,7 +503,20 @@ export function ProductionRunList() {
             onCancel={closeSideSheet}
             isSubmitting={createRun.isPending || updateRun.isPending}
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Production Run"}
-          />
+          >
+            {sideSheet.entity && sideSheet.mode === "edit" ? (
+              <>
+                <ProductionRunReadingTable productionRunId={sideSheet.entity.id} />
+                <ProductionSampleTable productionRunId={sideSheet.entity.id} />
+                <ProductionIncidentTable
+                  productionRunId={sideSheet.entity.id}
+                  facilityId={sideSheet.entity.facilityId}
+                  defaultReactorId={sideSheet.entity.reactorId}
+                  defaultOperatorId={sideSheet.entity.operatorId}
+                />
+              </>
+            ) : null}
+          </ProductionRunForm>
         </EntitySideSheet>
       )}
     </div>
