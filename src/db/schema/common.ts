@@ -136,6 +136,18 @@ export const transportMethod = pgEnum('transport_method', [
   'aircraft',
 ]);
 
+// Provenance of a stored road distance (map integration plan, decision 2).
+// Tracked on every surface where a distance can be written. A routed
+// distance is an ESTIMATE (suggested default, operator-editable) in the
+// same measured-vs-derived family as an emission estimate; document-backed
+// distances (bill of lading, weigh ticket) remain the authoritative form.
+// Orthogonal to a transport leg's isDerived flag.
+export const distanceSource = pgEnum('distance_source', [
+  'map_estimate', // CALC'd via OpenRouteService road routing
+  'manual', // hand-typed by the operator
+  'document', // backed by a bill of lading / weigh ticket
+]);
+
 // Emissions calculation method (Transportation Emissions Accounting Module v1.1)
 // Section 3.2: Energy Usage Method (preferred), Section 3.3: Distance-Based Method
 export const emissionsCalculationMethod = pgEnum('emissions_calculation_method', [
