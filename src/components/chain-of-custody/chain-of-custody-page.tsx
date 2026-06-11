@@ -67,6 +67,9 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
 const DEFAULT_BATCH_VIEW: BatchViewMode = "dag";
 
+// Shared width for the batch / run selector wrappers in the page header.
+const SELECTOR_WRAPPER_CLASS = "w-[320px] max-w-full";
+
 function parseApplicationView(raw: string | null): ApplicationViewMode {
   return APPLICATION_VIEW_MODES.some((mode) => mode.value === raw)
     ? (raw as ApplicationViewMode)
@@ -554,7 +557,7 @@ export function ChainOfCustodyPage() {
 
           <div className="flex flex-wrap items-end justify-between gap-16">
             <div className="flex flex-wrap items-end gap-16">
-              <div className="w-[320px] max-w-full" data-testid="chain-batch-select">
+              <div className={SELECTOR_WRAPPER_CLASS} data-testid="chain-batch-select">
                 <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
                   Credit Batch
                 </p>
@@ -568,7 +571,7 @@ export function ChainOfCustodyPage() {
                 />
               </div>
               {anchor === "batch" ? (
-                <div className="w-[320px] max-w-full" data-testid="chain-run-select">
+                <div className={SELECTOR_WRAPPER_CLASS} data-testid="chain-run-select">
                   <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
                     Production Run
                   </p>

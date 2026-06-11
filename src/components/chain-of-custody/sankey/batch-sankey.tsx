@@ -84,6 +84,9 @@ const EXIT_NOTES: Record<SankeyExitKey, string> = {
 };
 
 const TOOLTIP_W = 248;
+// Keeps the tooltip anchor far enough above the wrapper's bottom edge that
+// an estimated-height tooltip never clips outside the diagram.
+const TOOLTIP_BOTTOM_CLEARANCE = 120;
 
 function formatMassKg(value: number): string {
   return `${Math.round(value).toLocaleString()} kg`;
@@ -443,7 +446,7 @@ export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
     );
     const y = Math.min(
       targetRect.bottom - bounds.top + 8,
-      bounds.height - 120
+      bounds.height - TOOLTIP_BOTTOM_CLEARANCE
     );
     setSelection({ ...nextSelection, anchor: { x, y } });
   };
