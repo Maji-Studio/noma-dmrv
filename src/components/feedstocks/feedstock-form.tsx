@@ -296,6 +296,7 @@ export function FeedstockForm({
                       setValue(
                         "transportDistanceSource",
                         event.target.value === "" ? null : "manual",
+                        SET_VALUE_OPTS,
                       ),
                   })}
                 />

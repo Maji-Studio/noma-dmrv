@@ -650,6 +650,15 @@ export async function createStorageLocation(
     }
   }
 
+  // The Zod create schema enforces this for form/fn flows; repeat it here so
+  // direct data-access callers (seeds, scripts) can't create a bin the update
+  // path's invariant check would then refuse to touch.
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    throw new SafeError(
+      "Feedstock and ingredient bins must be restricted to one feedstock type"
+    );
+  }
+
   // A formulation only makes sense on a product bin; ignore it for other types.
   const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
   if (formulationId) {
