@@ -91,7 +91,7 @@ Rules:
 
 ### 1.3 Registry credentials — `certification.ts`
 
-```
+```text
 certifierCredentials
   id uuid PK
   organizationId text NOT NULL → organizations

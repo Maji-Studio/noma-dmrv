@@ -646,12 +646,15 @@ export async function updateFacility(
 export interface FacilityArchiveImpact {
   reactorCount: number;
   storageLocationCount: number;
+  feedstockDeliveryCount: number;
   feedstockCount: number;
   productionRunCount: number;
   biocharProductCount: number;
   orderCount: number;
   deliveryCount: number;
   creditBatchCount: number;
+  stockpileEventCount: number;
+  powerProcurementEvidenceCount: number;
   /**
    * True when the facility has removals/GHG statements submitted to the
    * certifier registry. Archiving stays allowed (the registry keeps its own
@@ -682,34 +685,43 @@ export async function getFacilityArchiveImpact(
   const [
     [reactorCount],
     [storageCount],
+    [feedstockDeliveryCount],
     [feedstockCount],
     [runCount],
     [productCount],
     [orderCount],
     [deliveryCount],
     [batchCount],
+    [stockpileEventCount],
+    [powerEvidenceCount],
     hasRegistrySubmissions,
   ] = await Promise.all([
     db.select({ count: count() }).from(reactors).where(eq(reactors.facilityId, facilityId)),
     db.select({ count: count() }).from(storageLocations).where(eq(storageLocations.facilityId, facilityId)),
+    db.select({ count: count() }).from(feedstockDeliveries).where(eq(feedstockDeliveries.facilityId, facilityId)),
     db.select({ count: count() }).from(feedstocks).where(eq(feedstocks.facilityId, facilityId)),
     db.select({ count: count() }).from(productionRuns).where(eq(productionRuns.facilityId, facilityId)),
     db.select({ count: count() }).from(biocharProducts).where(eq(biocharProducts.facilityId, facilityId)),
     db.select({ count: count() }).from(orders).where(eq(orders.facilityId, facilityId)),
     db.select({ count: count() }).from(deliveries).where(eq(deliveries.facilityId, facilityId)),
     db.select({ count: count() }).from(creditBatches).where(eq(creditBatches.facilityId, facilityId)),
+    db.select({ count: count() }).from(stockpileEvents).where(eq(stockpileEvents.facilityId, facilityId)),
+    db.select({ count: count() }).from(powerProcurementEvidence).where(eq(powerProcurementEvidence.facilityId, facilityId)),
     hasBlockingFacilitySubmission(db, facilityId, "isometric"),
   ]);
 
   return {
     reactorCount: Number(reactorCount.count),
     storageLocationCount: Number(storageCount.count),
+    feedstockDeliveryCount: Number(feedstockDeliveryCount.count),
     feedstockCount: Number(feedstockCount.count),
     productionRunCount: Number(runCount.count),
     biocharProductCount: Number(productCount.count),
     orderCount: Number(orderCount.count),
     deliveryCount: Number(deliveryCount.count),
     creditBatchCount: Number(batchCount.count),
+    stockpileEventCount: Number(stockpileEventCount.count),
+    powerProcurementEvidenceCount: Number(powerEvidenceCount.count),
     hasRegistrySubmissions,
   };
 }
@@ -796,6 +808,11 @@ export async function restoreFacility(
       .where(eq(facilities.id, facilityId))
       .returning();
 
+    // The facility cascade is the only writer of archived_at, so restore clears
+    // it on all children indiscriminately. If per-entity archive writers are
+    // ever added, guard these updates with .where(isNull(<table>.archivedAt))
+    // captured at archive time, or restore will un-archive individually
+    // archived rows.
     await tx.update(reactors).set({ archivedAt }).where(eq(reactors.facilityId, facilityId));
     await tx.update(storageLocations).set({ archivedAt }).where(eq(storageLocations.facilityId, facilityId));
     await tx.update(feedstockDeliveries).set({ archivedAt }).where(eq(feedstockDeliveries.facilityId, facilityId));

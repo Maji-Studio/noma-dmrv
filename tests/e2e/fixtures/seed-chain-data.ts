@@ -64,6 +64,10 @@ export async function seedChainData(
         name: `E2E Seed Facility ${testRunId}`,
         country: "Tanzania",
         location: "Dar es Salaam",
+        // Dodoma stub-geocode fixture coords — gives CALC a facility endpoint
+        // and makes stub reverse-geocode/route-distance assertions exact.
+        gpsLatitude: -6.163,
+        gpsLongitude: 35.7516,
       });
 
       // 2. Reactor (needs facility)

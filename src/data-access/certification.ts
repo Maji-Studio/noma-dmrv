@@ -11,6 +11,7 @@ import {
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import { SafeError } from "@/lib/errors";
 import { requireAuth } from "./utils";
 
@@ -196,7 +197,7 @@ export async function upsertCertifierProject(
     facilityId: input.facilityId,
     provider: input.provider,
     externalProjectId: input.externalProjectId,
-    protocolSlug: input.protocolSlug ?? "biochar",
+    protocolSlug: input.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     protocolVersion: input.protocolVersion ?? null,
     defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
     externalFacilityId: input.externalFacilityId ?? null,

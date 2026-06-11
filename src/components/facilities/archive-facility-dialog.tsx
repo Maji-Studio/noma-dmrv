@@ -23,12 +23,15 @@ interface ArchiveFacilityDialogProps {
 const IMPACT_LABELS = [
   ["reactorCount", "reactor", "reactors"],
   ["storageLocationCount", "storage bin", "storage bins"],
+  ["feedstockDeliveryCount", "feedstock delivery", "feedstock deliveries"],
   ["feedstockCount", "feedstock batch", "feedstock batches"],
   ["productionRunCount", "production run", "production runs"],
   ["biocharProductCount", "biochar product", "biochar products"],
   ["orderCount", "order", "orders"],
   ["deliveryCount", "delivery", "deliveries"],
   ["creditBatchCount", "credit batch", "credit batches"],
+  ["stockpileEventCount", "stockpile event", "stockpile events"],
+  ["powerProcurementEvidenceCount", "power procurement record", "power procurement records"],
 ] as const;
 
 export function ArchiveFacilityDialog({
@@ -84,7 +87,12 @@ export function ArchiveFacilityDialog({
             <p className="body-small text-[var(--color-text-tertiary)]">
               This facility has no attached data.
             </p>
-          ) : null}
+          ) : (
+            <p className="body-small text-[var(--color-signal-red)]">
+              Couldn&apos;t load the impact preview — archiving is disabled.
+              Close the dialog and try again.
+            </p>
+          )}
 
           {impact?.hasRegistrySubmissions && (
             <div className="flex items-start gap-8 border border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] p-12">
@@ -116,7 +124,7 @@ export function ArchiveFacilityDialog({
             variant="default"
             className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
             onClick={onConfirm}
-            disabled={isPending || isLoading}
+            disabled={isPending || isLoading || !impact}
           >
             {isPending ? "Archiving..." : "Archive"}
           </Button>

@@ -89,6 +89,7 @@ type DeliveryColumnAvailability = {
   truckMassOnArrivalKg: boolean;
   truckMassOnDepartureKg: boolean;
   distanceKmOverride: boolean;
+  distanceSource: boolean;
   distanceNote: boolean;
   archivedAt: boolean;
 };
@@ -107,6 +108,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
             'truck_mass_on_arrival_kg',
             'truck_mass_on_departure_kg',
             'distance_km_override',
+            'distance_source',
             'distance_note',
             'archived_at'
           )
@@ -118,6 +120,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
           truckMassOnArrivalKg: columns.has("truck_mass_on_arrival_kg"),
           truckMassOnDepartureKg: columns.has("truck_mass_on_departure_kg"),
           distanceKmOverride: columns.has("distance_km_override"),
+          distanceSource: columns.has("distance_source"),
           distanceNote: columns.has("distance_note"),
           archivedAt: columns.has("archived_at"),
         };
@@ -151,6 +154,11 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceKmOverride: columns.distanceKmOverride
       ? deliveries.distanceKmOverride
       : sql<number | null>`null`.as("distance_km_override"),
+    distanceSource: columns.distanceSource
+      ? deliveries.distanceSource
+      : sql<"map_estimate" | "manual" | "document" | null>`null`.as(
+          "distance_source"
+        ),
     distanceNote: columns.distanceNote
       ? deliveries.distanceNote
       : sql<string | null>`null`.as("distance_note"),
@@ -352,6 +360,7 @@ export async function getDeliveryWithRelations(
     truckMassOnArrivalKg: deliveryRow.truckMassOnArrivalKg,
     truckMassOnDepartureKg: deliveryRow.truckMassOnDepartureKg,
     distanceKmOverride: deliveryRow.distanceKmOverride,
+    distanceSource: deliveryRow.distanceSource,
     distanceNote: deliveryRow.distanceNote,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
@@ -509,6 +518,7 @@ export async function createDelivery(
     truckMassOnArrivalKg?: number | null;
     truckMassOnDepartureKg?: number | null;
     distanceKmOverride?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
   }
 ): Promise<Delivery> {
@@ -587,6 +597,9 @@ export async function createDelivery(
       ...(deliveryColumns.distanceKmOverride
         ? { distanceKmOverride: data.distanceKmOverride ?? null }
         : {}),
+      ...(deliveryColumns.distanceSource
+        ? { distanceSource: data.distanceSource ?? null }
+        : {}),
       ...(deliveryColumns.distanceNote
         ? { distanceNote: data.distanceNote ?? null }
         : {}),
@@ -621,6 +634,7 @@ export async function updateDelivery(
     truckMassOnArrivalKg?: number | null;
     truckMassOnDepartureKg?: number | null;
     distanceKmOverride?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
   }
 ): Promise<Delivery> {
@@ -715,6 +729,9 @@ export async function updateDelivery(
       ...(deliveryColumns.distanceKmOverride
         ? {}
         : { distanceKmOverride: undefined }),
+      ...(deliveryColumns.distanceSource
+        ? {}
+        : { distanceSource: undefined }),
       ...(deliveryColumns.distanceNote
         ? {}
         : { distanceNote: undefined }),

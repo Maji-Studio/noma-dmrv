@@ -5,12 +5,17 @@
  */
 "use client";
 
-import { nullableNumericValue } from "@/lib/form-utils";
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import {
+  DistanceCalcField,
+  FormField,
+  FormInput,
+  FormTextarea,
+  PositionPicker,
+} from "@/components/forms";
 import { Button } from "@/components/ui";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   customerLocationFormSchema,
   type CustomerLocationFormData,
@@ -46,6 +51,8 @@ export function CustomerLocationForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(customerLocationFormSchema),
@@ -58,11 +65,29 @@ export function CustomerLocationForm({
       gpsLongitude: location?.gpsLongitude ?? undefined,
       address: location?.address ?? "",
       distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
+      distanceSource: location?.distanceSource ?? null,
       isDefault: location?.isDefault ?? false,
     },
   });
 
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
+
+  // Preprocessed Zod fields have `unknown` input types — narrow the watches.
+  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
+  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
+  const distanceFromFacilityKm = watch("distanceFromFacilityKm") as number | null | undefined;
+  const distanceSource = watch("distanceSource");
+
+  // CALC endpoints: the globally selected facility → this destination site.
+  const { selectedFacility } = useFacilityContext();
+  const locationPoint =
+    gpsLatitude != null && gpsLongitude != null
+      ? { lat: gpsLatitude, lng: gpsLongitude }
+      : null;
+  const facilityPoint =
+    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
+      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
+      : null;
 
   const handleFormSubmit = handleSubmit((data) => {
     return onSubmit(data as CustomerLocationFormData);
@@ -161,47 +186,21 @@ export function CustomerLocationForm({
           GPS Coordinates
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="gpsLatitude"
-            label="GPS Latitude"
-            error={errors.gpsLatitude?.message}
-            helperText="Between -90 and 90"
-            required
-          >
-            <FormInput
-              id="gpsLatitude"
-              type="number"
-              step="any"
-              placeholder="e.g., -3.3349"
-              disabled={isSubmitting}
-              error={!!errors.gpsLatitude}
-              {...register("gpsLatitude", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="gpsLongitude"
-            label="GPS Longitude"
-            error={errors.gpsLongitude?.message}
-            helperText="Between -180 and 180"
-            required
-          >
-            <FormInput
-              id="gpsLongitude"
-              type="number"
-              step="any"
-              placeholder="e.g., 37.3404"
-              disabled={isSubmitting}
-              error={!!errors.gpsLongitude}
-              {...register("gpsLongitude", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-        </div>
+        <PositionPicker
+          idPrefix="gps"
+          label="Application site position"
+          accent="pink"
+          required
+          latitude={gpsLatitude ?? null}
+          longitude={gpsLongitude ?? null}
+          onPositionChange={({ lat, lng }) => {
+            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+          }}
+          latitudeError={errors.gpsLatitude?.message}
+          longitudeError={errors.gpsLongitude?.message}
+          disabled={isSubmitting}
+        />
       </div>
 
       {/* Logistics Section */}
@@ -211,25 +210,26 @@ export function CustomerLocationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
+          <DistanceCalcField
             id="distanceFromFacilityKm"
             label="Distance from facility (km)"
             error={errors.distanceFromFacilityKm?.message}
             helperText="Road distance facility → site. Auto-fills the biochar distribution transport leg used for certification."
-          >
-            <FormInput
-              id="distanceFromFacilityKm"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 120"
-              disabled={isSubmitting}
-              error={!!errors.distanceFromFacilityKm}
-              {...register("distanceFromFacilityKm", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
+            disabled={isSubmitting}
+            distanceKm={distanceFromFacilityKm}
+            distanceSource={distanceSource}
+            onDistanceChange={(km, source) => {
+              setValue("distanceFromFacilityKm", km ?? undefined, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("distanceSource", source, { shouldDirty: true });
+            }}
+            origin={facilityPoint}
+            destination={locationPoint}
+            originLabel="selected facility"
+            destinationLabel="application site position"
+          />
         </div>
 
         <label

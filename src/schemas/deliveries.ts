@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
+import { optionalDistanceSource } from "./distance-source";
 import { emptyToNull } from "./helpers";
 
 // ============================================
@@ -87,6 +88,7 @@ const deliveryFormBaseSchema = z.object({
   truckMassOnDepartureKg: optionalNumber,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
+  distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
 });
 
@@ -164,6 +166,7 @@ export const createDeliverySchema = z.object({
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
   distanceKmOverride: optionalNumber,
+  distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
@@ -215,6 +218,7 @@ export const updateDeliverySchema = z.object({
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
   distanceKmOverride: optionalNumber,
+  distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
