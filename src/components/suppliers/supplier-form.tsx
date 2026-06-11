@@ -134,24 +134,6 @@ export function SupplierForm({
               {...register("sourceRegion")}
             />
           </FormField>
-
-          <FormField
-            id="distanceToFacilityKm"
-            label="Distance to facility (km)"
-            error={errors.distanceToFacilityKm?.message}
-            helperText="Road distance to the delivery facility. Autofills a feedstock's transport leg (overridable per delivery)."
-          >
-            <FormInput
-              id="distanceToFacilityKm"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 85"
-              disabled={isSubmitting}
-              error={!!errors.distanceToFacilityKm}
-              {...register("distanceToFacilityKm", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -208,6 +190,26 @@ export function SupplierForm({
               />
             </FormField>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="distanceToFacilityKm"
+            label="Default distance to facility (km)"
+            error={errors.distanceToFacilityKm?.message}
+            helperText="Road distance to the delivery facility. Used when a supplier location has no distance of its own; autofills a feedstock's transport leg (overridable per delivery)."
+          >
+            <FormInput
+              id="distanceToFacilityKm"
+              type="number"
+              step="any"
+              min={0}
+              placeholder="e.g., 85"
+              disabled={isSubmitting}
+              error={!!errors.distanceToFacilityKm}
+              {...register("distanceToFacilityKm", { setValueAs: nullableNumericValue })}
+            />
+          </FormField>
         </div>
       </div>
 

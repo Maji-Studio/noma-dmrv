@@ -4,7 +4,12 @@
  */
 
 import { z } from "zod";
-import { optionalPositiveNumber } from "./helpers";
+import {
+  optionalPositiveNumber,
+  requiredLatitudeSchema as requiredLat,
+  requiredLongitudeSchema as requiredLng,
+  toNumberOrUndefined,
+} from "./helpers";
 
 // ============================================
 // Shared Location Part Schemas
@@ -97,11 +102,13 @@ export const customerLocationFormSchema = z.object({
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   address: customerLocationTextSchema,
-  gpsLatitude: optionalLatitudeSchema,
-  gpsLongitude: optionalLongitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   // Operational road distance (km) from the origin facility. Certifier
   // transport is recorded on cargo entities, not deliveries.
   distanceFromFacilityKm: optionalPositiveNumber,
+  // Marks this as the customer's default destination.
+  isDefault: z.boolean().optional().default(false),
 });
 
 // ============================================
@@ -157,9 +164,10 @@ export const createCustomerLocationSchema = z.object({
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   address: customerLocationTextSchema,
-  gpsLatitude: optionalLatitudeSchema,
-  gpsLongitude: optionalLongitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   distanceFromFacilityKm: optionalPositiveNumber,
+  isDefault: z.boolean().optional().default(false),
 });
 
 /**
@@ -175,6 +183,7 @@ export const updateCustomerLocationSchema = z.object({
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationTextSchema.optional(),
   distanceFromFacilityKm: optionalPositiveNumber,
+  isDefault: z.boolean().optional(),
 });
 
 /**

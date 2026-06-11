@@ -14,6 +14,26 @@ Each entry follows this shape:
 
 ## Schema
 
+### Wire per-location / per-delivery distance into transport-leg derivation (`parties/distance-derivation`) — opened 2026-06-10
+
+- **Context:** the location-distance + default-location work added
+  `supplier_locations.distance_from_facility_km`, `customer_locations.is_default`
+  / `supplier_locations.is_default`, and a per-delivery
+  `deliveries.distance_km_override` (+ `distance_note`). These are stored and
+  editable, but the certifier transport-leg math does **not** yet prefer them.
+- **Decision needed:** make `deriveTransportLeg` /
+  `syncBiocharProductTransportLeg` (`src/lib/calculations/transport-leg.ts`,
+  `src/lib/isometric/.../transport-legs.ts`) resolve distance in priority order
+  — feedstock side: feedstock `transportDistanceKm` → supplier location
+  (default) distance → supplier-level `distance_to_facility_km`; distribution
+  side: `deliveries.distance_km_override` → destination customer location
+  (default) `distance_from_facility_km`.
+- **Why it matters:** until wired, the new per-location distance and the
+  per-delivery override are operational metadata only and do not affect
+  certification emissions. The fields exist so the UI/data are ready; the
+  derivation change is a separate, riskier pass (touches credit math) and
+  should get its own review + e2e coverage.
+
 ### Dropped protocol-stub tables — re-add when each feature is built (opened 2026-06-08)
 
 Removed in migration `drizzle/0037_sour_lethal_legion.sql`. These tables were
@@ -64,8 +84,8 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **Decision needed:** when a second facility/operator group (or self-serve
   registration) is committed, design and ship a real facility-access model —
   membership tables, scoped guards in `data-access/`, and scoped option
-  queries (the known unscoped example: `getSupplierOptions`,
-  `src/data-access/suppliers.ts:198`).
+  queries (the known unscoped example: `getSupplierOptions` in
+  `src/data-access/suppliers.ts`).
 - **Why it matters:** today's shared-data model is intentional and documented
   (`docs/auth.md` §current model, `docs/security.md`); `requireAuth` is a
   userId-truthiness check at ~211 call sites. The moment data must be
@@ -81,6 +101,28 @@ guard. Pure starter-template residue; the app is facility-scoped.
   semantics, migration for existing rows).
 
 ## Isometric Certify integration
+
+### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
+
+- **When a registry create's reconcile lookup finds MULTIPLE candidates**
+  (today only reachable for GHG Statements — several DRAFT statements for one
+  `(project, end_on)`), `performRegistryCreate`
+  (`src/fn/certification/registry-create.ts`) rejects the ledger row and
+  throws the caller's ambiguity message **without writing a failed sync
+  event**. Deliberate Phase 2 parity with the pre-module GHG behavior; the
+  reliability-track plan limited behavior changes to its two named ones.
+- Not blind: the rejection reason survives in the ledger row's
+  `metadata.lastError`, and the row status flips to `rejected`. But the
+  statement's `certifier_sync_events` timeline just stops — the detail panel's
+  "recent sync events" list shows nothing for the failed attempt.
+- Phase 3's boundary test pins the current behavior by assertion
+  (`tests/registry-boundary-ghg-statement.test.ts`, "rejects with the
+  ambiguity message…") with a pointer here — flip that assertion when this is
+  resolved.
+- Resolve via: decide whether ambiguity should append a `status: "failed"`
+  sync event (operation `ghg_statement:create`, errorMessage = the ambiguity
+  wording, no response body) for audit-timeline completeness. One-line change
+  in `reconcileToResult` + the pinned assertion; no migration.
 
 ### GHG Entry API rename — September 2026 sunset cleanup (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
