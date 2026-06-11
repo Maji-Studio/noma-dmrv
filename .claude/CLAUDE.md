@@ -18,6 +18,8 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 
 Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
 
+Domain language lives in **`CONTEXT.md`** (repo root) — a pure glossary of canonical terms (Removal, Credit batch, Roll-up, Evidence method, …) with no implementation detail. Its definitions override casual usage; consult it before naming things or writing requirements/docs, and keep it free of implementation notes when updating it.
+
 ## Essential Commands
 
 | Command | Purpose |
