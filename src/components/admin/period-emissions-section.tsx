@@ -488,19 +488,7 @@ function PeriodEmissionFormDialog({
             </FormField>
           </div>
 
-          <div className="flex justify-end gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
-            <Button
-              type="button"
-              variant="default"
-              onClick={onClose}
-              disabled={
-                isSubmitting ||
-                createMutation.isPending ||
-                updateMutation.isPending
-              }
-            >
-              Cancel
-            </Button>
+          <div className="flex justify-start gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
             <Button
               type="submit"
               variant="primary"
@@ -517,6 +505,18 @@ function PeriodEmissionFormDialog({
                 : isEdit
                   ? "Save changes"
                   : "Add row"}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              onClick={onClose}
+              disabled={
+                isSubmitting ||
+                createMutation.isPending ||
+                updateMutation.isPending
+              }
+            >
+              Cancel
             </Button>
           </div>
         </form>

@@ -18,8 +18,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, SectionLabel } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormField, FormInput, FormTextarea, SectionLabel, FormActions } from "@/components/forms";
 import {
   creditBatchFormSchema,
   formatDurabilityOption,
@@ -239,6 +238,8 @@ interface CreditBatchFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  /** Sticky CTA row (side sheet) — pass false when embedded in a page card. */
+  stickyActions?: boolean;
 }
 
 export function CreditBatchForm({
@@ -250,6 +251,7 @@ export function CreditBatchForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  stickyActions = true,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
   const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
@@ -523,26 +525,14 @@ export function CreditBatchForm({
         </dl>
       </div>
 
-      {/* ── Form Actions ── */}
-      <div className="flex items-center justify-end gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={isSubmitting || !!overlappingBatch}
-        >
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      <FormActions
+        sticky={stickyActions}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitDisabled={!!overlappingBatch}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

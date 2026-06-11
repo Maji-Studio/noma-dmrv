@@ -129,7 +129,14 @@ export function ProductionRunReadingForm({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-16">
+      <div className="flex items-center justify-start gap-16">
+        <Button type="submit" variant="primary" disabled={isSubmitting}>
+          {isSubmitting
+            ? "Saving..."
+            : isEditMode
+              ? "Save Changes"
+              : "Add Reading"}
+        </Button>
         {onCancel && (
           <Button
             type="button"
@@ -140,13 +147,6 @@ export function ProductionRunReadingForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting
-            ? "Saving..."
-            : isEditMode
-              ? "Save Changes"
-              : "Add Reading"}
-        </Button>
       </div>
     </form>
   );
