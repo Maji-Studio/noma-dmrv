@@ -57,9 +57,11 @@ test.describe("Facility cascading archive", () => {
   });
 
   test.afterAll(async () => {
-    await deleteTestStorageLocation(bin.id);
-    await deleteTestFacility(facility.id);
-    await connection.pool.end();
+    // Guard each step — beforeAll may have failed partway through, and an
+    // unguarded teardown throw would mask the original error.
+    if (bin) await deleteTestStorageLocation(bin.id);
+    if (facility) await deleteTestFacility(facility.id);
+    if (connection?.pool) await connection.pool.end();
   });
 
   test("archive hides the facility and cascades to children; restore reverses it", async ({
