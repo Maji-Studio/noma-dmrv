@@ -31,7 +31,13 @@ interface DistanceCalcFieldProps {
   helperText?: string;
   error?: string;
   required?: boolean;
+  certifyRequired?: boolean;
   disabled?: boolean;
+  /**
+   * Hide the source caption when the parent renders its own provenance UI
+   * (e.g. the transport-leg form's distance-source select).
+   */
+  showSourceBadge?: boolean;
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;
   onDistanceChange: (km: number | null, source: DistanceSourceValue | null) => void;
@@ -61,7 +67,9 @@ export function DistanceCalcField({
   helperText,
   error,
   required = false,
+  certifyRequired = false,
   disabled = false,
+  showSourceBadge = true,
   distanceKm,
   distanceSource,
   onDistanceChange,
@@ -130,6 +138,7 @@ export function DistanceCalcField({
       error={error ?? (route.isError ? route.error.message : undefined)}
       helperText={helperText}
       required={required}
+      certifyRequired={certifyRequired}
     >
       <div>
         <div className="flex items-stretch gap-6">
@@ -162,7 +171,7 @@ export function DistanceCalcField({
             </span>
           </Tooltip>
         </div>
-        {source && (
+        {showSourceBadge && source && (
           <p
             className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
             data-testid={`${id}-distance-source`}
