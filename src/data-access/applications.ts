@@ -339,7 +339,7 @@ export async function getCreditBatchApplicationOptions(
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .where(eq(deliveries.facilityId, facilityId))
+    .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
     .orderBy(desc(applications.applicationDate));
 }
 

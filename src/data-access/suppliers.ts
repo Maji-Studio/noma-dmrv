@@ -219,6 +219,7 @@ export async function createSupplier(
     contactPhone?: string | null;
     sourceRegion?: string | null;
     distanceToFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
   }
 ): Promise<Supplier> {
   requireAuth(userId);
@@ -249,6 +250,7 @@ export async function createSupplier(
         contactPhone: data.contactPhone ?? null,
         sourceRegion: data.sourceRegion ?? null,
         distanceToFacilityKm: data.distanceToFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
       })
       .returning();
 
@@ -283,6 +285,7 @@ export async function updateSupplier(
     contactPhone?: string | null;
     sourceRegion?: string | null;
     distanceToFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
   }
 ): Promise<Supplier> {
   await ensureSupplierExists(userId, supplierId);
@@ -478,6 +481,7 @@ export async function createSupplierLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {
@@ -517,6 +521,7 @@ export async function createSupplierLocation(
         gpsLongitude: data.gpsLongitude ?? null,
         address: data.address ?? null,
         distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
         isDefault: makeDefault,
       })
       .returning();
@@ -537,6 +542,7 @@ export async function updateSupplierLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
     isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {

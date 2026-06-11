@@ -263,6 +263,19 @@ export async function updateProductionRun(
     }
   }
 
+  // Moving the run to another facility requires that facility to be active
+  // (no children move under an archived parent — mirrors createProductionRun).
+  if (data.facilityId && data.facilityId !== existing.facilityId) {
+    const [facility] = await db
+      .select({ id: facilities.id })
+      .from(facilities)
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+
+    if (!facility) {
+      throw new SafeError("Facility not found or archived");
+    }
+  }
+
   // Compute effective facility once — used for reactor + storage location validation
   const targetFacilityId = data.facilityId ?? existing.facilityId;
 

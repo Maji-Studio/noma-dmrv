@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import {
   aggregateDistributionLegs,
   deriveTransportLeg,
@@ -11,10 +12,12 @@ function row(
   distanceKm: number | null,
   locationName: string | null = null,
   gps: [number, number] | null = null,
+  distanceSource: DistanceSourceValue | null = null,
 ): DistributionLegRow {
   return {
     loadMassKg,
     distanceKm,
+    distanceSource,
     locationName,
     locationGpsLatitude: gps?.[0] ?? null,
     locationGpsLongitude: gps?.[1] ?? null,
@@ -89,6 +92,60 @@ describe("deriveTransportLeg", () => {
     expect(leg.missing).toHaveLength(0);
     expect(isDerivedLegPersistable(leg)).toBe(true);
   });
+
+  it("inherits the stored distance's source when the stored level wins", () => {
+    const leg = deriveTransportLeg({
+      origin, destination, vehicle, loadMassKg: 1500,
+      storedDistanceKm: 40, storedDistanceSource: "map_estimate",
+    });
+    expect(leg.distanceKm).toBe(40);
+    expect(leg.distanceSource).toBe("map_estimate");
+  });
+
+  it("inherits the override's source when the override wins", () => {
+    const leg = deriveTransportLeg({
+      origin, destination, vehicle, loadMassKg: 1500,
+      storedDistanceKm: 40, storedDistanceSource: "map_estimate",
+      distanceKmOverride: 62, distanceSourceOverride: "document",
+    });
+    expect(leg.distanceKm).toBe(62);
+    expect(leg.distanceSource).toBe("document");
+  });
+
+  it("treats an override without explicit source as hand-typed (manual)", () => {
+    const leg = deriveTransportLeg({
+      origin, destination, vehicle, loadMassKg: 1500,
+      storedDistanceKm: 40, storedDistanceSource: "document",
+      distanceKmOverride: 62,
+    });
+    expect(leg.distanceSource).toBe("manual");
+  });
+
+  it("keeps a pre-provenance stored distance's source null (never fabricated)", () => {
+    const leg = deriveTransportLeg({
+      origin, destination, vehicle, loadMassKg: 1500, storedDistanceKm: 40,
+    });
+    expect(leg.distanceSource).toBeNull();
+  });
+
+  it("null distance → null source", () => {
+    const leg = deriveTransportLeg({
+      origin, destination, vehicle, loadMassKg: 1500,
+      storedDistanceKm: null, storedDistanceSource: "document",
+    });
+    expect(leg.distanceKm).toBeNull();
+    expect(leg.distanceSource).toBeNull();
+  });
+
+  it("a rejected non-positive override does not leak its source", () => {
+    const leg = deriveTransportLeg({
+      origin, destination, vehicle, loadMassKg: 1500,
+      storedDistanceKm: 40, storedDistanceSource: "document",
+      distanceKmOverride: 0, distanceSourceOverride: "manual",
+    });
+    expect(leg.distanceKm).toBe(40);
+    expect(leg.distanceSource).toBe("document");
+  });
 });
 
 describe("aggregateDistributionLegs", () => {
@@ -140,5 +197,49 @@ describe("aggregateDistributionLegs", () => {
     expect(agg.totalMassKg).toBe(0);
     expect(agg.weightedDistanceKm).toBeNull();
     expect(agg.destinationName).toBeNull();
+    expect(agg.distanceSource).toBeNull();
+  });
+
+  describe("weakest contributing source", () => {
+    it("is document only when every contributor is document-backed", () => {
+      const agg = aggregateDistributionLegs([
+        row(100, 20, "Plot A", null, "document"),
+        row(100, 60, "Plot B", null, "document"),
+      ]);
+      expect(agg.distanceSource).toBe("document");
+    });
+
+    it("downgrades to map_estimate when any contributor is a map estimate", () => {
+      const agg = aggregateDistributionLegs([
+        row(100, 20, "Plot A", null, "document"),
+        row(100, 60, "Plot B", null, "map_estimate"),
+      ]);
+      expect(agg.distanceSource).toBe("map_estimate");
+    });
+
+    it("downgrades to manual when any contributor is manual", () => {
+      const agg = aggregateDistributionLegs([
+        row(100, 20, "Plot A", null, "map_estimate"),
+        row(100, 60, "Plot B", null, "manual"),
+        row(100, 10, "Plot C", null, "document"),
+      ]);
+      expect(agg.distanceSource).toBe("manual");
+    });
+
+    it("is null when any contributor has unknown provenance", () => {
+      const agg = aggregateDistributionLegs([
+        row(100, 20, "Plot A", null, "document"),
+        row(100, 60, "Plot B", null, null),
+      ]);
+      expect(agg.distanceSource).toBeNull();
+    });
+
+    it("ignores the sources of skipped (non-qualifying) rows", () => {
+      const agg = aggregateDistributionLegs([
+        row(100, 20, "Plot A", null, "document"),
+        row(null, 60, "Plot B", null, "manual"), // skipped: no mass
+      ]);
+      expect(agg.distanceSource).toBe("document");
+    });
   });
 });

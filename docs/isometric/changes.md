@@ -4,6 +4,47 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-11 (distance provenance + source-aware priority resolution — map integration Phase 1 §9)
+
+Implements decisions 2–3 of
+[`docs/plans/2026-06-10-map-integration.md`](../plans/2026-06-10-map-integration.md).
+Distance provenance is now part of the distance value, and the derived
+transport legs (the Eq. 3 distance carriers submitted to Isometric) resolve
+distance in the documented priority order instead of reading only the
+supplier-level / customer-location values.
+
+- **`distanceSource` enum** (`map_estimate` | `manual` | `document`,
+  `src/schemas/distance-source.ts` mirroring the `distance_source` pgEnum)
+  on every writable persisted distance: `suppliers.distance_to_facility_km`,
+  `supplier_locations.distance_from_facility_km`,
+  `customer_locations.distance_from_facility_km`,
+  `deliveries.distance_km_override`, `transport_legs.distance_km`. Null
+  distance ⇒ null source; a distance written without explicit provenance was
+  operator-typed ⇒ `manual` (`resolveDistanceSource`, applied at every `fn/`
+  write boundary). CALC fill ⇒ `map_estimate`; hand-editing a CALC'd value
+  flips it back to `manual` (`DistanceCalcField`); explicit transport legs can
+  be marked `document` (bill of lading / weigh ticket) in the leg form.
+- **Feedstock side** (`syncFeedstockTransportLeg`): feedstock-form override →
+  supplier **default location** `distance_from_facility_km` → supplier-level
+  `distance_to_facility_km`. The feedstock form's autofill mirrors the same
+  chain (and inherits the suggestion's source) so what the operator sees is
+  what persists.
+- **Distribution side** (`syncBiocharProductTransportLeg`): per delivery,
+  `deliveries.distance_km_override` → destination customer-location distance.
+  The aggregated (mass-weighted) leg's source is the **weakest contributing
+  source**: null if any contributor is unknown, else `manual` if any manual,
+  else `map_estimate` if any estimate, `document` only when all are
+  document-backed.
+- **Inheritance, not fabrication** — a derived leg copies the winning level's
+  source verbatim (`deriveTransportLeg`); a pre-provenance stored distance
+  yields a null source rather than a fabricated `manual`.
+- **Tests** — `src/lib/calculations/transport-leg.test.ts` (23 cases): source
+  inheritance for stored/override winners, null-distance ⇒ null-source,
+  rejected non-positive overrides not leaking their source, and the
+  weakest-source aggregation rules.
+
+Open question closed: `parties/distance-derivation`.
+
 ## 2026-06-10 (fake registry adapter + boundary tests — reliability track Phase 3)
 
 Implements Phase 3 of

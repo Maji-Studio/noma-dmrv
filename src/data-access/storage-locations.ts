@@ -19,7 +19,11 @@ import {
   applications,
   type StorageLocation,
 } from "@/db/schema";
-import type { StorageLocationFilterData } from "@/schemas/storage-locations";
+import {
+  isFeedstockBinType,
+  type StorageLocationFilterData,
+  type StorageLocationType,
+} from "@/schemas/storage-locations";
 
 // ============================================
 // Types
@@ -749,6 +753,23 @@ export async function updateStorageLocation(
   }
 
   const effectiveType = data.type ?? existing.type;
+
+  // The Zod update schema can only see the payload — when `type` is omitted it
+  // cannot tell this is a feedstock/ingredient bin, so an update could clear
+  // feedstockTypeId on one. Enforce the invariant against the effective row.
+  const effectiveFeedstockTypeId =
+    data.feedstockTypeId !== undefined
+      ? data.feedstockTypeId
+      : existing.feedstockTypeId;
+  if (
+    isFeedstockBinType(effectiveType as StorageLocationType) &&
+    !effectiveFeedstockTypeId
+  ) {
+    throw new SafeError(
+      "Feedstock and ingredient bins must be restricted to one feedstock type"
+    );
+  }
+
   const normalizedFormulationId =
     effectiveType === "product_bin"
       ? (data.formulationId !== undefined
