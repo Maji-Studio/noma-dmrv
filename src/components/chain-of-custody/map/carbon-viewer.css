@@ -1,0 +1,232 @@
+/*
+ * Carbon Viewer map chrome — styles for DOM that MapLibre generates or that
+ * the viewer injects imperatively (markers, distance chips, popups), where
+ * Tailwind classes can't reach. Tokens only, per the concept build distilled
+ * in docs/plans/2026-06-10-map-integration.md → Design reference.
+ */
+
+/* ── site markers (anchor is a 0×0 point; shapes center on it) ─────────── */
+.cvm-mk {
+  position: relative;
+  width: 0;
+  height: 0;
+  cursor: pointer;
+}
+.cvm-mk--supplier { --cvm-acc: var(--clr-orange); }
+.cvm-mk--facility { --cvm-acc: var(--clr-purple); }
+.cvm-mk--field { --cvm-acc: var(--clr-pink); }
+
+.cvm-mk .cvm-shape {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--cvm-acc);
+}
+.cvm-mk--field .cvm-shape {
+  transform: rotate(45deg);
+}
+.cvm-mk--facility .cvm-shape {
+  left: -9px;
+  top: -9px;
+  width: 18px;
+  height: 18px;
+}
+/* punched-out center on the facility square */
+.cvm-mk--facility .cvm-shape::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  background: var(--color-background-white);
+}
+
+/* hover/highlight outline ring */
+.cvm-mk .cvm-ring {
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid var(--cvm-acc);
+  opacity: 0;
+}
+.cvm-mk--field .cvm-ring {
+  transform: rotate(45deg);
+}
+.cvm-mk--facility .cvm-ring {
+  left: -16px;
+  top: -16px;
+  width: 32px;
+  height: 32px;
+}
+.cvm-mk:hover .cvm-ring,
+.cvm-mk.cvm-hl .cvm-ring {
+  opacity: 1;
+}
+.cvm-mk.cvm-hl .cvm-ring {
+  animation: cvm-pulse-soft 1.2s ease-in-out infinite;
+}
+@keyframes cvm-pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* side label: mono uppercase code + sub, paper halo for legibility */
+.cvm-mk .cvm-lbl {
+  position: absolute;
+  left: 15px;
+  top: -10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.cvm-mk--facility .cvm-lbl {
+  left: 19px;
+}
+.cvm-mk .cvm-lbl-code {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--clr-dark-purple);
+  text-shadow:
+    0 0 3px var(--color-background-white),
+    0 0 5px var(--color-background-white),
+    0 0 8px var(--color-background-white);
+}
+.cvm-mk .cvm-lbl-sub {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clr-dark-purple-60);
+  text-shadow:
+    0 0 3px var(--color-background-white),
+    0 0 5px var(--color-background-white),
+    0 0 8px var(--color-background-white);
+}
+/* SAT imagery: labels flip to white-on-plum halo */
+.cvm-sat .cvm-mk .cvm-lbl-code {
+  color: var(--color-background-white);
+  text-shadow:
+    0 0 3px var(--clr-dark-purple),
+    0 0 5px var(--clr-dark-purple),
+    0 0 8px var(--clr-dark-purple);
+}
+.cvm-sat .cvm-mk .cvm-lbl-sub {
+  color: color-mix(in srgb, var(--color-background-white) 75%, transparent);
+  text-shadow:
+    0 0 3px var(--clr-dark-purple),
+    0 0 5px var(--clr-dark-purple),
+    0 0 8px var(--clr-dark-purple);
+}
+
+/* ── distance chips at the line apex ───────────────────────────────────── */
+.cvm-dist {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--clr-dark-purple);
+  text-shadow:
+    0 0 3px var(--color-background-white),
+    0 0 5px var(--color-background-white),
+    0 0 8px var(--color-background-white);
+  pointer-events: none;
+}
+.cvm-sat .cvm-dist {
+  color: var(--color-background-white);
+  text-shadow:
+    0 0 3px var(--clr-dark-purple),
+    0 0 6px var(--clr-dark-purple);
+}
+
+/* ── popup: the node card restyled; MapLibre chrome fully stripped ─────── */
+.cvm-pop .maplibregl-popup-content {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.cvm-pop .maplibregl-popup-tip {
+  display: none;
+}
+
+.cvm-card {
+  width: 246px;
+  border: 1.5px solid var(--clr-dark-purple);
+  border-left: 3px solid var(--cvm-acc, var(--clr-purple));
+  background: color-mix(in srgb, var(--color-background-white) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+.cvm-card--supplier { --cvm-acc: var(--clr-orange); }
+.cvm-card--facility { --cvm-acc: var(--clr-purple); }
+.cvm-card--field { --cvm-acc: var(--clr-pink); }
+.cvm-card .cvm-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 0 13px;
+}
+.cvm-card .cvm-card-type {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--cvm-acc, var(--clr-purple));
+}
+.cvm-card .cvm-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  border: 1.5px solid currentColor;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.cvm-card .cvm-card-code {
+  padding: 8px 13px 0;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  color: var(--clr-dark-purple);
+}
+.cvm-card .cvm-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 13px 12px;
+}
+.cvm-card .cvm-card-line {
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.3;
+  color: var(--clr-dark-purple-80);
+}
+
+/* attribution: mono hairline, square corners */
+.cvm-map .maplibregl-ctrl-attrib {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-background-white) 94%, transparent);
+  color: var(--clr-dark-purple-40);
+}

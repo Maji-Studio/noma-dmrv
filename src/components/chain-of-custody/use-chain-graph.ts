@@ -11,7 +11,7 @@ import {
   type LineageNodeKind,
 } from "./chain-constants";
 
-interface LineageGraphNode {
+export interface LineageGraphNode {
   id: string;
   kind: LineageNodeKind;
   code: string;
@@ -48,7 +48,8 @@ function addLine(lines: string[], value: string | null | undefined) {
   }
 }
 
-function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
+/** Also feeds the Carbon Viewer's marker popups (same codes + detail lines). */
+export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
   const nodes: LineageGraphNode[] = [];
 
   if (data.reactor) {
@@ -214,7 +215,20 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
   return edges;
 }
 
-function buildGraph(data: ChainOfCustodyData): { nodes: Node[]; edges: Edge[] } {
+export interface ChainGraphOptions {
+  /**
+   * Split/map cross-linking: card clicks highlight the map marker instead of
+   * navigating, so the cards drop their links.
+   */
+  disableLinks?: boolean;
+  /** Node to ring-highlight (selected via map marker / rail / chip). */
+  highlightedNodeId?: string | null;
+}
+
+function buildGraph(
+  data: ChainOfCustodyData,
+  options: ChainGraphOptions
+): { nodes: Node[]; edges: Edge[] } {
   const lineageNodes = buildLineageNodes(data);
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
@@ -247,9 +261,10 @@ function buildGraph(data: ChainOfCustodyData): { nodes: Node[]; edges: Edge[] } 
         code: node.code,
         icon: style.icon,
         accent: style.accent,
-        href: node.href,
+        href: options.disableLinks ? null : node.href,
         status: node.status,
         detailLines: node.detailLines,
+        highlighted: node.id === options.highlightedNodeId,
       } satisfies ChainNodeData,
     };
   });
@@ -257,10 +272,13 @@ function buildGraph(data: ChainOfCustodyData): { nodes: Node[]; edges: Edge[] } 
   return { nodes, edges };
 }
 
-export function useChainGraph(data: ChainOfCustodyData | undefined) {
+export function useChainGraph(
+  data: ChainOfCustodyData | undefined,
+  options: ChainGraphOptions = {}
+) {
   if (!data) {
     return { nodes: [], edges: [] };
   }
 
-  return buildGraph(data);
+  return buildGraph(data, options);
 }
