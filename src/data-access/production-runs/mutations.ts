@@ -3,7 +3,7 @@
  * feedstock allocation and storage-location validation.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   productionRuns,
@@ -117,14 +117,14 @@ export async function createProductionRun(
     throw new SafeError("A production run with this code already exists");
   }
 
-  // Verify facility exists
+  // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, data.facilityId));
+    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new SafeError("Facility not found or archived");
   }
 
   // Verify reactor exists and belongs to facility

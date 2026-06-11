@@ -5,7 +5,7 @@
  * Split deliveries (one truck → multiple bins) share a deliveryGroupId.
  */
 
-import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   feedstocks,
@@ -181,7 +181,8 @@ export async function getFeedstocks(
     sortOrder = "desc",
   } = filters ?? {};
 
-  const conditions: SQL[] = [];
+  // Archived feedstocks (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -212,7 +213,7 @@ export async function getFeedstocks(
     conditions.push(lte(feedstocks.deliveryDate, endOfDay));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const sortColumn = {
     code: feedstocks.code,
@@ -267,9 +268,9 @@ export async function getFeedstockStats(
 ): Promise<FeedstockStats> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
   if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [stats] = await db
     .select({
@@ -585,6 +586,7 @@ export async function getFeedstockOptions(
     })
     .from(feedstocks)
     .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+    .where(isNull(feedstocks.archivedAt))
     .orderBy(desc(feedstocks.createdAt));
 }
 

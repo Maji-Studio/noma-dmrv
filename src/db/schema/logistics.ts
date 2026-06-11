@@ -68,6 +68,9 @@ export const orders = pgTable('orders', {
   value: real('value'),
   currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
+  // Stamped by the facility archive cascade; NULL = active
+  archivedAt: timestamp('archived_at'),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -128,6 +131,9 @@ export const deliveries = pgTable(
     // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
+
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
