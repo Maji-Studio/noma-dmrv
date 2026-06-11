@@ -1,9 +1,9 @@
 # Plan — facility / supplier / feedstock feature batch
 
-**Opened:** 2026-06-10 · **Status:** E ✅ · C ✅ · B ⬜ · D ⬜ · A ⬜
+**Opened:** 2026-06-10 · **Status:** E ✅ · C ✅ · B ✅ · D ⬜ · A ⬜
 
 Five independent workstreams, each shipped on its own branch off `staging` as a
-separate PR. Sequence: **E → C → B → D → A**. E and C are done; B, D, A remain.
+separate PR. Sequence: **E → C → B → D → A**. E, C, and B are done; D, A remain.
 
 ## Locked decisions
 
@@ -38,16 +38,20 @@ to facility"). Delivery form gained a Transport section. Docs updated
 (`docs/schema-overview.md`); deferred follow-up logged in `docs/open-questions.md`
 ("Wire per-location / per-delivery distance into transport-leg derivation").
 
-### B. Facility-form Isometric connector — ⬜ no migration, do first
-New section in `components/facilities/facility-form.tsx` (between "Default Durability
-Option" and the buttons): project `<select>` from `listProjects()`
-(`lib/isometric/projects.ts`), shows connected status, writes `externalProjectId` via
-`upsertCertifierProject` (`data-access/certification.ts`). "Advanced binding →
-Certification Settings" link. **Edit-mode only** (needs a facility id); disabled
-empty-state when Isometric not configured. Reference existing binding UI:
-`/certification/settings` → `FacilityCertifierDialog`, table `certifier_projects`
-(`db/schema/certification.ts`). Consult `docs/isometric/README.md` + the `isometric`
-MCP `how_to` tool first.
+### B. Facility-form Isometric connector — ✅ DONE
+Branch `feat/facility-isometric-connector`, commit `47a595c` (off `staging`, not
+pushed). No migration. New `FacilityIsometricConnector`
+(`components/certification/facility-isometric-connector.tsx`) rendered in
+`facility-form.tsx` edit mode, between "Default Durability Option" and the buttons.
+Admin-only (returns null otherwise — save is admin-gated server-side); reuses
+`useFacilityCertifierMapping` / `useSaveFacilityCertifierMapping` →
+`saveFacilityCertifierMapping` → `upsertCertifierProject`, so all server guards
+(project existence, submission-pinned mappings, production confirm) apply. Carries
+over the shared-project ack + production opt-in from `FacilityCertifierDialog`;
+changing project clears template/fcl_ id with an inline warning. Added
+`isConfigured` to the `FacilityCertifierMapping` payload (distinguishes missing
+credentials from an empty project list → disabled empty-state). "Advanced binding →
+Certification Settings ↗" link in the section header.
 
 ### D. Feedstock-type General/Isometric tabs — ⬜ no migration
 Tabbed `components/feedstock-types/feedstock-type-form.tsx`: **General** (existing,
