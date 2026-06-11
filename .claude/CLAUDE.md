@@ -213,7 +213,7 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 - **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod), `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`, `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET` (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
 
-**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env: `local`/`staging`/`production`). Local: `pnpm env:local` (`op inject` ← `.env.local.tpl` → `.env.local`). Deployed: `.env.tpl` (staging/production refs) feeds `pnpm env:vercel` only. CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Drift: `pnpm env:check`. See `docs/security.md` → Secrets Management.
+**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env: `local`/`staging`/`production`). Local: `pnpm env:local` (`.env.local.tpl` → `.env.local`). Deployed: `.env.tpl` (staging/production refs) feeds `pnpm env:vercel` only. Both syncs **skip optional vars missing from the item** (warning, not error) and fail only on `REQUIRED_LOCAL_VARS`/`REQUIRED_DEPLOYED_VARS` (`scripts/env-tpl-utils.ts`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Drift: `pnpm env:check`. See `docs/security.md` → Secrets Management.
 
 ## Security
 
