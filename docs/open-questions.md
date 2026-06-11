@@ -81,6 +81,53 @@ guard. Pure starter-template residue; the app is facility-scoped.
   whether a buyer-facing shareable page is wanted (different audience,
   different auth surface).
 
+### Multi-hop biochar transport — intermediate storage before the customer (`transport/multi-hop-distribution`, opened 2026-06-11)
+
+- **Current model:** a biochar product carries exactly ONE auto-derived
+  distribution leg (facility → delivery destination), aggregated from its
+  deliveries (mass-weighted distance, `transport_legs` one-derived-per-entity
+  invariant). This matches Dark Earth Carbon's flow, where biochar ships from
+  the facility straight to the application site. The manual "biochar → storage"
+  leg editor was removed from the product sheet on 2026-06-11 (it predated
+  derivation and invited rows the resync didn't own).
+- **Question:** how to model organizations that truck biochar to an
+  intermediate storage/depot first and onward to customers later — that's two
+  (or more) real legs per product, with different masses per hop, which the
+  single-derived-leg invariant can't represent. The live Isometric template's
+  `biochar-transport` component ("Biochar transportation to storage site via
+  truck", blueprint `transport`) takes one distance + mass pair per removal,
+  so submission-side either needs per-hop Σ(dist×mass) folded into one
+  equivalent leg, or a template change.
+- **To resolve:** wait until an org with intermediate storage onboards; then
+  decide between (a) multi-leg derivation with hop ordering on deliveries /
+  storage transfers, folded into the equivalent single distance×mass for
+  Certify, or (b) per-hop components in the removal template. Touches
+  `aggregateDistributionLegs`, the one-derived-per-entity index, and the
+  batch readiness transport gate.
+
+### Additional storage locations — keeping the dMRV flexible (`transport/storage-topology`, opened 2026-06-11)
+
+- **Question:** how does the dMRV stay correct when an org adds another
+  storage location (second warehouse, off-site depot)? Parts of the flow
+  hard-code a single facility-anchored storage topology today:
+  - derived transport legs use the **facility** (name + GPS) as the biochar
+    origin and the supplier/customer location as the other end — the storage
+    location a product actually sits in never enters the route;
+  - the live template's `biochar-transport` component assumes one
+    facility → destination hop (see
+    [multi-hop entry](#multi-hop-biochar-transport--intermediate-storage-before-the-customer-transportmulti-hop-distribution-opened-2026-06-11));
+  - `biochar-storage` emissions (template group currently empty) would need
+    per-location attribution if storage sites with different energy/fuel
+    profiles appear.
+- **Why it matters:** a second storage site silently changes real transport
+  distances and storage emissions without changing anything the derivation
+  reads, so submitted numbers drift from reality.
+- **To resolve:** when a second storage site is on the roadmap, decide whether
+  storage locations get GPS + distance provenance of their own and enter the
+  leg derivation (origin = product's bin location instead of the facility),
+  and whether storage-site transfers become first-class custody events in the
+  chain-of-custody trail.
+
 ### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
 
 - **Deferred, not rejected** (ADR 0010): the `organizationId`-on-every-table

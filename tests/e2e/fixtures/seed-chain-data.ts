@@ -103,7 +103,9 @@ export async function seedChainData(
         name: `E2E Seed Customer ${testRunId}`,
       });
 
-      // 5. Customer Location (needs customer)
+      // 5. Customer Location (needs customer). The stored distance lets the
+      // app derive a biochar distribution leg when a test records a delivery
+      // to this location.
       await tx.insert(schema.customerLocations).values({
         id: customerLocationId,
         customerId: customerId,
@@ -112,6 +114,8 @@ export async function seedChainData(
         address: "123 Farm Road, Dar es Salaam",
         gpsLatitude: -6.8,
         gpsLongitude: 39.28,
+        distanceFromFacilityKm: 25,
+        distanceSource: "manual",
       });
 
       // 6. Formulation

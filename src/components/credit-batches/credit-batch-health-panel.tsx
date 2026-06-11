@@ -49,13 +49,15 @@ function fixLinkFor(key: BatchHealthCheckKey, facilityId: string): FixLink {
         href: `/production-runs?facility=${facilityId}`,
       };
     case "transport":
-      // Biochar distribution legs auto-derive from each delivery's
-      // customer-location distance, but are edited/added on the biochar product
-      // (entityType "biochar" resolves to the product, not the delivery). The
-      // old `/deliveries?transportLeg=create` target was a dead link.
+      // Transport legs are auto-derived: feedstock legs from the supplier's
+      // stored distance, biochar distribution legs from each delivery's
+      // customer-location distance + delivered mass. A gap means a delivery is
+      // missing or its destination has no stored distance, so the deliveries
+      // page is the actionable target (the biochar product sheet only shows a
+      // read-only summary).
       return {
-        label: "Add transport leg",
-        href: `/biochar-products?facility=${facilityId}`,
+        label: "Review delivery distances",
+        href: `/deliveries?facility=${facilityId}`,
       };
     case "entityReadiness":
       return {

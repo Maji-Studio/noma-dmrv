@@ -24,7 +24,7 @@ const RAIL_HEAD_CLASS =
   "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]";
 
 const RAIL_FOOT_CLASS =
-  "px-12 py-9 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-40)]";
+  "px-12 py-[9px] font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-40)]";
 
 function legKindLabel(leg: ChainGeoLeg): string {
   return leg.kind === "inbound" ? "feedstock inbound" : "biochar outbound";
@@ -49,16 +49,16 @@ const LEGEND_ROWS = [
 export function ViewerLegend() {
   return (
     <div
-      className={`absolute bottom-16 left-16 z-10 flex flex-col gap-9 px-14 py-12 ${RAIL_BOX_CLASS}`}
+      className={`absolute bottom-16 left-16 z-10 flex flex-col gap-[9px] px-[14px] py-12 ${RAIL_BOX_CLASS}`}
       data-testid="carbon-viewer-legend"
     >
       {LEGEND_ROWS.map((row) => (
         <div
           key={row.label}
-          className="flex items-center gap-9 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+          className="flex items-center gap-[9px] font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
         >
           <span
-            className="size-9 shrink-0"
+            className="size-[9px] shrink-0"
             style={{
               background: row.accent,
               transform: row.diamond ? "rotate(45deg) scale(0.9)" : undefined,
@@ -94,10 +94,10 @@ export function TransportLegsRail({ legs, onSelectLeg }: TransportLegsRailProps)
           key={leg.id}
           type="button"
           onClick={() => onSelectLeg(leg)}
-          className="flex w-full cursor-pointer items-center gap-10 border-b border-[var(--clr-dark-purple-10)] px-12 py-9 text-left font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--clr-dark-purple)] last:border-b-0 hover:bg-[var(--clr-dark-purple-1)]"
+          className="flex w-full cursor-pointer items-center gap-10 border-b border-[var(--clr-dark-purple-10)] px-12 py-[9px] text-left font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--clr-dark-purple)] last:border-b-0 hover:bg-[var(--clr-dark-purple-1)]"
         >
           <span
-            className="size-7 shrink-0"
+            className="size-[7px] shrink-0"
             style={{
               background:
                 leg.kind === "inbound" ? "var(--clr-orange)" : "var(--clr-pink)",
@@ -154,10 +154,10 @@ export function NotGeolocatedRail({
               key={node.id}
               type="button"
               onClick={() => onSelectNode(node.id)}
-              className="flex w-full cursor-pointer items-center gap-10 border-b border-[var(--clr-dark-purple-10)] px-12 py-9 text-left font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--clr-dark-purple)] last:border-b-0 hover:bg-[var(--clr-dark-purple-1)]"
+              className="flex w-full cursor-pointer items-center gap-10 border-b border-[var(--clr-dark-purple-10)] px-12 py-[9px] text-left font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--clr-dark-purple)] last:border-b-0 hover:bg-[var(--clr-dark-purple-1)]"
             >
               <span
-                className="size-7 shrink-0"
+                className="size-[7px] shrink-0"
                 style={{ background: NODE_ACCENT_VAR[node.kind] }}
                 aria-hidden="true"
               />
@@ -198,7 +198,7 @@ export function NotGeolocatedChips({
             key={node.id}
             type="button"
             onClick={() => onSelectNode(node.id)}
-            className="cursor-pointer border-[1.5px] border-current px-7 py-4 font-mono text-[9.5px] font-medium uppercase tracking-[0.06em] hover:bg-[var(--clr-dark-purple-1)]"
+            className="cursor-pointer border-[1.5px] border-current px-[7px] py-4 font-mono text-[9.5px] font-medium uppercase tracking-[0.06em] hover:bg-[var(--clr-dark-purple-1)]"
             style={{ color: NODE_ACCENT_VAR[node.kind] }}
           >
             {node.code}
@@ -223,7 +223,7 @@ export function MapWarningBanner({ warnings }: { warnings: string[] }) {
       {warnings.map((warning) => (
         <p
           key={warning}
-          className="border-[1.5px] border-dashed border-[var(--clr-red)] bg-[color-mix(in_srgb,var(--color-background-white)_94%,transparent)] px-14 py-11 font-mono text-[9.5px] uppercase leading-[1.7] tracking-[0.07em] text-[var(--clr-red)] backdrop-blur-[8px]"
+          className="border-[1.5px] border-dashed border-[var(--clr-red)] bg-[color-mix(in_srgb,var(--color-background-white)_94%,transparent)] px-[14px] py-[11px] font-mono text-[9.5px] uppercase leading-[1.7] tracking-[0.07em] text-[var(--clr-red)] backdrop-blur-[8px]"
         >
           {warning}
         </p>

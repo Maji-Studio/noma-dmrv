@@ -389,6 +389,7 @@ async function seedDemoData() {
           contactEmail: 'asha@kili-forestry.coop',
           contactPhone: '+255700200001',
           distanceToFacilityKm: 42,
+          distanceSource: 'manual',
         },
         {
           id: ids.supplierMeru,
@@ -402,6 +403,7 @@ async function seedDemoData() {
           contactEmail: 'john@meru-agri.co.tz',
           contactPhone: '+255700200002',
           distanceToFacilityKm: 58,
+          distanceSource: 'manual',
         },
         {
           id: ids.supplierVictoria,
@@ -415,6 +417,7 @@ async function seedDemoData() {
           contactEmail: 'grace@victoria-rice.tz',
           contactPhone: '+255700200003',
           distanceToFacilityKm: 310,
+          distanceSource: 'manual',
         },
       ]);
 
@@ -459,6 +462,7 @@ async function seedDemoData() {
           gpsLongitude: 37.425,
           address: 'Plot N-12, Kilema Village',
           distanceFromFacilityKm: 120,
+          distanceSource: 'manual',
         },
         {
           id: ids.locationCoffeeSouth,
@@ -468,6 +472,7 @@ async function seedDemoData() {
           gpsLongitude: 37.198,
           address: 'Plot S-8, Machame Weruweru',
           distanceFromFacilityKm: 140,
+          distanceSource: 'manual',
         },
         {
           id: ids.locationTeaEast,
@@ -477,6 +482,7 @@ async function seedDemoData() {
           gpsLongitude: 38.312,
           address: 'Block E-1, Usambara Estate',
           distanceFromFacilityKm: 95,
+          distanceSource: 'manual',
         },
       ]);
 
@@ -630,6 +636,8 @@ async function seedDemoData() {
           status: 'complete',
           feedstockDeliveryId: ids.deliveryFeed1,
           feedstockTypeId: ids.feedstockWoodchips,
+          supplierId: ids.supplierKili,
+          vehicleId: ids.vehicleTruck1,
           massWetKg: 4500,
           massDryKg: 3780,
           moistureContentPercent: 16,
@@ -647,6 +655,8 @@ async function seedDemoData() {
           status: 'complete',
           feedstockDeliveryId: ids.deliveryFeed2,
           feedstockTypeId: ids.feedstockCoffeeHusk,
+          supplierId: ids.supplierMeru,
+          vehicleId: ids.vehicleTruck2,
           massWetKg: 3200,
           massDryKg: 2816,
           moistureContentPercent: 12,
@@ -664,6 +674,8 @@ async function seedDemoData() {
           status: 'complete',
           feedstockDeliveryId: ids.deliveryFeed3,
           feedstockTypeId: ids.feedstockWoodchips,
+          supplierId: ids.supplierKili,
+          vehicleId: ids.vehicleTruck1,
           massWetKg: 5000,
           massDryKg: 4100,
           moistureContentPercent: 18,
@@ -948,82 +960,129 @@ async function seedDemoData() {
       // submitCreditBatch can build complete Removal payloads. All legs
       // use the distance-based method with one shared emission factor per
       // category — mixed methods/factors would block aggregation.
+      //
+      // Feedstock and biochar legs are AUTO-DERIVED in the app (feedstock:
+      // supplier stored distance; biochar: aggregation of the product's
+      // deliveries). The seed bypasses the fn-layer resync hooks, so it
+      // inserts the rows the derivation would have produced — `isDerived:
+      // true`, values consistent with the seeded suppliers, customer
+      // locations, and deliveries above — letting any later resync converge
+      // onto the same row instead of duplicating it. Sample → lab legs are
+      // genuinely manual and stay `isDerived: false`.
       // ============================================================
 
       console.log('Creating transport legs...');
       await tx.insert(schema.transportLegs).values([
-        // --- Feedstock: source region -> Moshi facility ---
+        // --- Feedstock (derived): supplier -> Moshi facility ---
         {
           id: ids.transportLegFeedstock1,
           entityType: 'feedstock',
           entityId: ids.feedstock1,
-          originName: 'Kilimanjaro feedstock yard',
+          isDerived: true,
+          originName: 'Kilimanjaro Forestry Cooperative',
+          originGpsLatitude: -3.261,
+          originGpsLongitude: 37.126,
           destinationName: 'Moshi Biochar Production Center',
+          destinationGpsLatitude: -3.334,
+          destinationGpsLongitude: 37.339,
           distanceKm: 42,
+          distanceSource: 'manual',
           transportMethodType: 'road',
-          vehicleType: 'Class 8 heavy-duty truck',
-          loadMassKg: 7200,
+          vehicleType: 'heavy_truck',
+          modelYear: 2022,
+          loadMassKg: 4500,
           calculationMethodType: 'distance_based',
         },
         {
           id: ids.transportLegFeedstock2,
           entityType: 'feedstock',
           entityId: ids.feedstock2,
-          originName: 'Arumeru coffee estate',
+          isDerived: true,
+          originName: 'Mount Meru Agricultural Residues',
+          originGpsLatitude: -3.252,
+          originGpsLongitude: 36.786,
           destinationName: 'Moshi Biochar Production Center',
+          destinationGpsLatitude: -3.334,
+          destinationGpsLongitude: 37.339,
           distanceKm: 58,
+          distanceSource: 'manual',
           transportMethodType: 'road',
-          vehicleType: 'Class 8 heavy-duty truck',
-          loadMassKg: 5400,
+          vehicleType: 'heavy_truck',
+          modelYear: 2023,
+          loadMassKg: 3200,
           calculationMethodType: 'distance_based',
         },
         {
           id: ids.transportLegFeedstock3,
           entityType: 'feedstock',
           entityId: ids.feedstock3,
-          originName: 'Kilimanjaro feedstock yard',
+          isDerived: true,
+          originName: 'Kilimanjaro Forestry Cooperative',
+          originGpsLatitude: -3.261,
+          originGpsLongitude: 37.126,
           destinationName: 'Moshi Biochar Production Center',
+          destinationGpsLatitude: -3.334,
+          destinationGpsLongitude: 37.339,
           distanceKm: 42,
+          distanceSource: 'manual',
           transportMethodType: 'road',
-          vehicleType: 'Class 8 heavy-duty truck',
-          loadMassKg: 6300,
+          vehicleType: 'heavy_truck',
+          modelYear: 2022,
+          loadMassKg: 5000,
           calculationMethodType: 'distance_based',
         },
-        // --- Biochar: Moshi facility -> customer site ---
+        // --- Biochar (derived): Moshi facility -> delivery destination.
+        // Distance = customer location's stored distance, load = delivered
+        // wet mass (one delivery per product, so no weighting needed). ---
         {
           id: ids.transportLegBiochar1,
           entityType: 'biochar',
           entityId: ids.biocharProduct1,
+          isDerived: true,
           originName: 'Moshi Biochar Production Center',
-          destinationName: 'Coffee Estate North',
+          originGpsLatitude: -3.334,
+          originGpsLongitude: 37.339,
+          destinationName: 'North Plot - Kilema',
+          destinationGpsLatitude: -3.245,
+          destinationGpsLongitude: 37.425,
           distanceKm: 120,
+          distanceSource: 'manual',
           transportMethodType: 'road',
-          vehicleType: 'Class 8 heavy-duty truck',
-          loadMassKg: 2450,
+          loadMassKg: 2000,
           calculationMethodType: 'distance_based',
         },
         {
           id: ids.transportLegBiochar2,
           entityType: 'biochar',
           entityId: ids.biocharProduct2,
+          isDerived: true,
           originName: 'Moshi Biochar Production Center',
-          destinationName: 'Highland Farms Co-op',
+          originGpsLatitude: -3.334,
+          originGpsLongitude: 37.339,
+          destinationName: 'Eastern Estate Block',
+          destinationGpsLatitude: -4.789,
+          destinationGpsLongitude: 38.312,
           distanceKm: 95,
+          distanceSource: 'manual',
           transportMethodType: 'road',
-          vehicleType: 'Class 8 heavy-duty truck',
-          loadMassKg: 1800,
+          loadMassKg: 1500,
           calculationMethodType: 'distance_based',
         },
         {
           id: ids.transportLegBiochar3,
           entityType: 'biochar',
           entityId: ids.biocharProduct3,
+          isDerived: true,
           originName: 'Moshi Biochar Production Center',
-          destinationName: 'Rift Valley Estate',
+          originGpsLatitude: -3.334,
+          originGpsLongitude: 37.339,
+          destinationName: 'South Plot - Machame',
+          destinationGpsLatitude: -3.289,
+          destinationGpsLongitude: 37.198,
           distanceKm: 140,
+          distanceSource: 'manual',
           transportMethodType: 'road',
-          vehicleType: 'Class 8 heavy-duty truck',
-          loadMassKg: 2125,
+          loadMassKg: 1800,
           calculationMethodType: 'distance_based',
         },
         // --- Sample: Moshi facility -> analysis lab ---
