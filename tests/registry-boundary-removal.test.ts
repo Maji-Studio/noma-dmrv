@@ -290,6 +290,7 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    productionReadinessGap: null,
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,

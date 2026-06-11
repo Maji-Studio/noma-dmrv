@@ -178,6 +178,60 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
+  it("still walks production lineage when the default template is missing", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: null }),
+    );
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([template("rvt_1")]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: {
+        id: "app-1",
+        code: "APP-1",
+        biocharAppliedDryTons: 1,
+      } as never,
+      delivery: { id: "del-1" } as never,
+      order: null,
+      biocharProduct: {
+        id: "bp-1",
+        code: "BP-1",
+        linkedProductionRunId: "pr-1",
+      } as never,
+      productionRun: { id: "pr-1", code: "PR-1" } as never,
+      reactor: null,
+      feedstocks: [],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        biocharDryMassKg: 1000,
+        samples: [],
+      } as never,
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.defaultTemplate).toBeNull();
+    expect(result.hasSubmittableRuns).toBe(true);
+    expect(result.productionReadinessGap).toBeNull();
+    expect(result.runSummary.runCount).toBe(1);
+    expect(mockedGetLineage).toHaveBeenCalledWith(USER_ID, "app-1");
+  });
+
   it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "rvt_stale" }),
@@ -248,6 +302,11 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
     // No applications on the stub batch -> transport coverage is empty.
     expect(result.transportCoverage.feedstock.count).toBe(0);
+    expect(result.productionReadinessGap).toMatchObject({
+      kind: "noApplications",
+      detail: "No applications linked to this batch",
+      fixTarget: "batchDetails",
+    });
     expect(mockedGetLegs).not.toHaveBeenCalled();
     // An ungrouped batch (no removal) has no linked GHG Statement and an empty
     // run summary — the up-front loads short-circuit to null/zero.
