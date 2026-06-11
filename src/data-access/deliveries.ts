@@ -88,6 +88,8 @@ import { SafeError } from "@/lib/errors";
 type DeliveryColumnAvailability = {
   truckMassOnArrivalKg: boolean;
   truckMassOnDepartureKg: boolean;
+  distanceKmOverride: boolean;
+  distanceNote: boolean;
 };
 
 let deliveryColumnAvailabilityPromise: Promise<DeliveryColumnAvailability> | null = null;
@@ -100,7 +102,12 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
         from information_schema.columns
         where table_schema = 'public'
           and table_name = 'deliveries'
-          and column_name in ('truck_mass_on_arrival_kg', 'truck_mass_on_departure_kg')
+          and column_name in (
+            'truck_mass_on_arrival_kg',
+            'truck_mass_on_departure_kg',
+            'distance_km_override',
+            'distance_note'
+          )
       `)
       .then(({ rows }) => {
         const columns = new Set(rows.map((row) => row.column_name));
@@ -108,6 +115,8 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
         return {
           truckMassOnArrivalKg: columns.has("truck_mass_on_arrival_kg"),
           truckMassOnDepartureKg: columns.has("truck_mass_on_departure_kg"),
+          distanceKmOverride: columns.has("distance_km_override"),
+          distanceNote: columns.has("distance_note"),
         };
       });
   }
@@ -136,6 +145,12 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     truckMassOnDepartureKg: columns.truckMassOnDepartureKg
       ? deliveries.truckMassOnDepartureKg
       : sql<number | null>`null`.as("truck_mass_on_departure_kg"),
+    distanceKmOverride: columns.distanceKmOverride
+      ? deliveries.distanceKmOverride
+      : sql<number | null>`null`.as("distance_km_override"),
+    distanceNote: columns.distanceNote
+      ? deliveries.distanceNote
+      : sql<string | null>`null`.as("distance_note"),
     driverId: deliveries.driverId,
     vehicleId: deliveries.vehicleId,
     createdAt: deliveries.createdAt,
@@ -325,6 +340,8 @@ export async function getDeliveryWithRelations(
     moistureContentPercent: deliveryRow.moistureContentPercent,
     truckMassOnArrivalKg: deliveryRow.truckMassOnArrivalKg,
     truckMassOnDepartureKg: deliveryRow.truckMassOnDepartureKg,
+    distanceKmOverride: deliveryRow.distanceKmOverride,
+    distanceNote: deliveryRow.distanceNote,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
     createdAt: deliveryRow.createdAt,
@@ -477,6 +494,8 @@ export async function createDelivery(
     moistureContentPercent?: number | null;
     truckMassOnArrivalKg?: number | null;
     truckMassOnDepartureKg?: number | null;
+    distanceKmOverride?: number | null;
+    distanceNote?: string | null;
   }
 ): Promise<Delivery> {
   requireAuth(userId);
@@ -551,6 +570,12 @@ export async function createDelivery(
       ...(deliveryColumns.truckMassOnDepartureKg
         ? { truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null }
         : {}),
+      ...(deliveryColumns.distanceKmOverride
+        ? { distanceKmOverride: data.distanceKmOverride ?? null }
+        : {}),
+      ...(deliveryColumns.distanceNote
+        ? { distanceNote: data.distanceNote ?? null }
+        : {}),
     })
     .returning(getDeliveryBaseSelection(deliveryColumns));
 
@@ -581,6 +606,8 @@ export async function updateDelivery(
     moistureContentPercent?: number | null;
     truckMassOnArrivalKg?: number | null;
     truckMassOnDepartureKg?: number | null;
+    distanceKmOverride?: number | null;
+    distanceNote?: string | null;
   }
 ): Promise<Delivery> {
   requireAuth(userId);
@@ -671,6 +698,12 @@ export async function updateDelivery(
       ...(deliveryColumns.truckMassOnDepartureKg
         ? {}
         : { truckMassOnDepartureKg: undefined }),
+      ...(deliveryColumns.distanceKmOverride
+        ? {}
+        : { distanceKmOverride: undefined }),
+      ...(deliveryColumns.distanceNote
+        ? {}
+        : { distanceNote: undefined }),
       updatedAt: new Date(),
     })
     .where(eq(deliveries.id, deliveryId))

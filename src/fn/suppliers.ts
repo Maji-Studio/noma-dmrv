@@ -356,6 +356,8 @@ export async function createSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude ?? null,
       gpsLongitude: validated.gpsLongitude ?? null,
       address: validated.address || null,
+      distanceFromFacilityKm: validated.distanceFromFacilityKm ?? null,
+      isDefault: validated.isDefault,
     });
 
     return { success: true, data: location };
@@ -392,6 +394,8 @@ export async function updateSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
+      distanceFromFacilityKm: validated.distanceFromFacilityKm ?? null,
+      isDefault: validated.isDefault,
     });
 
     return { success: true, data: location };
