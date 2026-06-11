@@ -680,7 +680,10 @@ export async function createStorageLocation(
       type: data.type,
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
-      feedstockTypeId: data.feedstockTypeId ?? null,
+      // Only meaningful on feedstock/ingredient bins, like formulationId below.
+      feedstockTypeId: isFeedstockBinType(data.type)
+        ? data.feedstockTypeId ?? null
+        : null,
       formulationId,
       storageMethod: data.storageMethod ?? null,
       storageDescription: data.storageDescription ?? null,
@@ -779,6 +782,14 @@ export async function updateStorageLocation(
     );
   }
 
+  // A feedstock type only makes sense on a feedstock/ingredient bin — clear it
+  // when the (effective) type is anything else, same as formulationId below.
+  const normalizedFeedstockTypeId = isFeedstockBinType(
+    effectiveType as StorageLocationType
+  )
+    ? effectiveFeedstockTypeId ?? null
+    : null;
+
   const normalizedFormulationId =
     effectiveType === "product_bin"
       ? (data.formulationId !== undefined
@@ -820,12 +831,14 @@ export async function updateStorageLocation(
     }
   }
 
-  const dataWithoutFormulation = { ...data };
-  delete dataWithoutFormulation.formulationId;
+  const dataWithoutNormalized = { ...data };
+  delete dataWithoutNormalized.formulationId;
+  delete dataWithoutNormalized.feedstockTypeId;
   const [updated] = await db
     .update(storageLocations)
     .set({
-      ...dataWithoutFormulation,
+      ...dataWithoutNormalized,
+      feedstockTypeId: normalizedFeedstockTypeId,
       formulationId: normalizedFormulationId,
       updatedAt: new Date(),
     })
