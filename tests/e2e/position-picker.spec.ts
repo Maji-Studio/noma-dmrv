@@ -95,11 +95,13 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    // Either the MapLibre container (key configured; tiles aborted is fine)
-    // or the explicit no-key fallback must render — never a blank hole.
+    // The MapLibre container (key configured; tiles aborted is fine), the
+    // explicit no-key fallback, or the WebGL-unavailable fallback (headless
+    // browsers) must render — never a blank hole and never a crash.
     const map = dialog.getByTestId("position-picker-map");
-    const fallback = dialog.getByTestId("position-picker-no-map");
-    await expect(map.or(fallback).first()).toBeVisible();
+    const noKey = dialog.getByTestId("position-picker-no-map");
+    const noWebgl = dialog.getByTestId("position-picker-map-failed");
+    await expect(map.or(noKey).or(noWebgl).first()).toBeVisible();
   });
 
   test("CALC fills the stub road distance and tracks provenance", async ({
