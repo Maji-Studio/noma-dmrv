@@ -3,7 +3,7 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   orders,
@@ -98,8 +98,8 @@ export async function getOrders(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived orders (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(orders.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -122,7 +122,7 @@ export async function getOrders(
     conditions.push(lte(orders.orderDate, toDate));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -159,6 +159,7 @@ export async function getOrders(
       packaging: orders.packaging,
       value: orders.value,
       currency: orders.currency,
+      archivedAt: orders.archivedAt,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       facilityName: facilities.name,
@@ -254,6 +255,7 @@ export async function getOrderWithRelations(
       packaging: orders.packaging,
       value: orders.value,
       currency: orders.currency,
+      archivedAt: orders.archivedAt,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       facilityCode: facilities.code,
@@ -300,6 +302,7 @@ export async function getOrderWithRelations(
     packaging: orderRow.packaging,
     value: orderRow.value,
     currency: orderRow.currency,
+    archivedAt: orderRow.archivedAt,
     createdAt: orderRow.createdAt,
     updatedAt: orderRow.updatedAt,
     facility: orderRow.facilityId
@@ -341,12 +344,12 @@ export async function getOrdersForSelect(
 ): Promise<Array<{ id: string; code: string; orderDate: Date; customerName: string | null; biocharProductCode: string | null; quantityKg: number }>> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(orders.archivedAt)];
   if (facilityId) {
     conditions.push(eq(orders.facilityId, facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   return db
     .select({

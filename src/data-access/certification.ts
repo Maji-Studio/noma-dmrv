@@ -109,7 +109,9 @@ export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // resource, so both must block.
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
-async function hasBlockingFacilitySubmission(
+// Exported for the facility archive-with-warning gate (archive stays allowed;
+// the dialog surfaces a warning when registry submissions exist).
+export async function hasBlockingFacilitySubmission(
   executor: Tx | typeof db,
   facilityId: string,
   provider: CertifierProvider,

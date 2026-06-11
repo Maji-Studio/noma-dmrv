@@ -3,7 +3,7 @@
  * CRUD operations for storage locations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   storageLocations,
@@ -87,6 +87,7 @@ type BaseStorageLocationRow = {
   feedstockTypeId: string | null;
   formulationId: string | null;
   facilityId: string;
+  archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   facilityCode: string | null;
@@ -418,8 +419,8 @@ export async function getStorageLocations(
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived bins (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(storageLocations.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -439,7 +440,7 @@ export async function getStorageLocations(
     conditions.push(eq(storageLocations.type, type));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -477,6 +478,7 @@ export async function getStorageLocations(
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       facilityId: storageLocations.facilityId,
+      archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
@@ -544,6 +546,7 @@ export async function getStorageLocationWithFacility(
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       facilityId: storageLocations.facilityId,
+      archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
@@ -584,7 +587,7 @@ export async function getStorageLocationsByFacility(
   return db
     .select()
     .from(storageLocations)
-    .where(eq(storageLocations.facilityId, facilityId))
+    .where(and(eq(storageLocations.facilityId, facilityId), isNull(storageLocations.archivedAt)))
     .orderBy(asc(storageLocations.code));
 }
 
@@ -612,14 +615,14 @@ export async function createStorageLocation(
 ): Promise<StorageLocation> {
   requireAuth(userId);
 
-  // Verify facility exists
+  // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, data.facilityId));
+    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new SafeError("Facility not found or archived");
   }
 
   // Check for duplicate code
@@ -722,15 +725,15 @@ export async function updateStorageLocation(
     }
   }
 
-  // If facilityId is being changed, verify new facility exists
+  // If facilityId is being changed, verify new facility exists and is active
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(eq(facilities.id, data.facilityId));
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
     if (!facility) {
-      throw new SafeError("Facility not found");
+      throw new SafeError("Facility not found or archived");
     }
   }
 
@@ -875,6 +878,7 @@ export async function getStorageLocationTypes(
   const results = await db
     .selectDistinct({ type: storageLocations.type })
     .from(storageLocations)
+    .where(isNull(storageLocations.archivedAt))
     .orderBy(asc(storageLocations.type));
 
   return results.map((r) => r.type);

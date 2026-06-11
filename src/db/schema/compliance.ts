@@ -33,6 +33,8 @@ export const stockpileEvents = pgTable(
     mitigationNotes: text('mitigation_notes'),
     exceptionRef: text('exception_ref'), // required when stockpile exceeds 12 months
     documentRef: text('document_ref'),
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -83,6 +85,8 @@ export const powerProcurementEvidence = pgTable(
     retiredAt: timestamp('retired_at'),
     documentRef: text('document_ref'),
     notes: text('notes'),
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
