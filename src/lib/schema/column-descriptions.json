@@ -216,7 +216,6 @@
     "biochar_storage_location_id": "FK to where biochar output was stored",
     "feedstock_storage_location_id": "FK to the feedstock bin used for this run",
     "emission_factors_used": "JSON of emission factors applied to this run",
-    "plc_data_file_url": "URL to PLC telemetry data export file",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },

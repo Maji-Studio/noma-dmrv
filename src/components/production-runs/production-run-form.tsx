@@ -13,7 +13,8 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useRef } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormFileUpload, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, SectionLabel } from "@/components/forms";
+import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
@@ -262,7 +263,6 @@ export function ProductionRunForm({
       biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
       biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
       biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
-      plcDataFileUrl: productionRun?.plcDataFileUrl ?? "",
     },
   });
 
@@ -363,7 +363,12 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="status" label="Status" error={errors.status?.message}>
+          <FormField
+            id="status"
+            label="Status"
+            error={errors.status?.message}
+            helperText="Set to Complete once the run is finished — a run must be Complete before it can be certified."
+          >
             <FormSelect
               id="status"
               disabled={isSubmitting}
@@ -705,16 +710,18 @@ export function ProductionRunForm({
         <SectionLabel>Production Readings</SectionLabel>
 
         <FormField
-          id="plcDataFile"
-          label="Readings CSV"
-          helperText="UI mock only for now: selected CSV files are not uploaded or saved yet."
+          id="readingsCsv"
+          label="Readings CSV (optional)"
+          helperText="Optional and not required to certify. Upload PLC / sensor CSV exports — files are stored securely (local in dev, S3 in production)."
         >
-          <FormFileUpload
-            id="plcDataFile"
-            accept=".csv"
-            multiple={false}
-            disabled={isSubmitting}
-          />
+          {isEditMode && productionRun ? (
+            <ProductionReadingsDocuments productionRunId={productionRun.id} />
+          ) : (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Save the production run first, then reopen it to attach readings
+              CSV files.
+            </p>
+          )}
         </FormField>
       </div>
 
