@@ -212,6 +212,7 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 - **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`
 - **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod), `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`, `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET` (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
+- **Geo / maps (all optional — graceful degradation):** `OPENROUTESERVICE_API_KEY` (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public, domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic test fixtures, rejected in prod)
 
 **Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env). Local: `pnpm env:local` (`op inject` ← `.env.tpl`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Vercel: `pnpm env:vercel`. See `docs/security.md` → Secrets Management.
 

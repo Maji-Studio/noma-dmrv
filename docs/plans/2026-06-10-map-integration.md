@@ -1,6 +1,10 @@
 # Map Integration — Address / Point / Lat-Lng Input, Auto-Distance, Carbon Viewer
 
-> **Status: Planned** (2026-06-10). Output of a grilling session against the
+> **Status: Phase 1 in progress** (2026-06-11) — geo foundation (env, schema,
+> `src/lib/geo/`, actions/hooks), `PositionPicker` + `DistanceCalcField`, and
+> Tier 1/2 form wiring landed; derive-path provenance resolution and e2e
+> coverage in flight. Originally planned 2026-06-10 from a grilling session
+> against the
 > existing geographic substrate (GPS columns on 9+ entities, three distance
 > fields, the polymorphic `transport_legs` table, GPS Zod helpers). Decision
 > rationale for the provider boundary lives in

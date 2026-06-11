@@ -48,6 +48,17 @@ STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_
 STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
 
 # -----------------------------------------------------------------------------
+# Geo / Maps (map integration — ADR 0009)
+# Both keys are OPTIONAL: without them the app still runs; CALC/address search
+# and the map preview degrade gracefully. OPENROUTESERVICE_API_KEY is
+# server-only (geocoding + routing); NEXT_PUBLIC_MAPTILER_KEY is a public,
+# domain-locked basemap key. GEO_PROVIDER is not templated — it defaults to
+# "ors"; "stub" is for hermetic tests only (.env.test) and is rejected in prod.
+# -----------------------------------------------------------------------------
+OPENROUTESERVICE_API_KEY="op://Environment Variables/noma-dmrv env staging/OPENROUTESERVICE_API_KEY"
+NEXT_PUBLIC_MAPTILER_KEY="op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_MAPTILER_KEY"
+
+# -----------------------------------------------------------------------------
 # App Configuration
 # -----------------------------------------------------------------------------
 NODE_ENV=development
