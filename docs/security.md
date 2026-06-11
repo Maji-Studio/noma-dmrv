@@ -62,11 +62,11 @@ Never log:
 
 Secrets live in **1Password** (vault `Environment Variables`), never in the repo. One item per environment, with fields named exactly like the env vars:
 
-- `noma-dmrv env staging`, `noma-dmrv env production` (and `dev`)
+- `noma-dmrv env staging`, `noma-dmrv env production`, `noma-dmrv env local`
 
 Three consumers read those items:
 
-- **Local dev** — `pnpm env:local` runs `op inject -i .env.tpl -o .env`. `.env.tpl` is tracked and holds `op://Environment Variables/noma-dmrv env staging/<VAR>` references; values resolve at runtime, never committed.
+- **Local dev** — `pnpm env:local` (`scripts/env-local-inject.ts`) injects `.env.local.tpl` into `.env.local` via `op inject`. `.env.local.tpl` is tracked and holds `op://Environment Variables/noma-dmrv env local/<VAR>` references (machine-local values: localhost DB/app URLs, dev admin credentials, test toggles, geo keys); the injected `.env.local` is gitignored. `.env.tpl` is the separate, deployment-facing template — it references the staging item and feeds only the Vercel sync, never a local file.
 - **Vercel** — `pnpm env:vercel`
   (`scripts/sync-env-to-vercel.ts`) pushes the production item into Vercel
   Production and the staging item into Vercel Preview. Vercel Development is not
@@ -81,6 +81,7 @@ Notes:
   `vercel build --target=preview` cannot reconstruct sensitive values from
   Vercel; use local env injection for local builds.
 - Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
+- **Optional vars may be missing from an item.** Both sync scripts pre-check the item's field names and skip template refs with no matching field (per-var warning) instead of letting `op inject` hard-fail. They abort only when a **required** field is missing — `REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in `scripts/env-tpl-utils.ts`, the vars `src/config/env.ts` cannot boot without. `pnpm env:check` reports the same split (missing-optional is advisory; missing-required exits 1).
 - `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
 
 ## Dependency Supply Chain
