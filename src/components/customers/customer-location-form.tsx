@@ -58,6 +58,7 @@ export function CustomerLocationForm({
       gpsLongitude: location?.gpsLongitude ?? undefined,
       address: location?.address ?? "",
       distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
+      isDefault: location?.isDefault ?? false,
     },
   });
 
@@ -166,6 +167,7 @@ export function CustomerLocationForm({
             label="GPS Latitude"
             error={errors.gpsLatitude?.message}
             helperText="Between -90 and 90"
+            required
           >
             <FormInput
               id="gpsLatitude"
@@ -185,6 +187,7 @@ export function CustomerLocationForm({
             label="GPS Longitude"
             error={errors.gpsLongitude?.message}
             helperText="Between -180 and 180"
+            required
           >
             <FormInput
               id="gpsLongitude"
@@ -228,6 +231,22 @@ export function CustomerLocationForm({
             />
           </FormField>
         </div>
+
+        <label
+          htmlFor="isDefault"
+          className="flex items-center gap-12 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            id="isDefault"
+            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+            disabled={isSubmitting}
+            {...register("isDefault")}
+          />
+          <span className="body-medium text-[var(--color-text-primary)]">
+            Set as default destination
+          </span>
+        </label>
       </div>
 
       {/* Form Actions */}

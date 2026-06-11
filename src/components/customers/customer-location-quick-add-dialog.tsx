@@ -58,21 +58,20 @@ export function CustomerLocationQuickAddDialog({
       return;
     }
 
-    const lat =
-      formData.gpsLatitude.trim() === ""
-        ? null
-        : Number(formData.gpsLatitude);
-    const lng =
-      formData.gpsLongitude.trim() === ""
-        ? null
-        : Number(formData.gpsLongitude);
+    if (formData.gpsLatitude.trim() === "" || formData.gpsLongitude.trim() === "") {
+      setError("GPS latitude and longitude are required");
+      return;
+    }
 
-    if (lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) {
+    const lat = Number(formData.gpsLatitude);
+    const lng = Number(formData.gpsLongitude);
+
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
       setError("Latitude must be a number between -90 and 90");
       return;
     }
 
-    if (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180)) {
+    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
       setError("Longitude must be a number between -180 and 180");
       return;
     }
@@ -87,6 +86,7 @@ export function CustomerLocationQuickAddDialog({
         address: formData.address.trim() || "",
         gpsLatitude: lat,
         gpsLongitude: lng,
+        isDefault: false,
       });
       onClose();
     } catch (err) {
