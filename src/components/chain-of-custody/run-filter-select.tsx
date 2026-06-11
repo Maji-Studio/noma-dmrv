@@ -59,6 +59,14 @@ export function RunFilterSelect({
     setIsOpen(false);
   };
 
+  const selectOnEnterOrSpace =
+    (runId: string | undefined) => (event: React.KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        select(runId);
+      }
+    };
+
   return (
     <div ref={containerRef} className="relative">
       <div className="relative flex items-center">
@@ -121,9 +129,12 @@ export function RunFilterSelect({
           <li
             role="option"
             aria-selected={value == null}
+            tabIndex={0}
             onClick={() => select(undefined)}
+            onKeyDown={selectOnEnterOrSpace(undefined)}
             className={cn(
               "cursor-pointer px-12 py-8 text-[var(--text-s)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-background-medium)]",
+              "focus-visible:outline-none focus-visible:bg-[var(--color-background-medium)]",
               value == null && "bg-[var(--color-interaction-light)]"
             )}
           >
@@ -134,10 +145,13 @@ export function RunFilterSelect({
               key={run.id}
               role="option"
               aria-selected={run.id === value}
+              tabIndex={0}
               data-testid={`chain-run-option-${run.id}`}
               onClick={() => select(run.id)}
+              onKeyDown={selectOnEnterOrSpace(run.id)}
               className={cn(
                 "cursor-pointer px-12 py-8 transition-colors hover:bg-[var(--color-background-medium)]",
+                "focus-visible:outline-none focus-visible:bg-[var(--color-background-medium)]",
                 run.id === value && "bg-[var(--color-interaction-light)]"
               )}
             >
