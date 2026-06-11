@@ -5,6 +5,11 @@
 # .env.local (machine-local values: localhost DATABASE_URL / APP_URL, dev
 # admin credentials, test toggles). The staging/production items are synced
 # to Vercel from .env.tpl instead; this template never reaches a deployment.
+#
+# OPTIONAL variables (everything except DATABASE_URL / NEXT_PUBLIC_APP_URL /
+# BETTER_AUTH_SECRET — see REQUIRED_LOCAL_VARS in scripts/env-tpl-utils.ts)
+# may be absent from the 1Password item: pnpm env:local skips them with a
+# warning instead of failing, and the app degrades gracefully without them.
 # Drift between this file and the 1Password item: pnpm env:check.
 
 # -----------------------------------------------------------------------------
