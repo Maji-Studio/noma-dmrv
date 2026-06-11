@@ -329,7 +329,7 @@ export async function updateDeliveryFn(
       truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
       truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
       distanceKmOverride: validated.distanceKmOverride,
-      distanceNote: validated.distanceNote,
+      distanceNote: validated.distanceNote || null,
     });
 
     await resyncBiocharLegs(user.id, [

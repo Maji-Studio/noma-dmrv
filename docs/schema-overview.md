@@ -2,7 +2,7 @@
 
 Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
-Current shape after migration `0037_sour_lethal_legion`: 45 table exports across 14 schema files.
+Current shape: 45 table exports across 14 schema files.
 
 | Table | Area | What it does | Use cases | Links |
 |---|---|---|---|---|
