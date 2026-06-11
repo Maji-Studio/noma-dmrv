@@ -101,11 +101,15 @@ export async function getRouteGeometries(
           distanceKm: geometry.distanceKm,
         })
         .onConflictDoNothing();
-    } catch {
+    } catch (error) {
       // Unroutable pair (no road, provider error) — the viewer falls back to
       // a straight dashed line for these legs. Not cached: a transient ORS
       // failure should not pin the fallback forever.
       failures++;
+      log.debug(
+        { err: error instanceof Error ? error.message : String(error) },
+        "route geometry fetch failed"
+      );
     }
   }
 

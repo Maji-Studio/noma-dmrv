@@ -23,7 +23,7 @@ import { test, expect, type SeededChainData } from "./fixtures";
 // Seed geography (matches fixtures/seed-chain-data.ts: facility at Dodoma,
 // supplier/customer-location at Dar-ish coordinates).
 const FACILITY_POINT = { lat: -6.163, lng: 35.7516 };
-const SUPPLIER_POINT = { lat: -6.8, lng: 39.28 };
+const DAR_POINT = { lat: -6.8, lng: 39.28 };
 const FIELD_POINT = { lat: -6.75, lng: 39.2 };
 
 const INBOUND_DISTANCE_KM = 41.5;
@@ -166,8 +166,8 @@ async function seedGeoLineage(
             entityType: "feedstock",
             entityId: seededData.feedstock.id,
             originName: `E2E Supplier Origin ${suffix}`,
-            originGpsLatitude: SUPPLIER_POINT.lat,
-            originGpsLongitude: SUPPLIER_POINT.lng,
+            originGpsLatitude: DAR_POINT.lat,
+            originGpsLongitude: DAR_POINT.lng,
             destinationName: `E2E Facility ${suffix}`,
             destinationGpsLatitude: FACILITY_POINT.lat,
             destinationGpsLongitude: FACILITY_POINT.lng,
@@ -185,8 +185,8 @@ async function seedGeoLineage(
             originGpsLatitude: FACILITY_POINT.lat,
             originGpsLongitude: FACILITY_POINT.lng,
             destinationName: `E2E Customer Site ${suffix}`,
-            destinationGpsLatitude: SUPPLIER_POINT.lat,
-            destinationGpsLongitude: SUPPLIER_POINT.lng,
+            destinationGpsLatitude: DAR_POINT.lat,
+            destinationGpsLongitude: DAR_POINT.lng,
             distanceKm: OUTBOUND_DISTANCE_KM,
             distanceSource: "manual",
             transportMethodType: "road",
