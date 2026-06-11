@@ -16,7 +16,7 @@ import {
 } from "@/config/geo";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
-import type { GeocodeResult, GeoPoint, GeoProvider } from "./types";
+import type { GeocodeResult, GeoPoint, GeoProvider, RouteGeometry } from "./types";
 
 const log = logger.child({ mod: "geo" });
 
@@ -92,6 +92,14 @@ interface OrsDirectionsResponse {
   routes?: Array<{ summary?: { distance?: number } }>;
 }
 
+/** GeoJSON variant of the directions endpoint (route polyline). */
+interface OrsDirectionsGeoJsonResponse {
+  features?: Array<{
+    geometry?: { coordinates?: [number, number][] };
+    properties?: { summary?: { distance?: number } };
+  }>;
+}
+
 export const orsProvider: GeoProvider = {
   async geocode(address: string): Promise<GeocodeResult[]> {
     const key = requireKey();
@@ -163,5 +171,42 @@ export const orsProvider: GeoProvider = {
     }
     const km = meters / METERS_PER_KM;
     return Number(km.toFixed(DISTANCE_DECIMALS));
+  },
+
+  async routeGeometry(origin: GeoPoint, destination: GeoPoint): Promise<RouteGeometry> {
+    const key = requireKey();
+    const body = (await orsFetch(
+      "route-geometry",
+      `${ORS_BASE_URL}/v2/directions/${ORS_ROUTING_PROFILE}/geojson`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: key,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          coordinates: [
+            [origin.lng, origin.lat],
+            [destination.lng, destination.lat],
+          ],
+        }),
+      }
+    )) as OrsDirectionsGeoJsonResponse;
+
+    const feature = body.features?.[0];
+    const coordinates = feature?.geometry?.coordinates;
+    const meters = feature?.properties?.summary?.distance;
+    if (
+      !Array.isArray(coordinates) ||
+      coordinates.length < 2 ||
+      typeof meters !== "number" ||
+      !Number.isFinite(meters)
+    ) {
+      throw new SafeError("No road route found between these points.");
+    }
+    return {
+      coordinates,
+      distanceKm: Number((meters / METERS_PER_KM).toFixed(DISTANCE_DECIMALS)),
+    };
   },
 };

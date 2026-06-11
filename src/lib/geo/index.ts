@@ -10,7 +10,7 @@ import { orsProvider } from "./ors";
 import { stubProvider } from "./stub";
 import type { GeoProvider } from "./types";
 
-export type { GeocodeResult, GeoPoint, GeoProvider } from "./types";
+export type { GeocodeResult, GeoPoint, GeoProvider, RouteGeometry } from "./types";
 
 const provider: GeoProvider = env.GEO_PROVIDER === "stub" ? stubProvider : orsProvider;
 
@@ -26,3 +26,4 @@ export function isRoutingConfigured(): boolean {
 export const geocode = provider.geocode.bind(provider);
 export const reverseGeocode = provider.reverseGeocode.bind(provider);
 export const routeDistanceKm = provider.routeDistanceKm.bind(provider);
+export const routeGeometry = provider.routeGeometry.bind(provider);

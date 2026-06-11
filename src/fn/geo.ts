@@ -6,16 +6,26 @@
  * via withAction. Returns ActionResult<T> like every other server function.
  */
 
-import { GEO_GEOCODE_RATE_LIMIT, GEO_ROUTE_RATE_LIMIT } from "@/config/geo";
+import {
+  GEO_GEOCODE_RATE_LIMIT,
+  GEO_ROUTE_GEOMETRY_RATE_LIMIT,
+  GEO_ROUTE_RATE_LIMIT,
+} from "@/config/geo";
+import {
+  getRouteGeometries,
+  type RouteGeometryByRequestId,
+} from "@/data-access/geo-route-cache";
 import { geocode, isRoutingConfigured, reverseGeocode, routeDistanceKm } from "@/lib/geo";
 import type { GeoCapabilities, GeocodeResult } from "@/lib/geo/types";
 import {
   geocodeQuerySchema,
   geoPointSchema,
   routeDistanceRequestSchema,
+  routeGeometriesRequestSchema,
   type GeocodeQuery,
   type GeoPointInput,
   type RouteDistanceRequest,
+  type RouteGeometriesRequest,
 } from "@/schemas/geo";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
@@ -61,5 +71,25 @@ export async function routeDistanceFn(
       return routeDistanceKm(origin, destination);
     },
     { rateLimit: GEO_ROUTE_RATE_LIMIT, zodErrorPrefix: "Invalid route request" }
+  );
+}
+
+/**
+ * Viewer-time road polylines for the Carbon Viewer, one entry per leg id.
+ * Cached read-through (geo_route_cache); an unroutable leg resolves to null
+ * so the map can draw its straight dashed fallback instead of failing.
+ */
+export async function routeGeometriesFn(
+  input: RouteGeometriesRequest
+): Promise<ActionResult<RouteGeometryByRequestId>> {
+  return withAction(
+    async (userId) => {
+      const { legs } = routeGeometriesRequestSchema.parse(input);
+      return getRouteGeometries(userId, legs);
+    },
+    {
+      rateLimit: GEO_ROUTE_GEOMETRY_RATE_LIMIT,
+      zodErrorPrefix: "Invalid route geometry request",
+    }
   );
 }
