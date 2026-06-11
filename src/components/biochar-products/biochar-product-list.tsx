@@ -426,14 +426,7 @@ export function BiocharProductList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Product"}
-        >
-          {displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
-            <TransportLegsEditor
-              entityType="biochar"
-              entityId={displaySideSheet.entity.id}
-            />
-          ) : null}
-        </BiocharProductForm>
+        />
       </EntitySideSheet>
     </div>
   );
