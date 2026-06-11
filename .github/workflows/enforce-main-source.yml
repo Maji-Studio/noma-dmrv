@@ -1,0 +1,23 @@
+name: Enforce main PR source
+
+# PRs into main may only come from staging. This job is a required status
+# check in the "protect-main" ruleset, so a PR from any other branch can
+# never be merged into main.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+    branches: [main]
+
+jobs:
+  enforce-staging-source:
+    name: enforce-staging-source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require staging as source branch
+        if: github.head_ref != 'staging'
+        run: |
+          echo "::error::PRs into main are only allowed from staging (this PR is from '${{ github.head_ref }}')."
+          exit 1
+      - name: Source is staging
+        if: github.head_ref == 'staging'
+        run: echo "Source branch is staging — OK."
