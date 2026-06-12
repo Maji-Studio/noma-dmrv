@@ -70,13 +70,54 @@ structured so a `html[data-theme]` flip remains possible later.
 --ink: var(--clr-dark-purple-100);   /* Primary ink */
 ```
 
-Plum-tinted hairlines for **emphasized** borders and dividers; the gray border
-tokens remain for quiet chrome:
+Plum-tinted hairlines for **emphasized** borders and dividers:
 
 ```css
 --edge: #480b73;
 --edge-soft: rgba(72, 11, 115, 0.45);
 ```
+
+**Two-greys rule (Phase 2.5, 2026-06-12):** every grey in the light theme is an
+**alpha of plum over white** — never a neutral grey (cool neutrals read dirty on
+the warm field). The semantic tokens (`--color-border-*`, `--color-text-*`,
+`--color-background-light/medium/strong`, `--color-surface-*`) are all plum
+alphas now; don't reintroduce `--color-gray-*` in component code.
+
+### Hairline Hierarchy & Panel Recipe (Phase 2.5)
+
+Structure is drawn with a three-step hairline hierarchy (no drop shadows —
+elevation is border + paper):
+
+```css
+--hair:   1.5px solid var(--clr-dark-purple-100); /* structural / floating chrome */
+--hair-2: 1.5px solid var(--clr-dark-purple-20);  /* secondary structure */
+--hair-3: 1px solid var(--clr-dark-purple-10);    /* row dividers in dense lists */
+```
+
+Every surface that sits on the warm field uses the **panel recipe** — apply it
+through shared components (StatCard, DataTable frame, Card, entity cards),
+never as per-page classes:
+
+```css
+--panel-bg: var(--paper);
+--panel-border: 1.5px solid var(--clr-dark-purple-40); /* decided 2026-06-12 */
+--panel-shadow: none;
+--panel-head-bg: var(--sea);       /* table header / panel head wash */
+--panel-head-border: var(--hair-3);
+--row-divider: var(--hair-3);
+--row-hover-bg: var(--sea);
+```
+
+Rules that fall out of this:
+
+- **Tables never sit flush on the field** — the DataTable renders as a framed
+  panel (toolbar inside, pagination as the panel's footer row); table headers
+  are mono uppercase micro-labels (`.label-micro`) on the `--sea` wash; rows
+  separate with `--row-divider`, **no zebra striping**.
+- **Elevated surfaces (side sheets, menus, dialogs) are pure `--paper` with a
+  full-ink `--hair` border and no shadow** — the scrim + border do the
+  elevation. Alpha background tokens are translucent washes for fills *inside*
+  panels; never use them as an overlay's surface.
 
 Accent triad with **ink variants** — use the `-ink` token whenever accent
 colors render as text on light backgrounds (passes 4.5:1 contrast):

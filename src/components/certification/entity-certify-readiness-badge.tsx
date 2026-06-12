@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle, Warning } from "@phosphor-icons/react";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { EntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 
@@ -9,12 +10,12 @@ interface EntityCertifyReadinessBadgeProps {
 }
 
 /**
- * Certification readiness pill. Shares the visual language of the list
- * StatusBadge (icon + background tint, sentence case, no border) so the
- * "Certifier" column reads as a sibling of the adjacent "Status" column.
+ * Certification readiness pill — a StatusBadge, so the "Certifier" column is
+ * literally the same primitive as the adjacent "Status" column (same anatomy,
+ * same status ramp), not a lookalike.
  *
- * - ready      → green  ✓  "Ready"
- * - incomplete → amber  ⚠  "Incomplete (N)" — hover/focus reveals exactly
+ * - ready      → st-ok   ✓  "Ready"
+ * - incomplete → st-wait ⚠  "Incomplete (N)" — hover/focus reveals exactly
  *                which gaps remain, so "where is it missing" is always one
  *                interaction away rather than buried in a post-save toast.
  */
@@ -24,22 +25,17 @@ export function EntityCertifyReadinessBadge({
   const ready = readiness.state === "ready";
   const gapCount = readiness.gaps.length;
 
-  const label = ready ? "Ready" : `Incomplete (${gapCount})`;
-  const colorClass = ready
-    ? "text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/10"
-    : "text-[var(--color-signal-orange)] bg-[var(--color-signal-orange)]/10";
-
-  const pill = (
-    <span
-      className={`inline-flex items-center gap-4 whitespace-nowrap px-8 py-2 text-[var(--text-xs)] font-medium ${colorClass}`}
-    >
-      {ready ? (
-        <CheckCircle size={14} weight="fill" />
-      ) : (
-        <Warning size={14} weight="fill" />
-      )}
-      {label}
-    </span>
+  const pill = ready ? (
+    <StatusBadge
+      status="ready"
+      icon={<CheckCircle size={14} weight="fill" />}
+    />
+  ) : (
+    <StatusBadge
+      status="pending"
+      label={`Incomplete (${gapCount})`}
+      icon={<Warning size={14} weight="fill" />}
+    />
   );
 
   if (ready) {

@@ -151,14 +151,15 @@ export function EnergySummary() {
           </p>
         )}
         {config && splits && yieldKwhPerL != null && gensetKwh != null && totals && (
-          <div className="overflow-x-auto">
+          // Panel recipe (Phase 2.5): tables never sit flush on the warm field.
+          <div className="overflow-x-auto bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)]">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-[var(--color-border-secondary)]">
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 pr-8 text-left">Stage</th>
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 px-8 text-right whitespace-nowrap">Split</th>
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 px-8 text-right">Grid electricity (kWh)</th>
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 pl-8 text-right">Genset energy (kWh)</th>
+                <tr className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]">
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Stage</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right whitespace-nowrap">Split</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Grid electricity (kWh)</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Genset energy (kWh)</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,14 +168,14 @@ export function EnergySummary() {
                   return (
                     <tr
                       key={stage.key}
-                      className="border-b border-[var(--color-border-secondary)]"
+                      className="[border-bottom:var(--row-divider)] last:[border-bottom:none]"
                     >
-                      <td className="body-medium py-8 pr-8">{stage.label}</td>
-                      <td className="body-medium py-8 px-8 text-right whitespace-nowrap">{pct}%</td>
-                      <td className="body-medium py-8 px-8 text-right whitespace-nowrap">
+                      <td className="body-medium py-8 px-12">{stage.label}</td>
+                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap">{pct}%</td>
+                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
                         {fmt((electricityKwh * pct) / 100)}
                       </td>
-                      <td className="body-medium py-8 pl-8 text-right whitespace-nowrap">
+                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
                         {fmt((gensetKwh * pct) / 100)}
                       </td>
                     </tr>

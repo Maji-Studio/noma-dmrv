@@ -66,9 +66,51 @@ Port the inspiration token layer into `src/app/globals.css`:
   3. **Off-white panels** — panels at orange-1-over-white, reserving pure white for elevated surfaces only (menus, side sheets, dialogs) so elevation has a hierarchy.
 - Whatever wins: verify at 1440px on facilities, orders, production-runs, energy, credit-batches; check contrast stays ≥ 4.5:1 for text on tinted chrome.
 
+### Phase 2.5 findings & decisions (resolved 2026-06-12)
+
+What the inspiration mock actually does (verified against `dmrv.css` + concept screens):
+**zero box-shadows, zero tinted panels** — its entire figure/ground mechanism is a
+**hairline hierarchy**: `--hair` (1.5px full-ink) panel outlines, `--hair-2` (1.5px @ 20%)
+secondary structure, `--hair-3` (1px @ 10%) row dividers, plus the "two greys" rule
+(every grey is a plum alpha, never a neutral). Consequences:
+
+- **Candidate 1 (warm shadow) is rejected** — it contradicts the DS "no drop shadows"
+  rule, and in practice rendered near-invisible at 1440px. Built and compared anyway;
+  the `html[data-surface="shadow"]` branch can be deleted once a winner is locked.
+- **Root cause of the washed look was not border *strength* alone but border
+  *temperature*:** the semantic tokens (`--color-border-*`, `--color-text-*`,
+  `--color-background-light/medium/strong`, `--color-surface-*`) pointed at cool
+  neutral grays (#e1e2e2, #5f6565, #f5f5f5…) that read dirty on the warm field.
+  All re-pointed to plum alphas in `globals.css` — one change warm-corrected every
+  hand-rolled card, divider, and muted label app-wide.
+- **Panel recipe shipped as tokens** (`--panel-bg/-border/-shadow/-head-bg/-head-border`,
+  `--row-divider/-hover-bg/-stripe-bg`) applied through StatCard, the DataTable frame,
+  Card, facility/storage cards, and the energy per-stage table. **Winner (user pick,
+  2026-06-12): 1.5px plum hairline @ 40%** (`--panel-border: 1.5px solid
+  var(--clr-dark-purple-40)`) — mock-faithful full ink was tried and judged too heavy
+  for app-density layouts; 20% under-separated. The shadow candidate and the
+  `data-surface` compare switch were deleted.
+- **DataTable framed:** toolbar + pagination now live inside the bordered panel
+  (pagination moved below the table in the DOM — was rendering above it), header row
+  on the `--sea` wash with **mono uppercase micro-labels** (new `.label-micro` class,
+  the 12px sibling of `title-chapter-title`), 1px 10%-plum row dividers, `--sea` row
+  hover, **zebra striping retired** (the mock separates rows with dividers, not stripes).
+- **Alpha washes are not opaque surfaces:** re-pointing `--color-background-light` to a
+  2% alpha made the side sheet translucent (caught by user). Rule recorded: overlays
+  (sheets, menus, dialogs) get pure `--paper` + a full-ink hairline and **no shadow**
+  (scrim + border do the elevation); tinted alphas are only for fills *inside* panels.
+  Pure white is reserved for elevated surfaces — the field stays warm.
+- **StatusBadge squared** (`rounded-[4px]` removed — brutalist rule) and reused for the
+  certifier readiness chips (`entity-certify-readiness-badge`, batch health summary),
+  killing the last divergent hand-rolled status pills (user call-out).
+- Gotcha for future toggles: flipping a token-bearing attribute at runtime on elements
+  with `transition-colors` + `border: var(--…)` shorthand pins the old border color in
+  Chrome (stuck transition). Real page loads are unaffected; kill transitions before
+  flipping when screenshot-comparing.
+
 ## Phase 3 — Side-sheet & form system (sampling first — worst surface in the app)
 
-- **One form grammar — the production-run style is the keeper:** small mono uppercase section labels, tight 2-col grid, derived-value strips, CERT chips, sticky footer. **Rebuild the Create/Edit Sample sheet first** (explicit user call-out): kill the giant uppercase accordion headers; six stacked collapsed sections → labeled sections with progressive disclosure only where field count demands it. The sample-sheet rebuild may be pulled forward and shipped alongside Phase 1 if desired.
+- **One form grammar — the production-run style is the keeper:** small mono uppercase section labels, tight 2-col grid, derived-value strips, CERT chips, sticky footer. ~~**Rebuild the Create/Edit Sample sheet first**~~ **DONE 2026-06-12 (pulled forward into the Phase 2.5 branch, user call-out):** accordions removed from `sample-form.tsx`; now flat `SectionLabel` sections with hairline dividers in the production-run grammar; the conditional 1000-year block renders as two flat sibling sections (R₀ Reflectance · TGA), nutrient fields stay behind the claim checkbox.
 - Extract shared `FormSection` / section-label primitives so sheets can't drift again.
 - Document the spacing rule (`space-y-20` standard; `space-y-24` only for full-page/auth forms) in `docs/forms.md`.
 - Side-sheet chrome: consistent header (code + date subtitle), section treatment, and footer CTA row across all 14 entity sheets; detail-sheet section headings get the same mono label treatment.
