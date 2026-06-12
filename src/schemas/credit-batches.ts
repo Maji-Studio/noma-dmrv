@@ -272,35 +272,3 @@ export function formatDurabilityOption(option: DurabilityOption): string {
   };
   return labels[option];
 }
-
-/**
- * Get status badge color class
- */
-export function getStatusColor(status: CreditBatchStatus): {
-  bg: string;
-  text: string;
-} {
-  const colors: Record<CreditBatchStatus, { bg: string; text: string }> = {
-    draft: {
-      bg: "bg-[var(--color-surface-medium)]",
-      text: "text-[var(--color-text-secondary)]",
-    },
-    pending: {
-      bg: "bg-[var(--color-warning-light)]",
-      text: "text-[var(--color-warning)]",
-    },
-    verified: {
-      bg: "bg-[var(--color-info-light)]",
-      text: "text-[var(--color-info)]",
-    },
-    issued: {
-      bg: "bg-[var(--color-success-light)]",
-      text: "text-[var(--color-success)]",
-    },
-    rejected: {
-      bg: "bg-[var(--color-error-light)]",
-      text: "text-[var(--color-error)]",
-    },
-  };
-  return colors[status];
-}

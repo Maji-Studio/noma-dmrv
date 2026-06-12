@@ -13,7 +13,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -102,26 +102,26 @@ function createColumns(
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-16">
-          <button
-            type="button"
+          <Button
+            variant="default"
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(row.original);
             }}
-            className="h-[32px] px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small"
           >
             Edit
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(row.original.id);
             }}
-            className="h-[32px] px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small"
           >
             Delete
-          </button>
+          </Button>
         </div>
       ),
       enableSorting: false,
@@ -289,25 +289,24 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         hoverable
         onRowClick={(row) => openView(row)}
         emptyMessage={
-          <div className="flex flex-col items-center justify-center gap-24 py-48">
-            <MapPin size={48} className="text-[var(--color-text-tertiary)]" />
-            <div className="text-center">
-              <h3 className="title-heading-3 mb-1">
-                {contextFacilityId ? "No applications yet" : "Select a facility"}
-              </h3>
-              <p className="body-small text-[var(--color-text-secondary)]">
-                {contextFacilityId
-                  ? "Create your first field application to get started"
-                  : "Choose a facility from the sidebar to view applications"}
-              </p>
-            </div>
-            {contextFacilityId && (
-              <Button variant="primary" onClick={openCreate}>
-                <Plus size={18} weight="bold" />
-                New Application
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            padding="md"
+            icon={<MapPin size={48} />}
+            title={contextFacilityId ? "No applications yet" : "Select a facility"}
+            description={
+              contextFacilityId
+                ? "Create your first field application to get started"
+                : "Choose a facility from the sidebar to view applications"
+            }
+            action={
+              contextFacilityId ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <Plus size={18} weight="bold" />
+                  New Application
+                </Button>
+              ) : undefined
+            }
+          />
         }
       >
         <DataTable.Toolbar>

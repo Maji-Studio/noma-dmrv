@@ -106,7 +106,7 @@ function DryMassCard({
             <div className="flex items-center gap-8">
               {/* Wet mass */}
               <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-base)] font-semibold text-[var(--color-text-primary)]">
+                <span className="font-mono text-[var(--text-base)] font-[var(--font-weight-bold)] text-[var(--color-text-primary)]">
                   {formatKg(appliedKg)}
                 </span>
                 <span className="body-caption text-[var(--color-text-quaternary)]">

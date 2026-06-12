@@ -87,12 +87,23 @@
   --acc-dist: var(--clr-pink);
   --acc-dist-ink: #a6216e;
 
-  /* Status ramp (replaces ad-hoc signal-green usage) */
+  /* Status ramp (replaces ad-hoc signal-green usage).
+     -bg = 10% tint fill, -border = 40% tint border (badge anatomy). */
   --st-ok: #17744a;
+  --st-ok-bg: rgba(23, 116, 74, 0.1);
+  --st-ok-border: rgba(23, 116, 74, 0.4);
   --st-run: #6e2ba8;
+  --st-run-bg: rgba(110, 43, 168, 0.1);
+  --st-run-border: rgba(110, 43, 168, 0.4);
   --st-wait: #bc4519;
+  --st-wait-bg: rgba(188, 69, 25, 0.1);
+  --st-wait-border: rgba(188, 69, 25, 0.4);
   --st-off: rgba(15, 2, 26, 0.4);
+  --st-off-bg: rgba(15, 2, 26, 0.05);
+  --st-off-border: rgba(15, 2, 26, 0.2);
   --st-bad: #e54552;
+  --st-bad-bg: rgba(229, 69, 82, 0.1);
+  --st-bad-border: rgba(229, 69, 82, 0.4);
 
   /* Tinted canvas wash (chain-of-custody figure/ground) */
   --sea: rgba(72, 11, 115, 0.045);

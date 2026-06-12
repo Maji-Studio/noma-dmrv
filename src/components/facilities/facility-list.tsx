@@ -30,7 +30,7 @@ import {
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useIsAdmin } from "@/hooks/use-is-admin";
@@ -307,31 +307,32 @@ export function FacilityList() {
       </section>
 
       {facilities.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-24 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-56">
-          <Factory size={48} className="text-[var(--color-text-tertiary)]" />
-          <div className="text-center">
-            <h3 className="title-heading-3 mb-8">
-              {showArchived
-                ? "No archived facilities"
-                : hasActiveFilters
-                  ? "No facilities found"
-                  : "No facilities yet"}
-            </h3>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {showArchived
-                ? "Facilities you archive will appear here and can be restored."
-                : hasActiveFilters
-                  ? "Try adjusting your search or filters."
-                  : "Create your first facility to start organising reactors and storage bins."}
-            </p>
-          </div>
-          {!hasActiveFilters && !showArchived && (
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={20} weight="bold" />
-              Create Facility
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          padding="lg"
+          icon={<Factory size={48} />}
+          title={
+            showArchived
+              ? "No archived facilities"
+              : hasActiveFilters
+                ? "No facilities found"
+                : "No facilities yet"
+          }
+          description={
+            showArchived
+              ? "Facilities you archive will appear here and can be restored."
+              : hasActiveFilters
+                ? "Try adjusting your search or filters."
+                : "Create your first facility to start organising reactors and storage bins."
+          }
+          action={
+            !hasActiveFilters && !showArchived ? (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={20} weight="bold" />
+                Create Facility
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">

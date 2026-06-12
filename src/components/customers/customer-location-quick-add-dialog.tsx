@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from "react";
 import { Modal } from "@/components/ui";
+import { Button } from "@/components/ui/button";
 import { useCreateCustomerLocation } from "@/hooks/use-customers";
 
 // ============================================
@@ -278,23 +279,21 @@ export function CustomerLocationQuickAddDialog({
           </div>
 
           <div className="flex gap-16 justify-start pt-16">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={handleSubmit}
-              disabled={createLocation.isPending}
-              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
+              busy={createLocation.isPending}
               data-testid="location-submit-button"
             >
               {createLocation.isPending ? "Adding..." : "Add Location"}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="default"
               onClick={onClose}
               disabled={createLocation.isPending}
-              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       </div>
