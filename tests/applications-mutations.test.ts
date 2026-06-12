@@ -177,6 +177,8 @@ describe("application mutations", () => {
       expect(deliveryOption).toMatchObject({
         defaultSoilTemperatureC: 21.4,
         facilityDefaultSoilTemperatureC: 24.8,
+        destinationGpsLatitude: -3.3,
+        destinationGpsLongitude: 37.3,
       });
     } finally {
       await cleanupMutationFixture(fixture);
