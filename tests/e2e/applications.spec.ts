@@ -9,6 +9,7 @@
 import { test, expect } from "./fixtures";
 import {
   selectEntity,
+  selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -65,13 +66,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="deliveryDate"]', today);
     // Select the first available order
     await page.selectOption('select[name="status"]', "upcoming");
-    // The orderId select should have our order — select the first option
-    const orderSelect = page.locator('select[name="orderId"]');
-    const orderOptions = orderSelect.locator("option:not([value=''])");
-    const firstOrderValue = await orderOptions.first().getAttribute("value");
-    if (firstOrderValue) {
-      await orderSelect.selectOption(firstOrderValue);
-    }
+    // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
+    await selectFirstEntity(page, "Order");
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();

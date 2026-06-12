@@ -7,6 +7,7 @@ import {
   Package,
   PencilSimple,
   Trash,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -28,18 +29,19 @@ function getTypeAccent(type: StorageLocationType) {
     return "border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] text-[var(--clr-orange)]";
   if (type === "biochar_bin")
     return "border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] text-[var(--clr-purple)]";
-  if (type === "ingredient_bin")
-    return "border-[var(--clr-pink-20)] bg-[var(--clr-pink-10)] text-[var(--clr-pink)]";
   return "border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] text-[var(--clr-pink)]";
 }
 
 function getDryMass(s: StorageLocationWithFacility) {
-  if (s.type === "feedstock_bin" || s.type === "ingredient_bin")
+  if (s.type === "feedstock_bin")
     return s.feedstockInventory.currentDryMassKg;
   if (s.type === "biochar_bin") return s.biocharInventory.currentMassKg;
   return s.productInventory.currentMassKg;
 }
 
+function isFeedstockInputBin(type: StorageLocationType) {
+  return type === "feedstock_bin";
+}
 
 function getCapacityPercent(s: StorageLocationWithFacility) {
   if (!s.capacityKg || s.capacityKg <= 0) return null;
@@ -124,12 +126,22 @@ export function StorageLocationCard({
         </div>
 
         {/* Feedstock types (feedstock + ingredient bins) */}
-        {(storageLocation.type === "feedstock_bin" || storageLocation.type === "ingredient_bin") &&
+        {isFeedstockInputBin(storageLocation.type) &&
           storageLocation.feedstockInventory.feedstockTypes.length > 0 && (
             <div className="flex items-center gap-6 text-[var(--color-text-tertiary)]">
               <Package size={12} weight="bold" />
               <span className="body-caption truncate">
                 {storageLocation.feedstockInventory.feedstockTypes.join(", ")}
+              </span>
+            </div>
+          )}
+
+        {isFeedstockInputBin(storageLocation.type) &&
+          storageLocation.feedstockInventory.pendingDryMassKg > 0 && (
+            <div className="flex items-center gap-6 text-[var(--clr-orange)]">
+              <Warning size={12} weight="fill" />
+              <span className="body-caption">
+                {formatMass(storageLocation.feedstockInventory.pendingDryMassKg)} pending completion
               </span>
             </div>
           )}

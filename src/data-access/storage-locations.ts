@@ -41,8 +41,10 @@ export interface StorageLocationWithFacility extends StorageLocation {
   facilityName: string;
   feedstockInventory: {
     batchCount: number;
+    pendingBatchCount: number;
     feedstockTypes: string[];
     currentDryMassKg: number;
+    pendingDryMassKg: number;
     estimatedWetMassKg: number | null;
     estimatedMoisturePercent: number | null;
   };
@@ -129,12 +131,20 @@ async function enrichStorageLocationRows(
         db
           .select({
             storageLocationId: feedstocks.storageLocationId,
-            batchCount: count(),
+            batchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
+            pendingBatchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
             feedstockTypes: sql<string | null>`
               string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})
             `,
-            totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
-            totalWetKg: sql<number>`COALESCE(SUM(${feedstocks.massWetKg}), 0)`,
+            totalDryKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+            `,
+            totalWetKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massWetKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+            `,
+            pendingDryKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
+            `,
           })
           .from(feedstocks)
           .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
@@ -340,6 +350,7 @@ async function enrichStorageLocationRows(
     const feedstockConsumptionRow = feedstockConsumptionMap.get(row.id);
     const totalDryKg = Number(feedstockInventoryRow?.totalDryKg ?? 0);
     const totalWetKg = Number(feedstockInventoryRow?.totalWetKg ?? 0);
+    const pendingDryKg = Number(feedstockInventoryRow?.pendingDryKg ?? 0);
     const consumedDryKg = Number(feedstockConsumptionRow?.consumedDryKg ?? 0);
     const currentDryMassKg = Math.max(0, totalDryKg - consumedDryKg);
     const moistureRatio =
@@ -365,8 +376,10 @@ async function enrichStorageLocationRows(
       facilityName: row.facilityName ?? "",
       feedstockInventory: {
         batchCount: Number(feedstockInventoryRow?.batchCount ?? 0),
+        pendingBatchCount: Number(feedstockInventoryRow?.pendingBatchCount ?? 0),
         feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
         currentDryMassKg,
+        pendingDryMassKg: pendingDryKg,
         estimatedWetMassKg,
         estimatedMoisturePercent:
           moistureRatio != null ? moistureRatio * 100 : null,
@@ -607,7 +620,7 @@ export async function createStorageLocation(
   data: {
     code: string;
     name: string;
-    type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
+    type: "feedstock_bin" | "biochar_bin" | "product_bin";
     facilityId: string;
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
@@ -655,7 +668,7 @@ export async function createStorageLocation(
   // path's invariant check would then refuse to touch.
   if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
     throw new SafeError(
-      "Feedstock and ingredient bins must be restricted to one feedstock type"
+      "Feedstock bins must be restricted to one feedstock type"
     );
   }
 
@@ -680,7 +693,7 @@ export async function createStorageLocation(
       type: data.type,
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
-      // Only meaningful on feedstock/ingredient bins, like formulationId below.
+      // Only meaningful on feedstock bins, like formulationId below.
       feedstockTypeId: isFeedstockBinType(data.type)
         ? data.feedstockTypeId ?? null
         : null,
@@ -707,7 +720,7 @@ export async function updateStorageLocation(
   data: {
     code?: string;
     name?: string;
-    type?: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
+    type?: "feedstock_bin" | "biochar_bin" | "product_bin";
     facilityId?: string;
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
@@ -767,7 +780,7 @@ export async function updateStorageLocation(
   const effectiveType = data.type ?? existing.type;
 
   // The Zod update schema can only see the payload — when `type` is omitted it
-  // cannot tell this is a feedstock/ingredient bin, so an update could clear
+  // cannot tell this is a feedstock bin, so an update could clear
   // feedstockTypeId on one. Enforce the invariant against the effective row.
   const effectiveFeedstockTypeId =
     data.feedstockTypeId !== undefined
@@ -778,11 +791,11 @@ export async function updateStorageLocation(
     !effectiveFeedstockTypeId
   ) {
     throw new SafeError(
-      "Feedstock and ingredient bins must be restricted to one feedstock type"
+      "Feedstock bins must be restricted to one feedstock type"
     );
   }
 
-  // A feedstock type only makes sense on a feedstock/ingredient bin — clear it
+  // A feedstock type only makes sense on a feedstock bin — clear it
   // when the (effective) type is anything else, same as formulationId below.
   const normalizedFeedstockTypeId = isFeedstockBinType(
     effectiveType as StorageLocationType

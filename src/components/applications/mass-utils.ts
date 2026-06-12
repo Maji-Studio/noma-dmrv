@@ -1,5 +1,10 @@
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import type { SoilTemperatureSource } from "@/schemas/applications";
+
+/** The only source a delivery-derived prefill can assert (approved global dataset). */
+export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
+  "global_database" satisfies SoilTemperatureSource;
 
 export interface ApplicationDeliveryOption {
   id: string;
@@ -51,7 +56,7 @@ export function resolveApplicationPositionDefault({
 }
 
 export interface ApplicationSoilTemperatureDefault {
-  soilTemperatureSource: "global_database";
+  soilTemperatureSource: typeof SOIL_TEMPERATURE_SOURCE_GLOBAL;
   soilTemperatureC: number;
 }
 
@@ -76,7 +81,7 @@ export function resolveApplicationSoilTemperatureDefault({
   }
 
   return {
-    soilTemperatureSource: "global_database",
+    soilTemperatureSource: SOIL_TEMPERATURE_SOURCE_GLOBAL,
     soilTemperatureC,
   };
 }

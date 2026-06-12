@@ -49,7 +49,11 @@ export const storageLocationType = pgEnum('storage_location_type', [
   'feedstock_bin',
   'biochar_bin',
   'product_bin',
-  'ingredient_bin',
+]);
+
+export const feedstockTypeUsage = pgEnum('feedstock_type_usage', [
+  'pyrolysis',
+  'blend',
 ]);
 
 export const packagingType = pgEnum('packaging_type', ['loose', 'bagged']);

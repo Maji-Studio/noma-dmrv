@@ -14,12 +14,17 @@ import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect, FormSection, FormActions } from "@/components/forms";
+import {
+  StorageLocationQuickAddDialog,
+  useQuickAddDialog,
+} from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import {
   biocharProductFormSchema,
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
+import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
 import {
@@ -27,6 +32,9 @@ import {
   useBiocharComposition,
 } from "@/lib/biochar-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
+
+const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
+const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 // ============================================
 // Transfer Flow Visual
@@ -162,6 +170,7 @@ export function BiocharProductForm({
   const formId = useId();
   const isEditMode = !!product;
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const storageLocationDialog = useQuickAddDialog();
 
   const form = useForm({
     resolver: zodResolver(biocharProductFormSchema),
@@ -249,18 +258,37 @@ export function BiocharProductForm({
     }
   }, [selectedFormulationId, setValue]);
 
-  // Auto-fill mass from linked production run
+  // Prefill mass + production date from the linked production run (create mode
+  // only). Re-applies when a different run is selected — previously the mass
+  // kept the prior run's value, leaving the product inconsistent with its
+  // linked run (#46) — but never overwrites a field the user edited themselves.
+  const lastPrefilledRunIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (product || dirtyFields.massKg || linkedRunPreview?.biocharOutputKg == null) return;
+    if (product) return;
+    if (!linkedProductionRunId || !linkedRunPreview) return;
+    if (lastPrefilledRunIdRef.current === linkedProductionRunId) return;
+    lastPrefilledRunIdRef.current = linkedProductionRunId;
 
-    const currentMass = getValues("massKg");
-    if (currentMass === undefined || currentMass === null) {
+    if (!dirtyFields.massKg && linkedRunPreview.biocharOutputKg != null) {
       setValue("massKg", linkedRunPreview.biocharOutputKg, {
         shouldDirty: false,
         shouldValidate: false,
       });
     }
-  }, [dirtyFields.massKg, getValues, linkedRunPreview, product, setValue]);
+    if (!dirtyFields.productionDate && linkedRunPreview.date) {
+      setValue("productionDate", linkedRunPreview.date, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+  }, [
+    dirtyFields.massKg,
+    dirtyFields.productionDate,
+    linkedProductionRunId,
+    linkedRunPreview,
+    product,
+    setValue,
+  ]);
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
@@ -451,8 +479,8 @@ export function BiocharProductForm({
       {/* Destination + Product Details */}
       <FormSection title="Destination & Product">
 
-        {/* Formulation drives the bin filter, so it comes first. Leaving it empty
-            produces a pure-biochar product and limits the bin list to pure bins. */}
+        {/* Formulation drives ingredient-bin rows and the destination bin filter.
+            Leaving it empty produces a pure-biochar product. */}
         <FormField
           id="formulationId"
           label="Formulation"
@@ -474,6 +502,9 @@ export function BiocharProductForm({
             )}
           />
         </FormField>
+
+        {/* Ingredient Bins */}
+        <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -503,12 +534,20 @@ export function BiocharProductForm({
                     type: "product_bin",
                     formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                   }}
+                  allowCreate
+                  createLabel="Add New Bin"
+                  onCreateNew={() => storageLocationDialog.open()}
                 />
               )}
             />
           </FormField>
 
-          <FormField id="productionDate" label="Production Date" error={errors.productionDate?.message}>
+          <FormField
+            id="productionDate"
+            label="Production Date"
+            error={errors.productionDate?.message}
+            helperText={isEditMode ? undefined : "Prefilled from the selected production run"}
+          >
             <FormInput
               id="productionDate"
               type="date"
@@ -520,9 +559,22 @@ export function BiocharProductForm({
         </div>
       </FormSection>
 
-      {/* Ingredient Bins */}
-      <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
       </form>
+
+      {selectedFacilityId && (
+        <StorageLocationQuickAddDialog
+          isOpen={storageLocationDialog.isOpen}
+          onClose={storageLocationDialog.close}
+          onSuccess={(entity) => {
+            setValue("storageLocationId", entity.id, SET_VALUE_OPTS);
+            storageLocationDialog.close();
+          }}
+          defaultBinType="product_bin"
+          allowedTypes={PRODUCT_BIN_QUICK_ADD_TYPES}
+          defaultFormulationId={selectedFormulationId || undefined}
+          facilityId={selectedFacilityId}
+        />
+      )}
 
       {/* Extension content (e.g. transport legs) — always before the CTA */}
       {children}
