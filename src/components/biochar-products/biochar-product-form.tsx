@@ -14,12 +14,17 @@ import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
+import {
+  StorageLocationQuickAddDialog,
+  useQuickAddDialog,
+} from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import {
   biocharProductFormSchema,
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
+import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
 import {
@@ -27,6 +32,9 @@ import {
   useBiocharComposition,
 } from "@/lib/biochar-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
+
+const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
+const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 // ============================================
 // Transfer Flow Visual
@@ -162,6 +170,7 @@ export function BiocharProductForm({
   const formId = useId();
   const isEditMode = !!product;
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const storageLocationDialog = useQuickAddDialog();
 
   const form = useForm({
     resolver: zodResolver(biocharProductFormSchema),
@@ -468,14 +477,9 @@ export function BiocharProductForm({
             )}
           </div>
         )}
-      </div>
 
-      {/* Destination + Product Details */}
-      <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Destination & Product</SectionLabel>
-
-        {/* Formulation drives the bin filter, so it comes first. Leaving it empty
-            produces a pure-biochar product and limits the bin list to pure bins. */}
+        {/* Formulation drives ingredient-bin rows and the destination bin filter.
+            Leaving it empty produces a pure-biochar product. */}
         <FormField
           id="formulationId"
           label="Formulation"
@@ -497,6 +501,14 @@ export function BiocharProductForm({
             )}
           />
         </FormField>
+
+        {/* Ingredient Bins */}
+        <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
+      </div>
+
+      {/* Destination + Product Details */}
+      <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <SectionLabel>Destination & Product</SectionLabel>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -526,6 +538,9 @@ export function BiocharProductForm({
                     type: "product_bin",
                     formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                   }}
+                  allowCreate
+                  createLabel="Add New Bin"
+                  onCreateNew={() => storageLocationDialog.open()}
                 />
               )}
             />
@@ -548,9 +563,22 @@ export function BiocharProductForm({
         </div>
       </div>
 
-      {/* Ingredient Bins */}
-      <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
       </form>
+
+      {selectedFacilityId && (
+        <StorageLocationQuickAddDialog
+          isOpen={storageLocationDialog.isOpen}
+          onClose={storageLocationDialog.close}
+          onSuccess={(entity) => {
+            setValue("storageLocationId", entity.id, SET_VALUE_OPTS);
+            storageLocationDialog.close();
+          }}
+          defaultBinType="product_bin"
+          allowedTypes={PRODUCT_BIN_QUICK_ADD_TYPES}
+          defaultFormulationId={selectedFormulationId || undefined}
+          facilityId={selectedFacilityId}
+        />
+      )}
 
       {/* Extension content (e.g. transport legs) — always before the CTA */}
       {children}
