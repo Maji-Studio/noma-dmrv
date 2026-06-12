@@ -84,6 +84,16 @@ test.describe("Order + Delivery UI CRUD", () => {
       seededData.customerLocation.id
     );
 
+    // Selecting a location surfaces the read-only details panel with the
+    // stored facility distance and its provenance (issue #196). The mini map
+    // is not asserted — it needs a MapTiler key absent in hermetic CI.
+    await expect(
+      adminPage.getByTestId("order-location-details")
+    ).toBeVisible({ timeout: 8000 });
+    await expect(
+      adminPage.getByTestId("order-location-distance")
+    ).toContainText("25 km from");
+
     // Packaging
     await adminPage.selectOption('select[name="packaging"]', "loose");
 
