@@ -6,7 +6,7 @@
  * `src/schemas/biochar-products.ts` validates input shaped like `IngredientBin`.
  */
 
-export const COMPOSITION_BIN_TYPE = "ingredient_bin" as const;
+export const COMPOSITION_BIN_TYPE = "feedstock_bin" as const;
 
 /**
  * Shape mirrors `z.infer<typeof ingredientBinFormSchema>` in
