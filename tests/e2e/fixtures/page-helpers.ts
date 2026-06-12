@@ -19,6 +19,27 @@ export async function waitForSideSheetClose(page: Page) {
   });
 }
 
+/**
+ * Dismiss the "Link Isometric project" dialog that auto-opens for admins
+ * right after a facility is created (facility-list.tsx — intentional,
+ * optional prompt). It mounts only once its mapping payload loads, so wait
+ * briefly and dismiss if present; absence (e.g. payload fetch failed) is
+ * fine because the link is optional by design.
+ */
+export async function dismissCertifierLinkDialog(page: Page) {
+  const linkDialog = page
+    .getByRole("dialog")
+    .filter({ hasText: "Link Isometric project" });
+  const appeared = await linkDialog
+    .waitFor({ state: "visible", timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) {
+    await linkDialog.getByRole("button", { name: "Close" }).click();
+    await linkDialog.waitFor({ state: "hidden", timeout: 5000 });
+  }
+}
+
 /** Click an EntitySelect trigger scoped to a field label within the dialog, then click an option by ID */
 export async function selectEntity(
   page: Page,
