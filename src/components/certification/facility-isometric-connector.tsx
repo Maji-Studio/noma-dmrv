@@ -193,7 +193,7 @@ export function FacilityIsometricConnector({
       {mapping ? (
         <p className="body-small text-[var(--color-text-secondary)]">
           Connected to{" "}
-          <span className="text-[var(--color-text-primary)] font-semibold">
+          <span className="body-small-bold text-[var(--color-text-primary)]">
             {connectedProjectName ?? currentProjectId}
           </span>{" "}
           ·{" "}
@@ -266,7 +266,7 @@ export function FacilityIsometricConnector({
         <div className="flex flex-col gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber-subtle)] p-16">
           <p className="body-small text-[var(--color-text-primary)]">
             This project is already linked to{" "}
-            <strong className="font-semibold">
+            <strong className="body-small-bold">
               {linkedElsewhere.join(", ")}
             </strong>
             . Submissions from both facilities will target the same Isometric
@@ -298,7 +298,7 @@ export function FacilityIsometricConnector({
             />
             <span>
               I understand this links the facility to the{" "}
-              <strong className="font-semibold">production</strong> Isometric
+              <strong className="body-small-bold">production</strong> Isometric
               registry. Future submissions from this facility will use
               production.
             </span>

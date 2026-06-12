@@ -14,6 +14,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
 import type { EntitySelectProps, EntityOption } from "./types";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -421,15 +422,16 @@ export function EntitySelect({
           />
         </button>
         {value && !disabled && (
-          <button
-            type="button"
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={handleClear}
             aria-label="Clear selection"
             data-testid="entity-select-clear"
-            className="absolute right-[32px] p-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            className="absolute right-[32px] h-24 w-24 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
           >
             <XIcon className="size-16" />
-          </button>
+          </Button>
         )}
       </div>
 

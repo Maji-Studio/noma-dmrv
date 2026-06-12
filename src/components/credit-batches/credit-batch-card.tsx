@@ -6,11 +6,10 @@ import {
   PencilSimple,
   Trash,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui";
+import { Button, StatusBadge } from "@/components/ui";
 import {
   formatCreditBatchStatus,
   formatDurabilityOption,
-  getStatusColor,
   type CreditBatchStatus,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
@@ -29,7 +28,6 @@ export function CreditBatchCard({
   onEdit,
   onDelete,
 }: CreditBatchCardProps) {
-  const statusColors = getStatusColor(creditBatch.status as CreditBatchStatus);
   const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
   const hasPendingCo2e =
     (creditBatch.co2eStoredPreview?.missingInputs.length ?? 0) > 0;
@@ -46,11 +44,12 @@ export function CreditBatchCard({
             <Certificate size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          <span
-            className={`px-8 py-4 text-[var(--text-xs)] font-medium ${statusColors.bg} ${statusColors.text}`}
-          >
-            {formatCreditBatchStatus(creditBatch.status as CreditBatchStatus)}
-          </span>
+          <StatusBadge
+            status={creditBatch.status as CreditBatchStatus}
+            label={formatCreditBatchStatus(
+              creditBatch.status as CreditBatchStatus
+            )}
+          />
         </div>
 
         {/* Crediting period + facility */}

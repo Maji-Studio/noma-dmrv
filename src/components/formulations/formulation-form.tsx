@@ -183,15 +183,15 @@ export function FormulationForm({
               <span className="body-small font-medium text-[var(--color-text-secondary)]">
                 Ingredient {index + 1}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="destructive"
+                size="icon"
                 onClick={() => remove(index)}
                 disabled={isSubmitting}
                 aria-label={`Remove ingredient ${index + 1}`}
-                className="h-28 w-28 flex items-center justify-center text-[var(--color-signal-red)] hover:bg-[var(--color-signal-red)]/10 transition-colors"
               >
                 <Trash size={16} weight="bold" />
-              </button>
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">

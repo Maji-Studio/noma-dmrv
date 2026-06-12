@@ -180,24 +180,24 @@ export function ProductionRunReadingTable({
                   {!readOnly && (
                     <td className="py-8 text-right">
                       <div className="flex items-center justify-end gap-4">
-                        <button
-                          type="button"
+                        <Button
+                          variant="noOutline"
+                          size="icon"
                           onClick={() => openEdit(r)}
-                          className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
                           aria-label="Edit reading"
                           disabled={inlineForm.open}
                         >
                           <Pencil size={16} />
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
                           onClick={() => setDeletingId(r.id)}
-                          className="p-6 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
                           aria-label="Delete reading"
                           disabled={inlineForm.open}
                         >
                           <Trash size={16} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   )}

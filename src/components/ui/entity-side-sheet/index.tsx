@@ -13,7 +13,6 @@
 "use client";
 
 import * as React from "react";
-import { cn } from "@/lib/utils";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -135,22 +134,15 @@ function EntitySideSheet({
           <div className="flex items-center gap-12">
             {/* Back arrow: only in edit mode when coming from view (not create) */}
             {mode === "edit" && (
-              <button
-                type="button"
+              <Button
+                variant="noOutline"
+                size="icon"
                 onClick={() => onModeChange("view")}
-                className={cn(
-                  "flex items-center justify-center",
-                  "w-32 h-32 shrink-0",
-                  "text-[var(--color-text-tertiary)]",
-                  "hover:text-[var(--color-text-primary)]",
-                  "hover:bg-[var(--color-background-medium)]",
-                  "transition-colors duration-200",
-                  "cursor-pointer"
-                )}
+                className="shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
                 aria-label="Back to view"
               >
                 <ArrowLeftIcon />
-              </button>
+              </Button>
             )}
             <div className="flex flex-col gap-4 min-w-0">
               <SlideOverPanel.Title>{headerTitle}</SlideOverPanel.Title>
