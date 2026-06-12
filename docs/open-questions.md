@@ -1334,3 +1334,54 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
   files because sharding distributes by file. Consider `fullyParallel: true`
   (shard by test) after confirming no in-file ordering deps, replacing
   networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).
+
+## Tooling & toolchain upgrades (research pass, opened 2026-06-12)
+
+Verified findings from a sourced research sweep (Next 16 / TS 7 / Drizzle v1,
+mid-2026). Already confirmed fine: Turbopack default (no stale flags, no
+webpack config), `reactCompiler: true` opt-in, `src/proxy.ts` rename,
+generate+migrate CI workflow.
+
+### TypeScript 7 (tsgo) for CI typecheck (`tooling/ts7`) — opened 2026-06-12
+
+- TS 7's native Go compiler benchmarks ~7.5–10x faster full type-checks
+  (first-party numbers; partly multi-threading). Beta is live
+  (`@typescript/native-preview`, `tsgo` CLI, supports `--noEmit`); stable was
+  planned ~June 2026 but had not shipped as of 2026-06-12 (npm latest = 6.0.3).
+  Emit gaps are irrelevant here (typecheck-only; SWC/Turbopack transpiles), but
+  no Strada compiler-API support — inventory API consumers first.
+- **Resolve via:** add a non-blocking `tsgo --noEmit` CI job now to validate
+  parity against the 60+-table schema and Zod-heavy types; flip the blocking
+  typecheck to TS 7 once stable ships (S).
+  Sources: devblogs.microsoft.com/typescript/announcing-typescript-7-0-beta,
+  …/progress-on-typescript-7-december-2025.
+
+### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`) — opened 2026-06-12
+
+- v1 is at `1.0.0-rc.3` (2026-05-18; stable line still 0.45.x). Bundles a full
+  drizzle-kit rewrite (introspection ~10s → <1s — relevant at 60+ tables),
+  migrations folder v3 (journal.json removed, per-migration folders, ends git
+  conflicts on migrations), and Relational Queries v2 (breaking; official
+  v1→v2 guide). Release notes warn "something will definitely break".
+- **Resolve via:** do NOT adopt at RC. When stable ships, dedicated upgrade
+  branch; the no-prod-data reseed-over-migrate stance makes the
+  migrations-folder restructure cheap if done before launch (M).
+- Related, available now on 0.45/kit 0.31: first-class Postgres RLS
+  (`pgPolicy` auto-enables RLS) — candidate defense-in-depth layer for the
+  planned multi-tenancy `organizationId` scoping (ADR 0010).
+
+### Cache Components pilot (`app/cache-components`) — opened 2026-06-12
+
+- Next 16 caching is fully opt-in via `cacheComponents: true` ('use cache' +
+  PPR model; `cacheLife`/`cacheTag` now stable, old PPR flags removed). For an
+  auth-gated, facility-scoped app there's no urgency, and no verified
+  real-world adoption evidence for auth-heavy apps yet.
+- **Resolve via:** selective pilot on read-heavy views (dashboard,
+  chain-of-custody roll-ups) when perf data justifies it; not codebase-wide (M).
+
+### Unverified research areas needing a follow-up pass — opened 2026-06-12
+
+Lint tooling (Biome 2 / oxlint vs ESLint 9), Vitest 4 browser mode, Playwright
+1.58+ features (test agents, trace tooling), OpenAPI contract testing for the
+Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance updates —
+the research sweep produced no adversarially-verified claims in these areas.
