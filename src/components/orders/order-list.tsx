@@ -15,7 +15,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { OrderForm } from "./order-form";
 import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
@@ -75,8 +75,8 @@ function createColumns(
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-8">
-          <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(row.original); }} className="h-32 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors">Edit</button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }} className="h-32 px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small transition-colors">Delete</button>
+          <Button variant="default" size="small" onClick={(e) => { e.stopPropagation(); onEdit(row.original); }}>Edit</Button>
+          <Button variant="destructive" size="small" onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }}>Delete</Button>
         </div>
       ),
       enableSorting: false,
@@ -246,14 +246,13 @@ export function OrderList() {
         hoverable
         onRowClick={(row) => openView(row)}
         emptyMessage={
-          <div className="flex flex-col items-center justify-center gap-24 py-48">
-            <Package size={48} className="text-[var(--color-text-tertiary)]" />
-            <div className="text-center">
-              <h3 className="title-heading-3 mb-1">{hasActiveFilters ? "No orders found" : "No orders yet"}</h3>
-              <p className="body-small text-[var(--color-text-secondary)]">{hasActiveFilters ? "Try adjusting your search or filters." : "Create your first order to get started."}</p>
-            </div>
-            {!hasActiveFilters && <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />Create Order</Button>}
-          </div>
+          <EmptyState
+            padding="md"
+            icon={<Package size={48} />}
+            title={hasActiveFilters ? "No orders found" : "No orders yet"}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first order to get started."}
+            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />Create Order</Button> : undefined}
+          />
         }
       >
         <DataTable.Toolbar>

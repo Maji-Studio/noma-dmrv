@@ -206,7 +206,7 @@ export function FacilityCertifierDialog({
           <div className="flex flex-col gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber-subtle)] p-16">
             <p className="body-small text-[var(--color-text-primary)]">
               This project is already linked to{" "}
-              <strong className="font-semibold">
+              <strong className="body-small-bold">
                 {linkedHintForSelected?.join(", ")}
               </strong>
               . Submissions from both facilities will target the same Isometric

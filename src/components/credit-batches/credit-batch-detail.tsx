@@ -15,9 +15,9 @@ import { formatSafeDate } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   formatCreditBatchStatus,
-  getStatusColor,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import {
@@ -123,7 +123,6 @@ export function CreditBatchDetail({
     );
   }
 
-  const statusColors = getStatusColor(creditBatch.status);
   const existingBatches = (allBatches ?? []).map((b) => ({
     id: b.id,
     code: b.code,
@@ -147,11 +146,10 @@ export function CreditBatchDetail({
               {formatSafeDate(creditBatch.endDate)}
             </p>
           </div>
-          <span
-            className={`px-8 py-4 text-[var(--text-xs)] font-medium ${statusColors.bg} ${statusColors.text}`}
-          >
-            {formatCreditBatchStatus(creditBatch.status)}
-          </span>
+          <StatusBadge
+            status={creditBatch.status}
+            label={formatCreditBatchStatus(creditBatch.status)}
+          />
         </div>
       </header>
 

@@ -7,6 +7,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/client";
+import { Button } from "@/components/ui/button";
 
 export default function VerifyEmailPage() {
   // Get email from sessionStorage on mount (set during set-password flow)
@@ -65,14 +66,14 @@ export default function VerifyEmailPage() {
         <p className="body-medium text-[var(--color-text-secondary)]">
           We&apos;ve sent a verification link to{" "}
           {email ? (
-            <span className="font-semibold">{email}</span>
+            <span className="body-bold">{email}</span>
           ) : (
-            <span className="font-semibold">your email</span>
+            <span className="body-bold">your email</span>
           )}
         </p>
       </div>
 
-      <div className="bg-[var(--color-background-white)] rounded-[8px] border border-[var(--color-border-primary)] p-32 space-y-24 shadow-sm">
+      <div className="bg-[var(--color-background-white)] rounded-none border border-[var(--color-border-primary)] p-32 space-y-24 shadow-sm">
         <div className="space-y-16">
           <p className="body-small text-[var(--color-text-secondary)]">
             Please check your inbox and click the verification link to activate
@@ -108,14 +109,16 @@ export default function VerifyEmailPage() {
           <p className="body-small text-[var(--color-text-secondary)] mb-16">
             Didn&apos;t receive the email?
           </p>
-          <button
+          <Button
             type="button"
+            variant="noOutline"
+            size="small"
             onClick={handleResendVerification}
-            disabled={resending || !email}
-            className="body-small text-[var(--clr-dark-purple)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!email}
+            busy={resending}
           >
-            {resending ? "Sending..." : "Resend verification email"}
-          </button>
+            Resend verification email
+          </Button>
         </div>
 
         <div className="text-center pt-16">

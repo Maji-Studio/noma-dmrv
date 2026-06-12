@@ -330,6 +330,7 @@ async function seedDemoData() {
           storageMethod: 'covered_bin',
           storageDescription: 'Climate-controlled covered storage with moisture monitoring',
           facilityId: ids.facilityMoshi,
+          feedstockTypeId: ids.feedstockWoodchips,
         },
         {
           id: ids.storageCharMoshi,
@@ -359,6 +360,7 @@ async function seedDemoData() {
           capacityKg: 25000,
           storageMethod: 'covered_bin',
           facilityId: ids.facilityArusha,
+          feedstockTypeId: ids.feedstockWoodchips,
         },
         {
           id: ids.storageCharArusha,

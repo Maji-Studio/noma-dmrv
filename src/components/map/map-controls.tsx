@@ -7,14 +7,16 @@
  */
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
+// Overrides on top of Button (variant="noOutline" size="icon"): 36px square,
+// ink-on-paper that inverts on hover, hairline divider between stacked buttons.
 const CONTROL_BUTTON_CLASS =
-  "flex size-36 items-center justify-center label-button uppercase " +
+  "h-36 w-36 " +
   "bg-[var(--color-background-white)] text-[var(--clr-dark-purple)] " +
   "border-b border-[var(--clr-dark-purple-30)] last:border-b-0 " +
   "hover:bg-[var(--clr-dark-purple)] hover:text-[var(--color-background-white)] " +
-  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)] " +
-  "cursor-pointer transition-colors";
+  "focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)]";
 
 export interface MapControlsProps {
   onZoomIn: () => void;
@@ -41,24 +43,38 @@ export function MapControls({
         className
       )}
     >
-      <button type="button" aria-label="Zoom in" className={CONTROL_BUTTON_CLASS} onClick={onZoomIn}>
+      <Button
+        variant="noOutline"
+        size="icon"
+        aria-label="Zoom in"
+        className={CONTROL_BUTTON_CLASS}
+        onClick={onZoomIn}
+      >
         +
-      </button>
-      <button type="button" aria-label="Zoom out" className={CONTROL_BUTTON_CLASS} onClick={onZoomOut}>
+      </Button>
+      <Button
+        variant="noOutline"
+        size="icon"
+        aria-label="Zoom out"
+        className={CONTROL_BUTTON_CLASS}
+        onClick={onZoomOut}
+      >
         −
-      </button>
+      </Button>
       {onFit ? (
-        <button
-          type="button"
+        <Button
+          variant="noOutline"
+          size="icon"
           aria-label="Fit map to markers"
           className={CONTROL_BUTTON_CLASS}
           onClick={onFit}
         >
           FIT
-        </button>
+        </Button>
       ) : null}
-      <button
-        type="button"
+      <Button
+        variant="noOutline"
+        size="icon"
         aria-label="Toggle satellite imagery"
         aria-pressed={satOn}
         className={cn(
@@ -68,7 +84,7 @@ export function MapControls({
         onClick={onToggleSat}
       >
         SAT
-      </button>
+      </Button>
     </div>
   );
 }

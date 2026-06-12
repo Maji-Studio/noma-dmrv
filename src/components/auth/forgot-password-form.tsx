@@ -53,7 +53,7 @@ export function ForgotPasswordForm() {
             role="status"
             aria-live="polite"
           >
-            <h3 className="body-medium font-semibold mb-16">Check your email</h3>
+            <h3 className="body-bold mb-16">Check your email</h3>
             <p className="body-small">
               If an account exists with that email address, we&apos;ve sent a
               password reset link. Please check your inbox and follow the

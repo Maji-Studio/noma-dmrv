@@ -35,11 +35,12 @@ import {
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -49,8 +50,6 @@ import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
-  formatProductionRunStatus,
-  getStatusColorClass,
   type ProductionRunFormData,
   type ProductionRunFilterData,
   type ProductionRunStatus,
@@ -63,22 +62,15 @@ const TOAST_GAP_PREVIEW_LIMIT = 3;
 // Status Badge
 // ============================================
 
-function StatusBadge({ status }: { status: ProductionRunStatus }) {
-  const colorClass = getStatusColorClass(status);
-  const label = formatProductionRunStatus(status);
-  const icons: Record<ProductionRunStatus, React.ReactNode> = {
-    draft: <Warning size={14} weight="fill" />,
-    running: <Clock size={14} weight="fill" />,
-    complete: <CheckCircle size={14} weight="fill" />,
-    void: <Prohibit size={14} weight="fill" />,
-  };
+const STATUS_ICONS: Record<ProductionRunStatus, React.ReactNode> = {
+  draft: <Warning size={14} weight="fill" />,
+  running: <Clock size={14} weight="fill" />,
+  complete: <CheckCircle size={14} weight="fill" />,
+  void: <Prohibit size={14} weight="fill" />,
+};
 
-  return (
-    <span className={`inline-flex items-center gap-4 px-8 py-2 text-[var(--text-xs)] font-medium ${colorClass}`}>
-      {icons[status]}
-      {label}
-    </span>
-  );
+function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
+  return <StatusBadge status={status} icon={STATUS_ICONS[status]} />;
 }
 
 // ============================================
@@ -123,7 +115,7 @@ function createColumns(
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
     },
     {
       id: "certifyReadiness",
@@ -149,20 +141,22 @@ function createColumns(
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-8">
-          <button
+          <Button
             type="button"
+            variant="default"
+            size="small"
             onClick={(e) => { e.stopPropagation(); onEdit(row.original); }}
-            className="h-32 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors"
           >
             Edit
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="destructive"
+            size="small"
             onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }}
-            className="h-32 px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small transition-colors"
           >
             Delete
-          </button>
+          </Button>
         </div>
       ),
       enableSorting: false,
@@ -338,21 +332,20 @@ export function ProductionRunList() {
         hoverable
         onRowClick={(row) => openView(row)}
         emptyMessage={
-          <div className="flex flex-col items-center justify-center gap-24 py-48">
-            <Fire size={48} className="text-[var(--color-text-tertiary)]" />
-            <div className="text-center">
-              <h3 className="title-heading-3 mb-1">{hasActiveFilters ? "No production runs found" : "No production runs yet"}</h3>
-              <p className="body-small text-[var(--color-text-secondary)]">
-                {hasActiveFilters ? "Try adjusting your search or filters." : "Create your first production run to start tracking pyrolysis batches."}
-              </p>
-            </div>
-            {!hasActiveFilters && (
-              <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
-                Create Production Run
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            padding="md"
+            icon={<Fire size={48} />}
+            title={hasActiveFilters ? "No production runs found" : "No production runs yet"}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first production run to start tracking pyrolysis batches."}
+            action={
+              !hasActiveFilters ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <Plus size={20} weight="bold" />
+                  Create Production Run
+                </Button>
+              ) : undefined
+            }
+          />
         }
       >
         <DataTable.Toolbar>
@@ -439,7 +432,7 @@ export function ProductionRunList() {
               fields: [
                 { label: "Code", value: sideSheet.entity.code },
                 { label: "Date", value: formatDateField(sideSheet.entity.date) },
-                { label: "Status", value: <StatusBadge status={sideSheet.entity.status} /> },
+                { label: "Status", value: <RunStatusBadge status={sideSheet.entity.status} /> },
                 {
                   label: "Certifier",
                   value: (

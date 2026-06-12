@@ -37,7 +37,7 @@ export function ProductionConfirmation({
         />
         <span>
           I understand that this will {actionLabel}.{" "}
-          <strong className="font-semibold">{consequenceLabel}</strong>
+          <strong className="body-small-bold">{consequenceLabel}</strong>
         </span>
       </label>
       <FormError message={errorMessage} />

@@ -5,6 +5,7 @@ import { File, Trash, ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
 import {
@@ -124,15 +125,16 @@ export function ProductionReadingsDocuments({
                 <ArrowSquareOut size={16} weight="bold" />
               </a>
               {!readOnly && (
-                <button
-                  type="button"
+                <Button
+                  variant="destructive"
+                  size="icon"
                   onClick={() => setDeletingId(doc.id)}
                   disabled={deleteMutation.isPending}
-                  className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors duration-300 disabled:opacity-50"
+                  className="shrink-0"
                   aria-label={`Delete ${doc.fileName}`}
                 >
                   <Trash size={16} weight="bold" />
-                </button>
+                </Button>
               )}
             </li>
           ))}

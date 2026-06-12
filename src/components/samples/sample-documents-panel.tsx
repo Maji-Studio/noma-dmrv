@@ -5,6 +5,7 @@ import { File, Eye, EyeSlash, Trash, ArrowSquareOut } from "@phosphor-icons/reac
 import { ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
 import {
@@ -127,8 +128,9 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
               >
                 <ArrowSquareOut size={16} weight="bold" />
               </a>
-              <button
-                type="button"
+              <Button
+                variant="noOutline"
+                size="icon"
                 onClick={() =>
                   handleToggleVisibility(
                     doc.id,
@@ -136,7 +138,7 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
                   )
                 }
                 disabled={setVisibilityMutation.isPending}
-                className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-interaction)] transition-colors duration-300 disabled:opacity-50"
+                className="shrink-0"
                 aria-label={
                   doc.visibility === "private"
                     ? "Make public"
@@ -153,16 +155,17 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
                 ) : (
                   <Eye size={16} weight="bold" />
                 )}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="destructive"
+                size="icon"
                 onClick={() => setDeletingId(doc.id)}
                 disabled={deleteMutation.isPending}
-                className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors duration-300 disabled:opacity-50"
+                className="shrink-0"
                 aria-label={`Delete ${doc.fileName}`}
               >
                 <Trash size={16} weight="bold" />
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

@@ -114,7 +114,6 @@ export async function createStorageLocationFn(
 
     const prefixMap: Record<string, string> = {
       feedstock_bin: "FB",
-      ingredient_bin: "IB",
       biochar_bin: "BB",
       product_bin: "PB",
     };
