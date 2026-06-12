@@ -1314,9 +1314,14 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
   action — repeated real API calls and a degraded page instead of a calm
   "project not resolvable" state. Surfaced in CI when fake-project specs ran
   with real creds loaded; same behavior would hit prod on a stale/revoked link.
-- **Resolve via:** treat non-retryable 4xx (404/422) from project-scoped
-  listings as "link not resolvable" — return an empty/flagged result instead of
-  throwing, and surface a warning chip on the registry-connection card (M).
+- **Already handled:** `ghg-statements-list.tsx` derives `mappingFailed` from
+  the failing summary query and shows a warning banner, and
+  `deriveRemovalReadiness` (`src/lib/certification/readiness.ts`) already
+  blocks readiness when `!facts.hasMapping`.
+- **Still open:** `safeListIfConfigured` (`src/fn/certification/shared.ts`),
+  the project-scoped listing path — treat 404/422 as non-retryable, return an
+  empty/flagged result instead of throwing, and surface a warning chip on the
+  registry-connection card (M).
 
 ### Hermetic local stub for the Isometric client (`testing/isometric-stub`) — opened 2026-06-10
 
@@ -1326,6 +1331,20 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
 - **Resolve via:** a test-only base-URL override + a small fixture stub server
   (started from Playwright globalSetup) serving canned project/template
   responses, so the certification flows run hermetically everywhere (M).
+
+### Unprompted "Link Isometric project" modal after facility create, CI prod build only (`facilities/phantom-link-dialog`) — opened 2026-06-10
+
+- `FacilityCertifierDialog` opens unprompted over `/facilities` after facility
+  create, on GitHub-runner production builds only (6/6 there, 0 local repros).
+  Needs reproduction and a bisect; if real, it's a user-facing bug. Full CI
+  forensics (PR #167 run analysis, trace/DOM evidence, replication matrix)
+  archived in
+  [docs/archive/2026-06-10-phantom-link-dialog-investigation.md](archive/2026-06-10-phantom-link-dialog-investigation.md).
+- **Interim quarantine:** `facilities.spec.ts` dismisses the modal if present
+  (loud `phantom-link-dialog` test annotation); remove when resolved.
+- **Resolve via:** CI-side instrumentation — temporary `--trace on` first
+  attempt, or a debug step dumping the React owner chain of the dialog node
+  when present (component names need a non-minified build to be readable) (M).
 
 ### Playwright hygiene (`testing/e2e-hygiene`) — opened 2026-06-10
 
