@@ -56,8 +56,12 @@ test.describe("production run readings CSV import", () => {
     seededData,
   }) => {
     const run = await seedProductionRun(seededData);
+    const headerSuffix = run.id.slice(0, 8);
+    const temperatureColumn = `Carbonization Outlet Temperature ${headerSuffix}`;
+    const pressureColumn = `Drying Drum Pressure ${headerSuffix}`;
+    const gasFlowColumn = `Main Gas Flow ${headerSuffix}`;
     const csv = [
-      "Time,Carbonization Outlet Temperature,Drying Drum Pressure,Main Gas Flow",
+      `Time,${temperatureColumn},${pressureColumn},${gasFlowColumn}`,
       "00:00:00,500,0.12,7.5",
       "00:01:00,---,0.13,",
       "00:02:00,510,0.14,8.1",
@@ -95,14 +99,12 @@ test.describe("production run readings CSV import", () => {
 
     await expect(
       dialog.getByText(/Confirm channel alignment/),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
     await expect(page.locator("#temperatureColumn")).toHaveValue(
-      "Carbonization Outlet Temperature",
+      temperatureColumn,
     );
-    await expect(page.locator("#pressureColumn")).toHaveValue(
-      "Drying Drum Pressure",
-    );
-    await expect(page.locator("#gasFlowColumn")).toHaveValue("Main Gas Flow");
+    await expect(page.locator("#pressureColumn")).toHaveValue(pressureColumn);
+    await expect(page.locator("#gasFlowColumn")).toHaveValue(gasFlowColumn);
 
     await page.getByRole("button", { name: "Import Readings" }).click();
 

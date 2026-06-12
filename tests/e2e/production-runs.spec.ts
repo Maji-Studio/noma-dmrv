@@ -37,7 +37,6 @@ test.describe("Production Run + Sample UI CRUD", () => {
     const today = new Date().toISOString().split("T")[0];
     await page.fill('input[name="date"]', today);
 
-    await page.waitForLoadState("networkidle");
     await selectEntity(
       page,
       "Source Bin",
@@ -50,7 +49,6 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
-    await page.waitForLoadState("networkidle");
   }
 
   test("create production run via UI form", async ({
