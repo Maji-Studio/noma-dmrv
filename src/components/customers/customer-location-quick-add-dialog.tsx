@@ -58,6 +58,13 @@ export function CustomerLocationQuickAddDialog({
       return;
     }
 
+    // The server's createCustomerLocationSchema requires a non-empty address —
+    // catch it here so the operator sees the gap before submitting.
+    if (!formData.address.trim()) {
+      setError("Address / description is required");
+      return;
+    }
+
     if (formData.gpsLatitude.trim() === "" || formData.gpsLongitude.trim() === "") {
       setError("GPS latitude and longitude are required");
       return;
@@ -83,7 +90,7 @@ export function CustomerLocationQuickAddDialog({
         country: formData.country.trim(),
         stateRegion: formData.stateRegion.trim() || null,
         city: formData.city.trim() || null,
-        address: formData.address.trim() || "",
+        address: formData.address.trim(),
         gpsLatitude: lat,
         gpsLongitude: lng,
         isDefault: false,
@@ -204,7 +211,8 @@ export function CustomerLocationQuickAddDialog({
 
           <div className="flex flex-col gap-16">
             <label htmlFor="location-address" className="label-medium">
-              Address / Description
+              Address / Description{" "}
+              <span className="text-[var(--color-signal-red)]">*</span>
             </label>
             <input
               id="location-address"
@@ -222,7 +230,8 @@ export function CustomerLocationQuickAddDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-24">
             <div className="flex flex-col gap-16">
               <label htmlFor="location-latitude" className="label-medium">
-                GPS Latitude
+                GPS Latitude{" "}
+                <span className="text-[var(--color-signal-red)]">*</span>
               </label>
               <input
                 id="location-latitude"
@@ -245,7 +254,8 @@ export function CustomerLocationQuickAddDialog({
 
             <div className="flex flex-col gap-16">
               <label htmlFor="location-longitude" className="label-medium">
-                GPS Longitude
+                GPS Longitude{" "}
+                <span className="text-[var(--color-signal-red)]">*</span>
               </label>
               <input
                 id="location-longitude"
