@@ -246,6 +246,61 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedGetLineage).toHaveBeenCalledWith(USER_ID, "app-1");
   });
 
+  it("flags resolved production runs that have no telemetry readings", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: null }),
+    );
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([template("rvt_1")]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: {
+        id: "app-1",
+        code: "APP-1",
+        biocharAppliedDryTons: 1,
+      } as never,
+      delivery: { id: "del-1" } as never,
+      order: null,
+      biocharProduct: {
+        id: "bp-1",
+        code: "BP-1",
+        linkedProductionRunId: "pr-1",
+      } as never,
+      productionRun: { id: "pr-1", code: "PR-1" } as never,
+      reactor: null,
+      feedstocks: [],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        biocharDryMassKg: 1000,
+        samples: [],
+        readingsCount: 0,
+      } as never,
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.entityReadinessGaps).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Production run PR-1: Telemetry readings"),
+      ]),
+    );
+  });
+
   it("flags missingDefaultTemplateId when the saved template is not in the list (drift)", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "rvt_stale" }),
