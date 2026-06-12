@@ -41,8 +41,10 @@ export interface StorageLocationWithFacility extends StorageLocation {
   facilityName: string;
   feedstockInventory: {
     batchCount: number;
+    pendingBatchCount: number;
     feedstockTypes: string[];
     currentDryMassKg: number;
+    pendingDryMassKg: number;
     estimatedWetMassKg: number | null;
     estimatedMoisturePercent: number | null;
   };
@@ -129,12 +131,20 @@ async function enrichStorageLocationRows(
         db
           .select({
             storageLocationId: feedstocks.storageLocationId,
-            batchCount: count(),
+            batchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
+            pendingBatchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
             feedstockTypes: sql<string | null>`
               string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})
             `,
-            totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
-            totalWetKg: sql<number>`COALESCE(SUM(${feedstocks.massWetKg}), 0)`,
+            totalDryKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+            `,
+            totalWetKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massWetKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+            `,
+            pendingDryKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
+            `,
           })
           .from(feedstocks)
           .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
@@ -340,6 +350,7 @@ async function enrichStorageLocationRows(
     const feedstockConsumptionRow = feedstockConsumptionMap.get(row.id);
     const totalDryKg = Number(feedstockInventoryRow?.totalDryKg ?? 0);
     const totalWetKg = Number(feedstockInventoryRow?.totalWetKg ?? 0);
+    const pendingDryKg = Number(feedstockInventoryRow?.pendingDryKg ?? 0);
     const consumedDryKg = Number(feedstockConsumptionRow?.consumedDryKg ?? 0);
     const currentDryMassKg = Math.max(0, totalDryKg - consumedDryKg);
     const moistureRatio =
@@ -365,8 +376,10 @@ async function enrichStorageLocationRows(
       facilityName: row.facilityName ?? "",
       feedstockInventory: {
         batchCount: Number(feedstockInventoryRow?.batchCount ?? 0),
+        pendingBatchCount: Number(feedstockInventoryRow?.pendingBatchCount ?? 0),
         feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
         currentDryMassKg,
+        pendingDryMassKg: pendingDryKg,
         estimatedWetMassKg,
         estimatedMoisturePercent:
           moistureRatio != null ? moistureRatio * 100 : null,
