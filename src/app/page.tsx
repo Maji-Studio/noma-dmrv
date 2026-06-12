@@ -8,7 +8,7 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="container-max flex flex-col items-center justify-center min-h-screen gap-48 py-48 text-center">
         <div className="flex flex-col items-center gap-24 max-w-4xl">
            <span className="title-chapter-title text-[var(--clr-purple)]">Maji Noema</span>

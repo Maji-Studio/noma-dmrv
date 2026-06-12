@@ -37,6 +37,8 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 
 ### Common Patterns
 
+- **Page Field:** the body sits on the warm `--bg` (#FFF9F7); panels and cards are pure white (`--paper`). Never re-apply a gray page background.
+- **Status Colors:** entity status uses the `--st-*` ramp (ok/run/wait/off/bad); `--color-signal-green` is deprecated.
 - **Auth Card Padding:** `p-32` (32px) standard for auth page cards
 - **Entity Card Body Padding:** `p-20` (20px) for entity cards (facility, credit batch, etc.)
 - **Entity Card Footer:** `px-20 py-12` with `border-t border-[var(--color-border-tertiary)]`
@@ -56,6 +58,52 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 
 ## Color System
 
+### Theme Foundation (Warm Light)
+
+Adopted 2026-06-12 (visual design refresh). The app sits on a warm field with
+pure-white panels and near-black "ink" text. Light mode only; the tokens are
+structured so a `html[data-theme]` flip remains possible later.
+
+```css
+--bg: #fff9f7;                       /* Page field — clr-orange @ 5% over white */
+--paper: #ffffff;                    /* Panel/card surface */
+--ink: var(--clr-dark-purple-100);   /* Primary ink */
+```
+
+Plum-tinted hairlines for **emphasized** borders and dividers; the gray border
+tokens remain for quiet chrome:
+
+```css
+--edge: #480b73;
+--edge-soft: rgba(72, 11, 115, 0.45);
+```
+
+Accent triad with **ink variants** — use the `-ink` token whenever accent
+colors render as text on light backgrounds (passes 4.5:1 contrast):
+
+```css
+--acc-prod: var(--clr-orange);   --acc-prod-ink: #bc4519;   /* Production */
+--acc-infra: var(--clr-purple);  --acc-infra-ink: #480b73;  /* Infrastructure */
+--acc-dist: var(--clr-pink);     --acc-dist-ink: #a6216e;   /* Distribution */
+```
+
+Status ramp — the canonical palette for status badges, dots, and state text
+(replaces ad-hoc signal-green usage):
+
+```css
+--st-ok: #17744a;               /* Complete, verified, healthy */
+--st-run: #6e2ba8;              /* In progress, running */
+--st-wait: #bc4519;             /* Pending, waiting, attention */
+--st-off: rgba(15, 2, 26, 0.4); /* Inactive, draft, archived */
+--st-bad: #e54552;              /* Failed, error, rejected */
+```
+
+Tinted canvas wash for graph/canvas figure-ground (chain of custody):
+
+```css
+--sea: rgba(72, 11, 115, 0.045);
+```
+
 ### Brand Colors
 
 The Maji brand is built on a dark purple foundation, representing depth, wisdom, and transformation.
@@ -65,10 +113,12 @@ The Maji brand is built on a dark purple foundation, representing depth, wisdom,
 --clr-dark-purple-100: rgba(15, 2, 26, 1);
 --clr-dark-purple-80: rgba(15, 2, 26, 0.8);
 --clr-dark-purple-60: rgba(15, 2, 26, 0.6);
+--clr-dark-purple-50: rgba(15, 2, 26, 0.5);
 --clr-dark-purple-40: rgba(15, 2, 26, 0.4);
 --clr-dark-purple-30: rgba(15, 2, 26, 0.3);
 --clr-dark-purple-20: rgba(15, 2, 26, 0.2);
 --clr-dark-purple-10: rgba(15, 2, 26, 0.1);
+--clr-dark-purple-5: rgba(15, 2, 26, 0.05);
 --clr-dark-purple-1: rgba(15, 2, 26, 0.01);
 ```
 
@@ -78,43 +128,18 @@ Expressive accent colors for brand moments, data visualization, and emotional cu
 
 ```css
 --clr-rose: rgba(255, 178, 210, 1);      /* Soft, nurturing */
---clr-rose-80: rgba(255, 178, 210, 0.8);
---clr-rose-60: rgba(255, 178, 210, 0.6);
---clr-rose-40: rgba(255, 178, 210, 0.4);
---clr-rose-20: rgba(255, 178, 210, 0.2);
---clr-rose-10: rgba(255, 178, 210, 0.1);
-
 --clr-orange: rgba(255, 131, 89, 1);     /* Energetic, warm */
---clr-orange-80: rgba(255, 131, 89, 0.8);
---clr-orange-60: rgba(255, 131, 89, 0.6);
---clr-orange-40: rgba(255, 131, 89, 0.4);
---clr-orange-20: rgba(255, 131, 89, 0.2);
---clr-orange-10: rgba(255, 131, 89, 0.1);
-
 --clr-red: rgba(229, 69, 82, 1);         /* Alert, passion */
---clr-red-80: rgba(229, 69, 82, 0.8);
---clr-red-60: rgba(229, 69, 82, 0.6);
---clr-red-40: rgba(229, 69, 82, 0.4);
---clr-red-20: rgba(229, 69, 82, 0.2);
---clr-red-10: rgba(229, 69, 82, 0.1);
-
 --clr-pink: rgba(166, 33, 110, 1);       /* Bold, creative */
---clr-pink-80: rgba(166, 33, 110, 0.8);
---clr-pink-60: rgba(166, 33, 110, 0.6);
---clr-pink-40: rgba(166, 33, 110, 0.4);
---clr-pink-20: rgba(166, 33, 110, 0.2);
---clr-pink-10: rgba(166, 33, 110, 0.1);
-
 --clr-purple: rgba(72, 11, 115, 1);      /* Deep, mystical */
---clr-purple-80: rgba(72, 11, 115, 0.8);
---clr-purple-60: rgba(72, 11, 115, 0.6);
---clr-purple-40: rgba(72, 11, 115, 0.4);
---clr-purple-20: rgba(72, 11, 115, 0.2);
---clr-purple-10: rgba(72, 11, 115, 0.1);
 ```
 
 **Accent Color Opacity Variants:**
-All accent colors include opacity variants (100, 80, 60, 40, 20, 10) for flexible background usage in badges, overlays, and subtle UI elements.
+Every accent color ships the extended 9-step alpha ramp (Figma variables,
+2026-06-12): `100 / 80 / 60 / 40 / 30 / 20 / 10 / 5 / 1` — e.g.
+`--clr-rose-30`, `--clr-orange-5`, `--clr-orange-1`. The 5 and 1 steps are
+wash/field tints (the warm `--bg` is effectively orange-5 over white); 10–40
+serve badges, overlays, and subtle UI fills.
 
 **Usage:**
 - Rose: Supportive messaging, wellness features
@@ -142,14 +167,20 @@ Neutral colors for UI structure and hierarchy.
 
 ### Signal Colors
 
-System feedback and status indicators.
+System feedback and status indicators. **Prefer the status ramp
+(`--st-ok` / `--st-run` / `--st-wait` / `--st-off` / `--st-bad`, see Theme
+Foundation) for entity status.**
 
 ```css
 --color-signal-red: #e50b0bff;            /* Errors, destructive */
 --color-signal-orange: #f59723ff;         /* Warnings, pending */
 --color-signal-orange-strong: #f59723ff;  /* Strong warning */
 --color-signal-orange-light: #f5972326;   /* Warning background */
+--color-signal-green: var(--st-ok);       /* DEPRECATED — use --st-ok */
+--color-signal-green-light: rgba(23, 116, 74, 0.15); /* DEPRECATED — use an --st-ok tint */
 ```
+
+The `--color-status-success*` family also resolves to `--st-ok` values.
 
 ### Black & White Opacity Variants
 
@@ -200,7 +231,7 @@ These tokens define the functional use of colors across the UI.
 
 ```css
 --color-background-white: var(--color-white-100);        /* Pure white */
---color-background-light: var(--color-gray-50);          /* Page background */
+--color-background-light: var(--color-gray-50);          /* Component insets (zebra rows, inset panels) — page field is --bg */
 --color-background-medium: var(--color-gray-100);        /* Card background */
 --color-background-strong: var(--color-gray-200);        /* Elevated surface */
 --color-background-dark-light: var(--color-gray-700);    /* Dark surface light */

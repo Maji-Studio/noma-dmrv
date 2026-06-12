@@ -523,7 +523,7 @@ export function ChainOfCustodyPage() {
   })();
 
   return (
-    <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="flex flex-col h-screen">
         <header className="shrink-0 px-24 py-16 flex flex-col gap-16 border-b border-[var(--color-border-secondary)]">
           <div className="flex items-start justify-between gap-16">
