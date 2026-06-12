@@ -21,6 +21,7 @@ import {
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 // ============================================
 // Component
@@ -214,6 +215,7 @@ export function SupplierLocationForm({
             id="distanceFromFacilityKm"
             label="Distance to facility (km)"
             error={errors.distanceFromFacilityKm?.message}
+            certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
             helperText="Road distance site → facility. Overrides the supplier's default distance for feedstock from this location."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
