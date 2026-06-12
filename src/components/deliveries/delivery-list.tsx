@@ -260,7 +260,7 @@ export function DeliveryList() {
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
-      ? "Add a new outbound product delivery"
+      ? undefined
       : sideSheetEntity?.customerName || sideSheetEntity?.orderCode || undefined;
 
   return (

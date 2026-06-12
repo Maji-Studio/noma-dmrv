@@ -230,6 +230,55 @@ Styled textarea component:
 />
 ```
 
+### FormSection
+
+The single section block for sheet forms — mono uppercase `SectionLabel` above a
+`space-y-16` field stack, separated from the previous section by a `pt-16`
+hairline divider. Never hand-roll section wrappers; compose sections directly
+under the form element:
+
+```typescript
+<form className="space-y-20">
+  <FormSection title="Run Setup" divider={false}>   {/* first section: no divider */}
+    …fields…
+  </FormSection>
+  <FormSection title="Feedstock" hint="Explanatory text behind an ⓘ icon" certifyRequired>
+    …fields…
+  </FormSection>
+  <FormSection
+    title="Bin Allocations"
+    actions={<Button size="small">Add Bin</Button>}  {/* trailing header chrome */}
+  >
+    …fields…
+  </FormSection>
+  <FormActions onCancel={onCancel} isSubmitting={isSubmitting} />
+</form>
+```
+
+- `divider` (default `true`) — the first section of a form passes `divider={false}`.
+- `hint` / `certifyRequired` forward to `SectionLabel`.
+- `actions` — right-aligned header chrome (an "Add" button, a read-only badge);
+  the label row becomes `flex justify-between`.
+- Read-only detail sheets use the matching `DetailSection`
+  (`@/components/ui/detail-panel`), which mirrors this treatment so the
+  view ↔ edit toggle reads as the same surface.
+
+### Vertical rhythm (spacing rule)
+
+- **`space-y-20`** — standard for all side-sheet forms (top-level form element),
+  sectioned or not. `FormSection` owns all intra-section rhythm (`space-y-16`
+  fields, `pt-16` divider); nothing else sets section spacing.
+- **`space-y-24`** — reserved for full-page and auth forms only.
+- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
+
+### FormActions
+
+The only CTA row — left-aligned, primary action first, sticky by default,
+nothing renders after it. Nested inline forms (child-entity editors) pass
+`sticky={false}`. See the component header in
+`src/components/forms/form-actions.tsx` for the `formId` escape hatch used when
+extension content must render between the fields and the CTA.
+
 ## React Query Integration
 
 ### Mutation with Form

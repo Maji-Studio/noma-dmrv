@@ -7,10 +7,10 @@ import {
   FormActions,
   FormField,
   FormInput,
+  FormSection,
   FormSelect,
   PositionPicker,
   ServerError,
-  SectionLabel,
 } from "@/components/forms";
 import {
   transportLegFormSchema,
@@ -119,7 +119,7 @@ export function TransportLegForm({
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-24">
+    <form onSubmit={submit} className="flex flex-col gap-20">
       <p className="body-small text-[var(--color-text-secondary)]">
         Distance-based leg: we record distance + cargo mass; Isometric applies the
         emission factor (Transportation v1.1 Eq. 3).
@@ -129,8 +129,7 @@ export function TransportLegForm({
         <ServerError message={errors.root.serverError.message} />
       )}
 
-      <div className="flex flex-col gap-16">
-        <SectionLabel>Route</SectionLabel>
+      <FormSection title="Route" divider={false}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <FormField
             id="originName"
@@ -268,10 +267,9 @@ export function TransportLegForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
-      <div className="flex flex-col gap-16">
-        <SectionLabel>Documentation</SectionLabel>
+      <FormSection title="Documentation">
         <p className="body-small text-[var(--color-text-secondary)]">
           Verification evidence (Transportation v1.1 §6) — bill of lading and
           weigh-scale ticket.
@@ -284,7 +282,7 @@ export function TransportLegForm({
             weigh-scale ticket.
           </p>
         )}
-      </div>
+      </FormSection>
 
       <FormActions
         sticky={false}

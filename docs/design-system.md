@@ -44,9 +44,10 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 - **Entity Card Footer:** `px-20 py-12` with `border-t border-[var(--color-border-tertiary)]`
 - **Entity Card Border:** `border border-[var(--color-border-secondary)]` with `hover:border-[var(--color-border-primary)]`
 - **Entity Card Metrics:** `grid grid-cols-3 gap-12` for 3-column metric grids
-- **Form Spacing (side sheet):** `space-y-20` (20px) between form fields in side sheet forms
+- **Page Shell:** every routed page follows the canonical shell — see [Canonical Page Shell](#canonical-page-shell). No bespoke page layouts.
+- **Form Spacing (side sheet):** `space-y-20` (20px) at the form's top level in side-sheet forms
 - **Form Spacing (full page):** `space-y-24` (24px) for auth and full-page forms
-- **Form Section Divider:** `pt-20 border-t border-[var(--color-border-tertiary)]`
+- **Form Sections:** always `FormSection` (`@/components/forms`) — SectionLabel + `space-y-16` fields + `pt-16` hairline divider above every section but the first (`divider={false}`); never hand-roll section wrappers. Read-only sheets mirror it with `DetailSection`. See `docs/forms.md`.
 - **Label Spacing:** `mb-6` (6px) label to input
 - **Header Spacing:** `mb-32` (32px) header to content
 - **Border Radius:** `rounded-none` for most elements (brutalist); only UI primitives (StatusBadge, Card component, Accordion) use radius tokens
@@ -1298,6 +1299,47 @@ back without losing progress; omit `onNavigate` for a display-only rail.
 Steps render `done` (✓) / `active` / `upcoming` states and carry the
 `--clr-pink` certification accent. StepFlow never validates — the parent
 gates forward progress by disabling its own Next button.
+
+### Canonical Page Shell
+
+The single anatomy for every routed page — list pages, rollup pages (Energy),
+and detail pages alike. Reference implementations: `facility-list.tsx`,
+`reactor-list.tsx`, `order-list.tsx`. **Any page that deviates from this shell
+is a bug** (this is how the Energy page drifted: bare-text empty state,
+icon-less KPI cards, off-canon grid breakpoints).
+
+```tsx
+<div className="container-max py-32 flex flex-col gap-32">
+  {/* 1. Header — area eyebrow → title → one-line subtitle → actions */}
+  <PageHeader area="production" title="Orders" subtitle="…" actions={<Button …/>} />
+
+  {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
+    <StatCard title="…" value={…} icon={<Package size={24} weight="bold" />} description="…" isLoading={…} />
+  </div>
+
+  {/* 3. Content — DataTable (framed panel) / card grid / panels */}
+  <DataTable … emptyMessage={<EmptyState padding="md" icon={…} title="…" description="…" action={…} />} />
+</div>
+```
+
+Rules:
+
+- Container is always `container-max py-32 flex flex-col gap-32` — no custom
+  page padding (Chain of Custody's deviation was fixed in Phase 2).
+- KPI strips: `gap-24` grid, `md:grid-cols-2 lg:grid-cols-3` (3 cards) or
+  `lg:grid-cols-4` (4 cards). StatCards always have an icon.
+- Empty, "select a facility", and filtered-empty states use `EmptyState` —
+  never a bare `<p>`. Facility-scoped pages branch the copy:
+  `title={facilityId ? "No X yet" : "Select a facility"}`.
+- In-page section headings (rollup/detail pages) are `title-heading-3`,
+  sentence case (e.g. "Health check", "Per-stage submission preview").
+- Tables/panels never sit flush on the warm field — panel recipe tokens
+  (`--panel-*`, see Hairline Hierarchy & Panel Recipe).
+- Side sheets: header title = entity code (or `Create X` in create mode —
+  **no filler subtitle in create mode**); view/edit subtitle = identifying
+  secondary (name or date). Sections inside sheets use `FormSection`
+  (forms) / `DetailSection` (read-only) — see `docs/forms.md`.
 
 ### PageHeader Component
 

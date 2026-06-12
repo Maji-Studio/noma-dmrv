@@ -7,11 +7,10 @@
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatLocalDateTime } from "@/lib/date-utils";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
-import { Button } from "@/components/ui";
 import {
   productionIncidentFormSchema,
   productionIncidentSeverities,
@@ -19,14 +18,6 @@ import {
   type ProductionIncidentFormData,
 } from "@/schemas/production-incidents";
 import type { ProductionIncidentWithRelations } from "@/data-access/production-incidents";
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-      {children}
-    </h3>
-  );
-}
 
 const severityOptions = productionIncidentSeverities.map((severity) => ({
   value: severity,
@@ -80,9 +71,8 @@ export function ProductionIncidentForm({
   const onFormSubmit = handleSubmit((data) => onSubmit(data));
 
   return (
-    <div className="space-y-24">
-      <div className="space-y-16">
-        <SectionLabel>Incident Details</SectionLabel>
+    <form className="space-y-20" onSubmit={onFormSubmit}>
+      <FormSection title="Incident Details" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -160,10 +150,9 @@ export function ProductionIncidentForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Summary</SectionLabel>
+      <FormSection title="Summary">
 
         <FormField
           id="description"
@@ -206,27 +195,14 @@ export function ProductionIncidentForm({
             {...register("notes")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
-      <div className="flex items-center justify-start gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
-        <Button type="button" variant="primary" disabled={isSubmitting} onClick={onFormSubmit}>
-          {isSubmitting
-            ? "Saving..."
-            : isEditMode
-              ? "Save Changes"
-              : "Add Incident"}
-        </Button>
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-      </div>
-    </div>
+      <FormActions
+        sticky={false}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={isEditMode ? "Save Changes" : "Add Incident"}
+      />
+    </form>
   );
 }

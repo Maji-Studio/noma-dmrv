@@ -8,7 +8,7 @@
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormSelect, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormSelect, FormSection, FormActions } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { Plus, Trash } from "@phosphor-icons/react";
 import {
@@ -98,11 +98,7 @@ export function FormulationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Required Information
-        </h3>
-
+      <FormSection title="Required Information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
@@ -120,14 +116,10 @@ export function FormulationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Biochar Ratio Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Biochar Ratio
-        </h3>
-
+      <FormSection title="Biochar Ratio">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharRatio"
@@ -148,14 +140,12 @@ export function FormulationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Ingredients Section */}
-      <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <div className="flex items-center justify-between">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Ingredients
-          </h3>
+      <FormSection
+        title="Ingredients"
+        actions={
           <Button
             type="button"
             variant="default"
@@ -166,8 +156,8 @@ export function FormulationForm({
             <Plus size={16} weight="bold" />
             Add Ingredient
           </Button>
-        </div>
-
+        }
+      >
         {fields.length === 0 && (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
             No ingredients added. Click &quot;Add Ingredient&quot; to add amendment components.
@@ -268,14 +258,10 @@ export function FormulationForm({
             )}
           </div>
         )}
-      </div>
+      </FormSection>
 
       {/* Description Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Additional Information
-        </h3>
-
+      <FormSection title="Additional Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
             <FormField
@@ -293,7 +279,7 @@ export function FormulationForm({
             </FormField>
           </div>
         </div>
-      </div>
+      </FormSection>
 
       <FormActions
         onCancel={onCancel}

@@ -32,26 +32,33 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
+import { SectionLabel } from "@/components/forms/section-label";
 
 /* -------------------------------------------------------------------------------------------------
- * DetailSection - Gray background container with title
+ * DetailSection - Flat section with mono label, mirrors FormSection so the
+ * view ↔ edit mode toggle reads as the same surface (hairline divider above
+ * every section but the first).
  * -----------------------------------------------------------------------------------------------*/
 
 interface DetailSectionProps {
   title: string;
   children: React.ReactNode;
+  /** Hairline divider above the section (default) — first section disables it. */
+  divider?: boolean;
   className?: string;
 }
 
-function DetailSection({ title, children, className }: DetailSectionProps) {
+function DetailSection({ title, children, divider = true, className }: DetailSectionProps) {
   return (
-    <div className={cn("flex flex-col gap-16", className)}>
-      <h3 className="title-heading-4 text-[var(--color-text-primary)]">
-        {title}
-      </h3>
-      <div className="bg-[var(--color-background-light)] p-16 rounded-[8px] flex flex-col gap-16">
-        {children}
-      </div>
+    <div
+      className={cn(
+        "flex flex-col gap-16",
+        divider && "border-t border-[var(--color-border-tertiary)] pt-16",
+        className
+      )}
+    >
+      <SectionLabel>{title}</SectionLabel>
+      {children}
     </div>
   );
 }
@@ -144,9 +151,13 @@ function EntityDetailPanel({
           )}
         </SlideOverPanel.Header>
 
-        <SlideOverPanel.Body className="flex flex-col gap-32">
-          {sections.map((section) => (
-            <DetailSection key={section.title} title={section.title}>
+        <SlideOverPanel.Body className="flex flex-col gap-20">
+          {sections.map((section, sectionIdx) => (
+            <DetailSection
+              key={section.title}
+              title={section.title}
+              divider={sectionIdx > 0}
+            >
               {/* Render fields in rows of 2 */}
               {chunkFields(section.fields).map((row, rowIdx) => (
                 <DetailRow key={rowIdx}>

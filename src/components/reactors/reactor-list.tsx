@@ -270,7 +270,7 @@ export function ReactorList() {
     sideSheetMode === "create" ? "Create Reactor" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
-    sideSheetMode === "create" ? "Add a new pyrolysis reactor" : sideSheetEntity?.identifier;
+    sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">

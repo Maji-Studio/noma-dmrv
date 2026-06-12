@@ -6,8 +6,9 @@
  */
 "use client";
 
+import { Fire, GasPump, Lightning } from "@phosphor-icons/react";
 import { ServerError } from "@/components/forms";
-import { PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { StatCard } from "@/components/ui/stat-card";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityEnergyTotals } from "@/hooks/use-production-runs";
@@ -58,15 +59,25 @@ export function EnergySummary() {
 
   if (!facilityId) {
     return (
-      <p className="body-medium text-[var(--color-text-secondary)]">
-        Select a facility to view its energy summary.
-      </p>
+      <div className="flex flex-col gap-32">
+        <PageHeader
+          area="production"
+          title="Energy"
+          subtitle="Facility energy use feeding Isometric submission datapoints"
+        />
+        <EmptyState
+          padding="md"
+          icon={<Lightning size={48} />}
+          title="Select a facility"
+          description="Choose a facility from the sidebar to view its energy summary"
+        />
+      </div>
     );
   }
 
   if (totalsError && !totals) {
     return (
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-32">
         <PageHeader
           area="production"
           title="Energy"
@@ -88,7 +99,7 @@ export function EnergySummary() {
       <PageHeader
         area="production"
         title="Energy"
-        subtitle={`Rolled up across ${runCount} production run${runCount === 1 ? "" : "s"}. This is what feeds the energy datapoints of an Isometric submission.`}
+        subtitle="Facility energy use feeding Isometric submission datapoints"
       />
 
       {totalsError && (
@@ -101,22 +112,32 @@ export function EnergySummary() {
         />
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard
-          title="Grid electricity"
+          title="Production Runs"
+          value={runCount}
+          icon={<Fire size={24} weight="bold" />}
+          description="Rolled up in this summary"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Grid Electricity"
           value={`${fmt(electricityKwh)} kWh`}
+          icon={<Lightning size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
-          title="Genset diesel"
+          title="Genset Diesel"
           value={`${fmt(gensetLitres)} L`}
+          icon={<GasPump size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
-          title="Startup / plant diesel"
+          title="Startup / Plant Diesel"
           value={`${fmt(startupLitres)} L`}
+          icon={<GasPump size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />

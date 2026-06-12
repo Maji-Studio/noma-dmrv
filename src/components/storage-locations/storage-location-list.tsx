@@ -476,9 +476,7 @@ export function StorageLocationList() {
         onModeChange={handleModeChange}
         title={sideSheet?.mode === "create" ? "Create Storage Bin" : sideSheet?.entity?.code ?? ""}
         subtitle={
-          sideSheet?.mode === "create"
-            ? "Fill in the form to create a new storage bin."
-            : sideSheet?.entity?.name
+          sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name
         }
         editLabel="Edit Storage Bin"
         sections={

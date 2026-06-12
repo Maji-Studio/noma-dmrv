@@ -440,7 +440,7 @@ export function SampleList() {
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? "Fill in the form to create a new lab sample." : viewSubtitle}
+        subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {

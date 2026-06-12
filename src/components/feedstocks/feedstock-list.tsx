@@ -305,7 +305,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
-      ? "Add a new biomass delivery with bin allocation"
+      ? undefined
       : sideSheetEntity
         ? [
             sideSheetEntity.feedstockTypeName,
