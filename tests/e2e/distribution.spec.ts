@@ -11,7 +11,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
-import { selectEntity } from "./fixtures/page-helpers";
+import { selectEntity, selectEntityByText } from "./fixtures/page-helpers";
 
 // ============================================
 // Test Constants
@@ -35,8 +35,6 @@ async function selectBiocharProduct(page: Page, productId: string) {
 // ============================================
 
 test.describe("Order + Delivery UI CRUD", () => {
-  let createdOrderId: string;
-
   // -------------------------------------------------------
   // Orders — Create
   // -------------------------------------------------------
@@ -183,10 +181,6 @@ test.describe("Order + Delivery UI CRUD", () => {
       timeout: 10000,
     });
 
-    // Grab the orderId from the first row we just created via the select options
-    // that will be rendered in the delivery form. We identify the order by the
-    // customer name displayed in the orderId select (format: "CustomerName - Date").
-
     // ---- Navigate to Deliveries and open the creation form ----
 
     await adminPage.goto(deliveriesUrl);
@@ -203,25 +197,9 @@ test.describe("Order + Delivery UI CRUD", () => {
     // Status
     await adminPage.selectOption('select[name="status"]', "upcoming");
 
-    // Order — select by the customer name that should be part of the option label
-    // (DeliveryForm renders options as "CustomerName - Date")
-    const orderSelect = adminPage.locator('select[name="orderId"]');
-    await orderSelect.waitFor({ state: "attached", timeout: 8000 });
-
-    // Find the option whose text includes our seeded customer name
-    const matchingOption = orderSelect.locator(
-      `option:text-matches("${seededData.customer.name}", "i")`
-    );
-
-    // Wait for options to populate (async fetch)
-    await expect(matchingOption.first()).toBeAttached({ timeout: 8000 });
-
-    // Get the value attribute of the matching option and use it to select
-    const optionValue = await matchingOption.first().getAttribute("value");
-    expect(optionValue).not.toBeNull();
-    createdOrderId = optionValue!;
-
-    await adminPage.selectOption('select[name="orderId"]', createdOrderId);
+    // Order — a searchable EntitySelect (order code primary, customer in the
+    // meta line), so pick the option showing our seeded customer name.
+    await selectEntityByText(adminPage, "Order", seededData.customer.name);
 
     // Wet mass
     await adminPage.fill('input[name="deliveredWetMassKg"]', "95");
