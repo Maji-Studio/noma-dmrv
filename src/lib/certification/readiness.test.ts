@@ -204,6 +204,24 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     );
   });
 
+  it("uses the specific production-lineage blocker when one is known", () => {
+    const r = deriveRemovalReadiness(
+      ready({
+        hasSubmittableRuns: false,
+        productionReadinessGap: {
+          kind: "noApplications",
+          detail: "No applications linked to this batch",
+          fixTarget: "batchDetails",
+        },
+      }),
+    );
+    expect(r.state).toBe("blocked");
+    expect(r.reasons).toContain("No applications linked to this batch");
+    expect(r.reasons).not.toContain(
+      "No production data linked yet — nothing to submit",
+    );
+  });
+
   it("blocks when entity certifier fields are incomplete", () => {
     const r = deriveRemovalReadiness(
       ready({ entityReadinessGaps: ["Production run PR-1: Electricity"] }),
@@ -315,6 +333,22 @@ describe("buildRemovalPreflightChecklist", () => {
     );
     expect(checkFor(checks, "production").status).toBe("unmet");
     expect(checkFor(checks, "production").detail).toContain("nothing to submit");
+  });
+
+  it("shows the specific production-lineage blocker in preflight", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({
+        hasSubmittableRuns: false,
+        productionReadinessGap: {
+          kind: "biocharProductMissingRun",
+          detail: "Biochar product BP-1 is not linked to a production run",
+          fixTarget: "biocharProducts",
+        },
+      }),
+    );
+    expect(checkFor(checks, "production").detail).toBe(
+      "Biochar product BP-1 is not linked to a production run",
+    );
   });
 
   it("flags entity-level certifier gaps", () => {
