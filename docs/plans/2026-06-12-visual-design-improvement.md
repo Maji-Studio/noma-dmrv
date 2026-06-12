@@ -1,0 +1,78 @@
+# Visual Design Improvement Plan
+
+**Date:** 2026-06-12
+**Status:** Approved direction, phased rollout
+**Inspiration source:** `~/Downloads/Maji noma dMRV` (Maji UX studio concept screens + `theme.css` token layer)
+
+## Direction (decided 2026-06-12)
+
+1. **Warm light theme adopted globally** — `#FFF9F7` (clr-orange @ 5% over white) page field, pure-white panels, plum-tinted hairline borders. Light mode only; dark mode deferred.
+2. **Chain of custody stays light** — no dark canvas; instead stronger accent usage, readable nodes, colored Sankey.
+3. **Dashboard: full build** — target is the `01-dash` inspiration mock (KPI strip with sparklines, verification queue, feedstock mix, custody ribbon).
+4. **Navigation: keep the dark plum sidebar** — refine typography, group accents, and the facility switcher; no top-bar migration.
+
+## Why
+
+The app and the inspiration already share DNA (GT-Flexa, mono uppercase labels, brutalist corners, plum). The gap is **temperature, depth, and discipline**: a cold gray field with white-on-near-white panels, three competing status-badge implementations, three row-action styles, two form grammars, a placeholder dashboard, and a chain-of-custody view that reads as a wireframe. The inspiration's token layer closes most of the gap cheaply.
+
+---
+
+## Phase 0 — Theme foundation (tokens only, app-wide effect)
+
+Port the inspiration token layer into `src/app/globals.css`:
+
+- `--bg: #FFF9F7` page field (replaces `--color-background-light: #fafafa` at the page level), `--paper: #FFFFFF` panels, `--ink: #0F021A`.
+- Plum-tinted hairlines: `--edge: #480B73`, `--edge-soft: rgba(72,11,115,0.45)` — used for emphasized borders/dividers; existing gray border tokens remain for quiet chrome.
+- Status ramp with ink variants (replaces ad-hoc signal-green usage):
+  `--st-ok: #17744A` · `--st-run: #6E2BA8` · `--st-wait: #BC4519` · `--st-off: rgba(15,2,26,0.4)` · `--st-bad: #E54552`.
+- Accent triad **ink variants** for text-on-light (`--acc-prod-ink: #BC4519` etc.) so accent text always passes contrast.
+- **Sync accent alpha ramps to the new token set** (Figma variables, 2026-06-12): every accent color ships the extended ramp `100 / 80 / 60 / 40 / 30 / 20 / 10 / 5 / 1` (e.g. `--clr-rose-30`, `--clr-orange-5`, `--clr-orange-1`), not the current 6-step ramp. The 5/1 steps are the wash/field tints (the warm `--bg` is effectively orange-5 over white).
+- Update `docs/design-system.md` to match; deprecate `--color-signal-green` in favor of `--st-ok`.
+
+**Acceptance:** every routed page sits on the warm field with white panels; no component-level changes required yet.
+
+## Phase 1 — Component debt that blocks everything else
+
+- `Button`: add `destructive` variant (red border/text, red-10 hover) and a quiet icon-button size; then migrate the **86 raw `<button>`s in 45 files** (worst: `customer-form`, `data-table`, `map-controls`, `facility-selector`, `form-file-upload`).
+- **One StatusBadge.** Fold the hand-rolled badges in `production-run-list`, `credit-batch-list`, `reactor-list` into `@/components/ui/status-badge` (add icon support); map all states to the Phase-0 status ramp.
+- **EmptyState everywhere.** 14 of 16 entities hand-roll empties; migrate them to the shared component.
+- Fixes from the token audit: `rounded-[8px]` on the 5 auth pages → `rounded-none`; hardcoded `bg-[#0f021a]` / `bg-[#0c0114]` in `facility-selector` / `mobile-nav` → tokens; stray `font-semibold` / `text-[12px]` → typography classes.
+
+## Phase 2 — One page shell + quiet tables
+
+- **Canonical list-page shell:** mono uppercase area eyebrow (PRODUCTION / DISTRIBUTION / …) → `title-heading-2` title → one-line subtitle (every page gets one) → KPI strip → toolbar → list. Fix deviants: Production Runs/Orders (missing subtitle), Energy (sentence-case title, divergent KPI card style), Chain of Custody (different page padding).
+- **One KPI card** style (gray-filled today vs white-bordered on Energy) with an optional sparkline slot — this becomes the dashboard building block.
+- **Quiet the tables:** one row-action pattern across all 11 table entities (recommend: actions revealed on row hover / overflow menu; destructive variant for delete; kill the always-on red outlines). Row click opens the detail sheet consistently.
+- Normalize the credit-batches grid breakpoint (`lg:` → `xl:grid-cols-3`).
+
+## Phase 3 — Side-sheet & form system (sampling first — worst surface in the app)
+
+- **One form grammar — the production-run style is the keeper:** small mono uppercase section labels, tight 2-col grid, derived-value strips, CERT chips, sticky footer. **Rebuild the Create/Edit Sample sheet first** (explicit user call-out): kill the giant uppercase accordion headers; six stacked collapsed sections → labeled sections with progressive disclosure only where field count demands it. The sample-sheet rebuild may be pulled forward and shipped alongside Phase 1 if desired.
+- Extract shared `FormSection` / section-label primitives so sheets can't drift again.
+- Document the spacing rule (`space-y-20` standard; `space-y-24` only for full-page/auth forms) in `docs/forms.md`.
+- Side-sheet chrome: consistent header (code + date subtitle), section treatment, and footer CTA row across all 14 entity sheets; detail-sheet section headings get the same mono label treatment.
+
+## Phase 4 — Chain of custody (light, but no longer a wireframe)
+
+- Tinted canvas (`--sea`-style plum/rose wash at ~4%) + dotted grid so the graph has figure/ground; panels stay white.
+- **Node redesign:** stronger accent-triad coding (left edge + header chip with ink-variant text), readable primary line at default zoom, kg labels on edges only at sufficient zoom.
+- **Sankey:** full color ramp per stage (rose biomass → orange production → red biochar → purple field use, per the inspiration's carbon-flow ribbon); relocate the mass-balance warning out of the column-title row.
+- **Map:** never render a white void — graceful no-basemap fallback (tinted field + grid + node markers still plotted) and a visible "basemap unavailable" note; align page padding with the app shell.
+
+## Phase 5 — Dashboard + credit batch detail
+
+- **Dashboard (the `01-dash` mock):** breadcrumb eyebrow + display headline; 5-card KPI strip with sparklines and delta badges (`StatCard` exists, unused); verification/needs-attention queue (reuse certification overview data); feedstock mix bars; custody flow ribbon (reuse Sankey aggregates); date-range toggle.
+- **Credit batch detail page:** proper detail header (code, status badge, period, facility, KPI row: CO2e stored / weight / buffer / applications); clear separation of read panels vs the edit form (today inputs sit directly in the "detail" view); health check restyled as a compact checklist strip.
+
+---
+
+## Sequencing & verification
+
+Each phase is a separate branch/PR in order (0→5); 0+1 can land together. After each UI phase: `pnpm lint`, `pnpm build`, Playwright smoke (`pnpm test:e2e`), plus a browser pass at 1440px and mobile width (mobile guard spec: `tests/e2e/mobile-responsive.spec.ts`).
+
+## Open questions (decide per-phase, recommendations noted)
+
+- Row actions: hover-reveal vs always-visible overflow menu (rec: overflow menu — touch-friendly).
+- Suppliers/Customers "View" button vs row-click-to-detail everywhere (rec: row click, drop View).
+- Dashboard data: live queries from existing hooks vs new aggregate endpoints (decide when building Phase 5).
+- Dark mode: deferred; tokens are structured so a `html[data-theme]` flip remains possible later.
