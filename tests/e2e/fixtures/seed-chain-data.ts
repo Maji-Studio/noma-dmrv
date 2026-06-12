@@ -133,6 +133,7 @@ export async function seedChainData(
         name: `E2E Feedstock Bin ${testRunId}`,
         type: "feedstock_bin",
         facilityId: facilityId,
+        feedstockTypeId: feedstockTypeId,
       });
 
       await tx.insert(schema.storageLocations).values({

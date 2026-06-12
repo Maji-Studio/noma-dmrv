@@ -37,7 +37,7 @@ export function BinAllocationRow({
   canRemove,
   onRemove,
   disabled,
-  binTypeFilter = "feedstock_bin,ingredient_bin",
+  binTypeFilter = "feedstock_bin",
   facilityId,
   feedstockTypeId,
   onCreateNew,
