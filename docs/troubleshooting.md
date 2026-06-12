@@ -262,6 +262,21 @@ pnpm tsc --noEmit
 - For Vercel/deployment platforms: set env vars in dashboard
 - Check `src/config/env.ts` validates all required vars
 
+### Debugging Against the Wrong Environment Assumptions
+
+**Symptoms**
+- "Works in staging but not locally" (or vice versa) with no code difference
+- Auth/DB debugging goes in circles; fixes target config that was never wrong
+
+**Why**
+The three 1Password env items (`local` / `staging` / `production` in vault `Environment Variables`) **intentionally differ** — local has its own `DATABASE_URL` (Docker Postgres), `NEXT_PUBLIC_APP_URL` (localhost:3100), dev admin credentials, and test toggles like `DISABLE_RATE_LIMIT`. Local is not a copy of staging.
+
+**Fixes**
+- Before debugging env/auth issues, write down which environment you're in and which values you're assuming, then verify against the matching 1Password item
+- `pnpm env:check` reports drift between templates and 1Password
+- `pnpm env:local` re-injects `.env.local` from the `local` item
+- 1Password CLI (`op`) requires interactive desktop approval — agents/sandboxed shells can't sign in; run `op` commands manually when an agent is debugging
+
 ## Dependency Issues
 
 ### pnpm install Fails
