@@ -131,6 +131,8 @@ export const optionalPercent = z.preprocess(
 export const SOIL_TEMPERATURE_MIN_C = -50;
 export const SOIL_TEMPERATURE_MAX_C = 60;
 
+const SOIL_TEMPERATURE_RANGE_MESSAGE = `Soil temperature must be between ${SOIL_TEMPERATURE_MIN_C} and ${SOIL_TEMPERATURE_MAX_C} °C`;
+
 /**
  * Optional default-soil-temperature field (°C), shared by customer-location
  * and facility-emission-config forms so empty/whitespace inputs normalize
@@ -139,8 +141,8 @@ export const SOIL_TEMPERATURE_MAX_C = 60;
 export const defaultSoilTemperatureSchema = optionalNumber.pipe(
   z
     .number()
-    .min(SOIL_TEMPERATURE_MIN_C, "Soil temperature must be between -50 and 60 °C")
-    .max(SOIL_TEMPERATURE_MAX_C, "Soil temperature must be between -50 and 60 °C")
+    .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
+    .max(SOIL_TEMPERATURE_MAX_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
     .nullable()
     .optional(),
 );
