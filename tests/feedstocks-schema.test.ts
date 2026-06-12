@@ -21,6 +21,41 @@ const validFeedstockInput = {
 };
 
 describe("feedstockFormSchema", () => {
+  it("keeps truck weighing masses on valid feedstock intake input", () => {
+    const result = feedstockFormSchema.safeParse({
+      ...validFeedstockInput,
+      truckMassOnArrivalKg: 15_250,
+      truckMassOnDepartureKg: 13_750,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.truckMassOnArrivalKg).toBe(15_250);
+      expect(result.data.truckMassOnDepartureKg).toBe(13_750);
+    }
+  });
+
+  it("rejects truck departure mass greater than arrival mass", () => {
+    const result = feedstockFormSchema.safeParse({
+      ...validFeedstockInput,
+      truckMassOnArrivalKg: 13_750,
+      truckMassOnDepartureKg: 15_250,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["truckMassOnDepartureKg"],
+            message:
+              "Truck mass after unloading cannot exceed mass before unloading",
+          }),
+        ]),
+      );
+    }
+  });
+
   it("uses friendly required messages for required number fields", () => {
     const result = feedstockFormSchema.safeParse({
       ...validFeedstockInput,
