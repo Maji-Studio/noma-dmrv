@@ -455,7 +455,7 @@ export function ProductionRunForm({
                 placeholder="Select bin..."
                 disabled={isSubmitting || !watchedFacilityId}
                 error={!!errors.feedstockStorageLocationId}
-                filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "feedstock_bin" } : undefined}
+                filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "feedstock_bin", feedstockTypeUsage: "pyrolysis" } : undefined}
               />
             )}
           />

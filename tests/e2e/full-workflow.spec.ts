@@ -130,6 +130,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       type: "feedstock_bin",
       facilityId: ids.facility,
       capacityKg: 5000,
+      feedstockTypeId: ids.feedstockType,
     });
 
     // 4. Create Storage Location for biochar (linked to facility)

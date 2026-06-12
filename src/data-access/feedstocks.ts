@@ -27,7 +27,7 @@ import {
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 
-const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin", "ingredient_bin"] as const;
+const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -338,11 +338,11 @@ export async function createFeedstock(
     if (bin.facilityId !== data.facilityId) {
       throw new SafeError(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
-    if (!isFeedstockIntakeBinType(bin.type)) {
-      throw new SafeError(
-        `Feedstock materials must be allocated to a feedstock or ingredient bin, not a ${bin.type.replace("_", " ")}.`
-      );
-    }
+      if (!isFeedstockIntakeBinType(bin.type)) {
+        throw new SafeError(
+          `Feedstock materials must be allocated to a feedstock bin, not a ${bin.type.replace("_", " ")}.`
+        );
+      }
     if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
       throw new SafeError(
         `Storage bin already holds a different feedstock type. Each bin can only hold one type.`
@@ -487,7 +487,7 @@ export async function updateFeedstock(
 
       if (!isFeedstockIntakeBinType(bin.type)) {
         throw new SafeError(
-          "Feedstock materials must be allocated to a feedstock or ingredient bin."
+          "Feedstock materials must be allocated to a feedstock bin."
         );
       }
       if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {

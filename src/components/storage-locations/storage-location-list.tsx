@@ -56,7 +56,7 @@ function formatDateOrFallback(value: Date | null) {
 }
 
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
-  if (storageLocation.type === "feedstock_bin" || storageLocation.type === "ingredient_bin") {
+  if (storageLocation.type === "feedstock_bin") {
     return [
       {
         label: "Current Dry Mass",
@@ -369,7 +369,6 @@ export function StorageLocationList() {
               <option value="feedstock_bin">Feedstock Bin</option>
               <option value="biochar_bin">Biochar Bin</option>
               <option value="product_bin">Product Bin</option>
-              <option value="ingredient_bin">Ingredient Bin</option>
             </select>
           </div>
 

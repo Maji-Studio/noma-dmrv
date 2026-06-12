@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, doublePrecision, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
-import { feedstockEligibilityStatus, feedstockStatus } from './common';
+import { feedstockEligibilityStatus, feedstockStatus, feedstockTypeUsage } from './common';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
 import { vehicles } from './logistics';
@@ -67,6 +67,7 @@ export const feedstockTypes = pgTable('feedstock_types', {
   code: text('code').notNull().unique(),
   name: text('name').notNull().unique(), // e.g., "Mixed Wood Chips", "Hardwood"
   category: text('category').notNull(), // forestry | agricultural | industrial | municipal | invasive
+  usage: feedstockTypeUsage('usage').notNull().default('pyrolysis'),
   description: text('description'),
   registryUrl: text('registry_url'), // Link to Isometric registry page
 

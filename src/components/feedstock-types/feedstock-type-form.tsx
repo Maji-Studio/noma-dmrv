@@ -10,7 +10,9 @@ import { FormActions } from "@/components/forms/form-actions";
 import {
   feedstockTypeFormSchema,
   FEEDSTOCK_CATEGORY_OPTIONS,
+  FEEDSTOCK_TYPE_USAGE_OPTIONS,
   feedstockCategories,
+  feedstockTypeUsages,
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
 import type { FeedstockType } from "@/db/schema/feedstock";
@@ -81,6 +83,9 @@ export function FeedstockTypeForm({
       category: feedstockType?.category && (feedstockCategories as readonly string[]).includes(feedstockType.category)
         ? (feedstockType.category as FeedstockTypeFormData["category"])
         : undefined,
+      usage: feedstockType?.usage && (feedstockTypeUsages as readonly string[]).includes(feedstockType.usage)
+        ? (feedstockType.usage as FeedstockTypeFormData["usage"])
+        : "pyrolysis",
       description: feedstockType?.description ?? "",
       // No form field anymore (UI-only removal) — kept in form state so
       // edit-mode submits pass the persisted value through unchanged.
@@ -165,6 +170,22 @@ export function FeedstockTypeForm({
               error={!!errors.name}
               autoFocus
               {...register("name")}
+            />
+          </FormField>
+
+          <FormField
+            id="usage"
+            label="Usage"
+            error={errors.usage?.message}
+            required
+          >
+            <FormSelect
+              id="usage"
+              placeholder="Select usage..."
+              disabled={isSubmitting}
+              error={!!errors.usage}
+              options={FEEDSTOCK_TYPE_USAGE_OPTIONS}
+              {...register("usage")}
             />
           </FormField>
         </div>
