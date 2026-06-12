@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEntityById } from "@/hooks/use-entities";
@@ -38,6 +39,9 @@ import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+
+const isFeedstockCertifyField = (field: string) =>
+  isCertifyFormField("feedstock", field);
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
@@ -280,6 +284,7 @@ export function FeedstockForm({
               id="transportDistanceKm"
               label="Transport distance (km)"
               error={errors.transportDistanceKm?.message}
+              certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
               helperText={
                 storedDistanceKm != null
                   ? "Autofilled from the supplier's default location or supplier default; override if the route differs."
@@ -347,6 +352,7 @@ export function FeedstockForm({
               error={errors.totalWetMassKg?.message}
               helperText="As-received weight of the entire delivery"
               required
+              certifyRequired={isFeedstockCertifyField("totalWetMassKg")}
             >
               <FormInput
                 id="totalWetMassKg"
