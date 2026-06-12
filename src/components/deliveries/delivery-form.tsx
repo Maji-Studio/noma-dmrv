@@ -14,7 +14,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -77,28 +77,17 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const isEditMode = !!delivery;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
-  // Fetch orders for dropdown
+  // The order picker fetches its own options (FormEntitySelect); this query
+  // only backs the stored-distance prefill for the selected order below.
   const { data: ordersData } = useOrdersForSelect(contextFacilityId ?? undefined, {
     enabled: !!contextFacilityId,
   });
   const orders = ordersData ?? [];
   const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
 
-  const orderOptions = orders.map((o) => ({
-    value: o.id,
-    label:
-      [
-        o.customerName,
-        o.biocharProductCode,
-        o.quantityKg ? `${o.quantityKg} kg` : undefined,
-        o.orderDate ? new Date(o.orderDate).toLocaleDateString() : undefined,
-      ]
-        .filter(Boolean)
-        .join(" — ") || "Order",
-  }));
-
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -285,16 +274,19 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         </div>
 
-        <FormField id="orderId" label="Order" error={errors.orderId?.message}>
-          <FormSelect
-            id="orderId"
-            placeholder="Select order..."
-            disabled={isSubmitting}
-            error={!!errors.orderId}
-            options={orderOptions}
-            {...register("orderId")}
-          />
-        </FormField>
+        {/* Disabled until facility context resolves — an unscoped fetch would
+            list other facilities' orders, and the stored-distance prefill
+            below only covers the context facility's orders. */}
+        <FormEntitySelect
+          control={control}
+          name="orderId"
+          label="Order"
+          entityType="order"
+          placeholder="Select order..."
+          required
+          disabled={isSubmitting || !contextFacilityId}
+          filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+        />
       </div>
 
       {/* Mass & Moisture Section */}

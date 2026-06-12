@@ -539,15 +539,8 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="deliveryDate"]', today);
       await page.selectOption('select[name="status"]', "upcoming");
 
-      // Select the first available order
-      const orderSelect = page.locator('select[name="orderId"]');
-      await orderSelect.waitFor({ state: "attached", timeout: 8000 });
-      const orderOptions = orderSelect.locator("option:not([value=''])");
-      await expect(orderOptions.first()).toBeAttached({ timeout: 8000 });
-      const orderValue = await orderOptions.first().getAttribute("value");
-      if (orderValue) {
-        await orderSelect.selectOption(orderValue);
-      }
+      // Select the first available order (FormEntitySelect, not a native <select>)
+      await selectFirstEntity(page, "Order");
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
 
