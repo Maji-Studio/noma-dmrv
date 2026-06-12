@@ -104,14 +104,15 @@ export function LoginForm() {
           <p className="body-small text-[var(--color-text-secondary)] mb-16">
             Your email address needs to be verified.
           </p>
-          <button
+          <Button
             type="button"
+            variant="noOutline"
+            size="small"
             onClick={handleResendVerification}
-            disabled={resendLoading}
-            className="body-small text-[var(--clr-dark-purple)] hover:underline disabled:opacity-50"
+            busy={resendLoading}
           >
-            {resendLoading ? "Sending..." : "Resend verification email"}
-          </button>
+            Resend verification email
+          </Button>
         </div>
       )}
 

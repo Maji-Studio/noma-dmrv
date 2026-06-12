@@ -13,11 +13,15 @@ const buttonVariants = cva(
         primary: "bg-[var(--color-interaction)] text-white hover:bg-[var(--color-interaction-hover)] active:bg-[var(--color-interaction-active)] border-transparent",
         accent: "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent-active)] border-transparent",
         noOutline: "border-transparent bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-surface-medium)]",
+        destructive: "border border-[var(--st-bad)] bg-transparent text-[var(--st-bad)] hover:bg-[var(--clr-red-10)] active:bg-[var(--clr-red-20)]",
       },
       size: {
         default: "h-[40px] px-16 gap-10",
         small: "h-[32px] px-12 gap-8 text-[length:var(--text-xs)]",
         large: "h-[48px] px-20 xl:h-[60px] xl:px-24 gap-12",
+        /* Quiet icon-only button — pair with variant="noOutline" (or
+           "destructive" for delete row actions); always set aria-label. */
+        icon: "h-[32px] w-[32px] p-0",
       },
       width: {
         default: "w-auto",

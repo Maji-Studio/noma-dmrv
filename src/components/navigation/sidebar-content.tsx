@@ -297,7 +297,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           className="flex items-center gap-10"
         >
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-[12px] leading-none">
+            <span className="text-white font-bold text-[length:var(--text-xxs)] leading-none">
               D
             </span>
           </div>

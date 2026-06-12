@@ -19,6 +19,7 @@ import {
 import { CaretUp, CaretDown, MagnifyingGlass, CaretLeft, CaretRight, Check } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Button } from "@/components/ui/button";
 import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
 
 /* ------------------------------------------------------------------ */
@@ -648,12 +649,13 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
 
   return (
     <div className={cn("relative", className)} ref={dropdownRef}>
-      <button
+      <Button
+        variant="default"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small text-[var(--color-text-primary)] hover:bg-[var(--color-background-medium)] transition-colors cursor-pointer"
+        className="bg-[var(--color-background-white)]"
       >
         Columns
-      </button>
+      </Button>
       {isOpen && (
         <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)] shadow-lg">
           {table.getAllLeafColumns().map((column) => {
@@ -691,10 +693,10 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
 /*  DataTable Pagination                                                */
 /* ------------------------------------------------------------------ */
 
-// Shared chrome for the first/prev/next/last nav buttons. 44px touch target
-// on mobile, condensed to 32px from `sm` up (matches the a11y touch-target rule).
-const PAGINATION_NAV_BUTTON_CLASS =
-  "h-44 w-44 sm:h-32 sm:w-32 flex items-center justify-center border border-[var(--color-border-primary)] bg-[var(--color-background-white)] hover:bg-[var(--color-background-medium)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors";
+// Size override for the first/prev/next/last nav buttons. 44px touch target
+// on mobile, condensed to the standard 32px icon size from `sm` up (matches
+// the a11y touch-target rule).
+const PAGINATION_NAV_BUTTON_CLASS = "h-44 w-44 sm:h-32 sm:w-32";
 
 interface DataTablePaginationProps {
   showRowsPerPage?: boolean;
@@ -746,44 +748,48 @@ function DataTablePagination({
           Page {pageIndex + 1} of {pageCount || 1}
         </span>
         <div className="flex items-center gap-4">
-          <button
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={() => table.firstPage()}
             disabled={!table.getCanPreviousPage()}
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to first page"
-            type="button"
           >
             <CaretLeft size={14} weight="bold" className="pointer-events-none" />
             <CaretLeft size={14} weight="bold" className="-ml-8 pointer-events-none" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to previous page"
-            type="button"
           >
             <CaretLeft size={14} weight="bold" className="pointer-events-none" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to next page"
-            type="button"
           >
             <CaretRight size={14} weight="bold" className="pointer-events-none" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={() => table.lastPage()}
             disabled={!table.getCanNextPage()}
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to last page"
-            type="button"
           >
             <CaretRight size={14} weight="bold" className="pointer-events-none" />
             <CaretRight size={14} weight="bold" className="-ml-8 pointer-events-none" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

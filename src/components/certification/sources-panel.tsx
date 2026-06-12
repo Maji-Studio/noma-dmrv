@@ -255,8 +255,9 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
-        <button
-          type="button"
+        <Button
+          variant="default"
+          size="small"
           aria-pressed={isPublic}
           aria-label={
             isPublic
@@ -270,7 +271,6 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               ? "Public on the registry after issuance"
               : "Private — only visible to the verifier"
           }
-          className="flex items-center gap-4 border border-[var(--color-border-secondary)] px-8 py-4 transition-colors hover:border-[var(--color-border-primary)] disabled:opacity-50"
         >
           {isPublic ? (
             <>
@@ -283,7 +283,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               <span className="body-caption">Private</span>
             </>
           )}
-        </button>
+        </Button>
 
         {isMirrored ? (
           <>

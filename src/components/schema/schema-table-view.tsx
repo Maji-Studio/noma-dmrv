@@ -214,7 +214,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
   const areaCount = new Set(tables.filter((t) => !hideLegacy || !t.isLegacy).map((t) => t.area)).size;
 
   return (
-    <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         {/* Header */}
         <header className="flex flex-col gap-16">

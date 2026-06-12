@@ -259,20 +259,20 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                     </td>
                     <td className="px-16 py-12 text-right">
                       <div className="flex items-center justify-end gap-16">
-                        <button
-                          type="button"
+                        <Button
+                          variant="default"
+                          size="small"
                           onClick={() => setEditingLocation(location)}
-                          className="h-[32px] px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small"
                         >
                           Edit
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="small"
                           onClick={() => setDeletingLocationId(location.id)}
-                          className="h-[32px] px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small"
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

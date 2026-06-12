@@ -382,7 +382,7 @@ function SankeyTooltip({
       </div>
 
       <div className="flex flex-col gap-6 px-[14px] py-12">
-        <p className="font-mono text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--color-text-primary)]">
+        <p className="title-chapter-title text-[var(--color-text-primary)]">
           {isColumn ? selection.column.label : selection.exit.label}
         </p>
         <p className="font-mono text-[12px] text-[var(--color-text-secondary)]">
