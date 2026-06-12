@@ -27,6 +27,10 @@ client input.
 - **Postgres RLS now** — deferred, not rejected: the chosen schema is
   RLS-ready with zero schema change, so RLS can be added later as
   defense-in-depth if a client requires hard isolation guarantees.
+  No tooling blocker: Drizzle has first-class RLS on our pinned versions
+  (`pgPolicy` since drizzle-kit 0.27 auto-enables RLS on the table) —
+  adopting it is a policy-design task, not an upgrade
+  (verified 2026-06-12, https://orm.drizzle.team/docs/rls).
 
 ## Consequences
 

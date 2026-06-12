@@ -11,6 +11,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -43,6 +44,9 @@ import {
 // ============================================
 // Constants for select options
 // ============================================
+
+const isApplicationCertifyField = (field: string) =>
+  isCertifyFormField("application", field);
 
 const applicationMethodOptions: readonly { value: string; label: string }[] = applicationMethods.map((method) => ({
   value: method,
@@ -228,23 +232,24 @@ export function ApplicationForm({
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
 
-  // Prefill the soil temperature from the delivery's customer-location /
-  // facility default, but only while the operator hasn't touched the fields
-  // (manual edits set them dirty; prefills don't). While untouched, the
-  // values always mirror the selected delivery — including clearing a stale
+  // Prefill soil temperature from the delivery's customer-location /
+  // facility default, but only while the operator hasn't touched the
+  // fields (prefills don't set them dirty). While untouched, the values
+  // always mirror the selected delivery — including clearing a stale
   // prefill when the new delivery has no default.
   useEffect(() => {
     if (isEditMode || !selectedDelivery) return;
-    if (
-      getFieldState("soilTemperatureC").isDirty ||
-      getFieldState("soilTemperatureSource").isDirty
-    ) {
+
+    const temperatureState = getFieldState("soilTemperatureC");
+    const sourceState = getFieldState("soilTemperatureSource");
+    if (temperatureState.isDirty || sourceState.isDirty) {
       return;
     }
 
     const defaultValue = resolveApplicationSoilTemperatureDefault({
       delivery: selectedDelivery,
     });
+
     setValue("soilTemperatureSource", defaultValue?.soilTemperatureSource, {
       shouldDirty: false,
       shouldValidate: true,
@@ -377,6 +382,7 @@ export function ApplicationForm({
             label="Biochar Applied, Wet (kg)"
             error={errors.biocharAppliedTons?.message}
             required
+            certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             helperText={
               availableKg !== null
                 ? `${formatKg(availableKg)} available from this delivery`
@@ -403,6 +409,7 @@ export function ApplicationForm({
               label="Biochar Applied Dry (kg)"
               error={errors.biocharAppliedDryTons?.message}
               helperText="No moisture % on delivery — enter dry mass manually"
+              certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
             >
               <FormInput
                 id="biocharAppliedDryTons"
@@ -555,6 +562,7 @@ export function ApplicationForm({
             label="Soil Temperature (°C)"
             error={errors.soilTemperatureC?.message}
             helperText="Annual average for this application site"
+            certifyRequired={isApplicationCertifyField("soilTemperatureC")}
           >
             <FormInput
               id="soilTemperatureC"

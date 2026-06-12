@@ -21,6 +21,7 @@ import type { Order } from "@/db/schema";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { CustomerLocationDetails } from "./customer-location-details";
 import { useEffect } from "react";
 
 // ============================================
@@ -70,7 +71,7 @@ export function OrderForm({
   submitLabel,
 }: OrderFormProps) {
   const isEditMode = !!order;
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, facilities } = useFacilityContext();
 
   const {
     register,
@@ -98,6 +99,8 @@ export function OrderForm({
 
   const watchedCustomerId = useWatch({ control, name: "customerId" });
   const selectedCustomerId = watchedCustomerId || undefined;
+  const watchedLocationId = useWatch({ control, name: "customerLocationId" });
+  const watchedFacilityId = useWatch({ control, name: "facilityId" });
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });
@@ -120,6 +123,14 @@ export function OrderForm({
     value: l.id,
     label: l.name ?? "Unnamed location",
   }));
+
+  // Details panel data for the selected location (issue #196). The facility
+  // resolves from the form's own facilityId so edit mode shows the order's
+  // facility even when the global selector points elsewhere.
+  const selectedLocation = watchedLocationId
+    ? customerLocations.find((l) => l.id === watchedLocationId)
+    : undefined;
+  const formFacility = facilities.find((f) => f.id === watchedFacilityId);
 
   // Sync facilityId when contextFacilityId arrives after mount (create mode only)
   useEffect(() => {
@@ -219,6 +230,13 @@ export function OrderForm({
             />
           </FormField>
         </div>
+
+        {selectedLocation && (
+          <CustomerLocationDetails
+            location={selectedLocation}
+            facility={formFacility}
+          />
+        )}
       </div>
 
       {/* Product Section */}
