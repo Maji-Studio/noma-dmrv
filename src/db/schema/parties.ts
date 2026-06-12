@@ -86,6 +86,9 @@ export const customerLocations = pgTable(
     distanceFromFacilityKm: real('distance_from_facility_km'),
     // Provenance of distanceFromFacilityKm (null when no distance stored).
     distanceSource: distanceSource('distance_source'),
+    // Conservative default for the Isometric 200-year soil durability equation.
+    // New applications can prefill from this site value while staying editable.
+    defaultSoilTemperatureC: real('default_soil_temperature_c'),
     // Marks the customer's primary destination. At most one per customer
     // (enforced by the partial unique index below).
     isDefault: boolean('is_default').notNull().default(false),
@@ -109,6 +112,10 @@ export const customerLocations = pgTable(
     check(
       'customer_locations_distance_from_facility_km_non_negative',
       sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
+    ),
+    check(
+      'customer_locations_default_soil_temperature_c_range',
+      sql`${table.defaultSoilTemperatureC} is null or (${table.defaultSoilTemperatureC} >= -50 and ${table.defaultSoilTemperatureC} <= 60)`
     ),
   ]
 );

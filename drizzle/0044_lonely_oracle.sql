@@ -1,0 +1,4 @@
+ALTER TABLE "certifier_projects" ADD COLUMN "default_soil_temperature_c" real;--> statement-breakpoint
+ALTER TABLE "customer_locations" ADD COLUMN "default_soil_temperature_c" real;--> statement-breakpoint
+ALTER TABLE "certifier_projects" ADD CONSTRAINT "certifier_projects_default_soil_temperature_c_range" CHECK ("certifier_projects"."default_soil_temperature_c" is null or ("certifier_projects"."default_soil_temperature_c" >= -50 and "certifier_projects"."default_soil_temperature_c" <= 60));--> statement-breakpoint
+ALTER TABLE "customer_locations" ADD CONSTRAINT "customer_locations_default_soil_temperature_c_range" CHECK ("customer_locations"."default_soil_temperature_c" is null or ("customer_locations"."default_soil_temperature_c" >= -50 and "customer_locations"."default_soil_temperature_c" <= 60));

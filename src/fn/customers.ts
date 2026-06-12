@@ -399,6 +399,7 @@ export async function createCustomerLocationFn(
         validated.distanceFromFacilityKm ?? null,
         validated.distanceSource,
       ),
+      defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
     });
 
@@ -447,6 +448,7 @@ export async function updateCustomerLocationFn(
         validated.distanceFromFacilityKm,
         validated.distanceSource,
       ),
+      defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
     });
 
