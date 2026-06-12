@@ -35,16 +35,13 @@ jobs:
       ALLOW_SELF_SIGNUP: "false"
       DISABLE_RATE_LIMIT: "true"
       # Playwright builds + serves a production bundle on CI
-      # (playwright.config.ts), so NODE_ENV=production and @/config/env rejects
-      # the local-fs default as a fail-closed safeguard. No spec round-trips
-      # bytes to storage yet (real-Spaces CI coverage was deprioritized — see
-      # docs/archive/2026-05-21-e2e-spaces-integration.md), so these throwaway
-      # placeholders only satisfy Zod validation; build/boot never call S3.
-      STORAGE_PROVIDER: s3-compatible
-      STORAGE_BUCKET: e2e-build
-      STORAGE_REGION: us-east-1
-      STORAGE_ACCESS_KEY_ID: e2e-build
-      STORAGE_SECRET_ACCESS_KEY: e2e-build-placeholder
+      # (playwright.config.ts), but the suite is hermetic and localhost-only.
+      # Use local-fs so upload specs can round-trip bytes without external
+      # object-storage credentials; src/config/env.ts allows this only for CI
+      # localhost E2E, never for real production deployments.
+      STORAGE_PROVIDER: local-fs
+      STORAGE_LOCAL_FS_ROOT: .storage-e2e
+      STORAGE_SIGNING_SECRET: local-storage-signing-secret-local-32
       # Isometric — PR CI is HERMETIC: no sandbox credentials are loaded, so
       # the isometric client is not configured, the app degrades to its
       # not_configured paths, and zero external HTTP calls are made. Specs that
@@ -108,6 +105,9 @@ jobs:
           BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
           ALLOW_SELF_SIGNUP=${ALLOW_SELF_SIGNUP}
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+          STORAGE_PROVIDER=${STORAGE_PROVIDER}
+          STORAGE_LOCAL_FS_ROOT=${STORAGE_LOCAL_FS_ROOT}
+          STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET}
           EOF
 
       - name: Apply schema
