@@ -15,7 +15,6 @@ import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useEntityById } from "@/hooks/use-entities";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
@@ -123,11 +122,7 @@ export function FeedstockForm({
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
 
-  // Default new bins by feedstock category, while allowing intake into either compatible bin type.
-  const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
-  const defaultStorageBinType = selectedFeedstockType?.subtitle === "ingredient"
-    ? "ingredient_bin"
-    : "feedstock_bin";
+  const defaultStorageBinType = "feedstock_bin";
 
   // Transport distance autofills from the existing leg (edit) or the stored
   // level — the supplier's DEFAULT location, else the supplier-level distance —
@@ -401,8 +396,8 @@ export function FeedstockForm({
           </div>
         </div>
 
-        {/* Bin Allocations — only shown after feedstock type is selected and loaded */}
-        {watchedFeedstockTypeId && selectedFeedstockType ? (
+        {/* Bin Allocations — only shown after feedstock type is selected */}
+        {watchedFeedstockTypeId ? (
           <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
             <div className="flex items-center justify-between">
               <SectionLabel>

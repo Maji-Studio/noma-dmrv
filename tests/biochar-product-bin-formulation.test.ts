@@ -15,6 +15,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { createBiocharProduct } from "@/data-access/biochar-products";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
+import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
 import { biocharProducts, formulations } from "@/db/schema/products";
 
@@ -27,6 +28,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   let runId: string;
   let formulationAId: string;
   let formulationBId: string;
+  let pyrolysisTypeId: string;
   const createdBinIds: string[] = [];
   const createdProductIds: string[] = [];
 
@@ -65,6 +67,17 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
       .values({ code: `FM-PBF-B-${tag}`, name: `PBF Blend B ${tag}`, biocharRatio: 0.4 })
       .returning({ id: formulations.id });
     formulationBId = formulationB.id;
+
+    const [pyrolysisType] = await db
+      .insert(feedstockTypes)
+      .values({
+        code: `FT-PBF-P-${tag}`,
+        name: `PBF Pyrolysis Type ${tag}`,
+        category: "forestry",
+        usage: "pyrolysis",
+      })
+      .returning({ id: feedstockTypes.id });
+    pyrolysisTypeId = pyrolysisType.id;
   });
 
   afterAll(async () => {
@@ -102,6 +115,9 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
         db.delete(formulations).where(inArray(formulations.id, formulationIds)),
       );
     }
+    if (pyrolysisTypeId) {
+      await cleanup(() => db.delete(feedstockTypes).where(eq(feedstockTypes.id, pyrolysisTypeId)));
+    }
     if (facilityId) {
       await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
     }
@@ -116,6 +132,21 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
         type: "product_bin",
         facilityId,
         formulationId,
+      })
+      .returning({ id: storageLocations.id });
+    createdBinIds.push(bin.id);
+    return bin.id;
+  }
+
+  async function makeFeedstockBin(feedstockTypeId: string): Promise<string> {
+    const [bin] = await db
+      .insert(storageLocations)
+      .values({
+        code: `BIN-PBF-FS-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        name: `PBF Feedstock Bin ${tag}`,
+        type: "feedstock_bin",
+        facilityId,
+        feedstockTypeId,
       })
       .returning({ id: storageLocations.id });
     createdBinIds.push(bin.id);
@@ -179,5 +210,30 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
       .where(eq(storageLocations.id, binId));
 
     expect(bin.formulationId).toBeNull();
+  });
+
+  it("rejects pyrolysis-usage feedstock bins as formulation ingredient bins", async () => {
+    const productBinId = await makeProductBin(formulationAId);
+    const pyrolysisBinId = await makeFeedstockBin(pyrolysisTypeId);
+
+    await expect(
+      createBiocharProduct(TEST_USER_ID, {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        composition: {
+          ingredients: [
+            {
+              formulationIngredientId: crypto.randomUUID(),
+              ingredientName: "Pyrolysis-only stock",
+              ingredientType: "biomass",
+              ratio: 0.2,
+              massKg: 100,
+              storageLocationId: pyrolysisBinId,
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow("Ingredient bin must hold blend-usage feedstock");
   });
 });
