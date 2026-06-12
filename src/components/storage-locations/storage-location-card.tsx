@@ -7,6 +7,7 @@ import {
   Package,
   PencilSimple,
   Trash,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -40,6 +41,9 @@ function getDryMass(s: StorageLocationWithFacility) {
   return s.productInventory.currentMassKg;
 }
 
+function isFeedstockInputBin(type: StorageLocationType) {
+  return type === "feedstock_bin" || type === "ingredient_bin";
+}
 
 function getCapacityPercent(s: StorageLocationWithFacility) {
   if (!s.capacityKg || s.capacityKg <= 0) return null;
@@ -124,12 +128,22 @@ export function StorageLocationCard({
         </div>
 
         {/* Feedstock types (feedstock + ingredient bins) */}
-        {(storageLocation.type === "feedstock_bin" || storageLocation.type === "ingredient_bin") &&
+        {isFeedstockInputBin(storageLocation.type) &&
           storageLocation.feedstockInventory.feedstockTypes.length > 0 && (
             <div className="flex items-center gap-6 text-[var(--color-text-tertiary)]">
               <Package size={12} weight="bold" />
               <span className="body-caption truncate">
                 {storageLocation.feedstockInventory.feedstockTypes.join(", ")}
+              </span>
+            </div>
+          )}
+
+        {isFeedstockInputBin(storageLocation.type) &&
+          storageLocation.feedstockInventory.pendingDryMassKg > 0 && (
+            <div className="flex items-center gap-6 text-[var(--clr-orange)]">
+              <Warning size={12} weight="fill" />
+              <span className="body-caption">
+                {formatMass(storageLocation.feedstockInventory.pendingDryMassKg)} pending completion
               </span>
             </div>
           )}
