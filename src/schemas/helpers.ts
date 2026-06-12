@@ -131,6 +131,8 @@ export const optionalPercent = z.preprocess(
 export const SOIL_TEMPERATURE_MIN_C = -50;
 export const SOIL_TEMPERATURE_MAX_C = 60;
 
+const SOIL_TEMPERATURE_RANGE_MESSAGE = `Soil temperature must be between ${SOIL_TEMPERATURE_MIN_C} and ${SOIL_TEMPERATURE_MAX_C} °C`;
+
 /**
  * Optional default-soil-temperature field (°C), shared by customer-location
  * and facility-emission-config forms so empty/whitespace inputs normalize
@@ -139,11 +141,38 @@ export const SOIL_TEMPERATURE_MAX_C = 60;
 export const defaultSoilTemperatureSchema = optionalNumber.pipe(
   z
     .number()
-    .min(SOIL_TEMPERATURE_MIN_C, "Soil temperature must be between -50 and 60 °C")
-    .max(SOIL_TEMPERATURE_MAX_C, "Soil temperature must be between -50 and 60 °C")
+    .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
+    .max(SOIL_TEMPERATURE_MAX_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
     .nullable()
     .optional(),
 );
+
+// ============================================
+// Date-Only Input Helpers
+// ============================================
+
+/**
+ * Optional date field fed by `<input type="date">` ("YYYY-MM-DD").
+ *
+ * Parses date-only strings at LOCAL midnight — `new Date("YYYY-MM-DD")`
+ * parses as UTC midnight, which renders as the previous day in timezones
+ * west of UTC and shifts the stored date back one day on every edit/save
+ * round-trip. Empty or invalid input becomes undefined; Date values (e.g.
+ * server-side re-validation of an already-transformed payload) pass through.
+ */
+export const optionalDateOnly = z
+  .union([
+    z.date(),
+    z.string().transform((val): Date | undefined => {
+      if (val === "") return undefined;
+      const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+      const date = dateOnly
+        ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+        : new Date(val);
+      return isNaN(date.getTime()) ? undefined : date;
+    }),
+  ])
+  .optional();
 
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {

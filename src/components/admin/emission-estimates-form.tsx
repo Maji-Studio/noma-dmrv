@@ -21,7 +21,11 @@ import {
   type FacilityEmissionConfigFormData,
 } from "@/schemas/certification";
 import { useSaveFacilityEmissionConfig } from "@/hooks/use-certification";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { CertifierProjectRow } from "@/data-access/certification";
+
+const isEmissionConfigCertifyField = (field: string) =>
+  isCertifyFormField("facilityEmissionConfig", field);
 
 interface EmissionEstimatesFormProps {
   facilityId: string;
@@ -91,6 +95,7 @@ export function EmissionEstimatesForm({
           id="gensetEnergyYieldKwhPerLitre"
           label="Genset energy yield (kWh per litre)"
           required
+          certifyRequired={isEmissionConfigCertifyField("gensetEnergyYieldKwhPerLitre")}
           error={errors.gensetEnergyYieldKwhPerLitre?.message}
           helperText="Electrical kWh produced per litre of genset diesel. ~3.375 from the Dark Earth LCA (diesel 2.7 kgCO2e/L ÷ genset 0.8 kgCO2e/kWh)."
         >
@@ -135,6 +140,7 @@ export function EmissionEstimatesForm({
           id="stageSplitBiomassPct"
           label="Biomass processing (%)"
           required
+          certifyRequired={isEmissionConfigCertifyField("stageSplitBiomassPct")}
           error={errors.stageSplitBiomassPct?.message}
         >
           <FormInput
@@ -151,6 +157,7 @@ export function EmissionEstimatesForm({
           id="stageSplitPyrolysisPct"
           label="Pyrolysis (%)"
           required
+          certifyRequired={isEmissionConfigCertifyField("stageSplitPyrolysisPct")}
           error={errors.stageSplitPyrolysisPct?.message}
         >
           <FormInput
@@ -167,6 +174,7 @@ export function EmissionEstimatesForm({
           id="stageSplitBiocharPct"
           label="Biochar processing (%)"
           required
+          certifyRequired={isEmissionConfigCertifyField("stageSplitBiocharPct")}
           error={errors.stageSplitBiocharPct?.message}
         >
           <FormInput

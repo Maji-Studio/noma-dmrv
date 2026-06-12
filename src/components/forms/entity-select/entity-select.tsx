@@ -151,6 +151,7 @@ const ENTITY_TYPE_LABELS = {
   application: "application",
   formulation: "formulation",
   biocharProduct: "product",
+  order: "order",
   creditBatch: "credit batch",
 } as const;
 

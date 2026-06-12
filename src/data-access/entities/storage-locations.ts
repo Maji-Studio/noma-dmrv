@@ -28,6 +28,7 @@ function formatStorageLocationSubtitle(
   type: string,
   feedstockTypeName: string | null,
   totalStoredKg: number,
+  pendingStoredKg: number,
   totalConsumedKg: number,
   totalProducedKg: number,
   totalAllocatedKg: number,
@@ -48,6 +49,9 @@ function formatStorageLocationSubtitle(
         parts.push(feedstockTypeName);
       }
       parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+      if (pendingStoredKg > 0) {
+        parts.push(`${Math.round(pendingStoredKg).toLocaleString()} kg pending completion`);
+      }
       return parts.join(" · ");
     }
     case "biochar_bin": {
@@ -88,6 +92,9 @@ function formatStorageLocationSubtitle(
         parts.push(feedstockTypeName);
       }
       parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+      if (pendingStoredKg > 0) {
+        parts.push(`${Math.round(pendingStoredKg).toLocaleString()} kg pending completion`);
+      }
       return parts.join(" · ");
     }
     default:
@@ -99,7 +106,12 @@ const feedstockInventoryAggregate = db
   .select({
     storageLocationId: feedstocks.storageLocationId,
     feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
-    totalStoredKg: sql<number>`SUM(${feedstocks.massDryKg})`.as("total_stored_kg"),
+    totalStoredKg: sql<number>`
+      COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+    `.as("total_stored_kg"),
+    pendingStoredKg: sql<number>`
+      COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
+    `.as("pending_stored_kg"),
   })
   .from(feedstocks)
   .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
@@ -250,6 +262,7 @@ export async function getStorageLocations(params: {
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       formulationName: formulations.name,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      pendingStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
       totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
       totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
@@ -289,6 +302,7 @@ export async function getStorageLocations(params: {
       r.type,
       r.feedstockTypeName,
       r.totalStoredKg,
+      r.pendingStoredKg,
       r.totalConsumedKg,
       r.totalProducedKg,
       r.totalAllocatedKg,
@@ -314,6 +328,7 @@ export async function getStorageLocationById(
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       formulationName: formulations.name,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      pendingStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
       totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
       totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
@@ -355,6 +370,7 @@ export async function getStorageLocationById(
       result.type,
       result.feedstockTypeName,
       result.totalStoredKg,
+      result.pendingStoredKg,
       result.totalConsumedKg,
       result.totalProducedKg,
       result.totalAllocatedKg,
