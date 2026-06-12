@@ -249,18 +249,37 @@ export function BiocharProductForm({
     }
   }, [selectedFormulationId, setValue]);
 
-  // Auto-fill mass from linked production run
+  // Prefill mass + production date from the linked production run (create mode
+  // only). Re-applies when a different run is selected — previously the mass
+  // kept the prior run's value, leaving the product inconsistent with its
+  // linked run (#46) — but never overwrites a field the user edited themselves.
+  const lastPrefilledRunIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (product || dirtyFields.massKg || linkedRunPreview?.biocharOutputKg == null) return;
+    if (product) return;
+    if (!linkedProductionRunId || !linkedRunPreview) return;
+    if (lastPrefilledRunIdRef.current === linkedProductionRunId) return;
+    lastPrefilledRunIdRef.current = linkedProductionRunId;
 
-    const currentMass = getValues("massKg");
-    if (currentMass === undefined || currentMass === null) {
+    if (!dirtyFields.massKg && linkedRunPreview.biocharOutputKg != null) {
       setValue("massKg", linkedRunPreview.biocharOutputKg, {
         shouldDirty: false,
         shouldValidate: false,
       });
     }
-  }, [dirtyFields.massKg, getValues, linkedRunPreview, product, setValue]);
+    if (!dirtyFields.productionDate && linkedRunPreview.date) {
+      setValue("productionDate", linkedRunPreview.date, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+  }, [
+    dirtyFields.massKg,
+    dirtyFields.productionDate,
+    linkedProductionRunId,
+    linkedRunPreview,
+    product,
+    setValue,
+  ]);
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
@@ -512,7 +531,12 @@ export function BiocharProductForm({
             />
           </FormField>
 
-          <FormField id="productionDate" label="Production Date" error={errors.productionDate?.message}>
+          <FormField
+            id="productionDate"
+            label="Production Date"
+            error={errors.productionDate?.message}
+            helperText={isEditMode ? undefined : "Prefilled from the selected production run"}
+          >
             <FormInput
               id="productionDate"
               type="date"
