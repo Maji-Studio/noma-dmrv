@@ -26,7 +26,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormActions, FormSection } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
@@ -192,11 +192,10 @@ export function SampleForm({
   });
 
   return (
-    <div className="space-y-24">
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
+    <div className="space-y-20">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
         {/* ── Sample Information ── */}
-        <div className="space-y-16">
-          <SectionLabel>Sample Information</SectionLabel>
+        <FormSection title="Sample Information" divider={false}>
               <FormField
                 id="productionRunId"
                 label="Production Run"
@@ -325,11 +324,10 @@ export function SampleForm({
                   />
                 </FormField>
               </div>
-        </div>
+        </FormSection>
 
         {/* ── Carbon Analysis ── */}
-        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>Carbon Analysis</SectionLabel>
+        <FormSection title="Carbon Analysis">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
@@ -389,11 +387,10 @@ export function SampleForm({
                   })}
                 />
               </FormField>
-        </div>
+        </FormSection>
 
         {/* ── Elemental Analysis ── */}
-        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>Elemental Analysis</SectionLabel>
+        <FormSection title="Elemental Analysis">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="totalHydrogenPercent"
@@ -467,11 +464,10 @@ export function SampleForm({
                 />
               </FormField>
             </div>
-        </div>
+        </FormSection>
 
         {/* ── Proximate Analysis ── */}
-        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>Proximate Analysis</SectionLabel>
+        <FormSection title="Proximate Analysis">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="ashContentPercent"
@@ -527,11 +523,10 @@ export function SampleForm({
                   })}
                 />
               </FormField>
-        </div>
+        </FormSection>
 
         {/* ── Physical Properties ── */}
-        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>Physical Properties</SectionLabel>
+        <FormSection title="Physical Properties">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="bulkDensityKgPerM3"
@@ -607,11 +602,10 @@ export function SampleForm({
                 />
               </FormField>
             </div>
-        </div>
+        </FormSection>
 
         {/* ── Stability Ratios ── */}
-        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>Stability Ratios</SectionLabel>
+        <FormSection title="Stability Ratios">
               <FormField
                 id="durabilityOption"
                 label="Durability Option"
@@ -664,13 +658,12 @@ export function SampleForm({
                   />
                 </FormField>
               </div>
-        </div>
+        </FormSection>
 
         {/* ── 1000-Year Durability (conditional, two flat sibling sections) ── */}
         {watchedDurabilityOption === "1000_year" && (
           <>
-            <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-              <SectionLabel>1000-Year Durability · R₀ Reflectance</SectionLabel>
+            <FormSection title="1000-Year Durability · R₀ Reflectance">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
@@ -726,10 +719,9 @@ export function SampleForm({
                     })}
                   />
                 </FormField>
-            </div>
+            </FormSection>
 
-            <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-              <SectionLabel>TGA Non-Reactive Carbon</SectionLabel>
+            <FormSection title="TGA Non-Reactive Carbon">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
@@ -785,13 +777,12 @@ export function SampleForm({
                     })}
                   />
                 </FormField>
-            </div>
+            </FormSection>
           </>
         )}
 
         {/* ── Nutrient Claims ── */}
-        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>Nutrient Claims</SectionLabel>
+        <FormSection title="Nutrient Claims">
               <label
                 htmlFor="nutrientClaimEnabled"
                 className="flex items-center gap-12 cursor-pointer"
@@ -901,7 +892,7 @@ export function SampleForm({
                   </FormField>
                 </div>
               )}
-        </div>
+        </FormSection>
       </form>
 
       {/* Extension content (e.g. transport legs) — always before the CTA */}

@@ -115,6 +115,32 @@ secondary structure, `--hair-3` (1px @ 10%) row dividers, plus the "two greys" r
 - Document the spacing rule (`space-y-20` standard; `space-y-24` only for full-page/auth forms) in `docs/forms.md`.
 - Side-sheet chrome: consistent header (code + date subtitle), section treatment, and footer CTA row across all 14 entity sheets; detail-sheet section headings get the same mono label treatment.
 
+### Phase 3 implementation notes (resolved 2026-06-12, `feat/visual-design-phase-3`)
+
+- **`FormSection` shipped** (`src/components/forms/form-section.tsx`): SectionLabel +
+  `space-y-16` stack + `pt-16` hairline divider (first section `divider={false}`);
+  `hint`/`certifyRequired` forward to SectionLabel; `actions` slot absorbs trailing
+  header chrome (Add Bin / Add Ingredient buttons, ReadOnlyBadge) so no section
+  header stays hand-rolled.
+- **Migrated** all sectioned forms: sample, production-run, production-sample,
+  production-incident (local SectionLabel copy deleted), feedstock, biochar-product,
+  formulation, credit-batch, application, transport-leg. Top-level sheet-form rhythm
+  normalized to `space-y-20` (the documented standard); `space-y-24` is now
+  full-page/auth only.
+- **Nested CTA rows unified:** production-sample and production-incident forms moved
+  from hand-rolled button rows to `FormActions sticky={false}` (their wrappers became
+  real `<form>` elements — nesting-safe because ProductionRunForm renders `children`
+  after its `</form>`).
+- **DetailSection re-cut** to mirror FormSection: mono SectionLabel heading, flat
+  hairline-divided sections (gray `rounded-[8px]` box removed — brutalist rule);
+  EntitySideSheet/EntityDetailPanel view-body gap 32→20 for view ↔ edit parity.
+- **Header chrome:** create mode = title only (filler subtitles like "Fill in the
+  form to…" dropped across 12 lists); view/edit keeps code title + contextual
+  subtitle (name or date). Customer/supplier full-page detail routes left to the
+  page-shell pattern (Phase 2 scope, not sheets).
+- Spacing rule + FormSection/FormActions usage documented in `docs/forms.md`
+  (design-system.md already carried the 20/24 rule).
+
 ## Phase 4 — Chain of custody (light, but no longer a wireframe)
 
 - Tinted canvas (`--sea`-style plum/rose wash at ~4%) + dotted grid so the graph has figure/ground; panels stay white.

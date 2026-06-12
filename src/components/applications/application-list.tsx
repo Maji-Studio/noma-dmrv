@@ -239,7 +239,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
-      ? "Add a new field application record"
+      ? undefined
       : sideSheetEntity
         ? format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy")
         : undefined;

@@ -17,7 +17,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEntityById } from "@/hooks/use-entities";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, ServerError } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -207,11 +207,7 @@ export function FeedstockForm({
     <>
       <form onSubmit={handleFormSubmit} className="space-y-20">
         {/* Delivery Information */}
-        <div className="space-y-20">
-          <SectionLabel>
-            Delivery Information
-          </SectionLabel>
-
+        <FormSection title="Delivery Information" divider={false}>
           {!contextFacilityId && !feedstock && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
               <FormEntitySelect
@@ -252,16 +248,13 @@ export function FeedstockForm({
               required
             />
           </div>
-        </div>
+        </FormSection>
 
         {/* Transport Details */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel
-            hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
-          >
-            Transport Details
-          </SectionLabel>
-
+        <FormSection
+          title="Transport Details"
+          hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
@@ -316,14 +309,10 @@ export function FeedstockForm({
               </div>
             </FormField>
           </div>
-        </div>
+        </FormSection>
 
         {/* Material Details */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>
-            Material
-          </SectionLabel>
-
+        <FormSection title="Material">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
@@ -393,16 +382,14 @@ export function FeedstockForm({
               </span>
             )}
           </div>
-        </div>
+        </FormSection>
 
         {/* Bin Allocations — only shown after feedstock type is selected and loaded */}
         {watchedFeedstockTypeId && selectedFeedstockType ? (
-          <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-            <div className="flex items-center justify-between">
-              <SectionLabel>
-                Bin Allocations
-              </SectionLabel>
-              {!isEditMode && (
+          <FormSection
+            title="Bin Allocations"
+            actions={
+              !isEditMode && (
                 <Button
                   type="button"
                   variant="default"
@@ -413,9 +400,9 @@ export function FeedstockForm({
                   <Plus size={16} weight="bold" />
                   Add Bin
                 </Button>
-              )}
-            </div>
-
+              )
+            }
+          >
             {errors.allocations?.message && (
               <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
             )}
@@ -467,15 +454,11 @@ export function FeedstockForm({
                 disabled={isSubmitting}
               />
             )}
-          </div>
+          </FormSection>
         ) : null}
 
         {/* Documentation */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>
-            Documentation
-          </SectionLabel>
-
+        <FormSection title="Documentation">
           <div className="grid grid-cols-1 gap-y-20">
             <FormField
               id="notes"
@@ -493,7 +476,7 @@ export function FeedstockForm({
               />
             </FormField>
           </div>
-        </div>
+        </FormSection>
 
         {/* Server Error */}
         {serverError && <ServerError message={serverError} />}

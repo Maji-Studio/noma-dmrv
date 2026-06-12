@@ -369,7 +369,7 @@ export function BiocharProductList() {
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Biochar Product" : (displaySideSheet?.entity?.code ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? "Fill in the form to create a new biochar product." : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
+        subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
         editLabel="Edit Product"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {

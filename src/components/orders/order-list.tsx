@@ -218,7 +218,7 @@ export function OrderList() {
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
-      ? "Fill in the form to create a new order."
+      ? undefined
       : sideSheetEntity?.customerName || undefined;
 
   return (

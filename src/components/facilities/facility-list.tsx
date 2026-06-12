@@ -208,9 +208,7 @@ export function FacilityList() {
     sideSheetMode === "create" ? "Create Facility" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
-    sideSheetMode === "create"
-      ? "Fill in the form to create a new facility."
-      : sideSheetEntity?.name;
+    sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
     ? [

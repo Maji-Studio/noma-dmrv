@@ -324,7 +324,7 @@ export function FormulationList() {
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={sideSheet?.mode === "create" ? "Create Formulation" : (sideSheet?.entity?.code ?? "")}
-        subtitle={sideSheet?.mode === "create" ? "Fill in the form to create a new formulation." : sideSheet?.entity?.name}
+        subtitle={sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name}
         editLabel="Edit Formulation"
         sections={viewSections}
       >
