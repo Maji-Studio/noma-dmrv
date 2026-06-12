@@ -5,7 +5,12 @@ export type CertifyEntityKind =
   | "sample"
   | "feedstock"
   | "transportLeg"
-  | "facilityEmissionConfig";
+  | "facilityEmissionConfig"
+  | "delivery"
+  | "application"
+  | "customerLocation"
+  | "supplier"
+  | "supplierLocation";
 
 export type CertifyFieldKind = "entered" | "derived";
 
@@ -281,9 +286,28 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   feedstock: [
     {
+      // Form field `totalWetMassKg` persists as `massWetKg`; `satisfaction`
+      // checks the entity column while `formFields` drives the form badge.
+      // The wet mass becomes the auto-derived feedstock leg's load mass
+      // (data-access/feedstocks.ts → syncFeedstockTransportLeg).
+      key: "massWetKg",
+      label: "Feedstock wet mass",
+      kind: "entered",
+      formFields: ["totalWetMassKg"],
+      satisfaction: {
+        mode: "anyOf",
+        fields: ["massWetKg"],
+        label: "Feedstock wet mass",
+      },
+      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+    },
+    {
       key: "transportLeg",
       label: "Feedstock transport leg",
       kind: "derived",
+      // The derived leg's distance resolves form override → supplier default
+      // location → supplier-level distance; badge the form-side override.
+      formFields: ["transportDistanceKm"],
       mappings: [mapping("feedstockTransportAvgDistanceKm")],
     },
   ],
@@ -341,6 +365,71 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       ],
     },
   ],
+  // The kinds below are badge/mapping documentation only — they are never fed
+  // to `deriveEntityCertifyReadiness` (their gaps surface through the derived
+  // transport legs and the CO2e-stored preview instead).
+  delivery: [
+    {
+      // The truck weighbridge masses are the measurement method; this is the
+      // submitted value — it becomes the auto-derived biochar distribution
+      // leg's load mass (data-access/transport-legs.ts →
+      // syncBiocharProductTransportLeg).
+      key: "deliveredWetMassKg",
+      label: "Delivered wet mass",
+      kind: "entered",
+      mappings: [mapping("biocharTransportAvgDistanceKm")],
+    },
+  ],
+  application: [
+    // Carbon inputs for the CO2e-stored calculation
+    // (lib/calculations/biochar-removal.ts → computeApplicationCo2eStored):
+    // dry mass derives from wet mass × the delivery's moisture, falling back
+    // to the manual dry entry when the delivery has no moisture data.
+    {
+      key: "biocharAppliedTons",
+      label: "Applied biochar wet mass",
+      kind: "entered",
+    },
+    {
+      key: "biocharAppliedDryTons",
+      label: "Applied biochar dry mass",
+      kind: "entered",
+    },
+    {
+      key: "soilTemperatureC",
+      label: "Soil temperature",
+      kind: "entered",
+    },
+  ],
+  customerLocation: [
+    {
+      // Stored default distance for the auto-derived biochar distribution
+      // leg (a per-delivery `distanceKmOverride` beats it when set).
+      key: "distanceFromFacilityKm",
+      label: "Distance from facility",
+      kind: "entered",
+      mappings: [mapping("biocharTransportAvgDistanceKm")],
+    },
+  ],
+  supplier: [
+    {
+      // Supplier-level fallback distance for the auto-derived feedstock leg.
+      key: "distanceToFacilityKm",
+      label: "Distance to facility",
+      kind: "entered",
+      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+    },
+  ],
+  supplierLocation: [
+    {
+      // Default-location distance — the preferred stored level for the
+      // auto-derived feedstock leg.
+      key: "distanceFromFacilityKm",
+      label: "Distance from facility",
+      kind: "entered",
+      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+    },
+  ],
 } as const;
 
 export function getCertifyFieldDescriptors(
@@ -361,8 +450,10 @@ export function isCertifyFormField(
   fieldName: string,
 ): boolean {
   return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
-    if (field.kind !== "entered") return false;
-    const formFields = field.formFields ?? [field.key];
+    // Derived descriptors badge only the explicitly-named form inputs that
+    // feed the derivation; entered descriptors default to their own key.
+    const formFields =
+      field.formFields ?? (field.kind === "entered" ? [field.key] : []);
     return formFields.includes(fieldName);
   });
 }

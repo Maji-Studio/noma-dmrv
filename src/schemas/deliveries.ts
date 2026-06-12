@@ -62,6 +62,20 @@ function validateTruckMasses(
       message: "Truck mass on departure must be >= 0",
     });
   }
+
+  // Unloading can only remove mass — a heavier truck after unloading means a
+  // weighing or data-entry error.
+  if (
+    value.truckMassOnArrivalKg != null &&
+    value.truckMassOnDepartureKg != null &&
+    value.truckMassOnDepartureKg > value.truckMassOnArrivalKg
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnDepartureKg"],
+      message: "Truck mass after unloading cannot exceed mass before unloading",
+    });
+  }
 }
 
 // ============================================
