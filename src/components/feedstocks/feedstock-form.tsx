@@ -12,9 +12,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useEntityById } from "@/hooks/use-entities";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, ServerError } from "@/components/forms";
@@ -38,6 +38,9 @@ import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+
+const isFeedstockCertifyField = (field: string) =>
+  isCertifyFormField("feedstock", field);
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
@@ -119,11 +122,7 @@ export function FeedstockForm({
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
 
-  // Default new bins by feedstock category, while allowing intake into either compatible bin type.
-  const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
-  const defaultStorageBinType = selectedFeedstockType?.subtitle === "ingredient"
-    ? "ingredient_bin"
-    : "feedstock_bin";
+  const defaultStorageBinType = "feedstock_bin";
 
   // Transport distance autofills from the existing leg (edit) or the stored
   // level — the supplier's DEFAULT location, else the supplier-level distance —
@@ -273,6 +272,7 @@ export function FeedstockForm({
               id="transportDistanceKm"
               label="Transport distance (km)"
               error={errors.transportDistanceKm?.message}
+              certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
               helperText={
                 storedDistanceKm != null
                   ? "Autofilled from the supplier's default location or supplier default; override if the route differs."
@@ -336,6 +336,7 @@ export function FeedstockForm({
               error={errors.totalWetMassKg?.message}
               helperText="As-received weight of the entire delivery"
               required
+              certifyRequired={isFeedstockCertifyField("totalWetMassKg")}
             >
               <FormInput
                 id="totalWetMassKg"
@@ -384,8 +385,8 @@ export function FeedstockForm({
           </div>
         </FormSection>
 
-        {/* Bin Allocations — only shown after feedstock type is selected and loaded */}
-        {watchedFeedstockTypeId && selectedFeedstockType ? (
+        {/* Bin Allocations — only shown after feedstock type is selected */}
+        {watchedFeedstockTypeId ? (
           <FormSection
             title="Bin Allocations"
             actions={

@@ -6,6 +6,7 @@
  */
 
 import { ilike, or, eq, and, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   storageLocations,
@@ -27,7 +28,9 @@ import { requireAuth } from "../utils";
 function formatStorageLocationSubtitle(
   type: string,
   feedstockTypeName: string | null,
+  feedstockTypeUsage: string | null,
   totalStoredKg: number,
+  pendingStoredKg: number,
   totalConsumedKg: number,
   totalProducedKg: number,
   totalAllocatedKg: number,
@@ -40,14 +43,21 @@ function formatStorageLocationSubtitle(
       const typeLabel = formatStorageLocationType(type);
       const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
       if (!feedstockTypeName && remainingKg === 0) {
-        return `${typeLabel} · Empty`;
+        return `${typeLabel} · Empty · Feedstock type locks on first intake`;
       }
 
       const parts: string[] = [typeLabel];
       if (feedstockTypeName) {
-        parts.push(feedstockTypeName);
+        parts.push(
+          feedstockTypeUsage
+            ? `${feedstockTypeName} (${formatFeedstockTypeUsage(feedstockTypeUsage)})`
+            : feedstockTypeName
+        );
       }
       parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+      if (pendingStoredKg > 0) {
+        parts.push(`${Math.round(pendingStoredKg).toLocaleString()} kg pending completion`);
+      }
       return parts.join(" · ");
     }
     case "biochar_bin": {
@@ -76,30 +86,27 @@ function formatStorageLocationSubtitle(
       }
       return parts.join(" · ");
     }
-    case "ingredient_bin": {
-      const typeLabel = formatStorageLocationType(type);
-      const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
-      if (!feedstockTypeName && remainingKg === 0) {
-        return `${typeLabel} · Empty`;
-      }
-
-      const parts: string[] = [typeLabel];
-      if (feedstockTypeName) {
-        parts.push(feedstockTypeName);
-      }
-      parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
-      return parts.join(" · ");
-    }
     default:
       return "Empty";
   }
 }
 
+function formatFeedstockTypeUsage(usage: string): string {
+  return usage === "pyrolysis" ? "Pyrolysis" : "Blend";
+}
+
+const heldFeedstockTypes = alias(feedstockTypes, "held_feedstock_types");
+
 const feedstockInventoryAggregate = db
   .select({
     storageLocationId: feedstocks.storageLocationId,
     feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
-    totalStoredKg: sql<number>`SUM(${feedstocks.massDryKg})`.as("total_stored_kg"),
+    totalStoredKg: sql<number>`
+      COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+    `.as("total_stored_kg"),
+    pendingStoredKg: sql<number>`
+      COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
+    `.as("pending_stored_kg"),
   })
   .from(feedstocks)
   .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
@@ -173,13 +180,14 @@ export async function getStorageLocations(params: {
   facilityId?: string;
   type?: StorageLocationType | StorageLocationType[];
   feedstockTypeId?: string;
+  feedstockTypeUsage?: "pyrolysis" | "blend";
   /** Show product bins reserved for this formulation, plus unassigned (empty) bins. */
   formulationId?: string;
   /** Show only pure-biochar product bins (formulation unset). For pure-biochar products. */
   pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { userId, search, facilityId, type, feedstockTypeId, formulationId, pureProductOnly, limit } =
+  const { userId, search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, pureProductOnly, limit } =
     params;
   requireAuth(userId);
 
@@ -205,6 +213,10 @@ export async function getStorageLocations(params: {
         eq(storageLocations.feedstockTypeId, feedstockTypeId)
       )!
     );
+  }
+
+  if (feedstockTypeUsage) {
+    conditions.push(eq(heldFeedstockTypes.usage, feedstockTypeUsage));
   }
 
   // Keep product bins clean: a pure-biochar product can only land in an unassigned
@@ -247,9 +259,12 @@ export async function getStorageLocations(params: {
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      heldFeedstockTypeName: heldFeedstockTypes.name,
+      heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       formulationName: formulations.name,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      pendingStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
       totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
       totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
@@ -257,6 +272,7 @@ export async function getStorageLocations(params: {
       biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
+    .leftJoin(heldFeedstockTypes, eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id))
     .leftJoin(formulations, eq(storageLocations.formulationId, formulations.id))
     .leftJoin(
       feedstockInventoryAggregate,
@@ -287,8 +303,10 @@ export async function getStorageLocations(params: {
     name: r.name,
     subtitle: formatStorageLocationSubtitle(
       r.type,
-      r.feedstockTypeName,
+      r.heldFeedstockTypeName ?? r.feedstockTypeName,
+      r.heldFeedstockTypeUsage,
       r.totalStoredKg,
+      r.pendingStoredKg,
       r.totalConsumedKg,
       r.totalProducedKg,
       r.totalAllocatedKg,
@@ -311,9 +329,12 @@ export async function getStorageLocationById(
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
+      heldFeedstockTypeName: heldFeedstockTypes.name,
+      heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       formulationName: formulations.name,
       totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      pendingStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
       totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
       totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
       totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
@@ -321,6 +342,7 @@ export async function getStorageLocationById(
       biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
+    .leftJoin(heldFeedstockTypes, eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id))
     .leftJoin(formulations, eq(storageLocations.formulationId, formulations.id))
     .leftJoin(
       feedstockInventoryAggregate,
@@ -353,8 +375,10 @@ export async function getStorageLocationById(
     name: result.name,
     subtitle: formatStorageLocationSubtitle(
       result.type,
-      result.feedstockTypeName,
+      result.heldFeedstockTypeName ?? result.feedstockTypeName,
+      result.heldFeedstockTypeUsage,
       result.totalStoredKg,
+      result.pendingStoredKg,
       result.totalConsumedKg,
       result.totalProducedKg,
       result.totalAllocatedKg,

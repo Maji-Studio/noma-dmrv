@@ -29,6 +29,7 @@ export function FeedstockTypeQuickAddDialog({
       createFeedstockTypeFn({
         name: data.name.trim(),
         category: data.category,
+        usage: data.usage,
         description: data.description?.trim() || null,
         registryUrl: data.registryUrl?.trim() || null,
       }),
