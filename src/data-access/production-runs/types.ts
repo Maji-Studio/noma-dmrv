@@ -50,6 +50,7 @@ export interface ProductionRunWithRelations {
   feedstocks: ProductionRunFeedstockWithDetails[];
   // Computed fields
   totalFeedstockMassKg: number;
+  readingsCount: number;
 }
 
 export interface PaginatedProductionRuns {
@@ -86,4 +87,7 @@ export interface ProductionRunReadingRecord {
   createdAt: Date;
 }
 
-export type ProductionRunWithSamples = ProductionRun & { samples: Sample[] };
+export type ProductionRunWithSamples = ProductionRun & {
+  samples: Sample[];
+  readingsCount: number;
+};

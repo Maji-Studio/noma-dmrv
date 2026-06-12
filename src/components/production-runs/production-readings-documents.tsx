@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { File, Trash, ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
-import { ServerError } from "@/components/forms";
+import { FormField, FormSelect, ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,13 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
+import {
+  useImportProductionRunReadings,
+  usePreviewProductionRunReadingsImport,
+} from "@/hooks/use-production-run-reading-imports";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import type { ReactorDayCsvMappingInput } from "@/schemas/production-run-reading-imports";
+import type { ProductionRunReadingsImportPreview } from "@/fn/production-run-reading-imports";
 
 interface ProductionReadingsDocumentsProps {
   productionRunId: string;
@@ -26,6 +32,7 @@ const ENTITY_TYPE: DocumentEntityType = "production_run";
 // CSV / spreadsheet exports from PLC or sensor loggers.
 const READINGS_ACCEPT = ".csv,.xls,.xlsx";
 const READINGS_MAX_MB = 25;
+const EMPTY_SELECT_VALUE = "";
 
 /**
  * Readings CSV upload + file list for a production run, persisted as
@@ -45,10 +52,73 @@ export function ProductionReadingsDocuments({
   );
   const invalidateKey = documentKeys.forEntity(ENTITY_TYPE, productionRunId);
   const deleteMutation = useDeleteDocument(invalidateKey);
+  const previewImport = usePreviewProductionRunReadingsImport();
+  const importReadings = useImportProductionRunReadings();
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingPreview, setPendingPreview] =
+    useState<ProductionRunReadingsImportPreview | null>(null);
+  const [selectedMapping, setSelectedMapping] =
+    useState<ReactorDayCsvMappingInput>({
+      temperature: "",
+      pressure: "",
+      gasFlow: null,
+    });
+
+  const runImport = async (
+    documentId: string,
+    mapping?: ReactorDayCsvMappingInput,
+  ) => {
+    const result = await importReadings.mutateAsync({ documentId, mapping });
+    setPendingPreview(null);
+    setUploadError(null);
+    toast.success(
+      `Imported ${result.insertedRows} readings (${result.droppedRows} outside run window)`,
+    );
+    if (result.warnings.length > 0) {
+      toast.warning(result.warnings.join(" "));
+    }
+  };
+
+  const handleUploaded = (documentId: string) => {
+    setUploadError(null);
+    void (async () => {
+      try {
+        const preview = await previewImport.mutateAsync(documentId);
+        if (preview.requiresMapping) {
+          setPendingPreview(preview);
+          setSelectedMapping({
+            temperature: preview.suggestedMapping.temperature,
+            pressure: preview.suggestedMapping.pressure,
+            gasFlow: preview.suggestedMapping.gasFlow ?? null,
+          });
+          toast.info("Confirm channel alignment to import readings.");
+          return;
+        }
+        await runImport(documentId);
+      } catch (err) {
+        setUploadError(
+          err instanceof Error ? err.message : "Failed to import readings",
+        );
+      }
+    })();
+  };
+
+  const handleConfirmMapping = () => {
+    if (!pendingPreview) return;
+    setUploadError(null);
+    void (async () => {
+      try {
+        await runImport(pendingPreview.documentId, selectedMapping);
+      } catch (err) {
+        setUploadError(
+          err instanceof Error ? err.message : "Failed to import readings",
+        );
+      }
+    })();
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
@@ -69,6 +139,16 @@ export function ProductionReadingsDocuments({
       d.documentType === READINGS_DOC_TYPE &&
       (d.uploadStatus === "uploaded" || d.fileUrl),
   );
+  const isImporting = previewImport.isPending || importReadings.isPending;
+  const headerOptions =
+    pendingPreview?.headers.map((header) => ({
+      value: header,
+      label: header,
+    })) ?? [];
+  const gasFlowOptions = [
+    { value: EMPTY_SELECT_VALUE, label: "No gas flow column" },
+    ...headerOptions,
+  ];
 
   return (
     <section className="flex flex-col gap-12">
@@ -142,17 +222,106 @@ export function ProductionReadingsDocuments({
       )}
 
       {!readOnly && (
-        <FormFileUpload
-          id={`production-run-${productionRunId}-readings-upload`}
-          accept={READINGS_ACCEPT}
-          multiple
-          maxSizeMb={READINGS_MAX_MB}
-          entityType={ENTITY_TYPE}
-          entityId={productionRunId}
-          documentType={READINGS_DOC_TYPE}
-          onUploaded={() => setUploadError(null)}
-          onUploadError={(err) => setUploadError(err)}
-        />
+        <>
+          {pendingPreview && (
+            <div className="space-y-12 border border-[var(--color-border-primary)] bg-[var(--color-background-light)] p-16">
+              <div className="space-y-4">
+                <p className="body-small font-medium text-[var(--color-text-primary)]">
+                  Confirm channel alignment for {pendingPreview.fileName}
+                </p>
+                <p className="body-caption text-[var(--color-text-tertiary)]">
+                  Reactor-day {pendingPreview.fileReactorCode} ·{" "}
+                  {pendingPreview.fileDate}
+                </p>
+              </div>
+
+              {pendingPreview.warnings.length > 0 && (
+                <ServerError message={pendingPreview.warnings.join(" ")} />
+              )}
+
+              <div className="grid gap-12 md:grid-cols-3">
+                <FormField id="temperatureColumn" label="Temperature column">
+                  <FormSelect
+                    id="temperatureColumn"
+                    options={headerOptions}
+                    value={selectedMapping.temperature}
+                    onChange={(event) =>
+                      setSelectedMapping((current) => ({
+                        ...current,
+                        temperature: event.target.value,
+                      }))
+                    }
+                    disabled={isImporting}
+                  />
+                </FormField>
+                <FormField id="pressureColumn" label="Pressure column">
+                  <FormSelect
+                    id="pressureColumn"
+                    options={headerOptions}
+                    value={selectedMapping.pressure}
+                    onChange={(event) =>
+                      setSelectedMapping((current) => ({
+                        ...current,
+                        pressure: event.target.value,
+                      }))
+                    }
+                    disabled={isImporting}
+                  />
+                </FormField>
+                <FormField id="gasFlowColumn" label="Gas flow column">
+                  <FormSelect
+                    id="gasFlowColumn"
+                    options={gasFlowOptions}
+                    value={selectedMapping.gasFlow ?? EMPTY_SELECT_VALUE}
+                    onChange={(event) =>
+                      setSelectedMapping((current) => ({
+                        ...current,
+                        gasFlow: event.target.value || null,
+                      }))
+                    }
+                    disabled={isImporting}
+                  />
+                </FormField>
+              </div>
+
+              <div className="flex justify-end gap-8">
+                <Button
+                  type="button"
+                  variant="noOutline"
+                  onClick={() => setPendingPreview(null)}
+                  disabled={isImporting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleConfirmMapping}
+                  disabled={
+                    isImporting ||
+                    !selectedMapping.temperature ||
+                    !selectedMapping.pressure
+                  }
+                >
+                  Import Readings
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <FormFileUpload
+            id={`production-run-${productionRunId}-readings-upload`}
+            accept={READINGS_ACCEPT}
+            multiple
+            maxSizeMb={READINGS_MAX_MB}
+            disabled={isImporting}
+            entityType={ENTITY_TYPE}
+            entityId={productionRunId}
+            documentType={READINGS_DOC_TYPE}
+            onUploaded={handleUploaded}
+            onUploadError={(err) => setUploadError(err)}
+          />
+        </>
       )}
 
       {deleteError && <ServerError message={deleteError} />}

@@ -1,7 +1,10 @@
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
-export type ProductionRunWithSamples = ProductionRun & { samples: Sample[] };
+export type ProductionRunWithSamples = ProductionRun & {
+  samples: Sample[];
+  readingsCount?: number;
+};
 
 export interface AggregatedProductionData {
   weightedOrganicCarbonPercent: number | null;
