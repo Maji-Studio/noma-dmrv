@@ -32,6 +32,7 @@ import type {
 } from "@/lib/certification/batch-health";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { CheckRow } from "@/components/certification/check-row";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface FixLink {
   label: string;
@@ -158,15 +159,17 @@ export function CreditBatchHealthPanel({
 
   const isReady = health.state === "ready";
   const summary = isReady ? (
-    <span className="inline-flex items-center gap-6 border border-[var(--color-signal-green)] bg-[var(--color-signal-green-light)] px-10 py-4 body-caption font-medium text-[var(--color-signal-green)]">
-      <CheckCircle size={14} weight="fill" aria-hidden />
-      Ready to certify
-    </span>
+    <StatusBadge
+      status="ready"
+      label="Ready to certify"
+      icon={<CheckCircle size={14} weight="fill" />}
+    />
   ) : (
-    <span className="inline-flex items-center gap-6 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-10 py-4 body-caption font-medium text-[var(--color-signal-orange-strong)]">
-      <Warning size={14} weight="fill" aria-hidden />
-      {health.issueCount} {health.issueCount === 1 ? "issue" : "issues"}
-    </span>
+    <StatusBadge
+      status="pending"
+      label={`${health.issueCount} ${health.issueCount === 1 ? "issue" : "issues"}`}
+      icon={<Warning size={14} weight="fill" />}
+    />
   );
 
   return (

@@ -1,7 +1,11 @@
 /**
  * SampleForm component
  * Reusable sample form with React Hook Form integration
- * Uses Base UI Accordion for collapsible form sections
+ *
+ * Flat labeled sections (the production-run form grammar — mono section
+ * labels + hairline dividers, no accordions). Progressive disclosure only
+ * where the data demands it: the 1000-year sections appear with the
+ * durability option, nutrient fields with the claim checkbox.
  *
  * Form sections:
  * 1. Sample Info - production run, samplingTime, lab details
@@ -10,8 +14,8 @@
  * 4. Proximate - ash, volatile matter, moisture
  * 5. Physical - bulkDensity, pH, surfaceArea, saltContent
  * 6. Stability - durability option, H:C ratio, O:C ratio
- * 7. 1000-Year Durability (conditional) - R₀ reflectance, TGA non-reactive carbon
- * 8. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
+ * 7+8. (conditional, 1000-year) R₀ reflectance · TGA non-reactive carbon
+ * 9. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
  */
 "use client";
 
@@ -24,7 +28,6 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
-import { Accordion } from "@/components/ui/accordion";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   sampleFormSchema,
@@ -188,20 +191,12 @@ export function SampleForm({
     onSubmit(data as unknown as SampleFormData);
   });
 
-  // Default expanded accordion sections
-  const defaultExpandedSections = ["sample-info", "carbon-analysis"];
-
   return (
-    <div className="space-y-20">
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
-      <Accordion.Root defaultValue={defaultExpandedSections}>
-        {/* === Section 1: Sample Info === */}
-        <Accordion.Item value="sample-info">
-          <Accordion.Header>
-            <Accordion.Trigger>Sample Information</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
-            <div className="space-y-20">
+    <div className="space-y-24">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
+        {/* ── Sample Information ── */}
+        <div className="space-y-16">
+          <SectionLabel>Sample Information</SectionLabel>
               <FormField
                 id="productionRunId"
                 label="Production Run"
@@ -330,17 +325,11 @@ export function SampleForm({
                   />
                 </FormField>
               </div>
-            </div>
-          </Accordion.Panel>
-        </Accordion.Item>
+        </div>
 
-        {/* === Section 2: Carbon Analysis === */}
-        <Accordion.Item value="carbon-analysis">
-          <Accordion.Header>
-            <Accordion.Trigger>Carbon Analysis</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
-            <div className="space-y-20">
+        {/* ── Carbon Analysis ── */}
+        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Carbon Analysis</SectionLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
@@ -400,16 +389,11 @@ export function SampleForm({
                   })}
                 />
               </FormField>
-            </div>
-          </Accordion.Panel>
-        </Accordion.Item>
+        </div>
 
-        {/* === Section 3: Elemental Analysis === */}
-        <Accordion.Item value="elemental">
-          <Accordion.Header>
-            <Accordion.Trigger>Elemental Analysis</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
+        {/* ── Elemental Analysis ── */}
+        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Elemental Analysis</SectionLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="totalHydrogenPercent"
@@ -483,16 +467,11 @@ export function SampleForm({
                 />
               </FormField>
             </div>
-          </Accordion.Panel>
-        </Accordion.Item>
+        </div>
 
-        {/* === Section 4: Proximate Analysis === */}
-        <Accordion.Item value="proximate">
-          <Accordion.Header>
-            <Accordion.Trigger>Proximate Analysis</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
-            <div className="space-y-20">
+        {/* ── Proximate Analysis ── */}
+        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Proximate Analysis</SectionLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="ashContentPercent"
@@ -548,16 +527,11 @@ export function SampleForm({
                   })}
                 />
               </FormField>
-            </div>
-          </Accordion.Panel>
-        </Accordion.Item>
+        </div>
 
-        {/* === Section 5: Physical Properties === */}
-        <Accordion.Item value="physical">
-          <Accordion.Header>
-            <Accordion.Trigger>Physical Properties</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
+        {/* ── Physical Properties ── */}
+        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Physical Properties</SectionLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="bulkDensityKgPerM3"
@@ -633,16 +607,11 @@ export function SampleForm({
                 />
               </FormField>
             </div>
-          </Accordion.Panel>
-        </Accordion.Item>
+        </div>
 
-        {/* === Section 6: Stability === */}
-        <Accordion.Item value="stability">
-          <Accordion.Header>
-            <Accordion.Trigger>Stability Ratios</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
-            <div className="space-y-20">
+        {/* ── Stability Ratios ── */}
+        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Stability Ratios</SectionLabel>
               <FormField
                 id="durabilityOption"
                 label="Durability Option"
@@ -695,19 +664,13 @@ export function SampleForm({
                   />
                 </FormField>
               </div>
-            </div>
-          </Accordion.Panel>
-        </Accordion.Item>
+        </div>
 
-        {/* === Section 7: 1000-Year Durability (Conditional) === */}
+        {/* ── 1000-Year Durability (conditional, two flat sibling sections) ── */}
         {watchedDurabilityOption === "1000_year" && (
-          <Accordion.Item value="durability-1000">
-            <Accordion.Header>
-              <Accordion.Trigger>1000-Year Durability Data</Accordion.Trigger>
-            </Accordion.Header>
-            <Accordion.Panel>
-              <div className="space-y-20">
-                <SectionLabel>R₀ Reflectance</SectionLabel>
+          <>
+            <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+              <SectionLabel>1000-Year Durability · R₀ Reflectance</SectionLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
@@ -763,11 +726,10 @@ export function SampleForm({
                     })}
                   />
                 </FormField>
+            </div>
 
-                <div className="pt-20 border-t border-[var(--color-border-tertiary)]">
-                  <SectionLabel>TGA Non-Reactive Carbon</SectionLabel>
-                </div>
-
+            <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+              <SectionLabel>TGA Non-Reactive Carbon</SectionLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
@@ -823,18 +785,13 @@ export function SampleForm({
                     })}
                   />
                 </FormField>
-              </div>
-            </Accordion.Panel>
-          </Accordion.Item>
+            </div>
+          </>
         )}
 
-        {/* === Nutrient Claims Section === */}
-        <Accordion.Item value="nutrients">
-          <Accordion.Header>
-            <Accordion.Trigger>Nutrient Claims</Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Panel>
-            <div className="space-y-20">
+        {/* ── Nutrient Claims ── */}
+        <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+          <SectionLabel>Nutrient Claims</SectionLabel>
               <label
                 htmlFor="nutrientClaimEnabled"
                 className="flex items-center gap-12 cursor-pointer"
@@ -944,10 +901,7 @@ export function SampleForm({
                   </FormField>
                 </div>
               )}
-            </div>
-          </Accordion.Panel>
-        </Accordion.Item>
-      </Accordion.Root>
+        </div>
       </form>
 
       {/* Extension content (e.g. transport legs) — always before the CTA */}

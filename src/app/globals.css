@@ -6,6 +6,7 @@
   --clr-dark-purple: rgba(15, 2, 26, 1);
   --clr-dark-purple-100: rgba(15, 2, 26, 1);
   --clr-dark-purple-80: rgba(15, 2, 26, 0.8);
+  --clr-dark-purple-70: rgba(15, 2, 26, 0.7);
   --clr-dark-purple-60: rgba(15, 2, 26, 0.6);
   --clr-dark-purple-50: rgba(15, 2, 26, 0.5);
   --clr-dark-purple-40: rgba(15, 2, 26, 0.4);
@@ -108,6 +109,28 @@
   /* Tinted canvas wash (chain-of-custody figure/ground) */
   --sea: rgba(72, 11, 115, 0.045);
 
+  /* ===== HAIRLINE HIERARCHY (Maji DS) =====
+     --hair = full-ink structural border (the mock's figure/ground mechanism);
+     --hair-2 = secondary structure; --hair-3 = row dividers in dense lists. */
+  --hair: 1.5px solid var(--clr-dark-purple-100);
+  --hair-2: 1.5px solid var(--clr-dark-purple-20);
+  --hair-3: 1px solid var(--clr-dark-purple-10);
+
+  /* ===== PANEL RECIPE (Phase 2.5, decided 2026-06-12) =====
+     The one figure/ground recipe for surfaces on the warm field — StatCard,
+     DataTable frame, entity cards, filter chrome. Apply through shared
+     components, never per-page. 1.5px plum hairline at 40% (full ink proved
+     too heavy in app-density layouts); elevation is border + paper, never
+     shadow. */
+  --panel-bg: var(--paper);
+  --panel-border: 1.5px solid var(--clr-dark-purple-40);
+  --panel-shadow: none;
+  --panel-head-bg: var(--sea);
+  --panel-head-border: var(--hair-3);
+  --row-divider: var(--hair-3);
+  --row-hover-bg: var(--sea);
+  --row-stripe-bg: rgba(15, 2, 26, 0.02);
+
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;
   --color-gray-100: #f5f5f5ff;
@@ -149,34 +172,36 @@
 
   /* ===== SEMANTIC COLOR TOKENS ===== */
 
-  /* Borders */
-  --color-border-primary: var(--color-gray-400);
-  --color-border-secondary: var(--color-gray-300);
-  --color-border-tertiary: var(--color-gray-200);
+  /* Borders — plum alphas, not neutral grays (Maji "two greys" rule:
+     every grey on the light theme is an alpha of plum over white; cool
+     neutral hairlines read dirty on the warm field). */
+  --color-border-primary: var(--clr-dark-purple-30);
+  --color-border-secondary: var(--clr-dark-purple-20);
+  --color-border-tertiary: var(--clr-dark-purple-10);
 
-  /* Text */
-  --color-text-primary: var(--color-gray-800);
-  --color-text-secondary: var(--color-gray-600);
-  --color-text-tertiary: var(--color-gray-500);
+  /* Text — plum alphas (same rule) */
+  --color-text-primary: var(--ink);
+  --color-text-secondary: var(--clr-dark-purple-70);
+  --color-text-tertiary: var(--clr-dark-purple-50);
   --color-text-white-primary: var(--color-white-100);
-  --color-text-white-secondary: var(--color-gray-300);
+  --color-text-white-secondary: var(--color-white-75);
 
   /* Icons */
-  --color-icon-primary: var(--color-gray-900);
-  --color-icon-secondary: var(--color-gray-600);
+  --color-icon-primary: var(--clr-dark-purple-100);
+  --color-icon-secondary: var(--clr-dark-purple-60);
 
-  /* Backgrounds */
+  /* Backgrounds — faint plum washes over the paper/field */
   --color-background-white: var(--color-white-100);
-  --color-background-light: var(--color-gray-50);
-  --color-background-medium: var(--color-gray-100);
-  --color-background-strong: var(--color-gray-200);
-  --color-background-dark-light: var(--color-gray-700);
-  --color-background-dark-strong: var(--color-gray-800);
+  --color-background-light: rgba(15, 2, 26, 0.02);
+  --color-background-medium: rgba(15, 2, 26, 0.04);
+  --color-background-strong: rgba(15, 2, 26, 0.08);
+  --color-background-dark-light: var(--clr-dark-purple-80);
+  --color-background-dark-strong: var(--clr-dark-purple-100);
 
-  /* Surfaces */
-  --color-surface-light: var(--color-gray-200);
-  --color-surface-medium: var(--color-gray-400);
-  --color-surface-strong: var(--color-gray-500);
+  /* Surfaces (skeletons, fills) */
+  --color-surface-light: var(--clr-dark-purple-5);
+  --color-surface-medium: var(--clr-dark-purple-10);
+  --color-surface-strong: var(--clr-dark-purple-30);
 
   /* Interactive Backgrounds */
   --color-background-interaction-light: var(--clr-dark-purple-10);
@@ -571,6 +596,19 @@ p,
   font-weight: var(--text-label-button--font-weight);
   line-height: var(--text-label-button--line-height);
   letter-spacing: var(--text-label-button--letter-spacing);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* Mono micro-label — table headers, KPI titles, panel heads. The 12px
+   sibling of .title-chapter-title (every label is GT Flexa Mono Medium,
+   uppercase, letter-spaced, per the Maji DS). */
+.label-micro {
+  font-family: var(--font-mono);
+  font-size: var(--text-xxs);
+  font-weight: var(--font-weight-medium);
+  line-height: 120%;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   margin: 0;
 }

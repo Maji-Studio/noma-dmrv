@@ -55,8 +55,9 @@ function Content({
         <Menu.Popup
           className={cn(
             "min-w-[160px] py-4",
-            "bg-[var(--paper)] border border-[var(--color-border-primary)]",
-            "shadow-[0_4px_16px_var(--color-black-10)]",
+            // Floating chrome floats on border alone (Maji DS: no drop
+            // shadows) — full-ink hairline does the elevation work.
+            "bg-[var(--paper)] [border:var(--hair)]",
             "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
             "transition-opacity duration-150",
             "outline-none",

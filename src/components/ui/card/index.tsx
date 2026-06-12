@@ -9,7 +9,10 @@ import { cn } from "@/lib/utils"
  * -----------------------------------------------------------------------------------------------*/
 
 const cardRootVariants = cva(
-  "group flex flex-col overflow-hidden bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] transition-colors duration-300 hover:border-[var(--color-border-primary)]",
+  // Shared panel recipe (Phase 2.5): paper + plum hairline. Square corners
+  // are the default (Maji DS brutalist rule); radius="default" remains as an
+  // explicit opt-in for legacy spots.
+  "group flex flex-col overflow-hidden bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors duration-300 hover:[border-color:var(--edge-soft)]",
   {
     variants: {
       padding: {
@@ -25,7 +28,7 @@ const cardRootVariants = cva(
     },
     defaultVariants: {
       padding: "none",
-      radius: "default",
+      radius: "none",
     },
   }
 )

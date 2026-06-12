@@ -20,11 +20,13 @@ import { TrendUp, TrendDown, Minus } from "@phosphor-icons/react";
  * -----------------------------------------------------------------------------------------------*/
 
 const statCardVariants = cva(
-  "group flex flex-col overflow-hidden bg-[var(--paper)] border border-[var(--color-border-secondary)] transition-colors duration-300",
+  // Shared panel recipe (Phase 2.5) — paper + plum hairline, candidate
+  // treatments swap via the --panel-* tokens.
+  "group flex flex-col overflow-hidden bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors duration-300",
   {
     variants: {
       interactive: {
-        true: "cursor-pointer hover:border-[var(--color-border-primary)]",
+        true: "cursor-pointer hover:[border-color:var(--edge-soft)]",
         false: "",
       },
     },
@@ -165,10 +167,10 @@ const StatCardContent = React.forwardRef<
       >
         <div className="flex items-start justify-between gap-12">
           <div className="flex flex-col gap-2 min-w-0">
-            <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
+            <span className="label-micro text-[var(--color-text-secondary)]">
               {title}
             </span>
-            <span className="title-heading-3 text-[var(--color-text-primary)]">
+            <span className="title-heading-3 tabular-nums tracking-tight text-[var(--color-text-primary)]">
               {value}
             </span>
             {/* Trend indicator or description */}
