@@ -3,6 +3,7 @@
  *
  * Covers:
  * - UI CRUD: create a feedstock through the side sheet form, verify it appears in the list
+ * - Truck weighing: arrival/departure masses prefill feedstock wet mass and allocation
  */
 import { test, expect } from "./fixtures";
 import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
@@ -39,8 +40,15 @@ test.describe("Feedstock UI CRUD", () => {
       seededData.feedstockType.name
     );
 
-    // Fill required numeric fields (dry mass is auto-calculated)
-    await page.fill('input[name="totalWetMassKg"]', "100");
+    // Fill weighbridge masses; wet mass and single-bin allocation are inferred.
+    await page.fill('input[name="truckMassOnArrivalKg"]', "250");
+    await page.fill('input[name="truckMassOnDepartureKg"]', "150");
+    await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue("100");
+    await expect(
+      page.locator('input[name="allocations.0.allocatedWetMassKg"]')
+    ).toHaveValue("100");
+
+    // Fill remaining required numeric fields (dry mass is auto-calculated)
     await page.fill('input[name="moisturePercent"]', "25");
 
     // Select storage bin in allocation row
@@ -50,9 +58,6 @@ test.describe("Feedstock UI CRUD", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name
     );
-
-    // Fill allocated wet mass
-    await page.fill('input[name="allocations.0.allocatedWetMassKg"]', "100");
 
     // Submit the form
     await page.locator('[role="dialog"]').locator('button:has-text("Create Feedstock")').click();

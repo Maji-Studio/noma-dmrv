@@ -17,7 +17,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError, TruckWeighingSection } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -80,6 +80,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
@@ -93,6 +94,8 @@ export function FeedstockForm({
       feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
       moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+      truckMassOnArrivalKg: feedstock?.truckMassOnArrivalKg ?? undefined,
+      truckMassOnDepartureKg: feedstock?.truckMassOnDepartureKg ?? undefined,
       allocations: feedstock
         ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
         : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
@@ -113,6 +116,8 @@ export function FeedstockForm({
   // Watch values for dry mass calculation
   const watchWetMass = useWatch({ control, name: "totalWetMassKg" });
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
+  const watchArrivalMass = useWatch({ control, name: "truckMassOnArrivalKg" });
+  const watchDepartureMass = useWatch({ control, name: "truckMassOnDepartureKg" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
@@ -197,6 +202,34 @@ export function FeedstockForm({
     typeof watchWetMass === "number" && allocatedTotalWetKg > watchWetMass;
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
+
+  useEffect(() => {
+    if (isEditMode || fields.length !== 1 || typeof watchWetMass !== "number") {
+      return;
+    }
+    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
+    if (typeof currentAllocation !== "number") {
+      setValue("allocations.0.allocatedWetMassKg", watchWetMass, {
+        shouldValidate: true,
+      });
+    }
+  }, [fields.length, getValues, isEditMode, setValue, watchWetMass]);
+
+  const suggestWetMassFromTruckWeighing = (wetMassKg: number) => {
+    const currentWetMass = getValues("totalWetMassKg");
+    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
+    setValue("totalWetMassKg", wetMassKg, { shouldValidate: true });
+    if (
+      !isEditMode &&
+      fields.length === 1 &&
+      (typeof currentAllocation !== "number" ||
+        currentAllocation === currentWetMass)
+    ) {
+      setValue("allocations.0.allocatedWetMassKg", wetMassKg, {
+        shouldValidate: true,
+      });
+    }
+  };
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FeedstockFormData);
@@ -395,6 +428,23 @@ export function FeedstockForm({
             )}
           </div>
         </div>
+
+        <TruckWeighingSection
+          arrivalMassKg={watchArrivalMass}
+          departureMassKg={watchDepartureMass}
+          wetMassKg={watchWetMass}
+          wetMassLabel="Entered wet mass"
+          onSuggestWetMass={suggestWetMassFromTruckWeighing}
+          arrivalRegister={register("truckMassOnArrivalKg", {
+            setValueAs: numericValue,
+          })}
+          departureRegister={register("truckMassOnDepartureKg", {
+            setValueAs: numericValue,
+          })}
+          arrivalError={errors.truckMassOnArrivalKg?.message}
+          departureError={errors.truckMassOnDepartureKg?.message}
+          isSubmitting={isSubmitting}
+        />
 
         {/* Bin Allocations — only shown after feedstock type is selected */}
         {watchedFeedstockTypeId ? (
