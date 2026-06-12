@@ -1,0 +1,5 @@
+ALTER TABLE "feedstocks" ADD COLUMN "truck_mass_on_arrival_kg" real;--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD COLUMN "truck_mass_on_departure_kg" real;--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_truck_mass_on_arrival_non_negative" CHECK ("feedstocks"."truck_mass_on_arrival_kg" is null or "feedstocks"."truck_mass_on_arrival_kg" >= 0);--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_truck_mass_on_departure_non_negative" CHECK ("feedstocks"."truck_mass_on_departure_kg" is null or "feedstocks"."truck_mass_on_departure_kg" >= 0);--> statement-breakpoint
+ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_truck_mass_arrival_gte_departure" CHECK ("feedstocks"."truck_mass_on_arrival_kg" is null or "feedstocks"."truck_mass_on_departure_kg" is null or "feedstocks"."truck_mass_on_arrival_kg" >= "feedstocks"."truck_mass_on_departure_kg");

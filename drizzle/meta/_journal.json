@@ -323,6 +323,13 @@
       "when": 1781285245790,
       "tag": "0045_pale_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1781289370846,
+      "tag": "0046_outgoing_stryfe",
+      "breakpoints": true
     }
   ]
 }
