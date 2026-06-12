@@ -219,8 +219,6 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
-  const watchedSoilTemperatureC = useWatch({ control, name: "soilTemperatureC" });
-  const watchedSoilTemperatureSource = useWatch({ control, name: "soilTemperatureSource" });
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
 
@@ -230,16 +228,16 @@ export function ApplicationForm({
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
 
+  // Prefill the soil temperature from the delivery's customer-location /
+  // facility default, but only while the operator hasn't touched the fields
+  // (manual edits set them dirty; prefills don't). While untouched, the
+  // values always mirror the selected delivery — including clearing a stale
+  // prefill when the new delivery has no default.
   useEffect(() => {
     if (isEditMode || !selectedDelivery) return;
-
-    const temperatureState = getFieldState("soilTemperatureC");
-    const sourceState = getFieldState("soilTemperatureSource");
     if (
-      temperatureState.isDirty ||
-      sourceState.isDirty ||
-      watchedSoilTemperatureC != null ||
-      watchedSoilTemperatureSource
+      getFieldState("soilTemperatureC").isDirty ||
+      getFieldState("soilTemperatureSource").isDirty
     ) {
       return;
     }
@@ -247,24 +245,15 @@ export function ApplicationForm({
     const defaultValue = resolveApplicationSoilTemperatureDefault({
       delivery: selectedDelivery,
     });
-    if (!defaultValue) return;
-
-    setValue("soilTemperatureSource", defaultValue.soilTemperatureSource, {
+    setValue("soilTemperatureSource", defaultValue?.soilTemperatureSource, {
       shouldDirty: false,
       shouldValidate: true,
     });
-    setValue("soilTemperatureC", defaultValue.soilTemperatureC, {
+    setValue("soilTemperatureC", defaultValue?.soilTemperatureC, {
       shouldDirty: false,
       shouldValidate: true,
     });
-  }, [
-    getFieldState,
-    isEditMode,
-    selectedDelivery,
-    setValue,
-    watchedSoilTemperatureC,
-    watchedSoilTemperatureSource,
-  ]);
+  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
 
   // Prefill the field position from the delivery's destination customer
   // location, but only while the operator hasn't touched it (pin drag and
