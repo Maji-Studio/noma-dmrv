@@ -23,6 +23,8 @@ interface StorageLocationQuickAddDialogProps {
   allowedTypes?: readonly StorageLocationType[];
   /** Pre-selects the feedstock type the parent flow is working with */
   defaultFeedstockTypeId?: string;
+  /** Pre-selects the formulation the parent flow is working with */
+  defaultFormulationId?: string;
   /** Facility ID (required for creation) */
   facilityId: string;
 }
@@ -34,6 +36,7 @@ export function StorageLocationQuickAddDialog({
   defaultBinType,
   allowedTypes,
   defaultFeedstockTypeId,
+  defaultFormulationId,
   facilityId,
 }: StorageLocationQuickAddDialogProps) {
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<StorageLocationFormData>({
@@ -67,6 +70,7 @@ export function StorageLocationQuickAddDialog({
         defaultType={defaultBinType}
         allowedTypes={allowedTypes}
         defaultFeedstockTypeId={defaultFeedstockTypeId}
+        defaultFormulationId={defaultFormulationId}
       />
     </QuickAddDialogShell>
   );
