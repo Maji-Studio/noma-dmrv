@@ -163,24 +163,24 @@ export function ProductionIncidentTable({
                   {!readOnly && (
                     <td className="py-8 text-right">
                       <div className="flex items-center justify-end gap-4">
-                        <button
-                          type="button"
+                        <Button
+                          variant="noOutline"
+                          size="icon"
                           onClick={() => openEdit(incident)}
-                          className="p-6 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
                           aria-label="Edit incident"
                           disabled={inlineForm.open}
                         >
                           <Pencil size={16} />
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
                           onClick={() => setDeletingId(incident.id)}
-                          className="p-6 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-signal-red)]"
                           aria-label="Delete incident"
                           disabled={inlineForm.open}
                         >
                           <Trash size={16} />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   )}

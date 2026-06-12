@@ -30,6 +30,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import { ArrowLeft, TreeStructure } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { cn } from "@/lib/utils";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
@@ -523,7 +524,7 @@ export function ChainOfCustodyPage() {
   })();
 
   return (
-    <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="flex flex-col h-screen">
         <header className="shrink-0 px-24 py-16 flex flex-col gap-16 border-b border-[var(--color-border-secondary)]">
           <div className="flex items-start justify-between gap-16">
@@ -584,15 +585,15 @@ export function ChainOfCustodyPage() {
                 </div>
               ) : null}
               {anchor === "application" && selectedBatchId ? (
-                <button
-                  type="button"
+                <Button
+                  variant="default"
                   onClick={backToBatch}
                   data-testid="chain-back-to-batch"
-                  className="flex h-40 cursor-pointer items-center gap-8 border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
+                  className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
                 >
                   <ArrowLeft size={14} weight="bold" />
                   Batch roll-up
-                </button>
+                </Button>
               ) : null}
             </div>
 

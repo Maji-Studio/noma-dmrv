@@ -15,6 +15,7 @@ import {
 } from "react";
 import { X, CheckCircle, XCircle, Warning, Info } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // ============================================
 // Types
@@ -197,13 +198,15 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         <p className="body-small min-w-0 flex-1 text-[var(--color-text-primary)]">
           {toast.message}
         </p>
-        <button
+        <Button
+          variant="noOutline"
+          size="icon"
           onClick={() => onDismiss(toast.id)}
-          className="flex h-28 w-28 shrink-0 items-center justify-center text-[var(--color-text-tertiary)] transition-colors duration-300 hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]"
+          className="h-28 w-28 shrink-0 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]"
           aria-label="Dismiss notification"
         >
           <X size={14} weight="bold" />
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ export default function SchemaLinksPage() {
   const relationships = getSchemaRelationships();
 
   return (
-    <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         <header className="flex flex-col gap-16">
           <nav>

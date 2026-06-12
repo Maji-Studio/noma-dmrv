@@ -10,6 +10,7 @@ import * as React from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /* -------------------------------------------------------------------------------------------------
  * SlideOverPanel.Root
@@ -197,18 +198,14 @@ function Header({
       </div>
       {showClose && (
         <Dialog.Close
-          className={cn(
-            "flex items-center justify-center",
-            "w-32 h-32 shrink-0",
-            "text-[var(--color-text-tertiary)]",
-            "hover:text-[var(--color-text-primary)]",
-            "hover:bg-[var(--color-background-medium)]",
-            "transition-colors duration-200",
-            "focus-visible:outline-none focus-visible:ring-2",
-            "focus-visible:ring-[var(--color-border-primary)]",
-            "cursor-pointer"
-          )}
           aria-label="Close panel"
+          render={
+            <Button
+              variant="noOutline"
+              size="icon"
+              className="shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            />
+          }
         >
           <CloseIcon />
         </Dialog.Close>

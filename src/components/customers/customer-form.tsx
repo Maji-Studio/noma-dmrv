@@ -14,6 +14,7 @@ import { customerFormSchema, type CustomerFormData } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { Button } from "@/components/ui/button";
 import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-dialog";
 
 // ============================================
@@ -257,14 +258,15 @@ function CreateModeLocationsSection({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Locations <span className="text-[var(--color-signal-red)]">*</span>
         </h3>
-        <button
-          type="button"
+        <Button
+          variant="noOutline"
+          size="small"
           onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-6 px-10 py-4 text-[var(--text-s)] font-medium text-[var(--color-interaction)] hover:bg-[var(--color-interaction)]/10 transition-colors"
+          className="text-[var(--color-interaction)]"
         >
           <Plus size={14} weight="bold" />
           Add Location
-        </button>
+        </Button>
       </div>
 
       {error && (
@@ -302,14 +304,15 @@ function CreateModeLocationsSection({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="destructive"
+                  size="icon"
                   onClick={() => onRemove(index)}
-                  className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+                  className="shrink-0"
                   aria-label={`Remove ${loc.name}`}
                 >
                   <Trash size={16} />
-                </button>
+                </Button>
               </div>
             );
           })}
@@ -580,20 +583,12 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       </label>
 
       <div className="flex gap-12 justify-start pt-8">
-        <button
-          type="button"
-          onClick={handleAdd}
-          className="h-36 px-12 bg-[var(--color-interaction)] text-white hover:opacity-90 text-[var(--text-s)]"
-        >
+        <Button variant="primary" size="small" onClick={handleAdd}>
           Add Location
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-36 px-12 border border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] text-[var(--text-s)]"
-        >
+        </Button>
+        <Button variant="default" size="small" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -626,14 +621,15 @@ function LocationsSection({ customerId }: { customerId: string }) {
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Locations
         </h3>
-        <button
-          type="button"
+        <Button
+          variant="noOutline"
+          size="small"
           onClick={() => setShowAddDialog(true)}
-          className="inline-flex items-center gap-6 px-10 py-4 text-[var(--text-s)] font-medium text-[var(--color-interaction)] hover:bg-[var(--color-interaction)]/10 transition-colors"
+          className="text-[var(--color-interaction)]"
         >
           <Plus size={14} weight="bold" />
           Add Location
-        </button>
+        </Button>
       </div>
 
       {isLoading ? (
@@ -665,14 +661,15 @@ function LocationsSection({ customerId }: { customerId: string }) {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="destructive"
+                size="icon"
                 onClick={() => setDeletingLocationId(loc.id)}
-                className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+                className="shrink-0"
                 aria-label={`Delete ${loc.name}`}
               >
                 <Trash size={16} />
-              </button>
+              </Button>
             </div>
           ))}
         </div>

@@ -28,7 +28,7 @@ import {
 } from "@/components/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -375,25 +375,24 @@ export function SampleList() {
         hoverable
         onRowClick={(row) => openView(row)}
         emptyMessage={
-          <div className="flex flex-col items-center justify-center gap-24 py-48">
-            <Flask size={48} className="text-[var(--color-text-tertiary)]" />
-            <div className="text-center">
-              <h3 className="title-heading-3 mb-1">
-                {hasActiveFilters ? "No samples found" : "No samples yet"}
-              </h3>
-              <p className="body-small text-[var(--color-text-secondary)]">
-                {hasActiveFilters
-                  ? "Try adjusting your search or filters."
-                  : "Create your first lab sample to start tracking biochar quality."}
-              </p>
-            </div>
-            {!hasActiveFilters && (
-              <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
-                Create Sample
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            padding="md"
+            icon={<Flask size={48} />}
+            title={hasActiveFilters ? "No samples found" : "No samples yet"}
+            description={
+              hasActiveFilters
+                ? "Try adjusting your search or filters."
+                : "Create your first lab sample to start tracking biochar quality."
+            }
+            action={
+              !hasActiveFilters ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <Plus size={20} weight="bold" />
+                  Create Sample
+                </Button>
+              ) : undefined
+            }
+          />
         }
       >
         <DataTable.Toolbar>

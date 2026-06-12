@@ -93,7 +93,7 @@ export function FacilitySelector() {
         />
 
         {isOpen && (
-          <div className="absolute z-50 mt-6 w-full border border-[var(--color-white-10)] bg-[#0f021a] shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <div className="absolute z-50 mt-6 w-full border border-[var(--color-white-10)] bg-[var(--clr-dark-purple)] shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
             <ul role="listbox" id={listboxId} aria-label="Select facility" className="max-h-[240px] overflow-y-auto py-4">
               {facilities.map((facility) => {
                 const isSelected = facility.id === facilityId;
