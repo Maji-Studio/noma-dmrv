@@ -100,6 +100,7 @@ export async function getProductionRunBiocharPreviewFn(
   productionRunId: string
 ): Promise<
   ActionResult<{
+    date: string;
     biocharOutputKg: number | null;
     biocharStorageLocationCode: string | null;
   }>
@@ -112,6 +113,7 @@ export async function getProductionRunBiocharPreviewFn(
 
     const [run] = await db
       .select({
+        date: productionRuns.date,
         biocharOutputKg: productionRuns.biocharOutputKg,
         biocharStorageLocationCode: storageLocations.code,
       })
