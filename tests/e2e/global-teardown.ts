@@ -275,6 +275,61 @@ export default async function globalTeardown() {
       // ─── Biochar products ───
       await client.query(`DELETE FROM biochar_products WHERE code LIKE 'E2E-%'`);
 
+      // ─── Production-run readings documents and telemetry ───
+      await client.query(`
+        DELETE FROM documents
+        WHERE entity_type = 'production_run'
+          AND entity_id IN (
+            SELECT id FROM production_runs
+            WHERE code LIKE 'E2E-%'
+               OR facility_id IN (
+                    SELECT id FROM facilities
+                    WHERE code LIKE 'E2E-%'
+                       OR name LIKE 'UI %'
+                       OR name LIKE 'Chain %'
+                       OR name LIKE 'Duplicate Test %'
+                  )
+               OR reactor_id IN (
+                    SELECT id FROM reactors
+                    WHERE code LIKE 'E2E-%'
+                       OR identifier LIKE 'UI %'
+                       OR identifier LIKE 'Chain %'
+                  )
+               OR feedstock_storage_location_id IN (
+                    SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                  )
+               OR biochar_storage_location_id IN (
+                    SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                  )
+          )
+      `);
+      await client.query(`
+        DELETE FROM production_run_readings
+        WHERE production_run_id IN (
+          SELECT id FROM production_runs
+          WHERE code LIKE 'E2E-%'
+             OR facility_id IN (
+                  SELECT id FROM facilities
+                  WHERE code LIKE 'E2E-%'
+                     OR name LIKE 'UI %'
+                     OR name LIKE 'Chain %'
+                     OR name LIKE 'Duplicate Test %'
+                )
+             OR reactor_id IN (
+                  SELECT id FROM reactors
+                  WHERE code LIKE 'E2E-%'
+                     OR identifier LIKE 'UI %'
+                     OR identifier LIKE 'Chain %'
+                )
+             OR feedstock_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+             OR biochar_storage_location_id IN (
+                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
+                )
+        )
+      `);
+
       // ─── Production runs ───
       await client.query(`DELETE FROM production_runs WHERE code LIKE 'E2E-%'`);
       await client.query(`
@@ -374,7 +429,10 @@ export default async function globalTeardown() {
            OR identifier LIKE 'Chain %'
            OR facility_id IN (
                 SELECT id FROM facilities
-                WHERE name LIKE 'UI %' OR name LIKE 'Chain %' OR name LIKE 'Duplicate Test %'
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
               )
       `);
 

@@ -372,6 +372,7 @@ export function ProductionRunForm({
             label="Status"
             error={errors.status?.message}
             helperText="Set to Complete once the run is finished — a run must be Complete before it can be certified."
+            certifyRequired
           >
             <FormSelect
               id="status"
@@ -711,8 +712,9 @@ export function ProductionRunForm({
 
         <FormField
           id="readingsCsv"
-          label="Readings CSV (optional)"
-          helperText="Optional and not required to certify. Upload PLC / sensor CSV exports — files are stored securely (local in dev, S3 in production)."
+          label="Readings CSV"
+          helperText="Upload reactor-day PLC CSV exports. Raw files are stored securely and imported into the run window as telemetry readings."
+          certifyRequired
         >
           {isEditMode && productionRun ? (
             <ProductionReadingsDocuments productionRunId={productionRun.id} />

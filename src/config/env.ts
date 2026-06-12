@@ -3,6 +3,16 @@ import { z } from "zod";
 const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
 
+const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function isLocalAppUrl(value: string): boolean {
+  try {
+    return LOCAL_APP_HOSTS.has(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Environment variable validation schema
  * Ensures all required env vars are present and valid
@@ -185,13 +195,24 @@ const envSchema = z.object({
     });
   }
 
-  // Production fail-closed: never serve filesystem-backed storage in prod.
-  if (data.NODE_ENV === "production" && data.STORAGE_PROVIDER !== "s3-compatible") {
+  const allowsCiLocalFsStorage =
+    isCI &&
+    data.STORAGE_PROVIDER === "local-fs" &&
+    isLocalAppUrl(data.NEXT_PUBLIC_APP_URL);
+
+  // Production fail-closed: never serve filesystem-backed storage in real
+  // deployments. CI may use local-fs only against localhost for hermetic
+  // Playwright upload round-trips.
+  if (
+    data.NODE_ENV === "production" &&
+    data.STORAGE_PROVIDER !== "s3-compatible" &&
+    !allowsCiLocalFsStorage
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["STORAGE_PROVIDER"],
       message:
-        "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' is rejected as a security safeguard.",
+        "STORAGE_PROVIDER must be 's3-compatible' in production. 'local-fs' is only allowed for CI localhost E2E.",
     });
   }
 });
