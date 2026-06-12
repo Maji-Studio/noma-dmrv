@@ -206,7 +206,7 @@ All local summaries are **non-authoritative interpretations** — verify against
 
 - Admin-invite only by default (`ALLOW_SELF_SIGNUP=false`); admin set by `ADMIN_EMAIL`
 - Email invitations + password resets via Resend; Better Auth session cookies (`nextCookies` plugin)
-- Middleware uses `getSessionCookie()` (`src/middleware.ts`). See `docs/auth.md`.
+- Route protection runs through `src/proxy.ts` (Next.js 16's `middleware.ts` replacement, Node runtime) → `updateSession()` in `src/lib/auth/middleware.ts`. See `docs/auth.md`.
 
 ## Environment Variables
 
