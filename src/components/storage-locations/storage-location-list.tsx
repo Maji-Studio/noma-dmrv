@@ -56,12 +56,24 @@ function formatDateOrFallback(value: Date | null) {
 }
 
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
-  if (storageLocation.type === "feedstock_bin") {
+  if (storageLocation.type === "feedstock_bin" || storageLocation.type === "ingredient_bin") {
     return [
       {
         label: "Current Dry Mass",
         value: formatMass(storageLocation.feedstockInventory.currentDryMassKg),
       },
+      ...(storageLocation.feedstockInventory.pendingDryMassKg > 0
+        ? [
+            {
+              label: "Pending Completion",
+              value: formatMass(storageLocation.feedstockInventory.pendingDryMassKg),
+            },
+            {
+              label: "Pending Feedstocks",
+              value: String(storageLocation.feedstockInventory.pendingBatchCount),
+            },
+          ]
+        : []),
       {
         label: "Estimated Wet Mass",
         value: storageLocation.feedstockInventory.estimatedWetMassKg

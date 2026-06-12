@@ -76,6 +76,46 @@ export async function selectEntity(
   await option.click();
 }
 
+/**
+ * Click an EntitySelect trigger scoped to a field label within the dialog,
+ * then click the first option whose visible text contains `optionText`.
+ * Falls back to the server-side search box when the option isn't in the
+ * initial page of results.
+ */
+export async function selectEntityByText(
+  page: Page,
+  fieldLabel: string,
+  optionText: string
+) {
+  const dialog = page.locator('[role="dialog"]');
+  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
+  const fieldContainer = label.locator(
+    "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+  );
+
+  await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
+  await page.waitForSelector('[data-testid="entity-select-listbox"]', {
+    timeout: 10000,
+  });
+
+  const option = page
+    .locator('[role="option"]')
+    .filter({ hasText: optionText })
+    .first();
+
+  try {
+    await option.waitFor({ state: "visible", timeout: 3000 });
+  } catch {
+    const searchInput = page.locator('[data-testid="entity-select-search"]');
+    if (await searchInput.isVisible().catch(() => false)) {
+      await searchInput.fill(optionText);
+    }
+    await option.waitFor({ state: "visible", timeout: 10000 });
+  }
+
+  await option.click();
+}
+
 /** Click an EntitySelect trigger scoped to a field label within the dialog, then click the first option */
 export async function selectFirstEntity(page: Page, fieldLabel: string) {
   const dialog = page.locator('[role="dialog"]');
