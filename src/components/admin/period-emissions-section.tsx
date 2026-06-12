@@ -9,9 +9,9 @@
  * audit-trail journal: who transcribed what value, on what date, from
  * which LCA document.
  *
- * File upload of the LCA PDF is deliberately stubbed as a free-text
- * `sourceDocumentId` field — full FormFileUpload integration is a
- * follow-up so this PR can land.
+ * The LCA PDF is uploaded through the shared documents pipeline as a
+ * facility-level PDF document; the resulting document id is stored in
+ * `sourceDocumentId`.
  */
 "use client";
 
@@ -25,6 +25,7 @@ import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import {
   FormField,
+  FormFileUpload,
   FormInput,
   FormSelect,
   FormTextarea,
@@ -47,6 +48,7 @@ import {
   useProjectEmissionsForFacility,
   useUpdateProjectEmission,
 } from "@/hooks/use-project-emissions";
+import { createProjectEmissionSourceUploadConfig } from "./period-emission-source-upload";
 
 const CATEGORY_LABELS: Record<ProjectEmissionCategory, string> = {
   staff_travel: "Staff travel",
@@ -231,6 +233,7 @@ function PeriodEmissionFormDialog({
   const createMutation = useCreateProjectEmission();
   const updateMutation = useUpdateProjectEmission();
   const toast = useToast();
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const defaultCategory: ProjectEmissionCategory =
     initial?.category ?? "staff_travel";
@@ -282,7 +285,12 @@ function PeriodEmissionFormDialog({
     name: "category",
   }) as ProjectEmissionCategory;
   const currentUnit = useWatch({ control, name: "unit" });
+  const currentSourceDocumentId = useWatch({
+    control,
+    name: "sourceDocumentId",
+  });
   const suggestedUnit = defaultUnitForCategory(currentCategory);
+  const sourceUploadConfig = createProjectEmissionSourceUploadConfig(facilityId);
 
   const onSubmit = async (raw: unknown) => {
     // Trust the zodResolver to have parsed `raw` to ProjectEmissionFormData
@@ -339,7 +347,9 @@ function PeriodEmissionFormDialog({
           {errors.root?.serverError?.message && (
             <ServerError message={errors.root.serverError.message} />
           )}
+          {uploadError && <ServerError message={uploadError} />}
           <input type="hidden" {...register("facilityId")} />
+          <input type="hidden" {...register("sourceDocumentId")} />
 
           <div className="flex flex-col gap-16">
             <SectionLabel>Category</SectionLabel>
@@ -464,19 +474,36 @@ function PeriodEmissionFormDialog({
           <div className="flex flex-col gap-16">
             <SectionLabel>Provenance</SectionLabel>
             <FormField
-              id="sourceDocumentId"
-              label="Source document ID"
+              id="sourceDocumentUpload"
+              label="LCA PDF"
               error={errors.sourceDocumentId?.message}
-              helperText="UUID of an existing /documents row holding the LCA PDF. Leave empty for now; FormFileUpload integration ships in a follow-up."
+              helperText="Upload the source LCA PDF used for this transcribed value."
             >
-              <FormInput
-                id="sourceDocumentId"
-                type="text"
-                placeholder="(uuid)"
+              <FormFileUpload
+                id="sourceDocumentUpload"
+                accept={sourceUploadConfig.accept}
+                multiple={sourceUploadConfig.multiple}
+                maxSizeMb={sourceUploadConfig.maxSizeMb}
                 error={!!errors.sourceDocumentId}
-                {...register("sourceDocumentId")}
+                entityType={sourceUploadConfig.entityType}
+                entityId={sourceUploadConfig.entityId}
+                documentType={sourceUploadConfig.documentType}
+                onUploaded={(documentId) => {
+                  setUploadError(null);
+                  setValue("sourceDocumentId", documentId, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }}
+                onUploadError={(err) => setUploadError(err)}
               />
             </FormField>
+            {currentSourceDocumentId && (
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                Attached document:{" "}
+                <span className="font-mono">{currentSourceDocumentId}</span>
+              </p>
+            )}
             <FormField
               id="notes"
               label="Notes"
