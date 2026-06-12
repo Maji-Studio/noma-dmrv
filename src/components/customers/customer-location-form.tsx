@@ -5,17 +5,23 @@
  */
 "use client";
 
-import { nullableNumericValue } from "@/lib/form-utils";
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
-import { Button } from "@/components/ui";
+import {
+  DistanceCalcField,
+  FormActions,
+  FormField,
+  FormInput,
+  FormTextarea,
+  PositionPicker,
+} from "@/components/forms";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   customerLocationFormSchema,
   type CustomerLocationFormData,
 } from "@/schemas/customers";
 import type { CustomerLocation } from "@/db/schema/parties";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 // ============================================
 // Component
@@ -46,6 +52,8 @@ export function CustomerLocationForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(customerLocationFormSchema),
@@ -58,10 +66,30 @@ export function CustomerLocationForm({
       gpsLongitude: location?.gpsLongitude ?? undefined,
       address: location?.address ?? "",
       distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
+      distanceSource: location?.distanceSource ?? null,
+      defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
+      isDefault: location?.isDefault ?? false,
     },
   });
 
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
+
+  // Preprocessed Zod fields have `unknown` input types — narrow the watches.
+  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
+  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
+  const distanceFromFacilityKm = watch("distanceFromFacilityKm") as number | null | undefined;
+  const distanceSource = watch("distanceSource");
+
+  // CALC endpoints: the globally selected facility → this destination site.
+  const { selectedFacility } = useFacilityContext();
+  const locationPoint =
+    gpsLatitude != null && gpsLongitude != null
+      ? { lat: gpsLatitude, lng: gpsLongitude }
+      : null;
+  const facilityPoint =
+    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
+      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
+      : null;
 
   const handleFormSubmit = handleSubmit((data) => {
     return onSubmit(data as CustomerLocationFormData);
@@ -143,6 +171,7 @@ export function CustomerLocationForm({
           id="address"
           label="Address / Description"
           error={errors.address?.message}
+          required
         >
           <FormTextarea
             id="address"
@@ -160,45 +189,45 @@ export function CustomerLocationForm({
           GPS Coordinates
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="gpsLatitude"
-            label="GPS Latitude"
-            error={errors.gpsLatitude?.message}
-            helperText="Between -90 and 90"
-          >
-            <FormInput
-              id="gpsLatitude"
-              type="number"
-              step="any"
-              placeholder="e.g., -3.3349"
-              disabled={isSubmitting}
-              error={!!errors.gpsLatitude}
-              {...register("gpsLatitude", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
+        <PositionPicker
+          idPrefix="gps"
+          label="Application site position"
+          accent="pink"
+          required
+          latitude={gpsLatitude ?? null}
+          longitude={gpsLongitude ?? null}
+          onPositionChange={({ lat, lng }) => {
+            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+          }}
+          latitudeError={errors.gpsLatitude?.message}
+          longitudeError={errors.gpsLongitude?.message}
+          disabled={isSubmitting}
+        />
+      </div>
 
-          <FormField
-            id="gpsLongitude"
-            label="GPS Longitude"
-            error={errors.gpsLongitude?.message}
-            helperText="Between -180 and 180"
-          >
-            <FormInput
-              id="gpsLongitude"
-              type="number"
-              step="any"
-              placeholder="e.g., 37.3404"
-              disabled={isSubmitting}
-              error={!!errors.gpsLongitude}
-              {...register("gpsLongitude", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-        </div>
+      {/* Soil Defaults Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Soil Defaults
+        </h3>
+
+        <FormField
+          id="defaultSoilTemperatureC"
+          label="Default soil temperature (°C)"
+          error={errors.defaultSoilTemperatureC?.message}
+          helperText="Optional site default for new application durability calculations. Applications can still override it."
+        >
+          <FormInput
+            id="defaultSoilTemperatureC"
+            type="number"
+            step="any"
+            placeholder="e.g., 24.5"
+            disabled={isSubmitting}
+            error={!!errors.defaultSoilTemperatureC}
+            {...register("defaultSoilTemperatureC")}
+          />
+        </FormField>
       </div>
 
       {/* Logistics Section */}
@@ -208,44 +237,53 @@ export function CustomerLocationForm({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
+          <DistanceCalcField
             id="distanceFromFacilityKm"
             label="Distance from facility (km)"
             error={errors.distanceFromFacilityKm?.message}
+            certifyRequired={isCertifyFormField("customerLocation", "distanceFromFacilityKm")}
             helperText="Road distance facility → site. Auto-fills the biochar distribution transport leg used for certification."
-          >
-            <FormInput
-              id="distanceFromFacilityKm"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 120"
-              disabled={isSubmitting}
-              error={!!errors.distanceFromFacilityKm}
-              {...register("distanceFromFacilityKm", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
+            disabled={isSubmitting}
+            distanceKm={distanceFromFacilityKm}
+            distanceSource={distanceSource}
+            onDistanceChange={(km, source) => {
+              setValue("distanceFromFacilityKm", km ?? undefined, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("distanceSource", source, { shouldDirty: true });
+            }}
+            origin={facilityPoint}
+            destination={locationPoint}
+            originLabel="selected facility"
+            destinationLabel="application site position"
+          />
         </div>
+
+        <label
+          htmlFor="isDefault"
+          className="flex items-center gap-12 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            id="isDefault"
+            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+            disabled={isSubmitting}
+            {...register("isDefault")}
+          />
+          <span className="body-medium text-[var(--color-text-primary)]">
+            Set as default destination
+          </span>
+        </label>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      <FormActions
+        sticky={false}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

@@ -10,6 +10,8 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 - ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`
 - ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests
 - ❌ **NEVER log PII (emails, names)** — log IDs (`userId`, `removalId`) instead; the server logger redacts as a backstop, not a license
+- ❌ **NEVER commit to `staging` or `main` directly, and never modify `staging` during branch work** — feature branch + PR only; verify `git branch --show-current` before every commit
+- ❌ **NEVER assume local env matches staging/production** — the three 1Password items intentionally differ (see Environment Variables)
 - ❌ **NEVER create messy docs** — follow Documentation Standards below
 
 ## Project Overview
@@ -17,6 +19,8 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 **noma-dmrv** is a biochar carbon-credit MRV (Monitoring, Reporting, Verification) system on a Next.js 16 App Router stack: Better Auth, PostgreSQL + Drizzle ORM (60+ tables across 19 schema files), 16 core biochar-entity CRUD workflows, a Chain-of-Custody DAG, plus energy/emissions accounting and an **Isometric Certify** registry integration.
 
 Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
+
+Domain language lives in **`CONTEXT.md`** (repo root) — a pure glossary of canonical terms (Removal, Credit batch, Roll-up, Evidence method, …) with no implementation detail. Its definitions override casual usage; consult it before naming things or writing requirements/docs, and keep it free of implementation notes when updating it.
 
 ## Essential Commands
 
@@ -126,7 +130,7 @@ const log = logger.child({ requestId });   // bindings merged into every record
 
 ### Object Storage — `@/lib/storage`
 
-File uploads (lab reports, COAs, photos, calibration certs) use **real S3-compatible storage** with a presigned PUT/GET flow.
+File uploads (lab reports, COAs, photos, calibration certs, production readings CSVs) use **real S3-compatible storage** with a presigned PUT/GET flow.
 - `STORAGE_PROVIDER=s3-compatible` (prod — DO Spaces / AWS S3) or `local-fs` (dev/test, served by `/api/storage-local/[...key]`)
 - Production rejects `local-fs` at env-validation time. Use `<FormFileUpload>` (`@/components/forms/form-file-upload`) for upload UI. See `docs/storage.md`.
 
@@ -179,7 +183,7 @@ See `TEMPLATE_USAGE.md`. Reference entity pattern = **facilities** (schemas / da
 
 ## Chain of Custody
 
-Application-first lineage graph tracing the upstream rollback from a selected application to feedstock batches. 7 node types (Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application); color groups Production (orange) / Infrastructure (purple) / Distribution (rose); Dagre LR layout, minimap, zoom. Standard layered pattern (`data-access/chain-of-custody.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`). Docs: `docs/chain-of-custody.md`.
+Credit-batch anchored lineage page (ADR 0011): dual selector (`?batch=` / `?application=` deep links). Batch roll-up = member applications' rollbacks merged, runs deduped — views **DAG | Map | Sankey** (the Sankey is an honest dry-mass balance with explicit labeled exits: ineligible feedstock / conversion loss / in storage; `src/lib/chain-of-custody/sankey.ts`). Application drill-down — views **Lineage | Map | Split | Trail** (Trail = dated custody steps + attesting evidence: documents, samples, transport-leg provenance). 7 node types (Feedstock, Reactor, Production Run, Biochar Product, Order, Delivery, Application); color groups Production (orange) / Infrastructure (purple) / Distribution (rose); Dagre LR layout, minimap, zoom. Standard layered pattern (`data-access/chain-of-custody{,-batch,-trail}.ts` → `fn/` → `hooks/` → `components/chain-of-custody/`). Docs: `docs/chain-of-custody.md`.
 
 ## Production Run Extensions
 
@@ -194,7 +198,7 @@ Submits removals / GHG statements / sensor data to the Isometric registry via `s
 - `docs/isometric/versions.json` — single source of pinned protocol/module versions
 - `requirements-shortlist.md`, `schema-mapping.md`, `p0-compliance-checklist.md`, `simple-implementation-guide.md`, `condition-registry.md` (conditional-field triggers), `update-playbook.md`
 - `integration-plan.md`, `openapi-index.md`, `changes.md` (append-only changelog)
-- Decisions: `docs/adr/0001`–`0007`. Deferred work / sandbox checks: `docs/open-questions.md`.
+- Decisions: `docs/adr/0001`–`0008`. Deferred work / sandbox checks: `docs/open-questions.md`.
 
 All local summaries are **non-authoritative interpretations** — verify against linked Isometric Registry URLs before implementing logic or making credit claims. There's an `isometric` MCP server (call its `how_to` tool first) for authoritative protocol content.
 
@@ -202,7 +206,7 @@ All local summaries are **non-authoritative interpretations** — verify against
 
 - Admin-invite only by default (`ALLOW_SELF_SIGNUP=false`); admin set by `ADMIN_EMAIL`
 - Email invitations + password resets via Resend; Better Auth session cookies (`nextCookies` plugin)
-- Middleware uses `getSessionCookie()` (`src/middleware.ts`). See `docs/auth.md`.
+- Route protection runs through `src/proxy.ts` (Next.js 16's `middleware.ts` replacement, Node runtime) → `updateSession()` in `src/lib/auth/middleware.ts`. See `docs/auth.md`.
 
 ## Environment Variables
 
@@ -212,13 +216,17 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 - **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`
 - **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod), `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`, `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET` (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
+- **Geo / maps (all optional — graceful degradation):** `OPENROUTESERVICE_API_KEY` (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public, domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic test fixtures, rejected in prod)
 
-**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env). Local: `pnpm env:local` (`op inject` ← `.env.tpl`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Vercel: `pnpm env:vercel`. See `docs/security.md` → Secrets Management.
+**Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env: `local`/`staging`/`production`). Local: `pnpm env:local` (`.env.local.tpl` → `.env.local`). Deployed: `.env.tpl` (staging/production refs) feeds `pnpm env:vercel` only. Both syncs **skip optional vars missing from the item** (warning, not error) and fail only on `REQUIRED_LOCAL_VARS`/`REQUIRED_DEPLOYED_VARS` (`scripts/env-tpl-utils.ts`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Drift: `pnpm env:check`. See `docs/security.md` → Secrets Management.
+
+**The three env items intentionally differ** — `local` has its own `DATABASE_URL` (Docker Postgres), `NEXT_PUBLIC_APP_URL` (localhost:3100), dev admin credentials, and test toggles (`DISABLE_RATE_LIMIT`); it is **not** a copy of staging. Before debugging any env/auth issue: state your assumptions about local vs. deployed config and confirm them against the right 1Password item. The `op` CLI needs interactive desktop approval — a sandboxed shell can't reproduce 1Password auth, so ask the user to run `op` commands themselves (`! op …`) instead of diagnosing around a sign-in you can't perform.
 
 ## Security
 
 - Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>`. If a key leaks: rotate immediately, then scrub history with `git-filter-repo` (see `docs/security.md`).
 - Log `userId`, never `email`. Review PR diffs for accidental secret exposure.
+- Supply chain: 3-day `minimumReleaseAge` cooldown + `allowBuilds` script gating (`pnpm-workspace.yaml`), security-only Dependabot. See `docs/security.md` → Dependency Supply Chain.
 
 ## Documentation Standards
 
@@ -228,13 +236,24 @@ Keep `/docs` clean — only **evergreen** docs (product/architecture/design-syst
 
 Branch `<type>/<kebab-desc>`; commit/PR title `<type>: <imperative, lowercase verb>` (PR title < 70 chars). Types: `feat` · `fix` · `refactor` · `chore` · `docs` · `test`. Multi-line commits: blank line then a body explaining **why**, not what.
 
+### Branch guardrails
+
+- **Confirm the target branch before every commit** (`git branch --show-current`) — misplaced commits are a recurring failure mode here. If asked to commit and the current branch looks wrong for the work, stop and ask.
+- **`staging` and `main` are off-limits** for direct commits; `staging` also stays untouched during branch consolidations, rebases, and cherry-picks unless the user explicitly says otherwise.
+- **Run git/gh operations as discrete steps**, not chained `&&` one-liners — each step stays inspectable and avoids permission blocks mid-chain.
+- Default PR base is `staging`; `staging` → `main` promotion PRs are their own explicit step.
+
+### Code review remediation (CodeRabbit / Claude review / audits)
+
+For every finding: **verify it against the actual code first**, fix only valid ones with minimal changes, and skip invalid ones with a one-line written reason (false positives are common — including bogus P0s). Then validate with `pnpm lint` + `pnpm typecheck` + tests before committing. Never blanket-apply a findings list.
+
 ## E2E Testing
 
 Playwright per-entity specs + full-chain smoke tests. Fixtures (`tests/e2e/fixtures/auth-fixtures.ts`): `adminPage`, `seededData`, `cleanupTestData`. Seed (`seed-chain-data.ts`) creates 13 prerequisite entities; `full-chain-ui.spec.ts` builds all 8 core entities in one session. **Auth uses the HTTP API** (`createDirectAuthContext`), not UI login — requires `DISABLE_RATE_LIMIT=true` in `.env.local` and an `Origin` header on sign-in. Run `pnpm db:reset` first if you hit duplicate-key errors.
 
 ## Key Docs Index
 
-`docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
+`CONTEXT.md` (domain glossary — repo root) · `docs/architecture.md` · `docs/modern-patterns.md` (Next.js 16 caching) · `docs/organization.md` · `docs/design-system.md` · `docs/database.md` · `docs/auth.md` · `docs/forms.md` · `docs/storage.md` · `docs/security.md` · `docs/chain-of-custody.md` · `docs/schema-overview.md` (60+ tables) · `docs/isometric/README.md` · `docs/open-questions.md` · `docs/troubleshooting.md` · `docs/adr/` · `TEMPLATE_USAGE.md`
 
 ## CI/CD
 

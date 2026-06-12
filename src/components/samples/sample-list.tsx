@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate, PencilSimple, Trash } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
@@ -276,7 +276,10 @@ export function SampleList() {
     }
   };
 
-  const handleDelete = (sampleId: string) => setDeletingSampleId(sampleId);
+  const handleDelete = useCallback(
+    (sampleId: string) => setDeletingSampleId(sampleId),
+    [],
+  );
   const handleDeleteConfirm = async () => {
     if (!deletingSampleId) return;
     setDeleteError(null);
@@ -299,7 +302,10 @@ export function SampleList() {
     setFormError(null);
     setSideSheet({ mode: "view", entity: sample });
   };
-  const openEdit = (sample: SampleWithRelations) => { setFormError(null); setSideSheet({ mode: "edit", entity: sample }); };
+  const openEdit = useCallback((sample: SampleWithRelations) => {
+    setFormError(null);
+    setSideSheet({ mode: "edit", entity: sample });
+  }, []);
   const closeSideSheet = () => {
     setFocusedSampleId(null);
     setSideSheet(null);
@@ -510,14 +516,6 @@ export function SampleList() {
             </div>
           ) : null
         }
-        editModeChildren={
-          displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
-            <TransportLegsEditor
-              entityType="sample"
-              entityId={displaySideSheet.entity.id}
-            />
-          ) : null
-        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <SampleForm
@@ -527,7 +525,14 @@ export function SampleList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
-        />
+        >
+          {displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
+            <TransportLegsEditor
+              entityType="sample"
+              entityId={displaySideSheet.entity.id}
+            />
+          ) : null}
+        </SampleForm>
       </EntitySideSheet>
     </div>
   );

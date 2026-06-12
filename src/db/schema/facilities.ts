@@ -24,6 +24,11 @@ export const facilities = pgTable(
       .notNull()
       .default('200_year'),
 
+    // Soft-delete: archiving a facility cascades the same stamp to all
+    // facility-scoped child tables in one transaction (see data-access/facilities.ts).
+    // NULL = active. Reversible via restoreFacility.
+    archivedAt: timestamp('archived_at'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -55,6 +60,8 @@ export const reactors = pgTable('reactors', {
   samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
   nominalThroughputTph: real('nominal_throughput_tph'),
   specifications: jsonb('specifications'), // { description, manufacturer, ... }
+  // Stamped by the facility archive cascade; NULL = active
+  archivedAt: timestamp('archived_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -85,6 +92,8 @@ export const storageLocations = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

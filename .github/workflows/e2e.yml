@@ -53,6 +53,12 @@ jobs:
       # nightly schedule instead. ISOMETRIC_ENVIRONMENT is pinned to `sandbox`
       # (never empty) so the env-schema enum does not reject an empty string.
       ISOMETRIC_ENVIRONMENT: sandbox
+      # Geo — hermetic like Isometric/storage above: the stub adapter serves
+      # deterministic geocode/route fixtures, so position-picker specs make
+      # zero external HTTP calls and need no ORS/MapTiler keys. The env
+      # schema's "no stub in production" safeguard carves out CI for exactly
+      # this build (src/config/env.ts).
+      GEO_PROVIDER: stub
       PLAYWRIGHT_WORKERS: "2"
       PLAYWRIGHT_RETRIES: "1"
 

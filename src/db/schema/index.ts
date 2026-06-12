@@ -17,3 +17,4 @@ export * from "./storage-inventory";
 export * from "./documentation";
 export * from "./certification";
 export * from "./compliance";
+export * from "./geo";

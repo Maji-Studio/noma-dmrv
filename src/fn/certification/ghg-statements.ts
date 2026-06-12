@@ -5,20 +5,21 @@ import {
   attachReportDocument,
   clearTerminalStatusForResubmit,
   getCertifierProjectByFacility,
-  getLatestSubmission,
   getLatestSubmissionsForEntities,
   getSubmissionById,
-  insertDraftSubmissionWithMappingLock,
   listRecentSyncEvents,
-  markSubmissionRejected,
   markSubmissionSubmitted,
-  resetSubmissionToDraftWithMappingLock,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type CertifierSyncEventRow,
   type Tx,
 } from "@/data-access/certification";
+import {
+  claimSubmissionDraft,
+  getLatestSubmission,
+  type ClaimBlockedReason,
+} from "@/data-access/certification-submissions";
 import {
   countRemovalsByGhgStatementIds,
   getCertifierGhgStatementById,
@@ -41,9 +42,7 @@ import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
   createGhgStatement,
-  decideSubmissionClaim,
   getGhgStatement,
-  IsometricApiError,
   payloadHash,
   reconcileGhgStatement,
   resubmitGhgStatement,
@@ -56,10 +55,7 @@ import {
   ghgSubmitFingerprintChanged,
   type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
-import {
-  isLockedInFlight as computeIsLockedInFlight,
-  LOCK_TTL_MS,
-} from "@/lib/isometric/utils/lock";
+import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
   SUBMISSION_METADATA_KEYS,
   getMetadataValue,
@@ -72,6 +68,7 @@ import {
 } from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
+import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
 import {
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
@@ -90,7 +87,7 @@ export interface CreateGhgStatementResult {
   ghgStatementId: string;
   externalId: string;
   // Local removal ids Isometric linked into the statement, reconciled from
-  // its server-side `removal_ids`.
+  // its server-side `ghg_entry_ids`.
   linkedRemovalIds: string[];
   // Drift notes surfaced to the operator (predicted-but-unlinked removals,
   // Isometric removals with no local record, removals owned elsewhere).
@@ -151,13 +148,28 @@ export interface OpenRemovalView {
 const MULTIPLE_DRAFTS_MESSAGE =
   "Multiple draft GHG statements exist for this project and period in Isometric.";
 
+// Domain wording for the claim module's blocked outcomes (the module owns
+// only the mapping-guard wording; claim decisions are translated here).
+const GHG_CLAIM_BLOCKED_MESSAGES: Record<
+  ClaimBlockedReason,
+  string
+> = {
+  "in-flight": "GHG statement creation already in progress.",
+  "rejected-with-external":
+    "This GHG statement was rejected by the verifier. Resolve it in the Isometric registry before retrying.",
+  "invalid-changed-hash":
+    "The reporting period changed for an already-created GHG statement.",
+  "state-changed":
+    "Submission state changed while creating the GHG statement. Reload and retry.",
+};
+
 // How many recent sync events to surface in a statement's detail panel.
 const RECENT_SYNC_EVENTS_LIMIT = 10;
 
 // Creates a GHG Statement for a supplier-chosen reporting-period end.
 // Isometric's create API accepts only `{ project_id, end_on }` and links
 // Removals to the statement server-side by date range — so this is
-// period-first: after the POST the actual `removal_ids` are reconciled back
+// period-first: after the POST the actual `ghg_entry_ids` are reconciled back
 // onto local `certifier_removals.ghg_statement_id`.
 export async function createGhgStatementDraft(
   input: CreateGhgStatementInput,
@@ -232,104 +244,63 @@ export async function createGhgStatementDraft(
       ghgStatementId: statement.id,
       endOn: parsed.reportingPeriodEndOn,
     };
-    const semanticHash = payloadHash(semanticPayload);
-
-    const latest = await getLatestSubmission(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-      localEntityId: statement.id,
-    });
-
-    const claim = decideSubmissionClaim({
-      latest,
-      payloadHash: semanticHash,
-      now: Date.now(),
-      lockTtlMs: LOCK_TTL_MS,
-      policy: { onSubmittedHashChanged: "invalid-changed-hash" },
-    });
 
     // `statement.id` is stable per (facility, period), so on a repeat create
-    // `latest` is the prior ledger row and the claim genuinely resolves the
-    // race: an in-flight create blocks, an already-created one returns its
-    // external id, a stale or failed draft resumes. On a first create
-    // `latest` is null and the claim is `create-new-version`.
-    let row: CertificationSubmissionRow;
-    switch (claim.kind) {
-      case "blocked-in-flight":
-        throw new SafeError("GHG statement creation already in progress.");
-      case "blocked-rejected-with-external":
-        throw new SafeError(
-          "This GHG statement was rejected by the verifier. Resolve it in the Isometric registry before retrying.",
-        );
-      case "invalid-changed-hash":
-        throw new SafeError(
-          "The reporting period changed for an already-created GHG statement.",
-        );
-      case "return-existing":
+    // the ledger's latest row is the prior attempt and the claim genuinely
+    // resolves the race: an in-flight create blocks, an already-created one
+    // returns its external id, a stale or failed draft resumes. The module
+    // re-decides inside the mapping lock, so a concurrent duplicate create
+    // resolves to `existing`/`blocked` instead of dying on the
+    // entity-version unique constraint. The guard's template arm is omitted
+    // — a GHG Statement has no template.
+    const claimed = await claimSubmissionDraft(userId, {
+      key: {
+        provider: ISOMETRIC_PROVIDER,
+        submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+        localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+        localEntityId: statement.id,
+      },
+      guard: mappingGuard,
+      policy: { onSubmittedHashChanged: "invalid-changed-hash" },
+      tentativeInputs: semanticPayload,
+      hashOf: payloadHash,
+      buildSnapshot: ({ inputs }) => ({ payloadSnapshot: { semantic: inputs } }),
+    });
+
+    switch (claimed.kind) {
+      case "blocked":
+        throw new SafeError(GHG_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
+      case "existing":
         return {
           ghgStatementId: statement.id,
-          externalId: claim.externalId,
+          externalId: claimed.externalId,
           linkedRemovalIds: [],
           warnings: [],
         };
-      case "resume":
-        // …WithMappingLock locks certifier_projects and verifies the
-        // externalProjectId still matches what we read above. Without it, a
-        // concurrent repoint between the project read and the remote POST
-        // would create the registry statement under the old project while
-        // the facility now points elsewhere. The defaultRemovalTemplateId
-        // arm of the guard is skipped — a GHG Statement has no template.
-        row = await resetSubmissionToDraftWithMappingLock(
+      case "claimed":
+        return createGhgStatementRemote({
           userId,
-          claim.resumeRowId,
-          mappingGuard,
-          LOCK_TTL_MS,
-        );
-        break;
-      case "create-new-version":
-        row = await insertDraftSubmissionWithMappingLock(
-          userId,
-          {
-            provider: ISOMETRIC_PROVIDER,
-            submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-            localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-            localEntityId: statement.id,
-            version: claim.nextVersion,
-            payloadSnapshot: { semantic: semanticPayload },
-            payloadHash: semanticHash,
-          },
-          mappingGuard,
-        );
-        break;
-      case "resume-poll-existing":
-      case "resume-re-put":
-        // Phase 5 Slice A claim kinds; only reachable when callers pass
-        // `dataUploadResume`. GHG-statement creation does not — kept here
-        // for exhaustiveness so TS narrows the union end-to-end.
-        throw new SafeError(
-          "Unexpected resume kind for GHG statement creation.",
-        );
+          statement,
+          row: claimed.row,
+          resumed: claimed.resumed,
+          externalProjectId: project.externalProjectId,
+          endOn: parsed.reportingPeriodEndOn,
+          submissionAttemptId,
+        });
     }
-
-    return createGhgStatementRemote({
-      userId,
-      statement,
-      row,
-      externalProjectId: project.externalProjectId,
-      endOn: parsed.reportingPeriodEndOn,
-      submissionAttemptId,
-    });
   }, { rateLimit: submitRateLimit("cert:create-ghg-statement") });
 }
 
-// POSTs the statement to Isometric, with reconcile-on-error: a network
-// failure may surface after the registry already created the draft, so on
-// error we look it up by (project, end_on) before giving up.
+// POSTs the statement to Isometric through the shared create-or-reconcile
+// choreography: a network failure may surface after the registry already
+// created the draft, so on error (or on a resumed draft, before POSTing) it
+// is looked up by (project, end_on). A period holding multiple drafts is
+// ambiguous — the row is rejected with MULTIPLE_DRAFTS_MESSAGE.
 async function createGhgStatementRemote(args: {
   userId: string;
   statement: CertifierGhgStatementRow;
   row: CertificationSubmissionRow;
+  resumed: boolean;
   externalProjectId: string;
   endOn: string;
   submissionAttemptId: string;
@@ -338,106 +309,56 @@ async function createGhgStatementRemote(args: {
     userId,
     statement,
     row,
+    resumed,
     externalProjectId,
     endOn,
     submissionAttemptId,
   } = args;
 
-  let remote: GhgStatement;
-  try {
-    remote = await createGhgStatement({
-      end_on: endOn,
-      project_id: externalProjectId,
-    });
-  } catch (err) {
-    logger.warn(
-      {
-        op: "ghg-statement:create",
-        ghgStatementId: statement.id,
-        submissionId: row.id,
-        submissionAttemptId,
-        errorName: err instanceof Error ? err.name : typeof err,
-      },
-      "ghg statement create failed; attempting reconciliation",
-    );
-    const reconciled = await reconcileGhgStatement({
-      projectId: externalProjectId,
-      endOn,
-    });
-    if (reconciled.found === "multiple") {
-      await markSubmissionRejected(userId, row.id, {
-        errorMessage: MULTIPLE_DRAFTS_MESSAGE,
-      });
-      throw new SafeError(MULTIPLE_DRAFTS_MESSAGE);
-    }
-    if (reconciled.found === "single") {
-      return finalizeGhgStatement({
-        userId,
-        statement,
-        row,
-        externalId: reconciled.externalId,
-        operation: "ghg_statement:create:reconciled",
-        source: "reconciliation",
-      });
-    }
-
-    const message = err instanceof Error ? err.message : String(err);
-    // Preserve the verifier's response body — an Isometric 4xx carries the
-    // actionable detail; a bare status code is undebuggable without it.
-    const responsePayload =
-      err instanceof IsometricApiError ? err.body : undefined;
-    await appendSyncEvent(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: GHG_STATEMENT_ENTITY_TYPE,
-      entityId: statement.id,
-      operation: "ghg_statement:create",
-      status: "failed",
-      requestPayload: { end_on: endOn, project_id: externalProjectId },
-      responsePayload,
-      errorMessage: message,
-    });
-    await markSubmissionRejected(userId, row.id, { errorMessage: message });
-    throw new SafeError(`GHG statement create failed: ${message}`);
-  }
-
-  return finalizeGhgStatement({
+  const requestPayload = { end_on: endOn, project_id: externalProjectId };
+  const { externalId } = await performRegistryCreate({
     userId,
-    statement,
-    row,
-    externalId: remote.id,
+    entityType: GHG_STATEMENT_ENTITY_TYPE,
+    entityId: statement.id,
+    submissionRowId: row.id,
     operation: "ghg_statement:create",
-    source: "create",
+    requestPayload,
+    resumed,
+    create: () => createGhgStatement(requestPayload).then((r) => r.id),
+    reconcile: () =>
+      reconcileGhgStatement({ projectId: externalProjectId, endOn }).then(
+        ghgStatementLookup,
+      ),
+    ambiguousMessage: MULTIPLE_DRAFTS_MESSAGE,
+    failureMessagePrefix: "GHG statement create failed",
+    log: logger.child({
+      op: "ghg-statement:create",
+      ghgStatementId: statement.id,
+      submissionAttemptId,
+    }),
   });
+
+  return finalizeGhgStatement({ userId, statement, row, externalId });
 }
 
-// Shared tail for the fresh-create and reconciled-create paths. The remote
-// create has already succeeded, so the external id and audit event are
-// persisted standalone first — losing them would let a retry POST a
-// duplicate statement. The post-create reconciliation (removal membership,
-// server-derived reporting window, ledger state) then commits in one
-// transaction so a partial failure cannot leave the statement
-// half-reconciled.
+// Shared tail for the fresh-create and reconciled-create paths (the audit
+// event for either is recorded by performRegistryCreate). The remote create
+// has already succeeded, so the external id is persisted standalone first —
+// losing it would let a retry POST a duplicate statement. The post-create
+// reconciliation (removal membership, server-derived reporting window,
+// ledger state) then commits in one transaction so a partial failure cannot
+// leave the statement half-reconciled.
 async function finalizeGhgStatement(args: {
   userId: string;
   statement: CertifierGhgStatementRow;
   row: CertificationSubmissionRow;
   externalId: string;
-  operation: string;
-  source: "create" | "reconciliation";
 }): Promise<CreateGhgStatementResult> {
-  const { userId, statement, row, externalId, operation, source } = args;
+  const { userId, statement, row, externalId } = args;
 
   await markSubmissionSubmitted(userId, row.id, {
     externalId,
     supersedePreviousId: null,
-  });
-  await appendSyncEvent(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    entityType: GHG_STATEMENT_ENTITY_TYPE,
-    entityId: statement.id,
-    operation,
-    status: "succeeded",
-    responsePayload: { id: externalId, source },
   });
 
   // Re-fetch outside any transaction — the create response carries neither
@@ -461,7 +382,7 @@ async function finalizeGhgStatement(args: {
     const reconciled = await reconcileRemovalMembership(
       userId,
       statement.id,
-      remote.removal_ids,
+      remote.ghg_entry_ids,
       tx,
     );
     await updateGhgStatementReportingWindow(
@@ -682,7 +603,7 @@ export async function refreshGhgStatementStatus(
     await reconcileRemovalMembership(
       userId,
       submission.localEntityId,
-      remote.removal_ids,
+      remote.ghg_entry_ids,
     );
     return remote;
   });
@@ -860,7 +781,7 @@ function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
     submittedToVerifierAt: remote.submitted_at,
     creditsIssuedAt: remote.credits_issued_at,
     verifier: remote.verifier,
-    [SUBMISSION_METADATA_KEYS.removalIds]: remote.removal_ids,
+    [SUBMISSION_METADATA_KEYS.removalIds]: remote.ghg_entry_ids,
   };
 }
 

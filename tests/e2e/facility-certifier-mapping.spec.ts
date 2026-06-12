@@ -16,7 +16,7 @@
  * `tests/isometric-sandbox.integration.test.ts` (live API).
  *
  * `loadFacilityCertifierMapping` always reads from Isometric
- * (`listProjects` + `listRemovalTemplates(externalProjectId)`), so the
+ * (`listProjects` + `listGhgEntryTemplates(externalProjectId)`), so the
  * inserted `externalProjectId` must be a real sandbox project.
  * Playwright loads `.env.test` only — we additionally pull `.env.local`
  * (without overriding) so a developer with sandbox creds + an

@@ -17,6 +17,10 @@ import {
   deriveRemovalStatus,
   type LocalSubmissionStatus,
 } from "./status";
+import {
+  defaultProductionReadinessGap,
+  type ProductionReadinessGap,
+} from "./production-readiness";
 
 export type RemovalReadinessState =
   | "submitted" // done from noma's side — nothing to action
@@ -49,6 +53,8 @@ export interface RemovalReadinessFacts {
   unresolvedBlueprintKeys: string[];
   /** Production runs resolved from member-batch lineage — false ⇒ nothing to submit. */
   hasSubmittableRuns: boolean;
+  /** Specific reason production lineage is not submittable, when known. */
+  productionReadinessGap?: ProductionReadinessGap | null;
   /** Coverage facts for the template's required transport categories only. */
   requiredTransport: TransportCoverageFact[];
   /** Compact labels from per-entity certifier-readiness checks. */
@@ -62,7 +68,6 @@ export interface RemovalReadiness {
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
-const NO_PRODUCTION_REASON = "No production data linked yet — nothing to submit";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
@@ -113,6 +118,13 @@ function transportGapReasons(required: TransportCoverageFact[]): string[] {
   return reasons;
 }
 
+function productionGapDetail(facts: RemovalReadinessFacts): string {
+  return (
+    facts.productionReadinessGap?.detail ??
+    defaultProductionReadinessGap().detail
+  );
+}
+
 /**
  * Folds removal status + submission preconditions into one verdict.
  * Precedence: live lock → terminal (submitted/superseded) → blocked → ready.
@@ -145,7 +157,7 @@ export function deriveRemovalReadiness(
   }
 
   if (!facts.hasSubmittableRuns) {
-    reasons.push(NO_PRODUCTION_REASON);
+    reasons.push(productionGapDetail(facts));
   }
 
   const entityReadinessGaps = facts.entityReadinessGaps ?? [];
@@ -265,7 +277,9 @@ export function buildRemovalPreflightChecklist(
       key: "production",
       label: "Production data linked",
       status: facts.hasSubmittableRuns ? "met" : "unmet",
-      detail: facts.hasSubmittableRuns ? undefined : NO_PRODUCTION_REASON,
+      detail: facts.hasSubmittableRuns
+        ? undefined
+        : productionGapDetail(facts),
     },
     entityReadiness,
   ];

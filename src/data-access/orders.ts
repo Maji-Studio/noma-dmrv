@@ -3,7 +3,7 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, lte, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   orders,
@@ -15,6 +15,7 @@ import {
   type Order,
 } from "@/db/schema";
 import type { OrderFilterData } from "@/schemas/orders";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 // ============================================
 // Types
@@ -98,8 +99,8 @@ export async function getOrders(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived orders (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(orders.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -122,7 +123,7 @@ export async function getOrders(
     conditions.push(lte(orders.orderDate, toDate));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -159,6 +160,7 @@ export async function getOrders(
       packaging: orders.packaging,
       value: orders.value,
       currency: orders.currency,
+      archivedAt: orders.archivedAt,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       facilityName: facilities.name,
@@ -254,6 +256,7 @@ export async function getOrderWithRelations(
       packaging: orders.packaging,
       value: orders.value,
       currency: orders.currency,
+      archivedAt: orders.archivedAt,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
       facilityCode: facilities.code,
@@ -300,6 +303,7 @@ export async function getOrderWithRelations(
     packaging: orderRow.packaging,
     value: orderRow.value,
     currency: orderRow.currency,
+    archivedAt: orderRow.archivedAt,
     createdAt: orderRow.createdAt,
     updatedAt: orderRow.updatedAt,
     facility: orderRow.facilityId
@@ -338,15 +342,33 @@ export async function getOrderWithRelations(
 export async function getOrdersForSelect(
   userId: string,
   facilityId?: string
-): Promise<Array<{ id: string; code: string; orderDate: Date; customerName: string | null; biocharProductCode: string | null; quantityKg: number }>> {
+): Promise<
+  Array<{
+    id: string;
+    code: string;
+    orderDate: Date;
+    customerName: string | null;
+    biocharProductCode: string | null;
+    quantityKg: number;
+    /** Destination (order's customer location) GPS. */
+    destinationGpsLatitude: number | null;
+    destinationGpsLongitude: number | null;
+    /**
+     * Destination's stored road distance + provenance — prefills the delivery
+     * distance field (the derived transport leg already falls back to it).
+     */
+    destinationDistanceKm: number | null;
+    destinationDistanceSource: DistanceSourceValue | null;
+  }>
+> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(orders.archivedAt)];
   if (facilityId) {
     conditions.push(eq(orders.facilityId, facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   return db
     .select({
@@ -356,10 +378,15 @@ export async function getOrdersForSelect(
       customerName: customers.name,
       biocharProductCode: biocharProducts.code,
       quantityKg: orders.quantityKg,
+      destinationGpsLatitude: customerLocations.gpsLatitude,
+      destinationGpsLongitude: customerLocations.gpsLongitude,
+      destinationDistanceKm: customerLocations.distanceFromFacilityKm,
+      destinationDistanceSource: customerLocations.distanceSource,
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(customerLocations, eq(orders.customerLocationId, customerLocations.id))
     .where(whereClause)
     .orderBy(desc(orders.orderDate));
 }

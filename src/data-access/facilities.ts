@@ -3,22 +3,26 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   facilities,
   reactors,
   storageLocations,
+  feedstockDeliveries,
   feedstocks,
   productionRuns,
   productionRunFeedstocks,
   biocharProducts,
   formulations,
+  orders,
+  deliveries,
+  creditBatches,
   stockpileEvents,
   powerProcurementEvidence,
-  certifierRemovals,
   type Facility,
 } from "@/db/schema";
+import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
 
 // ============================================
@@ -93,14 +97,17 @@ export async function getFacilities(
   const {
     search,
     country,
+    archived = false,
     page = 1,
     pageSize = 20,
     sortBy = "name",
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — active facilities by default, archived-only view on demand
+  const conditions: SQL[] = [
+    archived ? isNotNull(facilities.archivedAt) : isNull(facilities.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -157,6 +164,7 @@ export async function getFacilities(
       contactPhone: facilities.contactPhone,
       timezone: facilities.timezone,
       defaultDurabilityOption: facilities.defaultDurabilityOption,
+      archivedAt: facilities.archivedAt,
       createdAt: facilities.createdAt,
       updatedAt: facilities.updatedAt,
     })
@@ -632,20 +640,39 @@ export async function updateFacility(
 }
 
 // ============================================
-// Delete Operations
+// Archive Operations (soft delete, reversible)
 // ============================================
 
+export interface FacilityArchiveImpact {
+  reactorCount: number;
+  storageLocationCount: number;
+  feedstockDeliveryCount: number;
+  feedstockCount: number;
+  productionRunCount: number;
+  biocharProductCount: number;
+  orderCount: number;
+  deliveryCount: number;
+  creditBatchCount: number;
+  stockpileEventCount: number;
+  powerProcurementEvidenceCount: number;
+  /**
+   * True when the facility has removals/GHG statements submitted to the
+   * certifier registry. Archiving stays allowed (the registry keeps its own
+   * records) — the UI surfaces a warning instead of blocking.
+   */
+  hasRegistrySubmissions: boolean;
+}
+
 /**
- * Delete a facility
- * Will fail if facility has associated reactors or storage locations
+ * Preview what archiving a facility would affect.
+ * Drives the confirm dialog (child counts + registry-submission warning).
  */
-export async function deleteFacility(
+export async function getFacilityArchiveImpact(
   userId: string,
   facilityId: string
-): Promise<void> {
+): Promise<FacilityArchiveImpact> {
   requireAuth(userId);
 
-  // Verify facility exists
   const [existing] = await db
     .select({ id: facilities.id })
     .from(facilities)
@@ -658,44 +685,148 @@ export async function deleteFacility(
   const [
     [reactorCount],
     [storageCount],
-    [stockpileCount],
-    [powerCount],
-    [removalCount],
+    [feedstockDeliveryCount],
+    [feedstockCount],
+    [runCount],
+    [productCount],
+    [orderCount],
+    [deliveryCount],
+    [batchCount],
+    [stockpileEventCount],
+    [powerEvidenceCount],
+    hasRegistrySubmissions,
   ] = await Promise.all([
     db.select({ count: count() }).from(reactors).where(eq(reactors.facilityId, facilityId)),
     db.select({ count: count() }).from(storageLocations).where(eq(storageLocations.facilityId, facilityId)),
+    db.select({ count: count() }).from(feedstockDeliveries).where(eq(feedstockDeliveries.facilityId, facilityId)),
+    db.select({ count: count() }).from(feedstocks).where(eq(feedstocks.facilityId, facilityId)),
+    db.select({ count: count() }).from(productionRuns).where(eq(productionRuns.facilityId, facilityId)),
+    db.select({ count: count() }).from(biocharProducts).where(eq(biocharProducts.facilityId, facilityId)),
+    db.select({ count: count() }).from(orders).where(eq(orders.facilityId, facilityId)),
+    db.select({ count: count() }).from(deliveries).where(eq(deliveries.facilityId, facilityId)),
+    db.select({ count: count() }).from(creditBatches).where(eq(creditBatches.facilityId, facilityId)),
     db.select({ count: count() }).from(stockpileEvents).where(eq(stockpileEvents.facilityId, facilityId)),
     db.select({ count: count() }).from(powerProcurementEvidence).where(eq(powerProcurementEvidence.facilityId, facilityId)),
-    db.select({ count: count() }).from(certifierRemovals).where(eq(certifierRemovals.facilityId, facilityId)),
+    hasBlockingFacilitySubmission(db, facilityId, "isometric"),
   ]);
 
-  if (Number(reactorCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete facility with associated reactors. Remove reactors first."
-    );
-  }
-  if (Number(storageCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete facility with associated storage locations. Remove storage locations first."
-    );
-  }
-  if (Number(stockpileCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete facility with associated stockpile events. Remove stockpile events first."
-    );
-  }
-  if (Number(powerCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete facility with associated power procurement evidence. Remove power procurement evidence first."
-    );
-  }
-  if (Number(removalCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete facility with associated certifier removals. Remove its credit batches first."
-    );
-  }
+  return {
+    reactorCount: Number(reactorCount.count),
+    storageLocationCount: Number(storageCount.count),
+    feedstockDeliveryCount: Number(feedstockDeliveryCount.count),
+    feedstockCount: Number(feedstockCount.count),
+    productionRunCount: Number(runCount.count),
+    biocharProductCount: Number(productCount.count),
+    orderCount: Number(orderCount.count),
+    deliveryCount: Number(deliveryCount.count),
+    creditBatchCount: Number(batchCount.count),
+    stockpileEventCount: Number(stockpileEventCount.count),
+    powerProcurementEvidenceCount: Number(powerEvidenceCount.count),
+    hasRegistrySubmissions,
+  };
+}
 
-  await db.delete(facilities).where(eq(facilities.id, facilityId));
+/**
+ * Archive a facility (soft delete, reversible via restoreFacility).
+ * Cascades the same archived_at stamp to every facility-scoped child table in
+ * one transaction; grandchildren (samples, readings, applications, …) and
+ * certifier registry mirrors are hidden transitively through their parent.
+ */
+export async function archiveFacility(
+  userId: string,
+  facilityId: string
+): Promise<Facility> {
+  requireAuth(userId);
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: facilities.id, archivedAt: facilities.archivedAt })
+      .from(facilities)
+      .where(eq(facilities.id, facilityId));
+
+    if (!existing) {
+      throw new SafeError("Facility not found");
+    }
+    if (existing.archivedAt) {
+      throw new SafeError("Facility is already archived");
+    }
+
+    const archivedAt = new Date();
+
+    const [archived] = await tx
+      .update(facilities)
+      .set({ archivedAt, updatedAt: archivedAt })
+      .where(eq(facilities.id, facilityId))
+      .returning();
+
+    // Cascade: only rows not already archived get this stamp, so a future
+    // per-entity archive cannot be clobbered (restore clears indiscriminately
+    // today because facility cascade is the only writer of archived_at).
+    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), isNull(reactors.archivedAt)));
+    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), isNull(storageLocations.archivedAt)));
+    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), isNull(feedstockDeliveries.archivedAt)));
+    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)));
+    await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), isNull(productionRuns.archivedAt)));
+    await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), isNull(biocharProducts.archivedAt)));
+    await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), isNull(orders.archivedAt)));
+    await tx.update(deliveries).set({ archivedAt }).where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)));
+    await tx.update(creditBatches).set({ archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)));
+    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), isNull(stockpileEvents.archivedAt)));
+    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), isNull(powerProcurementEvidence.archivedAt)));
+
+    return archived;
+  });
+}
+
+/**
+ * Restore an archived facility and all children archived by the cascade.
+ */
+export async function restoreFacility(
+  userId: string,
+  facilityId: string
+): Promise<Facility> {
+  requireAuth(userId);
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: facilities.id, archivedAt: facilities.archivedAt })
+      .from(facilities)
+      .where(eq(facilities.id, facilityId));
+
+    if (!existing) {
+      throw new SafeError("Facility not found");
+    }
+    if (!existing.archivedAt) {
+      throw new SafeError("Facility is not archived");
+    }
+
+    const archivedAt = null;
+
+    const [restored] = await tx
+      .update(facilities)
+      .set({ archivedAt, updatedAt: new Date() })
+      .where(eq(facilities.id, facilityId))
+      .returning();
+
+    // The facility cascade is the only writer of archived_at, so restore clears
+    // it on all children indiscriminately. If per-entity archive writers are
+    // ever added, guard these updates with .where(isNull(<table>.archivedAt))
+    // captured at archive time, or restore will un-archive individually
+    // archived rows.
+    await tx.update(reactors).set({ archivedAt }).where(eq(reactors.facilityId, facilityId));
+    await tx.update(storageLocations).set({ archivedAt }).where(eq(storageLocations.facilityId, facilityId));
+    await tx.update(feedstockDeliveries).set({ archivedAt }).where(eq(feedstockDeliveries.facilityId, facilityId));
+    await tx.update(feedstocks).set({ archivedAt }).where(eq(feedstocks.facilityId, facilityId));
+    await tx.update(productionRuns).set({ archivedAt }).where(eq(productionRuns.facilityId, facilityId));
+    await tx.update(biocharProducts).set({ archivedAt }).where(eq(biocharProducts.facilityId, facilityId));
+    await tx.update(orders).set({ archivedAt }).where(eq(orders.facilityId, facilityId));
+    await tx.update(deliveries).set({ archivedAt }).where(eq(deliveries.facilityId, facilityId));
+    await tx.update(creditBatches).set({ archivedAt }).where(eq(creditBatches.facilityId, facilityId));
+    await tx.update(stockpileEvents).set({ archivedAt }).where(eq(stockpileEvents.facilityId, facilityId));
+    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(eq(powerProcurementEvidence.facilityId, facilityId));
+
+    return restored;
+  });
 }
 
 // ============================================
@@ -736,6 +867,7 @@ export async function getFacilityCountries(userId: string): Promise<string[]> {
   const results = await db
     .selectDistinct({ country: facilities.country })
     .from(facilities)
+    .where(isNull(facilities.archivedAt))
     .orderBy(asc(facilities.country));
 
   return results.map((r) => r.country);

@@ -11,9 +11,9 @@ export type CreateDatapointRequest =
 export type PatchDatapointRequest =
   components["schemas"]["PatchDatapointRequest"];
 export type Datapoint = components["schemas"]["Datapoint"];
-export type CreateRemovalRequest =
-  components["schemas"]["CreateRemovalRequest"];
-export type Removal = components["schemas"]["Removal"];
+export type CreateGhgEntryRequest =
+  components["schemas"]["CreateGhgEntryRequest"];
+export type GhgEntry = components["schemas"]["GhgEntry"];
 export type CreateComponentRequest =
   components["schemas"]["CreateComponentRequest"];
 export type Component = components["schemas"]["Component"];
@@ -29,12 +29,12 @@ export function patchDatapoint(
   return isometric.patch<Datapoint>(`/datapoints/${id}`, body);
 }
 
-export function createRemoval(body: CreateRemovalRequest): Promise<Removal> {
-  return isometric.post<Removal>("/removals", body);
+export function createGhgEntry(body: CreateGhgEntryRequest): Promise<GhgEntry> {
+  return isometric.post<GhgEntry>("/ghg_entries", body);
 }
 
-// Defined for completeness; templated removals embed inputs directly via
-// CreateRemovalRequest.removal_template_components, so Phase 3 does not call
+// Defined for completeness; templated GHG entries embed inputs directly via
+// CreateGhgEntryRequest.ghg_entry_template_components, so Phase 3 does not call
 // this. Reserved for Phase 4 standalone-component flows.
 export function createComponent(body: CreateComponentRequest): Promise<Component> {
   return isometric.post<Component>("/components", body);
@@ -57,8 +57,10 @@ async function findBySupplierRef<T>(
   return null;
 }
 
-export function findRemovalBySupplierRef(ref: string): Promise<Removal | null> {
-  return findBySupplierRef<Removal>("/removals", ref);
+export function findGhgEntryBySupplierRef(
+  ref: string,
+): Promise<GhgEntry | null> {
+  return findBySupplierRef<GhgEntry>("/ghg_entries", ref);
 }
 
 export function findDatapointBySupplierRef(

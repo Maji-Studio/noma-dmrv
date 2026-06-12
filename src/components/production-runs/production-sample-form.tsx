@@ -282,7 +282,14 @@ export function ProductionSampleForm({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
+      <div className="flex items-center justify-start gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
+        <Button type="button" variant="primary" disabled={isSubmitting} onClick={onFormSubmit}>
+          {isSubmitting
+            ? "Saving..."
+            : isEditMode
+              ? "Save Changes"
+              : "Add Sample"}
+        </Button>
         {onCancel && (
           <Button
             type="button"
@@ -293,13 +300,6 @@ export function ProductionSampleForm({
             Cancel
           </Button>
         )}
-        <Button type="button" variant="primary" disabled={isSubmitting} onClick={onFormSubmit}>
-          {isSubmitting
-            ? "Saving..."
-            : isEditMode
-              ? "Save Changes"
-              : "Add Sample"}
-        </Button>
       </div>
     </div>
   );

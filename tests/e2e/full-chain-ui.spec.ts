@@ -11,6 +11,7 @@
  */
 import { test, expect } from "./fixtures";
 import {
+  dismissCertifierLinkDialog,
   waitForSideSheet,
   waitForSideSheetClose,
   selectEntity as selectEntityById,
@@ -388,11 +389,19 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.locator('[role="dialog"]').locator('button:has-text("Create Facility")').click();
       await waitForSideSheetClose(page);
 
-      // Search for the new facility (list may be paginated)
+      // Admins get an optional "Link Isometric project" prompt after create;
+      // it aria-hides the page, so dismiss it before asserting on the list.
+      await dismissCertifierLinkDialog(page);
+
+      // Search for the new facility (list may be paginated). Scope to the list
+      // card's heading — the sidebar FacilitySelector falls back to the first
+      // facility, which is this one, so a bare getByText matches twice.
       const facilitySearch = page.getByPlaceholder(/search/i);
       await facilitySearch.fill(`Chain Facility ${runId}`);
       await page.waitForTimeout(500);
-      await expect(page.getByText(`Chain Facility ${runId}`)).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole("heading", { name: `Chain Facility ${runId}` }),
+      ).toBeVisible({ timeout: 10000 });
     });
 
     // ─── 2. REACTOR ────────────────────────────────────────
@@ -416,7 +425,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await reactorSearch.fill(`Chain Reactor ${runId}`);
       await page.waitForTimeout(500);
       await expect(
-        page.getByRole("button", { name: new RegExp(`Chain Reactor ${runId}`) }).first()
+        page.getByRole("button", { name: `Chain Reactor ${runId}` }).first()
       ).toBeVisible({ timeout: 10000 });
     });
 
@@ -530,15 +539,8 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="deliveryDate"]', today);
       await page.selectOption('select[name="status"]', "upcoming");
 
-      // Select the first available order
-      const orderSelect = page.locator('select[name="orderId"]');
-      await orderSelect.waitFor({ state: "attached", timeout: 8000 });
-      const orderOptions = orderSelect.locator("option:not([value=''])");
-      await expect(orderOptions.first()).toBeAttached({ timeout: 8000 });
-      const orderValue = await orderOptions.first().getAttribute("value");
-      if (orderValue) {
-        await orderSelect.selectOption(orderValue);
-      }
+      // Select the first available order (FormEntitySelect, not a native <select>)
+      await selectFirstEntity(page, "Order");
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
 

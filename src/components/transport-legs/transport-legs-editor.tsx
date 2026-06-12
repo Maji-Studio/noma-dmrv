@@ -18,6 +18,7 @@ import type {
   TransportEntityTypeValue,
   TransportLegFormData,
 } from "@/schemas/transport-legs";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
 
@@ -28,11 +29,15 @@ interface TransportLegsEditorProps {
   title?: string;
   /** Read-only: list legs without add/edit/delete affordances (view mode). */
   readOnly?: boolean;
+  /** Override the no-legs message (e.g. for auto-derived categories). */
+  emptyMessage?: string;
 }
 
+// Feedstock and biochar legs are auto-derived (supplier distance / delivery
+// aggregation) and only ever rendered read-only; sample → lab stays manual.
 const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
   feedstock: "Transport: feedstock → processing",
-  biochar: "Transport: biochar → storage",
+  biochar: "Transport: biochar distribution",
   sample: "Transport: sample → lab",
 };
 
@@ -52,6 +57,7 @@ export function TransportLegsEditor({
   entityId,
   title,
   readOnly = false,
+  emptyMessage,
 }: TransportLegsEditorProps) {
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
@@ -143,9 +149,10 @@ export function TransportLegsEditor({
         <TableSkeleton columns={readOnly ? 4 : 5} rows={2} />
       ) : !hasLegs && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          {readOnly
-            ? "No transport legs recorded yet."
-            : 'No transport legs recorded yet. Click "Add leg" to record one.'}
+          {emptyMessage ??
+            (readOnly
+              ? "No transport legs recorded yet."
+              : 'No transport legs recorded yet. Click "Add leg" to record one.')}
         </p>
       ) : hasLegs ? (
         <div className="overflow-x-auto">
@@ -170,7 +177,14 @@ export function TransportLegsEditor({
                       " → " +
                       (leg.destinationName?.trim() || "—")}
                   </td>
-                  <td className="py-8 pr-12">{leg.distanceKm} km</td>
+                  <td className="py-8 pr-12">
+                    {leg.distanceKm} km
+                    {leg.distanceSource && (
+                      <span className="text-[var(--color-text-tertiary)]">
+                        {" "}· {DISTANCE_SOURCE_LABELS[leg.distanceSource]}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
                     {leg.loadMassKg != null ? formatMass(leg.loadMassKg) : "—"}

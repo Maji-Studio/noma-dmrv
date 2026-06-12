@@ -5,20 +5,24 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Warning } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions } from "@/components/forms";
+import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
-import { Button } from "@/components/ui";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 
 // ============================================
 // Constants for select options
@@ -28,6 +32,13 @@ const statusOptions: readonly { value: string; label: string }[] = deliveryStatu
   value: status,
   label: formatStatus(status),
 }));
+
+const isDeliveryCertifyField = (field: string) =>
+  isCertifyFormField("delivery", field);
+
+// The entered delivered wet mass may deviate from the weighbridge difference
+// (arrival − departure) by this fraction before the mismatch warning shows.
+const WEIGHBRIDGE_MISMATCH_TOLERANCE_RATIO = 0.01;
 
 // ============================================
 // Formatting helpers
@@ -66,31 +77,21 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const isEditMode = !!delivery;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
-  // Fetch orders for dropdown
+  // The order picker fetches its own options (FormEntitySelect); this query
+  // only backs the stored-distance prefill for the selected order below.
   const { data: ordersData } = useOrdersForSelect(contextFacilityId ?? undefined, {
     enabled: !!contextFacilityId,
   });
   const orders = ordersData ?? [];
   const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
 
-  const orderOptions = orders.map((o) => ({
-    value: o.id,
-    label:
-      [
-        o.customerName,
-        o.biocharProductCode,
-        o.quantityKg ? `${o.quantityKg} kg` : undefined,
-        o.orderDate ? new Date(o.orderDate).toLocaleDateString() : undefined,
-      ]
-        .filter(Boolean)
-        .join(" — ") || "Order",
-  }));
-
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
@@ -106,11 +107,71 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       biocharProductId: delivery?.biocharProductId ?? undefined,
       driverId: delivery?.driverId ?? undefined,
       vehicleId: delivery?.vehicleId ?? undefined,
+      distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
+      distanceSource: delivery?.distanceSource ?? null,
+      distanceNote: delivery?.distanceNote ?? "",
     },
   });
 
   const watchWetMass = watch("deliveredWetMassKg");
   const watchMoisture = watch("moistureContentPercent");
+  const watchArrivalMass = watch("truckMassOnArrivalKg");
+  const watchDepartureMass = watch("truckMassOnDepartureKg");
+  const watchOrderId = watch("orderId");
+  const distanceKmOverride = watch("distanceKmOverride") as number | null | undefined;
+
+  // Destination's stored distance (+ provenance) — the value the derived
+  // transport leg falls back to when this delivery has no override
+  // (data-access/transport-legs.ts, map-integration plan decision 3).
+  const selectedOrder = orders.find((o) => o.id === watchOrderId);
+  const storedDistanceKm = selectedOrder?.destinationDistanceKm ?? null;
+  const storedDistanceSource = selectedOrder?.destinationDistanceSource ?? null;
+
+  // The field displays the effective distance: override beats stored. The
+  // override is persisted only when the value genuinely differs from the
+  // stored distance, so later corrections on the customer location keep
+  // propagating to deliveries that never overrode (null-override invariant,
+  // schemas/distance-source.ts header).
+  const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
+
+  // Text draft so in-flight typing survives; resync when the effective value
+  // changes from outside (order switch, prefill) — adjust-state-during-render.
+  const [distanceDraft, setDistanceDraft] = useState(formatDistance(effectiveDistanceKm));
+  const [syncedDistanceKm, setSyncedDistanceKm] = useState(effectiveDistanceKm);
+  if (effectiveDistanceKm !== syncedDistanceKm) {
+    setSyncedDistanceKm(effectiveDistanceKm);
+    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
+      setDistanceDraft(formatDistance(effectiveDistanceKm));
+    }
+  }
+
+  const handleDistanceChange = (raw: string) => {
+    setDistanceDraft(raw);
+    const parsed = parseDistanceDraft(raw);
+    if (parsed === undefined) return; // unparseable in-flight text — wait
+    const isOverride = parsed !== null && parsed !== storedDistanceKm;
+    // Keep the render-time resync quiet while editing; a cleared/reverted
+    // draft refills from the stored value on blur instead of mid-keystroke.
+    setSyncedDistanceKm(isOverride ? parsed : storedDistanceKm);
+    setValue("distanceKmOverride", isOverride ? parsed : null, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("distanceSource", isOverride ? "manual" : null, { shouldDirty: true });
+  };
+
+  const handleDistanceBlur = () => {
+    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
+      setDistanceDraft(formatDistance(effectiveDistanceKm));
+    }
+  };
+
+  // Switching orders invalidates a trip-specific override and its note.
+  useClearOnDependencyChange(watchOrderId, () => {
+    setValue("distanceKmOverride", null, { shouldValidate: true });
+    setValue("distanceSource", null);
+    setValue("distanceNote", "");
+  });
 
   // Auto-calculate dry mass from wet mass and moisture using shared utility
   const calculatedDryMass =
@@ -131,11 +192,57 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     }
   }, [calculatedDryMass, setValue]);
 
+  // Weighbridge difference: arrival − departure = the unloaded mass. It is
+  // the measurement evidence for `deliveredWetMassKg` (the CERT value that
+  // becomes the derived biochar transport leg's load mass).
+  const weighbridgeWetMassKg =
+    typeof watchArrivalMass === "number" &&
+    typeof watchDepartureMass === "number" &&
+    watchDepartureMass >= 0 &&
+    watchArrivalMass >= watchDepartureMass
+      ? Math.round((watchArrivalMass - watchDepartureMass) * 100) / 100
+      : null;
+
+  // Prefill the delivered wet mass from the weighbridge difference while the
+  // field is empty or still holds our own previous fill; stop as soon as the
+  // user enters their own value (then the mismatch warning takes over).
+  const lastWeighbridgeFillRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (weighbridgeWetMassKg === null) {
+      lastWeighbridgeFillRef.current = null;
+      return;
+    }
+    const current = getValues("deliveredWetMassKg");
+    if (current == null || current === lastWeighbridgeFillRef.current) {
+      setValue("deliveredWetMassKg", weighbridgeWetMassKg, {
+        shouldValidate: true,
+      });
+      lastWeighbridgeFillRef.current = weighbridgeWetMassKg;
+    }
+  }, [weighbridgeWetMassKg, getValues, setValue]);
+
+  const weighbridgeMismatch =
+    weighbridgeWetMassKg !== null &&
+    typeof watchWetMass === "number" &&
+    Math.abs(watchWetMass - weighbridgeWetMassKg) >
+      weighbridgeWetMassKg * WEIGHBRIDGE_MISMATCH_TOLERANCE_RATIO
+      ? { enteredKg: watchWetMass, weighbridgeKg: weighbridgeWetMassKg }
+      : null;
+
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as DeliveryFormData);
+    // A distance note only explains an override — never persist one without.
+    const normalized =
+      data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
+    return onSubmit(normalized as DeliveryFormData);
   });
+
+  const distanceHelperText = !watchOrderId
+    ? "Select an order to load the destination's stored distance."
+    : storedDistanceKm == null
+      ? "No stored distance for this destination — add it on the customer location. A one-off manual distance is still possible."
+      : "Prefilled from the destination's stored distance. Edit only when this trip's routing differs.";
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
@@ -167,16 +274,19 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         </div>
 
-        <FormField id="orderId" label="Order" error={errors.orderId?.message}>
-          <FormSelect
-            id="orderId"
-            placeholder="Select order..."
-            disabled={isSubmitting}
-            error={!!errors.orderId}
-            options={orderOptions}
-            {...register("orderId")}
-          />
-        </FormField>
+        {/* Disabled until facility context resolves — an unscoped fetch would
+            list other facilities' orders, and the stored-distance prefill
+            below only covers the context facility's orders. */}
+        <FormEntitySelect
+          control={control}
+          name="orderId"
+          label="Order"
+          entityType="order"
+          placeholder="Select order..."
+          required
+          disabled={isSubmitting || !contextFacilityId}
+          filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+        />
       </div>
 
       {/* Mass & Moisture Section */}
@@ -190,8 +300,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             id="deliveredWetMassKg"
             label="Wet Mass (kg)"
             error={errors.deliveredWetMassKg?.message}
-            helperText="As-received weight"
+            helperText="As-received weight — prefilled from the truck weighing below when both masses are entered"
             required
+            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
           >
             <FormInput
               id="deliveredWetMassKg"
@@ -252,6 +363,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Truck Weighing at Delivery Site
         </h3>
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          Weighbridge evidence for the delivered wet mass: arrival − departure
+          suggests the unloaded mass.
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -290,19 +405,97 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
         </div>
+
+        {weighbridgeMismatch && (
+          <div
+            role="alert"
+            className="flex items-start gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber)]/5 p-16"
+          >
+            <Warning
+              size={20}
+              weight="fill"
+              className="text-[var(--color-signal-amber)] mt-1 shrink-0"
+            />
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Entered wet mass ({weighbridgeMismatch.enteredKg.toFixed(2)} kg)
+              deviates from the weighbridge difference (
+              {weighbridgeMismatch.weighbridgeKg.toFixed(2)} kg = arrival −
+              departure). Double-check the weighing or the entered mass.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
+      {/* Transport Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Transport
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="distanceKmOverride"
+            label="Distance (km)"
+            error={errors.distanceKmOverride?.message}
+            helperText={distanceHelperText}
+          >
+            <div>
+              <FormInput
+                id="distanceKmOverride"
+                type="number"
+                step="any"
+                min={0}
+                placeholder="e.g., 85"
+                disabled={isSubmitting}
+                error={!!errors.distanceKmOverride}
+                value={distanceDraft}
+                onChange={(event) => handleDistanceChange(event.target.value)}
+                onBlur={handleDistanceBlur}
+              />
+              {distanceKmOverride != null ? (
+                <p
+                  className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                  data-testid="distanceKmOverride-distance-source"
+                >
+                  Source: {DISTANCE_SOURCE_LABELS.manual} — overrides the stored distance
+                </p>
+              ) : storedDistanceKm != null ? (
+                <p
+                  className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                  data-testid="distanceKmOverride-distance-source"
+                >
+                  From customer location
+                  {storedDistanceSource ? ` — ${DISTANCE_SOURCE_LABELS[storedDistanceSource]}` : ""}
+                </p>
+              ) : null}
+            </div>
+          </FormField>
+        </div>
+
+        {distanceKmOverride != null && (
+          <FormField
+            id="distanceNote"
+            label="Distance note"
+            error={errors.distanceNote?.message}
+            helperText="Why this delivery's distance differs from the stored distance (optional)"
+          >
+            <FormTextarea
+              id="distanceNote"
+              placeholder="e.g., detour via the coastal road due to bridge closure"
+              disabled={isSubmitting}
+              error={!!errors.distanceNote}
+              {...register("distanceNote")}
+            />
+          </FormField>
         )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
       </div>
+
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

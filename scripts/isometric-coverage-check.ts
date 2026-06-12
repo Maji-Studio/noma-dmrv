@@ -168,7 +168,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { listRemovalTemplates, listComponents, listDatapoints } = await import(
+  const { listGhgEntryTemplates, listComponents, listDatapoints } = await import(
     "../src/lib/isometric"
   );
   const { lookupInputMapping, lookupPeriodInputTuple } = await import(
@@ -189,7 +189,7 @@ async function main(): Promise<void> {
     // ── 1. Template input coverage ────────────────────────────────────
     let template;
     try {
-      const templates = await listRemovalTemplates(facility.externalProjectId);
+      const templates = await listGhgEntryTemplates(facility.externalProjectId);
       template = templates.find(
         (t) => t.id === facility.defaultRemovalTemplateId,
       );

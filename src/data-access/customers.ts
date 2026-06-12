@@ -12,6 +12,7 @@ import {
   type CustomerLocation,
 } from "@/db/schema";
 import type { CustomerFilterData } from "@/schemas/customers";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 // ============================================
 // Types
@@ -40,6 +41,7 @@ export interface CustomerDetail extends Customer {
     gpsLongitude: number | null;
     address: string | null;
     distanceFromFacilityKm: number | null;
+    isDefault: boolean;
     createdAt: Date;
     updatedAt: Date;
   }>;
@@ -232,6 +234,7 @@ export async function getCustomerWithRelations(
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
       distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
+      isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,
       updatedAt: customerLocations.updatedAt,
     })
@@ -262,6 +265,8 @@ export async function getCustomerLocations(
     gpsLongitude: number | null;
     address: string | null;
     distanceFromFacilityKm: number | null;
+    distanceSource: DistanceSourceValue | null;
+    isDefault: boolean;
     createdAt: Date;
     updatedAt: Date;
   }>
@@ -289,6 +294,8 @@ export async function getCustomerLocations(
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
       distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
+      distanceSource: customerLocations.distanceSource,
+      isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,
       updatedAt: customerLocations.updatedAt,
     })
@@ -476,6 +483,9 @@ export async function createCustomerLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    defaultSoilTemperatureC?: number | null;
+    isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
   requireAuth(userId);
@@ -490,22 +500,47 @@ export async function createCustomerLocation(
     throw new SafeError("Customer not found");
   }
 
-  const [location] = await db
-    .insert(customerLocations)
-    .values({
-      customerId: data.customerId,
-      name: data.name,
-      country: data.country ?? 'UNKNOWN',
-      stateRegion: data.stateRegion ?? null,
-      city: data.city ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      address: data.address ?? null,
-      distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    // The customer's first location is always its default.
+    const [{ value: existingCount }] = await tx
+      .select({ value: count() })
+      .from(customerLocations)
+      .where(eq(customerLocations.customerId, data.customerId));
+    const makeDefault = data.isDefault === true || existingCount === 0;
 
-  return location;
+    // Clear the prior default first so the partial unique index never sees two.
+    if (makeDefault) {
+      await tx
+        .update(customerLocations)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(customerLocations.customerId, data.customerId),
+            eq(customerLocations.isDefault, true)
+          )
+        );
+    }
+
+    const [location] = await tx
+      .insert(customerLocations)
+      .values({
+        customerId: data.customerId,
+        name: data.name,
+        country: data.country ?? 'UNKNOWN',
+        stateRegion: data.stateRegion ?? null,
+        city: data.city ?? null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        address: data.address ?? null,
+        distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
+        defaultSoilTemperatureC: data.defaultSoilTemperatureC ?? null,
+        isDefault: makeDefault,
+      })
+      .returning();
+
+    return location;
+  });
 }
 
 /**
@@ -523,13 +558,16 @@ export async function updateCustomerLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    defaultSoilTemperatureC?: number | null;
+    isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
   requireAuth(userId);
 
   // Verify location exists
   const [existing] = await db
-    .select()
+    .select({ id: customerLocations.id, customerId: customerLocations.customerId })
     .from(customerLocations)
     .where(eq(customerLocations.id, locationId));
 
@@ -546,6 +584,9 @@ export async function updateCustomerLocation(
     gpsLongitude?: number | null;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    defaultSoilTemperatureC?: number | null;
+    isDefault?: boolean;
     updatedAt: Date;
   } = {
     updatedAt: new Date(),
@@ -559,14 +600,32 @@ export async function updateCustomerLocation(
   if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
   if (data.address !== undefined) updateData.address = data.address;
   if (data.distanceFromFacilityKm !== undefined) updateData.distanceFromFacilityKm = data.distanceFromFacilityKm;
+  if (data.distanceSource !== undefined) updateData.distanceSource = data.distanceSource;
+  if (data.defaultSoilTemperatureC !== undefined) updateData.defaultSoilTemperatureC = data.defaultSoilTemperatureC;
+  if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
-  const [updated] = await db
-    .update(customerLocations)
-    .set(updateData)
-    .where(eq(customerLocations.id, locationId))
-    .returning();
+  return db.transaction(async (tx) => {
+    // Promoting this location to default demotes the customer's current default.
+    if (data.isDefault === true) {
+      await tx
+        .update(customerLocations)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(customerLocations.customerId, existing.customerId),
+            eq(customerLocations.isDefault, true)
+          )
+        );
+    }
 
-  return updated;
+    const [updated] = await tx
+      .update(customerLocations)
+      .set(updateData)
+      .where(eq(customerLocations.id, locationId))
+      .returning();
+
+    return updated;
+  });
 }
 
 /**

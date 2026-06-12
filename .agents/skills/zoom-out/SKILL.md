@@ -1,10 +1,7 @@
 ---
 name: zoom-out
-description: Tell the agent to zoom out and give broader context or a higher-level perspective. Use when the user is unfamiliar with a section of code or needs to understand how it fits into the bigger picture.
+description: Tell the agent to zoom out and give broader context or a higher-level perspective. Use when you're unfamiliar with a section of code or need to understand how it fits into the bigger picture.
+disable-model-invocation: true
 ---
 
-Go up a layer of abstraction.
-
-Give the user a map of all relevant modules, callers, data flow, and boundaries. Use the project's domain glossary vocabulary where it exists.
-
-Prefer codebase exploration over guessing. If the answer depends on local architecture, inspect the relevant files before explaining.
+I don't know this area of code well. Go up a layer of abstraction. Give me a map of all the relevant modules and callers, using the project's domain glossary vocabulary.

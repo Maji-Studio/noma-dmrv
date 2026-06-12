@@ -4,6 +4,244 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-12 (phantom link dialog explained — post-create certifier prompt is intentional)
+
+Closes open question `facilities/phantom-link-dialog`.
+
+- The "Link Isometric project" modal that appeared over `/facilities` right
+  after a facility create was not a phantom: `facility-list.tsx` deliberately
+  opens `FacilityCertifierDialog` (via `FacilityCertifierLinkLoader`) for
+  admins after a successful create, as an optional prompt to link the new
+  facility to an Isometric project (commit `aa0e1da`, landed on staging via
+  PR #183). The earlier "no mount outside the Settings page" static analysis
+  predated that commit's arrival on the analyzed branch.
+- The dialog only mounts once its mapping payload loads (~0.5 s after
+  create), which is why it raced test assertions and looked nondeterministic.
+- E2E suites now dismiss it via a shared
+  `dismissCertifierLinkDialog(page)` helper
+  (`tests/e2e/fixtures/page-helpers.ts`), used by `facilities.spec.ts`
+  (replacing the quarantine workaround) and `full-chain-ui.spec.ts` (whose
+  Create Facility step had been failing on staging CI since PR #183 merged).
+
+Open question closed: `facilities/phantom-link-dialog`.
+
+## 2026-06-11 (distance provenance + source-aware priority resolution — map integration Phase 1 §9)
+
+Implements decisions 2–3 of
+[`docs/plans/2026-06-10-map-integration.md`](../plans/2026-06-10-map-integration.md).
+Distance provenance is now part of the distance value, and the derived
+transport legs (the Eq. 3 distance carriers submitted to Isometric) resolve
+distance in the documented priority order instead of reading only the
+supplier-level / customer-location values.
+
+- **`distanceSource` enum** (`map_estimate` | `manual` | `document`,
+  `src/schemas/distance-source.ts` mirroring the `distance_source` pgEnum)
+  on every writable persisted distance: `suppliers.distance_to_facility_km`,
+  `supplier_locations.distance_from_facility_km`,
+  `customer_locations.distance_from_facility_km`,
+  `deliveries.distance_km_override`, `transport_legs.distance_km`. Null
+  distance ⇒ null source; a distance written without explicit provenance was
+  operator-typed ⇒ `manual` (`resolveDistanceSource`, applied at every `fn/`
+  write boundary). CALC fill ⇒ `map_estimate`; hand-editing a CALC'd value
+  flips it back to `manual` (`DistanceCalcField`); explicit transport legs can
+  be marked `document` (bill of lading / weigh ticket) in the leg form.
+- **Feedstock side** (`syncFeedstockTransportLeg`): feedstock-form override →
+  supplier **default location** `distance_from_facility_km` → supplier-level
+  `distance_to_facility_km`. The feedstock form's autofill mirrors the same
+  chain (and inherits the suggestion's source) so what the operator sees is
+  what persists.
+- **Distribution side** (`syncBiocharProductTransportLeg`): per delivery,
+  `deliveries.distance_km_override` → destination customer-location distance.
+  The aggregated (mass-weighted) leg's source is the **weakest contributing
+  source**: null if any contributor is unknown, else `manual` if any manual,
+  else `map_estimate` if any estimate, `document` only when all are
+  document-backed.
+- **Inheritance, not fabrication** — a derived leg copies the winning level's
+  source verbatim (`deriveTransportLeg`); a pre-provenance stored distance
+  yields a null source rather than a fabricated `manual`.
+- **Tests** — `src/lib/calculations/transport-leg.test.ts` (23 cases): source
+  inheritance for stored/override winners, null-distance ⇒ null-source,
+  rejected non-positive overrides not leaking their source, and the
+  weakest-source aggregation rules.
+
+Open question closed: `parties/distance-derivation`.
+
+## 2026-06-10 (fake registry adapter + boundary tests — reliability track Phase 3)
+
+Implements Phase 3 of
+[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+the registry seam gains its second adapter —
+`tests/fixtures/fake-registry.ts`, an in-memory registry-shaped counterparty
+installed by faking the CLIENT (`vi.mock("@/lib/isometric/client")`), so the
+function-level wrappers (`createDatapoint`, `createGhgEntry`,
+`createGhgStatement`, `findGhgEntryBySupplierRef`,
+`findDatapointBySupplierRef`, `findDraftGhgStatementsByPeriod`) run for real
+— supplier-reference query semantics and `{first, after}` pagination are
+exercised, not simulated. No production code changed.
+
+- **The fake** — stores ghg entries / datapoints / GHG statements with
+  server-assigned IDs; honors `?supplier_reference_id=` filtering on
+  `/ghg_entries` + `/datapoints` and paged listing of `/ghg_statements`
+  (+ `GET /ghg_statements/:id`); enforces unique `supplier_reference_id`
+  on POST (422 with a body) while allowing multiple DRAFT statements per
+  period (the real ambiguity); fails loud on unfaked routes. Per-request
+  failure injection: `failNext(route, mode)` with `"reject-before-commit"`
+  (4xx `IsometricApiError` with a body, nothing created) and
+  `"drop-after-commit"` (created server-side, client sees a network error
+  — the mode no per-function mock can express). Request log for POST-count
+  assertions.
+- **Boundary tests** — `tests/registry-boundary-removal.test.ts` (5 cases)
+  and `tests/registry-boundary-ghg-statement.test.ts` (2 cases) run the
+  REAL `claimSubmissionDraft` DB-backed plus the real ledger/sync-event
+  writes and `performRegistryCreate`, with only the client faked. Mocked
+  besides the client: the removal context loader and sources resolver
+  (removal file), and the auth session (GHG file — the action runs through
+  `withAction`). Covered end-to-end: datapoint orphan → resume reconciles
+  by supplier ref and POSTs only the remaining datapoints (registry holds
+  exactly one of each); removal orphan → same property, plus same-attempt
+  recovery when the post-failure lookup works; 4xx reject → row rejected
+  and the failed sync event carries the registry response body +
+  `mapping_revision` (the Phase 2 behavior change asserted at the
+  boundary); hash-supersede v1→v2 → registry holds two removals with
+  version-distinct supplier refs; GHG drop-after-commit → resume
+  reconciles the single draft by `(project, end_on)` and finalizes without
+  re-POSTing; a second injected draft → rejected with the ambiguity
+  message and (Phase 2 parity, pinned by assertion) no failed sync event.
+- **Coverage gap from Phase 2 closed** — the two resume-path fixes that
+  were folded into Phase 2 without dedicated tests are now pinned:
+  `tests/certification-submissions.test.ts` gains a resume-path
+  concurrency case (row flips to `submitted` while the resume claimant is
+  parked on the mapping lock → `existing`, NOT a CAS revert back to
+  draft), and the removal boundary suite gains a
+  `readRemovalFixedInputs` fail-loud case (malformed `kind:"fixed"`
+  snapshot entry → resume refused with a `SafeError`, zero POSTs).
+- **Live anchor unchanged** — the sandbox integration test
+  (`tests/isometric-sandbox.integration.test.ts`) and the daily
+  `isometric-health.yml` check remain the live-truth anchor; the fake does
+  not replace them.
+
+## 2026-06-10 (registry create-or-reconcile module — reliability track Phase 2)
+
+Implements Phase 2 of
+[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+one implementation of *POST → on failure, reconcile by lookup → record sync
+event → claim the orphan or mark rejected* in
+`src/fn/certification/registry-create.ts` (`performRegistryCreate`), shared
+by datapoint creates, removal creates, and GHG Statement creates.
+`submit-removal.ts`'s local `createOrReconcile` is deleted;
+`createGhgStatementRemote`'s hand-rolled catch arm is replaced and its two
+`finalizeGhgStatement` continuations collapse into one call site (the module
+returns `source: "create" | "reconciliation"`).
+
+- **Behavior change (the point of the phase)** — removal/datapoint failure
+  sync events now preserve the registry's response body
+  (`IsometricApiError.body`, the actionable 4xx detail) alongside
+  `mapping_revision`; previously only GHG kept the body and only removal
+  kept the revision. Unified failed-event `responsePayload` shape:
+  `{ mapping_revision, body? }`.
+- **GHG create gains reconcile-first on resume** — a resumed GHG Statement
+  draft now looks up `(project, end_on)` BEFORE POSTing (the removal path's
+  double-submit guard); previously it re-POSTed and relied on the catch-arm
+  reconcile.
+- **GHG create audit events** unified onto the removal shape: best-effort
+  writes (a failed audit insert no longer unwinds a successful create),
+  `requestPayload` + `mapping_revision` on success events, `:reconciled`
+  operation suffix for reconciled claims (recorded before
+  `markSubmissionSubmitted`, no longer after).
+- **Out of scope by decision** — sources mirroring (signed-URL refresh
+  shape) and telemetry (ADR 0006 journaled-step recovery) stay on their own
+  shapes.
+- **Resume-path correctness (found during migration)** — `submitRemoval` now
+  reads the `fixed` (pre-bound) datapoint bindings back out of the resumed
+  row's `payloadSnapshot.semantic.inputs` instead of mixing live-template
+  bindings with the stored transport snapshot; and the claim module's
+  `resumeDraft` re-decides under the mapping lock (mirroring `createDraft`)
+  so the CAS reset can no longer revert a row a concurrent claimant just
+  flipped to `submitted`.
+- **Tests** — new `tests/registry-create.test.ts` (9 cases: fresh create,
+  resumed reconcile-first hit/miss, POST-fails-orphan-found,
+  POST-fails-lookup-misses (body preserved, row rejected), ambiguous
+  multiple → reject + message, best-effort audit, `supplierRefLookup`
+  adapter). Existing pipeline tests unchanged and green.
+
+## 2026-06-10 (submission-ledger claim module — reliability track Phase 1)
+
+Implements Phase 1 of
+[`docs/plans/2026-06-10-certification-reliability-track.md`](../plans/2026-06-10-certification-reliability-track.md):
+the claim choreography (*read latest → tentative decide → mapping lock →
+re-resolve → authoritative re-decide → insert/reset draft*) now lives in one
+module, `src/data-access/certification-submissions.ts`, entered only through
+`claimSubmissionDraft`. The Removal path's in-lock defensiveness is now the
+only path; GHG Statements inherit it.
+
+- **Behavior change (the point of the phase)** — a concurrent duplicate GHG
+  Statement create now resolves to `existing` / `blocked: "in-flight"`
+  instead of a raw `cert_submissions_entity_version_unique` constraint error.
+- **Seam decision** — internal data-access seam, DB-backed tests against
+  real Postgres; no port, no in-memory ledger fake (ADR 0008).
+- **Telemetry deferred** — `submit-telemetry.ts` keeps the relocated
+  primitives (`getLatestSubmission`, `insertDraftSubmissionWithMappingLock`,
+  `resetSubmissionToDraftWithMappingLock`) under an explicit boundary: no
+  barrel re-export, `TODO(telemetry-migration)` comments, single permitted
+  importer (grep-verified).
+- **Tests** — new `tests/certification-submissions.test.ts` (16 DB-backed
+  cases incl. real-interleaving concurrency: duplicate-claim race, in-lock
+  flip to `existing`, resume CAS won/lost, mid-claim repoint). Pipeline
+  tests stub `claimSubmissionDraft` via the shared
+  `tests/fixtures/fake-claim.ts` (real pure core over an in-memory store);
+  the hand-rolled per-primitive ledger fakes — including the
+  `undefined as never` tx handle — are retired.
+
+## 2026-06-10 (GHG entry API migration: removal→ghg_entry wire rename)
+
+Migrates the Certify wire layer from the deprecated removal-named endpoints to
+the new `ghg_entry` route family per Isometric's
+[2026-06-04 changelog](https://docs.isometric.com/api-reference/certify/api-changelog)
+("GHG entry API rename released across Certify REST endpoints"). The old
+endpoints stay functional until **September 2026**, then are removed. Verified
+against the live Certify spec (62 paths / 187 schemas) on 2026-06-10.
+
+- **Regen pipeline fixed first.** `regenerate-certify-types` defaulted to
+  `https://api.isometric.com/openapi.json`, which now serves Isometric's
+  internal FastAPI spec (no Certify routes), so `certify.d.ts` was stale
+  (pre-rename). Repointed to the docs-hosted Certify spec
+  `https://docs.isometric.com/api-reference/certify/mrv.openapi.json`
+  (`package.json`, `.github/workflows/isometric-health.yml`,
+  `docs/isometric/update-playbook.md`) and regenerated. New + deprecated
+  schemas coexist during the transition.
+- **Wire renames** (`src/lib/isometric/`): `POST/GET /removals` →
+  `/ghg_entries`; `/projects/{id}/removal_templates` → `/ghg_entry_templates`;
+  `GET /components?removal_id=` → `?ghg_entry_id=`; create-payload fields
+  `removal_template_id`/`removal_template_components`/`removal_template_component_id`
+  → `ghg_entry_template_*`; `GhgStatement.removal_ids` (read) →
+  `ghg_entry_ids` (required; old field now `deprecated: true`). Symbols/files
+  renamed: `createRemoval`→`createGhgEntry`,
+  `findRemovalBySupplierRef`→`findGhgEntryBySupplierRef`,
+  `listRemovalTemplates`→`listGhgEntryTemplates`,
+  `buildCreateRemovalRequest`→`buildCreateGhgEntryRequest`,
+  `transformers/removal.ts`→`transformers/ghg-entry.ts`,
+  `utils/removal-membership.ts`→`utils/ghg-entry-membership.ts`, and the
+  `Removal*`/`RemovalTemplate*` type aliases → `GhgEntry*`/`GhgEntryTemplate*`.
+- **Wire-only rename decision.** App-layer + DB naming (`certifier_removals`,
+  `credit_batches.removal_id`, `defaultRemovalTemplateId`, ledger
+  `'removal'` keys, the `decideRemovalMembership` / `reconcileRemoval` domain
+  fns) stays "Removal" — our templates are `credit_type: REMOVAL`, so it
+  remains the correct domain word. No DB/data migration; all `rmv_`/`rvt_`/
+  `ggs_` ids unchanged, and old Removals resolve through `/ghg_entries` by the
+  same `supplier_reference_id`. `listGhgEntryTemplates` now warns on any
+  non-REMOVAL `credit_type`. Rejected: full domain rename (no behavioural gain
+  on a biochar-only product, ~50 files of churn). Revisit only if we ever
+  submit `REDUCTION`-type entries.
+- **Tests.** New fetch-mocked contract test
+  (`src/lib/isometric/submissions.test.ts`) pins
+  `findGhgEntryBySupplierRef` to `GET /ghg_entries?supplier_reference_id=`;
+  sandbox read suite migrated to `ghg_entry_templates` (asserts
+  `credit_type`) + a `GET /ghg_entries` `rmv_`-shape test + an env-gated
+  pre-rename supplier-ref lookup. Free fields now exposed on the migrated
+  surface (`credit_type`, `risk_of_reversal_percentage`, `credit_allocation`,
+  statement reporting-period readback, source `description`) are tracked as
+  follow-ups in `docs/open-questions.md`; not adopted here.
+
 ## 2026-06-08 (Schema slim-down: drop unused protocol-stub tables)
 
 Schema-only cleanup; no behaviour change. Dropped tables/columns that were

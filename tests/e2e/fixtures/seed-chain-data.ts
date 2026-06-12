@@ -64,6 +64,10 @@ export async function seedChainData(
         name: `E2E Seed Facility ${testRunId}`,
         country: "Tanzania",
         location: "Dar es Salaam",
+        // Dodoma stub-geocode fixture coords — gives CALC a facility endpoint
+        // and makes stub reverse-geocode/route-distance assertions exact.
+        gpsLatitude: -6.163,
+        gpsLongitude: 35.7516,
       });
 
       // 2. Reactor (needs facility)
@@ -99,7 +103,9 @@ export async function seedChainData(
         name: `E2E Seed Customer ${testRunId}`,
       });
 
-      // 5. Customer Location (needs customer)
+      // 5. Customer Location (needs customer). The stored distance lets the
+      // app derive a biochar distribution leg when a test records a delivery
+      // to this location.
       await tx.insert(schema.customerLocations).values({
         id: customerLocationId,
         customerId: customerId,
@@ -108,6 +114,8 @@ export async function seedChainData(
         address: "123 Farm Road, Dar es Salaam",
         gpsLatitude: -6.8,
         gpsLongitude: 39.28,
+        distanceFromFacilityKm: 25,
+        distanceSource: "manual",
       });
 
       // 6. Formulation
@@ -374,6 +382,15 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             .where(
               inArray(
                 schema.samples.productionRunId,
+                facilityRuns.map((r) => r.id)
+              )
+            );
+          // Delete in-process production samples linked to production runs
+          await tx
+            .delete(schema.productionSamples)
+            .where(
+              inArray(
+                schema.productionSamples.productionRunId,
                 facilityRuns.map((r) => r.id)
               )
             );

@@ -69,6 +69,7 @@ export function toBatchHealthFacts(
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
+    productionReadinessGap: ctx.productionReadinessGap ?? null,
     facilitySetupComplete: isFacilitySetupComplete(ctx),
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,

@@ -46,6 +46,7 @@ import {
   getBiocharProducts,
   getBiocharProductEntityById,
 } from "./biochar-products";
+import { getOrdersEntity, getOrderEntityById } from "./orders";
 import {
   getCreditBatchesEntity,
   getCreditBatchEntityById,
@@ -148,6 +149,13 @@ export async function getEntities(
         facilityId: filterBy?.facilityId,
         limit,
       });
+    case "order":
+      return getOrdersEntity({
+        userId,
+        search,
+        facilityId: filterBy?.facilityId,
+        limit,
+      });
     case "creditBatch":
       return getCreditBatchesEntity({ search, facilityId: filterBy?.facilityId, limit });
     default:
@@ -190,6 +198,8 @@ export async function getEntityById(
       return getFormulationEntityById(id);
     case "biocharProduct":
       return getBiocharProductEntityById(userId, id);
+    case "order":
+      return getOrderEntityById(userId, id);
     case "creditBatch":
       return getCreditBatchEntityById(id);
     default:

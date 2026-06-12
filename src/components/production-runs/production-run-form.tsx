@@ -10,14 +10,14 @@ import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormFileUpload, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, SectionLabel, FormActions } from "@/components/forms";
+import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
-import { Button } from "@/components/ui";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   productionRunFormSchema,
@@ -217,7 +217,11 @@ interface ProductionRunFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
-  /** Content rendered before the form actions (e.g. sample table) */
+  /**
+   * Extension content (e.g. readings/samples/incidents tables) rendered
+   * between the form fields and the CTA row — outside the `<form>` element,
+   * so it may contain its own forms. Nothing ever renders after the CTA.
+   */
   children?: React.ReactNode;
 }
 
@@ -229,6 +233,7 @@ export function ProductionRunForm({
   submitLabel,
   children,
 }: ProductionRunFormProps) {
+  const formId = useId();
   const isEditMode = !!productionRun;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
@@ -262,7 +267,6 @@ export function ProductionRunForm({
       biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
       biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
       biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
-      plcDataFileUrl: productionRun?.plcDataFileUrl ?? "",
     },
   });
 
@@ -338,7 +342,8 @@ export function ProductionRunForm({
   });
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-24">
+    <div className="space-y-24">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
       {/* ── Run Setup ── */}
       <div className="space-y-16">
         <SectionLabel>Run Setup</SectionLabel>
@@ -363,7 +368,12 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="status" label="Status" error={errors.status?.message}>
+          <FormField
+            id="status"
+            label="Status"
+            error={errors.status?.message}
+            helperText="Set to Complete once the run is finished — a run must be Complete before it can be certified."
+          >
             <FormSelect
               id="status"
               disabled={isSubmitting}
@@ -705,33 +715,33 @@ export function ProductionRunForm({
         <SectionLabel>Production Readings</SectionLabel>
 
         <FormField
-          id="plcDataFile"
-          label="Readings CSV"
-          helperText="UI mock only for now: selected CSV files are not uploaded or saved yet."
+          id="readingsCsv"
+          label="Readings CSV (optional)"
+          helperText="Optional and not required to certify. Upload PLC / sensor CSV exports — files are stored securely (local in dev, S3 in production)."
         >
-          <FormFileUpload
-            id="plcDataFile"
-            accept=".csv"
-            multiple={false}
-            disabled={isSubmitting}
-          />
+          {isEditMode && productionRun ? (
+            <ProductionReadingsDocuments productionRunId={productionRun.id} />
+          ) : (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Save the production run first, then reopen it to attach readings
+              CSV files.
+            </p>
+          )}
         </FormField>
       </div>
 
-      {/* ── Slot for extra content (e.g. production samples table) ── */}
+      </form>
+
+      {/* ── Extension content (e.g. readings/samples/incidents) — always before the CTA ── */}
       {children}
 
-      {/* ── Form Actions ── */}
-      <div className="flex items-center justify-end gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
-    </form>
+      <FormActions
+        formId={formId}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
+    </div>
   );
 }

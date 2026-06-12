@@ -89,6 +89,26 @@ const envSchema = z.object({
     z.string().min(1).optional(),
   ),
 
+  // Geo (map integration — ADR 0009). BOTH keys are optional by design:
+  // env parses at import time, so a required geo key would break every
+  // command (build, db scripts, e2e) in environments not yet updated.
+  // Degradation is gated where the feature renders, never at parse time.
+  // No OPENROUTESERVICE_API_KEY → CALC + address search disabled (tooltip);
+  // no NEXT_PUBLIC_MAPTILER_KEY → no basemap, manual lat/lng fallback.
+  OPENROUTESERVICE_API_KEY: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  ),
+  NEXT_PUBLIC_MAPTILER_KEY: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional()
+  ),
+  // Geo provider selector: "ors" (real OpenRouteService) or "stub"
+  // (deterministic fixtures for hermetic PR CI — set in .env.test).
+  GEO_PROVIDER: z
+    .preprocess(emptyToUndefined, z.enum(["ors", "stub"]).optional())
+    .default("ors"),
+
   // Object storage (Digital Ocean Spaces / AWS S3 / local-fs fallback)
   STORAGE_PROVIDER: z
     .preprocess(emptyToUndefined, z.enum(["s3-compatible", "local-fs"]).optional())
@@ -149,6 +169,21 @@ const envSchema = z.object({
   // outright (next check), so we only require the secret when explicitly using
   // local-fs in production-like environments. In dev/test it's optional and the
   // local-fs provider falls back to an ephemeral random secret with a warning.
+
+  // Production fail-closed: never serve stubbed geo answers in prod. CI is
+  // carved out because hermetic e2e builds a production bundle (e2e.yml:
+  // `pnpm build && pnpm start`) with GEO_PROVIDER=stub by design — same
+  // precedent as the storage placeholder env there. Real deployments never
+  // run with CI set at runtime, so the safeguard still holds where it matters.
+  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
+  if (data.NODE_ENV === "production" && !isCI && data.GEO_PROVIDER === "stub") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["GEO_PROVIDER"],
+      message:
+        "GEO_PROVIDER must not be 'stub' in production — stub adapters return fixture distances.",
+    });
+  }
 
   // Production fail-closed: never serve filesystem-backed storage in prod.
   if (data.NODE_ENV === "production" && data.STORAGE_PROVIDER !== "s3-compatible") {

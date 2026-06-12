@@ -262,6 +262,21 @@ pnpm tsc --noEmit
 - For Vercel/deployment platforms: set env vars in dashboard
 - Check `src/config/env.ts` validates all required vars
 
+### Debugging Against the Wrong Environment Assumptions
+
+**Symptoms**
+- "Works in staging but not locally" (or vice versa) with no code difference
+- Auth/DB debugging goes in circles; fixes target config that was never wrong
+
+**Why**
+The three 1Password env items (`local` / `staging` / `production` in vault `Environment Variables`) **intentionally differ** — local has its own `DATABASE_URL` (Docker Postgres), `NEXT_PUBLIC_APP_URL` (localhost:3100), dev admin credentials, and test toggles like `DISABLE_RATE_LIMIT`. Local is not a copy of staging.
+
+**Fixes**
+- Before debugging env/auth issues, write down which environment you're in and which values you're assuming, then verify against the matching 1Password item
+- `pnpm env:check` reports drift between templates and 1Password
+- `pnpm env:local` re-injects `.env.local` from the `local` item
+- 1Password CLI (`op`) requires interactive desktop approval — agents/sandboxed shells can't sign in; run `op` commands manually when an agent is debugging
+
 ## Dependency Issues
 
 ### pnpm install Fails
@@ -540,6 +555,36 @@ pnpm test:e2e
 ```
 
 If the database has been left in a partially migrated state, use your normal local reset flow first and then re-apply the schema.
+
+### Entity Names Collide with the Sidebar FacilitySelector (Strict Mode)
+
+**Symptoms**
+- `strict mode violation: getByText('…') resolved to 2 elements` — one a `<span>` button label, one an `<h3>` heading
+- Or, worse: a `not.toBeVisible()` assertion times out because the *sidebar* still shows the name after the list updated
+
+**Root Cause**
+The sidebar `FacilitySelector` renders the selected facility's name, and the provider can auto-select a freshly-seeded test facility (fallback is `facilities[0]`, and `E2E …` names sort early). Any `page.getByText(<facility name>)` then matches both the sidebar and the card.
+
+**Fix**
+Scope to the role that only the card uses — `page.getByRole("heading", { name: facility.name })` — or scope within the card: `page.locator("article").filter({ hasText: facility.code })`.
+
+### DB-State Assertions Right After a UI Signal Are Racy
+
+**Symptoms**
+- The UI confirmed an action (card disappeared, toast shown) but an immediate direct-DB read from the spec sees the old state (e.g., a freshly-stamped column still `NULL`)
+- Passes locally on re-run, flaky overall
+
+**Root Cause**
+The spec's DB read uses its own `pg` Pool — a separate connection from the app's. Combined with dev-mode latency and React Query refetch timing, "UI looks done" does not guarantee the spec's next statement observes the committed write yet.
+
+**Fix**
+Wrap direct-DB assertions in `expect.poll` instead of a one-shot read:
+```ts
+await expect
+  .poll(async () => (await readStamps()).archivedAt !== null, { timeout: 15000 })
+  .toBe(true);
+```
+See `tests/e2e/facility-archive.spec.ts` for the pattern in context.
 
 ## UI & Styling Issues
 

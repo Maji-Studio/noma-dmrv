@@ -3,7 +3,7 @@
  * CRUD operations for storage locations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   storageLocations,
@@ -19,7 +19,11 @@ import {
   applications,
   type StorageLocation,
 } from "@/db/schema";
-import type { StorageLocationFilterData } from "@/schemas/storage-locations";
+import {
+  isFeedstockBinType,
+  type StorageLocationFilterData,
+  type StorageLocationType,
+} from "@/schemas/storage-locations";
 
 // ============================================
 // Types
@@ -37,8 +41,10 @@ export interface StorageLocationWithFacility extends StorageLocation {
   facilityName: string;
   feedstockInventory: {
     batchCount: number;
+    pendingBatchCount: number;
     feedstockTypes: string[];
     currentDryMassKg: number;
+    pendingDryMassKg: number;
     estimatedWetMassKg: number | null;
     estimatedMoisturePercent: number | null;
   };
@@ -87,6 +93,7 @@ type BaseStorageLocationRow = {
   feedstockTypeId: string | null;
   formulationId: string | null;
   facilityId: string;
+  archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   facilityCode: string | null;
@@ -124,12 +131,20 @@ async function enrichStorageLocationRows(
         db
           .select({
             storageLocationId: feedstocks.storageLocationId,
-            batchCount: count(),
+            batchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
+            pendingBatchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
             feedstockTypes: sql<string | null>`
               string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})
             `,
-            totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
-            totalWetKg: sql<number>`COALESCE(SUM(${feedstocks.massWetKg}), 0)`,
+            totalDryKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+            `,
+            totalWetKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massWetKg}) filter (where ${feedstocks.status} = 'complete'), 0)
+            `,
+            pendingDryKg: sql<number>`
+              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
+            `,
           })
           .from(feedstocks)
           .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
@@ -335,6 +350,7 @@ async function enrichStorageLocationRows(
     const feedstockConsumptionRow = feedstockConsumptionMap.get(row.id);
     const totalDryKg = Number(feedstockInventoryRow?.totalDryKg ?? 0);
     const totalWetKg = Number(feedstockInventoryRow?.totalWetKg ?? 0);
+    const pendingDryKg = Number(feedstockInventoryRow?.pendingDryKg ?? 0);
     const consumedDryKg = Number(feedstockConsumptionRow?.consumedDryKg ?? 0);
     const currentDryMassKg = Math.max(0, totalDryKg - consumedDryKg);
     const moistureRatio =
@@ -360,8 +376,10 @@ async function enrichStorageLocationRows(
       facilityName: row.facilityName ?? "",
       feedstockInventory: {
         batchCount: Number(feedstockInventoryRow?.batchCount ?? 0),
+        pendingBatchCount: Number(feedstockInventoryRow?.pendingBatchCount ?? 0),
         feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
         currentDryMassKg,
+        pendingDryMassKg: pendingDryKg,
         estimatedWetMassKg,
         estimatedMoisturePercent:
           moistureRatio != null ? moistureRatio * 100 : null,
@@ -418,8 +436,8 @@ export async function getStorageLocations(
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived bins (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(storageLocations.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -439,7 +457,7 @@ export async function getStorageLocations(
     conditions.push(eq(storageLocations.type, type));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -477,6 +495,7 @@ export async function getStorageLocations(
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       facilityId: storageLocations.facilityId,
+      archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
@@ -544,6 +563,7 @@ export async function getStorageLocationWithFacility(
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       facilityId: storageLocations.facilityId,
+      archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
@@ -584,7 +604,7 @@ export async function getStorageLocationsByFacility(
   return db
     .select()
     .from(storageLocations)
-    .where(eq(storageLocations.facilityId, facilityId))
+    .where(and(eq(storageLocations.facilityId, facilityId), isNull(storageLocations.archivedAt)))
     .orderBy(asc(storageLocations.code));
 }
 
@@ -612,14 +632,14 @@ export async function createStorageLocation(
 ): Promise<StorageLocation> {
   requireAuth(userId);
 
-  // Verify facility exists
+  // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, data.facilityId));
+    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new SafeError("Facility not found or archived");
   }
 
   // Check for duplicate code
@@ -643,6 +663,15 @@ export async function createStorageLocation(
     }
   }
 
+  // The Zod create schema enforces this for form/fn flows; repeat it here so
+  // direct data-access callers (seeds, scripts) can't create a bin the update
+  // path's invariant check would then refuse to touch.
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    throw new SafeError(
+      "Feedstock and ingredient bins must be restricted to one feedstock type"
+    );
+  }
+
   // A formulation only makes sense on a product bin; ignore it for other types.
   const formulationId = data.type === "product_bin" ? data.formulationId ?? null : null;
   if (formulationId) {
@@ -664,7 +693,10 @@ export async function createStorageLocation(
       type: data.type,
       facilityId: data.facilityId,
       capacityKg: data.capacityKg ?? null,
-      feedstockTypeId: data.feedstockTypeId ?? null,
+      // Only meaningful on feedstock/ingredient bins, like formulationId below.
+      feedstockTypeId: isFeedstockBinType(data.type)
+        ? data.feedstockTypeId ?? null
+        : null,
       formulationId,
       storageMethod: data.storageMethod ?? null,
       storageDescription: data.storageDescription ?? null,
@@ -722,15 +754,15 @@ export async function updateStorageLocation(
     }
   }
 
-  // If facilityId is being changed, verify new facility exists
+  // If facilityId is being changed, verify new facility exists and is active
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(eq(facilities.id, data.facilityId));
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
     if (!facility) {
-      throw new SafeError("Facility not found");
+      throw new SafeError("Facility not found or archived");
     }
   }
 
@@ -746,6 +778,31 @@ export async function updateStorageLocation(
   }
 
   const effectiveType = data.type ?? existing.type;
+
+  // The Zod update schema can only see the payload — when `type` is omitted it
+  // cannot tell this is a feedstock/ingredient bin, so an update could clear
+  // feedstockTypeId on one. Enforce the invariant against the effective row.
+  const effectiveFeedstockTypeId =
+    data.feedstockTypeId !== undefined
+      ? data.feedstockTypeId
+      : existing.feedstockTypeId;
+  if (
+    isFeedstockBinType(effectiveType as StorageLocationType) &&
+    !effectiveFeedstockTypeId
+  ) {
+    throw new SafeError(
+      "Feedstock and ingredient bins must be restricted to one feedstock type"
+    );
+  }
+
+  // A feedstock type only makes sense on a feedstock/ingredient bin — clear it
+  // when the (effective) type is anything else, same as formulationId below.
+  const normalizedFeedstockTypeId = isFeedstockBinType(
+    effectiveType as StorageLocationType
+  )
+    ? effectiveFeedstockTypeId ?? null
+    : null;
+
   const normalizedFormulationId =
     effectiveType === "product_bin"
       ? (data.formulationId !== undefined
@@ -787,12 +844,14 @@ export async function updateStorageLocation(
     }
   }
 
-  const dataWithoutFormulation = { ...data };
-  delete dataWithoutFormulation.formulationId;
+  const dataWithoutNormalized = { ...data };
+  delete dataWithoutNormalized.formulationId;
+  delete dataWithoutNormalized.feedstockTypeId;
   const [updated] = await db
     .update(storageLocations)
     .set({
-      ...dataWithoutFormulation,
+      ...dataWithoutNormalized,
+      feedstockTypeId: normalizedFeedstockTypeId,
       formulationId: normalizedFormulationId,
       updatedAt: new Date(),
     })
@@ -875,6 +934,7 @@ export async function getStorageLocationTypes(
   const results = await db
     .selectDistinct({ type: storageLocations.type })
     .from(storageLocations)
+    .where(isNull(storageLocations.archivedAt))
     .orderBy(asc(storageLocations.type));
 
   return results.map((r) => r.type);

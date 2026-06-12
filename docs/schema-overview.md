@@ -2,7 +2,9 @@
 
 Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
-Current shape after migration `0037_sour_lethal_legion`: 45 table exports across 14 schema files.
+Current shape: 45 table exports across 14 schema files.
+
+**Facility archive (soft delete):** `facilities` and the 11 operational facility-scoped tables (`reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence`) carry a nullable `archived_at` stamped by the facility archive cascade; `NULL` = active. Grandchildren and certifier mirror tables hide transitively. See `docs/database.md` → "Soft Delete — Facility Archive".
 
 | Table | Area | What it does | Use cases | Links |
 |---|---|---|---|---|
@@ -16,8 +18,8 @@ Current shape after migration `0037_sour_lethal_legion`: 45 table exports across
 | `biochar_storage_inventory` | Facilities | Tracks biochar inventory movements and storage state. | Stored-product inventory, dispatch readiness, mass-balance support. | `src/db/schema/storage-inventory.ts` |
 | `suppliers` | Parties | Master list of feedstock suppliers and contacts. | Supply chain tracking, chain-of-custody references. | `src/db/schema/parties.ts:8` |
 | `customers` | Parties | Buyer/customer entities for biochar distribution. | Sales destination tracking, customer-level delivery reporting. | `src/db/schema/parties.ts:42` |
-| `customer_locations` | Parties | Normalized delivery/application locations per customer with structured address fields (country, state/region, city). | Multi-field customers, geospatial destination accuracy. | `src/db/schema/parties.ts` |
-| `supplier_locations` | Parties | Multi-location sources per supplier with structured address fields (country, state/region, city). | Multi-site suppliers, pickup point tracking. | `src/db/schema/parties.ts` |
+| `customer_locations` | Parties | Normalized delivery/application locations per customer with structured address fields (country, state/region, city), per-location facility distance, optional site default soil temperature, and a default-destination flag (one default per customer, partial-unique enforced). | Multi-field customers, geospatial destination accuracy, application soil-temperature prefill. | `src/db/schema/parties.ts` |
+| `supplier_locations` | Parties | Multi-location sources per supplier with structured address fields (country, state/region, city), per-location facility distance, and a default-source flag (one default per supplier, partial-unique enforced). | Multi-site suppliers, pickup point tracking. | `src/db/schema/parties.ts` |
 | `drivers` | Parties | Driver identities and transport credentials/contact fields. | Delivery assignment, transport traceability. | `src/db/schema/parties.ts` |
 | `operators` | Parties | Reactor/production operator identities and credentials. | Operational accountability for runs/samples/incidents. | `src/db/schema/parties.ts` |
 | `feedstock_deliveries` | Feedstock | Logs incoming biomass shipments and transport attributes. | Intake receiving, transport emissions inputs, supplier delivery records. | `src/db/schema/feedstock.ts:13` |
@@ -34,14 +36,14 @@ Current shape after migration `0037_sour_lethal_legion`: 45 table exports across
 | `biochar_products` | Products | Stores produced product batches and composition/storage details. | Inventory release, run-to-product lineage, downstream order fulfillment. | `src/db/schema/products.ts:117` |
 | `vehicles` | Logistics | Master list of transport vehicles and fuel characteristics. | Transport planning, fuel/emissions parameterization. | `src/db/schema/logistics.ts:27` |
 | `orders` | Logistics | Customer order records linked to products and quantities. | Commercial order lifecycle, fulfillment planning. | `src/db/schema/logistics.ts:46` |
-| `deliveries` | Logistics | Shipment fulfillment records for ordered biochar movement. | Dispatch tracking, dry/wet mass documentation, delivery evidence. | `src/db/schema/logistics.ts:92` |
+| `deliveries` | Logistics | Shipment fulfillment records for ordered biochar movement, including an optional per-delivery distance override + note (defaults to the destination location's distance). | Dispatch tracking, dry/wet mass documentation, delivery evidence. | `src/db/schema/logistics.ts:92` |
 | `transport_legs` | Logistics | Canonical per-leg transport emissions accounting ledger. | Distance/energy method calculations, BCU tracking, transport auditability. | `src/db/schema/logistics.ts:160` |
 | `applications` | Application | Field application events for delivered biochar to soil. | Soil application reporting, per-application CO2e storage outputs. | `src/db/schema/application.ts:21` |
 | `soil_temperature_measurements` | Application | Soil temperature observations tied to applications. | 200-year durability baseline and evidence support. | `src/db/schema/application.ts:88` |
 | `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. Includes `total_feedstock_mass_kg` and `ineligible_feedstock_mass_kg` summary columns for the >25% ineligible-biomass cap (P0-01). | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep, Method B cadence guardrails (reactor-driven), ineligible biomass fraction reporting. | `src/db/schema/credits.ts:22` |
 | `credit_batch_applications` | Credits | M:N join between credit batches and applications. | Tracing which applications contribute to each issuance batch. | `src/db/schema/credits.ts:130` |
 | `documents` | Documentation | Central optional evidence store linked by `entity_type` + `entity_id`. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:14` |
-| `certifier_projects` | Certification | Maps local facilities to external certifier project identifiers; also holds per-facility emission-estimate config (genset kWh/L yield, three-stage energy split %). | Provider project registration and linkage, emission-estimate configuration. | `src/db/schema/certification.ts:20` |
+| `certifier_projects` | Certification | Maps local facilities to external certifier project identifiers; also holds per-facility emission-estimate config (genset kWh/L yield, three-stage energy split %) and the facility fallback soil temperature. | Provider project registration and linkage, emission-estimate configuration, application soil-temperature fallback. | `src/db/schema/certification.ts:20` |
 | `certifier_sensors` | Certification | Maps local reactors/measurement properties to external certifier sensor IDs. | Time-series telemetry submission, sensor reference reuse. | `src/db/schema/certification.ts` |
 | `certifier_project_emissions` | Certification | Facility reporting-period LCA journal rows reconciled against Isometric Project Components. | Period-emission drift checks, ADR 0005 support. | `src/db/schema/certification.ts` |
 | `certifier_ghg_statements` | Certification | Independent, period-anchored GHG Statement artifacts that roll up multiple Removals for a supplier-chosen reporting period (ADR 0004). | Period-first GHG Statement creation, verifier submission lifecycle. | `src/db/schema/certification.ts:71` |

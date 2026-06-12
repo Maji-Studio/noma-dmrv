@@ -267,6 +267,55 @@
       "when": 1780911821105,
       "tag": "0037_sour_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781024503264,
+      "tag": "0038_messy_bromley",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1781106081890,
+      "tag": "0039_true_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1781106739499,
+      "tag": "0040_simple_spyke",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1781159340362,
+      "tag": "0041_outgoing_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1781162869103,
+      "tag": "0042_fresh_richard_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1781170493083,
+      "tag": "0043_nice_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1781189346493,
+      "tag": "0044_lonely_oracle",
+      "breakpoints": true
     }
   ]
 }

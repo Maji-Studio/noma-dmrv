@@ -24,8 +24,8 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 type ComponentBlueprintInput = components["schemas"]["ComponentBlueprintInput"];
-type RemovalTemplateComponentInput =
-  components["schemas"]["RemovalTemplateComponentInput"];
+type GhgEntryTemplateComponentInput =
+  components["schemas"]["GhgEntryTemplateComponentInput"];
 
 const PROJECT_ID = "prj_TEST";
 const SUPPLIER_REF = "nm-rmv-abc-dp-x-v1";
@@ -73,8 +73,8 @@ function blueprintInput(
 }
 
 function rtcInput(
-  overrides: Partial<RemovalTemplateComponentInput> = {},
-): RemovalTemplateComponentInput {
+  overrides: Partial<GhgEntryTemplateComponentInput> = {},
+): GhgEntryTemplateComponentInput {
   return {
     datapoint_id: null,
     display_name: "Product mass",

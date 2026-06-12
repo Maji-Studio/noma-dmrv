@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   deliveryStatus,
+  distanceSource,
   emissionsCalculationMethod,
   packagingType,
   transportEntityType,
@@ -68,6 +69,9 @@ export const orders = pgTable('orders', {
   value: real('value'),
   currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
+  // Stamped by the facility archive cascade; NULL = active
+  archivedAt: timestamp('archived_at'),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -98,6 +102,15 @@ export const deliveries = pgTable(
       () => customerLocations.id
     ),
 
+    // Per-delivery road-distance override (km) for the distribution transport
+    // leg. Defaults to the destination customer location's distance; set here
+    // only when this trip's routing differs. Mirrors the feedstock-side
+    // transportDistanceKm override.
+    distanceKmOverride: real('distance_km_override'),
+    // Provenance of distanceKmOverride (null when no override stored).
+    distanceSource: distanceSource('distance_source'),
+    distanceNote: text('distance_note'),
+
     // --- Product Batch ---
     biocharProductId: uuid('biochar_product_id').references(
       () => biocharProducts.id
@@ -121,6 +134,9 @@ export const deliveries = pgTable(
     // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
+
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -150,6 +166,10 @@ export const deliveries = pgTable(
       'deliveries_truck_mass_arrival_gte_departure',
       sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnDepartureKg} is null or ${table.truckMassOnArrivalKg} >= ${table.truckMassOnDepartureKg}`
     ),
+    check(
+      'deliveries_distance_km_override_non_negative',
+      sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} >= 0`
+    ),
   ]
 );
 
@@ -175,6 +195,11 @@ export const transportLegs = pgTable(
     destinationGpsLongitude: doublePrecision('destination_gps_longitude'),
     destinationName: text('destination_name'),
     distanceKm: real('distance_km').notNull(),
+    // Provenance of distanceKm. On a derived leg this is inherited from the
+    // level that won the distance-priority resolution (NOT a blanket
+    // supplier/customer default); on an aggregated distribution leg it is the
+    // weakest contributing source. Orthogonal to isDerived.
+    distanceSource: distanceSource('distance_source'),
 
     // --- Transport Details ---
     transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft

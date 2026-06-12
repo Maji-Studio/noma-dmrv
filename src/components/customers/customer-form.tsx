@@ -9,8 +9,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash, MapPin } from "@phosphor-icons/react";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormField, FormInput, FormTextarea, FormActions } from "@/components/forms";
 import { customerFormSchema, type CustomerFormData } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
@@ -27,11 +26,13 @@ export interface PendingLocation {
   stateRegion?: string | null;
   city?: string | null;
   address: string;
-  gpsLatitude: number | null;
-  gpsLongitude: number | null;
+  gpsLatitude: number;
+  gpsLongitude: number;
   // Road distance (km) facility → site. Feeds the auto-derived biochar
   // distribution transport leg on delivery save.
   distanceFromFacilityKm: number | null;
+  // Marks this as the customer's default destination.
+  isDefault: boolean;
 }
 
 function formatPendingLocationSummary({
@@ -223,17 +224,12 @@ export function CustomerForm({
         </div>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }
@@ -302,9 +298,7 @@ function CreateModeLocationsSection({
                     ) : null}
                     <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                       {loc.address}
-                      {loc.gpsLatitude !== null && loc.gpsLongitude !== null
-                        ? ` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`
-                        : ""}
+                      {` — ${loc.gpsLatitude.toFixed(4)}, ${loc.gpsLongitude.toFixed(4)}`}
                     </p>
                   </div>
                 </div>
@@ -352,6 +346,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
     gpsLatitude: "",
     gpsLongitude: "",
     distanceFromFacilityKm: "",
+    isDefault: false,
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -367,22 +362,26 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       return;
     }
     if (!formData.address.trim()) {
-      setFormError("Location address is required");
+      setFormError("Address / description is required");
+      return;
+    }
+    if (formData.gpsLatitude.trim() === "" || formData.gpsLongitude.trim() === "") {
+      setFormError("GPS latitude and longitude are required");
       return;
     }
 
-    const lat = formData.gpsLatitude.trim() === "" ? null : Number(formData.gpsLatitude);
-    const lng = formData.gpsLongitude.trim() === "" ? null : Number(formData.gpsLongitude);
+    const lat = Number(formData.gpsLatitude);
+    const lng = Number(formData.gpsLongitude);
     const distance =
       formData.distanceFromFacilityKm.trim() === ""
         ? null
         : Number(formData.distanceFromFacilityKm);
 
-    if (lat !== null && (Number.isNaN(lat) || lat < -90 || lat > 90)) {
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
       setFormError("Latitude must be between -90 and 90");
       return;
     }
-    if (lng !== null && (Number.isNaN(lng) || lng < -180 || lng > 180)) {
+    if (Number.isNaN(lng) || lng < -180 || lng > 180) {
       setFormError("Longitude must be between -180 and 180");
       return;
     }
@@ -400,6 +399,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       gpsLatitude: lat,
       gpsLongitude: lng,
       distanceFromFacilityKm: distance,
+      isDefault: formData.isDefault,
     });
   };
 
@@ -497,7 +497,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         <div className="flex flex-col gap-6">
           <label htmlFor="pending-loc-lat" className="label-medium">
-            GPS Latitude
+            GPS Latitude <span className="text-[var(--color-signal-red)]">*</span>
           </label>
           <input
             id="pending-loc-lat"
@@ -518,7 +518,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
         </div>
         <div className="flex flex-col gap-6">
           <label htmlFor="pending-loc-lng" className="label-medium">
-            GPS Longitude
+            GPS Longitude <span className="text-[var(--color-signal-red)]">*</span>
           </label>
           <input
             id="pending-loc-lng"
@@ -564,20 +564,35 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
         </p>
       </div>
 
-      <div className="flex gap-12 justify-end pt-8">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-36 px-12 border border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] text-[var(--text-s)]"
-        >
-          Cancel
-        </button>
+      <label htmlFor="pending-loc-default" className="flex items-center gap-12 cursor-pointer">
+        <input
+          type="checkbox"
+          id="pending-loc-default"
+          className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+          checked={formData.isDefault}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, isDefault: e.target.checked }))
+          }
+        />
+        <span className="body-medium text-[var(--color-text-primary)]">
+          Set as default destination
+        </span>
+      </label>
+
+      <div className="flex gap-12 justify-start pt-8">
         <button
           type="button"
           onClick={handleAdd}
           className="h-36 px-12 bg-[var(--color-interaction)] text-white hover:opacity-90 text-[var(--text-s)]"
         >
           Add Location
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-36 px-12 border border-[var(--color-border-primary)] hover:bg-[var(--color-background-medium)] text-[var(--text-s)]"
+        >
+          Cancel
         </button>
       </div>
     </div>

@@ -100,6 +100,7 @@ export async function getProductionRunBiocharPreviewFn(
   productionRunId: string
 ): Promise<
   ActionResult<{
+    date: string;
     biocharOutputKg: number | null;
     biocharStorageLocationCode: string | null;
   }>
@@ -112,6 +113,7 @@ export async function getProductionRunBiocharPreviewFn(
 
     const [run] = await db
       .select({
+        date: productionRuns.date,
         biocharOutputKg: productionRuns.biocharOutputKg,
         biocharStorageLocationCode: storageLocations.code,
       })
@@ -285,7 +287,6 @@ export async function createProductionRunFn(
           biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
           biocharStorageLocationId: validated.biocharStorageLocationId || null,
           feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
-          plcDataFileUrl: validated.plcDataFileUrl || null,
         })
     );
 
@@ -382,7 +383,6 @@ export async function updateProductionRunFn(
       biocharMoisturePercent: validated.biocharMoisturePercent,
       biocharStorageLocationId: validated.biocharStorageLocationId,
       feedstockStorageLocationId: validated.feedstockStorageLocationId,
-      plcDataFileUrl: validated.plcDataFileUrl,
     });
 
     return { success: true, data: run };

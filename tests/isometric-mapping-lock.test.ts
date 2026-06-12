@@ -18,7 +18,7 @@ import {
   resetSubmissionToDraftWithMappingLock,
   type MappingClaimGuard,
   type InsertDraftSubmissionInput,
-} from "@/data-access/certification";
+} from "@/data-access/certification-submissions";
 import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 

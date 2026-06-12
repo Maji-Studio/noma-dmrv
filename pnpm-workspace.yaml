@@ -1,6 +1,9 @@
 packages:
   - "."
 
+# Supply-chain cooldown: resolver ignores versions younger than 3 days
+minimumReleaseAge: 4320
+
 allowBuilds:
   esbuild: true
   sharp: true
