@@ -373,6 +373,7 @@ export function ProductionRunForm({
             label="Status"
             error={errors.status?.message}
             helperText="Set to Complete once the run is finished — a run must be Complete before it can be certified."
+            certifyRequired
           >
             <FormSelect
               id="status"

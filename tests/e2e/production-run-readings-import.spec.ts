@@ -76,6 +76,11 @@ test.describe("production run readings CSV import", () => {
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit Production Run" }).click();
     const dialog = page.locator('[role="dialog"]');
+    const statusLabelRow = dialog
+      .locator('label[for="status"]')
+      .locator("xpath=..");
+    await expect(statusLabelRow.getByText(/^CERT/)).toBeVisible();
+
     await dialog.getByText("Production Readings").first().scrollIntoViewIfNeeded();
     await expect(
       dialog.locator(`#production-run-${run.id}-readings-upload`),
