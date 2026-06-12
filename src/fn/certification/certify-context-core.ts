@@ -21,6 +21,8 @@ import {
   getCreditBatchById,
   type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
+import { getDeliveriesByIds } from "@/data-access/deliveries";
+import { getFeedstocksByIds } from "@/data-access/feedstocks";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   deriveBatchHealth,
@@ -277,6 +279,44 @@ function buildEntityReadinessGaps(
   }
 
   return Array.from(new Set(gaps));
+}
+
+function hasCompleteTruckWeighing(row: {
+  truckMassOnArrivalKg: number | null;
+  truckMassOnDepartureKg: number | null;
+}): boolean {
+  return row.truckMassOnArrivalKg != null && row.truckMassOnDepartureKg != null;
+}
+
+function uniqueIds(ids: (string | null | undefined)[]): string[] {
+  return Array.from(new Set(ids.filter((id): id is string => !!id)));
+}
+
+async function buildTruckWeighingGaps(
+  userId: string,
+  lineages: ChainOfCustodyData[],
+  entityIds: ReturnType<typeof collectTransportEntityIds>,
+): Promise<string[]> {
+  const feedstockIds = entityIds.feedstockIds;
+  const deliveryIds = uniqueIds(lineages.map((lineage) => lineage.delivery?.id));
+
+  const [feedstockRows, deliveryRows] = await Promise.all([
+    feedstockIds.length > 0
+      ? getFeedstocksByIds(userId, feedstockIds)
+      : Promise.resolve([]),
+    deliveryIds.length > 0
+      ? getDeliveriesByIds(userId, deliveryIds)
+      : Promise.resolve([]),
+  ]);
+
+  const feedstockGaps = (feedstockRows ?? [])
+    .filter((feedstock) => !hasCompleteTruckWeighing(feedstock))
+    .map((feedstock) => `Feedstock ${feedstock.code}: truck weighing`);
+  const deliveryGaps = (deliveryRows ?? [])
+    .filter((delivery) => !hasCompleteTruckWeighing(delivery))
+    .map((delivery) => `Delivery ${delivery.code}: truck weighing`);
+
+  return [...feedstockGaps, ...deliveryGaps];
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
@@ -667,12 +707,15 @@ export async function buildRemovalContext(
   const transportCoverage = buildCoverage(transportLegs, entityIds);
   const runIdsRequiring1000YearDurability =
     collect1000YearDurabilityRunIds(scope, lineageByApplicationId);
-  const entityReadinessGaps = buildEntityReadinessGaps(
-    runs,
-    transportLegs,
-    facilityFacts.requiredTransportCategories,
-    runIdsRequiring1000YearDurability,
-  );
+  const entityReadinessGaps = [
+    ...buildEntityReadinessGaps(
+      runs,
+      transportLegs,
+      facilityFacts.requiredTransportCategories,
+      runIdsRequiring1000YearDurability,
+    ),
+    ...(await buildTruckWeighingGaps(userId, lineages, entityIds)),
+  ];
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(

@@ -182,6 +182,7 @@ export interface CreateFeedstockTypeData {
   code: string;
   name: string;
   category: string;
+  usage?: "pyrolysis" | "blend";
   description?: string | null;
   registryUrl?: string | null;
 }
@@ -223,6 +224,7 @@ export async function createFeedstockType(
         code: data.code,
         name: data.name,
         category: data.category,
+        usage: data.usage ?? "pyrolysis",
         description: data.description ?? null,
         registryUrl: data.registryUrl ?? null,
       })
@@ -232,7 +234,7 @@ export async function createFeedstockType(
       id: feedstockType.id,
       code: feedstockType.code,
       name: feedstockType.name,
-      subtitle: feedstockType.category,
+      subtitle: `${feedstockType.category} · ${feedstockType.usage}`,
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {

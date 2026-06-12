@@ -12,7 +12,6 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
@@ -152,21 +151,10 @@ const ENTITY_TYPE_LABELS = {
   application: "application",
   formulation: "formulation",
   biocharProduct: "product",
+  order: "order",
   creditBatch: "credit batch",
 } as const;
 
-const ENTITY_CREATE_ROUTES = {
-  facility: "/facilities",
-  reactor: "/reactors",
-  supplier: "/suppliers",
-  customer: "/customers",
-  storageLocation: "/storage-locations",
-  feedstock: "/feedstocks",
-  productionRun: "/production-runs",
-  application: "/applications",
-  formulation: "/formulations",
-  creditBatch: "/credit-batches",
-} as const;
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
 export function EntitySelect({
@@ -186,7 +174,6 @@ export function EntitySelect({
   hideSearch = false,
   formatSelectedLabel,
 }: EntitySelectProps) {
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -241,17 +228,10 @@ export function EntitySelect({
         return () => setIsVehicleDialogOpen(true);
       case "feedstockType":
         return () => setIsFeedstockTypeDialogOpen(true);
-      default: {
-        const route = ENTITY_CREATE_ROUTES[
-          entityType as keyof typeof ENTITY_CREATE_ROUTES
-        ];
-        if (!route) {
-          return undefined;
-        }
-        return () => router.push(`${route}?create=true`);
-      }
+      default:
+        return undefined;
     }
-  }, [entityType, router]);
+  }, [entityType]);
 
   const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
   const hasCreateAction = Boolean(resolvedCreateAction);

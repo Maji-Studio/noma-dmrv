@@ -5,19 +5,23 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DistanceCalcField, FormField, FormInput, FormTextarea, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, TruckWeighingSection } from "@/components/forms";
+import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 
 // ============================================
 // Constants for select options
@@ -27,6 +31,9 @@ const statusOptions: readonly { value: string; label: string }[] = deliveryStatu
   value: status,
   label: formatStatus(status),
 }));
+
+const isDeliveryCertifyField = (field: string) =>
+  isCertifyFormField("delivery", field);
 
 // ============================================
 // Formatting helpers
@@ -63,30 +70,19 @@ interface DeliveryFormProps {
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel }: DeliveryFormProps) {
   const isEditMode = !!delivery;
-  const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
+  const { facilityId: contextFacilityId } = useFacilityContext();
 
-  // Fetch orders for dropdown
+  // The order picker fetches its own options (FormEntitySelect); this query
+  // only backs the stored-distance prefill for the selected order below.
   const { data: ordersData } = useOrdersForSelect(contextFacilityId ?? undefined, {
     enabled: !!contextFacilityId,
   });
   const orders = ordersData ?? [];
   const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
 
-  const orderOptions = orders.map((o) => ({
-    value: o.id,
-    label:
-      [
-        o.customerName,
-        o.biocharProductCode,
-        o.quantityKg ? `${o.quantityKg} kg` : undefined,
-        o.orderDate ? new Date(o.orderDate).toLocaleDateString() : undefined,
-      ]
-        .filter(Boolean)
-        .join(" — ") || "Order",
-  }));
-
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setValue,
@@ -113,20 +109,63 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const watchWetMass = watch("deliveredWetMassKg");
   const watchMoisture = watch("moistureContentPercent");
+  const watchArrivalMass = watch("truckMassOnArrivalKg");
+  const watchDepartureMass = watch("truckMassOnDepartureKg");
   const watchOrderId = watch("orderId");
   const distanceKmOverride = watch("distanceKmOverride") as number | null | undefined;
-  const distanceSource = watch("distanceSource");
 
-  // CALC endpoints: selected facility → the selected order's customer location.
-  const facilityPoint =
-    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
-      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
-      : null;
+  // Destination's stored distance (+ provenance) — the value the derived
+  // transport leg falls back to when this delivery has no override
+  // (data-access/transport-legs.ts, map-integration plan decision 3).
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
-  const destinationPoint =
-    selectedOrder?.destinationGpsLatitude != null && selectedOrder?.destinationGpsLongitude != null
-      ? { lat: selectedOrder.destinationGpsLatitude, lng: selectedOrder.destinationGpsLongitude }
-      : null;
+  const storedDistanceKm = selectedOrder?.destinationDistanceKm ?? null;
+  const storedDistanceSource = selectedOrder?.destinationDistanceSource ?? null;
+
+  // The field displays the effective distance: override beats stored. The
+  // override is persisted only when the value genuinely differs from the
+  // stored distance, so later corrections on the customer location keep
+  // propagating to deliveries that never overrode (null-override invariant,
+  // schemas/distance-source.ts header).
+  const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
+
+  // Text draft so in-flight typing survives; resync when the effective value
+  // changes from outside (order switch, prefill) — adjust-state-during-render.
+  const [distanceDraft, setDistanceDraft] = useState(formatDistance(effectiveDistanceKm));
+  const [syncedDistanceKm, setSyncedDistanceKm] = useState(effectiveDistanceKm);
+  if (effectiveDistanceKm !== syncedDistanceKm) {
+    setSyncedDistanceKm(effectiveDistanceKm);
+    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
+      setDistanceDraft(formatDistance(effectiveDistanceKm));
+    }
+  }
+
+  const handleDistanceChange = (raw: string) => {
+    setDistanceDraft(raw);
+    const parsed = parseDistanceDraft(raw);
+    if (parsed === undefined) return; // unparseable in-flight text — wait
+    const isOverride = parsed !== null && parsed !== storedDistanceKm;
+    // Keep the render-time resync quiet while editing; a cleared/reverted
+    // draft refills from the stored value on blur instead of mid-keystroke.
+    setSyncedDistanceKm(isOverride ? parsed : storedDistanceKm);
+    setValue("distanceKmOverride", isOverride ? parsed : null, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("distanceSource", isOverride ? "manual" : null, { shouldDirty: true });
+  };
+
+  const handleDistanceBlur = () => {
+    if (parseDistanceDraft(distanceDraft) !== effectiveDistanceKm) {
+      setDistanceDraft(formatDistance(effectiveDistanceKm));
+    }
+  };
+
+  // Switching orders invalidates a trip-specific override and its note.
+  useClearOnDependencyChange(watchOrderId, () => {
+    setValue("distanceKmOverride", null, { shouldValidate: true });
+    setValue("distanceSource", null);
+    setValue("distanceNote", "");
+  });
 
   // Auto-calculate dry mass from wet mass and moisture using shared utility
   const calculatedDryMass =
@@ -150,8 +189,17 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as DeliveryFormData);
+    // A distance note only explains an override — never persist one without.
+    const normalized =
+      data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
+    return onSubmit(normalized as DeliveryFormData);
   });
+
+  const distanceHelperText = !watchOrderId
+    ? "Select an order to load the destination's stored distance."
+    : storedDistanceKm == null
+      ? "No stored distance for this destination — add it on the customer location. A one-off manual distance is still possible."
+      : "Prefilled from the destination's stored distance. Edit only when this trip's routing differs.";
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
@@ -183,16 +231,19 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         </div>
 
-        <FormField id="orderId" label="Order" error={errors.orderId?.message}>
-          <FormSelect
-            id="orderId"
-            placeholder="Select order..."
-            disabled={isSubmitting}
-            error={!!errors.orderId}
-            options={orderOptions}
-            {...register("orderId")}
-          />
-        </FormField>
+        {/* Disabled until facility context resolves — an unscoped fetch would
+            list other facilities' orders, and the stored-distance prefill
+            below only covers the context facility's orders. */}
+        <FormEntitySelect
+          control={control}
+          name="orderId"
+          label="Order"
+          entityType="order"
+          placeholder="Select order..."
+          required
+          disabled={isSubmitting || !contextFacilityId}
+          filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+        />
       </div>
 
       {/* Mass & Moisture Section */}
@@ -206,8 +257,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             id="deliveredWetMassKg"
             label="Wet Mass (kg)"
             error={errors.deliveredWetMassKg?.message}
-            helperText="As-received weight"
+            helperText="As-received weight — prefilled from the truck weighing below when both masses are entered"
             required
+            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
           >
             <FormInput
               id="deliveredWetMassKg"
@@ -263,50 +315,24 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
       </div>
 
-      {/* Truck Weighing Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Truck Weighing at Delivery Site
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="truckMassOnArrivalKg"
-            label="Truck Mass Before Unloading (kg)"
-            error={errors.truckMassOnArrivalKg?.message}
-          >
-            <FormInput
-              id="truckMassOnArrivalKg"
-              type="number"
-              step="any"
-              placeholder="e.g., 15000"
-              disabled={isSubmitting}
-              error={!!errors.truckMassOnArrivalKg}
-              {...register("truckMassOnArrivalKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="truckMassOnDepartureKg"
-            label="Truck Mass After Unloading (kg)"
-            error={errors.truckMassOnDepartureKg?.message}
-          >
-            <FormInput
-              id="truckMassOnDepartureKg"
-              type="number"
-              step="any"
-              placeholder="e.g., 5000"
-              disabled={isSubmitting}
-              error={!!errors.truckMassOnDepartureKg}
-              {...register("truckMassOnDepartureKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
-      </div>
+      <TruckWeighingSection
+        arrivalMassKg={watchArrivalMass}
+        departureMassKg={watchDepartureMass}
+        wetMassKg={watchWetMass}
+        wetMassLabel="Entered wet mass"
+        onSuggestWetMass={(wetMassKg) =>
+          setValue("deliveredWetMassKg", wetMassKg, { shouldValidate: true })
+        }
+        arrivalRegister={register("truckMassOnArrivalKg", {
+          setValueAs: numericValue,
+        })}
+        departureRegister={register("truckMassOnDepartureKg", {
+          setValueAs: numericValue,
+        })}
+        arrivalError={errors.truckMassOnArrivalKg?.message}
+        departureError={errors.truckMassOnDepartureKg?.message}
+        isSubmitting={isSubmitting}
+      />
 
       {/* Transport Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
@@ -315,42 +341,61 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <DistanceCalcField
+          <FormField
             id="distanceKmOverride"
-            label="Distance override (km)"
+            label="Distance (km)"
             error={errors.distanceKmOverride?.message}
-            helperText="Leave blank to use the destination's stored distance. Set only when this trip's routing differs."
-            disabled={isSubmitting}
-            distanceKm={distanceKmOverride}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              setValue("distanceKmOverride", km ?? undefined, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("distanceSource", source, { shouldDirty: true });
-            }}
-            origin={facilityPoint}
-            destination={destinationPoint}
-            originLabel="selected facility"
-            destinationLabel="order's destination"
-          />
+            helperText={distanceHelperText}
+          >
+            <div>
+              <FormInput
+                id="distanceKmOverride"
+                type="number"
+                step="any"
+                min={0}
+                placeholder="e.g., 85"
+                disabled={isSubmitting}
+                error={!!errors.distanceKmOverride}
+                value={distanceDraft}
+                onChange={(event) => handleDistanceChange(event.target.value)}
+                onBlur={handleDistanceBlur}
+              />
+              {distanceKmOverride != null ? (
+                <p
+                  className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                  data-testid="distanceKmOverride-distance-source"
+                >
+                  Source: {DISTANCE_SOURCE_LABELS.manual} — overrides the stored distance
+                </p>
+              ) : storedDistanceKm != null ? (
+                <p
+                  className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                  data-testid="distanceKmOverride-distance-source"
+                >
+                  From customer location
+                  {storedDistanceSource ? ` — ${DISTANCE_SOURCE_LABELS[storedDistanceSource]}` : ""}
+                </p>
+              ) : null}
+            </div>
+          </FormField>
         </div>
 
-        <FormField
-          id="distanceNote"
-          label="Distance note"
-          error={errors.distanceNote?.message}
-          helperText="Why this delivery's distance differs (optional)"
-        >
-          <FormTextarea
+        {distanceKmOverride != null && (
+          <FormField
             id="distanceNote"
-            placeholder="e.g., detour via the coastal road due to bridge closure"
-            disabled={isSubmitting}
-            error={!!errors.distanceNote}
-            {...register("distanceNote")}
-          />
-        </FormField>
+            label="Distance note"
+            error={errors.distanceNote?.message}
+            helperText="Why this delivery's distance differs from the stored distance (optional)"
+          >
+            <FormTextarea
+              id="distanceNote"
+              placeholder="e.g., detour via the coastal road due to bridge closure"
+              disabled={isSubmitting}
+              error={!!errors.distanceNote}
+              {...register("distanceNote")}
+            />
+          </FormField>
+        )}
       </div>
 
       <FormActions

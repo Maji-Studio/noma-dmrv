@@ -27,6 +27,7 @@ import {
   orderFilterSchema,
 } from "@/schemas/orders";
 import type { ActionResult } from "@/types/actions";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { withAction } from "./with-action";
 
 // ============================================
@@ -94,6 +95,8 @@ export async function getOrdersForSelectFn(
       quantityKg: number;
       destinationGpsLatitude: number | null;
       destinationGpsLongitude: number | null;
+      destinationDistanceKm: number | null;
+      destinationDistanceSource: DistanceSourceValue | null;
     }>
   >
 > {

@@ -51,6 +51,7 @@ export function IngredientBinField({
             filterBy={{
               ...(facilityId ? { facilityId } : {}),
               type: COMPOSITION_BIN_TYPE,
+              feedstockTypeUsage: "blend",
             }}
             formatSelectedLabel={formatLabel}
           />

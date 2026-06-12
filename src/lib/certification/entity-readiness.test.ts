@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveEntityCertifyReadiness } from "./entity-readiness";
+import { isCertifyFormField } from "./certify-field-registry";
 
 describe("deriveEntityCertifyReadiness", () => {
   it("marks a complete production run ready", () => {
@@ -120,5 +121,49 @@ describe("deriveEntityCertifyReadiness", () => {
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("marks a complete feedstock with wet mass ready", () => {
+    const readiness = deriveEntityCertifyReadiness("feedstock", {
+      status: "complete",
+      massWetKg: 1500,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("reports a feedstock missing wet mass via the entity column", () => {
+    const readiness = deriveEntityCertifyReadiness("feedstock", {
+      status: "complete",
+      massWetKg: null,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "massWetKg", fields: ["massWetKg"] },
+    ]);
+  });
+});
+
+describe("isCertifyFormField", () => {
+  it("badges entered descriptors by their key", () => {
+    expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
+    expect(isCertifyFormField("application", "soilTemperatureC")).toBe(true);
+    expect(isCertifyFormField("customerLocation", "distanceFromFacilityKm")).toBe(true);
+  });
+
+  it("badges via formFields when the form name differs from the column", () => {
+    expect(isCertifyFormField("feedstock", "totalWetMassKg")).toBe(true);
+    expect(isCertifyFormField("feedstock", "massWetKg")).toBe(false);
+  });
+
+  it("badges derived descriptors only through explicit formFields", () => {
+    expect(isCertifyFormField("feedstock", "transportDistanceKm")).toBe(true);
+    expect(isCertifyFormField("feedstock", "transportLeg")).toBe(false);
+  });
+
+  it("ignores fields outside the registry", () => {
+    expect(isCertifyFormField("delivery", "truckMassOnArrivalKg")).toBe(false);
+    expect(isCertifyFormField("delivery", "distanceKmOverride")).toBe(false);
   });
 });

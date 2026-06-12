@@ -40,7 +40,7 @@ export interface TestStorageLocation {
   id: string;
   code: string;
   name: string;
-  type: "feedstock_bin" | "biochar_bin" | "product_bin" | "ingredient_bin";
+  type: "feedstock_bin" | "biochar_bin" | "product_bin";
   facilityId: string;
   formulationId: string | null;
 }

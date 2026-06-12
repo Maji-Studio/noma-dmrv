@@ -19,7 +19,8 @@ export async function getFeedstockTypes(params: {
     whereClause = or(
       ilike(feedstockTypes.code, searchPattern),
       ilike(feedstockTypes.name, searchPattern),
-      ilike(feedstockTypes.category, searchPattern)
+      ilike(feedstockTypes.category, searchPattern),
+      ilike(feedstockTypes.usage, searchPattern)
     );
   }
 
@@ -29,6 +30,7 @@ export async function getFeedstockTypes(params: {
       code: feedstockTypes.code,
       name: feedstockTypes.name,
       category: feedstockTypes.category,
+      usage: feedstockTypes.usage,
     })
     .from(feedstockTypes)
     .where(whereClause)
@@ -38,7 +40,7 @@ export async function getFeedstockTypes(params: {
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: r.category,
+    subtitle: `${r.category} · ${r.usage}`,
   }));
 }
 
@@ -49,6 +51,7 @@ export async function getFeedstockTypeById(id: string): Promise<EntityOption | n
       code: feedstockTypes.code,
       name: feedstockTypes.name,
       category: feedstockTypes.category,
+      usage: feedstockTypes.usage,
     })
     .from(feedstockTypes)
     .where(eq(feedstockTypes.id, id))
@@ -60,6 +63,6 @@ export async function getFeedstockTypeById(id: string): Promise<EntityOption | n
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.category,
+    subtitle: `${result.category} · ${result.usage}`,
   };
 }
