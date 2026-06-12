@@ -19,12 +19,11 @@ import { numericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
-import { Button } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
@@ -65,6 +64,12 @@ interface SampleFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  /**
+   * Extension content (e.g. transport-legs editor) rendered between the form
+   * fields and the CTA row — outside the `<form>` element, so it may contain
+   * its own forms. Nothing ever renders after the CTA.
+   */
+  children?: React.ReactNode;
 }
 
 export function SampleForm({
@@ -74,7 +79,9 @@ export function SampleForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  children,
 }: SampleFormProps) {
+  const formId = useId();
   const isEditMode = !!sample;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
@@ -185,7 +192,8 @@ export function SampleForm({
   const defaultExpandedSections = ["sample-info", "carbon-analysis"];
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    <div className="space-y-20">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       <Accordion.Root defaultValue={defaultExpandedSections}>
         {/* === Section 1: Sample Info === */}
         <Accordion.Item value="sample-info">
@@ -940,23 +948,18 @@ export function SampleForm({
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion.Root>
+      </form>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
-    </form>
+      {/* Extension content (e.g. transport legs) — always before the CTA */}
+      {children}
+
+      <FormActions
+        formId={formId}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
+    </div>
   );
 }

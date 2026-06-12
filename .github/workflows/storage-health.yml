@@ -1,0 +1,87 @@
+name: Storage health
+
+# Daily real round-trip against the staging S3-compatible bucket to catch
+# storage breakage (rotated/revoked keys, bucket permission drift, region or
+# endpoint changes, provider downtime) before it surfaces as a user-facing
+# upload failure. Runs scripts/storage-smoke.ts: presigned PUT → HEAD → signed
+# GET (byte-for-byte) → DELETE → HEAD(404), cleaning up its own probe object.
+#
+# This is the coverage the unit tests deliberately skip — they inject a fake
+# provider. It does NOT test browser CORS (only the cross-origin PUT from the
+# app exercises that). No noma DB, no app boot.
+#
+# Storage secrets come from 1Password via the "Load storage secrets" step:
+#   op://Environment Variables/noma-dmrv env staging/{STORAGE_PROVIDER,
+#   STORAGE_BUCKET,STORAGE_REGION,STORAGE_ACCESS_KEY_ID,
+#   STORAGE_SECRET_ACCESS_KEY}
+# (No STORAGE_ENDPOINT — staging is AWS S3, endpoint derived from region. The
+# keys here mirror .env.tpl exactly; add STORAGE_ENDPOINT only if staging ever
+# moves to DO Spaces and the 1Password item gains that field.)
+# CI authenticates with a single repo secret, OP_SERVICE_ACCOUNT_TOKEN. When it
+# is absent the load + smoke steps are skipped so forks/PRs stay green rather
+# than failing on missing creds. The non-storage env vars below are
+# format-valid placeholders only — env.ts validates them at import time but the
+# storage code path never opens a DB connection or boots the app.
+
+on:
+  schedule:
+    # Daily at 09:33 UTC. Minute 33 stays clear of the :00 cron pile-up and of
+    # the 09:17 Isometric health ping.
+    - cron: "33 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      LOAD_OP_SECRETS: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN != '' }}
+      # Placeholders — satisfy env.ts Zod validation (.url() / .min(32) /
+      # enum) at import time. The storage round-trip never uses these.
+      NODE_ENV: test
+      DATABASE_URL: postgres://smoke:smoke@localhost:5432/smoke
+      NEXT_PUBLIC_APP_URL: https://staging.example.com
+      BETTER_AUTH_SECRET: ci-storage-smoke-placeholder-secret-unused-0000
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Read-only smoke run — no commits/pushes. Keep GITHUB_TOKEN out of
+          # .git/config so it can't leak to later steps or artifacts.
+          persist-credentials: false
+
+      # Skipped when OP_SERVICE_ACCOUNT_TOKEN is unset; the smoke step below is
+      # gated the same way so the job is a no-op (green) rather than failing.
+      - name: Load storage secrets from 1Password
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          STORAGE_PROVIDER: op://Environment Variables/noma-dmrv env staging/STORAGE_PROVIDER
+          STORAGE_BUCKET: op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET
+          STORAGE_REGION: op://Environment Variables/noma-dmrv env staging/STORAGE_REGION
+          STORAGE_ACCESS_KEY_ID: op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID
+          STORAGE_SECRET_ACCESS_KEY: op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY
+
+      - name: Setup pnpm
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Storage round-trip smoke (staging bucket)
+        if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        run: pnpm storage:smoke

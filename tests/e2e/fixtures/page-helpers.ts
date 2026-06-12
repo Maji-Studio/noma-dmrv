@@ -19,6 +19,27 @@ export async function waitForSideSheetClose(page: Page) {
   });
 }
 
+/**
+ * Dismiss the "Link Isometric project" dialog that auto-opens for admins
+ * right after a facility is created (facility-list.tsx — intentional,
+ * optional prompt). It mounts only once its mapping payload loads, so wait
+ * briefly and dismiss if present; absence (e.g. payload fetch failed) is
+ * fine because the link is optional by design.
+ */
+export async function dismissCertifierLinkDialog(page: Page) {
+  const linkDialog = page
+    .getByRole("dialog")
+    .filter({ hasText: "Link Isometric project" });
+  const appeared = await linkDialog
+    .waitFor({ state: "visible", timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) {
+    await linkDialog.getByRole("button", { name: "Close" }).click();
+    await linkDialog.waitFor({ state: "hidden", timeout: 5000 });
+  }
+}
+
 /** Click an EntitySelect trigger scoped to a field label within the dialog, then click an option by ID */
 export async function selectEntity(
   page: Page,
@@ -48,6 +69,46 @@ export async function selectEntity(
       if (await searchInput.isVisible().catch(() => false)) {
         await searchInput.fill(searchText);
       }
+    }
+    await option.waitFor({ state: "visible", timeout: 10000 });
+  }
+
+  await option.click();
+}
+
+/**
+ * Click an EntitySelect trigger scoped to a field label within the dialog,
+ * then click the first option whose visible text contains `optionText`.
+ * Falls back to the server-side search box when the option isn't in the
+ * initial page of results.
+ */
+export async function selectEntityByText(
+  page: Page,
+  fieldLabel: string,
+  optionText: string
+) {
+  const dialog = page.locator('[role="dialog"]');
+  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
+  const fieldContainer = label.locator(
+    "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+  );
+
+  await fieldContainer.locator('[data-testid="entity-select-trigger"]').click();
+  await page.waitForSelector('[data-testid="entity-select-listbox"]', {
+    timeout: 10000,
+  });
+
+  const option = page
+    .locator('[role="option"]')
+    .filter({ hasText: optionText })
+    .first();
+
+  try {
+    await option.waitFor({ state: "visible", timeout: 3000 });
+  } catch {
+    const searchInput = page.locator('[data-testid="entity-select-search"]');
+    if (await searchInput.isVisible().catch(() => false)) {
+      await searchInput.fill(optionText);
     }
     await option.waitFor({ state: "visible", timeout: 10000 });
   }

@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
+import { optionalDistanceSource } from "./distance-source";
 import { emptyToNull } from "./helpers";
 
 // ============================================
@@ -24,6 +25,20 @@ export type DeliveryStatus = (typeof deliveryStatuses)[number];
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
+const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
+
+function validateDistanceOverride(
+  value: { distanceKmOverride?: number | null },
+  ctx: z.RefinementCtx
+) {
+  if (value.distanceKmOverride != null && value.distanceKmOverride < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["distanceKmOverride"],
+      message: "Distance must be >= 0",
+    });
+  }
+}
 
 function validateTruckMasses(
   value: {
@@ -45,6 +60,20 @@ function validateTruckMasses(
       code: z.ZodIssueCode.custom,
       path: ["truckMassOnDepartureKg"],
       message: "Truck mass on departure must be >= 0",
+    });
+  }
+
+  // Unloading can only remove mass — a heavier truck after unloading means a
+  // weighing or data-entry error.
+  if (
+    value.truckMassOnArrivalKg != null &&
+    value.truckMassOnDepartureKg != null &&
+    value.truckMassOnDepartureKg > value.truckMassOnArrivalKg
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["truckMassOnDepartureKg"],
+      message: "Truck mass after unloading cannot exceed mass before unloading",
     });
   }
 }
@@ -71,6 +100,10 @@ const deliveryFormBaseSchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  // Per-delivery road-distance override (km) + reason for the distribution leg.
+  distanceKmOverride: optionalNumber,
+  distanceSource: optionalDistanceSource,
+  distanceNote: optionalNote,
 });
 
 /**
@@ -117,6 +150,7 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
   }
 
   validateTruckMasses(value, ctx);
+  validateDistanceOverride(value, ctx);
 });
 
 // ============================================
@@ -145,6 +179,9 @@ export const createDeliverySchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  distanceKmOverride: optionalNumber,
+  distanceSource: optionalDistanceSource,
+  distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -167,6 +204,7 @@ export const createDeliverySchema = z.object({
   }
 
   validateTruckMasses(value, ctx);
+  validateDistanceOverride(value, ctx);
 });
 
 /**
@@ -193,6 +231,9 @@ export const updateDeliverySchema = z.object({
   moistureContentPercent: optionalNumber,
   truckMassOnArrivalKg: optionalNumber,
   truckMassOnDepartureKg: optionalNumber,
+  distanceKmOverride: optionalNumber,
+  distanceSource: optionalDistanceSource,
+  distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -215,6 +256,7 @@ export const updateDeliverySchema = z.object({
   }
 
   validateTruckMasses(value, ctx);
+  validateDistanceOverride(value, ctx);
 });
 
 /**

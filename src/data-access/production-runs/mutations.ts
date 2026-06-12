@@ -3,7 +3,7 @@
  * feedstock allocation and storage-location validation.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   productionRuns,
@@ -103,7 +103,6 @@ export async function createProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-    plcDataFileUrl?: string | null;
   }
 ): Promise<ProductionRunWithRelations> {
   requireAuth(userId);
@@ -118,14 +117,14 @@ export async function createProductionRun(
     throw new SafeError("A production run with this code already exists");
   }
 
-  // Verify facility exists
+  // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, data.facilityId));
+    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new SafeError("Facility not found or archived");
   }
 
   // Verify reactor exists and belongs to facility
@@ -178,7 +177,6 @@ export async function createProductionRun(
         biocharDryMassKg: biocharDryMass,
         biocharStorageLocationId: data.biocharStorageLocationId ?? null,
         feedstockStorageLocationId: data.feedstockStorageLocationId ?? null,
-        plcDataFileUrl: data.plcDataFileUrl ?? null,
       })
       .returning();
 
@@ -239,7 +237,6 @@ export async function updateProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-    plcDataFileUrl?: string | null;
   }
 ): Promise<ProductionRunWithRelations> {
   requireAuth(userId);
@@ -263,6 +260,19 @@ export async function updateProductionRun(
 
     if (duplicate) {
       throw new SafeError("A production run with this code already exists");
+    }
+  }
+
+  // Moving the run to another facility requires that facility to be active
+  // (no children move under an archived parent — mirrors createProductionRun).
+  if (data.facilityId && data.facilityId !== existing.facilityId) {
+    const [facility] = await db
+      .select({ id: facilities.id })
+      .from(facilities)
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+
+    if (!facility) {
+      throw new SafeError("Facility not found or archived");
     }
   }
 
@@ -330,7 +340,6 @@ export async function updateProductionRun(
 
   if (data.biocharStorageLocationId !== undefined) updateData.biocharStorageLocationId = data.biocharStorageLocationId;
   if (data.feedstockStorageLocationId !== undefined) updateData.feedstockStorageLocationId = data.feedstockStorageLocationId;
-  if (data.plcDataFileUrl !== undefined) updateData.plcDataFileUrl = data.plcDataFileUrl;
 
   const feedstockFieldsChanged =
     data.feedstockStorageLocationId !== undefined ||

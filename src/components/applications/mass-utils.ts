@@ -1,5 +1,10 @@
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import type { SoilTemperatureSource } from "@/schemas/applications";
+
+/** Source tag for prefilled soil temperatures — facility/customer-location defaults come from the approved global dataset. */
+export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
+  "global_database" satisfies SoilTemperatureSource;
 
 export interface ApplicationDeliveryOption {
   id: string;
@@ -11,8 +16,74 @@ export interface ApplicationDeliveryOption {
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
   moistureContentPercent: number | null;
+  defaultSoilTemperatureC: number | null;
+  facilityDefaultSoilTemperatureC: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   /** Total kg already applied from this delivery across all applications */
   alreadyAppliedWetKg: number;
+}
+
+export interface ApplicationPositionDefault {
+  gpsLatitude: number;
+  gpsLongitude: number;
+}
+
+/**
+ * Default field position from the delivery's destination customer location.
+ * Requires both coordinates — a destination with partial/no GPS yields no
+ * prefill (the position schema enforces lat/lng as a pair).
+ */
+export function resolveApplicationPositionDefault({
+  delivery,
+}: {
+  delivery:
+    | Pick<
+        ApplicationDeliveryOption,
+        "destinationGpsLatitude" | "destinationGpsLongitude"
+      >
+    | null
+    | undefined;
+}): ApplicationPositionDefault | null {
+  const gpsLatitude = delivery?.destinationGpsLatitude ?? null;
+  const gpsLongitude = delivery?.destinationGpsLongitude ?? null;
+
+  if (gpsLatitude == null || gpsLongitude == null) {
+    return null;
+  }
+
+  return { gpsLatitude, gpsLongitude };
+}
+
+export interface ApplicationSoilTemperatureDefault {
+  soilTemperatureSource: typeof SOIL_TEMPERATURE_SOURCE_GLOBAL;
+  soilTemperatureC: number;
+}
+
+export function resolveApplicationSoilTemperatureDefault({
+  delivery,
+}: {
+  delivery:
+    | Pick<
+        ApplicationDeliveryOption,
+        "defaultSoilTemperatureC" | "facilityDefaultSoilTemperatureC"
+      >
+    | null
+    | undefined;
+}): ApplicationSoilTemperatureDefault | null {
+  const soilTemperatureC =
+    delivery?.defaultSoilTemperatureC ??
+    delivery?.facilityDefaultSoilTemperatureC ??
+    null;
+
+  if (soilTemperatureC == null) {
+    return null;
+  }
+
+  return {
+    soilTemperatureSource: SOIL_TEMPERATURE_SOURCE_GLOBAL,
+    soilTemperatureC,
+  };
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   storageLocationTypes,
   type StorageLocationType,
   formatStorageLocationType,
+  isFeedstockBinType,
 } from "./storage-locations";
 
 // ============================================
@@ -88,6 +89,12 @@ export {
 const FORMULATION_PRODUCT_BIN_MESSAGE =
   "formulationId is only allowed for type 'product_bin'";
 
+const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
+  "Feedstock and ingredient bins must be restricted to one feedstock type";
+
+const FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE =
+  "feedstockTypeId is only allowed for feedstock and ingredient bins";
+
 export const storageLocationQuickAddSchema = z.object({
   name: z
     .string()
@@ -102,6 +109,8 @@ export const storageLocationQuickAddSchema = z.object({
     .positive("Capacity must be positive")
     .optional()
     .nullable(),
+  // Feedstock/ingredient bins only — restricts the bin to one feedstock type
+  feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
   // Product bins only — restricts the bin to one formulation (empty = pure biochar)
   formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),
 }).superRefine((data, ctx) => {
@@ -110,6 +119,20 @@ export const storageLocationQuickAddSchema = z.object({
       code: "custom",
       path: ["formulationId"],
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
+    });
+  }
+  if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedstockTypeId"],
+      message: FEEDSTOCK_TYPE_REQUIRED_MESSAGE,
+    });
+  }
+  if (!isFeedstockBinType(data.type) && data.feedstockTypeId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedstockTypeId"],
+      message: FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE,
     });
   }
 });

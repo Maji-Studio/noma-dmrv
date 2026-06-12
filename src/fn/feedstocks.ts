@@ -24,13 +24,47 @@ import {
   type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
 import { getUser } from "@/lib/auth/server";
+import { logger } from "@/lib/log";
 import {
   createFeedstockSchema,
   deleteFeedstockSchema,
   updateFeedstockSchema,
   feedstockFilterSchema,
 } from "@/schemas/feedstocks";
+import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
+
+// The leg sync runs AFTER the feedstock write has committed, so a failure here
+// must not surface as a failed mutation — the UI would invite a retry of a
+// create that already happened (duplicate codes). Mirrors resyncBiocharLegs in
+// fn/deliveries.ts, with one difference: the form's distance override is NOT
+// persisted on the feedstock row, so a swallowed failure loses it until the
+// next edit — log the override so the value is recoverable.
+async function syncFeedstockLegsBestEffort(
+  userId: string,
+  feedstockIds: string[],
+  override: NonNullable<Parameters<typeof syncFeedstockTransportLeg>[2]>,
+): Promise<void> {
+  const results = await Promise.allSettled(
+    feedstockIds.map((id) => syncFeedstockTransportLeg(userId, id, override)),
+  );
+  results.forEach((result, index) => {
+    if (result.status !== "rejected") return;
+    logger.warn(
+      {
+        userId,
+        feedstockId: feedstockIds[index],
+        distanceKmOverride: override.distanceKm ?? null,
+        distanceSourceOverride: override.distanceSource ?? null,
+        err:
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason),
+      },
+      "feedstock transport leg sync failed after committed write; leg (and any form distance override) stale until next edit",
+    );
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -153,14 +187,16 @@ export async function createFeedstockFn(
 
     // Auto-derive the transport leg for each created feedstock (split deliveries
     // produce one feedstock row per bin; each gets its own leg, mass-weighted).
-    await Promise.all(
-      result.feedstocks.map((feedstock) =>
-        syncFeedstockTransportLeg(
-          user.id,
-          feedstock.id,
+    await syncFeedstockLegsBestEffort(
+      user.id,
+      result.feedstocks.map((feedstock) => feedstock.id),
+      {
+        distanceKm: data.transportDistanceKm,
+        distanceSource: resolveDistanceSource(
           data.transportDistanceKm,
+          data.transportDistanceSource,
         ),
-      ),
+      },
     );
 
     return { success: true, data: result };
@@ -189,13 +225,19 @@ export async function updateFeedstockFn(
     const user = await getUser();
     if (!user?.id) return { success: false, error: "Unauthorized" };
 
-    // transportDistanceKm is not a feedstock column — it drives the derived
-    // transport leg, so strip it before the feedstock update spread.
-    const { feedstockId, transportDistanceKm, ...updateData } =
+    // transportDistanceKm/-Source are not feedstock columns — they drive the
+    // derived transport leg, so strip them before the feedstock update spread.
+    const { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData } =
       updateFeedstockSchema.parse(input);
     const data = await updateFeedstock(user.id, feedstockId, updateData);
 
-    await syncFeedstockTransportLeg(user.id, feedstockId, transportDistanceKm);
+    await syncFeedstockLegsBestEffort(user.id, [feedstockId], {
+      distanceKm: transportDistanceKm,
+      distanceSource: resolveDistanceSource(
+        transportDistanceKm,
+        transportDistanceSource,
+      ),
+    });
 
     return { success: true, data };
   } catch (error) {

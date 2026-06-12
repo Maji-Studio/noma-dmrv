@@ -6,7 +6,7 @@ import {
   certificationSubmissions,
 } from "@/db/schema/certification";
 import { SafeError } from "@/lib/errors";
-import { decideRemovalMembership } from "@/lib/isometric/utils/removal-membership";
+import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
 import type { Tx } from "./certification";
 import { requireAuth } from "./utils";
 import type { CertifierRemovalRow } from "./certifier-removals";
@@ -227,7 +227,7 @@ export interface ReconcileResult {
 
 // Reconciles a GHG Statement's server-side removal membership onto local
 // rows. Isometric decides membership by reporting-period date range and
-// returns `removal_ids`; this maps each back to its local certifier_removals
+// returns `ghg_entry_ids`; this maps each back to its local certifier_removals
 // row and stamps ghg_statement_id. It never steals a removal already linked
 // to a different statement — the FOR UPDATE read + IS NULL guard make the
 // link decision and the write atomic.
@@ -245,7 +245,7 @@ export async function reconcileRemovalMembership(
   const run = async (tx: Tx): Promise<ReconcileResult> => {
     // 0. Resolve the target statement's facility so every subsequent step
     //    refuses to stamp a removal that lives in a different facility.
-    //    Defence in depth — Isometric's `removal_ids` should already be
+    //    Defence in depth — Isometric's `ghg_entry_ids` should already be
     //    facility-scoped (its project owns a single noma facility), but a
     //    registry bug, misconfiguration, or external_id collision must
     //    never let the stamp cross facility boundaries.

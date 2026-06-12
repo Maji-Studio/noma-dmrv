@@ -3,7 +3,7 @@
  * CRUD operations for biochar products with auth guards, pagination, filtering, and relations
  */
 
-import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
@@ -85,8 +85,8 @@ export async function getBiocharProducts(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Build where conditions
-  const conditions: SQL[] = [];
+  // Build where conditions — archived products (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(biocharProducts.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -111,7 +111,7 @@ export async function getBiocharProducts(
     conditions.push(eq(biocharProducts.formulationId, formulationId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Build sort clause
   const sortColumn = {
@@ -155,6 +155,7 @@ export async function getBiocharProducts(
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
       expiresAt: biocharProducts.expiresAt,
+      archivedAt: biocharProducts.archivedAt,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
       // Facility relation
@@ -195,6 +196,7 @@ export async function getBiocharProducts(
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
     expiresAt: row.expiresAt,
+    archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     facility: {
@@ -258,6 +260,7 @@ export async function getBiocharProductById(
       waterAddedKg: biocharProducts.waterAddedKg,
       storageLocationId: biocharProducts.storageLocationId,
       expiresAt: biocharProducts.expiresAt,
+      archivedAt: biocharProducts.archivedAt,
       createdAt: biocharProducts.createdAt,
       updatedAt: biocharProducts.updatedAt,
       facilityCode: facilities.code,
@@ -294,6 +297,7 @@ export async function getBiocharProductById(
     waterAddedKg: row.waterAddedKg,
     storageLocationId: row.storageLocationId,
     expiresAt: row.expiresAt,
+    archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     facility: {
@@ -363,15 +367,15 @@ export async function createBiocharProduct(
     throw new SafeError("A biochar product with this code already exists");
   }
 
-  // Verify facility exists; verify the formulation only when one was provided.
-  // The lookups are independent, so run them in parallel — but evaluate the
-  // results in a fixed order so the surfaced error stays deterministic
-  // (facility before formulation).
+  // Verify facility exists and is active; verify the formulation only when one
+  // was provided. The lookups are independent, so run them in parallel — but
+  // evaluate the results in a fixed order so the surfaced error stays
+  // deterministic (facility before formulation).
   const [[facility], formulationRows] = await Promise.all([
     db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(eq(facilities.id, data.facilityId)),
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))),
     formulationId
       ? db
           .select({ id: formulations.id })
@@ -381,7 +385,7 @@ export async function createBiocharProduct(
   ]);
 
   if (!facility) {
-    throw new SafeError("Facility not found");
+    throw new SafeError("Facility not found or archived");
   }
 
   if (formulationId && formulationRows.length === 0) {
@@ -543,15 +547,15 @@ export async function updateBiocharProduct(
     }
   }
 
-  // Verify facility if being changed
+  // Verify facility if being changed (must be active)
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(eq(facilities.id, data.facilityId));
+      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
 
     if (!facility) {
-      throw new SafeError("Facility not found");
+      throw new SafeError("Facility not found or archived");
     }
   }
 
@@ -792,5 +796,6 @@ export async function getBiocharProductOptions(
       code: biocharProducts.code,
     })
     .from(biocharProducts)
+    .where(isNull(biocharProducts.archivedAt))
     .orderBy(desc(biocharProducts.productionDate));
 }

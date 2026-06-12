@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
@@ -13,9 +13,8 @@ import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
 import { useEntityById } from "@/hooks/use-entities";
-import { Button } from "@/components/ui";
 import {
   biocharProductFormSchema,
   PURE_PRODUCT_BIN_FILTER,
@@ -144,6 +143,12 @@ interface BiocharProductFormProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  /**
+   * Extension content (e.g. transport-legs editor) rendered between the form
+   * fields and the CTA row — outside the `<form>` element, so it may contain
+   * its own forms. Nothing ever renders after the CTA.
+   */
+  children?: React.ReactNode;
 }
 
 export function BiocharProductForm({
@@ -152,7 +157,9 @@ export function BiocharProductForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  children,
 }: BiocharProductFormProps) {
+  const formId = useId();
   const isEditMode = !!product;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
@@ -242,18 +249,37 @@ export function BiocharProductForm({
     }
   }, [selectedFormulationId, setValue]);
 
-  // Auto-fill mass from linked production run
+  // Prefill mass + production date from the linked production run (create mode
+  // only). Re-applies when a different run is selected — previously the mass
+  // kept the prior run's value, leaving the product inconsistent with its
+  // linked run (#46) — but never overwrites a field the user edited themselves.
+  const lastPrefilledRunIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (product || dirtyFields.massKg || linkedRunPreview?.biocharOutputKg == null) return;
+    if (product) return;
+    if (!linkedProductionRunId || !linkedRunPreview) return;
+    if (lastPrefilledRunIdRef.current === linkedProductionRunId) return;
+    lastPrefilledRunIdRef.current = linkedProductionRunId;
 
-    const currentMass = getValues("massKg");
-    if (currentMass === undefined || currentMass === null) {
+    if (!dirtyFields.massKg && linkedRunPreview.biocharOutputKg != null) {
       setValue("massKg", linkedRunPreview.biocharOutputKg, {
         shouldDirty: false,
         shouldValidate: false,
       });
     }
-  }, [dirtyFields.massKg, getValues, linkedRunPreview, product, setValue]);
+    if (!dirtyFields.productionDate && linkedRunPreview.date) {
+      setValue("productionDate", linkedRunPreview.date, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+  }, [
+    dirtyFields.massKg,
+    dirtyFields.productionDate,
+    linkedProductionRunId,
+    linkedRunPreview,
+    product,
+    setValue,
+  ]);
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
@@ -284,7 +310,8 @@ export function BiocharProductForm({
       : null;
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-24">
+    <div className="space-y-24">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
       {/* Transfer Flow Preview */}
       <div className="space-y-12">
         <SectionLabel>Transfer Preview</SectionLabel>
@@ -504,7 +531,12 @@ export function BiocharProductForm({
             />
           </FormField>
 
-          <FormField id="productionDate" label="Production Date" error={errors.productionDate?.message}>
+          <FormField
+            id="productionDate"
+            label="Production Date"
+            error={errors.productionDate?.message}
+            helperText={isEditMode ? undefined : "Prefilled from the selected production run"}
+          >
             <FormInput
               id="productionDate"
               type="date"
@@ -518,18 +550,18 @@ export function BiocharProductForm({
 
       {/* Ingredient Bins */}
       <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
+      </form>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
-    </form>
+      {/* Extension content (e.g. transport legs) — always before the CTA */}
+      {children}
+
+      <FormActions
+        formId={formId}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
+    </div>
   );
 }

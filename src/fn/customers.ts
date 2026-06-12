@@ -37,6 +37,8 @@ import {
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
+import { resolveDistanceSource } from "@/schemas/distance-source";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 // ============================================
@@ -133,9 +135,15 @@ export async function getCustomerLocationsFn(
     Array<{
       id: string;
       name: string | null;
+      country: string;
+      stateRegion: string | null;
+      city: string | null;
       gpsLatitude: number | null;
       gpsLongitude: number | null;
       address: string | null;
+      distanceFromFacilityKm: number | null;
+      distanceSource: DistanceSourceValue | null;
+      isDefault: boolean;
       createdAt: Date;
       updatedAt: Date;
     }>
@@ -394,6 +402,12 @@ export async function createCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceFromFacilityKm ?? null,
+        validated.distanceSource,
+      ),
+      defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
+      isDefault: validated.isDefault,
     });
 
     return { success: true, data: location };
@@ -437,6 +451,12 @@ export async function updateCustomerLocationFn(
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceFromFacilityKm,
+        validated.distanceSource,
+      ),
+      defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
+      isDefault: validated.isDefault,
     });
 
     // The distance feeds derived biochar distribution legs; recompute the legs

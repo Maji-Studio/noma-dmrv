@@ -21,7 +21,11 @@ import {
   type FacilityEmissionConfigFormData,
 } from "@/schemas/certification";
 import { useSaveFacilityEmissionConfig } from "@/hooks/use-certification";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { CertifierProjectRow } from "@/data-access/certification";
+
+const isEmissionConfigCertifyField = (field: string) =>
+  isCertifyFormField("facilityEmissionConfig", field);
 
 interface EmissionEstimatesFormProps {
   facilityId: string;
@@ -49,6 +53,7 @@ export function EmissionEstimatesForm({
       stageSplitBiomassPct: mapping?.stageSplitBiomassPct ?? undefined,
       stageSplitPyrolysisPct: mapping?.stageSplitPyrolysisPct ?? undefined,
       stageSplitBiocharPct: mapping?.stageSplitBiocharPct ?? undefined,
+      defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
     },
   });
 
@@ -90,6 +95,7 @@ export function EmissionEstimatesForm({
           id="gensetEnergyYieldKwhPerLitre"
           label="Genset energy yield (kWh per litre)"
           required
+          certifyRequired={isEmissionConfigCertifyField("gensetEnergyYieldKwhPerLitre")}
           error={errors.gensetEnergyYieldKwhPerLitre?.message}
           helperText="Electrical kWh produced per litre of genset diesel. ~3.375 from the Dark Earth LCA (diesel 2.7 kgCO2e/L ÷ genset 0.8 kgCO2e/kWh)."
         >
@@ -100,6 +106,24 @@ export function EmissionEstimatesForm({
             min={0}
             error={!!errors.gensetEnergyYieldKwhPerLitre}
             {...register("gensetEnergyYieldKwhPerLitre")}
+          />
+        </FormField>
+      </div>
+
+      <div className="flex flex-col gap-16">
+        <SectionLabel>Soil durability defaults</SectionLabel>
+        <FormField
+          id="defaultSoilTemperatureC"
+          label="Facility fallback soil temperature (°C)"
+          error={errors.defaultSoilTemperatureC?.message}
+          helperText="Optional conservative fallback for new applications when the selected customer location has no site-specific default."
+        >
+          <FormInput
+            id="defaultSoilTemperatureC"
+            type="number"
+            step="any"
+            error={!!errors.defaultSoilTemperatureC}
+            {...register("defaultSoilTemperatureC")}
           />
         </FormField>
       </div>
@@ -116,6 +140,7 @@ export function EmissionEstimatesForm({
           id="stageSplitBiomassPct"
           label="Biomass processing (%)"
           required
+          certifyRequired={isEmissionConfigCertifyField("stageSplitBiomassPct")}
           error={errors.stageSplitBiomassPct?.message}
         >
           <FormInput
@@ -132,6 +157,7 @@ export function EmissionEstimatesForm({
           id="stageSplitPyrolysisPct"
           label="Pyrolysis (%)"
           required
+          certifyRequired={isEmissionConfigCertifyField("stageSplitPyrolysisPct")}
           error={errors.stageSplitPyrolysisPct?.message}
         >
           <FormInput
@@ -148,6 +174,7 @@ export function EmissionEstimatesForm({
           id="stageSplitBiocharPct"
           label="Biochar processing (%)"
           required
+          certifyRequired={isEmissionConfigCertifyField("stageSplitBiocharPct")}
           error={errors.stageSplitBiocharPct?.message}
         >
           <FormInput

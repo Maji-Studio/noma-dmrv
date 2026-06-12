@@ -12,10 +12,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEntityById } from "@/hooks/use-entities";
-import { useSupplier } from "@/hooks/use-suppliers";
+import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
@@ -24,6 +25,10 @@ import {
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
+import {
+  DISTANCE_SOURCE_LABELS,
+  type DistanceSourceValue,
+} from "@/schemas/distance-source";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
@@ -31,10 +36,14 @@ import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
 import { WetMassWarning } from "./wet-mass-warning";
+import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
-const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = "feedstock_bin,ingredient_bin";
+const isFeedstockCertifyField = (field: string) =>
+  isCertifyFormField("feedstock", field);
+
+const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
 // ============================================
 // Component
@@ -81,6 +90,7 @@ export function FeedstockForm({
       supplierId: feedstock?.supplierId ?? "",
       vehicleId: feedstock?.vehicleId ?? "",
       transportDistanceKm: undefined as number | undefined,
+      transportDistanceSource: null as DistanceSourceValue | null,
       feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
       moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
@@ -108,6 +118,10 @@ export function FeedstockForm({
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
+  const transportDistanceSource = useWatch({
+    control,
+    name: "transportDistanceSource",
+  }) as DistanceSourceValue | null | undefined;
 
   // Default new bins by feedstock category, while allowing intake into either compatible bin type.
   const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
@@ -115,16 +129,36 @@ export function FeedstockForm({
     ? "ingredient_bin"
     : "feedstock_bin";
 
-  // Transport distance autofills from the supplier's stored distance-to-facility
-  // (create) or the existing leg (edit); overridable. We never auto-calc from GPS.
+  // Transport distance autofills from the existing leg (edit) or the stored
+  // level — the supplier's DEFAULT location, else the supplier-level distance —
+  // mirroring the server's priority resolution. The suggestion carries its
+  // provenance along; hand-editing flips it to manual.
   const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
+  const { data: supplierLocationList } = useSupplierLocationsBySupplier(
+    watchedSupplierId,
+    !!watchedSupplierId,
+  );
+  const defaultSupplierLocation =
+    supplierLocationList?.find((location) => location.isDefault) ?? null;
   const { data: existingLegs } = useTransportLegsForEntity("feedstock", feedstock?.id ?? "", {
     enabled: isEditMode,
   });
   const existingLegDistanceKm = existingLegs?.[0]?.distanceKm ?? null;
+  const storedDistanceKm =
+    defaultSupplierLocation?.distanceFromFacilityKm ??
+    selectedSupplier?.distanceToFacilityKm ??
+    null;
+  const storedDistanceSource =
+    defaultSupplierLocation?.distanceFromFacilityKm != null
+      ? defaultSupplierLocation.distanceSource
+      : (selectedSupplier?.distanceSource ?? null);
   const suggestedDistanceKm = isEditMode
-    ? existingLegDistanceKm ?? selectedSupplier?.distanceToFacilityKm ?? null
-    : selectedSupplier?.distanceToFacilityKm ?? null;
+    ? existingLegDistanceKm ?? storedDistanceKm
+    : storedDistanceKm;
+  const suggestedDistanceSource =
+    isEditMode && existingLegDistanceKm != null
+      ? (existingLegs?.[0]?.distanceSource ?? null)
+      : storedDistanceSource;
 
   // Auto-set facility from context
   useEffect(() => {
@@ -133,13 +167,20 @@ export function FeedstockForm({
     }
   }, [feedstock, contextFacilityId, watchedFacilityId, setValue]);
 
-  // Prefill the distance from the supplier/existing leg unless the user edited it.
+  // Prefill the distance (and its provenance) from the supplier/existing leg
+  // unless the user edited it.
   useEffect(() => {
     if (dirtyFields.transportDistanceKm) return;
     if (suggestedDistanceKm != null) {
       setValue("transportDistanceKm", suggestedDistanceKm);
+      setValue("transportDistanceSource", suggestedDistanceSource);
+    } else {
+      // Suggestion gone (e.g. switched to a supplier without a stored
+      // distance) — clear the previous autofill so it can't persist.
+      setValue("transportDistanceKm", undefined);
+      setValue("transportDistanceSource", null);
     }
-  }, [suggestedDistanceKm, dirtyFields.transportDistanceKm, setValue]);
+  }, [suggestedDistanceKm, suggestedDistanceSource, dirtyFields.transportDistanceKm, setValue]);
 
   // Calculated dry mass
   const deliveredDryMassKg =
@@ -243,22 +284,41 @@ export function FeedstockForm({
               id="transportDistanceKm"
               label="Transport distance (km)"
               error={errors.transportDistanceKm?.message}
+              certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
               helperText={
-                selectedSupplier?.distanceToFacilityKm != null
-                  ? "Autofilled from the supplier; override if the route differs."
-                  : "Set a supplier default to autofill this distance."
+                storedDistanceKm != null
+                  ? "Autofilled from the supplier's default location or supplier default; override if the route differs."
+                  : "Set a distance on the supplier (or its default location) to autofill this."
               }
             >
-              <FormInput
-                id="transportDistanceKm"
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="e.g., 85"
-                disabled={isSubmitting}
-                error={!!errors.transportDistanceKm}
-                {...register("transportDistanceKm", { setValueAs: numericValue })}
-              />
+              <div>
+                <FormInput
+                  id="transportDistanceKm"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  placeholder="e.g., 85"
+                  disabled={isSubmitting}
+                  error={!!errors.transportDistanceKm}
+                  {...register("transportDistanceKm", {
+                    setValueAs: numericValue,
+                    onChange: (event) =>
+                      setValue(
+                        "transportDistanceSource",
+                        event.target.value === "" ? null : "manual",
+                        SET_VALUE_OPTS,
+                      ),
+                  })}
+                />
+                {transportDistanceSource && (
+                  <p
+                    className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                    data-testid="transportDistanceKm-distance-source"
+                  >
+                    Source: {DISTANCE_SOURCE_LABELS[transportDistanceSource]}
+                  </p>
+                )}
+              </div>
             </FormField>
           </div>
         </div>
@@ -292,6 +352,7 @@ export function FeedstockForm({
               error={errors.totalWetMassKg?.message}
               helperText="As-received weight of the entire delivery"
               required
+              certifyRequired={isFeedstockCertifyField("totalWetMassKg")}
             >
               <FormInput
                 id="totalWetMassKg"
@@ -479,6 +540,8 @@ export function FeedstockForm({
             storageLocationDialog.close();
           }}
           defaultBinType={defaultStorageBinType}
+          allowedTypes={FEEDSTOCK_BIN_TYPES}
+          defaultFeedstockTypeId={watchedFeedstockTypeId || undefined}
           facilityId={watchedFacilityId}
         />
       )}

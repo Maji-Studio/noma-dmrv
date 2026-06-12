@@ -1,7 +1,8 @@
 # Object Storage
 
-File uploads (lab reports, photos, COAs, calibration certificates, etc.)
-are stored in S3-compatible object storage. The provider is chosen via
+File uploads (lab reports, photos, COAs, calibration certificates,
+production readings CSVs, etc.) are stored in S3-compatible object
+storage. The provider is chosen via
 the `STORAGE_PROVIDER` env var:
 
 - **`s3-compatible`** (production) — DigitalOcean Spaces or AWS S3. Same
@@ -154,6 +155,7 @@ tune:
 | `pdd` | 50 MB | PDF |
 | `video` | 100 MB | mp4, webm |
 | `photo` | 25 MB | png, jpeg, gif, webp |
+| `sensor_data` | 25 MB | CSV, XLSX (production readings) |
 | (others) | 25 MB | PDF + images |
 
 The local-fs route also enforces a hard `LOCAL_FS_GLOBAL_MAX_BYTES =

@@ -5,13 +5,14 @@
  * Split deliveries (one truck → multiple bins) share a deliveryGroupId.
  */
 
-import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   feedstocks,
   feedstockTypes,
   facilities,
   storageLocations,
+  supplierLocations,
   suppliers,
   vehicles,
   productionRunFeedstocks,
@@ -19,7 +20,7 @@ import {
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import { requireAuth } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
+import { deriveTransportLeg, positiveOrNull } from "@/lib/calculations/transport-leg";
 import {
   deleteTransportLegsForEntity,
   replaceDerivedTransportLeg,
@@ -181,7 +182,8 @@ export async function getFeedstocks(
     sortOrder = "desc",
   } = filters ?? {};
 
-  const conditions: SQL[] = [];
+  // Archived feedstocks (facility archive cascade) are hidden
+  const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -212,7 +214,7 @@ export async function getFeedstocks(
     conditions.push(lte(feedstocks.deliveryDate, endOfDay));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const sortColumn = {
     code: feedstocks.code,
@@ -267,9 +269,9 @@ export async function getFeedstockStats(
 ): Promise<FeedstockStats> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
   if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [stats] = await db
     .select({
@@ -585,6 +587,7 @@ export async function getFeedstockOptions(
     })
     .from(feedstocks)
     .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+    .where(isNull(feedstocks.archivedAt))
     .orderBy(desc(feedstocks.createdAt));
 }
 
@@ -594,14 +597,20 @@ export async function getFeedstockOptions(
 
 /**
  * Recompute and persist the feedstock's single transport leg from records we
- * already hold (supplier origin + facility destination + vehicle + wet cargo
- * mass). Distance uses `distanceKmOverride` when provided, else the supplier's
- * stored distance-to-facility. Call after every feedstock create/update.
+ * already hold (supplier origin — default location's name/GPS preferred —
+ * + facility destination + vehicle + wet cargo mass). Distance resolves in
+ * priority order — feedstock-form override → the
+ * supplier's DEFAULT location distance → supplier-level distance-to-facility —
+ * and the leg inherits the winning level's `distanceSource` (map-integration
+ * plan, decision 3). Call after every feedstock create/update.
  */
 export async function syncFeedstockTransportLeg(
   userId: string,
   feedstockId: string,
-  distanceKmOverride?: number | null,
+  distanceOverride?: {
+    distanceKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+  },
 ): Promise<void> {
   requireAuth(userId);
 
@@ -611,6 +620,12 @@ export async function syncFeedstockTransportLeg(
       supplierGpsLatitude: suppliers.gpsLatitude,
       supplierGpsLongitude: suppliers.gpsLongitude,
       supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
+      supplierDistanceSource: suppliers.distanceSource,
+      locationName: supplierLocations.name,
+      locationGpsLatitude: supplierLocations.gpsLatitude,
+      locationGpsLongitude: supplierLocations.gpsLongitude,
+      locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
+      locationDistanceSource: supplierLocations.distanceSource,
       facilityName: facilities.name,
       facilityGpsLatitude: facilities.gpsLatitude,
       facilityGpsLongitude: facilities.gpsLongitude,
@@ -620,17 +635,39 @@ export async function syncFeedstockTransportLeg(
     })
     .from(feedstocks)
     .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
+    .leftJoin(
+      supplierLocations,
+      and(
+        eq(supplierLocations.supplierId, suppliers.id),
+        eq(supplierLocations.isDefault, true),
+      ),
+    )
     .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
     .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
     .where(eq(feedstocks.id, feedstockId));
 
   if (!row) return;
 
+  // Stored level: the default supplier location wins over the supplier-level
+  // default; each carries its own provenance.
+  const locationDistance = positiveOrNull(row.locationDistanceFromFacilityKm);
+  const storedDistanceKm = locationDistance ?? row.supplierDistanceToFacilityKm;
+  const storedDistanceSource =
+    locationDistance != null
+      ? row.locationDistanceSource
+      : row.supplierDistanceSource;
+
+  // Origin identity mirrors the distance priority: the default supplier
+  // location is the actual pickup point, so its name/GPS beat the supplier's.
+  // GPS falls back as a pair — a lone latitude or longitude is unusable.
+  const locationHasGps =
+    row.locationGpsLatitude != null && row.locationGpsLongitude != null;
+
   const derived = deriveTransportLeg({
     origin: {
-      name: row.supplierName,
-      gpsLatitude: row.supplierGpsLatitude,
-      gpsLongitude: row.supplierGpsLongitude,
+      name: row.locationName ?? row.supplierName,
+      gpsLatitude: locationHasGps ? row.locationGpsLatitude : row.supplierGpsLatitude,
+      gpsLongitude: locationHasGps ? row.locationGpsLongitude : row.supplierGpsLongitude,
     },
     destination: {
       name: row.facilityName,
@@ -639,8 +676,10 @@ export async function syncFeedstockTransportLeg(
     },
     vehicle: { vehicleType: row.vehicleType, modelYear: row.vehicleModelYear },
     loadMassKg: row.loadMassKg,
-    storedDistanceKm: row.supplierDistanceToFacilityKm,
-    distanceKmOverride,
+    storedDistanceKm,
+    storedDistanceSource,
+    distanceKmOverride: distanceOverride?.distanceKm,
+    distanceSourceOverride: distanceOverride?.distanceSource,
   });
 
   await replaceDerivedTransportLeg(userId, "feedstock", feedstockId, derived);

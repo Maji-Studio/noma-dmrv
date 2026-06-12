@@ -1,10 +1,10 @@
 import { env } from "@/config/env";
 import {
   getCertifierProjectByFacility,
-  getLatestSubmission,
   type CertificationSubmissionRow,
   type CertifierProjectRow,
 } from "@/data-access/certification";
+import { getLatestSubmission } from "@/data-access/certification-submissions";
 import {
   getCertifierRemovalById,
   getCreditBatchesByRemovalId,
@@ -34,6 +34,10 @@ import {
   EMPTY_RUN_SUMMARY,
   type RemovalRunSummary,
 } from "@/lib/certification/mass-accounting";
+import {
+  defaultProductionReadinessGap,
+  type ProductionReadinessGap,
+} from "@/lib/certification/production-readiness";
 import type { DerivedStatus } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
@@ -42,10 +46,10 @@ import {
   collectTransportEntityIds,
   listComponentBlueprints,
   listProjects,
-  listRemovalTemplates,
+  listGhgEntryTemplates,
   type IsometricComponentBlueprint,
   type IsometricProject,
-  type IsometricRemovalTemplate,
+  type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
@@ -123,7 +127,7 @@ export interface RemovalCertifyContext {
   removalId: string | null;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
-  defaultTemplate: IsometricRemovalTemplate | null;
+  defaultTemplate: IsometricGhgEntryTemplate | null;
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -138,6 +142,10 @@ export interface RemovalCertifyContext {
   // `hasSubmittableRuns` fact the server-owned Overview loader does, without
   // shipping the heavy `runs` array to the client.
   hasSubmittableRuns: boolean;
+  // Specific blocker when production lineage does not resolve a run. This keeps
+  // no-applications / broken-product-link cases out of the generic production
+  // bucket on health and readiness surfaces.
+  productionReadinessGap: ProductionReadinessGap | null;
   // Compact labels from the per-entity certifier-readiness layer. The raw
   // entity rows stay server-side; Review/pre-flight only needs gap labels.
   entityReadinessGaps?: string[];
@@ -167,7 +175,7 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
 }
 
 function deriveRequiredTransportCategories(
-  template: IsometricRemovalTemplate,
+  template: IsometricGhgEntryTemplate,
 ): TransportCategory[] {
   const seen = new Set<TransportCategory>();
   for (const group of template.groups) {
@@ -416,7 +424,7 @@ async function loadLinkedGhgStatementStatus(
 export interface FacilityCertifierFacts {
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
-  defaultTemplate: IsometricRemovalTemplate | null;
+  defaultTemplate: IsometricGhgEntryTemplate | null;
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
@@ -458,7 +466,7 @@ export async function loadFacilityCertifierFacts(
 
   const [projects, templates] = await Promise.all([
     safeListIfConfigured(() => listProjects()),
-    safeListIfConfigured(() => listRemovalTemplates(mapping.externalProjectId)),
+    safeListIfConfigured(() => listGhgEntryTemplates(mapping.externalProjectId)),
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
@@ -524,6 +532,49 @@ function collect1000YearDurabilityRunIds(
   return runIds;
 }
 
+function productionReadinessGapFromLineages(
+  lineages: ChainOfCustodyData[],
+): ProductionReadinessGap | null {
+  if (lineages.every((lineage) => lineage.productionRun)) {
+    return null;
+  }
+
+  const missingProduct = lineages.find((lineage) => !lineage.biocharProduct);
+  if (missingProduct) {
+    return {
+      kind: "missingBiocharProduct",
+      detail: `Application ${missingProduct.application.code} is not linked to a biochar product through its delivery or order`,
+      fixTarget: "deliveries",
+    };
+  }
+
+  const productMissingRun = lineages.find(
+    (lineage) =>
+      lineage.biocharProduct && !lineage.biocharProduct.linkedProductionRunId,
+  );
+  if (productMissingRun?.biocharProduct) {
+    return {
+      kind: "biocharProductMissingRun",
+      detail: `Biochar product ${productMissingRun.biocharProduct.code} is not linked to a production run`,
+      fixTarget: "biocharProducts",
+    };
+  }
+
+  const missingRun = lineages.find(
+    (lineage) =>
+      lineage.biocharProduct?.linkedProductionRunId && !lineage.productionRun,
+  );
+  if (missingRun?.biocharProduct) {
+    return {
+      kind: "productionRunMissing",
+      detail: `Biochar product ${missingRun.biocharProduct.code} links to a production run that could not be loaded`,
+      fixTarget: "biocharProducts",
+    };
+  }
+
+  return defaultProductionReadinessGap();
+}
+
 // Composes one removal's full submission context from its resolved scope and
 // the facility-scoped certifier facts (loaded once per facility, passed in).
 // The facility half spreads straight onto the context; this only adds the
@@ -561,10 +612,17 @@ export async function buildRemovalContext(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
 
-  // Nothing to submit unless the facility resolves a clean default template AND
-  // the removal carries applications — both gate the lineage walk. Either way
-  // the removal-level half is empty; the facility half is whatever resolved.
-  if (!facilityFacts.defaultTemplate || applicationIds.length === 0) {
+  // Nothing to submit when the removal carries no applications. Facility
+  // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
+  // into a misleading "no production data" blocker.
+  if (applicationIds.length === 0) {
+    const productionReadinessGap: ProductionReadinessGap = {
+      kind: "noApplications",
+      detail: scope.removalId
+        ? "No applications linked to this removal"
+        : "No applications linked to this batch",
+      fixTarget: "batchDetails",
+    };
     return {
       facilityId: scope.facilityId,
       removalId: scope.removalId,
@@ -572,6 +630,7 @@ export async function buildRemovalContext(
       memberBatches,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
+      productionReadinessGap,
       entityReadinessGaps: [],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
@@ -601,6 +660,7 @@ export async function buildRemovalContext(
     runIds.length > 0
       ? await getProductionRunsWithSamples(userId, runIds)
       : [];
+  const productionReadinessGap = productionReadinessGapFromLineages(lineages);
 
   const entityIds = collectTransportEntityIds(lineages, runs);
   const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
@@ -626,7 +686,8 @@ export async function buildRemovalContext(
     ...facilityFacts,
     memberBatches,
     transportCoverage,
-    hasSubmittableRuns: runs.length > 0,
+    hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
+    productionReadinessGap,
     entityReadinessGaps,
     runSummary,
     latestSubmission,
@@ -671,6 +732,7 @@ function projectUiContext(
     transportCoverage: ctx.transportCoverage,
     requiredTransportCategories: ctx.requiredTransportCategories,
     hasSubmittableRuns: ctx.hasSubmittableRuns,
+    productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,

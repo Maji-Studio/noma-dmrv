@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { createApplication, updateApplication } from "@/data-access/applications";
+import {
+  createApplication,
+  getApplicationDeliveryOptions,
+  updateApplication,
+} from "@/data-access/applications";
 import { applications } from "@/db/schema/application";
+import { certifierProjects } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { deliveries, orders } from "@/db/schema/logistics";
-import { customers } from "@/db/schema/parties";
+import { customerLocations, customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -13,6 +18,7 @@ const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 interface ApplicationMutationFixture {
   facilityId: string;
   customerId: string;
+  customerLocationId: string;
   formulationId: string;
   productId: string;
   orderId: string;
@@ -27,6 +33,19 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
       .values({ name: `Application Mutation Customer ${runId}`, code: `CU-AM-${runId}` })
       .returning({ id: customers.id });
 
+    const [customerLocation] = await tx
+      .insert(customerLocations)
+      .values({
+        customerId: customer.id,
+        name: `Application Mutation Location ${runId}`,
+        country: "Tanzania",
+        address: `Application Mutation Location ${runId}`,
+        gpsLatitude: -3.3,
+        gpsLongitude: 37.3,
+        defaultSoilTemperatureC: 21.4,
+      })
+      .returning({ id: customerLocations.id });
+
     const [formulation] = await tx
       .insert(formulations)
       .values({ name: `Application Mutation Formulation ${runId}`, code: `FM-AM-${runId}` })
@@ -36,6 +55,13 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
       .insert(facilities)
       .values({ name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
       .returning({ id: facilities.id });
+
+    await tx.insert(certifierProjects).values({
+      facilityId: facility.id,
+      provider: "isometric",
+      externalProjectId: `iso-project-${runId}`,
+      defaultSoilTemperatureC: 24.8,
+    });
 
     const [product] = await tx
       .insert(biocharProducts)
@@ -53,6 +79,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
         facilityId: facility.id,
         biocharProductId: product.id,
         customerId: customer.id,
+        customerLocationId: customerLocation.id,
         orderDate: new Date("2025-07-01"),
         quantityKg: 10_000,
         packaging: "bagged",
@@ -84,6 +111,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
     return {
       facilityId: facility.id,
       customerId: customer.id,
+      customerLocationId: customerLocation.id,
       formulationId: formulation.id,
       productId: product.id,
       orderId: order.id,
@@ -105,6 +133,8 @@ async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Prom
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
     await tx.delete(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
+    await tx.delete(certifierProjects).where(eq(certifierProjects.facilityId, fixture.facilityId));
+    await tx.delete(customerLocations).where(eq(customerLocations.id, fixture.customerLocationId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
     await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
   });
@@ -126,6 +156,30 @@ describe("application mutations", () => {
 
       expect(application.biocharAppliedTons).toBe(2);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("includes location and facility soil temperature defaults in delivery options", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const options = await getApplicationDeliveryOptions(
+        TEST_USER_ID,
+        fixture.facilityId,
+      );
+      const deliveryOption = options.find(
+        (option) => option.id === fixture.deliveryIds[0],
+      );
+
+      expect(deliveryOption).toMatchObject({
+        defaultSoilTemperatureC: 21.4,
+        facilityDefaultSoilTemperatureC: 24.8,
+        destinationGpsLatitude: -3.3,
+        destinationGpsLongitude: 37.3,
+      });
     } finally {
       await cleanupMutationFixture(fixture);
     }

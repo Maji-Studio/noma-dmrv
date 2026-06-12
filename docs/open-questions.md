@@ -57,7 +57,153 @@ Also removed the same day (not Isometric-related): the legacy Next.js-starter
 `[projectId]` route tree, data-access, fn, hooks, components, and `requireProjectMember`
 guard. Pure starter-template residue; the app is facility-scoped.
 
+## Architecture
+
+### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
+
+- **Decision deferred (2026-06-11 multi-tenancy grilling):** at launch each
+  Organization gets the org-scoped app with its name/logo in the chrome —
+  no per-org subdomains, theming, or branded invitation emails.
+- **To resolve:** revisit when a client asks for white-labeling; scope is
+  wildcard domain routing, per-org theme tokens, branded Resend templates.
+
+### Facility-wide monitoring dashboard / live map (`coc/facility-dashboard`, opened 2026-06-11)
+
+- **Recorded as future, out of scope (2026-06-11 chain-of-custody-views
+  grilling):** the Maji concept canvas also contains a one-screen
+  monitoring dashboard (KPIs, geospatial panel, mini-Sankey, sensors,
+  credit ledger), a facility-wide live map spanning all batches/routes,
+  and an outward-facing public provenance showcase. The credit-batch
+  anchor (`docs/plans/2026-06-11-chain-of-custody-views.md`, ADR 0011)
+  deliberately covers only batch-scoped provenance.
+- **To resolve:** revisit after Phase 3 ships — decide whether the
+  existing dashboard route grows a geospatial/mass-balance panel, and
+  whether a buyer-facing shareable page is wanted (different audience,
+  different auth surface).
+
+### Multi-hop biochar transport — intermediate storage before the customer (`transport/multi-hop-distribution`, opened 2026-06-11)
+
+- **Current model:** a biochar product carries exactly ONE auto-derived
+  distribution leg (facility → delivery destination), aggregated from its
+  deliveries (mass-weighted distance, `transport_legs` one-derived-per-entity
+  invariant). This matches Dark Earth Carbon's flow, where biochar ships from
+  the facility straight to the application site. The manual "biochar → storage"
+  leg editor was removed from the product sheet on 2026-06-11 (it predated
+  derivation and invited rows the resync didn't own).
+- **Question:** how to model organizations that truck biochar to an
+  intermediate storage/depot first and onward to customers later — that's two
+  (or more) real legs per product, with different masses per hop, which the
+  single-derived-leg invariant can't represent. The live Isometric template's
+  `biochar-transport` component ("Biochar transportation to storage site via
+  truck", blueprint `transport`) takes one distance + mass pair per removal,
+  so submission-side either needs per-hop Σ(dist×mass) folded into one
+  equivalent leg, or a template change.
+- **To resolve:** wait until an org with intermediate storage onboards; then
+  decide between (a) multi-leg derivation with hop ordering on deliveries /
+  storage transfers, folded into the equivalent single distance×mass for
+  Certify, or (b) per-hop components in the removal template. Touches
+  `aggregateDistributionLegs`, the one-derived-per-entity index, and the
+  batch readiness transport gate.
+
+### Additional storage locations — keeping the dMRV flexible (`transport/storage-topology`, opened 2026-06-11)
+
+- **Question:** how does the dMRV stay correct when an org adds another
+  storage location (second warehouse, off-site depot)? Parts of the flow
+  hard-code a single facility-anchored storage topology today:
+  - derived transport legs use the **facility** (name + GPS) as the biochar
+    origin and the supplier/customer location as the other end — the storage
+    location a product actually sits in never enters the route;
+  - the live template's `biochar-transport` component assumes one
+    facility → destination hop (see
+    [multi-hop entry](#multi-hop-biochar-transport--intermediate-storage-before-the-customer-transportmulti-hop-distribution-opened-2026-06-11));
+  - `biochar-storage` emissions (template group currently empty) would need
+    per-location attribution if storage sites with different energy/fuel
+    profiles appear.
+- **Why it matters:** a second storage site silently changes real transport
+  distances and storage emissions without changing anything the derivation
+  reads, so submitted numbers drift from reality.
+- **To resolve:** when a second storage site is on the roadmap, decide whether
+  storage locations get GPS + distance provenance of their own and enter the
+  leg derivation (origin = product's bin location instead of the facility),
+  and whether storage-site transfers become first-class custody events in the
+  chain-of-custody trail.
+
+### Split `src/db/seed-data.ts` into domain seed modules (`db/seed-modularization`, opened 2026-06-11)
+
+- **Problem:** `seed-data.ts` is ~1,390 lines, past the project's 1,000-line
+  cap, and keeps growing as each new domain (latest: transport legs) appends
+  its block to the single transaction.
+- **To resolve:** extract per-domain modules (e.g. `src/db/seeds/transport.ts`
+  exporting `createTransportLegsSeed(tx, ids)`) and leave `seed-data.ts` as a
+  thin orchestrator. Mechanical but touchy — the blocks share the `ids` map —
+  so do it as a dedicated refactor PR, not a drive-by (M).
+
+### Postgres RLS as defense-in-depth (`tenancy/rls`, opened 2026-06-11)
+
+- **Deferred, not rejected** (ADR 0010): the `organizationId`-on-every-table
+  schema is RLS-ready with zero schema change. Add RLS policies +
+  per-transaction `SET LOCAL` if a client contractually requires hard
+  isolation guarantees beyond data-access-layer enforcement.
+
 ## Isometric Certify integration
+
+### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
+
+- **When a registry create's reconcile lookup finds MULTIPLE candidates**
+  (today only reachable for GHG Statements — several DRAFT statements for one
+  `(project, end_on)`), `performRegistryCreate`
+  (`src/fn/certification/registry-create.ts`) rejects the ledger row and
+  throws the caller's ambiguity message **without writing a failed sync
+  event**. Deliberate Phase 2 parity with the pre-module GHG behavior; the
+  reliability-track plan limited behavior changes to its two named ones.
+- Not blind: the rejection reason survives in the ledger row's
+  `metadata.lastError`, and the row status flips to `rejected`. But the
+  statement's `certifier_sync_events` timeline just stops — the detail panel's
+  "recent sync events" list shows nothing for the failed attempt.
+- Phase 3's boundary test pins the current behavior by assertion
+  (`tests/registry-boundary-ghg-statement.test.ts`, "rejects with the
+  ambiguity message…") with a pointer here — flip that assertion when this is
+  resolved.
+- Resolve via: decide whether ambiguity should append a `status: "failed"`
+  sync event (operation `ghg_statement:create`, errorMessage = the ambiguity
+  wording, no response body) for audit-timeline completeness. One-line change
+  in `reconcileToResult` + the pinned assertion; no migration.
+
+### GHG Entry API rename — September 2026 sunset cleanup (`isometric/ghg-entry-migration`, opened 2026-06-10)
+
+- **Migration landed 2026-06-10** (plan Phases 1–4; see
+  [`docs/isometric/changes.md`](./isometric/changes.md) → 2026-06-10). noma now
+  calls the `ghg_entry` route family; the regen pipeline points at the
+  docs-hosted Certify spec.
+- **What remains, post-sunset (after September 2026):** Isometric removes the
+  deprecated `removal*` endpoints/fields. At that point: (a) regenerate
+  `certify.d.ts` — the deprecated `Removal*` schemas + `GhgStatement.removal_ids`
+  / `Component.removal_template_component_id` keys disappear, so the test mocks
+  that still carry both old+new fields (`isometric-reconciliation.test.ts`,
+  `isometric-ghg-statement-flow.test.ts`, `isometric-ghg-statement-submit.test.ts`,
+  `project-emission-match.test.ts`) drop the deprecated keys; (b) delete the
+  🚫-marked deprecated rows from `docs/isometric/openapi-index.md`. No app-code
+  change expected — the wire layer already only calls the new routes.
+- Full inventory + verified renames + phased plan:
+  [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
+
+### GHG entry / statement free-field follow-ups from the rename (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
+
+The migrated surface returns fields noma does not yet capture. Each is a new
+capability, not a blocker — tracked here so they are not lost:
+
+- **Credit allocation / buffer pool.** `GhgEntry` + `GhgStatement` now expose
+  `risk_of_reversal_percentage` and `credit_allocation`
+  (`buffer_pool_contribution_kg` / `supplier_allocation_kg`). Surfacing the
+  split on the certify panel / credit-batch detail is new UI. Relates to the
+  dropped `reversal_risk_assessments` table (see Schema section above).
+- **Reporting-period readback.** `GhgStatement.reporting_period_start_at` /
+  `_end_at` are returned; reading them back can fix the known reconciliation
+  gap where the statement wizard's "predicted to be linked" preview
+  over-promises against Isometric's server-derived period.
+- **Source `description`.** Optional human-readable label now accepted on
+  `POST /sources` / `PATCH /sources/{id}` (we pass the `Undefined` sentinel
+  today). Wire it to a real label when the Sources panel grows one.
 
 ### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
 
@@ -347,6 +493,34 @@ once Slice A is in production and operator demand surfaces.
 - Resolve via: re-check the docs page in the next update-playbook
   pass; close this entry when the intro enumerates biochar alongside
   DAC.
+
+### Isometric Certify API — no facilities LIST endpoint (forces paste-only `fcl_…`) (`isometric/facilities-list-endpoint`, opened 2026-06-10, filed 2026-06-10)
+
+- **Status:** filed with Isometric via `mcp__isometric__submit_feedback`
+  (missing capability) on 2026-06-10. Remains open here until a read endpoint
+  exists.
+- The Certify API exposes **no way to enumerate facilities** — verified against
+  the live operation list (`mcp__isometric__openapi_documents_list_objects`,
+  certify): no `GET /facilities`, no `GET /projects/{project_id}/facilities`,
+  no `POST /facilities`. The facility id (`fcl_…`) appears only as a stored
+  scalar field on other resources.
+- **Why it matters:** the facility certifier mapping's "Isometric facility
+  (telemetry)" field (`externalFacilityId`) is therefore a free-text paste —
+  operators create the facility in the Certify UI, then hand-copy the `fcl_…`
+  id into noma (`facility-certifier-dialog.tsx`). Error-prone (typo →
+  telemetry submitted against the wrong facility), and it's the one mapping
+  field with no validation against a real list. We wanted a dropdown; the
+  missing LIST capability blocks it. (Creation being UI-only is fine and
+  intentional — the gap is purely the missing read.)
+- **Resolve via:** when Isometric ships a read endpoint (ideally
+  `GET /projects/{project_id}/facilities` returning id + display name), wire the
+  dropdown by mirroring the existing template-picker chain:
+  `listFacilitiesByProject()` in `src/lib/isometric/projects.ts` → a
+  `useIsometricProjectFacilities(projectId)` hook (pattern:
+  `useIsometricProjectTemplates`) → swap the free-text `externalFacilityId`
+  `FormInput` for a `FormSelect` in `facility-certifier-dialog.tsx`. Re-check
+  the certify OpenAPI operation list on the next update-playbook pass; close
+  this entry once the endpoint exists.
 
 ### Phase 4 deferrals
 
@@ -1179,3 +1353,54 @@ selectors (EntitySelect migration, auto-matched credit-batch applications).
   files because sharding distributes by file. Consider `fullyParallel: true`
   (shard by test) after confirming no in-file ordering deps, replacing
   networkidle waits with role-based expects, and `eslint-plugin-playwright` (S).
+
+## Tooling & toolchain upgrades (research pass, opened 2026-06-12)
+
+Verified findings from a sourced research sweep (Next 16 / TS 7 / Drizzle v1,
+mid-2026). Already confirmed fine: Turbopack default (no stale flags, no
+webpack config), `reactCompiler: true` opt-in, `src/proxy.ts` rename,
+generate+migrate CI workflow.
+
+### TypeScript 7 (tsgo) for CI typecheck (`tooling/ts7`) — opened 2026-06-12
+
+- TS 7's native Go compiler benchmarks ~7.5–10x faster full type-checks
+  (first-party numbers; partly multi-threading). Beta is live
+  (`@typescript/native-preview`, `tsgo` CLI, supports `--noEmit`); stable was
+  planned ~June 2026 but had not shipped as of 2026-06-12 (npm latest = 6.0.3).
+  Emit gaps are irrelevant here (typecheck-only; SWC/Turbopack transpiles), but
+  no Strada compiler-API support — inventory API consumers first.
+- **Resolve via:** add a non-blocking `tsgo --noEmit` CI job now to validate
+  parity against the 60+-table schema and Zod-heavy types; flip the blocking
+  typecheck to TS 7 once stable ships (S).
+  Sources: devblogs.microsoft.com/typescript/announcing-typescript-7-0-beta,
+  …/progress-on-typescript-7-december-2025.
+
+### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`) — opened 2026-06-12
+
+- v1 is at `1.0.0-rc.3` (2026-05-18; stable line still 0.45.x). Bundles a full
+  drizzle-kit rewrite (introspection ~10s → <1s — relevant at 60+ tables),
+  migrations folder v3 (journal.json removed, per-migration folders, ends git
+  conflicts on migrations), and Relational Queries v2 (breaking; official
+  v1→v2 guide). Release notes warn "something will definitely break".
+- **Resolve via:** do NOT adopt at RC. When stable ships, dedicated upgrade
+  branch; the no-prod-data reseed-over-migrate stance makes the
+  migrations-folder restructure cheap if done before launch (M).
+- Related, available now on 0.45/kit 0.31: first-class Postgres RLS
+  (`pgPolicy` auto-enables RLS) — candidate defense-in-depth layer for the
+  planned multi-tenancy `organizationId` scoping (ADR 0010).
+
+### Cache Components pilot (`app/cache-components`) — opened 2026-06-12
+
+- Next 16 caching is fully opt-in via `cacheComponents: true` ('use cache' +
+  PPR model; `cacheLife`/`cacheTag` now stable, old PPR flags removed). For an
+  auth-gated, facility-scoped app there's no urgency, and no verified
+  real-world adoption evidence for auth-heavy apps yet.
+- **Resolve via:** selective pilot on read-heavy views (dashboard,
+  chain-of-custody roll-ups) when perf data justifies it; not codebase-wide (M).
+
+### Unverified research areas needing a follow-up pass — opened 2026-06-12
+
+Lint tooling (Biome 2 / oxlint vs ESLint 9), Vitest 4 browser mode, Playwright
+1.58+ features (test agents, trace tooling), OpenAPI contract testing for the
+Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance updates —
+the research sweep produced no adversarially-verified claims in these areas.

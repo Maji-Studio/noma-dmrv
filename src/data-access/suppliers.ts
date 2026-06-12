@@ -152,6 +152,7 @@ export async function getSuppliers(
       contactPhone: suppliers.contactPhone,
       sourceRegion: suppliers.sourceRegion,
       distanceToFacilityKm: suppliers.distanceToFacilityKm,
+      distanceSource: suppliers.distanceSource,
       createdAt: suppliers.createdAt,
       updatedAt: suppliers.updatedAt,
     })
@@ -218,6 +219,7 @@ export async function createSupplier(
     contactPhone?: string | null;
     sourceRegion?: string | null;
     distanceToFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
   }
 ): Promise<Supplier> {
   requireAuth(userId);
@@ -248,6 +250,7 @@ export async function createSupplier(
         contactPhone: data.contactPhone ?? null,
         sourceRegion: data.sourceRegion ?? null,
         distanceToFacilityKm: data.distanceToFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
       })
       .returning();
 
@@ -282,6 +285,7 @@ export async function updateSupplier(
     contactPhone?: string | null;
     sourceRegion?: string | null;
     distanceToFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
   }
 ): Promise<Supplier> {
   await ensureSupplierExists(userId, supplierId);
@@ -476,26 +480,54 @@ export async function createSupplierLocation(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
+    distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {
   requireAuth(userId);
   await ensureSupplierExists(userId, data.supplierId);
 
-  const [location] = await db
-    .insert(supplierLocations)
-    .values({
-      supplierId: data.supplierId,
-      name: data.name ?? null,
-      country: data.country,
-      stateRegion: data.stateRegion ?? null,
-      city: data.city ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      address: data.address ?? null,
-    })
-    .returning();
+  return db.transaction(async (tx) => {
+    // The supplier's first location is always its default.
+    const [{ value: existingCount }] = await tx
+      .select({ value: count() })
+      .from(supplierLocations)
+      .where(eq(supplierLocations.supplierId, data.supplierId));
+    const makeDefault = data.isDefault === true || existingCount === 0;
 
-  return location;
+    // Clear the prior default first so the partial unique index never sees two.
+    if (makeDefault) {
+      await tx
+        .update(supplierLocations)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(supplierLocations.supplierId, data.supplierId),
+            eq(supplierLocations.isDefault, true)
+          )
+        );
+    }
+
+    const [location] = await tx
+      .insert(supplierLocations)
+      .values({
+        supplierId: data.supplierId,
+        name: data.name ?? null,
+        country: data.country,
+        stateRegion: data.stateRegion ?? null,
+        city: data.city ?? null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        address: data.address ?? null,
+        distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
+        isDefault: makeDefault,
+      })
+      .returning();
+
+    return location;
+  });
 }
 
 export async function updateSupplierLocation(
@@ -509,25 +541,43 @@ export async function updateSupplierLocation(
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
     address?: string | null;
+    distanceFromFacilityKm?: number | null;
+    distanceSource?: "map_estimate" | "manual" | "document" | null;
+    isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {
   requireAuth(userId);
-  await ensureSupplierLocationExists(userId, locationId);
+  const { supplierId } = await ensureSupplierLocationExists(userId, locationId);
 
-  const [updated] = await db
-    .update(supplierLocations)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(supplierLocations.id, locationId))
-    .returning();
+  return db.transaction(async (tx) => {
+    // Promoting this location to default demotes the supplier's current default.
+    if (data.isDefault === true) {
+      await tx
+        .update(supplierLocations)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(supplierLocations.supplierId, supplierId),
+            eq(supplierLocations.isDefault, true)
+          )
+        );
+    }
 
-  if (!updated) {
-    throw new SafeError("Supplier location not found");
-  }
+    const [updated] = await tx
+      .update(supplierLocations)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(supplierLocations.id, locationId))
+      .returning();
 
-  return updated;
+    if (!updated) {
+      throw new SafeError("Supplier location not found");
+    }
+
+    return updated;
+  });
 }
 
 export async function deleteSupplierLocation(

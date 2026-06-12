@@ -11,12 +11,13 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { FormField, FormInput, FormSelect } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { FormField, FormInput, FormSelect, PositionPicker, FormActions } from "@/components/forms";
 import {
   applicationFormSchema,
   applicationMethods,
@@ -35,12 +36,17 @@ import {
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   formatKg,
+  resolveApplicationPositionDefault,
+  resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 
 // ============================================
 // Constants for select options
 // ============================================
+
+const isApplicationCertifyField = (field: string) =>
+  isCertifyFormField("application", field);
 
 const applicationMethodOptions: readonly { value: string; label: string }[] = applicationMethods.map((method) => ({
   value: method,
@@ -190,6 +196,8 @@ export function ApplicationForm({
     handleSubmit,
     control,
     setError,
+    setValue,
+    getFieldState,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -215,12 +223,69 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
+  const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
+  const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
 
   const deliveryOptions = deliveries.map((d) => ({
     value: d.id,
     label: formatApplicationDeliveryOptionLabel(d),
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+
+  // Prefill soil temperature from the delivery's customer-location /
+  // facility default, but only while the operator hasn't touched the
+  // fields (prefills don't set them dirty). While untouched, the values
+  // always mirror the selected delivery — including clearing a stale
+  // prefill when the new delivery has no default.
+  useEffect(() => {
+    if (isEditMode || !selectedDelivery) return;
+
+    const temperatureState = getFieldState("soilTemperatureC");
+    const sourceState = getFieldState("soilTemperatureSource");
+    if (temperatureState.isDirty || sourceState.isDirty) {
+      return;
+    }
+
+    const defaultValue = resolveApplicationSoilTemperatureDefault({
+      delivery: selectedDelivery,
+    });
+
+    setValue("soilTemperatureSource", defaultValue?.soilTemperatureSource, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+    setValue("soilTemperatureC", defaultValue?.soilTemperatureC, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
+
+  // Prefill the field position from the delivery's destination customer
+  // location, but only while the operator hasn't touched it (pin drag and
+  // address search set the fields dirty; prefills don't). While untouched,
+  // the position always mirrors the selected delivery — including clearing
+  // a stale prefill when the new destination has no GPS.
+  useEffect(() => {
+    if (isEditMode || !selectedDelivery) return;
+    if (
+      getFieldState("gpsLatitude").isDirty ||
+      getFieldState("gpsLongitude").isDirty
+    ) {
+      return;
+    }
+
+    const positionDefault = resolveApplicationPositionDefault({
+      delivery: selectedDelivery,
+    });
+    setValue("gpsLatitude", positionDefault?.gpsLatitude, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+    setValue("gpsLongitude", positionDefault?.gpsLongitude, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
@@ -317,6 +382,7 @@ export function ApplicationForm({
             label="Biochar Applied, Wet (kg)"
             error={errors.biocharAppliedTons?.message}
             required
+            certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             helperText={
               availableKg !== null
                 ? `${formatKg(availableKg)} available from this delivery`
@@ -343,6 +409,7 @@ export function ApplicationForm({
               label="Biochar Applied Dry (kg)"
               error={errors.biocharAppliedDryTons?.message}
               helperText="No moisture % on delivery — enter dry mass manually"
+              certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
             >
               <FormInput
                 id="biocharAppliedDryTons"
@@ -431,45 +498,20 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="gpsLatitude"
-            label="GPS Latitude"
-            error={errors.gpsLatitude?.message}
-            helperText="Between -90 and 90"
-          >
-            <FormInput
-              id="gpsLatitude"
-              type="number"
-              step="any"
-              placeholder="e.g., -3.3349"
-              disabled={isSubmitting}
-              error={!!errors.gpsLatitude}
-              {...register("gpsLatitude", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="gpsLongitude"
-            label="GPS Longitude"
-            error={errors.gpsLongitude?.message}
-            helperText="Between -180 and 180"
-          >
-            <FormInput
-              id="gpsLongitude"
-              type="number"
-              step="any"
-              placeholder="e.g., 37.3404"
-              disabled={isSubmitting}
-              error={!!errors.gpsLongitude}
-              {...register("gpsLongitude", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
+        <PositionPicker
+          idPrefix="gps"
+          label="Field position"
+          accent="pink"
+          latitude={gpsLatitude ?? null}
+          longitude={gpsLongitude ?? null}
+          onPositionChange={({ lat, lng }) => {
+            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+          }}
+          latitudeError={errors.gpsLatitude?.message}
+          longitudeError={errors.gpsLongitude?.message}
+          disabled={isSubmitting}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -520,6 +562,7 @@ export function ApplicationForm({
             label="Soil Temperature (°C)"
             error={errors.soilTemperatureC?.message}
             helperText="Annual average for this application site"
+            certifyRequired={isApplicationCertifyField("soilTemperatureC")}
           >
             <FormInput
               id="soilTemperatureC"
@@ -536,17 +579,12 @@ export function ApplicationForm({
         </div>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : (submitLabel ?? defaultSubmitLabel)}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

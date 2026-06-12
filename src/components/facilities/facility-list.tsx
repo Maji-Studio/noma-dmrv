@@ -6,6 +6,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  Archive,
   Factory,
   Lightning,
   MagnifyingGlass,
@@ -15,10 +16,11 @@ import {
 } from "@phosphor-icons/react";
 import type { Facility } from "@/db/schema";
 import {
+  useArchiveFacility,
   useCreateFacility,
-  useDeleteFacility,
   useFacilities,
   useFacilityCountries,
+  useRestoreFacility,
   useUpdateFacility,
 } from "@/hooks/use-facilities";
 import { formatMass, getPaginationLabel } from "@/lib/format-utils";
@@ -27,20 +29,25 @@ import {
   EntitySideSheet,
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { FacilityCertifierSummary } from "@/components/certification";
+import { useIsAdmin } from "@/hooks/use-is-admin";
+import {
+  FacilityCertifierLinkLoader,
+  FacilityCertifierSummary,
+} from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
+import { ArchiveFacilityDialog } from "./archive-facility-dialog";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState<string>("");
+  const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
 
@@ -48,21 +55,29 @@ export function FacilityList() {
     entity: FacilityWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingFacilityId, setDeletingFacilityId] = useState<string | null>(null);
+  const [archivingFacilityId, setArchivingFacilityId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  // After creating a facility, admins are offered the optional certifier link
+  // for the new facility (skippable; editable later in Settings).
+  const [linkCertifierFacilityId, setLinkCertifierFacilityId] = useState<
+    string | null
+  >(null);
+
+  const isAdmin = useIsAdmin();
 
   const filters: Partial<FacilityFilterData> = useMemo(
     () => ({
       search: searchQuery || undefined,
       country: countryFilter || undefined,
+      archived: showArchived,
       page: currentPage,
       pageSize,
       sortBy: "name",
       sortOrder: "asc",
     }),
-    [searchQuery, countryFilter, currentPage, pageSize]
+    [searchQuery, countryFilter, showArchived, currentPage, pageSize]
   );
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
@@ -70,7 +85,8 @@ export function FacilityList() {
 
   const createFacility = useCreateFacility();
   const updateFacility = useUpdateFacility();
-  const deleteFacility = useDeleteFacility();
+  const archiveFacility = useArchiveFacility();
+  const restoreFacility = useRestoreFacility();
   const toast = useToast();
 
   const facilities = facilitiesData?.items ?? [];
@@ -89,9 +105,15 @@ export function FacilityList() {
   const handleCreate = async (data: FacilityFormData) => {
     setCreateError(null);
     try {
-      await createFacility.mutateAsync(data);
+      const facility = await createFacility.mutateAsync(data);
       setSideSheet(null);
       toast.success("Facility created successfully");
+      // Offer the optional certifier link for the new facility. Admin-only
+      // (saving the mapping is admin-gated); non-admins create unlinked and an
+      // admin links later in Settings.
+      if (isAdmin) {
+        setLinkCertifierFacilityId(facility.id);
+      }
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create facility");
     }
@@ -109,17 +131,27 @@ export function FacilityList() {
     }
   };
 
-  const handleDelete = (facilityId: string) => setDeletingFacilityId(facilityId);
+  const handleArchive = (facilityId: string) => setArchivingFacilityId(facilityId);
 
-  const handleDeleteConfirm = async () => {
-    if (!deletingFacilityId) return;
-    setDeleteError(null);
+  const handleArchiveConfirm = async () => {
+    if (!archivingFacilityId) return;
+    setArchiveError(null);
     try {
-      await deleteFacility.mutateAsync(deletingFacilityId);
-      setDeletingFacilityId(null);
-      toast.success("Facility deleted successfully");
+      await archiveFacility.mutateAsync(archivingFacilityId);
+      setArchivingFacilityId(null);
+      toast.success("Facility archived — restore it any time from the archived view");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete facility");
+      setArchiveError(error instanceof Error ? error.message : "Failed to archive facility");
+    }
+  };
+
+  const handleRestore = async (facilityId: string) => {
+    setArchiveError(null);
+    try {
+      await restoreFacility.mutateAsync(facilityId);
+      toast.success("Facility restored");
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : "Failed to restore facility");
     }
   };
 
@@ -154,6 +186,11 @@ export function FacilityList() {
 
   const hasActiveFilters = Boolean(searchQuery || countryFilter);
 
+  const toggleShowArchived = () => {
+    setShowArchived((previous) => !previous);
+    setCurrentPage(1);
+  };
+
   if (fetchError) {
     return (
       <div className="container-max py-32">
@@ -174,7 +211,7 @@ export function FacilityList() {
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          title="Active Facilities"
+          title={showArchived ? "Archived Facilities" : "Active Facilities"}
           value={totalFacilities}
           icon={<Factory size={24} weight="bold" />}
           description="Facilities matching the current filters"
@@ -235,6 +272,16 @@ export function FacilityList() {
           </div>
 
           <div className="flex flex-wrap items-center gap-8">
+            <Button
+              variant={showArchived ? "primary" : "default"}
+              size="small"
+              onClick={toggleShowArchived}
+              aria-pressed={showArchived}
+            >
+              <Archive size={16} weight="bold" />
+              Archived
+            </Button>
+
             <select
               value={String(pageSize)}
               onChange={(event) => {
@@ -264,15 +311,21 @@ export function FacilityList() {
           <Factory size={48} className="text-[var(--color-text-tertiary)]" />
           <div className="text-center">
             <h3 className="title-heading-3 mb-8">
-              {hasActiveFilters ? "No facilities found" : "No facilities yet"}
+              {showArchived
+                ? "No archived facilities"
+                : hasActiveFilters
+                  ? "No facilities found"
+                  : "No facilities yet"}
             </h3>
             <p className="body-small text-[var(--color-text-secondary)]">
-              {hasActiveFilters
-                ? "Try adjusting your search or filters."
-                : "Create your first facility to start organising reactors and storage bins."}
+              {showArchived
+                ? "Facilities you archive will appear here and can be restored."
+                : hasActiveFilters
+                  ? "Try adjusting your search or filters."
+                  : "Create your first facility to start organising reactors and storage bins."}
             </p>
           </div>
-          {!hasActiveFilters && (
+          {!hasActiveFilters && !showArchived && (
             <Button variant="primary" onClick={openCreate}>
               <Plus size={20} weight="bold" />
               Create Facility
@@ -288,7 +341,8 @@ export function FacilityList() {
                 facility={facility}
                 onView={openView}
                 onEdit={openEdit}
-                onDelete={handleDelete}
+                onArchive={handleArchive}
+                onRestore={handleRestore}
               />
             ))}
           </div>
@@ -323,18 +377,16 @@ export function FacilityList() {
         </>
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
+      {archiveError && <ServerError message={archiveError} />}
 
-      <DeleteConfirmDialog
-        isOpen={!!deletingFacilityId}
-        title="Delete Facility"
-        message="Are you sure you want to delete this facility? This action cannot be undone. Note: Facilities with reactors or storage locations cannot be deleted."
-        onConfirm={handleDeleteConfirm}
+      <ArchiveFacilityDialog
+        facilityId={archivingFacilityId}
+        onConfirm={handleArchiveConfirm}
         onCancel={() => {
-          setDeletingFacilityId(null);
-          setDeleteError(null);
+          setArchivingFacilityId(null);
+          setArchiveError(null);
         }}
-        isPending={deleteFacility.isPending}
+        isPending={archiveFacility.isPending}
       />
 
       {sideSheet && (
@@ -424,6 +476,14 @@ export function FacilityList() {
             submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Facility"}
           />
         </EntitySideSheet>
+      )}
+
+      {linkCertifierFacilityId && (
+        <FacilityCertifierLinkLoader
+          facilityId={linkCertifierFacilityId}
+          isOpen
+          onClose={() => setLinkCertifierFacilityId(null)}
+        />
       )}
     </div>
   );

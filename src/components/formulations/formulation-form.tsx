@@ -8,7 +8,7 @@
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormSelect } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormSelect, FormActions } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { Plus, Trash } from "@phosphor-icons/react";
 import {
@@ -295,22 +295,12 @@ export function FormulationForm({
         </div>
       </div>
 
-      {/* Form Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

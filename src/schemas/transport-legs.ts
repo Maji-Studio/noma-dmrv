@@ -4,6 +4,7 @@
 // `transport_legs_distance_based_requirements` (load mass present).
 
 import { z } from "zod";
+import { optionalDistanceSource } from "./distance-source";
 import {
   latitudeSchema,
   longitudeSchema,
@@ -66,6 +67,9 @@ const baseTransportLegShape = {
       })
       .positive("Distance must be greater than 0"),
   ),
+  // Provenance of distanceKm (audit metadata; defaults to manual at the write
+  // boundary — explicit/manual legs own their distance and its source).
+  distanceSource: optionalDistanceSource,
 
   // Transport details. Vehicle type is metadata that maps to the Isometric
   // component's emission factor (Eq. 3) — optional, not a blocker.

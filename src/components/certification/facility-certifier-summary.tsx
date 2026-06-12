@@ -104,13 +104,6 @@ function SummaryBody({
         </span>
       </Field>
 
-      <Field label="Protocol">
-        <span className="body-small text-[var(--color-text-primary)]">
-          {mapping.protocolSlug}
-          {mapping.protocolVersion ? ` · ${mapping.protocolVersion}` : ""}
-        </span>
-      </Field>
-
       <Field label="Default removal template">
         {mapping.defaultRemovalTemplateId ? (
           <span className="body-small font-mono text-[var(--color-text-primary)]">

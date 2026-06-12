@@ -1,12 +1,14 @@
-import { desc, eq, count, sum, ne, and, SQL, sql } from "drizzle-orm";
+import { desc, eq, count, sum, ne, and, isNull, SQL, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
   soilTemperatureMeasurements,
   type Application,
 } from "@/db/schema/application";
+import { certifierProjects } from "@/db/schema/certification";
 import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
 import { deliveries, orders } from "@/db/schema/logistics";
+import { customerLocations } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -33,6 +35,10 @@ export interface ApplicationDeliveryOptionData {
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
   moistureContentPercent: number | null;
+  defaultSoilTemperatureC: number | null;
+  facilityDefaultSoilTemperatureC: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
 }
 
@@ -200,13 +206,14 @@ export async function getApplications(
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
-  const conditions: SQL[] = [];
+  // Applications carry no archived_at — hide them via their archived delivery
+  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
 
   if (options?.facilityId) {
     conditions.push(eq(deliveries.facilityId, options.facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
@@ -260,12 +267,12 @@ export async function getApplicationDeliveryOptions(
 ): Promise<ApplicationDeliveryOptionData[]> {
   requireAuth(userId);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   const [rawDeliveries, appliedRows] = await Promise.all([
     db
@@ -279,9 +286,28 @@ export async function getApplicationDeliveryOptions(
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         orderQuantityKg: orders.quantityKg,
         moistureContentPercent: deliveries.moistureContentPercent,
+        defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
+        facilityDefaultSoilTemperatureC:
+          certifierProjects.defaultSoilTemperatureC,
+        destinationGpsLatitude: customerLocations.gpsLatitude,
+        destinationGpsLongitude: customerLocations.gpsLongitude,
       })
       .from(deliveries)
       .leftJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(
+        customerLocations,
+        eq(
+          customerLocations.id,
+          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        ),
+      )
+      .leftJoin(
+        certifierProjects,
+        and(
+          eq(certifierProjects.facilityId, deliveries.facilityId),
+          eq(certifierProjects.provider, "isometric"),
+        ),
+      )
       .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
       .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
       .where(whereClause)
@@ -338,7 +364,7 @@ export async function getCreditBatchApplicationOptions(
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .where(eq(deliveries.facilityId, facilityId))
+    .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
     .orderBy(desc(applications.applicationDate));
 }
 

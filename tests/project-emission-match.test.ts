@@ -66,6 +66,7 @@ function makeComponent(args: {
       datapoint_id: s.datapointId,
       input_key: s.inputKey,
     })),
+    ghg_entry_template_component_id: null,
     removal_template_component_id: null,
     scope: "PROJECT",
     supplier_reference_id: null,

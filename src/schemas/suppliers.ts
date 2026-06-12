@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { optionalDistanceSource } from "./distance-source";
 import { latitudeSchema, longitudeSchema, optionalPositiveNumber, requiredLatitudeSchema, requiredLongitudeSchema, toNumberOrUndefined } from "./helpers";
 
 // ============================================
@@ -63,6 +64,7 @@ export const supplierFormSchema = z.object({
   // Road distance (km) to the delivery facility — autofills a feedstock
   // transport leg's distance (overridable per delivery).
   distanceToFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
 });
 
 // ============================================
@@ -97,6 +99,7 @@ export const updateSupplierSchema = z.object({
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
   distanceToFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
 });
 
 /**
@@ -157,9 +160,14 @@ export const supplierLocationFormSchema = z.object({
   country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
   stateRegion: z.string().max(100, "State/Region must be less than 100 characters").optional().or(z.literal("")),
   city: z.string().max(100, "City must be less than 100 characters").optional().or(z.literal("")),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   address: z.string().max(500, "Address must be less than 500 characters").optional().or(z.literal("")),
+  // Road distance (km) from this location to the delivery facility.
+  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
+  // Marks this as the supplier's default source location.
+  isDefault: z.boolean().optional().default(false),
 });
 
 /**
@@ -181,6 +189,9 @@ export const updateSupplierLocationSchema = z.object({
   gpsLatitude: latitudeSchema,
   gpsLongitude: longitudeSchema,
   address: z.string().max(500).optional().nullable().or(z.literal("")),
+  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
+  isDefault: z.boolean().optional(),
 });
 
 /**

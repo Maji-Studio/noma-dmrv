@@ -25,6 +25,7 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   application: "Application",
   formulation: "Formulation",
   biocharProduct: "Biochar Product",
+  order: "Order",
   creditBatch: "Credit Batch",
 };
 
@@ -175,7 +176,15 @@ export function QuickAddDialog({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-16 justify-end pt-16">
+          <div className="flex gap-16 justify-start pt-16">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
+            >
+              {isSubmitting && <SpinnerIcon className="size-16" />}
+              {isSubmitting ? "Creating..." : `Create ${entityLabel}`}
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -183,14 +192,6 @@ export function QuickAddDialog({
               className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
-            >
-              {isSubmitting && <SpinnerIcon className="w-4 h-4" />}
-              {isSubmitting ? "Creating..." : `Create ${entityLabel}`}
             </button>
           </div>
         </form>

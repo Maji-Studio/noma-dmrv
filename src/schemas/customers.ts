@@ -4,7 +4,14 @@
  */
 
 import { z } from "zod";
-import { optionalPositiveNumber } from "./helpers";
+import { optionalDistanceSource } from "./distance-source";
+import {
+  defaultSoilTemperatureSchema,
+  optionalPositiveNumber,
+  requiredLatitudeSchema as requiredLat,
+  requiredLongitudeSchema as requiredLng,
+  toNumberOrUndefined,
+} from "./helpers";
 
 // ============================================
 // Shared Location Part Schemas
@@ -17,29 +24,12 @@ const locationPartSchema = z.string().max(LOCATION_PART_MAX).optional().nullable
 // GPS Coordinate Validation
 // ============================================
 
-/**
- * GPS latitude validation (-90 to 90)
- */
-const requiredLatitudeSchema = z
-  .number()
-  .min(-90, "Latitude must be between -90 and 90")
-  .max(90, "Latitude must be between -90 and 90");
-
-/**
- * GPS longitude validation (-180 to 180)
- */
-const requiredLongitudeSchema = z
-  .number()
-  .min(-180, "Longitude must be between -180 and 180")
-  .max(180, "Longitude must be between -180 and 180");
-
-const optionalLatitudeSchema = requiredLatitudeSchema.nullable().optional();
-const optionalLongitudeSchema = requiredLongitudeSchema.nullable().optional();
+const optionalLatitudeSchema = requiredLat.nullable().optional();
+const optionalLongitudeSchema = requiredLng.nullable().optional();
 const customerLocationTextSchema = z
   .string()
-  .min(1, "Location is required")
-  .max(500, "Location must be less than 500 characters");
-
+  .min(1, "Address / description is required")
+  .max(500, "Address / description must be less than 500 characters");
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================
@@ -97,11 +87,15 @@ export const customerLocationFormSchema = z.object({
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   address: customerLocationTextSchema,
-  gpsLatitude: optionalLatitudeSchema,
-  gpsLongitude: optionalLongitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   // Operational road distance (km) from the origin facility. Certifier
   // transport is recorded on cargo entities, not deliveries.
   distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+  // Marks this as the customer's default destination.
+  isDefault: z.boolean().optional().default(false),
 });
 
 // ============================================
@@ -157,9 +151,12 @@ export const createCustomerLocationSchema = z.object({
   stateRegion: locationPartSchema,
   city: locationPartSchema,
   address: customerLocationTextSchema,
-  gpsLatitude: optionalLatitudeSchema,
-  gpsLongitude: optionalLongitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+  isDefault: z.boolean().optional().default(false),
 });
 
 /**
@@ -175,6 +172,9 @@ export const updateCustomerLocationSchema = z.object({
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationTextSchema.optional(),
   distanceFromFacilityKm: optionalPositiveNumber,
+  distanceSource: optionalDistanceSource,
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+  isDefault: z.boolean().optional(),
 });
 
 /**

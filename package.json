@@ -23,7 +23,8 @@
     "db:seed": "tsx src/db/seed-data.ts",
     "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
     "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin",
-    "env:local": "op inject -i .env.tpl -o .env",
+    "env:local": "tsx scripts/env-local-inject.ts",
+    "env:check": "tsx scripts/check-env-drift.ts",
     "env:vercel": "pnpm env:prod && pnpm env:preview",
     "env:prod": "tsx scripts/sync-env-to-vercel.ts --1p-env=prod --vercel-env=production",
     "env:preview": "tsx scripts/sync-env-to-vercel.ts --1p-env=staging --vercel-env=preview",
@@ -34,7 +35,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "isometric:coverage-check": "tsx scripts/isometric-coverage-check.ts",
-    "regenerate-certify-types": "openapi-typescript ${ISOMETRIC_OPENAPI_URL:-https://api.isometric.com/openapi.json} -o src/lib/isometric/generated/certify.d.ts"
+    "storage:smoke": "NODE_ENV=test tsx scripts/storage-smoke.ts",
+    "regenerate-certify-types": "openapi-typescript ${ISOMETRIC_OPENAPI_URL:-https://docs.isometric.com/api-reference/certify/mrv.openapi.json} -o src/lib/isometric/generated/certify.d.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1049.0",
@@ -46,7 +48,7 @@
     "@tanstack/react-query": "^5.90.20",
     "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.10.1",
-    "better-auth": "^1.4.18",
+    "better-auth": "^1.6.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -54,6 +56,7 @@
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
     "hyparquet-writer": "^0.15.3",
+    "maplibre-gl": "^5.24.0",
     "next": "16.2.6",
     "nuqs": "^2.8.9",
     "pg": "^8.18.0",
@@ -85,6 +88,6 @@
     "tailwindcss": "^4.1.18",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.0"
   }
 }

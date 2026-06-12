@@ -58,6 +58,8 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address || "",
+        distanceFromFacilityKm: data.distanceFromFacilityKm,
+        isDefault: data.isDefault,
       });
       setIsAddingLocation(false);
     } catch (error) {
@@ -81,6 +83,8 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address,
+        distanceFromFacilityKm: data.distanceFromFacilityKm,
+        isDefault: data.isDefault,
       });
       setEditingLocation(null);
     } catch (error) {

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { emptyToNull, requiredNumber } from "@/schemas/helpers";
+import {
+  defaultSoilTemperatureSchema,
+  emptyToNull,
+  requiredNumber,
+} from "@/schemas/helpers";
 
 // Hard cap on the free-text "summary of changes" the operator writes when
 // resubmitting a GHG statement. 2 kB is enough for the audit-trail context
@@ -34,7 +38,6 @@ export const saveMappingSchema = z.object({
   facilityId: z.string().uuid(),
   externalProjectId: z.string().min(1, "Pick an Isometric project"),
   protocolSlug: z.string().min(1),
-  protocolVersion: emptyToNull.or(z.string().min(1)).nullable().optional(),
   defaultRemovalTemplateId: emptyToNull
     .or(z.string().min(1))
     .nullable()
@@ -84,6 +87,7 @@ export const facilityEmissionConfigSchema = z
     stageSplitBiocharPct: requiredNumber("Biochar processing split is required").pipe(
       z.number().min(0).max(100, "Split must be between 0 and 100"),
     ),
+    defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   })
   .superRefine((value, ctx) => {
     const sum =

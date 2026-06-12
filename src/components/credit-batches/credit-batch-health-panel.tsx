@@ -25,7 +25,11 @@ import {
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { useBatchHealth } from "@/hooks/use-certification";
-import type { BatchHealthCheckKey } from "@/lib/certification/batch-health";
+import type {
+  BatchHealthCheck,
+  BatchHealthCheckKey,
+  BatchHealthFixTarget,
+} from "@/lib/certification/batch-health";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { CheckRow } from "@/components/certification/check-row";
 
@@ -37,31 +41,60 @@ interface FixLink {
 // Where each unmet batch-level check is fixed (design doc §6). All targets are
 // in-app, so plain Next <Link> navigation; the facility param keeps the target
 // page scoped to this batch's facility.
-function fixLinkFor(key: BatchHealthCheckKey, facilityId: string): FixLink {
-  switch (key) {
-    case "carbon":
+function fixLinkFor(check: BatchHealthCheck, facilityId: string): FixLink {
+  const target = check.fixTarget ?? fallbackFixTarget(check.key);
+  switch (target) {
+    case "batchDetails":
       // Carbon & durability inputs resolve from the batch's linked lab samples /
       // applications, edited via the form anchored below on this same page.
-      return { label: "Edit batch details", href: "#batch-details" };
-    case "production":
+      return {
+        label: check.key === "production" ? "Link applications" : "Edit batch details",
+        href: "#batch-details",
+      };
+    case "productionRuns":
       return {
         label: "Link production data",
         href: `/production-runs?facility=${facilityId}`,
       };
-    case "transport":
-      // Biochar distribution legs auto-derive from each delivery's
-      // customer-location distance, but are edited/added on the biochar product
-      // (entityType "biochar" resolves to the product, not the delivery). The
-      // old `/deliveries?transportLeg=create` target was a dead link.
+    case "biocharProducts":
       return {
-        label: "Add transport leg",
+        label: "Link production run",
         href: `/biochar-products?facility=${facilityId}`,
       };
-    case "entityReadiness":
+    case "deliveries":
+      return {
+        label: "Review deliveries",
+        href: `/deliveries?facility=${facilityId}`,
+      };
+    case "deliveryDistances":
+      // Transport legs are auto-derived: feedstock legs from the supplier's
+      // stored distance, biochar distribution legs from each delivery's
+      // customer-location distance + delivered mass. A gap means a delivery is
+      // missing or its destination has no stored distance, so the deliveries
+      // page is the actionable target (the biochar product sheet only shows a
+      // read-only summary).
+      return {
+        label: "Review delivery distances",
+        href: `/deliveries?facility=${facilityId}`,
+      };
+    case "sourceData":
       return {
         label: "Review source data",
         href: `/production-runs?facility=${facilityId}`,
       };
+  }
+}
+
+function fallbackFixTarget(key: BatchHealthCheckKey): BatchHealthFixTarget {
+  switch (key) {
+    case "carbon":
+      return "batchDetails";
+    case "production":
+      return "productionRuns";
+    case "transport":
+      return "deliveryDistances";
+    case "entityReadiness":
+      return "sourceData";
   }
 }
 
@@ -150,7 +183,7 @@ export function CreditBatchHealthPanel({
             paddingX={20}
             fix={
               check.status === "unmet"
-                ? fixLinkFor(check.key, facilityId)
+                ? fixLinkFor(check, facilityId)
                 : null
             }
           >

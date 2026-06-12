@@ -1,13 +1,11 @@
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput } from "@/components/forms";
+import { FormField, FormInput, PositionPicker, FormActions } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
-import { Button } from "@/components/ui";
 import {
   facilityFormSchema,
   timezones,
@@ -20,6 +18,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
+import { FacilityIsometricConnector } from "@/components/certification";
 
 const DEFAULT_DURABILITY_OPTION: DurabilityOption = "200_year";
 
@@ -60,6 +59,8 @@ export function FacilityForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(facilityFormSchema),
@@ -82,6 +83,9 @@ export function FacilityForm({
   });
 
   const defaultSubmitLabel = isEditMode ? "Update Facility" : "Create Facility";
+
+  const gpsLatitude = watch("gpsLatitude");
+  const gpsLongitude = watch("gpsLongitude");
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FacilityFormData);
@@ -150,31 +154,20 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField id="gpsLatitude" label="GPS Latitude" error={errors.gpsLatitude?.message}>
-          <FormInput
-            id="gpsLatitude"
-            type="number"
-            step="any"
-            placeholder="e.g., -3.3349"
-            disabled={isSubmitting}
-            error={!!errors.gpsLatitude}
-            {...register("gpsLatitude", { setValueAs: numericValue })}
-          />
-        </FormField>
-
-        <FormField id="gpsLongitude" label="GPS Longitude" error={errors.gpsLongitude?.message}>
-          <FormInput
-            id="gpsLongitude"
-            type="number"
-            step="any"
-            placeholder="e.g., 37.3404"
-            disabled={isSubmitting}
-            error={!!errors.gpsLongitude}
-            {...register("gpsLongitude", { setValueAs: numericValue })}
-          />
-        </FormField>
-      </div>
+      <PositionPicker
+        idPrefix="gps"
+        label="Facility position"
+        accent="purple"
+        latitude={gpsLatitude ?? null}
+        longitude={gpsLongitude ?? null}
+        onPositionChange={({ lat, lng }) => {
+          setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
+          setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+        }}
+        latitudeError={errors.gpsLatitude?.message}
+        longitudeError={errors.gpsLongitude?.message}
+        disabled={isSubmitting}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="contactEmail" label="Contact Email" error={errors.contactEmail?.message}>
@@ -217,17 +210,20 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-16 pt-20 border-t border-[var(--color-border-secondary)]">
-        {onCancel && (
-          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" variant="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
-        </Button>
-      </div>
+      {/* Registry connection — edit-mode only (needs a facility id; the
+          post-create link dialog covers new facilities). Self-contained:
+          saves immediately via its own admin-gated action, independent of
+          this form's submit. */}
+      {isEditMode && facility && (
+        <FacilityIsometricConnector facilityId={facility.id} />
+      )}
+
+      <FormActions
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+      />
     </form>
   );
 }

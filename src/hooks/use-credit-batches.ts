@@ -33,18 +33,22 @@ export const creditBatchKeys = {
 };
 
 /**
- * Query hook for fetching all credit batches
+ * Query hook for fetching a facility's credit batches. Facility-scoped: the
+ * facilityId is part of the query key so switching facilities refetches rather
+ * than serving another facility's batches from cache.
  */
-export function useCreditBatches() {
+export function useCreditBatches(facilityId?: string) {
   return useQuery({
-    queryKey: creditBatchKeys.lists(),
+    queryKey: creditBatchKeys.list({ facilityId }),
     queryFn: async () => {
-      const result = await getCreditBatchesFn();
+      if (!facilityId) return [];
+      const result = await getCreditBatchesFn(facilityId);
       if (!result.success) {
         throw new Error(result.error);
       }
       return result.data;
     },
+    enabled: !!facilityId,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }

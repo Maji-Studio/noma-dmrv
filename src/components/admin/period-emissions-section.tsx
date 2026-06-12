@@ -16,7 +16,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
@@ -259,7 +259,7 @@ function PeriodEmissionFormDialog({
     register,
     handleSubmit,
     setError,
-    watch,
+    control,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -277,8 +277,11 @@ function PeriodEmissionFormDialog({
     },
   });
 
-  const currentCategory = watch("category") as ProjectEmissionCategory;
-  const currentUnit = watch("unit");
+  const currentCategory = useWatch({
+    control,
+    name: "category",
+  }) as ProjectEmissionCategory;
+  const currentUnit = useWatch({ control, name: "unit" });
   const suggestedUnit = defaultUnitForCategory(currentCategory);
 
   const onSubmit = async (raw: unknown) => {
@@ -488,19 +491,7 @@ function PeriodEmissionFormDialog({
             </FormField>
           </div>
 
-          <div className="flex justify-end gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
-            <Button
-              type="button"
-              variant="default"
-              onClick={onClose}
-              disabled={
-                isSubmitting ||
-                createMutation.isPending ||
-                updateMutation.isPending
-              }
-            >
-              Cancel
-            </Button>
+          <div className="flex justify-start gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
             <Button
               type="submit"
               variant="primary"
@@ -517,6 +508,18 @@ function PeriodEmissionFormDialog({
                 : isEdit
                   ? "Save changes"
                   : "Add row"}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              onClick={onClose}
+              disabled={
+                isSubmitting ||
+                createMutation.isPending ||
+                updateMutation.isPending
+              }
+            >
+              Cancel
             </Button>
           </div>
         </form>

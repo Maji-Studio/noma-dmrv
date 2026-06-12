@@ -33,6 +33,7 @@ import {
   updateSupplierLocationSchema,
   deleteSupplierLocationSchema,
 } from "@/schemas/suppliers";
+import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 // ============================================
@@ -206,6 +207,10 @@ export async function createSupplierFn(
           contactPhone: validated.contactPhone || null,
           sourceRegion: validated.sourceRegion || null,
           distanceToFacilityKm: validated.distanceToFacilityKm ?? null,
+          distanceSource: resolveDistanceSource(
+            validated.distanceToFacilityKm ?? null,
+            validated.distanceSource,
+          ),
         })
     );
 
@@ -255,6 +260,10 @@ export async function updateSupplierFn(
       contactPhone: validated.contactPhone,
       sourceRegion: validated.sourceRegion,
       distanceToFacilityKm: validated.distanceToFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceToFacilityKm,
+        validated.distanceSource,
+      ),
     });
 
     return { success: true, data: supplier };
@@ -356,6 +365,12 @@ export async function createSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude ?? null,
       gpsLongitude: validated.gpsLongitude ?? null,
       address: validated.address || null,
+      distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceFromFacilityKm ?? null,
+        validated.distanceSource,
+      ),
+      isDefault: validated.isDefault,
     });
 
     return { success: true, data: location };
@@ -392,6 +407,12 @@ export async function updateSupplierLocationFn(
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
       address: validated.address,
+      distanceFromFacilityKm: validated.distanceFromFacilityKm,
+      distanceSource: resolveDistanceSource(
+        validated.distanceFromFacilityKm,
+        validated.distanceSource,
+      ),
+      isDefault: validated.isDefault,
     });
 
     return { success: true, data: location };
