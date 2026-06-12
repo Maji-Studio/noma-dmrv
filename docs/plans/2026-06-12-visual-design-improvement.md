@@ -209,7 +209,9 @@ secondary structure, `--hair-3` (1px @ 10%) row dividers, plus the "two greys" r
   conversion. `StatCard`'s sparkline slot (built Phase 2, unused since)
   finally lights up.
 - **Needs-attention queue = derived record checks, not a task system**
-  (idea adopted from the codex draft PR #237, which this phase supersedes):
+  (concept adopted from the codex operator dashboard — merged via #237 mid-
+  phase and replaced wholesale by this build; its `CONTEXT.md` "Attention
+  item" term stays canonical):
   cheap capped queries over existing MRV records — complete runs missing
   mass, lots with no linked run, feedstocks `missing_data`, upcoming
   deliveries, pending batches past their period — each row links to where
