@@ -44,9 +44,10 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 - **Entity Card Footer:** `px-20 py-12` with `border-t border-[var(--color-border-tertiary)]`
 - **Entity Card Border:** `border border-[var(--color-border-secondary)]` with `hover:border-[var(--color-border-primary)]`
 - **Entity Card Metrics:** `grid grid-cols-3 gap-12` for 3-column metric grids
-- **Form Spacing (side sheet):** `space-y-20` (20px) between form fields in side sheet forms
+- **Page Shell:** every routed page follows the canonical shell — see [Canonical Page Shell](#canonical-page-shell). No bespoke page layouts.
+- **Form Spacing (side sheet):** `space-y-20` (20px) at the form's top level in side-sheet forms
 - **Form Spacing (full page):** `space-y-24` (24px) for auth and full-page forms
-- **Form Section Divider:** `pt-20 border-t border-[var(--color-border-tertiary)]`
+- **Form Sections:** always `FormSection` (`@/components/forms`) — SectionLabel + `space-y-16` fields + `pt-16` hairline divider above every section but the first (`divider={false}`); never hand-roll section wrappers. Read-only sheets mirror it with `DetailSection`. See `docs/forms.md`.
 - **Label Spacing:** `mb-6` (6px) label to input
 - **Header Spacing:** `mb-32` (32px) header to content
 - **Border Radius:** `rounded-none` for most elements (brutalist); only UI primitives (StatusBadge, Card component, Accordion) use radius tokens
@@ -70,13 +71,54 @@ structured so a `html[data-theme]` flip remains possible later.
 --ink: var(--clr-dark-purple-100);   /* Primary ink */
 ```
 
-Plum-tinted hairlines for **emphasized** borders and dividers; the gray border
-tokens remain for quiet chrome:
+Plum-tinted hairlines for **emphasized** borders and dividers:
 
 ```css
 --edge: #480b73;
 --edge-soft: rgba(72, 11, 115, 0.45);
 ```
+
+**Two-greys rule (Phase 2.5, 2026-06-12):** every grey in the light theme is an
+**alpha of plum over white** — never a neutral grey (cool neutrals read dirty on
+the warm field). The semantic tokens (`--color-border-*`, `--color-text-*`,
+`--color-background-light/medium/strong`, `--color-surface-*`) are all plum
+alphas now; don't reintroduce `--color-gray-*` in component code.
+
+### Hairline Hierarchy & Panel Recipe (Phase 2.5)
+
+Structure is drawn with a three-step hairline hierarchy (no drop shadows —
+elevation is border + paper):
+
+```css
+--hair:   1.5px solid var(--clr-dark-purple-100); /* structural / floating chrome */
+--hair-2: 1.5px solid var(--clr-dark-purple-20);  /* secondary structure */
+--hair-3: 1px solid var(--clr-dark-purple-10);    /* row dividers in dense lists */
+```
+
+Every surface that sits on the warm field uses the **panel recipe** — apply it
+through shared components (StatCard, DataTable frame, Card, entity cards),
+never as per-page classes:
+
+```css
+--panel-bg: var(--paper);
+--panel-border: 1.5px solid var(--clr-dark-purple-40); /* decided 2026-06-12 */
+--panel-shadow: none;
+--panel-head-bg: var(--sea);       /* table header / panel head wash */
+--panel-head-border: var(--hair-3);
+--row-divider: var(--hair-3);
+--row-hover-bg: var(--sea);
+```
+
+Rules that fall out of this:
+
+- **Tables never sit flush on the field** — the DataTable renders as a framed
+  panel (toolbar inside, pagination as the panel's footer row); table headers
+  are mono uppercase micro-labels (`.label-micro`) on the `--sea` wash; rows
+  separate with `--row-divider`, **no zebra striping**.
+- **Elevated surfaces (side sheets, menus, dialogs) are pure `--paper` with a
+  full-ink `--hair` border and no shadow** — the scrim + border do the
+  elevation. Alpha background tokens are translucent washes for fills *inside*
+  panels; never use them as an overlay's surface.
 
 Accent triad with **ink variants** — use the `-ink` token whenever accent
 colors render as text on light backgrounds (passes 4.5:1 contrast):
@@ -1257,6 +1299,139 @@ back without losing progress; omit `onNavigate` for a display-only rail.
 Steps render `done` (✓) / `active` / `upcoming` states and carry the
 `--clr-pink` certification accent. StepFlow never validates — the parent
 gates forward progress by disabling its own Next button.
+
+### Canonical Page Shell
+
+The single anatomy for every routed page — list pages, rollup pages (Energy),
+and detail pages alike. Reference implementations: `facility-list.tsx`,
+`reactor-list.tsx`, `order-list.tsx`. **Any page that deviates from this shell
+is a bug** (this is how the Energy page drifted: bare-text empty state,
+icon-less KPI cards, off-canon grid breakpoints).
+
+```tsx
+<div className="container-max py-32 flex flex-col gap-32">
+  {/* 1. Header — area eyebrow → title → one-line subtitle → actions */}
+  <PageHeader area="production" title="Orders" subtitle="…" actions={<Button …/>} />
+
+  {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
+    <StatCard title="…" value={…} icon={<Package size={24} weight="bold" />} description="…" isLoading={…} />
+  </div>
+
+  {/* 3. Content — DataTable (framed panel) / card grid / panels */}
+  <DataTable … emptyMessage={<EmptyState padding="md" icon={…} title="…" description="…" action={…} />} />
+</div>
+```
+
+Rules:
+
+- Container is always `container-max py-32 flex flex-col gap-32` — no custom
+  page padding (Chain of Custody's deviation was fixed in Phase 2).
+- KPI strips: `gap-24` grid, `md:grid-cols-2 lg:grid-cols-3` (3 cards) or
+  `lg:grid-cols-4` (4 cards). StatCards always have an icon.
+- Empty, "select a facility", and filtered-empty states use `EmptyState` —
+  never a bare `<p>`. Facility-scoped pages branch the copy:
+  `title={facilityId ? "No X yet" : "Select a facility"}`.
+- In-page section headings (rollup/detail pages) are `title-heading-3`,
+  sentence case (e.g. "Health check", "Per-stage submission preview").
+- Tables/panels never sit flush on the warm field — panel recipe tokens
+  (`--panel-*`, see Hairline Hierarchy & Panel Recipe).
+- Side sheets: header title = entity code (or `Create X` in create mode —
+  **no filler subtitle in create mode**); view/edit subtitle = identifying
+  secondary (name or date). Sections inside sheets use `FormSection`
+  (forms) / `DetailSection` (read-only) — see `docs/forms.md`.
+
+### PageHeader Component
+
+The canonical list-page shell header (visual design plan, Phase 2). Every
+routed list page opens with: mono uppercase **area eyebrow** → `title-heading-2`
+title → one-line subtitle → actions slot. The eyebrow names the sidebar nav
+area and is tinted with that area's accent ink (contrast-safe on light).
+
+```tsx
+import { PageHeader } from "@/components/ui";
+
+<PageHeader
+  area="distribution"   // production | infrastructure | distribution | verification | certification
+  title="Orders"
+  subtitle="Customer orders for biochar products"
+  actions={<Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Order</Button>}
+/>
+```
+
+- `area` sets both the eyebrow text and its ink (`--acc-prod-ink` /
+  `--acc-infra-ink` / `--acc-dist-ink`); `eyebrow` overrides the text.
+- Omit `area` for pages outside the nav groups (Chain of Custody) — no eyebrow.
+- **Every list page gets a subtitle** — a single descriptive line, sentence case.
+
+### StatCard Component (KPI card)
+
+The one KPI card — `@/components/ui/stat-card` (moved from
+`components/dashboard/`). White `--paper` panel with a hairline border on the
+warm page field; gray-filled cards are retired. Trend badges sit on the
+`--st-*` status ramp. An optional `sparkline` slot takes any React node
+(renders full-width under the value row) so the same card builds the
+dashboard KPI strip.
+
+```tsx
+import { StatCard } from "@/components/ui/stat-card";
+
+<StatCard title="Total Orders" value={totalOrders} icon={<Package size={24} weight="bold" />}
+  description="All orders" isLoading={isLoading} />
+<StatCard title="CO2e Stored" value="1,204 t" trend="up" trendValue="+8%" trendLabel="vs last period"
+  sparkline={<MiniSparkline data={series} />} />
+```
+
+KPI strips use `gap-24` grids (`md:grid-cols-2 lg:grid-cols-3` or `-4`).
+
+### DropdownMenu & RowActionsMenu
+
+`DropdownMenu` (`@/components/ui/dropdown-menu`) is the light overflow menu
+primitive on Base UI Menu — white `--paper` popup, square corners, `z-[60]`
+(above slide-overs). `RowActionsMenu` composes it into **the single
+row-action pattern** for table and card lists: a quiet ⋮ icon button per row,
+menu carrying the explicit verbs. Inline Edit/Delete button pairs and
+always-on red outlines in rows are retired.
+
+```tsx
+import { RowActionsMenu } from "@/components/ui";
+
+// in a DataTable actions column
+<div className="flex items-center justify-end">
+  <RowActionsMenu
+    label={`Actions for ${row.original.code}`}
+    actions={[
+      { label: "Open details", href: `/customers/${row.original.id}` }, // optional navigation item
+      { label: "Edit", onSelect: () => onEdit(row.original) },
+      { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+    ]}
+  />
+</div>
+```
+
+- **Row click opens the detail side sheet** everywhere; the menu holds the
+  verbs. Explicit "View" buttons are retired (detail routes become an
+  "Open details" menu item).
+- `destructive: true` for irreversible actions (red text, red-tint highlight).
+- The wrapper stops propagation so menu clicks never trigger the row click.
+
+### Side-sheet mounting rule
+
+`EntitySideSheet` must be **always mounted with a controlled `open` prop** —
+never conditionally rendered:
+
+```tsx
+// ✅ animates in and out
+<EntitySideSheet open={!!sideSheet} onOpenChange={(o) => !o && closeSideSheet()}
+  mode={sideSheet?.mode ?? "create"} … />
+
+// ❌ skips the slide animation entirely (mounts already-open, unmounts instantly)
+{sideSheet && <EntitySideSheet open … />}
+```
+
+Derive title/subtitle/sections/form props with optional chaining + fallbacks
+(see `order-list.tsx` for the reference shape), and keep the form's
+`key={entity?.id ?? "create"}` reset.
 
 ### Component Guidelines
 

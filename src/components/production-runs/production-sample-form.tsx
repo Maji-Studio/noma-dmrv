@@ -8,10 +8,9 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
-import { FormField, FormInput, FormFileUpload, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, FormFileUpload, FormActions, FormSection } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
-import { Button } from "@/components/ui";
 import {
   productionSampleFormSchema,
   type ProductionSampleFormData,
@@ -65,15 +64,14 @@ export function ProductionSampleForm({
     })(),
   });
 
-  // Use a div instead of form to avoid nesting inside the parent ProductionRunForm's <form>
-  // We handle submission manually via the button onClick below
+  // Rendered via the parent ProductionRunForm's `children` slot, which lives
+  // outside its <form> element — so a real <form> is safe here (no nesting).
   const onFormSubmit = handleSubmit((data) => onSubmit(data as ProductionSampleFormData));
 
   return (
-    <div className="space-y-24">
+    <form className="space-y-20" onSubmit={onFormSubmit}>
       {/* Sample Info */}
-      <div className="space-y-16">
-        <SectionLabel>Sample Info</SectionLabel>
+      <FormSection title="Sample Info" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -112,11 +110,10 @@ export function ProductionSampleForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Physical Measurements */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Physical Measurements</SectionLabel>
+      <FormSection title="Physical Measurements">
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
           <FormField
@@ -173,11 +170,10 @@ export function ProductionSampleForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Proximate Analysis */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Proximate Analysis</SectionLabel>
+      <FormSection title="Proximate Analysis">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -252,11 +248,10 @@ export function ProductionSampleForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Documentation */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Documentation</SectionLabel>
+      <FormSection title="Documentation">
 
         <FormField
           id="attachments"
@@ -279,28 +274,14 @@ export function ProductionSampleForm({
             {...register("notes")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
-      {/* Actions */}
-      <div className="flex items-center justify-start gap-16 pt-16 border-t border-[var(--color-border-secondary)]">
-        <Button type="button" variant="primary" disabled={isSubmitting} onClick={onFormSubmit}>
-          {isSubmitting
-            ? "Saving..."
-            : isEditMode
-              ? "Save Changes"
-              : "Add Sample"}
-        </Button>
-        {onCancel && (
-          <Button
-            type="button"
-            variant="default"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        )}
-      </div>
-    </div>
+      <FormActions
+        sticky={false}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={isEditMode ? "Save Changes" : "Add Sample"}
+      />
+    </form>
   );
 }

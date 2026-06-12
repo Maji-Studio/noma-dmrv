@@ -111,8 +111,10 @@ const slideOverContentVariants = cva(
   [
     "fixed top-0 right-0 z-50 h-full",
     "flex flex-col",
-    "bg-[var(--color-background-light)] border-l border-[var(--color-border-secondary)]",
-    "shadow-[-8px_0_32px_rgba(0,0,0,0.12)]",
+    // Elevated surface: pure paper (the page field is the warm tint; sheets,
+    // menus and dialogs reserve white) + full-ink hairline — no shadow, the
+    // scrim + border do the elevation (Maji DS).
+    "bg-[var(--paper)] [border-left:var(--hair)]",
     // Animation
     "transition-transform duration-300 ease-out",
     "data-[open]:translate-x-0",

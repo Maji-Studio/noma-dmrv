@@ -17,8 +17,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
@@ -100,27 +100,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -262,14 +249,17 @@ export function FormulationList() {
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Formulations</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Formulation
-        </Button>
-      </div>
+      <PageHeader
+        area="production"
+        title="Formulations"
+        subtitle="Biochar product recipes and blend ratios"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Formulation
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
@@ -334,7 +324,7 @@ export function FormulationList() {
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={sideSheet?.mode === "create" ? "Create Formulation" : (sideSheet?.entity?.code ?? "")}
-        subtitle={sideSheet?.mode === "create" ? "Fill in the form to create a new formulation." : sideSheet?.entity?.name}
+        subtitle={sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name}
         editLabel="Edit Formulation"
         sections={viewSections}
       >

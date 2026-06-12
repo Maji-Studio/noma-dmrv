@@ -112,8 +112,10 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
 
     // Open the seeded supplier (has GPS) in the edit sheet. Clickable
     // data-table rows carry role="button" (not "row") — match by tag + text.
+    // Row actions live in the ⋮ overflow menu (RowActionsMenu, Phase 2).
     const row = page.locator("tr", { hasText: seededData.supplier.name });
-    await row.getByRole("button", { name: "Edit" }).click();
+    await row.getByRole("button", { name: /^Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();

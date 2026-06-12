@@ -297,7 +297,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                 ) : null}
                 <span
                   className="z-10 flex size-32 shrink-0 items-center justify-center border-[1.5px] bg-[var(--color-background-white)]"
-                  style={{ borderColor: style.accent, color: style.accent }}
+                  style={{ borderColor: style.accent, color: style.accentInk }}
                 >
                   <Icon size={16} weight="bold" />
                 </span>
@@ -307,7 +307,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                     <div className="flex items-baseline gap-10">
                       <span
                         className="font-mono text-[11px] font-medium uppercase tracking-[0.08em]"
-                        style={{ color: style.accent }}
+                        style={{ color: style.accentInk }}
                       >
                         {style.label}
                       </span>
