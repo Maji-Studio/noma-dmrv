@@ -66,10 +66,22 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const SAT_TILE_SIZE = 256;
 const FALLBACK_LAYER_ID = `${LEGS_BASE_LAYER_ID}-fallback`;
 
-/** Popup body per chain node id (codes + detail lines from the lineage DAG). */
+/**
+ * No-basemap mode (missing NEXT_PUBLIC_MAPTILER_KEY): MapLibre still runs on
+ * a blank transparent style, so markers, legs, and distance chips plot over
+ * the container's tinted field — never a white void. The satellite raster is
+ * key-independent, so the SAT toggle keeps working too.
+ */
+const BLANK_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {},
+  layers: [],
+};
+
+/** Popup body per chain node id (codes + detail rows from the lineage DAG). */
 export type PopupContentByNodeId = Record<
   string,
-  Pick<PopupCardInput, "typeLabel" | "status" | "detailLines">
+  Pick<PopupCardInput, "typeLabel" | "status" | "details">
 >;
 
 export interface CarbonTransitMapProps {
@@ -187,13 +199,13 @@ export default function CarbonTransitMap({
   // Map instance lifecycle — the legitimate imperative-DOM exception.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !MAPTILER_KEY) return;
+    if (!container) return;
 
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container,
-        style: maptilerStyleUrl(MAPTILER_KEY),
+        style: MAPTILER_KEY ? maptilerStyleUrl(MAPTILER_KEY) : BLANK_STYLE,
         center: DEFAULT_MAP_CENTER,
         zoom: DEFAULT_MAP_ZOOM,
         attributionControl: { compact: true },
@@ -214,7 +226,7 @@ export default function CarbonTransitMap({
     });
 
     map.once("load", () => {
-      applyBrandRecolor(map);
+      if (MAPTILER_KEY) applyBrandRecolor(map);
 
       // SAT raster first so the leg layers added after naturally sit above it.
       map.addSource(SAT_SOURCE_ID, {
@@ -374,7 +386,9 @@ export default function CarbonTransitMap({
             typeLabel: content?.typeLabel ?? node.kind,
             code: node.code,
             status: content?.status ?? null,
-            detailLines: content?.detailLines ?? (node.sub ? [node.sub] : []),
+            details:
+              content?.details ??
+              (node.sub ? [{ label: "Detail", value: node.sub }] : []),
           })
         )
         .addTo(map);
@@ -446,7 +460,7 @@ export default function CarbonTransitMap({
   if (mapFailed) {
     return (
       <div
-        className="flex h-full flex-col items-center justify-center gap-6 bg-[var(--color-background-light)] px-16 text-center"
+        className="cvm-field flex h-full flex-col items-center justify-center gap-6 px-16 text-center"
         data-testid="carbon-viewer-no-map"
       >
         <span className="label-button uppercase text-[var(--color-text-secondary)]">
@@ -464,9 +478,17 @@ export default function CarbonTransitMap({
     <div className={`cvm-map relative h-full w-full${satOn ? " cvm-sat" : ""}`}>
       <div
         ref={containerRef}
-        className="h-full w-full bg-[var(--color-background-white)]"
+        className={`h-full w-full ${MAPTILER_KEY ? "bg-[var(--color-background-white)]" : "cvm-field"}`}
         data-testid="carbon-viewer-map"
       />
+      {!MAPTILER_KEY && !satOn ? (
+        <div
+          className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+          data-testid="carbon-viewer-no-basemap-note"
+        >
+          Basemap unavailable — set NEXT_PUBLIC_MAPTILER_KEY
+        </div>
+      ) : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}

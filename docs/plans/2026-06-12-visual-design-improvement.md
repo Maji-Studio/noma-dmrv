@@ -148,6 +148,45 @@ secondary structure, `--hair-3` (1px @ 10%) row dividers, plus the "two greys" r
 - **Sankey:** full color ramp per stage (rose biomass → orange production → red biochar → purple field use, per the inspiration's carbon-flow ribbon); relocate the mass-balance warning out of the column-title row.
 - **Map:** never render a white void — graceful no-basemap fallback (tinted field + grid + node markers still plotted) and a visible "basemap unavailable" note; align page padding with the app shell.
 
+### Phase 4 implementation notes (resolved 2026-06-12, `feat/visual-design-phase-4`)
+
+- **Canvas:** DAG + Sankey React Flow canvases sit on the `--sea` wash with a
+  28px plum dotted grid; shared chrome constants (`GRAPH_CANVAS_CLASS`,
+  `GRAPH_DOTS`, `GRAPH_CONTROLS_CLASS`, minimap) live in `chain-constants.ts`.
+  Controls/minimap are paper boxes with full-ink hairlines, hover-inverting.
+- **Nodes** rebuilt to the concept recipe: 1.5px plum-20 frame + 3px accent
+  left edge, accent-**ink** header chip (type label + icon), mono 21px primary
+  line (date-first kept), label/value detail rows (mono micro-label left,
+  light value right). `detailLines: string[]` became structured
+  `details: {label, value}[]` — the map popups consume the same rows.
+  Distribution accent moved rose → pink (`--acc-dist`), matching the accent
+  triad and the existing map markers; trail chips/labels use ink variants.
+  Status pills squared with a 6px dot, mapped to the `--st-*` ramp.
+- **Edges rebuilt as `ChainEdge`** (user call-out, 2026-06-12): paper casing
+  under each line keeps crossings separable; the kg chip renders via
+  `EdgeLabelRenderer` and hides below zoom 0.62 (`EDGE_LABEL_MIN_ZOOM`,
+  store-driven — a globals.css attribute-selector approach was dropped after
+  the compiled chunk silently omitted the rule).
+- **Hover focus** (user call-out, 2026-06-12): hovering a card dims every
+  card/edge outside its lineage (ancestors + descendants, computed per hover
+  in `ChainFlowGraph`) and thickens the path edges; interactive cards get a
+  fade-in header affordance (↗ open record / trace icon for batch drill-down).
+  `NODE_HEIGHT` raised to 232 so tall feedstock cards (wrapping supplier
+  names) can't overlap in dense batch graphs.
+- **Sankey:** stage ramp rose → orange → red → purple; ribbons are
+  source→target SVG gradients at 0.5 stop-opacity with an animated marching
+  centerline (`.coc-flow-line` in globals.css, reduced-motion safe);
+  mass-balance warnings relocated bottom-right out of the column-title row;
+  warning chrome unified (dashed `--st-wait` boxes here and on the DAG).
+- **Map keyless fallback:** MapLibre now always mounts — without
+  `NEXT_PUBLIC_MAPTILER_KEY` it runs a blank transparent style over a
+  sea-tinted dotted field (`.cvm-field`), so markers/legs/chips stay plotted
+  and the SAT raster (key-independent) still toggles; a corner "basemap
+  unavailable" note replaces the old centered void. WebGL failure keeps the
+  explicit notice.
+- **Header padding** aligned with the app shell (`container-max`); split-view
+  panels use the Phase-2.5 panel hairline (1.5px plum-40).
+
 ## Phase 5 — Dashboard + credit batch detail
 
 - **Dashboard (the `01-dash` mock):** breadcrumb eyebrow + display headline; 5-card KPI strip with sparklines and delta badges (`StatCard` exists, unused); verification/needs-attention queue (reuse certification overview data); feedstock mix bars; custody flow ribbon (reuse Sankey aggregates); date-range toggle.
