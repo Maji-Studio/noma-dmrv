@@ -26,7 +26,9 @@ if (!process.env.DATABASE_URL) {
 
 async function main(): Promise<void> {
   const { db } = await import("../src/db");
-  const { suppliers, customers } = await import("../src/db/schema/parties");
+  const { suppliers, customers, supplierLocations } = await import(
+    "../src/db/schema/parties"
+  );
   const { feedstocks, feedstockDeliveries } = await import("../src/db/schema/feedstock");
   const { eq, sql } = await import("drizzle-orm");
 
@@ -37,7 +39,6 @@ async function main(): Promise<void> {
     .select({
       supplierId: suppliers.id,
       supplierCode: suppliers.code,
-      supplierName: suppliers.name,
       supplierCreatedAt: suppliers.createdAt,
       customerId: customers.id,
       customerCode: customers.code,
@@ -48,6 +49,10 @@ async function main(): Promise<void> {
       deliveryCount: sql<number>`(
         select count(*)::int from ${feedstockDeliveries}
         where ${feedstockDeliveries.supplierId} = ${suppliers.id}
+      )`,
+      supplierLocationCount: sql<number>`(
+        select count(*)::int from ${supplierLocations}
+        where ${supplierLocations.supplierId} = ${suppliers.id}
       )`,
     })
     .from(suppliers)
@@ -61,12 +66,13 @@ async function main(): Promise<void> {
       `${overlaps.length} supplier row(s) share a name with a customer:\n`,
     );
     for (const row of overlaps) {
-      const usage = row.feedstockCount + row.deliveryCount;
+      const usage =
+        row.feedstockCount + row.deliveryCount + row.supplierLocationCount;
       const referenced =
         usage > 0
-          ? `REFERENCED by ${row.feedstockCount} feedstock(s) + ${row.deliveryCount} delivery(ies) — do not delete blindly`
+          ? `REFERENCED by ${row.feedstockCount} feedstock(s) + ${row.deliveryCount} delivery(ies) + ${row.supplierLocationCount} supplier_location(s) — do not delete blindly`
           : "unreferenced — safe to delete after review";
-      console.log(`- supplier ${row.supplierCode} "${row.supplierName}"`);
+      console.log(`- supplier ${row.supplierCode}`);
       console.log(`    supplierId: ${row.supplierId}`);
       console.log(`    createdAt:  ${row.supplierCreatedAt.toISOString()}`);
       console.log(`    matches customer ${row.customerCode} (${row.customerId})`);
