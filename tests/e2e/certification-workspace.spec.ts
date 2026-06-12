@@ -104,6 +104,37 @@ test.describe("Certification workspace — section navigation", () => {
   });
 });
 
+test.describe("Certification workspace — period emissions", () => {
+  test("uses LCA PDF upload instead of a raw source document UUID field", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData; // activate fixture auto-cleanup
+
+    const facilityId = seededData.facility.id;
+
+    await page.goto(
+      `/certification/settings?facility=${facilityId}&tab=emissions`,
+    );
+
+    await expect(
+      page.getByRole("heading", { name: "Emission estimates", level: 2 }),
+    ).toBeVisible({ timeout: 20000 });
+
+    await page.getByRole("button", { name: "Add row" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Add row", level: 2 }),
+    ).toBeVisible();
+    await page.getByText("Provenance").scrollIntoViewIfNeeded();
+    await expect(
+      page.getByText("Drop files here or click to upload"),
+    ).toBeVisible();
+    await expect(page.getByLabel("Source document ID")).toHaveCount(0);
+  });
+});
+
 // @live — talks to the real Isometric sandbox; excluded from PR CI (e2e.yml
 // runs --grep-invert @live) and exercised by the nightly e2e-live workflow.
 test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
