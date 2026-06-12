@@ -481,6 +481,7 @@ export async function createCustomerLocation(
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
+    defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
@@ -530,6 +531,7 @@ export async function createCustomerLocation(
         address: data.address ?? null,
         distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
         distanceSource: data.distanceSource ?? null,
+        defaultSoilTemperatureC: data.defaultSoilTemperatureC ?? null,
         isDefault: makeDefault,
       })
       .returning();
@@ -554,6 +556,7 @@ export async function updateCustomerLocation(
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
+    defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
@@ -579,6 +582,7 @@ export async function updateCustomerLocation(
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
+    defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
     updatedAt: Date;
   } = {
@@ -594,6 +598,7 @@ export async function updateCustomerLocation(
   if (data.address !== undefined) updateData.address = data.address;
   if (data.distanceFromFacilityKm !== undefined) updateData.distanceFromFacilityKm = data.distanceFromFacilityKm;
   if (data.distanceSource !== undefined) updateData.distanceSource = data.distanceSource;
+  if (data.defaultSoilTemperatureC !== undefined) updateData.defaultSoilTemperatureC = data.defaultSoilTemperatureC;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   return db.transaction(async (tx) => {

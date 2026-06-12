@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
+  defaultSoilTemperatureSchema,
   optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
@@ -29,7 +30,6 @@ const customerLocationTextSchema = z
   .string()
   .min(1, "Location is required")
   .max(500, "Location must be less than 500 characters");
-
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================
@@ -93,6 +93,7 @@ export const customerLocationFormSchema = z.object({
   // transport is recorded on cargo entities, not deliveries.
   distanceFromFacilityKm: optionalPositiveNumber,
   distanceSource: optionalDistanceSource,
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   // Marks this as the customer's default destination.
   isDefault: z.boolean().optional().default(false),
 });
@@ -154,6 +155,7 @@ export const createCustomerLocationSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   distanceFromFacilityKm: optionalPositiveNumber,
   distanceSource: optionalDistanceSource,
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   isDefault: z.boolean().optional().default(false),
 });
 
@@ -171,6 +173,7 @@ export const updateCustomerLocationSchema = z.object({
   address: customerLocationTextSchema.optional(),
   distanceFromFacilityKm: optionalPositiveNumber,
   distanceSource: optionalDistanceSource,
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   isDefault: z.boolean().optional(),
 });
 
