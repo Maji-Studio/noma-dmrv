@@ -31,6 +31,7 @@ import {
 import "@xyflow/react/dist/base.css";
 import { ArrowLeft, TreeStructure } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { cn } from "@/lib/utils";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
@@ -528,21 +529,10 @@ export function ChainOfCustodyPage() {
       <main className="flex flex-col h-screen">
         <header className="shrink-0 px-24 py-16 flex flex-col gap-16 border-b border-[var(--color-border-secondary)]">
           <div className="flex items-start justify-between gap-16">
-            <div className="flex items-center gap-10">
-              <TreeStructure
-                size={18}
-                weight="bold"
-                className="text-[var(--clr-purple)]"
-              />
-              <div>
-                <h1 className="title-heading-2">Chain of Custody</h1>
-                <p className="body-small text-[var(--color-text-secondary)] mt-2">
-                  Select a credit batch to roll up its provenance, narrow it by
-                  production run, or click an application card to trace a
-                  single rollback.
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              title="Chain of Custody"
+              subtitle="Select a credit batch to roll up its provenance, narrow it by production run, or click an application card to trace a single rollback."
+            />
 
             <div className="text-right max-w-[320px]">
               <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">

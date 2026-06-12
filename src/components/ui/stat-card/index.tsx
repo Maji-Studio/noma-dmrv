@@ -1,3 +1,12 @@
+/**
+ * StatCard — the one KPI card (visual design plan, Phase 2).
+ *
+ * White paper panel on the warm page field with a hairline border — the style
+ * the Energy summary cards pioneered, now canonical. Optional sparkline slot
+ * so the same card can build the dashboard KPI strip (Phase 5).
+ *
+ * Moved here from `src/components/dashboard/stat-card.tsx`.
+ */
 "use client";
 
 import * as React from "react";
@@ -11,7 +20,7 @@ import { TrendUp, TrendDown, Minus } from "@phosphor-icons/react";
  * -----------------------------------------------------------------------------------------------*/
 
 const statCardVariants = cva(
-  "group flex flex-col overflow-hidden bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] transition-colors duration-300",
+  "group flex flex-col overflow-hidden bg-[var(--paper)] border border-[var(--color-border-secondary)] transition-colors duration-300",
   {
     variants: {
       interactive: {
@@ -30,8 +39,8 @@ const trendBadgeVariants = cva(
   {
     variants: {
       trend: {
-        up: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]",
-        down: "bg-[var(--clr-red-10)] text-[var(--clr-red)]",
+        up: "bg-[var(--st-ok-bg)] text-[var(--st-ok)]",
+        down: "bg-[var(--st-bad-bg)] text-[var(--st-bad)]",
         neutral: "bg-[var(--color-background-medium)] text-[var(--color-text-secondary)]",
       },
     },
@@ -64,6 +73,8 @@ export interface StatCardProps
   trendValue?: string;
   /** Trend label (e.g., "from last month") */
   trendLabel?: string;
+  /** Optional sparkline slot rendered under the value row (dashboard KPI strip) */
+  sparkline?: React.ReactNode;
   /** Link destination for click-through navigation */
   href?: string;
   /** Loading state */
@@ -131,6 +142,7 @@ const StatCardContent = React.forwardRef<
       trend,
       trendValue,
       trendLabel,
+      sparkline,
       interactive,
       isLoading,
       ...props
@@ -174,6 +186,7 @@ const StatCardContent = React.forwardRef<
             </div>
           )}
         </div>
+        {sparkline && <div className="mt-12">{sparkline}</div>}
       </div>
     );
   }

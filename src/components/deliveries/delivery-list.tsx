@@ -10,11 +10,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Truck, Calendar, Package, Drop, Plus } from "@phosphor-icons/react";
 import type { Delivery } from "@/db/schema";
 import { DataTable } from "@/components/ui/data-table";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
@@ -114,27 +114,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-16">
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -278,19 +265,17 @@ export function DeliveryList() {
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <div>
-          <h1 className="title-heading-2">Deliveries</h1>
-          <p className="body-small text-[var(--color-text-secondary)] mt-1">
-            Track outbound biochar product deliveries
-          </p>
-        </div>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={18} weight="bold" />
-          New Delivery
-        </Button>
-      </div>
+      <PageHeader
+        area="distribution"
+        title="Deliveries"
+        subtitle="Track outbound biochar product deliveries"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={18} weight="bold" />
+            New Delivery
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">

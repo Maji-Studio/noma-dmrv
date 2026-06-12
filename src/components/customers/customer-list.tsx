@@ -19,8 +19,8 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
@@ -75,34 +75,15 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Link
-            href={`/customers/${row.original.id}`}
-            className="h-32 px-12 inline-flex items-center border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View
-          </Link>
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Open details", href: `/customers/${row.original.id}` },
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -222,16 +203,32 @@ export function CustomerList() {
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Customer" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create"
+      ? "Fill in the form to create a new customer."
+      : sideSheetEntity?.name || undefined;
+
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Customers</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Customer
-        </Button>
-      </div>
+      <PageHeader
+        area="distribution"
+        title="Customers"
+        subtitle="Biochar buyers and their application locations"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Customer
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
@@ -297,64 +294,59 @@ export function CustomerList() {
         isPending={deleteCustomer.isPending}
       />
 
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-          title={sideSheet.mode === "create" ? "Create Customer" : sideSheet.entity?.code ?? ""}
-          subtitle={
-            sideSheet.mode === "create"
-              ? "Fill in the form to create a new customer."
-              : sideSheet.entity?.name
-          }
-          editLabel="Edit Customer"
-          sections={
-            sideSheet.entity
-              ? [
-                  {
-                    title: "General Information",
-                    fields: [
-                      { label: "Code", value: sideSheet.entity.code },
-                      { label: "Name", value: sideSheet.entity.name },
-                      { label: "Crop Type", value: sideSheet.entity.cropType },
-                      { label: "Address", value: sideSheet.entity.address },
-                    ],
-                  },
-                  {
-                    title: "Contact Information",
-                    fields: [
-                      { label: "Email", value: sideSheet.entity.contactEmail },
-                      { label: "Phone", value: sideSheet.entity.contactPhone },
-                    ],
-                  },
-                  {
-                    title: "Locations",
-                    fields: [
-                      { label: "Count", value: String(sideSheet.entity.locationCount) },
-                    ],
-                  },
-                ]
-              : undefined
-          }
-        >
-          {(createError || updateError) && (
-            <div className="mb-24">
-              <ServerError message={createError || updateError || ""} />
-            </div>
-          )}
-          <CustomerForm
-            key={sideSheet.entity?.id ?? "create"}
-            customer={sideSheet.entity as Customer | undefined}
-            customerId={sideSheet.entity && sideSheet.mode === "edit" ? sideSheet.entity.id : undefined}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={closeSideSheet}
-            isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
-            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Customer"}
-          />
-        </EntitySideSheet>
-      )}
+      {/* Unified Side Sheet */}
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Customer"
+        sections={
+          sideSheetEntity
+            ? [
+                {
+                  title: "General Information",
+                  fields: [
+                    { label: "Code", value: sideSheetEntity.code },
+                    { label: "Name", value: sideSheetEntity.name },
+                    { label: "Crop Type", value: sideSheetEntity.cropType },
+                    { label: "Address", value: sideSheetEntity.address },
+                  ],
+                },
+                {
+                  title: "Contact Information",
+                  fields: [
+                    { label: "Email", value: sideSheetEntity.contactEmail },
+                    { label: "Phone", value: sideSheetEntity.contactPhone },
+                  ],
+                },
+                {
+                  title: "Locations",
+                  fields: [
+                    { label: "Count", value: String(sideSheetEntity.locationCount) },
+                  ],
+                },
+              ]
+            : undefined
+        }
+      >
+        {(createError || updateError) && (
+          <div className="mb-24">
+            <ServerError message={createError || updateError || ""} />
+          </div>
+        )}
+        <CustomerForm
+          key={sideSheetEntity?.id ?? "create"}
+          customer={sideSheet?.entity as Customer | undefined}
+          customerId={sideSheetEntity && sideSheetMode === "edit" ? sideSheetEntity.id : undefined}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Customer"}
+        />
+      </EntitySideSheet>
     </div>
   );
 }
