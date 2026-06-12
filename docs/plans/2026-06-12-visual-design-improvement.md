@@ -192,6 +192,58 @@ secondary structure, `--hair-3` (1px @ 10%) row dividers, plus the "two greys" r
 - **Dashboard (the `01-dash` mock):** breadcrumb eyebrow + display headline; 5-card KPI strip with sparklines and delta badges (`StatCard` exists, unused); verification/needs-attention queue (reuse certification overview data); feedstock mix bars; custody flow ribbon (reuse Sankey aggregates); date-range toggle.
 - **Credit batch detail page:** proper detail header (code, status badge, period, facility, KPI row: CO2e stored / weight / buffer / applications); clear separation of read panels vs the edit form (today inputs sit directly in the "detail" view); health check restyled as a compact checklist strip.
 
+### Phase 5 implementation notes (resolved 2026-06-12, `feat/visual-design-phase-5`)
+
+- **Dashboard data: one new aggregate endpoint won** (the plan's open question).
+  Standard layered flow — `data-access/dashboard-overview.ts` → `fn/` →
+  `use-dashboard-overview` — returns KPIs (value + delta vs the previous
+  equal period + a 12-bucket sparkline series), the attention queue, the
+  feedstock mix, and the custody-flow totals in one facility-scoped read.
+  Row-narrow fetches, aggregation in JS (facility scale, not SQL bucketing).
+  The pre-existing **orphaned `dashboard-stats` chain was deleted** (component
+  was never rendered anywhere).
+- **KPI strip reads as the mass-flow story** left → right: Feedstock
+  processed → Biochar produced → Pyrolysis yield → Applied to soil → CO₂e
+  stored — mirroring the custody ribbon below. No data renders "—", never a
+  fabricated zero; yield only counts runs that recorded both sides of the
+  conversion. `StatCard`'s sparkline slot (built Phase 2, unused since)
+  finally lights up.
+- **Needs-attention queue = derived record checks, not a task system**
+  (idea adopted from the codex draft PR #237, which this phase supersedes):
+  cheap capped queries over existing MRV records — complete runs missing
+  mass, lots with no linked run, feedstocks `missing_data`, upcoming
+  deliveries, pending batches past their period — each row links to where
+  the record is fixed and disappears when it is. The plan's "reuse
+  certification overview data" was **rejected**: that loader walks lineage
+  per removal (too heavy for a dashboard tile) and is registry-gated, so a
+  facility without a registry link would lose its queue.
+- **Custody flow ribbon reuses the Sankey grammar, not the Sankey walk:**
+  new pure `buildStageFlow(totals)` sibling beside `buildBatchSankey` in
+  `src/lib/chain-of-custody/sankey.ts` (same columns, same labeled exits,
+  same clamp-negative-residuals-to-warning rule; unit-tested in
+  `tests/dashboard-stage-flow.test.ts`). The batch-level per-application
+  rollback resolution is O(N) queries — facility-period totals come from
+  SQL sums instead. The batch-only ineligible-feedstock exit has no
+  facility-period analogue and is omitted. Rendered as a static SVG with
+  the batch Sankey's exact recipe (accent ramp rose→orange→red→purple,
+  source→target gradients @ 0.5, marching `.coc-flow-line` centerline);
+  below `sm` the diagram is dropped (not shrunk to noise) and exits render
+  as text rows.
+- **Header is the mock's display headline** (`title-heading-1` + `-thin`
+  span), not the standard PageHeader — the dashboard is the one
+  intentional exception to the list-page shell. Period toggle = the mock's
+  `.seg` segmented control (30D / YTD / ALL; "all" disables deltas).
+- **Credit batch detail recut:** PageHeader (VERIFICATION eyebrow, code,
+  status badge in actions) → 4-card KPI row (CO₂e stored falls back to the
+  certify preview, labeled "Preview estimate") → health check as a compact
+  chip strip (`credit-batch-health-strip.tsx`, same `useBatchHealth`
+  classifier + fix-link mapping; the full `CreditBatchHealthPanel` deleted)
+  → read panels (`DetailSection`/`DetailField`) with the edit form mounted
+  only behind the "Edit details" toggle. Page moved onto the canonical
+  `container-max` shell.
+- E2E: `tests/e2e/dashboard.spec.ts` (dashboard panels + period toggle;
+  batch detail read/edit toggle + health strip).
+
 ---
 
 ## Sequencing & verification
@@ -202,5 +254,5 @@ Each phase is a separate branch/PR in order (0→5); 0+1 can land together. Afte
 
 - Row actions: hover-reveal vs always-visible overflow menu (rec: overflow menu — touch-friendly).
 - Suppliers/Customers "View" button vs row-click-to-detail everywhere (rec: row click, drop View).
-- Dashboard data: live queries from existing hooks vs new aggregate endpoints (decide when building Phase 5).
+- ~~Dashboard data: live queries from existing hooks vs new aggregate endpoints~~ — resolved Phase 5: one new aggregate endpoint (`dashboard-overview`), see the Phase 5 notes.
 - Dark mode: deferred; tokens are structured so a `html[data-theme]` flip remains possible later.
