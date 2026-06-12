@@ -71,6 +71,7 @@ export function StorageLocationQuickAddDialog({
         allowedTypes={allowedTypes}
         defaultFeedstockTypeId={defaultFeedstockTypeId}
         defaultFormulationId={defaultFormulationId}
+        defaultFacilityId={facilityId}
       />
     </QuickAddDialogShell>
   );
