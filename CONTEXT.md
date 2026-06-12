@@ -60,11 +60,21 @@ and are **never submitted** to a registry.
 _Avoid_: ingredient, material (the catalog is one thing; usage
 disambiguates).
 
+**Feedstock bin**:
+A storage bin holding a **feedstock type**, declared at creation or
+locked on first intake. What a bin may feed follows from its held
+type's declared usage — pyrolysis-usage stock may enter a production
+run, blend-usage stock may enter a formulation — never from the bin
+itself; an input bin has no kind of its own. Distinct from output bins,
+which hold biochar lots and products.
+_Avoid_: ingredient bin as a bin *kind*.
+
 **Ingredient bin**:
-A storage bin holding a **blend-usage feedstock type**, drawn on when a
-biochar product is mixed per a formulation. A bin declares its feedstock
-type at creation; the biochar product form proposes only bins whose
-type matches the selected formulation's lines.
+Descriptive shorthand for a **feedstock bin** currently holding a
+blend-usage feedstock type, drawn on when a biochar product is mixed
+per a formulation; the biochar product form proposes only bins whose
+held type matches the selected formulation's lines. Not a distinct
+kind of bin.
 
 **Bin movement**:
 A single recorded change to a storage bin's stock — an intake, draw,
@@ -72,6 +82,22 @@ transfer, write-off, or adjustment — carrying its mass, actor, time,
 and reason. Bin stock is the consequence of its movements; nothing
 changes stock except a movement.
 _Avoid_: stock change, log entry, audit record.
+
+### External parties
+
+**Supplier**:
+An external organization feedstock is sourced from. A supplier has one
+or more locations; each location carries the stored transport distance
+its feedstock deliveries inherit. Deliberately distinct from
+**Customer** — the same real-world company in both roles is two records;
+a unified party registry was considered and rejected.
+_Avoid_: vendor, party, external organization.
+
+**Customer**:
+An external organization biochar is delivered to. A customer has one or
+more locations; a customer location is a GPS-pinned application site
+carrying per-site defaults. Distinct from **Supplier**.
+_Avoid_: client (collides with client components / API clients), buyer.
 
 ### Submission & registry
 

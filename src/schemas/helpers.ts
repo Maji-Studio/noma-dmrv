@@ -127,6 +127,24 @@ export const optionalPercent = z.preprocess(
     .optional()
 );
 
+/** Plausible soil-temperature range for biochar application sites (°C). */
+export const SOIL_TEMPERATURE_MIN_C = -50;
+export const SOIL_TEMPERATURE_MAX_C = 60;
+
+/**
+ * Optional default-soil-temperature field (°C), shared by customer-location
+ * and facility-emission-config forms so empty/whitespace inputs normalize
+ * identically (to null) on both surfaces.
+ */
+export const defaultSoilTemperatureSchema = optionalNumber.pipe(
+  z
+    .number()
+    .min(SOIL_TEMPERATURE_MIN_C, "Soil temperature must be between -50 and 60 °C")
+    .max(SOIL_TEMPERATURE_MAX_C, "Soil temperature must be between -50 and 60 °C")
+    .nullable()
+    .optional(),
+);
+
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {
   if (v === null || v === undefined) return null;

@@ -11,6 +11,7 @@
  */
 import { test, expect } from "./fixtures";
 import {
+  dismissCertifierLinkDialog,
   waitForSideSheet,
   waitForSideSheetClose,
   selectEntity as selectEntityById,
@@ -387,6 +388,10 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Facility")').click();
       await waitForSideSheetClose(page);
+
+      // Admins get an optional "Link Isometric project" prompt after create;
+      // it aria-hides the page, so dismiss it before asserting on the list.
+      await dismissCertifierLinkDialog(page);
 
       // Search for the new facility (list may be paginated). Scope to the list
       // card's heading — the sidebar FacilitySelector falls back to the first

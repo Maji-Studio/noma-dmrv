@@ -66,6 +66,7 @@ export function CustomerLocationForm({
       address: location?.address ?? "",
       distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
       distanceSource: location?.distanceSource ?? null,
+      defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
       isDefault: location?.isDefault ?? false,
     },
   });
@@ -169,6 +170,7 @@ export function CustomerLocationForm({
           id="address"
           label="Address / Description"
           error={errors.address?.message}
+          required
         >
           <FormTextarea
             id="address"
@@ -201,6 +203,30 @@ export function CustomerLocationForm({
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
         />
+      </div>
+
+      {/* Soil Defaults Section */}
+      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Soil Defaults
+        </h3>
+
+        <FormField
+          id="defaultSoilTemperatureC"
+          label="Default soil temperature (°C)"
+          error={errors.defaultSoilTemperatureC?.message}
+          helperText="Optional site default for new application durability calculations. Applications can still override it."
+        >
+          <FormInput
+            id="defaultSoilTemperatureC"
+            type="number"
+            step="any"
+            placeholder="e.g., 24.5"
+            disabled={isSubmitting}
+            error={!!errors.defaultSoilTemperatureC}
+            {...register("defaultSoilTemperatureC")}
+          />
+        </FormField>
       </div>
 
       {/* Logistics Section */}

@@ -45,22 +45,25 @@ async function syncFeedstockLegsBestEffort(
   feedstockIds: string[],
   override: NonNullable<Parameters<typeof syncFeedstockTransportLeg>[2]>,
 ): Promise<void> {
-  try {
-    await Promise.all(
-      feedstockIds.map((id) => syncFeedstockTransportLeg(userId, id, override)),
-    );
-  } catch (error) {
+  const results = await Promise.allSettled(
+    feedstockIds.map((id) => syncFeedstockTransportLeg(userId, id, override)),
+  );
+  results.forEach((result, index) => {
+    if (result.status !== "rejected") return;
     logger.warn(
       {
         userId,
-        feedstockIds,
+        feedstockId: feedstockIds[index],
         distanceKmOverride: override.distanceKm ?? null,
         distanceSourceOverride: override.distanceSource ?? null,
-        err: error instanceof Error ? error.message : String(error),
+        err:
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason),
       },
       "feedstock transport leg sync failed after committed write; leg (and any form distance override) stale until next edit",
     );
-  }
+  });
 }
 
 // ============================================

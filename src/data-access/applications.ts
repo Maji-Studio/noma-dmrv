@@ -5,8 +5,10 @@ import {
   soilTemperatureMeasurements,
   type Application,
 } from "@/db/schema/application";
+import { certifierProjects } from "@/db/schema/certification";
 import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
 import { deliveries, orders } from "@/db/schema/logistics";
+import { customerLocations } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -33,6 +35,10 @@ export interface ApplicationDeliveryOptionData {
   deliveredWetMassKg: number | null;
   orderQuantityKg: number | null;
   moistureContentPercent: number | null;
+  defaultSoilTemperatureC: number | null;
+  facilityDefaultSoilTemperatureC: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
 }
 
@@ -280,9 +286,28 @@ export async function getApplicationDeliveryOptions(
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         orderQuantityKg: orders.quantityKg,
         moistureContentPercent: deliveries.moistureContentPercent,
+        defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
+        facilityDefaultSoilTemperatureC:
+          certifierProjects.defaultSoilTemperatureC,
+        destinationGpsLatitude: customerLocations.gpsLatitude,
+        destinationGpsLongitude: customerLocations.gpsLongitude,
       })
       .from(deliveries)
       .leftJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(
+        customerLocations,
+        eq(
+          customerLocations.id,
+          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        ),
+      )
+      .leftJoin(
+        certifierProjects,
+        and(
+          eq(certifierProjects.facilityId, deliveries.facilityId),
+          eq(certifierProjects.provider, "isometric"),
+        ),
+      )
       .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
       .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
       .where(whereClause)
