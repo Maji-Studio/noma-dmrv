@@ -28,8 +28,8 @@ const optionalLatitudeSchema = requiredLat.nullable().optional();
 const optionalLongitudeSchema = requiredLng.nullable().optional();
 const customerLocationTextSchema = z
   .string()
-  .min(1, "Location is required")
-  .max(500, "Location must be less than 500 characters");
+  .min(1, "Address / description is required")
+  .max(500, "Address / description must be less than 500 characters");
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================

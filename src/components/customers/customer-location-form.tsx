@@ -170,6 +170,7 @@ export function CustomerLocationForm({
           id="address"
           label="Address / Description"
           error={errors.address?.message}
+          required
         >
           <FormTextarea
             id="address"
