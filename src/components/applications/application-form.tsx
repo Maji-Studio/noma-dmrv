@@ -17,7 +17,7 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { FormField, FormInput, FormSelect, PositionPicker, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, PositionPicker, FormActions } from "@/components/forms";
 import {
   applicationFormSchema,
   applicationMethods,
@@ -336,11 +336,7 @@ export function ApplicationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* === Section 1: Application Details === */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Application Details
-        </h3>
-
+      <FormSection title="Application Details" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
             <FormInput
@@ -430,14 +426,10 @@ export function ApplicationForm({
             moisturePercent={moisturePercent}
           />
         </div>
-      </div>
+      </FormSection>
 
       {/* === Section 2: Field Details === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Field Details
-        </h3>
-
+      <FormSection title="Field Details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="fieldSizeHa" label="Field Size (Ha)" error={errors.fieldSizeHa?.message}>
             <FormInput
@@ -530,13 +522,10 @@ export function ApplicationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* === Section 3: Soil Temperature === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Soil Temperature
-        </h3>
+      <FormSection title="Soil Temperature">
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
           Isometric Protocol: Used in 200-year durability calculation
         </p>
@@ -577,7 +566,7 @@ export function ApplicationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       <FormActions
         onCancel={onCancel}

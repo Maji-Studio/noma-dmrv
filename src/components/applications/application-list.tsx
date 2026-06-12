@@ -12,8 +12,8 @@ import { MapPin, Plus, Leaf } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -101,27 +101,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-16">
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -242,23 +229,36 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Application" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create"
+      ? undefined
+      : sideSheetEntity
+        ? format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy")
+        : undefined;
+
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <div>
-          <h1 className="title-heading-2">Applications</h1>
-          <p className="body-small text-[var(--color-text-secondary)] mt-1">
-            Field applications of biochar to soil
-          </p>
-        </div>
-        {contextFacilityId && (
-          <Button variant="primary" onClick={openCreate}>
-            <Plus size={18} weight="bold" />
-            New Application
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        area="distribution"
+        title="Applications"
+        subtitle="Field applications of biochar to soil"
+        actions={
+          contextFacilityId ? (
+            <Button variant="primary" onClick={openCreate}>
+              <Plus size={18} weight="bold" />
+              New Application
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
@@ -332,82 +332,75 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         isPending={deleteApplication.isPending}
       />
 
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-          title={sideSheet.mode === "create" ? "Create Application" : sideSheet.entity?.code ?? ""}
-          subtitle={
-            sideSheet.mode === "create"
-              ? "Add a new field application record"
-              : sideSheet.entity
-                ? format(new Date(sideSheet.entity.applicationDate), "MMM d, yyyy")
-                : undefined
-          }
-          editLabel="Edit Application"
-          size="wide"
-          sections={sideSheet.entity ? [
-            {
-              title: "General",
-              fields: [
-                { label: "Code", value: sideSheet.entity.code },
-                {
-                  label: "Application Date",
-                  value: format(new Date(sideSheet.entity.applicationDate), "MMM d, yyyy"),
-                },
-              ],
-            },
-            {
-              title: "Biochar",
-              fields: [
-                {
-                  label: "Biochar Applied",
-                  value: sideSheet.entity.biocharAppliedTons != null
-                    ? formatApplicationKgFromTons(sideSheet.entity.biocharAppliedTons)
-                    : null,
-                },
-                {
-                  label: "Biochar Applied Dry",
-                  value: sideSheet.entity.biocharAppliedDryTons != null
-                    ? formatApplicationKgFromTons(sideSheet.entity.biocharAppliedDryTons)
-                    : null,
-                },
-              ],
-            },
-            {
-              title: "Field",
-              fields: [
-                {
-                  label: "Field Size",
-                  value: sideSheet.entity.fieldSizeHa != null
-                    ? `${sideSheet.entity.fieldSizeHa.toFixed(2)} ha`
-                    : null,
-                },
-                {
-                  label: "Application Method",
-                  value: sideSheet.entity.applicationMethodType
-                    ? formatApplicationMethod(sideSheet.entity.applicationMethodType as ApplicationMethod)
-                    : null,
-                },
-                { label: "Crop Type", value: sideSheet.entity.cropType },
-                { label: "Field Identifier", value: sideSheet.entity.fieldIdentifier },
-              ],
-            },
-          ] : undefined}
-        >
-          {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
-          <ApplicationForm
-            key={sideSheet.entity?.id ?? "create"}
-            application={sideSheet.entity ?? undefined}
-            deliveries={deliveryOptions}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={closeSideSheet}
-            isSubmitting={createApplication.isPending || updateApplication.isPending}
-          />
-        </EntitySideSheet>
-      )}
+      {/* Unified Side Sheet */}
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Application"
+        size="wide"
+        sections={sideSheetEntity ? [
+          {
+            title: "General",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              {
+                label: "Application Date",
+                value: format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy"),
+              },
+            ],
+          },
+          {
+            title: "Biochar",
+            fields: [
+              {
+                label: "Biochar Applied",
+                value: sideSheetEntity.biocharAppliedTons != null
+                  ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
+                  : null,
+              },
+              {
+                label: "Biochar Applied Dry",
+                value: sideSheetEntity.biocharAppliedDryTons != null
+                  ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
+                  : null,
+              },
+            ],
+          },
+          {
+            title: "Field",
+            fields: [
+              {
+                label: "Field Size",
+                value: sideSheetEntity.fieldSizeHa != null
+                  ? `${sideSheetEntity.fieldSizeHa.toFixed(2)} ha`
+                  : null,
+              },
+              {
+                label: "Application Method",
+                value: sideSheetEntity.applicationMethodType
+                  ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
+                  : null,
+              },
+              { label: "Crop Type", value: sideSheetEntity.cropType },
+              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
+            ],
+          },
+        ] : undefined}
+      >
+        {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
+        <ApplicationForm
+          key={sideSheetEntity?.id ?? "create"}
+          application={sideSheetEntity ?? undefined}
+          deliveries={deliveryOptions}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={createApplication.isPending || updateApplication.isPending}
+        />
+      </EntitySideSheet>
     </div>
   );
 }

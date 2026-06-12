@@ -6,7 +6,7 @@ import {
   ClipboardText,
   Certificate,
 } from "@phosphor-icons/react";
-import { StatCard, StatCardSkeleton } from "./stat-card";
+import { StatCard, StatCardSkeleton } from "@/components/ui/stat-card";
 import {
   useDashboardStats,
   formatMetricWithTrend,

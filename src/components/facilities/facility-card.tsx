@@ -29,7 +29,7 @@ export function FacilityCard({
   const isArchived = facility.archivedAt != null;
   return (
     <article
-      className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-border-primary)] cursor-pointer"
+      className="flex flex-col bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors hover:[border-color:var(--edge-soft)] cursor-pointer"
       onClick={() => onView(facility)}
     >
       <div className="flex flex-1 flex-col gap-16 p-20">

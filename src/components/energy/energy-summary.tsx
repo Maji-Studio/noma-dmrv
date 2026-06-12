@@ -6,7 +6,10 @@
  */
 "use client";
 
+import { Fire, GasPump, Lightning } from "@phosphor-icons/react";
 import { ServerError } from "@/components/forms";
+import { EmptyState, PageHeader } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityEnergyTotals } from "@/hooks/use-production-runs";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
@@ -19,17 +22,6 @@ const STAGES = [
 
 function fmt(value: number): string {
   return Math.round(value).toLocaleString();
-}
-
-function SummaryCard({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <div className="border border-[var(--color-border-secondary)] p-16 flex flex-col gap-4">
-      <span className="body-small text-[var(--color-text-secondary)]">{label}</span>
-      <span className="title-heading-3">
-        {value} <span className="body-small text-[var(--color-text-secondary)]">{unit}</span>
-      </span>
-    </div>
-  );
 }
 
 export function EnergySummary() {
@@ -67,21 +59,30 @@ export function EnergySummary() {
 
   if (!facilityId) {
     return (
-      <p className="body-medium text-[var(--color-text-secondary)]">
-        Select a facility to view its energy summary.
-      </p>
+      <div className="flex flex-col gap-32">
+        <PageHeader
+          area="production"
+          title="Energy"
+          subtitle="Facility energy use feeding Isometric submission datapoints"
+        />
+        <EmptyState
+          padding="md"
+          icon={<Lightning size={48} />}
+          title="Select a facility"
+          description="Choose a facility from the sidebar to view its energy summary"
+        />
+      </div>
     );
   }
 
   if (totalsError && !totals) {
     return (
-      <div className="flex flex-col gap-16">
-        <header className="flex flex-col gap-4">
-          <h1 className="title-heading-2">Electricity &amp; diesel</h1>
-          <p className="body-medium text-[var(--color-text-secondary)]">
-            Energy totals could not be loaded for this facility.
-          </p>
-        </header>
+      <div className="flex flex-col gap-32">
+        <PageHeader
+          area="production"
+          title="Energy"
+          subtitle="Energy totals could not be loaded for this facility."
+        />
         <ServerError
           message={
             totalsError instanceof Error
@@ -94,15 +95,12 @@ export function EnergySummary() {
   }
 
   return (
-    <div className="flex flex-col gap-24">
-      <header className="flex flex-col gap-4">
-        <h1 className="title-heading-2">Electricity &amp; diesel</h1>
-        <p className="body-medium text-[var(--color-text-secondary)]">
-          Rolled up across {runCount} production run
-          {runCount === 1 ? "" : "s"}. This is what feeds the energy
-          datapoints of an Isometric submission.
-        </p>
-      </header>
+    <div className="flex flex-col gap-32">
+      <PageHeader
+        area="production"
+        title="Energy"
+        subtitle="Facility energy use feeding Isometric submission datapoints"
+      />
 
       {totalsError && (
         <ServerError
@@ -114,21 +112,34 @@ export function EnergySummary() {
         />
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-16">
-        <SummaryCard
-          label="Grid electricity"
-          value={isLoading ? "—" : fmt(electricityKwh)}
-          unit="kWh"
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
+        <StatCard
+          title="Production Runs"
+          value={runCount}
+          icon={<Fire size={24} weight="bold" />}
+          description="Rolled up in this summary"
+          isLoading={isLoading}
         />
-        <SummaryCard
-          label="Genset diesel"
-          value={isLoading ? "—" : fmt(gensetLitres)}
-          unit="L"
+        <StatCard
+          title="Grid Electricity"
+          value={`${fmt(electricityKwh)} kWh`}
+          icon={<Lightning size={24} weight="bold" />}
+          description="All production runs"
+          isLoading={isLoading}
         />
-        <SummaryCard
-          label="Startup / plant diesel"
-          value={isLoading ? "—" : fmt(startupLitres)}
-          unit="L"
+        <StatCard
+          title="Genset Diesel"
+          value={`${fmt(gensetLitres)} L`}
+          icon={<GasPump size={24} weight="bold" />}
+          description="All production runs"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Startup / Plant Diesel"
+          value={`${fmt(startupLitres)} L`}
+          icon={<GasPump size={24} weight="bold" />}
+          description="All production runs"
+          isLoading={isLoading}
         />
       </div>
 
@@ -161,14 +172,15 @@ export function EnergySummary() {
           </p>
         )}
         {config && splits && yieldKwhPerL != null && gensetKwh != null && totals && (
-          <div className="overflow-x-auto">
+          // Panel recipe (Phase 2.5): tables never sit flush on the warm field.
+          <div className="overflow-x-auto bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)]">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-[var(--color-border-secondary)]">
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 pr-8 text-left">Stage</th>
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 px-8 text-right whitespace-nowrap">Split</th>
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 px-8 text-right">Grid electricity (kWh)</th>
-                  <th className="body-small text-[var(--color-text-secondary)] py-8 pl-8 text-right">Genset energy (kWh)</th>
+                <tr className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]">
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Stage</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right whitespace-nowrap">Split</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Grid electricity (kWh)</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Genset energy (kWh)</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,14 +189,14 @@ export function EnergySummary() {
                   return (
                     <tr
                       key={stage.key}
-                      className="border-b border-[var(--color-border-secondary)]"
+                      className="[border-bottom:var(--row-divider)] last:[border-bottom:none]"
                     >
-                      <td className="body-medium py-8 pr-8">{stage.label}</td>
-                      <td className="body-medium py-8 px-8 text-right whitespace-nowrap">{pct}%</td>
-                      <td className="body-medium py-8 px-8 text-right whitespace-nowrap">
+                      <td className="body-medium py-8 px-12">{stage.label}</td>
+                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap">{pct}%</td>
+                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
                         {fmt((electricityKwh * pct) / 100)}
                       </td>
-                      <td className="body-medium py-8 pl-8 text-right whitespace-nowrap">
+                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
                         {fmt((gensetKwh * pct) / 100)}
                       </td>
                     </tr>

@@ -20,9 +20,9 @@ import {
   EntitySideSheet,
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import {
@@ -264,21 +264,118 @@ export function CreditBatchList({
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create" ? undefined : sideSheetEntity?.facility?.name;
+
+  const sideSheetSections = sideSheetEntity
+    ? [
+        {
+          title: "General",
+          fields: [
+            { label: "Code", value: sideSheetEntity.code },
+            {
+              label: "Status",
+              value: (
+                <StatusBadge
+                  status={sideSheetEntity.status as CreditBatchStatus}
+                />
+              ),
+            },
+            {
+              label: "Certifier",
+              value: sideSheetEntity.certifier
+                ? formatCertifierProvider(
+                    sideSheetEntity.certifier as CertifierProvider
+                  )
+                : null,
+            },
+          ],
+        },
+        {
+          title: "Details",
+          fields: [
+            {
+              label: "Facility",
+              value: sideSheetEntity.facility?.name,
+            },
+            {
+              label: "Crediting Period",
+              value: `${formatSafeDate(sideSheetEntity.startDate)} — ${formatSafeDate(sideSheetEntity.endDate)}`,
+            },
+            {
+              label: "Durability Option",
+              value: sideSheetEntity.durabilityOption
+                ? formatDurabilityOption(
+                    sideSheetEntity.durabilityOption as DurabilityOption
+                  )
+                : null,
+            },
+          ],
+        },
+        {
+          title: "Metrics",
+          fields: [
+            {
+              label: "Total Biochar Weight",
+              value:
+                sideSheetEntity.weightTons != null
+                  ? `${sideSheetEntity.weightTons.toFixed(2)} t`
+                  : null,
+            },
+            {
+              label: "Total CO2e Stored",
+              value:
+                sideSheetEntity.co2eStoredPreview?.co2eStoredTonnes != null
+                  ? `${sideSheetEntity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO₂e`
+                  : sideSheetEntity.co2eStoredPreview
+                    ? "Pending inputs"
+                    : "Open the batch detail to calculate",
+            },
+            {
+              label: "Preview Inputs",
+              value:
+                !sideSheetEntity.co2eStoredPreview
+                  ? "Open the batch detail to calculate"
+                  : sideSheetEntity.co2eStoredPreview.missingInputs.length > 0
+                    ? sideSheetEntity.co2eStoredPreview.missingInputs.join(", ")
+                    : "Complete",
+            },
+          ],
+        },
+        {
+          title: "Applications",
+          fields: [
+            {
+              label: "Application Count",
+              value: String(sideSheetEntity.applicationCount ?? 0),
+            },
+          ],
+        },
+      ]
+    : undefined;
+
   return (
     <div className="container-max py-32 flex flex-col gap-32">
       {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <div className="flex flex-col gap-4">
-          <h1 className="title-heading-2">Credit Batches</h1>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Carbon credit batches for verification and registry
-          </p>
-        </div>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Credit Batch
-        </Button>
-      </div>
+      <PageHeader
+        area="verification"
+        title="Credit Batches"
+        subtitle="Carbon credit batches for verification and registry"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Credit Batch
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
@@ -452,157 +549,56 @@ export function CreditBatchList({
         isPending={deleteCreditBatch.isPending}
       />
 
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) =>
-            setSideSheet((prev) => (prev ? { ...prev, mode } : null))
+      {/* Unified Side Sheet */}
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) =>
+          setSideSheet((prev) => (prev ? { ...prev, mode } : null))
+        }
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Credit Batch"
+        size="wide"
+        sections={sideSheetSections}
+        viewModeChildren={
+          sideSheetEntity && sideSheetMode === "view" ? (
+            <CertifyPanel creditBatchId={sideSheetEntity.id} />
+          ) : null
+        }
+      >
+        {(createError || updateError) && (
+          <div className="mb-24">
+            <ServerError message={createError || updateError || ""} />
+          </div>
+        )}
+        <CreditBatchForm
+          key={sideSheetEntity?.id ?? "create"}
+          creditBatch={sideSheetEntity ?? undefined}
+          applications={formApplications}
+          existingBatches={allItems.map((b) => ({
+            id: b.id,
+            code: b.code,
+            facilityId: b.facilityId,
+            startDate: typeof b.startDate === "string" ? b.startDate : b.startDate,
+            endDate: typeof b.endDate === "string" ? b.endDate : b.endDate,
+          }))}
+          onSubmit={
+            sideSheetEntity && sideSheetMode === "edit"
+              ? handleUpdate
+              : handleCreate
           }
-          title={
-            sideSheet.mode === "create"
-              ? "Create Credit Batch"
-              : sideSheet.entity?.code ?? ""
+          onClearServerError={() => {
+            setCreateError(null);
+            setUpdateError(null);
+          }}
+          onCancel={closeSideSheet}
+          isSubmitting={
+            createCreditBatch.isPending || updateCreditBatch.isPending
           }
-          subtitle={
-            sideSheet.mode === "create"
-              ? undefined
-              : sideSheet.entity?.facility?.name
-          }
-          editLabel="Edit Credit Batch"
-          size="wide"
-          sections={
-            sideSheet.entity
-              ? [
-                  {
-                    title: "General",
-                    fields: [
-                      { label: "Code", value: sideSheet.entity.code },
-                      {
-                        label: "Status",
-                        value: (
-                          <StatusBadge
-                            status={
-                              sideSheet.entity.status as CreditBatchStatus
-                            }
-                          />
-                        ),
-                      },
-                      {
-                        label: "Certifier",
-                        value: sideSheet.entity.certifier
-                          ? formatCertifierProvider(
-                              sideSheet.entity.certifier as CertifierProvider
-                            )
-                          : null,
-                      },
-                    ],
-                  },
-                  {
-                    title: "Details",
-                    fields: [
-                      {
-                        label: "Facility",
-                        value: sideSheet.entity.facility?.name,
-                      },
-                      {
-                        label: "Crediting Period",
-                        value: `${formatSafeDate(sideSheet.entity.startDate)} — ${formatSafeDate(sideSheet.entity.endDate)}`,
-                      },
-                      {
-                        label: "Durability Option",
-                        value: sideSheet.entity.durabilityOption
-                          ? formatDurabilityOption(
-                              sideSheet.entity
-                                .durabilityOption as DurabilityOption
-                            )
-                          : null,
-                      },
-                    ],
-                  },
-                  {
-                    title: "Metrics",
-                    fields: [
-                      {
-                        label: "Total Biochar Weight",
-                        value:
-                          sideSheet.entity.weightTons != null
-                            ? `${sideSheet.entity.weightTons.toFixed(2)} t`
-                            : null,
-                      },
-                      {
-                        label: "Total CO2e Stored",
-                        value:
-                          sideSheet.entity.co2eStoredPreview?.co2eStoredTonnes != null
-                            ? `${sideSheet.entity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO\u2082e`
-                            : sideSheet.entity.co2eStoredPreview
-                              ? "Pending inputs"
-                              : "Open the batch detail to calculate",
-                      },
-                      {
-                        label: "Preview Inputs",
-                        value:
-                          !sideSheet.entity.co2eStoredPreview
-                            ? "Open the batch detail to calculate"
-                            : sideSheet.entity.co2eStoredPreview.missingInputs.length > 0
-                              ? sideSheet.entity.co2eStoredPreview.missingInputs.join(", ")
-                              : "Complete",
-                      },
-                    ],
-                  },
-                  {
-                    title: "Applications",
-                    fields: [
-                      {
-                        label: "Application Count",
-                        value: String(
-                          sideSheet.entity.applicationCount ?? 0
-                        ),
-                      },
-                    ],
-                  },
-                ]
-              : undefined
-          }
-          viewModeChildren={
-            sideSheet.entity && sideSheet.mode === "view" ? (
-              <CertifyPanel creditBatchId={sideSheet.entity.id} />
-            ) : null
-          }
-        >
-          {(createError || updateError) && (
-            <div className="mb-24">
-              <ServerError message={createError || updateError || ""} />
-            </div>
-          )}
-          <CreditBatchForm
-            key={sideSheet.entity?.id ?? "create"}
-            creditBatch={sideSheet.entity ?? undefined}
-            applications={formApplications}
-            existingBatches={allItems.map((b) => ({
-              id: b.id,
-              code: b.code,
-              facilityId: b.facilityId,
-              startDate: typeof b.startDate === "string" ? b.startDate : b.startDate,
-              endDate: typeof b.endDate === "string" ? b.endDate : b.endDate,
-            }))}
-            onSubmit={
-              sideSheet.entity && sideSheet.mode === "edit"
-                ? handleUpdate
-                : handleCreate
-            }
-            onClearServerError={() => {
-              setCreateError(null);
-              setUpdateError(null);
-            }}
-            onCancel={closeSideSheet}
-            isSubmitting={
-              createCreditBatch.isPending || updateCreditBatch.isPending
-            }
-          />
-        </EntitySideSheet>
-      )}
+        />
+      </EntitySideSheet>
     </div>
   );
 }

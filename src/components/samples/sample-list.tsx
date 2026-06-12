@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate, PencilSimple, Trash } from "@phosphor-icons/react/dist/ssr";
+import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   useCreateSample,
@@ -27,8 +27,8 @@ import {
   TransportLegsSummary,
 } from "@/components/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -129,26 +129,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div
-          className="flex items-center justify-end gap-8"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button
-            size="small"
-            variant="default"
-            onClick={() => onEdit(row.original)}
-          >
-            <PencilSimple size={16} /> Edit
-          </Button>
-          <Button
-            size="small"
-            variant="default"
-            className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-            onClick={() => onDelete(row.original.id)}
-            aria-label="Delete sample"
-          >
-            <Trash size={16} />
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.sampleCode}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -343,13 +331,17 @@ export function SampleList() {
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Lab Samples</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Sample
-        </Button>
-      </div>
+      <PageHeader
+        area="verification"
+        title="Lab Samples"
+        subtitle="Lab analysis of biochar samples and carbon permanence"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Sample
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<Flask size={24} weight="bold" />} description="All lab samples" isLoading={statsLoading} />
@@ -448,7 +440,7 @@ export function SampleList() {
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? "Fill in the form to create a new lab sample." : viewSubtitle}
+        subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {

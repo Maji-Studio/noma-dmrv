@@ -31,6 +31,7 @@ import {
 import "@xyflow/react/dist/base.css";
 import { ArrowLeft, TreeStructure } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { cn } from "@/lib/utils";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
@@ -38,6 +39,14 @@ import {
   useChainOfCustody,
   useCreditBatchChain,
 } from "@/hooks/use-chain-of-custody";
+import {
+  GRAPH_CANVAS_CLASS,
+  GRAPH_CONTROLS_CLASS,
+  GRAPH_DOTS,
+  GRAPH_MINIMAP_CLASS,
+  GRAPH_MINIMAP_MASK,
+} from "./chain-constants";
+import { ChainEdge } from "./chain-edge";
 import { ChainNode } from "./chain-node";
 import { CarbonTransitPanel } from "./map";
 import { RunFilterSelect, type RunFilterOption } from "./run-filter-select";
@@ -48,6 +57,45 @@ import { useBatchChainGraph, useChainGraph } from "./use-chain-graph";
 const nodeTypes: NodeTypes = {
   chainNode: ChainNode,
 };
+
+const edgeTypes = {
+  chainEdge: ChainEdge,
+};
+
+/**
+ * Hover focus: the hovered card's full lineage (ancestors + descendants
+ * through the flow) stays lit; everything else fades back. Returns the
+ * related node-id set, or null when nothing is hovered.
+ */
+function relatedNodeIds(
+  hoveredNodeId: string | null,
+  edges: Edge[]
+): Set<string> | null {
+  if (!hoveredNodeId) return null;
+  const downstream = new Map<string, string[]>();
+  const upstream = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (!downstream.has(edge.source)) downstream.set(edge.source, []);
+    downstream.get(edge.source)!.push(edge.target);
+    if (!upstream.has(edge.target)) upstream.set(edge.target, []);
+    upstream.get(edge.target)!.push(edge.source);
+  }
+  const related = new Set<string>([hoveredNodeId]);
+  for (const adjacency of [downstream, upstream]) {
+    const queue = [hoveredNodeId];
+    const seen = new Set<string>([hoveredNodeId]);
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      for (const next of adjacency.get(current) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        related.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return related;
+}
 
 type ApplicationViewMode = "lineage" | "map" | "split" | "trail";
 type BatchViewMode = "dag" | "map" | "sankey";
@@ -109,11 +157,33 @@ interface ChainFlowGraphProps {
 
 /** Shared ReactFlow chrome for the single-rollback and merged batch DAGs. */
 function ChainFlowGraph({ nodes, edges, warnings, onNodeClick }: ChainFlowGraphProps) {
+  // Hover focus — hovering a card fades back everything outside its lineage
+  // and emphasizes the path edges.
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const related = relatedNodeIds(hoveredNodeId, edges);
+  const displayNodes = related
+    ? nodes.map((node) =>
+        related.has(node.id)
+          ? node
+          : { ...node, data: { ...node.data, dimmed: true } }
+      )
+    : nodes;
+  const displayEdges = related
+    ? edges.map((edge) => {
+        const onPath = related.has(edge.source) && related.has(edge.target);
+        return {
+          ...edge,
+          zIndex: onPath ? 1 : 0,
+          data: { ...edge.data, dimmed: !onPath, emphasized: onPath },
+        };
+      })
+    : edges;
+
   return (
-    <>
+    <div className="h-full w-full">
       {warnings.length > 0 ? (
-        <div className="absolute top-16 left-16 z-10 max-w-[480px] border border-[var(--color-signal-orange)] bg-[var(--color-background-white)] p-12 shadow-sm">
-          <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-signal-orange)]">
+        <div className="absolute top-16 left-16 z-10 max-w-[480px] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
+          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--st-wait)]">
             Missing Links
           </p>
           <ul className="mt-8 flex flex-col gap-6">
@@ -130,10 +200,14 @@ function ChainFlowGraph({ nodes, edges, warnings, onNodeClick }: ChainFlowGraphP
       ) : null}
 
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        className={GRAPH_CANVAS_CLASS}
+        nodes={displayNodes}
+        edges={displayEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodeClick={onNodeClick}
+        onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
+        onNodeMouseLeave={() => setHoveredNodeId(null)}
         fitView
         fitViewOptions={{ padding: 0.18 }}
         proOptions={{ hideAttribution: true }}
@@ -142,29 +216,25 @@ function ChainFlowGraph({ nodes, edges, warnings, onNodeClick }: ChainFlowGraphP
         elementsSelectable={false}
         minZoom={0.3}
         maxZoom={2}
-        defaultEdgeOptions={{ type: "smoothstep" }}
       >
         <FitViewOnNodesReady nodeCount={nodes.length} />
         <Background
           variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color="var(--color-border-tertiary)"
+          gap={GRAPH_DOTS.gap}
+          size={GRAPH_DOTS.size}
+          color={GRAPH_DOTS.color}
         />
-        <Controls
-          showInteractive={false}
-          className="!rounded-none !border-[var(--color-border-secondary)] !shadow-none [&>button]:!rounded-none"
-        />
+        <Controls showInteractive={false} className={GRAPH_CONTROLS_CLASS} />
         <MiniMap
-          className="!rounded-none !border-[var(--color-border-secondary)] !shadow-none"
-          maskColor="rgba(0,0,0,0.08)"
+          className={GRAPH_MINIMAP_CLASS}
+          maskColor={GRAPH_MINIMAP_MASK}
           nodeColor={(node) =>
             (node.data as { accent?: string }).accent ??
             "var(--color-background-medium)"
           }
         />
       </ReactFlow>
-    </>
+    </div>
   );
 }
 
@@ -445,7 +515,7 @@ export function ChainOfCustodyPage() {
     }
     return (
       <div className="grid h-full grid-cols-1 gap-16 p-16 xl:grid-cols-[1.45fr_1fr]">
-        <div className="relative min-h-0 overflow-hidden border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+        <div className="relative min-h-0 overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]">
           <ChainFlowGraph
             nodes={nodes}
             edges={edges}
@@ -526,23 +596,15 @@ export function ChainOfCustodyPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="flex flex-col h-screen">
-        <header className="shrink-0 px-24 py-16 flex flex-col gap-16 border-b border-[var(--color-border-secondary)]">
+        {/* Horizontal rhythm matches the app shell (container-max); only the
+            canvas below is full-bleed. */}
+        <header className="shrink-0 border-b border-[var(--color-border-secondary)]">
+          <div className="container-max py-16 flex flex-col gap-16">
           <div className="flex items-start justify-between gap-16">
-            <div className="flex items-center gap-10">
-              <TreeStructure
-                size={18}
-                weight="bold"
-                className="text-[var(--clr-purple)]"
-              />
-              <div>
-                <h1 className="title-heading-2">Chain of Custody</h1>
-                <p className="body-small text-[var(--color-text-secondary)] mt-2">
-                  Select a credit batch to roll up its provenance, narrow it by
-                  production run, or click an application card to trace a
-                  single rollback.
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              title="Chain of Custody"
+              subtitle="Select a credit batch to roll up its provenance, narrow it by production run, or click an application card to trace a single rollback."
+            />
 
             <div className="text-right max-w-[320px]">
               <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
@@ -622,6 +684,7 @@ export function ChainOfCustodyPage() {
                 ))}
               </div>
             ) : null}
+          </div>
           </div>
         </header>
 

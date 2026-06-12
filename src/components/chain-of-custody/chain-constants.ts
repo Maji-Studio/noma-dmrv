@@ -11,8 +11,9 @@ import {
 
 export const NODE_WIDTH = 260;
 // Layout estimate for dagre — sized for the tallest card (feedstock: date +
-// code + stat + up to five detail lines), so real cards never overlap.
-export const NODE_HEIGHT = 212;
+// code + five label/value rows with a wrapping supplier name), so real cards
+// never overlap.
+export const NODE_HEIGHT = 232;
 
 export const DAGRE_CONFIG = {
   rankdir: "LR" as const,
@@ -20,6 +21,30 @@ export const DAGRE_CONFIG = {
   // Wide enough that edge mass labels sit clear of both ranks' cards.
   ranksep: 140,
 };
+
+/** Edge mass labels declutter below this zoom (read the flow, not the kg). */
+export const EDGE_LABEL_MIN_ZOOM = 0.62;
+
+/**
+ * Shared graph-canvas chrome (figure/ground per the concept screens): the
+ * canvas sits on the --sea plum wash with a quiet dotted grid; the white
+ * cards lift off it. Controls/minimap are paper boxes with ink hairlines
+ * that invert on hover.
+ */
+export const GRAPH_CANVAS_CLASS = "!bg-[var(--sea)]";
+export const GRAPH_DOTS = {
+  gap: 28,
+  size: 1.5,
+  color: "var(--clr-dark-purple-10)",
+} as const;
+export const GRAPH_CONTROLS_CLASS =
+  "!rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none " +
+  "[&>button]:!rounded-none [&>button]:!border-b [&>button]:!border-[var(--clr-dark-purple-10)] " +
+  "[&>button]:!bg-transparent [&>button:last-child]:!border-b-0 " +
+  "[&>button:hover]:!bg-[var(--ink)] [&>button:hover>svg]:!fill-[var(--paper)]";
+export const GRAPH_MINIMAP_CLASS =
+  "!rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none";
+export const GRAPH_MINIMAP_MASK = "rgba(15, 2, 26, 0.05)";
 
 export type LineageNodeKind =
   | "application"
@@ -33,62 +58,76 @@ export type LineageNodeKind =
 export interface LineageNodeStyle {
   label: string;
   icon: ElementType;
+  /** Fill accent — left edge, minimap, marker shapes. */
   accent: string;
+  /** Ink variant of the accent — text-on-light always passes contrast. */
+  accentInk: string;
 }
 
+/**
+ * Accent triad (Phase 0 tokens): Production (orange) / Infrastructure
+ * (purple) / Distribution (pink) — each with its ink variant for text.
+ */
 export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
   application: {
     label: "Application",
     icon: MapPin,
-    accent: "var(--clr-rose)",
+    accent: "var(--acc-dist)",
+    accentInk: "var(--acc-dist-ink)",
   },
   delivery: {
     label: "Delivery",
     icon: Truck,
-    accent: "var(--clr-rose)",
+    accent: "var(--acc-dist)",
+    accentInk: "var(--acc-dist-ink)",
   },
   order: {
     label: "Order",
     icon: ShoppingCart,
-    accent: "var(--clr-rose)",
+    accent: "var(--acc-dist)",
+    accentInk: "var(--acc-dist-ink)",
   },
   biocharProduct: {
     label: "Biochar Product",
     icon: Cube,
-    accent: "var(--clr-orange)",
+    accent: "var(--acc-prod)",
+    accentInk: "var(--acc-prod-ink)",
   },
   productionRun: {
     label: "Production Run",
     icon: Factory,
-    accent: "var(--clr-orange)",
+    accent: "var(--acc-prod)",
+    accentInk: "var(--acc-prod-ink)",
   },
   reactor: {
     label: "Reactor",
     icon: Flask,
-    accent: "var(--clr-purple)",
+    accent: "var(--acc-infra)",
+    accentInk: "var(--acc-infra-ink)",
   },
   feedstock: {
     label: "Feedstock",
     icon: Leaf,
-    accent: "var(--clr-orange)",
+    accent: "var(--acc-prod)",
+    accentInk: "var(--acc-prod-ink)",
   },
 };
 
 export const STATUS_COLORS: Record<string, string> = {
-  applied: "var(--color-status-success)",
-  delivered: "var(--color-status-success)",
-  complete: "var(--color-status-success)",
-  ready: "var(--color-status-success)",
-  processed: "var(--color-status-success)",
-  running: "var(--clr-purple)",
-  upcoming: "var(--clr-purple)",
-  ordered: "var(--clr-purple)",
-  pending: "var(--color-signal-orange)",
-  scheduled: "var(--color-signal-orange)",
-  draft: "var(--color-text-tertiary)",
-  missing_data: "var(--color-text-tertiary)",
-  rejected: "var(--color-signal-red)",
-  void: "var(--color-signal-red)",
+  applied: "var(--st-ok)",
+  delivered: "var(--st-ok)",
+  complete: "var(--st-ok)",
+  ready: "var(--st-ok)",
+  processed: "var(--st-ok)",
+  running: "var(--st-run)",
+  upcoming: "var(--st-run)",
+  ordered: "var(--st-run)",
+  pending: "var(--st-wait)",
+  scheduled: "var(--st-wait)",
+  draft: "var(--st-off)",
+  missing_data: "var(--st-off)",
+  rejected: "var(--st-bad)",
+  void: "var(--st-bad)",
 };
 
-export const STATUS_COLOR_FALLBACK = "var(--color-text-tertiary)";
+export const STATUS_COLOR_FALLBACK = "var(--st-off)";

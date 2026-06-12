@@ -13,7 +13,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, SectionLabel, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -342,11 +342,10 @@ export function ProductionRunForm({
   });
 
   return (
-    <div className="space-y-24">
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
+    <div className="space-y-20">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* ── Run Setup ── */}
-      <div className="space-y-16">
-        <SectionLabel>Run Setup</SectionLabel>
+      <FormSection title="Run Setup" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
@@ -428,11 +427,10 @@ export function ProductionRunForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* ── Feedstock & Processing ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Feedstock & Processing</SectionLabel>
+      <FormSection title="Feedstock & Processing">
 
         {!watchedFacilityId && (
           <p className="text-[var(--color-text-tertiary)] body-caption">
@@ -545,11 +543,10 @@ export function ProductionRunForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* ── Output & Energy ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Output & Energy</SectionLabel>
+      <FormSection title="Output & Energy">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -694,11 +691,10 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-      </div>
+      </FormSection>
 
       {/* ── Process Flow ── */}
-      <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Process Flow</SectionLabel>
+      <FormSection title="Process Flow" className="space-y-12">
         <ProcessFlowPreview
           sourceBinName={selectedSourceBin?.name ?? null}
           feedstockKg={typeof watchWetMass === "number" ? watchWetMass : null}
@@ -708,11 +704,10 @@ export function ProductionRunForm({
           biocharDryKg={previewBiocharDryMass}
           destinationBinName={selectedDestBin?.name ?? null}
         />
-      </div>
+      </FormSection>
 
       {/* ── Production Readings ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Production Readings</SectionLabel>
+      <FormSection title="Production Readings">
 
         <FormField
           id="readingsCsv"
@@ -728,7 +723,7 @@ export function ProductionRunForm({
             </p>
           )}
         </FormField>
-      </div>
+      </FormSection>
 
       </form>
 

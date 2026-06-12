@@ -41,9 +41,9 @@ function nodeKindLabel(node: ChainGeoNode): string {
 // ---------------------------------------------------------------------------
 
 const LEGEND_ROWS = [
-  { accent: "var(--clr-orange)", diamond: false, label: "Supplier · feedstock origin" },
-  { accent: "var(--clr-purple)", diamond: false, label: "Facility · pyrolysis hub" },
-  { accent: "var(--clr-pink)", diamond: true, label: "Application field · stored" },
+  { accent: "var(--acc-prod)", diamond: false, label: "Supplier · feedstock origin" },
+  { accent: "var(--acc-infra)", diamond: false, label: "Facility · pyrolysis hub" },
+  { accent: "var(--acc-dist)", diamond: true, label: "Application field · stored" },
 ] as const;
 
 export function ViewerLegend() {
@@ -100,7 +100,7 @@ export function TransportLegsRail({ legs, onSelectLeg }: TransportLegsRailProps)
             className="size-[7px] shrink-0"
             style={{
               background:
-                leg.kind === "inbound" ? "var(--clr-orange)" : "var(--clr-pink)",
+                leg.kind === "inbound" ? "var(--acc-prod)" : "var(--acc-dist)",
             }}
             aria-hidden="true"
           />

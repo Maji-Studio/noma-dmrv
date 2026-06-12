@@ -5,7 +5,7 @@
 "use client";
 
 import { Package, Scales, Drop, CheckCircle, Warning } from "@phosphor-icons/react";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { formatMass } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFeedstockStats } from "@/hooks/use-feedstocks";
