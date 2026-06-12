@@ -19,6 +19,30 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [] });
   });
 
+  it("reports missing telemetry when a complete production run has no readings", () => {
+    const readiness = deriveEntityCertifyReadiness("productionRun", {
+      status: "complete",
+      feedstockWetMassKg: 5000,
+      feedstockMoisturePercent: 25,
+      biocharOutputKg: 1500,
+      biocharMoisturePercent: 10,
+      dieselOperationLiters: 0,
+      dieselGensetLiters: 12,
+      preprocessingFuelLiters: 3,
+      electricityKwh: 50,
+      readingsCount: 0,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "telemetryReadings",
+        label: "Telemetry readings",
+      },
+    ]);
+  });
+
   it("reports missing entered fields", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
