@@ -11,6 +11,12 @@ import {
   type LineageNodeKind,
 } from "./chain-constants";
 
+/** One label/value row on a lineage card (mono micro-label left, value right). */
+export interface LineageDetailRow {
+  label: string;
+  value: string;
+}
+
 export interface LineageGraphNode {
   id: string;
   kind: LineageNodeKind;
@@ -19,33 +25,14 @@ export interface LineageGraphNode {
   status?: string | null;
   /** Formatted event date — the card's primary line (code is secondary). */
   date: string | null;
-  /** Headline quantity for the card (mass in/out at this step). */
-  stat: string | null;
-  detailLines: string[];
+  /** Label/value rows below the primary line (masses, parties, identifiers). */
+  details: LineageDetailRow[];
 }
 
+// Stroke, casing, and the mass label chip live in ChainEdge (chain-edge.tsx).
 const EDGE_STYLE = {
-  type: "smoothstep" as const,
+  type: "chainEdge" as const,
   markerEnd: { type: MarkerType.ArrowClosed, color: "var(--clr-purple)" },
-  style: { stroke: "var(--clr-purple)", strokeWidth: 1.5 },
-};
-
-/** Mono chip rendered on an edge — the mass moving between the two records. */
-const EDGE_LABEL_STYLE = {
-  labelStyle: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    fontWeight: 500,
-    letterSpacing: "0.04em",
-    fill: "var(--clr-dark-purple)",
-  },
-  labelBgStyle: {
-    fill: "var(--color-background-white)",
-    stroke: "var(--clr-dark-purple-20)",
-    strokeWidth: 1,
-  },
-  labelBgPadding: [6, 4] as [number, number],
-  labelBgBorderRadius: 0,
 };
 
 /** Residual smaller than this is rounding noise, not a storage remainder. */
@@ -67,28 +54,32 @@ function formatDateOrNull(value: Date | string | null | undefined): string | nul
   return formatted === "—" ? null : formatted;
 }
 
-function addLine(lines: string[], value: string | null | undefined) {
+function addRow(
+  rows: LineageDetailRow[],
+  label: string,
+  value: string | null | undefined
+) {
   if (value) {
-    lines.push(value);
+    rows.push({ label, value });
   }
 }
 
-/** Also feeds the Carbon Viewer's marker popups (same codes + detail lines). */
+/** Also feeds the Carbon Viewer's marker popups (same codes + detail rows). */
 export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] {
   const nodes: LineageGraphNode[] = [];
 
   if (data.reactor) {
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Unit", data.reactor.identifier);
+    addRow(details, "Type", data.reactor.reactorType ?? "Not set");
+
     nodes.push({
       id: `reactor:${data.reactor.id}`,
       kind: "reactor",
       code: data.reactor.code,
       href: data.reactor.href,
       date: null,
-      stat: null,
-      detailLines: [
-        data.reactor.identifier,
-        data.reactor.reactorType ?? "Type not set",
-      ],
+      details,
     });
   }
 
@@ -96,23 +87,12 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     left.code.localeCompare(right.code)
   );
   for (const feedstock of sortedFeedstocks) {
-    const detailLines: string[] = [];
-    addLine(detailLines, feedstock.feedstockTypeName ?? undefined);
-    addLine(
-      detailLines,
-      feedstock.supplierName ? `Supplier ${feedstock.supplierName}` : undefined
-    );
-    addLine(
-      detailLines,
-      feedstock.feedstockDeliveryCode
-        ? `Inbound ${feedstock.feedstockDeliveryCode}`
-        : undefined
-    );
-    const massUsed = formatKg(feedstock.massUsedKg);
-    const massDry = formatKg(feedstock.massDryKg);
-    if (massUsed && massDry) {
-      addLine(detailLines, `${massDry} dry`);
-    }
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Type", feedstock.feedstockTypeName);
+    addRow(details, "Supplier", feedstock.supplierName);
+    addRow(details, "Inbound", feedstock.feedstockDeliveryCode);
+    addRow(details, "Used", formatKg(feedstock.massUsedKg));
+    addRow(details, "Dry mass", formatKg(feedstock.massDryKg));
 
     nodes.push({
       id: `feedstock:${feedstock.id}`,
@@ -121,16 +101,14 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       href: feedstock.href,
       status: feedstock.status,
       date: formatDateOrNull(feedstock.deliveryDate),
-      stat: massUsed ? `${massUsed} used` : massDry ? `${massDry} dry` : null,
-      detailLines,
+      details,
     });
   }
 
   if (data.productionRun) {
-    const detailLines: string[] = [];
-    const feedstockIn = formatKg(data.productionRun.feedstockMassDryKg);
-    addLine(detailLines, feedstockIn ? `${feedstockIn} feedstock in` : undefined);
-    const biocharOut = formatKg(data.productionRun.biocharDryMassKg);
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Feedstock in", formatKg(data.productionRun.feedstockMassDryKg));
+    addRow(details, "Biochar out", formatKg(data.productionRun.biocharDryMassKg));
 
     nodes.push({
       id: `production-run:${data.productionRun.id}`,
@@ -139,13 +117,13 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       href: data.productionRun.href,
       status: data.productionRun.status,
       date: formatDateOrNull(data.productionRun.date),
-      stat: biocharOut ? `${biocharOut} biochar out` : null,
-      detailLines,
+      details,
     });
   }
 
   if (data.biocharProduct) {
-    const detailLines: string[] = [];
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Mass", formatKg(data.biocharProduct.massKg));
     // The unsold remainder sitting in storage — material that entered the
     // bin instead of moving on (per this rollback's order).
     if (
@@ -155,7 +133,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     ) {
       const remainderKg = data.biocharProduct.massKg - data.order.quantityKg;
       if (remainderKg > STORAGE_REMAINDER_EPSILON_KG) {
-        addLine(detailLines, `${formatKg(remainderKg)} in storage`);
+        addRow(details, "In storage", formatKg(remainderKg));
       }
     }
 
@@ -166,25 +144,28 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       href: data.biocharProduct.href,
       status: data.biocharProduct.status,
       date: formatDateOrNull(data.biocharProduct.productionDate),
-      stat: formatKg(data.biocharProduct.massKg),
-      detailLines,
+      details,
     });
   }
 
   if (data.order) {
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Quantity", formatKg(data.order.quantityKg));
+
     nodes.push({
       id: `order:${data.order.id}`,
       kind: "order",
       code: data.order.code,
       href: data.order.href,
       date: formatDateOrNull(data.order.orderDate),
-      stat: formatKg(data.order.quantityKg),
-      detailLines: [],
+      details,
     });
   }
 
   {
-    const massDry = formatKg(data.delivery.massDryKg);
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Dry mass", formatKg(data.delivery.massDryKg));
+
     nodes.push({
       id: `delivery:${data.delivery.id}`,
       kind: "delivery",
@@ -192,15 +173,14 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       href: data.delivery.href,
       status: data.delivery.status,
       date: formatDateOrNull(data.delivery.deliveryDate),
-      stat: massDry ? `${massDry} dry` : null,
-      detailLines: [],
+      details,
     });
   }
 
   {
-    const detailLines: string[] = [];
-    addLine(detailLines, data.application.fieldIdentifier ?? undefined);
-    const applied = formatDryTons(data.application.biocharAppliedDryTons);
+    const details: LineageDetailRow[] = [];
+    addRow(details, "Field", data.application.fieldIdentifier);
+    addRow(details, "Applied", formatDryTons(data.application.biocharAppliedDryTons));
 
     nodes.push({
       id: `application:${data.application.id}`,
@@ -209,8 +189,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       href: data.application.href,
       status: data.application.status,
       date: formatDateOrNull(data.application.applicationDate),
-      stat: applied ? `${applied} applied` : null,
-      detailLines,
+      details,
     });
   }
 
@@ -223,7 +202,7 @@ function edge(source: string, target: string, label?: string | null): Edge {
     source,
     target,
     ...EDGE_STYLE,
-    ...(label ? { label, ...EDGE_LABEL_STYLE } : {}),
+    ...(label ? { label } : {}),
   };
 }
 
@@ -305,6 +284,8 @@ export interface ChainGraphOptions {
   disableLinks?: boolean;
   /** Node to ring-highlight (selected via map marker / rail / chip). */
   highlightedNodeId?: string | null;
+  /** Batch DAG: application cards drill into the rollback (hover hint). */
+  drillApplications?: boolean;
 }
 
 function layoutGraph(
@@ -346,12 +327,14 @@ function layoutGraph(
         code: node.code,
         icon: style.icon,
         accent: style.accent,
+        accentInk: style.accentInk,
         href: options.disableLinks ? null : node.href,
         status: node.status,
         date: node.date,
-        stat: node.stat,
-        detailLines: node.detailLines,
+        details: node.details,
         highlighted: node.id === options.highlightedNodeId,
+        drillable:
+          options.drillApplications === true && node.kind === "application",
       } satisfies ChainNodeData,
     };
   });
@@ -398,6 +381,6 @@ export function useBatchChainGraph(
   return layoutGraph(
     Array.from(nodeById.values()),
     Array.from(edgeById.values()),
-    options
+    { ...options, drillApplications: true }
   );
 }

@@ -33,6 +33,11 @@ import type {
   SankeyExit,
   SankeyExitKey,
 } from "@/lib/chain-of-custody/sankey";
+import {
+  GRAPH_CANVAS_CLASS,
+  GRAPH_CONTROLS_CLASS,
+  GRAPH_DOTS,
+} from "../chain-constants";
 
 // ViewBox geometry — rendered 1:1 on the canvas; React Flow handles zoom.
 const VIEW_W = 1040;
@@ -49,15 +54,23 @@ const EXIT_ROW_H = 46;
 /** Invisible hit zone widening each clickable column / exit target. */
 const HIT_PAD_X = 40;
 
+/**
+ * Stage color ramp per the inspiration's carbon-flow ribbon: rose biomass →
+ * orange production → red biochar → purple field use. Ribbons blend between
+ * adjacent stage colors.
+ */
 const COLUMN_ACCENTS: Record<SankeyColumnKey, string> = {
-  feedstock: "var(--clr-orange)",
+  feedstock: "var(--clr-rose)",
   productionRuns: "var(--clr-orange)",
-  biocharLots: "var(--clr-orange)",
-  applied: "var(--clr-rose)",
+  biocharLots: "var(--clr-red)",
+  applied: "var(--clr-purple)",
 };
 
-const RIBBON_FILL = "var(--clr-dark-purple)";
-const RIBBON_OPACITY = 0.14;
+const RIBBON_STOP_OPACITY = 0.5;
+/** Marching centerline width scales with the ribbon, clamped to stay quiet. */
+const FLOW_LINE_WIDTH_RATIO = 0.12;
+const FLOW_LINE_MIN_WIDTH = 1;
+const FLOW_LINE_MAX_WIDTH = 2.4;
 
 /** "See details" target per column — the entity list backing the column. */
 const COLUMN_ROUTES: Record<SankeyColumnKey, string> = {
@@ -97,9 +110,7 @@ function formatNetCo2e(tons: number): string {
 }
 
 function exitTone(exit: SankeyExit): string {
-  return exit.tone === "alert"
-    ? "var(--color-signal-red)"
-    : "var(--color-text-tertiary)";
+  return exit.tone === "alert" ? "var(--st-bad)" : "var(--color-text-tertiary)";
 }
 
 type SankeySelection =
@@ -172,6 +183,31 @@ function SankeyDiagramNode({ data }: NodeProps) {
       role="img"
       aria-label={`Mass balance for credit batch ${batchCode}`}
     >
+      {/* Stage-blend gradients for the ribbons */}
+      <defs>
+        {columns.slice(0, -1).map((column, index) => (
+          <linearGradient
+            key={`gradient-${column.key}`}
+            id={`sankey-ribbon-${column.key}`}
+            x1="0"
+            x2="1"
+            y1="0"
+            y2="0"
+          >
+            <stop
+              offset="0%"
+              stopColor={COLUMN_ACCENTS[column.key]}
+              stopOpacity={RIBBON_STOP_OPACITY}
+            />
+            <stop
+              offset="100%"
+              stopColor={COLUMN_ACCENTS[columns[index + 1].key]}
+              stopOpacity={RIBBON_STOP_OPACITY}
+            />
+          </linearGradient>
+        ))}
+      </defs>
+
       {/* Ribbons between adjacent columns */}
       {columns.slice(0, -1).map((column, index) => {
         const next = columns[index + 1];
@@ -186,13 +222,28 @@ function SankeyDiagramNode({ data }: NodeProps) {
         const rightH = Math.min(leftH, barHeight(next.massKg));
         const xLeft = COLUMN_XS[index] + BAR_W / 2;
         const xRight = COLUMN_XS[index + 1] - BAR_W / 2;
+        const flowWidth = Math.max(
+          FLOW_LINE_MIN_WIDTH,
+          Math.min(FLOW_LINE_MAX_WIDTH, rightH * FLOW_LINE_WIDTH_RATIO)
+        );
         return (
-          <polygon
-            key={`ribbon-${column.key}`}
-            points={`${xLeft},${FLOW_TOP} ${xRight},${FLOW_TOP} ${xRight},${FLOW_TOP + rightH} ${xLeft},${FLOW_TOP + leftH}`}
-            fill={RIBBON_FILL}
-            opacity={RIBBON_OPACITY}
-          />
+          <g key={`ribbon-${column.key}`}>
+            <polygon
+              points={`${xLeft},${FLOW_TOP} ${xRight},${FLOW_TOP} ${xRight},${FLOW_TOP + rightH} ${xLeft},${FLOW_TOP + leftH}`}
+              fill={`url(#sankey-ribbon-${column.key})`}
+            />
+            {/* Marching centerline — direction of the mass flow */}
+            <line
+              className="coc-flow-line"
+              x1={xLeft}
+              y1={FLOW_TOP + leftH / 2}
+              x2={xRight}
+              y2={FLOW_TOP + rightH / 2}
+              stroke={COLUMN_ACCENTS[next.key]}
+              strokeWidth={flowWidth}
+              strokeOpacity={0.5}
+            />
+          </g>
         );
       })}
 
@@ -503,25 +554,23 @@ export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
         maxZoom={2}
         onPaneClick={() => setSelection(null)}
         onMoveStart={() => setSelection(null)}
+        className={GRAPH_CANVAS_CLASS}
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color="var(--color-border-tertiary)"
+          gap={GRAPH_DOTS.gap}
+          size={GRAPH_DOTS.size}
+          color={GRAPH_DOTS.color}
         />
-        <Controls
-          showInteractive={false}
-          className="!rounded-none !border-[var(--color-border-secondary)] !shadow-none [&>button]:!rounded-none"
-        />
+        <Controls showInteractive={false} className={GRAPH_CONTROLS_CLASS} />
       </ReactFlow>
 
       {sankey.netCo2eRemovalTons != null ? (
-        <div className="absolute right-16 top-16 z-10 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8">
-          <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+        <div className="absolute right-16 top-16 z-10 border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-12 py-8">
+          <p className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]">
             Net removal
           </p>
-          <p className="font-mono text-[13px] text-[var(--color-text-primary)]">
+          <p className="mt-2 font-mono text-[13px] text-[var(--color-text-primary)]">
             {formatNetCo2e(sankey.netCo2eRemovalTons)}
           </p>
         </div>
@@ -536,9 +585,10 @@ export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
         />
       ) : null}
 
+      {/* Out of the column-title row — bottom-right, clear of the controls. */}
       {sankey.warnings.length > 0 ? (
-        <div className="absolute top-16 left-16 z-10 max-w-[480px] border border-[var(--color-signal-orange)] bg-[var(--color-background-white)] p-12">
-          <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-signal-orange)]">
+        <div className="absolute bottom-16 right-16 z-10 max-w-[480px] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
+          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--st-wait)]">
             Mass balance inconsistencies
           </p>
           <ul className="mt-8 flex flex-col gap-6">

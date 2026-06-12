@@ -1289,6 +1289,23 @@ p,
 
 /* ===== ANIMATIONS ===== */
 
+/* Chain-of-custody Sankey — marching flow centerline on the mass ribbons
+   (dash cycle = 5 + 7, so one offset period reads as continuous travel). */
+@keyframes coc-flow-march {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+.coc-flow-line {
+  stroke-dasharray: 5 7;
+  animation: coc-flow-march 1.1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .coc-flow-line {
+    animation: none;
+  }
+}
+
 /* Toast slide-in animation */
 @keyframes slide-in-right {
   from {
