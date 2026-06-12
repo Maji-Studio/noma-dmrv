@@ -11,6 +11,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -43,6 +44,9 @@ import {
 // ============================================
 // Constants for select options
 // ============================================
+
+const isApplicationCertifyField = (field: string) =>
+  isCertifyFormField("application", field);
 
 const applicationMethodOptions: readonly { value: string; label: string }[] = applicationMethods.map((method) => ({
   value: method,
@@ -388,6 +392,7 @@ export function ApplicationForm({
             label="Biochar Applied, Wet (kg)"
             error={errors.biocharAppliedTons?.message}
             required
+            certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             helperText={
               availableKg !== null
                 ? `${formatKg(availableKg)} available from this delivery`
@@ -414,6 +419,7 @@ export function ApplicationForm({
               label="Biochar Applied Dry (kg)"
               error={errors.biocharAppliedDryTons?.message}
               helperText="No moisture % on delivery — enter dry mass manually"
+              certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
             >
               <FormInput
                 id="biocharAppliedDryTons"
@@ -566,6 +572,7 @@ export function ApplicationForm({
             label="Soil Temperature (°C)"
             error={errors.soilTemperatureC?.message}
             helperText="Annual average for this application site"
+            certifyRequired={isApplicationCertifyField("soilTemperatureC")}
           >
             <FormInput
               id="soilTemperatureC"
