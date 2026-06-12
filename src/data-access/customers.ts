@@ -12,6 +12,7 @@ import {
   type CustomerLocation,
 } from "@/db/schema";
 import type { CustomerFilterData } from "@/schemas/customers";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 // ============================================
 // Types
@@ -264,6 +265,7 @@ export async function getCustomerLocations(
     gpsLongitude: number | null;
     address: string | null;
     distanceFromFacilityKm: number | null;
+    distanceSource: DistanceSourceValue | null;
     isDefault: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -292,6 +294,7 @@ export async function getCustomerLocations(
       gpsLongitude: customerLocations.gpsLongitude,
       address: customerLocations.address,
       distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
+      distanceSource: customerLocations.distanceSource,
       isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,
       updatedAt: customerLocations.updatedAt,
