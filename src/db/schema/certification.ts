@@ -49,6 +49,9 @@ export const certifierProjects = pgTable(
     stageSplitBiomassPct: real('stage_split_biomass_pct'),
     stageSplitPyrolysisPct: real('stage_split_pyrolysis_pct'),
     stageSplitBiocharPct: real('stage_split_biochar_pct'),
+    // Region-wide conservative fallback used when an application's customer
+    // location has no site-specific default soil temperature.
+    defaultSoilTemperatureC: real('default_soil_temperature_c'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
     // Phase 5 Slice A — operator-pasted Isometric facility ID
@@ -79,6 +82,10 @@ export const certifierProjects = pgTable(
     unique('certifier_projects_provider_external_facility_unique').on(
       table.provider,
       table.externalFacilityId
+    ),
+    check(
+      'certifier_projects_default_soil_temperature_c_range',
+      sql`${table.defaultSoilTemperatureC} is null or (${table.defaultSoilTemperatureC} >= -50 and ${table.defaultSoilTemperatureC} <= 60)`
     ),
   ]
 );

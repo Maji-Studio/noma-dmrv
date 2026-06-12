@@ -61,6 +61,39 @@ describe("deriveBatchHealth", () => {
     expect(checkFor(result, "production").status).toBe("unmet");
   });
 
+  it("names no linked applications separately from missing production data", () => {
+    const result = deriveBatchHealth(
+      facts({
+        hasSubmittableRuns: false,
+        productionReadinessGap: {
+          kind: "noApplications",
+          detail: "No applications linked to this batch",
+          fixTarget: "batchDetails",
+        },
+      }),
+    );
+    const production = checkFor(result, "production");
+    expect(production.status).toBe("unmet");
+    expect(production.detail).toBe("No applications linked to this batch");
+    expect(production.fixTarget).toBe("batchDetails");
+  });
+
+  it("points broken product-to-run lineage at the biochar product workflow", () => {
+    const result = deriveBatchHealth(
+      facts({
+        hasSubmittableRuns: false,
+        productionReadinessGap: {
+          kind: "biocharProductMissingRun",
+          detail: "Biochar product BP-1 is not linked to a production run",
+          fixTarget: "biocharProducts",
+        },
+      }),
+    );
+    const production = checkFor(result, "production");
+    expect(production.detail).toContain("BP-1");
+    expect(production.fixTarget).toBe("biocharProducts");
+  });
+
   it("blocks grouping when the batch's entity certifier fields are incomplete", () => {
     const result = deriveBatchHealth(
       facts({

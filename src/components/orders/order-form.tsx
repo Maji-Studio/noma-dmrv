@@ -7,7 +7,7 @@
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormEntitySelect, FormActions } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
@@ -20,7 +20,8 @@ import {
 import type { Order } from "@/db/schema";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
-import { useState, useEffect } from "react";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { useEffect } from "react";
 
 // ============================================
 // Constants for select options
@@ -70,9 +71,33 @@ export function OrderForm({
 }: OrderFormProps) {
   const isEditMode = !!order;
   const { facilityId: contextFacilityId } = useFacilityContext();
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(
-    order?.customerId ?? undefined
-  );
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    getValues,
+    setValue,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(orderFormSchema),
+    defaultValues: {
+      facilityId: order?.facilityId ?? contextFacilityId ?? "",
+      customerId: order?.customerId ?? "",
+      customerLocationId: order?.customerLocationId ?? "",
+      biocharProductId: order?.biocharProductId ?? "",
+      orderDate: order?.orderDate
+        ? formatLocalDate(new Date(order.orderDate))
+        : formatLocalDate(new Date()),
+      quantityKg: order?.quantityKg ?? undefined,
+      packaging: (order?.packaging as PackagingType) ?? "loose",
+      value: order?.value ?? undefined,
+      currency: order?.currency ?? "TZS",
+    },
+  });
+
+  const watchedCustomerId = useWatch({ control, name: "customerId" });
+  const selectedCustomerId = watchedCustomerId || undefined;
 
   // Fetch related data for dropdowns
   const { data: customersData } = useCustomers({ pageSize: 100 });
@@ -96,59 +121,28 @@ export function OrderForm({
     label: l.name ?? "Unnamed location",
   }));
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm({
-    resolver: zodResolver(orderFormSchema),
-    defaultValues: {
-      facilityId: order?.facilityId ?? contextFacilityId ?? "",
-      customerId: order?.customerId ?? "",
-      customerLocationId: order?.customerLocationId ?? "",
-      biocharProductId: order?.biocharProductId ?? "",
-      orderDate: order?.orderDate
-        ? formatLocalDate(new Date(order.orderDate))
-        : formatLocalDate(new Date()),
-      quantityKg: order?.quantityKg ?? undefined,
-      packaging: (order?.packaging as PackagingType) ?? "loose",
-      value: order?.value ?? undefined,
-      currency: order?.currency ?? "TZS",
-    },
-  });
-
-  const watchedCustomerId = watch("customerId");
-
   // Sync facilityId when contextFacilityId arrives after mount (create mode only)
   useEffect(() => {
     if (!order?.facilityId && contextFacilityId) {
-      const currentValue = watch("facilityId");
+      const currentValue = getValues("facilityId");
       if (!currentValue) {
         setValue("facilityId", contextFacilityId);
       }
     }
-  }, [contextFacilityId, order?.facilityId, setValue, watch]);
+  }, [contextFacilityId, order?.facilityId, setValue, getValues]);
 
-  // Update customer locations when customer changes
-  useEffect(() => {
-    if (watchedCustomerId !== selectedCustomerId) {
-      setSelectedCustomerId(watchedCustomerId || undefined);
-      // Clear customer location when customer changes
-      if (watchedCustomerId !== order?.customerId) {
-        setValue("customerLocationId", "");
-      }
-    }
-  }, [watchedCustomerId, selectedCustomerId, order?.customerId, setValue]);
+  // Clear stale location when customer changes (skips initial mount so
+  // edit-mode defaults survive)
+  useClearOnDependencyChange(watchedCustomerId, () =>
+    setValue("customerLocationId", "")
+  );
 
   // Auto-select location when customer has exactly one
   useEffect(() => {
-    if (customerLocations.length === 1 && !watch("customerLocationId")) {
-      setValue("customerLocationId", customerLocations[0].id);
+    if (customerLocationsData?.length === 1 && !getValues("customerLocationId")) {
+      setValue("customerLocationId", customerLocationsData[0].id);
     }
-  }, [customerLocations, setValue, watch]);
+  }, [customerLocationsData, setValue, getValues]);
 
   const defaultSubmitLabel = isEditMode ? "Update Order" : "Create Order";
 

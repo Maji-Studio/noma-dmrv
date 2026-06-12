@@ -10,6 +10,8 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 - ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`
 - ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests
 - ❌ **NEVER log PII (emails, names)** — log IDs (`userId`, `removalId`) instead; the server logger redacts as a backstop, not a license
+- ❌ **NEVER commit to `staging` or `main` directly, and never modify `staging` during branch work** — feature branch + PR only; verify `git branch --show-current` before every commit
+- ❌ **NEVER assume local env matches staging/production** — the three 1Password items intentionally differ (see Environment Variables)
 - ❌ **NEVER create messy docs** — follow Documentation Standards below
 
 ## Project Overview
@@ -204,7 +206,7 @@ All local summaries are **non-authoritative interpretations** — verify against
 
 - Admin-invite only by default (`ALLOW_SELF_SIGNUP=false`); admin set by `ADMIN_EMAIL`
 - Email invitations + password resets via Resend; Better Auth session cookies (`nextCookies` plugin)
-- Middleware uses `getSessionCookie()` (`src/middleware.ts`). See `docs/auth.md`.
+- Route protection runs through `src/proxy.ts` (Next.js 16's `middleware.ts` replacement, Node runtime) → `updateSession()` in `src/lib/auth/middleware.ts`. See `docs/auth.md`.
 
 ## Environment Variables
 
@@ -217,6 +219,8 @@ All validated via Zod in `src/config/env.ts` (`superRefine` enforces cross-field
 - **Geo / maps (all optional — graceful degradation):** `OPENROUTESERVICE_API_KEY` (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public, domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic test fixtures, rejected in prod)
 
 **Sourcing** — values live in 1Password (vault `Environment Variables`, one item per env: `local`/`staging`/`production`). Local: `pnpm env:local` (`.env.local.tpl` → `.env.local`). Deployed: `.env.tpl` (staging/production refs) feeds `pnpm env:vercel` only. Both syncs **skip optional vars missing from the item** (warning, not error) and fail only on `REQUIRED_LOCAL_VARS`/`REQUIRED_DEPLOYED_VARS` (`scripts/env-tpl-utils.ts`). CI: `1password/load-secrets-action` via the `OP_SERVICE_ACCOUNT_TOKEN` repo secret. Drift: `pnpm env:check`. See `docs/security.md` → Secrets Management.
+
+**The three env items intentionally differ** — `local` has its own `DATABASE_URL` (Docker Postgres), `NEXT_PUBLIC_APP_URL` (localhost:3100), dev admin credentials, and test toggles (`DISABLE_RATE_LIMIT`); it is **not** a copy of staging. Before debugging any env/auth issue: state your assumptions about local vs. deployed config and confirm them against the right 1Password item. The `op` CLI needs interactive desktop approval — a sandboxed shell can't reproduce 1Password auth, so ask the user to run `op` commands themselves (`! op …`) instead of diagnosing around a sign-in you can't perform.
 
 ## Security
 
@@ -231,6 +235,17 @@ Keep `/docs` clean — only **evergreen** docs (product/architecture/design-syst
 ## Git Conventions
 
 Branch `<type>/<kebab-desc>`; commit/PR title `<type>: <imperative, lowercase verb>` (PR title < 70 chars). Types: `feat` · `fix` · `refactor` · `chore` · `docs` · `test`. Multi-line commits: blank line then a body explaining **why**, not what.
+
+### Branch guardrails
+
+- **Confirm the target branch before every commit** (`git branch --show-current`) — misplaced commits are a recurring failure mode here. If asked to commit and the current branch looks wrong for the work, stop and ask.
+- **`staging` and `main` are off-limits** for direct commits; `staging` also stays untouched during branch consolidations, rebases, and cherry-picks unless the user explicitly says otherwise.
+- **Run git/gh operations as discrete steps**, not chained `&&` one-liners — each step stays inspectable and avoids permission blocks mid-chain.
+- Default PR base is `staging`; `staging` → `main` promotion PRs are their own explicit step.
+
+### Code review remediation (CodeRabbit / Claude review / audits)
+
+For every finding: **verify it against the actual code first**, fix only valid ones with minimal changes, and skip invalid ones with a one-line written reason (false positives are common — including bogus P0s). Then validate with `pnpm lint` + `pnpm typecheck` + tests before committing. Never blanket-apply a findings list.
 
 ## E2E Testing
 

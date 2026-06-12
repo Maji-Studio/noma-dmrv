@@ -4,6 +4,27 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+## 2026-06-12 (phantom link dialog explained — post-create certifier prompt is intentional)
+
+Closes open question `facilities/phantom-link-dialog`.
+
+- The "Link Isometric project" modal that appeared over `/facilities` right
+  after a facility create was not a phantom: `facility-list.tsx` deliberately
+  opens `FacilityCertifierDialog` (via `FacilityCertifierLinkLoader`) for
+  admins after a successful create, as an optional prompt to link the new
+  facility to an Isometric project (commit `aa0e1da`, landed on staging via
+  PR #183). The earlier "no mount outside the Settings page" static analysis
+  predated that commit's arrival on the analyzed branch.
+- The dialog only mounts once its mapping payload loads (~0.5 s after
+  create), which is why it raced test assertions and looked nondeterministic.
+- E2E suites now dismiss it via a shared
+  `dismissCertifierLinkDialog(page)` helper
+  (`tests/e2e/fixtures/page-helpers.ts`), used by `facilities.spec.ts`
+  (replacing the quarantine workaround) and `full-chain-ui.spec.ts` (whose
+  Create Facility step had been failing on staging CI since PR #183 merged).
+
+Open question closed: `facilities/phantom-link-dialog`.
+
 ## 2026-06-11 (distance provenance + source-aware priority resolution — map integration Phase 1 §9)
 
 Implements decisions 2–3 of

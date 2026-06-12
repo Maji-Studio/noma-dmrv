@@ -49,6 +49,7 @@ export function EmissionEstimatesForm({
       stageSplitBiomassPct: mapping?.stageSplitBiomassPct ?? undefined,
       stageSplitPyrolysisPct: mapping?.stageSplitPyrolysisPct ?? undefined,
       stageSplitBiocharPct: mapping?.stageSplitBiocharPct ?? undefined,
+      defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
     },
   });
 
@@ -100,6 +101,24 @@ export function EmissionEstimatesForm({
             min={0}
             error={!!errors.gensetEnergyYieldKwhPerLitre}
             {...register("gensetEnergyYieldKwhPerLitre")}
+          />
+        </FormField>
+      </div>
+
+      <div className="flex flex-col gap-16">
+        <SectionLabel>Soil durability defaults</SectionLabel>
+        <FormField
+          id="defaultSoilTemperatureC"
+          label="Facility fallback soil temperature (°C)"
+          error={errors.defaultSoilTemperatureC?.message}
+          helperText="Optional conservative fallback for new applications when the selected customer location has no site-specific default."
+        >
+          <FormInput
+            id="defaultSoilTemperatureC"
+            type="number"
+            step="any"
+            error={!!errors.defaultSoilTemperatureC}
+            {...register("defaultSoilTemperatureC")}
           />
         </FormField>
       </div>

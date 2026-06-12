@@ -12,6 +12,7 @@
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -34,6 +35,8 @@ import {
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   formatKg,
+  resolveApplicationPositionDefault,
+  resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 
@@ -190,6 +193,7 @@ export function ApplicationForm({
     control,
     setError,
     setValue,
+    getFieldState,
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
@@ -215,6 +219,8 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
+  const watchedSoilTemperatureC = useWatch({ control, name: "soilTemperatureC" });
+  const watchedSoilTemperatureSource = useWatch({ control, name: "soilTemperatureSource" });
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
 
@@ -223,6 +229,69 @@ export function ApplicationForm({
     label: formatApplicationDeliveryOptionLabel(d),
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
+
+  useEffect(() => {
+    if (isEditMode || !selectedDelivery) return;
+
+    const temperatureState = getFieldState("soilTemperatureC");
+    const sourceState = getFieldState("soilTemperatureSource");
+    if (
+      temperatureState.isDirty ||
+      sourceState.isDirty ||
+      watchedSoilTemperatureC != null ||
+      watchedSoilTemperatureSource
+    ) {
+      return;
+    }
+
+    const defaultValue = resolveApplicationSoilTemperatureDefault({
+      delivery: selectedDelivery,
+    });
+    if (!defaultValue) return;
+
+    setValue("soilTemperatureSource", defaultValue.soilTemperatureSource, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+    setValue("soilTemperatureC", defaultValue.soilTemperatureC, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [
+    getFieldState,
+    isEditMode,
+    selectedDelivery,
+    setValue,
+    watchedSoilTemperatureC,
+    watchedSoilTemperatureSource,
+  ]);
+
+  // Prefill the field position from the delivery's destination customer
+  // location, but only while the operator hasn't touched it (pin drag and
+  // address search set the fields dirty; prefills don't). While untouched,
+  // the position always mirrors the selected delivery — including clearing
+  // a stale prefill when the new destination has no GPS.
+  useEffect(() => {
+    if (isEditMode || !selectedDelivery) return;
+    if (
+      getFieldState("gpsLatitude").isDirty ||
+      getFieldState("gpsLongitude").isDirty
+    ) {
+      return;
+    }
+
+    const positionDefault = resolveApplicationPositionDefault({
+      delivery: selectedDelivery,
+    });
+    setValue("gpsLatitude", positionDefault?.gpsLatitude, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+    setValue("gpsLongitude", positionDefault?.gpsLongitude, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;

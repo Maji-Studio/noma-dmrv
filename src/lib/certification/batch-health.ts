@@ -16,6 +16,10 @@
  */
 
 import type { TransportCategory } from "./readiness";
+import {
+  defaultProductionReadinessGap,
+  type ProductionReadinessGap,
+} from "./production-readiness";
 
 export type BatchHealthState =
   | "ready" // every applicable batch-level check is met — selectable
@@ -26,6 +30,14 @@ export type BatchHealthCheckKey =
   | "production" // lineage resolves >= 1 production run
   | "transport" // transport legs present for the template's required categories
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
+
+export type BatchHealthFixTarget =
+  | "batchDetails"
+  | "deliveries"
+  | "deliveryDistances"
+  | "productionRuns"
+  | "biocharProducts"
+  | "sourceData";
 
 export type BatchHealthCheckStatus =
   | "met" // satisfied
@@ -39,6 +51,8 @@ export interface BatchHealthCheck {
   status: BatchHealthCheckStatus;
   /** Missing items when unmet, or context when skipped/met. */
   detail?: string;
+  /** UI hint for the most specific workflow that resolves an unmet check. */
+  fixTarget?: BatchHealthFixTarget;
 }
 
 export interface BatchTransportFact {
@@ -64,6 +78,8 @@ export interface BatchHealthFacts {
   entityReadinessGaps: string[];
   /** The batch's application lineage resolves at least one production run. */
   hasSubmittableRuns: boolean;
+  /** Specific reason production lineage is not submittable, when known. */
+  productionReadinessGap?: ProductionReadinessGap | null;
   /**
    * The facility is set up on Isometric (project mapping + a cleanly-resolving
    * default template). Transport requirements come from the template, so
@@ -108,14 +124,17 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheck {
 }
 
 function productionCheck(facts: BatchHealthFacts): BatchHealthCheck {
-  return facts.hasSubmittableRuns
-    ? { key: "production", label: PRODUCTION_LABEL, status: "met" }
-    : {
-        key: "production",
-        label: PRODUCTION_LABEL,
-        status: "unmet",
-        detail: "No production data linked yet — nothing to certify",
-      };
+  if (facts.hasSubmittableRuns) {
+    return { key: "production", label: PRODUCTION_LABEL, status: "met" };
+  }
+  const gap = facts.productionReadinessGap ?? defaultProductionReadinessGap();
+  return {
+    key: "production",
+    label: PRODUCTION_LABEL,
+    status: "unmet",
+    detail: gap.detail,
+    fixTarget: gap.fixTarget,
+  };
 }
 
 function transportCheck(facts: BatchHealthFacts): BatchHealthCheck {
