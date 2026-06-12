@@ -8,6 +8,10 @@ import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
 import { optionalDistanceSource } from "./distance-source";
 import { emptyToNull } from "./helpers";
+import {
+  optionalTruckMass,
+  validateTruckMasses,
+} from "./truck-weighing";
 
 // ============================================
 // Constants and Enums
@@ -40,30 +44,6 @@ function validateDistanceOverride(
   }
 }
 
-function validateTruckMasses(
-  value: {
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
-  },
-  ctx: z.RefinementCtx
-) {
-  if (value.truckMassOnArrivalKg != null && value.truckMassOnArrivalKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnArrivalKg"],
-      message: "Truck mass on arrival must be >= 0",
-    });
-  }
-
-  if (value.truckMassOnDepartureKg != null && value.truckMassOnDepartureKg < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["truckMassOnDepartureKg"],
-      message: "Truck mass on departure must be >= 0",
-    });
-  }
-}
-
 // ============================================
 // Delivery Form Schema (Client-side validation)
 // ============================================
@@ -84,8 +64,8 @@ const deliveryFormBaseSchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
-  truckMassOnArrivalKg: optionalNumber,
-  truckMassOnDepartureKg: optionalNumber,
+  truckMassOnArrivalKg: optionalTruckMass,
+  truckMassOnDepartureKg: optionalTruckMass,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -163,8 +143,8 @@ export const createDeliverySchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
-  truckMassOnArrivalKg: optionalNumber,
-  truckMassOnDepartureKg: optionalNumber,
+  truckMassOnArrivalKg: optionalTruckMass,
+  truckMassOnDepartureKg: optionalTruckMass,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -215,8 +195,8 @@ export const updateDeliverySchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
-  truckMassOnArrivalKg: optionalNumber,
-  truckMassOnDepartureKg: optionalNumber,
+  truckMassOnArrivalKg: optionalTruckMass,
+  truckMassOnDepartureKg: optionalTruckMass,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,

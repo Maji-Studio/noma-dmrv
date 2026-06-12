@@ -21,6 +21,7 @@ import {
   type CustomerLocationFormData,
 } from "@/schemas/customers";
 import type { CustomerLocation } from "@/db/schema/parties";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 // ============================================
 // Component
@@ -240,6 +241,7 @@ export function CustomerLocationForm({
             id="distanceFromFacilityKm"
             label="Distance from facility (km)"
             error={errors.distanceFromFacilityKm?.message}
+            certifyRequired={isCertifyFormField("customerLocation", "distanceFromFacilityKm")}
             helperText="Road distance facility → site. Auto-fills the biochar distribution transport leg used for certification."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}

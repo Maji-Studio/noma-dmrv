@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Calendar, Package, Plus } from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -111,6 +111,17 @@ function createColumns(
       ),
     },
     {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <StatusBadge
+          status={row.original.status === "complete" ? "complete" : "pending"}
+          label={row.original.status === "complete" ? "Complete" : "Missing data"}
+          size="small"
+        />
+      ),
+    },
+    {
       accessorKey: "moistureContentPercent",
       header: "Moisture",
       cell: ({ row }) => (
@@ -147,6 +158,32 @@ function createColumns(
       enableSorting: false,
     },
   ];
+}
+
+function buildFeedstockTransferToast(feedstocks: FeedstockWithRelations[]) {
+  const [first] = feedstocks;
+  if (!first) return "Feedstock created successfully";
+
+  const feedstockType = first.feedstockTypeName ?? "feedstock";
+  const totalDryKg = feedstocks.reduce(
+    (sum, feedstock) => sum + feedstock.massDryKg,
+    0,
+  );
+  const binLabels = feedstocks
+    .map((feedstock) => feedstock.storageLocationCode ?? feedstock.storageLocationName)
+    .filter((label): label is string => Boolean(label));
+  const uniqueBinLabels = [...new Set(binLabels)];
+
+  if (feedstocks.length === 1) {
+    const binLabel = uniqueBinLabels[0] ?? "the selected bin";
+    return `Transferred ${formatMass(totalDryKg)} ${feedstockType} to ${binLabel}`;
+  }
+
+  const binLabel =
+    uniqueBinLabels.length > 0
+      ? uniqueBinLabels.join(", ")
+      : "the selected bins";
+  return `Transferred ${formatMass(totalDryKg)} ${feedstockType} across ${binLabel}`;
 }
 
 // ============================================
@@ -192,10 +229,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     try {
       const result = await createFeedstock.mutateAsync(data);
       setSideSheet(null);
-      const count = result.feedstocks.length;
+      const transferMessage = buildFeedstockTransferToast(result.feedstocks);
       const msg = result.warning
-        ? `Feedstock created (${count} record${count > 1 ? "s" : ""}). Warning: ${result.warning}`
-        : `Feedstock created successfully (${count} record${count > 1 ? "s" : ""})`;
+        ? `${transferMessage}. Warning: ${result.warning}`
+        : transferMessage;
       toast.success(msg);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create feedstock");
@@ -215,6 +252,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
+        truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
+        truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
         massDryKg: deriveMassDryKg(
           data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
           data.moisturePercent
@@ -263,7 +302,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
   useOpenCreateIntent(openCreate);
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   const feedstockItems = feedstocksData?.items ?? [];
   useEffect(() => {
@@ -430,6 +469,23 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             title: "Storage",
             fields: [
               { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
+            ],
+          },
+          {
+            title: "Truck Weighing",
+            fields: [
+              {
+                label: "Before unloading",
+                value: sideSheetEntity.truckMassOnArrivalKg !== null
+                  ? formatMass(sideSheetEntity.truckMassOnArrivalKg)
+                  : null,
+              },
+              {
+                label: "After unloading",
+                value: sideSheetEntity.truckMassOnDepartureKg !== null
+                  ? formatMass(sideSheetEntity.truckMassOnDepartureKg)
+                  : null,
+              },
             ],
           },
           ...(sideSheetEntity.overrideJustification ? [{

@@ -27,7 +27,7 @@ import {
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 
-const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin", "ingredient_bin"] as const;
+const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -48,6 +48,8 @@ export interface FeedstockWithRelations {
   vehicleId: string | null;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
+  truckMassOnArrivalKg: number | null;
+  truckMassOnDepartureKg: number | null;
   deliveryGroupId: string | null;
   overrideJustification: string | null;
   // Material fields
@@ -98,6 +100,8 @@ export interface CreateFeedstockInput {
   vehicleId?: string | null;
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
+  truckMassOnArrivalKg?: number | null;
+  truckMassOnDepartureKg?: number | null;
   feedstockTypeId: string;
   totalWetMassKg: number;
   moisturePercent: number;
@@ -125,6 +129,8 @@ const feedstockSelectFields = {
   vehicleId: feedstocks.vehicleId,
   gpsLatitude: feedstocks.gpsLatitude,
   gpsLongitude: feedstocks.gpsLongitude,
+  truckMassOnArrivalKg: feedstocks.truckMassOnArrivalKg,
+  truckMassOnDepartureKg: feedstocks.truckMassOnDepartureKg,
   deliveryGroupId: feedstocks.deliveryGroupId,
   overrideJustification: feedstocks.overrideJustification,
   feedstockTypeId: feedstocks.feedstockTypeId,
@@ -263,6 +269,31 @@ export async function getFeedstockById(
   return item;
 }
 
+export async function getFeedstocksByIds(
+  userId: string,
+  feedstockIds: string[],
+): Promise<
+  {
+    id: string;
+    code: string;
+    truckMassOnArrivalKg: number | null;
+    truckMassOnDepartureKg: number | null;
+  }[]
+> {
+  requireAuth(userId);
+  if (feedstockIds.length === 0) return [];
+
+  return db
+    .select({
+      id: feedstocks.id,
+      code: feedstocks.code,
+      truckMassOnArrivalKg: feedstocks.truckMassOnArrivalKg,
+      truckMassOnDepartureKg: feedstocks.truckMassOnDepartureKg,
+    })
+    .from(feedstocks)
+    .where(inArray(feedstocks.id, feedstockIds));
+}
+
 export async function getFeedstockStats(
   userId: string,
   facilityId?: string
@@ -338,11 +369,11 @@ export async function createFeedstock(
     if (bin.facilityId !== data.facilityId) {
       throw new SafeError(`Storage bin ${bin.id} does not belong to the selected facility`);
     }
-    if (!isFeedstockIntakeBinType(bin.type)) {
-      throw new SafeError(
-        `Feedstock materials must be allocated to a feedstock or ingredient bin, not a ${bin.type.replace("_", " ")}.`
-      );
-    }
+      if (!isFeedstockIntakeBinType(bin.type)) {
+        throw new SafeError(
+          `Feedstock materials must be allocated to a feedstock bin, not a ${bin.type.replace("_", " ")}.`
+        );
+      }
     if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
       throw new SafeError(
         `Storage bin already holds a different feedstock type. Each bin can only hold one type.`
@@ -376,6 +407,8 @@ export async function createFeedstock(
           vehicleId: data.vehicleId ?? null,
           gpsLatitude: data.gpsLatitude ?? null,
           gpsLongitude: data.gpsLongitude ?? null,
+          truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
+          truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
           deliveryGroupId,
           overrideJustification: data.overrideJustification || null,
           // Material fields
@@ -432,6 +465,8 @@ export async function updateFeedstock(
     vehicleId?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
+    truckMassOnArrivalKg?: number | null;
+    truckMassOnDepartureKg?: number | null;
     feedstockTypeId?: string;
     massDryKg?: number;
     massWetKg?: number | null;
@@ -487,7 +522,7 @@ export async function updateFeedstock(
 
       if (!isFeedstockIntakeBinType(bin.type)) {
         throw new SafeError(
-          "Feedstock materials must be allocated to a feedstock or ingredient bin."
+          "Feedstock materials must be allocated to a feedstock bin."
         );
       }
       if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {

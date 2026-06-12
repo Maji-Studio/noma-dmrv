@@ -14,6 +14,7 @@ import {
   reactors,
   storageLocations,
   feedstocks,
+  feedstockTypes,
 } from "@/db/schema";
 import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { requireAuth } from "../utils";
@@ -58,13 +59,12 @@ async function allocateFeedstockMass(
 }
 
 /**
- * Validate that a storage location exists, belongs to the facility, and is the expected type.
+ * Validate that an output storage location exists, belongs to the facility, and is a biochar bin.
  */
-async function validateStorageLocation(
+async function validateBiocharStorageLocation(
   tx: DbTransaction,
   locationId: string,
   facilityId: string,
-  expectedType: "feedstock_bin" | "biochar_bin",
   label: string,
 ) {
   const [loc] = await tx
@@ -74,7 +74,38 @@ async function validateStorageLocation(
 
   if (!loc) throw new SafeError(`${label} storage location not found`);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
-  if (loc.type !== expectedType) throw new SafeError(`Selected storage location is not a ${expectedType.replace("_", " ")}`);
+  if (loc.type !== "biochar_bin") throw new SafeError("Selected storage location is not a biochar bin");
+}
+
+/**
+ * Validate that a production-run source bin holds pyrolysis-usage feedstock.
+ */
+async function validateProductionFeedstockSource(
+  tx: DbTransaction,
+  locationId: string,
+  facilityId: string,
+) {
+  const [loc] = await tx
+    .select({
+      id: storageLocations.id,
+      facilityId: storageLocations.facilityId,
+      type: storageLocations.type,
+      feedstockTypeId: storageLocations.feedstockTypeId,
+      feedstockTypeUsage: feedstockTypes.usage,
+    })
+    .from(storageLocations)
+    .leftJoin(feedstockTypes, eq(storageLocations.feedstockTypeId, feedstockTypes.id))
+    .where(eq(storageLocations.id, locationId));
+
+  if (!loc) throw new SafeError("Feedstock storage location not found");
+  if (loc.facilityId !== facilityId) throw new SafeError("Feedstock bin does not belong to the selected facility");
+  if (loc.type !== "feedstock_bin") throw new SafeError("Selected storage location is not a feedstock bin");
+  if (!loc.feedstockTypeId || !loc.feedstockTypeUsage) {
+    throw new SafeError("Source bin must be restricted to a feedstock type before it can feed a production run");
+  }
+  if (loc.feedstockTypeUsage !== "pyrolysis") {
+    throw new SafeError("Source bin holds a blend feedstock type and cannot feed a production run");
+  }
 }
 
 /**
@@ -182,10 +213,10 @@ export async function createProductionRun(
 
     // Validate storage locations belong to facility and are correct type
     if (data.feedstockStorageLocationId) {
-      await validateStorageLocation(tx, data.feedstockStorageLocationId, data.facilityId, "feedstock_bin", "Feedstock");
+      await validateProductionFeedstockSource(tx, data.feedstockStorageLocationId, data.facilityId);
     }
     if (data.biocharStorageLocationId) {
-      await validateStorageLocation(tx, data.biocharStorageLocationId, data.facilityId, "biochar_bin", "Biochar");
+      await validateBiocharStorageLocation(tx, data.biocharStorageLocationId, data.facilityId, "Biochar");
     }
 
     // Auto-populate M:M feedstock relationships from bin contents
@@ -361,7 +392,7 @@ export async function updateProductionRun(
       effectiveFeedstockStorageId &&
       (data.feedstockStorageLocationId !== undefined || data.facilityId !== undefined)
     ) {
-      await validateStorageLocation(tx, effectiveFeedstockStorageId, targetFacilityId, "feedstock_bin", "Feedstock");
+      await validateProductionFeedstockSource(tx, effectiveFeedstockStorageId, targetFacilityId);
     }
 
     const effectiveBiocharStorageId =
@@ -373,7 +404,7 @@ export async function updateProductionRun(
       effectiveBiocharStorageId &&
       (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
     ) {
-      await validateStorageLocation(tx, effectiveBiocharStorageId, targetFacilityId, "biochar_bin", "Biochar");
+      await validateBiocharStorageLocation(tx, effectiveBiocharStorageId, targetFacilityId, "Biochar");
     }
 
     // Re-allocate feedstock M:M when feedstock fields change

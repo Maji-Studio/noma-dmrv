@@ -3,13 +3,14 @@
  * CRUD operations for biochar products with auth guards, pagination, filtering, and relations
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
   formulations,
   facilities,
   storageLocations,
+  feedstockTypes,
   productionRuns,
   orders,
   deliveries,
@@ -59,6 +60,63 @@ export interface PaginatedBiocharProducts {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+
+function getCompositionStorageLocationIds(composition: Record<string, unknown> | null | undefined): string[] {
+  const ingredients = composition?.ingredients;
+  if (!Array.isArray(ingredients)) return [];
+
+  return [
+    ...new Set(
+      ingredients
+        .map((ingredient) =>
+          typeof ingredient === "object" &&
+          ingredient !== null &&
+          "storageLocationId" in ingredient &&
+          typeof ingredient.storageLocationId === "string"
+            ? ingredient.storageLocationId
+            : null
+        )
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+}
+
+async function validateCompositionIngredientBins(
+  tx: Pick<typeof db, "select">,
+  composition: Record<string, unknown> | null | undefined,
+  facilityId: string
+) {
+  const storageLocationIds = getCompositionStorageLocationIds(composition);
+  if (storageLocationIds.length === 0) return;
+
+  const bins = await tx
+    .select({
+      id: storageLocations.id,
+      facilityId: storageLocations.facilityId,
+      type: storageLocations.type,
+      feedstockTypeId: storageLocations.feedstockTypeId,
+      feedstockTypeUsage: feedstockTypes.usage,
+    })
+    .from(storageLocations)
+    .leftJoin(feedstockTypes, eq(storageLocations.feedstockTypeId, feedstockTypes.id))
+    .where(inArray(storageLocations.id, storageLocationIds));
+
+  if (bins.length !== storageLocationIds.length) {
+    throw new SafeError("Ingredient bin not found");
+  }
+
+  for (const bin of bins) {
+    if (bin.facilityId !== facilityId) {
+      throw new SafeError("Ingredient bin belongs to a different facility");
+    }
+    if (bin.type !== "feedstock_bin") {
+      throw new SafeError("Ingredient bin must be a feedstock bin");
+    }
+    if (!bin.feedstockTypeId || bin.feedstockTypeUsage !== "blend") {
+      throw new SafeError("Ingredient bin must hold blend-usage feedstock");
+    }
+  }
+}
 
 // ============================================
 // Biochar Product Read Operations
@@ -437,6 +495,8 @@ export async function createBiocharProduct(
   // so two products with different formulations can't both pass the reservation
   // check and strand a mismatched product (the claim-after-insert TOCTOU).
   const product = await db.transaction(async (tx) => {
+    await validateCompositionIngredientBins(tx, data.composition, data.facilityId);
+
     const [storage] = await tx
       .select({
         id: storageLocations.id,
@@ -590,6 +650,10 @@ export async function updateBiocharProduct(
   const effectiveWaterAddedKg = data.waterAddedKg !== undefined
     ? data.waterAddedKg
     : existing.waterAddedKg;
+  const effectiveComposition =
+    data.composition !== undefined
+      ? data.composition
+      : (existing.composition as Record<string, unknown> | null);
 
   if (data.linkedProductionRunId !== undefined && !effectiveLinkedRunId) {
     throw new SafeError("Production run is required");
@@ -647,6 +711,10 @@ export async function updateBiocharProduct(
   // products with different formulations can't strand a mismatch in one bin.
   const updated = await db.transaction(async (tx) => {
     let claimBinFormulationId: string | null = null;
+
+    if (data.composition !== undefined || facilityChanged) {
+      await validateCompositionIngredientBins(tx, effectiveComposition, effectiveFacilityId);
+    }
 
     if (
       effectiveStorageId &&

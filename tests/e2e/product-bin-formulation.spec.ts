@@ -135,4 +135,29 @@ test.describe("Product bin ↔ formulation filtering", () => {
     await expect(page.locator(`[data-testid="entity-option-${binA.id}"]`)).toHaveCount(0);
     await expect(page.locator(`[data-testid="entity-option-${binB.id}"]`)).toHaveCount(0);
   });
+
+  test("adding a product bin from the side sheet opens the quick-add dialog without navigating", async ({
+    adminPage: page,
+  }) => {
+    const id = generateTestId("pbf-empty");
+    const emptyFacility = await createTestFacility({
+      code: `E2E-PBF-EMPTY-${id.toUpperCase()}`,
+      name: `PBF Empty Facility ${id}`,
+    });
+
+    try {
+      await page.goto(`/biochar-products?facility=${emptyFacility.id}`);
+      await page.waitForLoadState("networkidle");
+      await page.click('button:has-text("New Product")');
+      await waitForSideSheet(page);
+
+      await openProductBinDropdown(page);
+      await page.locator('[data-testid="entity-select-create"]').click();
+
+      await expect(page).toHaveURL(/\/biochar-products/);
+      await expect(page.locator('[data-testid="storage-location-quick-add-dialog"]')).toBeVisible();
+    } finally {
+      await deleteTestFacility(emptyFacility.id).catch(() => {});
+    }
+  });
 });

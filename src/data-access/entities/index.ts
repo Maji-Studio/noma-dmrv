@@ -46,6 +46,7 @@ import {
   getBiocharProducts,
   getBiocharProductEntityById,
 } from "./biochar-products";
+import { getOrdersEntity, getOrderEntityById } from "./orders";
 import {
   getCreditBatchesEntity,
   getCreditBatchEntityById,
@@ -108,12 +109,18 @@ export async function getEntities(
         rawFormulation && rawFormulation !== PURE_PRODUCT_BIN_FILTER
           ? rawFormulation
           : undefined;
+      const rawFeedstockTypeUsage = filterBy?.feedstockTypeUsage?.trim();
+      const feedstockTypeUsage =
+        rawFeedstockTypeUsage === "pyrolysis" || rawFeedstockTypeUsage === "blend"
+          ? rawFeedstockTypeUsage
+          : undefined;
       return getStorageLocations({
         userId,
         search,
         facilityId: filterBy?.facilityId,
         type,
         feedstockTypeId: filterBy?.feedstockTypeId,
+        feedstockTypeUsage,
         formulationId,
         pureProductOnly,
         limit,
@@ -143,6 +150,13 @@ export async function getEntities(
       return getFormulationsEntity({ search, limit });
     case "biocharProduct":
       return getBiocharProducts({
+        userId,
+        search,
+        facilityId: filterBy?.facilityId,
+        limit,
+      });
+    case "order":
+      return getOrdersEntity({
         userId,
         search,
         facilityId: filterBy?.facilityId,
@@ -190,6 +204,8 @@ export async function getEntityById(
       return getFormulationEntityById(id);
     case "biocharProduct":
       return getBiocharProductEntityById(userId, id);
+    case "order":
+      return getOrderEntityById(userId, id);
     case "creditBatch":
       return getCreditBatchEntityById(id);
     default:

@@ -49,12 +49,12 @@ interface DistanceCalcFieldProps {
   destinationLabel: string;
 }
 
-function formatDistance(value: number | null): string {
+export function formatDistance(value: number | null): string {
   return value == null ? "" : String(value);
 }
 
 /** Empty → null; parseable → number; anything else → undefined (keep draft). */
-function parseDraft(raw: string): number | null | undefined {
+export function parseDistanceDraft(raw: string): number | null | undefined {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
   const parsed = Number(trimmed);
@@ -91,12 +91,12 @@ export function DistanceCalcField({
   const [syncedValue, setSyncedValue] = useState(value);
   if (value !== syncedValue) {
     setSyncedValue(value);
-    if (parseDraft(draft) !== value) setDraft(formatDistance(value));
+    if (parseDistanceDraft(draft) !== value) setDraft(formatDistance(value));
   }
 
   const handleManualChange = (raw: string) => {
     setDraft(raw);
-    const parsed = parseDraft(raw);
+    const parsed = parseDistanceDraft(raw);
     if (parsed === undefined) return; // unparseable in-flight text — wait
     if (parsed !== value) {
       setSyncedValue(parsed);

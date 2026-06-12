@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { biocharProductFormSchema } from "@/schemas/biochar-products";
+import { formatLocalDate } from "@/lib/date-utils";
 
 const validBiocharProductInput = {
   facilityId: "11111111-1111-4111-8111-111111111111",
@@ -49,5 +50,54 @@ describe("biocharProductFormSchema", () => {
     const result = biocharProductFormSchema.safeParse(validBiocharProductInput);
 
     expect(result.success).toBe(true);
+  });
+
+  // #46 — date-only input must parse at LOCAL midnight; `new Date("YYYY-MM-DD")`
+  // parses at UTC midnight, which shifted the stored date back one day per
+  // edit/save round-trip for users west of UTC.
+  describe("productionDate", () => {
+    it("parses date-only input at local midnight", () => {
+      const result = biocharProductFormSchema.safeParse(validBiocharProductInput);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        const date = result.data.productionDate!;
+        expect(date).toBeInstanceOf(Date);
+        expect(date.getFullYear()).toBe(2026);
+        expect(date.getMonth()).toBe(0);
+        expect(date.getDate()).toBe(18);
+        expect(date.getHours()).toBe(0);
+      }
+    });
+
+    it("round-trips through the edit form's local date formatting without shifting a day", () => {
+      const result = biocharProductFormSchema.safeParse(validBiocharProductInput);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(formatLocalDate(result.data.productionDate!)).toBe("2026-01-18");
+      }
+    });
+
+    it("treats empty string as undefined and passes Date values through", () => {
+      const emptyResult = biocharProductFormSchema.safeParse({
+        ...validBiocharProductInput,
+        productionDate: "",
+      });
+      expect(emptyResult.success).toBe(true);
+      if (emptyResult.success) {
+        expect(emptyResult.data.productionDate).toBeUndefined();
+      }
+
+      const existing = new Date(2026, 2, 5);
+      const dateResult = biocharProductFormSchema.safeParse({
+        ...validBiocharProductInput,
+        productionDate: existing,
+      });
+      expect(dateResult.success).toBe(true);
+      if (dateResult.success) {
+        expect(dateResult.data.productionDate).toBe(existing);
+      }
+    });
   });
 });

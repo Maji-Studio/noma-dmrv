@@ -62,6 +62,18 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
         label: "Current Dry Mass",
         value: formatMass(storageLocation.feedstockInventory.currentDryMassKg),
       },
+      ...(storageLocation.feedstockInventory.pendingDryMassKg > 0
+        ? [
+            {
+              label: "Pending Completion",
+              value: formatMass(storageLocation.feedstockInventory.pendingDryMassKg),
+            },
+            {
+              label: "Pending Feedstocks",
+              value: String(storageLocation.feedstockInventory.pendingBatchCount),
+            },
+          ]
+        : []),
       {
         label: "Estimated Wet Mass",
         value: storageLocation.feedstockInventory.estimatedWetMassKg
@@ -361,7 +373,6 @@ export function StorageLocationList() {
               <option value="feedstock_bin">Feedstock Bin</option>
               <option value="biochar_bin">Biochar Bin</option>
               <option value="product_bin">Product Bin</option>
-              <option value="ingredient_bin">Ingredient Bin</option>
             </select>
           </div>
 

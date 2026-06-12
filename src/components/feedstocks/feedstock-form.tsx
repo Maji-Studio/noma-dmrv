@@ -12,12 +12,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useEntityById } from "@/hooks/use-entities";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, ServerError, TruckWeighingSection } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -38,6 +38,9 @@ import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+
+const isFeedstockCertifyField = (field: string) =>
+  isCertifyFormField("feedstock", field);
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
@@ -77,6 +80,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
@@ -90,6 +94,8 @@ export function FeedstockForm({
       feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
       moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+      truckMassOnArrivalKg: feedstock?.truckMassOnArrivalKg ?? undefined,
+      truckMassOnDepartureKg: feedstock?.truckMassOnDepartureKg ?? undefined,
       allocations: feedstock
         ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
         : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
@@ -110,6 +116,8 @@ export function FeedstockForm({
   // Watch values for dry mass calculation
   const watchWetMass = useWatch({ control, name: "totalWetMassKg" });
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
+  const watchArrivalMass = useWatch({ control, name: "truckMassOnArrivalKg" });
+  const watchDepartureMass = useWatch({ control, name: "truckMassOnDepartureKg" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
@@ -119,11 +127,7 @@ export function FeedstockForm({
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
 
-  // Default new bins by feedstock category, while allowing intake into either compatible bin type.
-  const { data: selectedFeedstockType } = useEntityById("feedstockType", watchedFeedstockTypeId || undefined);
-  const defaultStorageBinType = selectedFeedstockType?.subtitle === "ingredient"
-    ? "ingredient_bin"
-    : "feedstock_bin";
+  const defaultStorageBinType = "feedstock_bin";
 
   // Transport distance autofills from the existing leg (edit) or the stored
   // level — the supplier's DEFAULT location, else the supplier-level distance —
@@ -199,6 +203,34 @@ export function FeedstockForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
+  useEffect(() => {
+    if (isEditMode || fields.length !== 1 || typeof watchWetMass !== "number") {
+      return;
+    }
+    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
+    if (typeof currentAllocation !== "number") {
+      setValue("allocations.0.allocatedWetMassKg", watchWetMass, {
+        shouldValidate: true,
+      });
+    }
+  }, [fields.length, getValues, isEditMode, setValue, watchWetMass]);
+
+  const suggestWetMassFromTruckWeighing = (wetMassKg: number) => {
+    const currentWetMass = getValues("totalWetMassKg");
+    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
+    setValue("totalWetMassKg", wetMassKg, { shouldValidate: true });
+    if (
+      !isEditMode &&
+      fields.length === 1 &&
+      (typeof currentAllocation !== "number" ||
+        currentAllocation === currentWetMass)
+    ) {
+      setValue("allocations.0.allocatedWetMassKg", wetMassKg, {
+        shouldValidate: true,
+      });
+    }
+  };
+
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FeedstockFormData);
   });
@@ -273,6 +305,7 @@ export function FeedstockForm({
               id="transportDistanceKm"
               label="Transport distance (km)"
               error={errors.transportDistanceKm?.message}
+              certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
               helperText={
                 storedDistanceKm != null
                   ? "Autofilled from the supplier's default location or supplier default; override if the route differs."
@@ -336,6 +369,7 @@ export function FeedstockForm({
               error={errors.totalWetMassKg?.message}
               helperText="As-received weight of the entire delivery"
               required
+              certifyRequired={isFeedstockCertifyField("totalWetMassKg")}
             >
               <FormInput
                 id="totalWetMassKg"
@@ -384,8 +418,25 @@ export function FeedstockForm({
           </div>
         </FormSection>
 
-        {/* Bin Allocations — only shown after feedstock type is selected and loaded */}
-        {watchedFeedstockTypeId && selectedFeedstockType ? (
+        <TruckWeighingSection
+          arrivalMassKg={watchArrivalMass}
+          departureMassKg={watchDepartureMass}
+          wetMassKg={watchWetMass}
+          wetMassLabel="Entered wet mass"
+          onSuggestWetMass={suggestWetMassFromTruckWeighing}
+          arrivalRegister={register("truckMassOnArrivalKg", {
+            setValueAs: numericValue,
+          })}
+          departureRegister={register("truckMassOnDepartureKg", {
+            setValueAs: numericValue,
+          })}
+          arrivalError={errors.truckMassOnArrivalKg?.message}
+          departureError={errors.truckMassOnDepartureKg?.message}
+          isSubmitting={isSubmitting}
+        />
+
+        {/* Bin Allocations — only shown after feedstock type is selected */}
+        {watchedFeedstockTypeId ? (
           <FormSection
             title="Bin Allocations"
             actions={
