@@ -18,9 +18,11 @@ import {
 test.describe("Production Run + Sample UI CRUD", () => {
   async function createProductionRun(page: Page, seededData: SeededChainData) {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: "New Production Run" }),
+    ).toBeVisible();
 
-    await page.click('button:has-text("New Production Run")');
+    await page.getByRole("button", { name: "New Production Run" }).click();
     await waitForSideSheet(page);
 
     await page.selectOption('select[name="status"]', "draft");

@@ -65,7 +65,6 @@ test.describe("production run readings CSV import", () => {
     ].join("\n");
 
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
     await expect(page.getByText(run.code).first()).toBeVisible();
 
     const runRow = page.locator("tr", { hasText: run.code });
