@@ -15,6 +15,7 @@ import {
   type Order,
 } from "@/db/schema";
 import type { OrderFilterData } from "@/schemas/orders";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 // ============================================
 // Types
@@ -349,9 +350,15 @@ export async function getOrdersForSelect(
     customerName: string | null;
     biocharProductCode: string | null;
     quantityKg: number;
-    /** Destination (order's customer location) GPS — feeds the delivery CALC. */
+    /** Destination (order's customer location) GPS. */
     destinationGpsLatitude: number | null;
     destinationGpsLongitude: number | null;
+    /**
+     * Destination's stored road distance + provenance — prefills the delivery
+     * distance field (the derived transport leg already falls back to it).
+     */
+    destinationDistanceKm: number | null;
+    destinationDistanceSource: DistanceSourceValue | null;
   }>
 > {
   requireAuth(userId);
@@ -373,6 +380,8 @@ export async function getOrdersForSelect(
       quantityKg: orders.quantityKg,
       destinationGpsLatitude: customerLocations.gpsLatitude,
       destinationGpsLongitude: customerLocations.gpsLongitude,
+      destinationDistanceKm: customerLocations.distanceFromFacilityKm,
+      destinationDistanceSource: customerLocations.distanceSource,
     })
     .from(orders)
     .leftJoin(customers, eq(orders.customerId, customers.id))
