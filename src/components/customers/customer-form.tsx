@@ -362,7 +362,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       return;
     }
     if (!formData.address.trim()) {
-      setFormError("Location address is required");
+      setFormError("Address / description is required");
       return;
     }
     if (formData.gpsLatitude.trim() === "" || formData.gpsLongitude.trim() === "") {
@@ -497,7 +497,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         <div className="flex flex-col gap-6">
           <label htmlFor="pending-loc-lat" className="label-medium">
-            GPS Latitude
+            GPS Latitude <span className="text-[var(--color-signal-red)]">*</span>
           </label>
           <input
             id="pending-loc-lat"
@@ -518,7 +518,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
         </div>
         <div className="flex flex-col gap-6">
           <label htmlFor="pending-loc-lng" className="label-medium">
-            GPS Longitude
+            GPS Longitude <span className="text-[var(--color-signal-red)]">*</span>
           </label>
           <input
             id="pending-loc-lng"
