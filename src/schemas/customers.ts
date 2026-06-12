@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
-  optionalNumber,
+  defaultSoilTemperatureSchema,
   optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
@@ -30,15 +30,6 @@ const customerLocationTextSchema = z
   .string()
   .min(1, "Location is required")
   .max(500, "Location must be less than 500 characters");
-const defaultSoilTemperatureSchema = optionalNumber.pipe(
-  z
-    .number()
-    .min(-50, "Soil temperature must be between -50 and 60 °C")
-    .max(60, "Soil temperature must be between -50 and 60 °C")
-    .nullable()
-    .optional(),
-);
-
 // ============================================
 // Customer Form Schema (Client-side validation)
 // ============================================
