@@ -232,6 +232,16 @@ the stored distance governs — so later corrections to the stored
 distance keep propagating.
 _Avoid_: treating the override as the primary distance value.
 
+### Operational oversight
+
+**Attention item**:
+A computed operational gap or next action surfaced from existing MRV
+records — for example missing evidence, blocked certification readiness,
+a failed verifier submission, or an active production run. It has no
+independent lifecycle, assignee, or completion state; it disappears when
+the underlying record changes.
+_Avoid_: todo, task (unless a future manual work system is built).
+
 ### Tenancy
 
 **Organization**:
