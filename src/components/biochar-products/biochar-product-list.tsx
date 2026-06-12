@@ -19,8 +19,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { TransportLegsSummary } from "@/components/transport-legs";
@@ -125,27 +125,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -300,14 +287,17 @@ export function BiocharProductList() {
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Biochar Products</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Product
-        </Button>
-      </div>
+      <PageHeader
+        area="production"
+        title="Biochar Products"
+        subtitle="Finished biochar inventory and certifications"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Product
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">

@@ -28,8 +28,8 @@ import {
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { StorageLocationForm } from "./storage-location-form";
 import { StorageLocationCard } from "./storage-location-card";
@@ -292,13 +292,17 @@ export function StorageLocationList() {
 
   return (
     <div className="container-max flex flex-col gap-32 py-32">
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Storage</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Storage Bin
-        </Button>
-      </div>
+      <PageHeader
+        area="infrastructure"
+        title="Storage"
+        subtitle="Bins and stores for feedstock and biochar"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Storage Bin
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard

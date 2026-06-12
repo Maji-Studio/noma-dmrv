@@ -19,8 +19,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SupplierForm } from "./supplier-form";
@@ -75,34 +75,15 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Link
-            href={`/suppliers/${row.original.id}`}
-            className="h-32 px-12 inline-flex items-center border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View
-          </Link>
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Open details", href: `/suppliers/${row.original.id}` },
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -199,16 +180,32 @@ export function SupplierList() {
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Supplier" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create"
+      ? "Fill in the form to create a new supplier."
+      : sideSheetEntity?.name || undefined;
+
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Suppliers</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Supplier
-        </Button>
-      </div>
+      <PageHeader
+        area="distribution"
+        title="Suppliers"
+        subtitle="Biomass suppliers and their source sites"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Supplier
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
@@ -269,47 +266,46 @@ export function SupplierList() {
         isPending={deleteSupplier.isPending}
       />
 
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-          title={sideSheet.mode === "create" ? "Create Supplier" : sideSheet.entity?.code ?? ""}
-          subtitle={sideSheet.mode === "create" ? "Fill in the form to create a new supplier." : sideSheet.entity?.name}
-          editLabel="Edit Supplier"
-          sections={sideSheet.entity ? [
-            {
-              title: "General Information",
-              fields: [
-                { label: "Code", value: sideSheet.entity.code },
-                { label: "Name", value: sideSheet.entity.name },
-                { label: "Location", value: sideSheet.entity.location },
-                { label: "Source Region", value: sideSheet.entity.sourceRegion },
-                { label: "Address", value: sideSheet.entity.address },
-              ],
-            },
-            {
-              title: "Contact",
-              fields: [
-                { label: "Contact Name", value: sideSheet.entity.contactName },
-                { label: "Contact Email", value: sideSheet.entity.contactEmail },
-                { label: "Contact Phone", value: sideSheet.entity.contactPhone },
-              ],
-            },
-          ] : undefined}
-        >
-          {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
-          <SupplierForm
-            key={sideSheet.entity?.id ?? "create"}
-            supplier={sideSheet.entity as Supplier | undefined}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={closeSideSheet}
-            isSubmitting={createSupplier.isPending || updateSupplier.isPending}
-            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Supplier"}
-          />
-        </EntitySideSheet>
-      )}
+      {/* Unified Side Sheet */}
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Supplier"
+        sections={sideSheetEntity ? [
+          {
+            title: "General Information",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Name", value: sideSheetEntity.name },
+              { label: "Location", value: sideSheetEntity.location },
+              { label: "Source Region", value: sideSheetEntity.sourceRegion },
+              { label: "Address", value: sideSheetEntity.address },
+            ],
+          },
+          {
+            title: "Contact",
+            fields: [
+              { label: "Contact Name", value: sideSheetEntity.contactName },
+              { label: "Contact Email", value: sideSheetEntity.contactEmail },
+              { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+            ],
+          },
+        ] : undefined}
+      >
+        {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
+        <SupplierForm
+          key={sideSheetEntity?.id ?? "create"}
+          supplier={sideSheet?.entity as Supplier | undefined}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={createSupplier.isPending || updateSupplier.isPending}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Supplier"}
+        />
+      </EntitySideSheet>
     </div>
   );
 }

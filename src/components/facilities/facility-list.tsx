@@ -29,8 +29,8 @@ import {
   EntitySideSheet,
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useIsAdmin } from "@/hooks/use-is-admin";
@@ -199,15 +199,82 @@ export function FacilityList() {
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Facility" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create"
+      ? "Fill in the form to create a new facility."
+      : sideSheetEntity?.name;
+
+  const sideSheetSections = sideSheetEntity
+    ? [
+        {
+          title: "General Information",
+          fields: [
+            { label: "Code", value: sideSheetEntity.code },
+            { label: "Name", value: sideSheetEntity.name },
+            { label: "Location", value: sideSheetEntity.location },
+            { label: "Country", value: sideSheetEntity.country },
+            { label: "Address", value: sideSheetEntity.address },
+          ],
+        },
+        {
+          title: "Infrastructure",
+          fields: [
+            { label: "Reactors", value: `${sideSheetEntity.reactorCount} reactors` },
+            {
+              label: "Feedstock Bins",
+              value: `${sideSheetEntity.storageSummary.feedstockBinCount} bins`,
+            },
+            {
+              label: "Biochar Bins",
+              value: `${sideSheetEntity.storageSummary.biocharBinCount} bins`,
+            },
+            {
+              label: "Product Bins",
+              value: `${sideSheetEntity.storageSummary.productBinCount} bins`,
+            },
+          ],
+        },
+        {
+          title: "Inventory Snapshot",
+          fields: [
+            {
+              label: "Feedstock On Hand",
+              value: formatMass(sideSheetEntity.inventorySummary.feedstockDryKg),
+            },
+            {
+              label: "Biochar On Hand",
+              value: formatMass(sideSheetEntity.inventorySummary.biocharKg),
+            },
+            {
+              label: "Product Mass",
+              value: formatMass(sideSheetEntity.inventorySummary.productKg),
+            },
+          ],
+        },
+      ]
+    : undefined;
+
   return (
     <div className="container-max flex flex-col gap-32 py-32">
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Facilities</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Facility
-        </Button>
-      </div>
+      <PageHeader
+        area="infrastructure"
+        title="Facilities"
+        subtitle="Production sites, reactors, and registry links"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Facility
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
@@ -390,94 +457,39 @@ export function FacilityList() {
         isPending={archiveFacility.isPending}
       />
 
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) =>
-            setSideSheet((previous) => (previous ? { ...previous, mode } : null))
-          }
-          title={sideSheet.mode === "create" ? "Create Facility" : sideSheet.entity?.code ?? ""}
-          subtitle={
-            sideSheet.mode === "create"
-              ? "Fill in the form to create a new facility."
-              : sideSheet.entity?.name
-          }
-          editLabel="Edit Facility"
-          sections={
-            sideSheet.entity
-              ? [
-                  {
-                    title: "General Information",
-                    fields: [
-                      { label: "Code", value: sideSheet.entity.code },
-                      { label: "Name", value: sideSheet.entity.name },
-                      { label: "Location", value: sideSheet.entity.location },
-                      { label: "Country", value: sideSheet.entity.country },
-                      { label: "Address", value: sideSheet.entity.address },
-                    ],
-                  },
-                  {
-                    title: "Infrastructure",
-                    fields: [
-                      { label: "Reactors", value: `${sideSheet.entity.reactorCount} reactors` },
-                      {
-                        label: "Feedstock Bins",
-                        value: `${sideSheet.entity.storageSummary.feedstockBinCount} bins`,
-                      },
-                      {
-                        label: "Biochar Bins",
-                        value: `${sideSheet.entity.storageSummary.biocharBinCount} bins`,
-                      },
-                      {
-                        label: "Product Bins",
-                        value: `${sideSheet.entity.storageSummary.productBinCount} bins`,
-                      },
-                    ],
-                  },
-                  {
-                    title: "Inventory Snapshot",
-                    fields: [
-                      {
-                        label: "Feedstock On Hand",
-                        value: formatMass(sideSheet.entity.inventorySummary.feedstockDryKg),
-                      },
-                      {
-                        label: "Biochar On Hand",
-                        value: formatMass(sideSheet.entity.inventorySummary.biocharKg),
-                      },
-                      {
-                        label: "Product Mass",
-                        value: formatMass(sideSheet.entity.inventorySummary.productKg),
-                      },
-                    ],
-                  },
-                ]
-              : undefined
-          }
-          viewModeChildren={
-            sideSheet.entity ? (
-              <FacilityCertifierSummary facilityId={sideSheet.entity.id} />
-            ) : undefined
-          }
-        >
-          {(createError || updateError) && (
-            <div className="mb-24">
-              <ServerError message={createError || updateError || ""} />
-            </div>
-          )}
+      {/* Unified Side Sheet */}
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) =>
+          setSideSheet((previous) => (previous ? { ...previous, mode } : null))
+        }
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Facility"
+        sections={sideSheetSections}
+        viewModeChildren={
+          sideSheetEntity ? (
+            <FacilityCertifierSummary facilityId={sideSheetEntity.id} />
+          ) : undefined
+        }
+      >
+        {(createError || updateError) && (
+          <div className="mb-24">
+            <ServerError message={createError || updateError || ""} />
+          </div>
+        )}
 
-          <FacilityForm
-            key={sideSheet.entity?.id ?? "create"}
-            facility={sideSheet.entity as Facility | undefined}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={closeSideSheet}
-            isSubmitting={createFacility.isPending || updateFacility.isPending}
-            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Facility"}
-          />
-        </EntitySideSheet>
-      )}
+        <FacilityForm
+          key={sideSheetEntity?.id ?? "create"}
+          facility={sideSheet?.entity as Facility | undefined}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={createFacility.isPending || updateFacility.isPending}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Facility"}
+        />
+      </EntitySideSheet>
 
       {linkCertifierFacilityId && (
         <FacilityCertifierLinkLoader

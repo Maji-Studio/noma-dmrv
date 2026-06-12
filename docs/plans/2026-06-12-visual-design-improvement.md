@@ -44,6 +44,27 @@ Port the inspiration token layer into `src/app/globals.css`:
 - **One KPI card** style (gray-filled today vs white-bordered on Energy) with an optional sparkline slot — this becomes the dashboard building block.
 - **Quiet the tables:** one row-action pattern across all 11 table entities (recommend: actions revealed on row hover / overflow menu; destructive variant for delete; kill the always-on red outlines). Row click opens the detail sheet consistently.
 - Normalize the credit-batches grid breakpoint (`lg:` → `xl:grid-cols-3`).
+- **Side-sheet mounting consistency (added 2026-06-12, user call-out):** some sheets slide in/out, some pop — caused by two mounting patterns. Conditional mounting (`{sideSheet && <EntitySideSheet open …>}`) skips both enter and exit animations; the always-mounted controlled pattern (`open={!!sideSheet}`) animates correctly. Convert all conditional-mount lists (customers, suppliers, facilities, production-runs, applications, feedstocks, reactors, credit-batches) to the controlled pattern.
+
+### Phase 2 decisions (resolved 2026-06-12)
+
+- Row actions: **overflow menu** (⋮ via `RowActionsMenu` on a new `DropdownMenu` primitive) — touch-friendly, kills the always-on red outlines.
+- Suppliers/Customers View button: **dropped**; row click keeps opening the side sheet, the `/customers/[id]` detail route moves into the menu as "Open details".
+- KPI card: **white-bordered wins** (`--paper` + hairline, the Energy style) — gray-filled retired; `StatCard` moved to `@/components/ui/stat-card` with a `sparkline` slot.
+- Credit-batches grid: already normalized (`xl:grid-cols-2 2xl:grid-cols-3`, matches facilities) — no change needed.
+
+## Phase 2.5 — Surface & figure-ground treatment (added 2026-06-12, user call-out)
+
+**Problem:** on the warm `--bg` field, the pure-white surfaces — tables, KPI cards, filter bars, entity cards — don't sit well: hairline borders alone give too little figure/ground separation, so panels read as flat floating boxes and pages look washed. This needs real design iteration, not a token swap.
+
+**Approach (iterate visually in the browser, screenshot → adjust → repeat; consult the inspiration mock at `~/Downloads/Maji noma dMRV` + its `theme.css` for how the concept screens ground their surfaces):**
+
+- Define ONE panel recipe as tokens (`--panel-border`, `--panel-shadow`, optional `--panel-bg`) and apply it through the shared components (StatCard, DataTable frame, Card, filter bars) — never per-page classes.
+- Candidate treatments to compare side-by-side before choosing:
+  1. **Tinted hairline + soft warm shadow** — plum/warm two-layer shadow (e.g. `0 1px 2px rgba(72,11,115,0.06), 0 2px 8px rgba(188,69,25,0.04)`) so white panels lift off the field.
+  2. **Tinted table chrome** — header row on an `--clr-orange-1`/`--sea` wash, hairline row dividers, warm row hover; frame the DataTable (toolbar inside a bordered panel) instead of letting a full-bleed white table sit flush on the warm field — tables are the worst offenders.
+  3. **Off-white panels** — panels at orange-1-over-white, reserving pure white for elevated surfaces only (menus, side sheets, dialogs) so elevation has a hierarchy.
+- Whatever wins: verify at 1440px on facilities, orders, production-runs, energy, credit-batches; check contrast stays ≥ 4.5:1 for text on tinted chrome.
 
 ## Phase 3 — Side-sheet & form system (sampling first — worst surface in the app)
 

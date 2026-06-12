@@ -1258,6 +1258,98 @@ Steps render `done` (✓) / `active` / `upcoming` states and carry the
 `--clr-pink` certification accent. StepFlow never validates — the parent
 gates forward progress by disabling its own Next button.
 
+### PageHeader Component
+
+The canonical list-page shell header (visual design plan, Phase 2). Every
+routed list page opens with: mono uppercase **area eyebrow** → `title-heading-2`
+title → one-line subtitle → actions slot. The eyebrow names the sidebar nav
+area and is tinted with that area's accent ink (contrast-safe on light).
+
+```tsx
+import { PageHeader } from "@/components/ui";
+
+<PageHeader
+  area="distribution"   // production | infrastructure | distribution | verification | certification
+  title="Orders"
+  subtitle="Customer orders for biochar products"
+  actions={<Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Order</Button>}
+/>
+```
+
+- `area` sets both the eyebrow text and its ink (`--acc-prod-ink` /
+  `--acc-infra-ink` / `--acc-dist-ink`); `eyebrow` overrides the text.
+- Omit `area` for pages outside the nav groups (Chain of Custody) — no eyebrow.
+- **Every list page gets a subtitle** — a single descriptive line, sentence case.
+
+### StatCard Component (KPI card)
+
+The one KPI card — `@/components/ui/stat-card` (moved from
+`components/dashboard/`). White `--paper` panel with a hairline border on the
+warm page field; gray-filled cards are retired. Trend badges sit on the
+`--st-*` status ramp. An optional `sparkline` slot takes any React node
+(renders full-width under the value row) so the same card builds the
+dashboard KPI strip.
+
+```tsx
+import { StatCard } from "@/components/ui/stat-card";
+
+<StatCard title="Total Orders" value={totalOrders} icon={<Package size={24} weight="bold" />}
+  description="All orders" isLoading={isLoading} />
+<StatCard title="CO2e Stored" value="1,204 t" trend="up" trendValue="+8%" trendLabel="vs last period"
+  sparkline={<MiniSparkline data={series} />} />
+```
+
+KPI strips use `gap-24` grids (`md:grid-cols-2 lg:grid-cols-3` or `-4`).
+
+### DropdownMenu & RowActionsMenu
+
+`DropdownMenu` (`@/components/ui/dropdown-menu`) is the light overflow menu
+primitive on Base UI Menu — white `--paper` popup, square corners, `z-[60]`
+(above slide-overs). `RowActionsMenu` composes it into **the single
+row-action pattern** for table and card lists: a quiet ⋮ icon button per row,
+menu carrying the explicit verbs. Inline Edit/Delete button pairs and
+always-on red outlines in rows are retired.
+
+```tsx
+import { RowActionsMenu } from "@/components/ui";
+
+// in a DataTable actions column
+<div className="flex items-center justify-end">
+  <RowActionsMenu
+    label={`Actions for ${row.original.code}`}
+    actions={[
+      { label: "Open details", href: `/customers/${row.original.id}` }, // optional navigation item
+      { label: "Edit", onSelect: () => onEdit(row.original) },
+      { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+    ]}
+  />
+</div>
+```
+
+- **Row click opens the detail side sheet** everywhere; the menu holds the
+  verbs. Explicit "View" buttons are retired (detail routes become an
+  "Open details" menu item).
+- `destructive: true` for irreversible actions (red text, red-tint highlight).
+- The wrapper stops propagation so menu clicks never trigger the row click.
+
+### Side-sheet mounting rule
+
+`EntitySideSheet` must be **always mounted with a controlled `open` prop** —
+never conditionally rendered:
+
+```tsx
+// ✅ animates in and out
+<EntitySideSheet open={!!sideSheet} onOpenChange={(o) => !o && closeSideSheet()}
+  mode={sideSheet?.mode ?? "create"} … />
+
+// ❌ skips the slide animation entirely (mounts already-open, unmounts instantly)
+{sideSheet && <EntitySideSheet open … />}
+```
+
+Derive title/subtitle/sections/form props with optional chaining + fallbacks
+(see `order-list.tsx` for the reference shape), and keep the form's
+`key={entity?.id ?? "create"}` reset.
+
 ### Component Guidelines
 
 **When to Use Button:**

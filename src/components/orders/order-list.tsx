@@ -14,8 +14,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { OrderForm } from "./order-form";
 import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
@@ -74,9 +74,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Button variant="default" size="small" onClick={(e) => { e.stopPropagation(); onEdit(row.original); }}>Edit</Button>
-          <Button variant="destructive" size="small" onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }}>Delete</Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -218,10 +223,14 @@ export function OrderList() {
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Orders</h1>
-        <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Order</Button>
-      </div>
+      <PageHeader
+        area="distribution"
+        title="Orders"
+        subtitle="Customer orders for biochar products"
+        actions={
+          <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Order</Button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard title="Total Orders" value={totalOrders} icon={<Package size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
