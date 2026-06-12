@@ -252,6 +252,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
+        truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
+        truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
         massDryKg: deriveMassDryKg(
           data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
           data.moisturePercent
@@ -467,6 +469,23 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             title: "Storage",
             fields: [
               { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
+            ],
+          },
+          {
+            title: "Truck Weighing",
+            fields: [
+              {
+                label: "Before unloading",
+                value: sideSheetEntity.truckMassOnArrivalKg !== null
+                  ? formatMass(sideSheetEntity.truckMassOnArrivalKg)
+                  : null,
+              },
+              {
+                label: "After unloading",
+                value: sideSheetEntity.truckMassOnDepartureKg !== null
+                  ? formatMass(sideSheetEntity.truckMassOnDepartureKg)
+                  : null,
+              },
             ],
           },
           ...(sideSheetEntity.overrideJustification ? [{
