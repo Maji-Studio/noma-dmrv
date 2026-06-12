@@ -28,6 +28,14 @@ const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = 
   feedstock: ["complete"],
 };
 
+const TELEMETRY_GAP: EntityCertifyGap = {
+  kind: "field",
+  key: "telemetryReadings",
+  label: "Telemetry readings",
+  fields: ["readingsCount"],
+  detail: "Production readings CSV is required to certify",
+};
+
 function fieldValue(
   entity: EntityReadinessRecord,
   field: string,
@@ -122,6 +130,13 @@ export function deriveEntityCertifyReadiness(
 
   const lifecycle = lifecycleGap(entityKind, effectiveLifecycleState);
   if (lifecycle) gaps.push(lifecycle);
+
+  if (entityKind === "productionRun") {
+    const readingsCount = fieldValue(entity, "readingsCount");
+    if (typeof readingsCount === "number" && readingsCount === 0) {
+      gaps.push(TELEMETRY_GAP);
+    }
+  }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
     if (!conditionApplies(descriptor, entity)) continue;
