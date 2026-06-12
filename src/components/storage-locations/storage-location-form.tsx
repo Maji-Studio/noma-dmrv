@@ -31,6 +31,8 @@ interface StorageLocationFormProps {
   allowedTypes?: readonly StorageLocationType[];
   /** Pre-selects the feedstock type the parent flow is working with */
   defaultFeedstockTypeId?: string;
+  /** Pre-selects the formulation the parent flow is working with */
+  defaultFormulationId?: string;
 }
 
 export function StorageLocationForm({
@@ -42,6 +44,7 @@ export function StorageLocationForm({
   defaultType,
   allowedTypes,
   defaultFeedstockTypeId,
+  defaultFormulationId,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -65,7 +68,7 @@ export function StorageLocationForm({
       facilityId: storageLocation?.facilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
-      formulationId: storageLocation?.formulationId ?? "",
+      formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
     },
