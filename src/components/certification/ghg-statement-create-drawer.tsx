@@ -530,7 +530,7 @@ function ResultPanel({
         <p className="body-small text-[var(--color-text-primary)]">
           GHG statement <span className="font-mono">{externalId}</span> created.
           Isometric linked{" "}
-          <strong className="font-semibold">{linkedCount}</strong> removal(s).
+          <strong className="body-small-bold">{linkedCount}</strong> removal(s).
         </p>
       </div>
       {warnings.length > 0 && (

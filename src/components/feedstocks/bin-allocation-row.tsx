@@ -8,6 +8,7 @@
 import { Trash } from "@phosphor-icons/react";
 import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
+import { Button } from "@/components/ui/button";
 
 interface BinAllocationRowProps {
   index: number;
@@ -37,7 +38,7 @@ export function BinAllocationRow({
   canRemove,
   onRemove,
   disabled,
-  binTypeFilter = "feedstock_bin,ingredient_bin",
+  binTypeFilter = "feedstock_bin",
   facilityId,
   feedstockTypeId,
   onCreateNew,
@@ -84,15 +85,16 @@ export function BinAllocationRow({
       </div>
 
       {canRemove && (
-        <button
-          type="button"
+        <Button
+          variant="destructive"
+          size="icon"
           onClick={onRemove}
           disabled={disabled}
-          className="mt-28 p-8 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors"
+          className="mt-28"
           aria-label="Remove allocation"
         >
           <Trash size={18} />
-        </button>
+        </Button>
       )}
     </div>
   );

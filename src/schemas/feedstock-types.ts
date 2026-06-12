@@ -20,6 +20,10 @@ export const feedstockCategories = [
 
 export type FeedstockCategory = (typeof feedstockCategories)[number];
 
+export const feedstockTypeUsages = ["pyrolysis", "blend"] as const;
+
+export type FeedstockTypeUsage = (typeof feedstockTypeUsages)[number];
+
 export const FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
   { value: "forestry", label: "Forestry" },
   { value: "agricultural", label: "Agricultural" },
@@ -27,6 +31,11 @@ export const FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategor
   { value: "municipal", label: "Municipal" },
   { value: "invasive", label: "Invasive Species" },
   { value: "ingredient", label: "Ingredient" },
+];
+
+export const FEEDSTOCK_TYPE_USAGE_OPTIONS: ReadonlyArray<{ value: FeedstockTypeUsage; label: string }> = [
+  { value: "pyrolysis", label: "Pyrolysis" },
+  { value: "blend", label: "Blend" },
 ];
 
 // ============================================
@@ -39,6 +48,7 @@ export const feedstockTypeFormSchema = z.object({
     .min(1, "Feedstock type name is required")
     .max(255, "Name must be less than 255 characters"),
   category: z.enum(feedstockCategories, { message: "Category is required" }),
+  usage: z.enum(feedstockTypeUsages, { message: "Usage is required" }),
   description: z
     .string()
     .max(1000, "Description must be less than 1000 characters")
@@ -63,6 +73,7 @@ export const updateFeedstockTypeSchema = z.object({
   feedstockTypeId: z.string().uuid("Invalid feedstock type ID"),
   name: z.string().min(1).max(255).optional(),
   category: z.enum(feedstockCategories).optional(),
+  usage: z.enum(feedstockTypeUsages).optional(),
   description: z.string().max(1000).optional().nullable(),
   registryUrl: z.string().max(500).optional().nullable(),
 });

@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { useToast } from "@/components/ui/toast";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import {
   CreditBatchForm,
@@ -44,7 +45,6 @@ import {
   formatCertifierProvider,
   formatCreditBatchStatus,
   formatDurabilityOption,
-  getStatusColor,
   type CertifierProvider,
   type CreditBatchStatus,
   type DurabilityOption,
@@ -57,18 +57,6 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 // ============================================
 
 const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
-
-function CreditStatusBadge({ status }: { status: CreditBatchStatus }) {
-  const colors = getStatusColor(status);
-  return (
-    <span
-      className={`px-8 py-4 text-[var(--text-xs)] font-medium ${colors.bg} ${colors.text}`}
-    >
-      {formatCreditBatchStatus(status)}
-    </span>
-  );
-}
-
 
 // ============================================
 // Component
@@ -383,30 +371,28 @@ export function CreditBatchList({
 
       {/* Card Grid or Empty State */}
       {paginatedItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-24 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-56">
-          <Certificate
-            size={48}
-            className="text-[var(--color-text-tertiary)]"
-          />
-          <div className="text-center">
-            <h3 className="title-heading-3 mb-8">
-              {hasActiveFilters
-                ? "No credit batches found"
-                : "No credit batches yet"}
-            </h3>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {hasActiveFilters
-                ? "Try adjusting your search or filters."
-                : "Create your first credit batch to get started."}
-            </p>
-          </div>
-          {!hasActiveFilters && (
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={18} weight="bold" />
-              New Credit Batch
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          padding="lg"
+          icon={<Certificate size={48} />}
+          title={
+            hasActiveFilters
+              ? "No credit batches found"
+              : "No credit batches yet"
+          }
+          description={
+            hasActiveFilters
+              ? "Try adjusting your search or filters."
+              : "Create your first credit batch to get started."
+          }
+          action={
+            !hasActiveFilters ? (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={18} weight="bold" />
+                New Credit Batch
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">
@@ -496,7 +482,7 @@ export function CreditBatchList({
                       {
                         label: "Status",
                         value: (
-                          <CreditStatusBadge
+                          <StatusBadge
                             status={
                               sideSheet.entity.status as CreditBatchStatus
                             }

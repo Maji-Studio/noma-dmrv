@@ -18,7 +18,7 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
@@ -101,26 +101,26 @@ function createColumns(
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-8">
-          <button
-            type="button"
+          <Button
+            variant="default"
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(row.original);
             }}
-            className="h-32 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small transition-colors"
           >
             Edit
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(row.original.id);
             }}
-            className="h-32 px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small transition-colors"
           >
             Delete
-          </button>
+          </Button>
         </div>
       ),
       enableSorting: false,
@@ -293,19 +293,18 @@ export function FormulationList() {
         hoverable
         onRowClick={(row) => openView(row)}
         emptyMessage={
-          <div className="flex flex-col items-center justify-center gap-24 py-48">
-            <ListChecks size={48} className="text-[var(--color-text-tertiary)]" />
-            <div className="text-center">
-              <h3 className="title-heading-3 mb-1">No formulations yet</h3>
-              <p className="body-small text-[var(--color-text-secondary)]">
-                Create your first formulation to define biochar product recipes.
-              </p>
-            </div>
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={20} weight="bold" />
-              Create Formulation
-            </Button>
-          </div>
+          <EmptyState
+            padding="md"
+            icon={<ListChecks size={48} />}
+            title="No formulations yet"
+            description="Create your first formulation to define biochar product recipes."
+            action={
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={20} weight="bold" />
+                Create Formulation
+              </Button>
+            }
+          />
         }
       >
         <DataTable.Toolbar>

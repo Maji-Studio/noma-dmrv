@@ -113,7 +113,7 @@ export function ViewRelatedLink({
   const displayLabel = label || config.label;
 
   const sizeClasses = {
-    sm: "text-[12px] px-[8px] py-[4px] gap-[4px]",
+    sm: "body-caption px-[8px] py-[4px] gap-[4px]",
     md: "text-[14px] px-[12px] py-[6px] gap-[6px]",
   };
 
@@ -155,7 +155,7 @@ export function ViewRelatedGroup({
 }: ViewRelatedGroupProps) {
   return (
     <div className={cn("flex flex-wrap items-center gap-[8px]", className)}>
-      <span className="text-[12px] text-[var(--color-text-tertiary)]">{label}:</span>
+      <span className="body-caption text-[var(--color-text-tertiary)]">{label}:</span>
       {children}
     </div>
   );

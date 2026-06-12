@@ -46,7 +46,7 @@ export function SubmitConfirmDialog({
       busyLabel="Submitting…"
       body={
         <>
-          <strong className="font-semibold text-[var(--color-text-primary)]">
+          <strong className="body-bold text-[var(--color-text-primary)]">
             This creates a verifier-visible record on the production Isometric
             registry.
           </strong>{" "}

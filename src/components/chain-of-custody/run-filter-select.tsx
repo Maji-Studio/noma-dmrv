@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CaretDown, X } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatSafeDate } from "@/lib/format-utils";
 
@@ -107,15 +108,16 @@ export function RunFilterSelect({
           />
         </button>
         {selected && !disabled ? (
-          <button
-            type="button"
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={() => select(undefined)}
             aria-label="Clear production run filter"
             data-testid="chain-run-select-clear"
-            className="absolute right-[36px] p-4 text-[var(--color-text-tertiary)] hover:bg-[var(--color-background-medium)] hover:text-[var(--color-text-primary)]"
+            className="absolute right-[36px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
           >
             <X size={16} />
-          </button>
+          </Button>
         ) : null}
       </div>
 

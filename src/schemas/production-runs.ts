@@ -290,16 +290,3 @@ export function formatProductionRunStatus(status: ProductionRunStatus): string {
   };
   return labels[status];
 }
-
-/**
- * Get status color class for UI display
- */
-export function getStatusColorClass(status: ProductionRunStatus): string {
-  const colors: Record<ProductionRunStatus, string> = {
-    draft: "text-[var(--color-text-secondary)] bg-[var(--color-surface-light)]",
-    running: "text-[var(--color-signal-yellow)] bg-[var(--color-signal-yellow)]/10",
-    complete: "text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/10",
-    void: "text-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10",
-  };
-  return colors[status];
-}

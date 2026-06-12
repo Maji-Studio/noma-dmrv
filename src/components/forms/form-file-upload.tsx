@@ -14,6 +14,7 @@
 
 import { useRef, useState } from "react";
 import { UploadSimple, File, X, CheckCircle, WarningCircle, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import { formatFileSize } from "@/lib/format-utils";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import type { DocumentType } from "@/schemas/documents";
@@ -256,14 +257,15 @@ export function FormFileUpload({
                   {u.error}
                 </span>
               )}
-              <button
-                type="button"
+              <Button
+                variant="noOutline"
+                size="icon"
                 onClick={() => removeUpload(u.tempKey)}
-                className="ml-auto shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors duration-300"
+                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
                 aria-label={`Remove ${u.name}`}
               >
                 <X size={14} weight="bold" />
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -287,15 +289,16 @@ export function FormFileUpload({
               <span className="body-caption shrink-0 text-[var(--color-text-tertiary)]">
                 {formatFileSize(file.size)}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="noOutline"
+                size="icon"
                 disabled={disabled}
                 onClick={() => removeMockup(i)}
-                className="ml-auto shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)] transition-colors duration-300 disabled:opacity-50"
+                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
                 aria-label={`Remove ${file.name}`}
               >
                 <X size={14} weight="bold" />
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

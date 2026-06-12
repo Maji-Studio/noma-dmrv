@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { StorageLocationForm } from "./storage-location-form";
 import { StorageLocationCard } from "./storage-location-card";
@@ -56,7 +56,7 @@ function formatDateOrFallback(value: Date | null) {
 }
 
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
-  if (storageLocation.type === "feedstock_bin" || storageLocation.type === "ingredient_bin") {
+  if (storageLocation.type === "feedstock_bin") {
     return [
       {
         label: "Current Dry Mass",
@@ -369,7 +369,6 @@ export function StorageLocationList() {
               <option value="feedstock_bin">Feedstock Bin</option>
               <option value="biochar_bin">Biochar Bin</option>
               <option value="product_bin">Product Bin</option>
-              <option value="ingredient_bin">Ingredient Bin</option>
             </select>
           </div>
 
@@ -399,25 +398,24 @@ export function StorageLocationList() {
       </section>
 
       {storageLocations.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-24 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-56">
-          <Warehouse size={48} className="text-[var(--color-text-tertiary)]" />
-          <div className="text-center">
-            <h3 className="title-heading-3 mb-8">
-              {hasActiveFilters ? "No storage bins found" : "No storage bins yet"}
-            </h3>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {hasActiveFilters
-                ? "Try adjusting your search or storage-type filter."
-                : "Create your first storage bin to track feedstock, biochar, and finished product inventory."}
-            </p>
-          </div>
-          {!hasActiveFilters && (
-            <Button variant="primary" onClick={openCreate}>
-              <Plus size={20} weight="bold" />
-              Create Storage Bin
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          padding="lg"
+          icon={<Warehouse size={48} />}
+          title={hasActiveFilters ? "No storage bins found" : "No storage bins yet"}
+          description={
+            hasActiveFilters
+              ? "Try adjusting your search or storage-type filter."
+              : "Create your first storage bin to track feedstock, biochar, and finished product inventory."
+          }
+          action={
+            !hasActiveFilters ? (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={20} weight="bold" />
+                Create Storage Bin
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">

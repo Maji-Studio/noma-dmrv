@@ -12,8 +12,8 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
 import type { EntitySelectProps, EntityOption } from "./types";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -155,18 +155,6 @@ const ENTITY_TYPE_LABELS = {
   creditBatch: "credit batch",
 } as const;
 
-const ENTITY_CREATE_ROUTES = {
-  facility: "/facilities",
-  reactor: "/reactors",
-  supplier: "/suppliers",
-  customer: "/customers",
-  storageLocation: "/storage-locations",
-  feedstock: "/feedstocks",
-  productionRun: "/production-runs",
-  application: "/applications",
-  formulation: "/formulations",
-  creditBatch: "/credit-batches",
-} as const;
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
 export function EntitySelect({
@@ -186,7 +174,6 @@ export function EntitySelect({
   hideSearch = false,
   formatSelectedLabel,
 }: EntitySelectProps) {
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -241,17 +228,10 @@ export function EntitySelect({
         return () => setIsVehicleDialogOpen(true);
       case "feedstockType":
         return () => setIsFeedstockTypeDialogOpen(true);
-      default: {
-        const route = ENTITY_CREATE_ROUTES[
-          entityType as keyof typeof ENTITY_CREATE_ROUTES
-        ];
-        if (!route) {
-          return undefined;
-        }
-        return () => router.push(`${route}?create=true`);
-      }
+      default:
+        return undefined;
     }
-  }, [entityType, router]);
+  }, [entityType]);
 
   const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
   const hasCreateAction = Boolean(resolvedCreateAction);
@@ -422,15 +402,16 @@ export function EntitySelect({
           />
         </button>
         {value && !disabled && (
-          <button
-            type="button"
+          <Button
+            variant="noOutline"
+            size="icon"
             onClick={handleClear}
             aria-label="Clear selection"
             data-testid="entity-select-clear"
-            className="absolute right-[32px] p-4 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            className="absolute right-[32px] h-24 w-24 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
           >
             <XIcon className="size-16" />
-          </button>
+          </Button>
         )}
       </div>
 

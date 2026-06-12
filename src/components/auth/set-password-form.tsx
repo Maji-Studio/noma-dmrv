@@ -69,7 +69,7 @@ function SetPasswordFormContent() {
           className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-medium font-semibold mb-16">Invalid Invitation Link</h3>
+          <h3 className="body-bold mb-16">Invalid Invitation Link</h3>
           <p className="body-small">
             This invitation link is invalid or has expired. Please contact your
             administrator for a new invitation.
@@ -97,7 +97,7 @@ function SetPasswordFormContent() {
             role="status"
             aria-live="polite"
           >
-            <h3 className="body-medium font-semibold mb-16">
+            <h3 className="body-bold mb-16">
               Password set successfully
             </h3>
             <p className="body-small">
@@ -109,7 +109,7 @@ function SetPasswordFormContent() {
       ) : (
         <>
           <div className="mb-24">
-            <h2 className="body-large font-semibold text-[var(--color-text-primary)]">
+            <h2 className="body-large-bold text-[var(--color-text-primary)]">
               Set Your Password
             </h2>
             <p className="body-small text-[var(--color-text-secondary)] mt-16">

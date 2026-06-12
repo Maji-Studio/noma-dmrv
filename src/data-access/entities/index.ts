@@ -109,12 +109,18 @@ export async function getEntities(
         rawFormulation && rawFormulation !== PURE_PRODUCT_BIN_FILTER
           ? rawFormulation
           : undefined;
+      const rawFeedstockTypeUsage = filterBy?.feedstockTypeUsage?.trim();
+      const feedstockTypeUsage =
+        rawFeedstockTypeUsage === "pyrolysis" || rawFeedstockTypeUsage === "blend"
+          ? rawFeedstockTypeUsage
+          : undefined;
       return getStorageLocations({
         userId,
         search,
         facilityId: filterBy?.facilityId,
         type,
         feedstockTypeId: filterBy?.feedstockTypeId,
+        feedstockTypeUsage,
         formulationId,
         pureProductOnly,
         limit,

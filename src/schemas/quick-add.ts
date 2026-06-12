@@ -90,10 +90,10 @@ const FORMULATION_PRODUCT_BIN_MESSAGE =
   "formulationId is only allowed for type 'product_bin'";
 
 const FEEDSTOCK_TYPE_REQUIRED_MESSAGE =
-  "Feedstock and ingredient bins must be restricted to one feedstock type";
+  "Feedstock bins must be restricted to one feedstock type";
 
 const FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE =
-  "feedstockTypeId is only allowed for feedstock and ingredient bins";
+  "feedstockTypeId is only allowed for feedstock bins";
 
 export const storageLocationQuickAddSchema = z.object({
   name: z
@@ -109,7 +109,7 @@ export const storageLocationQuickAddSchema = z.object({
     .positive("Capacity must be positive")
     .optional()
     .nullable(),
-  // Feedstock/ingredient bins only — restricts the bin to one feedstock type
+  // Feedstock bins only — restricts the bin to one feedstock type
   feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
   // Product bins only — restricts the bin to one formulation (empty = pure biochar)
   formulationId: emptyToNull.or(z.string().uuid("Invalid formulation")).nullable().optional(),

@@ -46,10 +46,12 @@ export function MobileNav() {
   return (
     <Dialog.Root open={isOpen} onOpenChange={setIsOpen} modal>
       {/* Sticky top bar — mobile only */}
-      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between h-56 px-16 border-b border-[var(--color-white-10)] bg-[#0c0114]">
+      {/* bg uses --clr-dark-purple (#0f021a) — the closest token; the previous
+          hardcoded #0c0114 had no matching design token. */}
+      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between h-56 px-16 border-b border-[var(--color-white-10)] bg-[var(--clr-dark-purple)]">
         <Link href="/dashboard" className="flex items-center gap-10 min-w-0">
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-[12px] leading-none">
+            <span className="text-white font-bold text-[length:var(--text-xxs)] leading-none">
               D
             </span>
           </div>

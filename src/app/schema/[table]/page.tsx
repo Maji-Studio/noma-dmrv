@@ -51,7 +51,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
   const descriptions = (columnDescriptions as Record<string, Record<string, string>>)[tableName] ?? {};
 
   return (
-    <div className="min-h-screen bg-[var(--color-background-light)] text-[var(--color-text-primary)]">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
       <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         <nav className="flex flex-wrap items-center gap-[8px]">
           <Link href="/schema" className={buttonVariants({ size: "small" })}>

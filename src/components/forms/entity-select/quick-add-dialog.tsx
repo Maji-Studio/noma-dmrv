@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from "react";
 import { Modal } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { QuickAddDialogProps, EntityOption, EntityType } from "./types";
 
 // Human-readable entity type labels
@@ -28,35 +28,6 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   order: "Order",
   creditBatch: "Credit Batch",
 };
-
-// Icon components
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("animate-spin", className)}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="2"
-      />
-      <path
-        d="M8 2a6 6 0 0 1 6 6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 interface QuickAddForm {
   code: string;
@@ -177,22 +148,16 @@ export function QuickAddDialog({
 
           {/* Actions */}
           <div className="flex gap-16 justify-start pt-16">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-8 px-16 py-8 bg-[var(--color-interaction)] text-white rounded-none hover:opacity-90 disabled:opacity-50"
-            >
-              {isSubmitting && <SpinnerIcon className="size-16" />}
+            <Button type="submit" variant="primary" busy={isSubmitting}>
               {isSubmitting ? "Creating..." : `Create ${entityLabel}`}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="default"
               onClick={onClose}
               disabled={isSubmitting}
-              className="h-40 px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </div>

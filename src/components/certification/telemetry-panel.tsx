@@ -152,7 +152,7 @@ function TelemetryError({ state }: { state: TelemetryState }) {
         className="text-[var(--color-signal-orange)] shrink-0"
       />
       <div className="flex flex-col gap-4">
-        <span className="body-small font-semibold">Isometric error</span>
+        <span className="body-small-bold">Isometric error</span>
         <span className="body-caption text-[var(--color-text-secondary)]">
           {message}
         </span>

@@ -65,7 +65,7 @@ function ResetPasswordFormContent() {
           className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
           role="alert"
         >
-          <h3 className="body-medium font-semibold mb-16">Invalid Reset Link</h3>
+          <h3 className="body-bold mb-16">Invalid Reset Link</h3>
           <p className="body-small">
             This password reset link is invalid or has expired. Please request a
             new password reset.
@@ -93,7 +93,7 @@ function ResetPasswordFormContent() {
             role="status"
             aria-live="polite"
           >
-            <h3 className="body-medium font-semibold mb-16">
+            <h3 className="body-bold mb-16">
               Password reset successful
             </h3>
             <p className="body-small">

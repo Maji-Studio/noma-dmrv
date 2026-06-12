@@ -7,47 +7,106 @@
   --clr-dark-purple-100: rgba(15, 2, 26, 1);
   --clr-dark-purple-80: rgba(15, 2, 26, 0.8);
   --clr-dark-purple-60: rgba(15, 2, 26, 0.6);
+  --clr-dark-purple-50: rgba(15, 2, 26, 0.5);
   --clr-dark-purple-40: rgba(15, 2, 26, 0.4);
   --clr-dark-purple-30: rgba(15, 2, 26, 0.3);
   --clr-dark-purple-20: rgba(15, 2, 26, 0.2);
   --clr-dark-purple-10: rgba(15, 2, 26, 0.1);
+  --clr-dark-purple-5: rgba(15, 2, 26, 0.05);
   --clr-dark-purple-1: rgba(15, 2, 26, 0.01);
 
-  /* ===== ACCENT COLORS ===== */
+  /* ===== ACCENT COLORS =====
+     Ramp steps (Figma variables, 2026-06-12): 100/80/60/40/30/20/10/5/1.
+     The 5 and 1 steps are wash/field tints. */
   --clr-rose: rgba(255, 178, 210, 1);
   --clr-rose-80: rgba(255, 178, 210, 0.8);
   --clr-rose-60: rgba(255, 178, 210, 0.6);
   --clr-rose-40: rgba(255, 178, 210, 0.4);
+  --clr-rose-30: rgba(255, 178, 210, 0.3);
   --clr-rose-20: rgba(255, 178, 210, 0.2);
   --clr-rose-10: rgba(255, 178, 210, 0.1);
+  --clr-rose-5: rgba(255, 178, 210, 0.05);
+  --clr-rose-1: rgba(255, 178, 210, 0.01);
 
   --clr-orange: rgba(255, 131, 89, 1);
   --clr-orange-80: rgba(255, 131, 89, 0.8);
   --clr-orange-60: rgba(255, 131, 89, 0.6);
   --clr-orange-40: rgba(255, 131, 89, 0.4);
+  --clr-orange-30: rgba(255, 131, 89, 0.3);
   --clr-orange-20: rgba(255, 131, 89, 0.2);
   --clr-orange-10: rgba(255, 131, 89, 0.1);
+  --clr-orange-5: rgba(255, 131, 89, 0.05);
+  --clr-orange-1: rgba(255, 131, 89, 0.01);
 
   --clr-red: rgba(229, 69, 82, 1);
   --clr-red-80: rgba(229, 69, 82, 0.8);
   --clr-red-60: rgba(229, 69, 82, 0.6);
   --clr-red-40: rgba(229, 69, 82, 0.4);
+  --clr-red-30: rgba(229, 69, 82, 0.3);
   --clr-red-20: rgba(229, 69, 82, 0.2);
   --clr-red-10: rgba(229, 69, 82, 0.1);
+  --clr-red-5: rgba(229, 69, 82, 0.05);
+  --clr-red-1: rgba(229, 69, 82, 0.01);
 
   --clr-pink: rgba(166, 33, 110, 1);
   --clr-pink-80: rgba(166, 33, 110, 0.8);
   --clr-pink-60: rgba(166, 33, 110, 0.6);
   --clr-pink-40: rgba(166, 33, 110, 0.4);
+  --clr-pink-30: rgba(166, 33, 110, 0.3);
   --clr-pink-20: rgba(166, 33, 110, 0.2);
   --clr-pink-10: rgba(166, 33, 110, 0.1);
+  --clr-pink-5: rgba(166, 33, 110, 0.05);
+  --clr-pink-1: rgba(166, 33, 110, 0.01);
 
   --clr-purple: rgba(72, 11, 115, 1);
   --clr-purple-80: rgba(72, 11, 115, 0.8);
   --clr-purple-60: rgba(72, 11, 115, 0.6);
   --clr-purple-40: rgba(72, 11, 115, 0.4);
+  --clr-purple-30: rgba(72, 11, 115, 0.3);
   --clr-purple-20: rgba(72, 11, 115, 0.2);
   --clr-purple-10: rgba(72, 11, 115, 0.1);
+  --clr-purple-5: rgba(72, 11, 115, 0.05);
+  --clr-purple-1: rgba(72, 11, 115, 0.01);
+
+  /* ===== WARM LIGHT THEME (visual refresh 2026-06-12) =====
+     Page field / panel / ink. The warm --bg is clr-orange @ 5% over white. */
+  --bg: #fff9f7;
+  --paper: #ffffff;
+  --ink: var(--clr-dark-purple-100);
+
+  /* Plum-tinted hairlines — emphasized borders/dividers only;
+     the gray border tokens below remain for quiet chrome. */
+  --edge: #480b73;
+  --edge-soft: rgba(72, 11, 115, 0.45);
+
+  /* Accent triad + ink variants (ink = text-on-light, passes 4.5:1) */
+  --acc-prod: var(--clr-orange);
+  --acc-prod-ink: #bc4519;
+  --acc-infra: var(--clr-purple);
+  --acc-infra-ink: #480b73;
+  --acc-dist: var(--clr-pink);
+  --acc-dist-ink: #a6216e;
+
+  /* Status ramp (replaces ad-hoc signal-green usage).
+     -bg = 10% tint fill, -border = 40% tint border (badge anatomy). */
+  --st-ok: #17744a;
+  --st-ok-bg: rgba(23, 116, 74, 0.1);
+  --st-ok-border: rgba(23, 116, 74, 0.4);
+  --st-run: #6e2ba8;
+  --st-run-bg: rgba(110, 43, 168, 0.1);
+  --st-run-border: rgba(110, 43, 168, 0.4);
+  --st-wait: #bc4519;
+  --st-wait-bg: rgba(188, 69, 25, 0.1);
+  --st-wait-border: rgba(188, 69, 25, 0.4);
+  --st-off: rgba(15, 2, 26, 0.4);
+  --st-off-bg: rgba(15, 2, 26, 0.05);
+  --st-off-border: rgba(15, 2, 26, 0.2);
+  --st-bad: #e54552;
+  --st-bad-bg: rgba(229, 69, 82, 0.1);
+  --st-bad-border: rgba(229, 69, 82, 0.4);
+
+  /* Tinted canvas wash (chain-of-custody figure/ground) */
+  --sea: rgba(72, 11, 115, 0.045);
 
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;
@@ -66,13 +125,14 @@
   --color-signal-orange: #f59723ff;
   --color-signal-orange-strong: #f59723ff;
   --color-signal-orange-light: #f5972326;
-  --color-signal-green: #16a34aff;
-  --color-signal-green-light: #16a34a26;
+  /* DEPRECATED: use --st-ok (signal-green now aliases the status ramp) */
+  --color-signal-green: var(--st-ok);
+  --color-signal-green-light: rgba(23, 116, 74, 0.15);
 
   /* ===== STATUS COLORS ===== */
-  --color-status-success: #16a34a;
-  --color-status-success-bg: rgba(22, 163, 74, 0.1);
-  --color-status-success-border: rgba(22, 163, 74, 0.4);
+  --color-status-success: var(--st-ok);
+  --color-status-success-bg: rgba(23, 116, 74, 0.1);
+  --color-status-success-border: rgba(23, 116, 74, 0.4);
 
   /* ===== BLACK & WHITE OPACITY VARIANTS ===== */
   --color-black-100: #000000ff;
@@ -228,8 +288,8 @@
   --breakpoint-xl: 1280px;
   --breakpoint-desktop: 100rem;
 
-  /* Default theme values */
-  --background: var(--color-background-light);
+  /* Default theme values — warm field page background, ink foreground */
+  --background: var(--bg);
   --foreground: var(--color-text-primary);
 }
 

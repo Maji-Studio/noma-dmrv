@@ -301,11 +301,11 @@ export interface FacilityEmissionConfigInput {
   defaultSoilTemperatureC?: number | null;
 }
 
-// Updates the Phase 3.7 emission-estimate columns
-// (gensetEnergyYieldKwhPerLitre + the three stageSplit*Pct values) plus
-// defaultSoilTemperatureC on an existing certifier_projects row. The
-// facility must already be linked to an Isometric project — the config
-// has no meaning otherwise.
+// Updates only the emission-config columns on an existing
+// certifier_projects row: the four Phase 3.7 emission-estimate fields
+// (gensetEnergyYieldKwhPerLitre + the three stageSplit*Pct columns) plus
+// defaultSoilTemperatureC. The facility must already be linked to an
+// Isometric project — the config has no meaning otherwise.
 export async function updateFacilityEmissionConfig(
   userId: string,
   input: FacilityEmissionConfigInput,

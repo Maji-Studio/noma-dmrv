@@ -10,7 +10,8 @@ import { useDebounce } from "@/hooks/use-debounce";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Lightning, Flask, Plus, CheckCircle, Warning } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -49,22 +50,20 @@ function MethodBEligibilityBadge({
 }) {
   if (isEligible) {
     return (
-      <div className="inline-flex items-center gap-4 px-8 py-4 bg-[var(--color-signal-green)]/10 border border-[var(--color-signal-green)]/30">
-        <CheckCircle size={14} weight="fill" className="text-[var(--color-signal-green)]" />
-        <span className="text-[var(--text-xs)] font-medium text-[var(--color-signal-green)]">
-          Eligible ({sampleCount})
-        </span>
-      </div>
+      <StatusBadge
+        status="ready"
+        label={`Eligible (${sampleCount})`}
+        icon={<CheckCircle size={14} weight="fill" />}
+      />
     );
   }
 
   return (
-    <div className="inline-flex items-center gap-4 px-8 py-4 bg-[var(--color-signal-yellow)]/10 border border-[var(--color-signal-yellow)]/30">
-      <Warning size={14} weight="fill" className="text-[var(--color-signal-yellow)]" />
-      <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)]">
-        {sampleCount}/{minimumRequired}
-      </span>
-    </div>
+    <StatusBadge
+      status="pending"
+      label={`${sampleCount}/${minimumRequired}`}
+      icon={<Warning size={14} weight="fill" />}
+    />
   );
 }
 
@@ -134,26 +133,28 @@ function createColumns(
       header: "",
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-16">
-          <button
+          <Button
             type="button"
+            variant="default"
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(row.original);
             }}
-            className="h-[32px] px-12 border border-[var(--color-border-primary)] rounded-none hover:bg-[var(--color-background-medium)] body-small"
           >
             Edit
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="destructive"
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(row.original.id);
             }}
-            className="h-[32px] px-12 border border-[var(--color-signal-red)] text-[var(--color-signal-red)] rounded-none hover:bg-[var(--color-signal-red)]/10 body-small"
           >
             Delete
-          </button>
+          </Button>
         </div>
       ),
       enableSorting: false,
@@ -328,25 +329,24 @@ export function ReactorList() {
         isLoading={isLoading}
         hoverable
         emptyMessage={
-          <div className="flex flex-col items-center justify-center gap-24 py-48">
-            <Lightning size={48} className="text-[var(--color-text-tertiary)]" />
-            <div className="text-center">
-              <h3 className="title-heading-3 mb-1">
-                {contextFacilityId ? "No reactors yet" : "Select a facility"}
-              </h3>
-              <p className="body-small text-[var(--color-text-secondary)]">
-                {contextFacilityId
-                  ? "Create your first reactor to get started"
-                  : "Choose a facility from the sidebar to view reactors"}
-              </p>
-            </div>
-            {contextFacilityId && (
-              <Button variant="primary" onClick={openCreate}>
-                <Plus size={18} weight="bold" />
-                New Reactor
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            padding="md"
+            icon={<Lightning size={48} />}
+            title={contextFacilityId ? "No reactors yet" : "Select a facility"}
+            description={
+              contextFacilityId
+                ? "Create your first reactor to get started"
+                : "Choose a facility from the sidebar to view reactors"
+            }
+            action={
+              contextFacilityId ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <Plus size={18} weight="bold" />
+                  New Reactor
+                </Button>
+              ) : undefined
+            }
+          />
         }
       >
         <DataTable.Toolbar>

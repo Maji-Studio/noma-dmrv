@@ -21,35 +21,37 @@ const statusBadgeVariants = cva(
       /**
        * Status determines the color scheme of the badge
        */
+      /**
+       * All states map onto the design-system status ramp
+       * (--st-ok / --st-run / --st-wait / --st-off / --st-bad).
+       */
       status: {
-        // Neutral / Draft states - gray
-        draft: "bg-[var(--color-background-medium)] text-[var(--color-text-secondary)] border-[var(--color-border-secondary)]",
+        // Off / inactive states — muted (st-off)
+        draft: "bg-[var(--st-off-bg)] text-[var(--color-text-secondary)] border-[var(--st-off-border)]",
 
         // Superseded / replaced states - muted with strikethrough, distinct from draft
-        superseded: "bg-[var(--color-background-light)] text-[var(--color-text-tertiary)] border-[var(--color-border-tertiary)] line-through",
+        superseded: "bg-[var(--st-off-bg)] text-[var(--color-text-tertiary)] border-[var(--st-off-border)] line-through",
 
-        // In-progress / Active states - purple/brand
-        running: "bg-[var(--clr-purple-10)] text-[var(--clr-purple)] border-[var(--clr-purple-40)]",
+        // In-progress / Active states (st-run)
+        running: "bg-[var(--st-run-bg)] text-[var(--st-run)] border-[var(--st-run-border)]",
+        sold: "bg-[var(--st-run-bg)] text-[var(--st-run)] border-[var(--st-run-border)]",
 
-        // Pending / Upcoming states - orange/warning
-        pending: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
-        upcoming: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
+        // Pending / Upcoming / attention states (st-wait)
+        pending: "bg-[var(--st-wait-bg)] text-[var(--st-wait)] border-[var(--st-wait-border)]",
+        upcoming: "bg-[var(--st-wait-bg)] text-[var(--st-wait)] border-[var(--st-wait-border)]",
+        testing: "bg-[var(--st-wait-bg)] text-[var(--st-wait)] border-[var(--st-wait-border)]",
 
-        // Success / Complete states - green
-        complete: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
-        delivered: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
-        applied: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
-        verified: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
-        issued: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
+        // Success / Complete states (st-ok)
+        complete: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
+        delivered: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
+        applied: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
+        verified: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
+        issued: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
+        ready: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
 
-        // Testing / Ready states
-        testing: "bg-[var(--clr-orange-10)] text-[var(--color-signal-orange)] border-[var(--clr-orange-40)]",
-        ready: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)] border-[var(--color-status-success-border)]",
-        sold: "bg-[var(--clr-purple-10)] text-[var(--clr-purple)] border-[var(--clr-purple-40)]",
-
-        // Error / Void / Rejected states - red
-        void: "bg-[var(--clr-red-10)] text-[var(--clr-red)] border-[var(--clr-red-40)]",
-        rejected: "bg-[var(--clr-red-10)] text-[var(--clr-red)] border-[var(--clr-red-40)]",
+        // Error / Void / Rejected states (st-bad)
+        void: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
+        rejected: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
       },
       /**
        * Size variants
@@ -121,6 +123,11 @@ export interface StatusBadgeProps
    * Optional custom label to override the default status label
    */
   label?: string
+  /**
+   * Optional leading icon (typically a 14px Phosphor icon).
+   * Inherits the badge's text color.
+   */
+  icon?: React.ReactNode
 }
 
 /**
@@ -157,16 +164,24 @@ export interface StatusBadgeProps
  * <StatusBadge status="running" size="large" />
  */
 const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
-  ({ className, status, size, label, ...props }, ref) => {
+  ({ className, status, size, label, icon, ...props }, ref) => {
     const displayLabel = label ?? statusLabels[status]
 
     return (
       <span
         ref={ref}
-        className={cn(statusBadgeVariants({ status, size, className }))}
+        className={cn(
+          statusBadgeVariants({ status, size, className }),
+          icon ? "gap-4" : undefined
+        )}
         data-status={status}
         {...props}
       >
+        {icon && (
+          <span aria-hidden className="shrink-0 inline-flex">
+            {icon}
+          </span>
+        )}
         {displayLabel}
       </span>
     )

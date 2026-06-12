@@ -29,20 +29,18 @@ function getTypeAccent(type: StorageLocationType) {
     return "border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] text-[var(--clr-orange)]";
   if (type === "biochar_bin")
     return "border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] text-[var(--clr-purple)]";
-  if (type === "ingredient_bin")
-    return "border-[var(--clr-pink-20)] bg-[var(--clr-pink-10)] text-[var(--clr-pink)]";
   return "border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] text-[var(--clr-pink)]";
 }
 
 function getDryMass(s: StorageLocationWithFacility) {
-  if (s.type === "feedstock_bin" || s.type === "ingredient_bin")
+  if (s.type === "feedstock_bin")
     return s.feedstockInventory.currentDryMassKg;
   if (s.type === "biochar_bin") return s.biocharInventory.currentMassKg;
   return s.productInventory.currentMassKg;
 }
 
 function isFeedstockInputBin(type: StorageLocationType) {
-  return type === "feedstock_bin" || type === "ingredient_bin";
+  return type === "feedstock_bin";
 }
 
 function getCapacityPercent(s: StorageLocationWithFacility) {
