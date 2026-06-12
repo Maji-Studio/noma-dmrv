@@ -37,6 +37,8 @@ export interface ApplicationDeliveryOptionData {
   moistureContentPercent: number | null;
   defaultSoilTemperatureC: number | null;
   facilityDefaultSoilTemperatureC: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
 }
 
@@ -287,6 +289,8 @@ export async function getApplicationDeliveryOptions(
         defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
         facilityDefaultSoilTemperatureC:
           certifierProjects.defaultSoilTemperatureC,
+        destinationGpsLatitude: customerLocations.gpsLatitude,
+        destinationGpsLongitude: customerLocations.gpsLongitude,
       })
       .from(deliveries)
       .leftJoin(orders, eq(deliveries.orderId, orders.id))

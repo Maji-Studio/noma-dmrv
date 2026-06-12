@@ -35,6 +35,7 @@ import {
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   formatKg,
+  resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
@@ -264,6 +265,33 @@ export function ApplicationForm({
     watchedSoilTemperatureC,
     watchedSoilTemperatureSource,
   ]);
+
+  // Prefill the field position from the delivery's destination customer
+  // location, but only while the operator hasn't touched it (pin drag and
+  // address search set the fields dirty; prefills don't). While untouched,
+  // the position always mirrors the selected delivery — including clearing
+  // a stale prefill when the new destination has no GPS.
+  useEffect(() => {
+    if (isEditMode || !selectedDelivery) return;
+    if (
+      getFieldState("gpsLatitude").isDirty ||
+      getFieldState("gpsLongitude").isDirty
+    ) {
+      return;
+    }
+
+    const positionDefault = resolveApplicationPositionDefault({
+      delivery: selectedDelivery,
+    });
+    setValue("gpsLatitude", positionDefault?.gpsLatitude, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+    setValue("gpsLongitude", positionDefault?.gpsLongitude, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
 
   const moisturePercent = selectedDelivery?.moistureContentPercent ?? null;
   const appliedKgNum = typeof watchedAppliedKg === "string" ? parseFloat(watchedAppliedKg) : watchedAppliedKg;
