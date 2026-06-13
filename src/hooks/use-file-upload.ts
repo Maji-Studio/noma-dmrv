@@ -5,6 +5,7 @@ import {
   useConfirmUpload,
   useRequestUpload,
 } from "@/hooks/use-documents";
+import { resolveUploadContentType } from "@/lib/documents/content-type";
 import type { DocumentType } from "@/schemas/documents";
 
 interface EvidenceExif {
@@ -170,7 +171,10 @@ export function useFileUpload(): UseFileUploadResult {
           entityId,
           documentType,
           fileName: file.name,
-          contentType: file.type || "application/octet-stream",
+          contentType: resolveUploadContentType({
+            fileName: file.name,
+            contentType: file.type,
+          }),
           sizeBytes: file.size,
           capturedAt: capturedAt ?? parsedExif.capturedAt,
           gpsLatitude: gpsLatitude ?? parsedExif.gpsLatitude,

@@ -282,7 +282,7 @@ export async function createFacilityFn(
           address: validated.address || null,
           gpsLatitude: validated.gpsLatitude ?? null,
           gpsLongitude: validated.gpsLongitude ?? null,
-          timezone: validated.timezone ?? null,
+          timezone: validated.timezone,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
           defaultDurabilityOption: validated.defaultDurabilityOption,

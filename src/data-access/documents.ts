@@ -1,6 +1,7 @@
-import { and, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { documents } from "@/db/schema";
+import { documents, productionRuns } from "@/db/schema";
+import { SafeError } from "@/lib/errors";
 import { requireAuth } from "./utils";
 
 /**
@@ -13,12 +14,32 @@ const MAX_DOCUMENTS_PER_ENTITY = 200;
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
 
+export async function assertCanManageDocumentEntity(
+  userId: string,
+  entityType: string,
+  entityId: string
+): Promise<void> {
+  requireAuth(userId);
+
+  if (entityType !== "production_run") return;
+
+  const [run] = await db
+    .select({ id: productionRuns.id })
+    .from(productionRuns)
+    .where(and(eq(productionRuns.id, entityId), isNull(productionRuns.archivedAt)));
+
+  if (!run) {
+    throw new SafeError("Production run not found or archived");
+  }
+}
+
 export async function listDocumentsForEntity(
   userId: string,
   entityType: string,
   entityId: string
 ): Promise<DocumentRow[]> {
   requireAuth(userId);
+  await assertCanManageDocumentEntity(userId, entityType, entityId);
   return db
     .select()
     .from(documents)
