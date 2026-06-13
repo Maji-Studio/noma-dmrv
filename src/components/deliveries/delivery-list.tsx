@@ -276,7 +276,7 @@ export function DeliveryList() {
       : sideSheetEntity?.customerName || sideSheetEntity?.orderCode || undefined;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="distribution"
         title="Deliveries"

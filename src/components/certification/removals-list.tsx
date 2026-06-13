@@ -55,7 +55,7 @@ export function RemovalsList() {
   };
 
   return (
-    <div className="container-max flex flex-col gap-32 py-32">
+    <div className="container-max page-shell">
       <header className="flex items-start justify-between gap-16">
         <div className="flex flex-col gap-8">
           <span className="title-chapter-title text-[var(--color-text-tertiary)]">

@@ -72,7 +72,7 @@ function Breadcrumb({ code }: { code: string | null }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="container-max flex flex-col gap-32 py-32">{children}</div>
+    <div className="container-max page-shell">{children}</div>
   );
 }
 

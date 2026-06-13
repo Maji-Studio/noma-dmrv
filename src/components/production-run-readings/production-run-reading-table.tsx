@@ -152,9 +152,12 @@ export function ProductionRunReadingTable({
             : "No readings recorded yet. Upload a readings CSV or click \"Add Reading\" to record monitoring data."}
         </p>
       ) : readings?.length ? (
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[420px]">
           <table className="w-full body-small">
-            <thead>
+            {/* Sticky header so the column labels stay visible once the body
+                scrolls past the capped height. bg matches the side-sheet paper
+                so rows don't bleed through behind it. */}
+            <thead className="sticky top-0 z-10 bg-[var(--color-background-white)]">
               <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Temp (&deg;C)</th>
