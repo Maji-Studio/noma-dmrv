@@ -342,7 +342,8 @@ async function seedDemoData() {
           code: demoCodes.storageCharMoshi,
           name: 'Moshi Biochar Storage',
           type: 'biochar_bin' as const,
-          capacityKg: 15000,
+          // Biochar stores are uncapped piles — no fixed capacity (no gauge).
+          capacityKg: null,
           storageMethod: 'tarped_pile',
           storageDescription: 'Covered pile on impermeable liner with drainage',
           facilityId: ids.facilityMoshi,
@@ -372,7 +373,8 @@ async function seedDemoData() {
           code: demoCodes.storageCharArusha,
           name: 'Arusha Biochar Storage',
           type: 'biochar_bin' as const,
-          capacityKg: 18000,
+          // Biochar stores are uncapped piles — no fixed capacity (no gauge).
+          capacityKg: null,
           storageMethod: 'tarped_pile',
           facilityId: ids.facilityArusha,
         },
@@ -1399,6 +1401,122 @@ async function seedDemoData() {
           stageSplitBiocharPct: 9.3,
         },
       ]);
+
+      // ============================================================
+      // EXTRA STORAGE BINS (Moshi) — exercises the storage flow board at
+      // realistic scale (20+ bins) with a spread of fill levels. Pure demo
+      // data in a reserved id/code range (9xxx) so it never collides with
+      // the curated entities above. Fill comes from the same sources the
+      // board reads: feedstock rows, production-run output, and products.
+      // ============================================================
+      console.log('Creating extra storage bins (scale demo)...');
+
+      const extraBinBase = 9000;
+      const feedstockTypeRotation = [
+        ids.feedstockWoodchips,
+        ids.feedstockCoffeeHusk,
+        ids.feedstockCoconut,
+      ];
+
+      // [type, capacityBasisKg, fillFraction, name]
+      // For feedstock/product bins the basis is the stored capacity. Biochar
+      // bins are uncapped piles (stored capacity = null), so their basis is
+      // only used to derive a realistic demo output mass.
+      const extraBinSpecs: Array<
+        ['feedstock_bin' | 'biochar_bin' | 'product_bin', number, number, string]
+      > = [
+        ['feedstock_bin', 12000, 0.0, 'Moshi Feedstock Bay B'],
+        ['feedstock_bin', 18000, 0.22, 'Moshi Feedstock Bay C'],
+        ['feedstock_bin', 15000, 0.46, 'Moshi Feedstock Bay D'],
+        ['feedstock_bin', 22000, 0.68, 'Moshi Feedstock Bay E'],
+        ['feedstock_bin', 16000, 0.88, 'Moshi Feedstock Bay F'],
+        ['feedstock_bin', 14000, 0.97, 'Moshi Feedstock Bay G'],
+        ['feedstock_bin', 20000, 0.34, 'Moshi Feedstock Bay H'],
+        ['biochar_bin', 15000, 0.0, 'Moshi Biochar Store B'],
+        ['biochar_bin', 12000, 0.28, 'Moshi Biochar Store C'],
+        ['biochar_bin', 18000, 0.55, 'Moshi Biochar Store D'],
+        ['biochar_bin', 14000, 0.8, 'Moshi Biochar Store E'],
+        ['biochar_bin', 16000, 0.95, 'Moshi Biochar Store F'],
+        ['product_bin', 10000, 0.0, 'Moshi Product Store B'],
+        ['product_bin', 8000, 0.3, 'Moshi Product Store C'],
+        ['product_bin', 12000, 0.58, 'Moshi Product Store D'],
+        ['product_bin', 9000, 0.82, 'Moshi Product Store E'],
+        ['product_bin', 11000, 0.95, 'Moshi Product Store F'],
+        ['product_bin', 7000, 0.5, 'Moshi Product Store G'],
+      ];
+
+      const extraBins = extraBinSpecs.map(([type, capacityBasisKg, , name], i) => ({
+        id: demoId(extraBinBase + i),
+        code: `SL-26-${900 + i}`,
+        name,
+        type,
+        // Biochar piles are uncapped; feedstock/product bins store their capacity.
+        capacityKg: type === 'biochar_bin' ? null : capacityBasisKg,
+        facilityId: ids.facilityMoshi,
+        storageMethod:
+          type === 'feedstock_bin'
+            ? 'covered_bin'
+            : type === 'biochar_bin'
+              ? 'tarped_pile'
+              : 'bagged_palletized',
+        feedstockTypeId:
+          type === 'feedstock_bin'
+            ? feedstockTypeRotation[i % feedstockTypeRotation.length]
+            : null,
+      }));
+      await tx.insert(schema.storageLocations).values(extraBins);
+
+      const extraFeedstocks: (typeof schema.feedstocks.$inferInsert)[] = [];
+      const extraRuns: (typeof schema.productionRuns.$inferInsert)[] = [];
+      const extraProducts: (typeof schema.biocharProducts.$inferInsert)[] = [];
+
+      extraBinSpecs.forEach(([type, capacityBasisKg, frac], i) => {
+        const massKg = Math.round(capacityBasisKg * frac);
+        if (massKg <= 0) return; // leave a few bins empty on purpose
+        const binId = demoId(extraBinBase + i);
+        if (type === 'feedstock_bin') {
+          extraFeedstocks.push({
+            id: demoId(extraBinBase + 100 + i),
+            code: `FI-26-${900 + i}`,
+            facilityId: ids.facilityMoshi,
+            status: 'complete',
+            feedstockTypeId: feedstockTypeRotation[i % feedstockTypeRotation.length],
+            massDryKg: massKg,
+            massWetKg: Math.round(massKg / 0.85),
+            moistureContentPercent: 15,
+            storageLocationId: binId,
+          });
+        } else if (type === 'biochar_bin') {
+          extraRuns.push({
+            id: demoId(extraBinBase + 200 + i),
+            code: `PR-26-${900 + i}`,
+            facilityId: ids.facilityMoshi,
+            date: '2026-05-20',
+            status: 'complete',
+            reactorId: ids.reactorMoshi1,
+            biocharStorageLocationId: binId,
+            biocharOutputKg: massKg,
+          });
+        } else {
+          extraProducts.push({
+            id: demoId(extraBinBase + 300 + i),
+            code: `BP-26-${900 + i}`,
+            facilityId: ids.facilityMoshi,
+            massKg,
+            storageLocationId: binId,
+          });
+        }
+      });
+
+      if (extraFeedstocks.length > 0) {
+        await tx.insert(schema.feedstocks).values(extraFeedstocks);
+      }
+      if (extraRuns.length > 0) {
+        await tx.insert(schema.productionRuns).values(extraRuns);
+      }
+      if (extraProducts.length > 0) {
+        await tx.insert(schema.biocharProducts).values(extraProducts);
+      }
     });
 
     console.log('');
@@ -1407,7 +1525,7 @@ async function seedDemoData() {
     console.log('Summary of created entities:');
     console.log('  - 3 Facilities (Moshi, Arusha, Mwanza)');
     console.log('  - 3 Reactors');
-    console.log('  - 5 Storage Locations');
+    console.log('  - 23 Storage Locations (5 curated + 18 scale-demo on Moshi)');
     console.log('  - 3 Suppliers');
     console.log('  - 3 Customers with 3 Locations');
     console.log('  - 2 Drivers, 2 Operators, 2 Vehicles');

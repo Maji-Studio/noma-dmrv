@@ -4,50 +4,23 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle,
-  Package,
   PencilSimple,
   Trash,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { formatMass } from "@/lib/format-utils";
 import {
-  formatStorageLocationType,
-  type StorageLocationType,
-} from "@/schemas/storage-locations";
+  binAccentStyle,
+  binCapacityPercent,
+  binCurrentMassKg,
+} from "./bin-display";
 
 interface StorageLocationCardProps {
   storageLocation: StorageLocationWithFacility;
   onView: (storageLocation: StorageLocationWithFacility) => void;
   onEdit: (storageLocation: StorageLocationWithFacility) => void;
   onDelete: (storageLocationId: string) => void;
-}
-
-function getTypeAccent(type: StorageLocationType) {
-  if (type === "feedstock_bin")
-    return "border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] text-[var(--clr-orange)]";
-  if (type === "biochar_bin")
-    return "border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] text-[var(--clr-purple)]";
-  return "border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] text-[var(--clr-pink)]";
-}
-
-function getDryMass(s: StorageLocationWithFacility) {
-  if (s.type === "feedstock_bin")
-    return s.feedstockInventory.currentDryMassKg;
-  if (s.type === "biochar_bin") return s.biocharInventory.currentMassKg;
-  return s.productInventory.currentMassKg;
-}
-
-function isFeedstockInputBin(type: StorageLocationType) {
-  return type === "feedstock_bin";
-}
-
-function getCapacityPercent(s: StorageLocationWithFacility) {
-  if (!s.capacityKg || s.capacityKg <= 0) return null;
-  return Math.round(
-    Math.max(0, Math.min(100, (getDryMass(s) / s.capacityKg) * 100))
-  );
 }
 
 function formatTimeAgo(date: Date) {
@@ -64,155 +37,160 @@ function formatTimeAgo(date: Date) {
   return `${diffMonths}mo ago`;
 }
 
+/** One muted line describing what kind of material the bin holds. */
+function contentsLabel(s: StorageLocationWithFacility): string | null {
+  if (s.type === "feedstock_bin") {
+    return s.feedstockInventory.feedstockTypes.join(", ") || null;
+  }
+  if (s.type === "biochar_bin") {
+    return s.biocharInventory.downstreamFormulations.join(", ") || null;
+  }
+  return s.productInventory.formulationNames.join(", ") || null;
+}
+
 export function StorageLocationCard({
   storageLocation,
   onView,
   onEdit,
   onDelete,
 }: StorageLocationCardProps) {
-  const accent = getTypeAccent(storageLocation.type);
-  const capacityPercent = getCapacityPercent(storageLocation);
+  const currentMassKg = binCurrentMassKg(storageLocation);
+  const capacityPercent = binCapacityPercent(storageLocation);
+  const isEmpty = currentMassKg <= 0;
+  const hasCapacity = storageLocation.capacityKg != null && storageLocation.capacityKg > 0;
   const { lastActivity } = storageLocation;
+  const contents = contentsLabel(storageLocation);
 
   return (
     <article
-      className="flex flex-col bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors hover:[border-color:var(--edge-soft)] cursor-pointer"
+      style={binAccentStyle(storageLocation.type)}
+      className={`group flex flex-col bg-[var(--panel-bg)] [border:var(--panel-border)] [border-left:4px_solid_var(--bin-accent)] [box-shadow:var(--panel-shadow)] transition-colors hover:[border-color:var(--bin-accent)] cursor-pointer ${
+        isEmpty ? "opacity-65" : ""
+      }`}
       onClick={() => onView(storageLocation)}
     >
-      <div className="flex flex-1 flex-col gap-16 p-20">
-        {/* Header: badge + type */}
-        <div className="flex items-center justify-between gap-12">
-          <span
-            className={`inline-flex items-center gap-6 border px-10 py-4 text-[11px] uppercase tracking-[0.12em] ${accent}`}
-          >
-            <Package size={12} weight="bold" />
+      <div className="flex flex-col gap-12 p-16">
+        {/* Header: code + last activity */}
+        <div className="flex items-center justify-between gap-8">
+          <span className="inline-flex items-center bg-[var(--bin-soft)] px-8 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--bin-ink)]">
             {storageLocation.code}
           </span>
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            {formatStorageLocationType(storageLocation.type)}
-          </span>
+          {lastActivity && (
+            <span
+              className={`inline-flex shrink-0 items-center gap-4 body-caption ${
+                lastActivity.type === "in"
+                  ? "text-[var(--color-signal-green)]"
+                  : "text-[var(--color-signal-orange)]"
+              }`}
+              title={`${lastActivity.label} · ${
+                lastActivity.type === "in" ? "+" : "−"
+              }${formatMass(lastActivity.massKg)}`}
+            >
+              {lastActivity.type === "in" ? (
+                <ArrowUp size={12} weight="bold" />
+              ) : (
+                <ArrowDown size={12} weight="bold" />
+              )}
+              {formatTimeAgo(lastActivity.date)}
+            </span>
+          )}
         </div>
 
         {/* Name */}
-        <h3 className="title-heading-3 text-[var(--color-text-primary)]">
+        <h3 className="title-heading-3 truncate text-[var(--color-text-primary)]">
           {storageLocation.name}
         </h3>
 
-        {/* Primary metric: dry mass */}
-        <div className="flex items-end justify-between gap-12">
-          <div>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              Dry mass
-            </p>
-            <p className="title-heading-3 text-[var(--color-text-primary)]">
-              {formatMass(getDryMass(storageLocation))}
-            </p>
-          </div>
-          {storageLocation.capacityKg != null && (
-            <div className="text-right">
-              <p className="body-caption text-[var(--color-text-tertiary)]">
-                Capacity
-              </p>
-              <p className="body-small text-[var(--color-text-primary)]">
-                {formatMass(storageLocation.capacityKg)}
-                {capacityPercent != null && (
-                  <span className="ml-6 text-[var(--color-text-tertiary)]">
-                    ({capacityPercent}%)
-                  </span>
-                )}
-              </p>
-            </div>
+        {/* Current mass + capacity context */}
+        <div className="flex items-baseline justify-between gap-8">
+          <span
+            className={`title-heading-2 ${
+              isEmpty
+                ? "text-[var(--color-text-tertiary)]"
+                : "text-[var(--color-text-primary)]"
+            }`}
+          >
+            {isEmpty ? "Empty" : formatMass(currentMassKg)}
+          </span>
+          {/* Capacity context only when a capacity is set — uncapped stores
+              (e.g. biochar piles) just show their mass. */}
+          {hasCapacity && (
+            <span className="shrink-0 body-caption text-[var(--color-text-tertiary)]">
+              {capacityPercent}% of {formatMass(storageLocation.capacityKg)}
+            </span>
           )}
         </div>
 
-        {/* Feedstock types (feedstock + ingredient bins) */}
-        {isFeedstockInputBin(storageLocation.type) &&
-          storageLocation.feedstockInventory.feedstockTypes.length > 0 && (
-            <div className="flex items-center gap-6 text-[var(--color-text-tertiary)]">
-              <Package size={12} weight="bold" />
-              <span className="body-caption truncate">
-                {storageLocation.feedstockInventory.feedstockTypes.join(", ")}
-              </span>
-            </div>
-          )}
+        {/* Capacity meter — omitted entirely for uncapped bins */}
+        {hasCapacity && (
+          <div
+            className="h-6 w-full bg-[var(--bin-track)]"
+            role="progressbar"
+            aria-valuenow={capacityPercent ?? 0}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Fill level"
+          >
+            <div
+              className="h-full bg-[var(--bin-accent)] transition-[width] duration-500"
+              style={{ width: `${capacityPercent ?? 0}%` }}
+            />
+          </div>
+        )}
 
-        {isFeedstockInputBin(storageLocation.type) &&
+        {/* Contents */}
+        {contents && (
+          <p className="truncate body-caption text-[var(--color-text-secondary)]">
+            {contents}
+          </p>
+        )}
+
+        {/* Signals */}
+        {storageLocation.type === "feedstock_bin" &&
           storageLocation.feedstockInventory.pendingDryMassKg > 0 && (
-            <div className="flex items-center gap-6 text-[var(--clr-orange)]">
+            <p className="flex items-center gap-4 body-caption text-[var(--clr-orange)]">
               <Warning size={12} weight="fill" />
-              <span className="body-caption">
-                {formatMass(storageLocation.feedstockInventory.pendingDryMassKg)} pending completion
-              </span>
-            </div>
+              {formatMass(storageLocation.feedstockInventory.pendingDryMassKg)}{" "}
+              pending completion
+            </p>
           )}
 
         {storageLocation.type === "product_bin" &&
           storageLocation.productInventory.appliedApplicationCount > 0 && (
-            <div className="flex items-center gap-6 text-[var(--color-signal-green)]">
+            <p className="flex items-center gap-4 body-caption text-[var(--color-signal-green)]">
               <CheckCircle size={12} weight="fill" />
-              <span className="body-caption">
-                Applied {formatMass(storageLocation.productInventory.appliedDryMassKg)}
-                <span className="mx-4">&middot;</span>
-                {storageLocation.productInventory.appliedApplicationCount} successful
-                {storageLocation.productInventory.appliedApplicationCount === 1
-                  ? " application"
-                  : " applications"}
-              </span>
-              {storageLocation.productInventory.lastAppliedAt && (
-                <span className="ml-auto truncate text-[var(--color-text-tertiary)]">
-                  {formatTimeAgo(storageLocation.productInventory.lastAppliedAt)}
-                </span>
-              )}
-            </div>
+              Applied{" "}
+              {formatMass(storageLocation.productInventory.appliedDryMassKg)}
+              <span className="mx-2">·</span>
+              {storageLocation.productInventory.appliedApplicationCount}{" "}
+              {storageLocation.productInventory.appliedApplicationCount === 1
+                ? "application"
+                : "applications"}
+            </p>
           )}
-
-        {/* Last activity */}
-        {lastActivity && (
-          <div
-            className={`flex items-center gap-6 body-caption ${
-              lastActivity.type === "in"
-                ? "text-[var(--color-signal-green)]"
-                : "text-[var(--color-signal-orange)]"
-            }`}
-          >
-            {lastActivity.type === "in" ? (
-              <ArrowUp size={12} weight="bold" />
-            ) : (
-              <ArrowDown size={12} weight="bold" />
-            )}
-            <span>
-              {formatTimeAgo(lastActivity.date)}
-              <span className="mx-4">&middot;</span>
-              {lastActivity.type === "in" ? "+" : "−"}
-              {formatMass(lastActivity.massKg)}
-            </span>
-            <span className="ml-auto truncate max-w-[100px] text-[var(--color-text-tertiary)]" title={lastActivity.label}>
-              {lastActivity.label}
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          {storageLocation.facilityName}
-        </span>
-
-        <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
-          <Button size="small" variant="default" onClick={() => onEdit(storageLocation)}>
-            <PencilSimple size={16} />
-            Edit
-          </Button>
-          <Button
-            size="small"
-            variant="default"
-            className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-            onClick={() => onDelete(storageLocation.id)}
-          >
-            <Trash size={16} />
-          </Button>
-        </div>
+      {/* Actions footer */}
+      <div
+        className="flex items-center justify-end gap-4 border-t border-[var(--color-border-tertiary)] px-12 py-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => onEdit(storageLocation)}
+          className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--bin-accent)] hover:text-[var(--bin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          aria-label={`Edit ${storageLocation.name}`}
+        >
+          <PencilSimple size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(storageLocation.id)}
+          className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--color-signal-red)] hover:text-[var(--color-signal-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          aria-label={`Delete ${storageLocation.name}`}
+        >
+          <Trash size={15} />
+        </button>
       </div>
     </article>
   );
