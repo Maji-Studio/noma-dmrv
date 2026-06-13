@@ -28,6 +28,18 @@ import {
   storageLocationFilterSchema,
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function storageLocationActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "storage location action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -232,10 +244,11 @@ export async function createStorageLocationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to create storage location",
+      error: storageLocationActionError(
+        error,
+        "Failed to create storage location",
+        "storage-location:create",
+      ),
     };
   }
 }
@@ -285,10 +298,11 @@ export async function updateStorageLocationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to update storage location",
+      error: storageLocationActionError(
+        error,
+        "Failed to update storage location",
+        "storage-location:update",
+      ),
     };
   }
 }
@@ -322,10 +336,11 @@ export async function deleteStorageLocationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to delete storage location",
+      error: storageLocationActionError(
+        error,
+        "Failed to delete storage location",
+        "storage-location:delete",
+      ),
     };
   }
 }

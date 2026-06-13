@@ -9,6 +9,10 @@ export {
   type IsometricEnvironment,
 } from "./client";
 export {
+  describeIsometricApiError,
+  sanitizeIsometricErrorBody,
+} from "./error-utils";
+export {
   listProjects,
   listGhgEntryTemplates,
   listComponentBlueprints,
