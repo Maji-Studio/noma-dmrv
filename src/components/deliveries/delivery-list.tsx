@@ -18,6 +18,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   useCreateDelivery,
   useDeleteDelivery,
@@ -32,6 +33,7 @@ import type {
 } from "@/schemas/deliveries";
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 
 // ============================================
 // Helper Functions
@@ -109,6 +111,15 @@ function createColumns(
       header: "Status",
       cell: ({ row }) => (
         <StatusBadge status={row.original.status} />
+      ),
+    },
+    {
+      id: "certifyReadiness",
+      header: "Certifier",
+      cell: ({ row }) => (
+        <EntityCertifyReadinessBadge
+          readiness={deriveEntityCertifyReadiness("delivery", row.original)}
+        />
       ),
     },
     {
@@ -363,6 +374,17 @@ export function DeliveryList() {
                       label: "Status",
                       value: (
                         <StatusBadge status={sideSheetEntity.status} />
+                      ),
+                    },
+                    {
+                      label: "Certifier",
+                      value: (
+                        <EntityCertifyReadinessBadge
+                          readiness={deriveEntityCertifyReadiness(
+                            "delivery",
+                            sideSheetEntity,
+                          )}
+                        />
                       ),
                     },
                   ],
