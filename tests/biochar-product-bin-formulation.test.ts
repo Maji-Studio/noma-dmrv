@@ -29,6 +29,8 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   let formulationAId: string;
   let formulationBId: string;
   let pyrolysisTypeId: string;
+  let blendTypeAId: string;
+  let blendTypeBId: string;
   const createdBinIds: string[] = [];
   const createdProductIds: string[] = [];
 
@@ -78,6 +80,28 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
       })
       .returning({ id: feedstockTypes.id });
     pyrolysisTypeId = pyrolysisType.id;
+
+    const [blendTypeA] = await db
+      .insert(feedstockTypes)
+      .values({
+        code: `FT-PBF-BA-${tag}`,
+        name: `PBF Blend Type A ${tag}`,
+        category: "compost",
+        usage: "blend",
+      })
+      .returning({ id: feedstockTypes.id });
+    blendTypeAId = blendTypeA.id;
+
+    const [blendTypeB] = await db
+      .insert(feedstockTypes)
+      .values({
+        code: `FT-PBF-BB-${tag}`,
+        name: `PBF Blend Type B ${tag}`,
+        category: "mineral",
+        usage: "blend",
+      })
+      .returning({ id: feedstockTypes.id });
+    blendTypeBId = blendTypeB.id;
   });
 
   afterAll(async () => {
@@ -115,8 +139,11 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
         db.delete(formulations).where(inArray(formulations.id, formulationIds)),
       );
     }
-    if (pyrolysisTypeId) {
-      await cleanup(() => db.delete(feedstockTypes).where(eq(feedstockTypes.id, pyrolysisTypeId)));
+    const feedstockTypeIds = [pyrolysisTypeId, blendTypeAId, blendTypeBId].filter(
+      (id): id is string => id != null,
+    );
+    if (feedstockTypeIds.length > 0) {
+      await cleanup(() => db.delete(feedstockTypes).where(inArray(feedstockTypes.id, feedstockTypeIds)));
     }
     if (facilityId) {
       await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
@@ -225,8 +252,9 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
           ingredients: [
             {
               formulationIngredientId: crypto.randomUUID(),
-              ingredientName: "Pyrolysis-only stock",
-              ingredientType: "biomass",
+              feedstockTypeId: pyrolysisTypeId,
+              feedstockTypeName: "Pyrolysis-only stock",
+              feedstockTypeCategory: "forestry",
               ratio: 0.2,
               massKg: 100,
               storageLocationId: pyrolysisBinId,
@@ -235,5 +263,31 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
         },
       })
     ).rejects.toThrow("Ingredient bin must hold blend-usage feedstock");
+  });
+
+  it("rejects blend ingredient bins whose held type differs from the formulation line", async () => {
+    const productBinId = await makeProductBin(formulationAId);
+    const wrongBlendBinId = await makeFeedstockBin(blendTypeBId);
+
+    await expect(
+      createBiocharProduct(TEST_USER_ID, {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: productBinId,
+        composition: {
+          ingredients: [
+            {
+              formulationIngredientId: crypto.randomUUID(),
+              feedstockTypeId: blendTypeAId,
+              feedstockTypeName: "Compost",
+              feedstockTypeCategory: "compost",
+              ratio: 0.2,
+              massKg: 100,
+              storageLocationId: wrongBlendBinId,
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow("Ingredient bin must match the formulation material");
   });
 });

@@ -29,7 +29,25 @@ import {
 } from "@/lib/chain-of-custody/sankey";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import {
+  getDashboardOperations,
+  type DashboardEvidenceRow,
+  type DashboardMapPoint,
+  type DashboardNowItem,
+  type DashboardProgressStage,
+} from "./dashboard-operations";
 import { requireAuth } from "./utils";
+
+// Re-exported so components import every dashboard type from one module.
+export type {
+  DashboardEvidenceRow,
+  DashboardMapKind,
+  DashboardMapPoint,
+  DashboardNowItem,
+  DashboardNowKind,
+  DashboardNowStatus,
+  DashboardProgressStage,
+} from "./dashboard-operations";
 
 export type DashboardRange = "30d" | "ytd" | "all";
 
@@ -85,10 +103,20 @@ export interface DashboardFeedstockMixSlice {
 
 export interface DashboardOverview {
   range: DashboardRange;
+  /** Server time the snapshot was built (ISO) — drives the header "updated" stamp. */
+  generatedAt: string;
   kpis: DashboardKpi[];
   attention: DashboardAttentionItem[];
   feedstockMix: DashboardFeedstockMixSlice[];
   flow: CreditBatchSankeyData;
+  /** Live signal: running runs + in-flight submissions (range-independent). */
+  now: DashboardNowItem[];
+  /** MRV pipeline funnel with per-stage needs-attention share. */
+  progress: DashboardProgressStage[];
+  /** Structural certification gaps (GPS, samples, transport provenance). */
+  evidence: DashboardEvidenceRow[];
+  /** Plottable sites for the dashboard map preview. */
+  mapPoints: DashboardMapPoint[];
 }
 
 interface RangeBounds {
@@ -563,9 +591,23 @@ export async function getDashboardOverview(
     },
   });
 
-  const attention = await getAttentionItems(facilityId);
+  const [attention, operations] = await Promise.all([
+    getAttentionItems(facilityId),
+    getDashboardOperations(userId, facilityId),
+  ]);
 
-  return { range, kpis, attention, feedstockMix, flow };
+  return {
+    range,
+    generatedAt: operations.generatedAt,
+    kpis,
+    attention,
+    feedstockMix,
+    flow,
+    now: operations.now,
+    progress: operations.progress,
+    evidence: operations.evidence,
+    mapPoints: operations.mapPoints,
+  };
 }
 
 // ============================================

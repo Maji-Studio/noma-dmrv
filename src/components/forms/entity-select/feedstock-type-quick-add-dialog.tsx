@@ -7,7 +7,7 @@
 
 import { createFeedstockTypeFn } from "@/fn/quick-add";
 import { FeedstockTypeForm } from "@/components/feedstock-types/feedstock-type-form";
-import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
+import type { FeedstockTypeFormData, FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
@@ -16,13 +16,20 @@ interface FeedstockTypeQuickAddDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (entity: EntityOption) => void;
+  defaultUsage?: FeedstockTypeUsage;
 }
 
 export function FeedstockTypeQuickAddDialog({
   isOpen,
   onClose,
   onSuccess,
+  defaultUsage,
 }: FeedstockTypeQuickAddDialogProps) {
+  const hint =
+    defaultUsage === "blend"
+      ? "Add an internal-only blend material such as compost, mineral, lime, binder, or another amendment. Blend materials are not submitted to the registry."
+      : "Add the agricultural or forestry residue used in Dark Earth Carbon operations. The Isometric tab shows the registry's catalogue for cross-reference (read-only).";
+
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FeedstockTypeFormData>({
     entityType: "feedstockType",
     serverFn: (data) =>
@@ -50,7 +57,8 @@ export function FeedstockTypeQuickAddDialog({
         onCancel={onClose}
         isSubmitting={isSubmitting}
         submitLabel="Create Feedstock Type"
-        hint="Add the agricultural or forestry residue used in Dark Earth Carbon operations. The Isometric tab shows the registry's catalogue for cross-reference (read-only)."
+        defaultUsage={defaultUsage}
+        hint={hint}
       />
     </QuickAddDialogShell>
   );

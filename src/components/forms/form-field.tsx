@@ -6,6 +6,7 @@
 import { cloneElement, isValidElement, type ReactNode } from "react";
 import { FormError } from "./form-error";
 import { InfoHint } from "@/components/ui/tooltip";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 
 interface FormFieldProps {
   id: string;
@@ -87,11 +88,7 @@ export function FormField({
             </>
           )}
         </label>
-        {certifyRequired && (
-          <span className="body-caption border border-[var(--color-border-primary)] px-4 py-1 text-[var(--color-text-secondary)]">
-            CERT<span className="sr-only">Required for certification</span>
-          </span>
-        )}
+        {certifyRequired && <CertificationFieldTag />}
         {hint != null && <InfoHint side="top">{hint}</InfoHint>}
       </div>
       {describeChild(children, describedBy, Boolean(error))}

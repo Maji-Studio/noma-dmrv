@@ -17,13 +17,18 @@ export const NODE_HEIGHT = 232;
 
 export const DAGRE_CONFIG = {
   rankdir: "LR" as const,
-  nodesep: 48,
+  // Vertical breathing room between sibling cards so fan-in/out trunks get
+  // their own corridor instead of piling on each other's labels.
+  nodesep: 76,
   // Wide enough that edge mass labels sit clear of both ranks' cards.
-  ranksep: 140,
+  ranksep: 208,
 };
 
 /** Edge mass labels declutter below this zoom (read the flow, not the kg). */
 export const EDGE_LABEL_MIN_ZOOM = 0.62;
+
+/** Fallback edge color when an edge ships without an explicit color. */
+export const EDGE_COLOR_FALLBACK = "var(--clr-dark-purple)";
 
 /**
  * Shared graph-canvas chrome (figure/ground per the concept screens): the

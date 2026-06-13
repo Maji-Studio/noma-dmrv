@@ -331,6 +331,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         })}
         arrivalError={errors.truckMassOnArrivalKg?.message}
         departureError={errors.truckMassOnDepartureKg?.message}
+        arrivalCertifyRequired={isDeliveryCertifyField("truckMassOnArrivalKg")}
+        departureCertifyRequired={isDeliveryCertifyField("truckMassOnDepartureKg")}
         isSubmitting={isSubmitting}
       />
 

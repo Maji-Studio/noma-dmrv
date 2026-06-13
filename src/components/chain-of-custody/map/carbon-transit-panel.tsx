@@ -13,6 +13,7 @@
  */
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import { MapTrifold } from "@phosphor-icons/react/dist/ssr";
 import type {
   ChainGeoLeg,
@@ -31,7 +32,6 @@ import type { PopupContentByNodeId } from "./carbon-transit-map";
 import {
   MapWarningBanner,
   NotGeolocatedChips,
-  NotGeolocatedRail,
   TransportLegsRail,
   ViewerEmptyState,
   ViewerLegend,
@@ -134,6 +134,14 @@ export function CarbonTransitPanel({
   const { data: geo, isLoading, isError, error } =
     source.kind === "application" ? applicationGeo : batchGeo;
 
+  // Clicking a leg in the bottom strip zooms/flashes that segment on the map.
+  // The nonce lets a repeat click on the same leg re-trigger the ease-to.
+  const [focusedLeg, setFocusedLeg] = useState<{ legId: string; nonce: number } | null>(
+    null
+  );
+  const focusLeg = (legId: string) =>
+    setFocusedLeg((current) => ({ legId, nonce: (current?.nonce ?? 0) + 1 }));
+
   const plottableLegs = geo ? resolveLegEndpoints(geo).plottable : [];
   const { data: routeGeometries } = useRouteGeometries(
     plottableLegs.length > 0
@@ -196,6 +204,7 @@ export function CarbonTransitPanel({
             popupContent={popupContent}
             railVisible={view === "map"}
             highlight={highlight}
+            focusedLeg={focusedLeg}
             onMarkerClick={onNodeSelect}
           />
 
@@ -203,15 +212,14 @@ export function CarbonTransitPanel({
           <ViewerLegend />
 
           {view === "map" ? (
-            <div className="absolute right-16 top-16 z-10 flex w-[252px] flex-col gap-12">
+            <div className="absolute bottom-16 left-16 right-16 z-10">
               <TransportLegsRail
                 legs={geo.legs}
-                onSelectLeg={(leg) => onNodeSelect(legAnchorNodeId(geo, leg))}
-              />
-              <NotGeolocatedRail
-                nodes={ungeolocated}
-                facilityCode={geo.facility.code}
-                onSelectNode={onNodeSelect}
+                selectedLegId={focusedLeg?.legId ?? null}
+                onFocusLeg={(leg) => {
+                  focusLeg(leg.id);
+                  onNodeSelect(legAnchorNodeId(geo, leg));
+                }}
               />
             </div>
           ) : (

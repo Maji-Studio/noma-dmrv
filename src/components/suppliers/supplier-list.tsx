@@ -26,6 +26,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SupplierForm } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 
 // ============================================
 // Column Definitions
@@ -282,6 +283,13 @@ export function SupplierList() {
               { label: "Location", value: sideSheetEntity.location },
               { label: "Source Region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
+              {
+                label: "Distance to Facility",
+                ...certificationDetailField("supplier", "distanceToFacilityKm"),
+                value: sideSheetEntity.distanceToFacilityKm != null
+                  ? `${sideSheetEntity.distanceToFacilityKm} km`
+                  : null,
+              },
             ],
           },
           {

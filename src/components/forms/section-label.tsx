@@ -6,6 +6,7 @@
  */
 
 import { InfoHint } from "@/components/ui/tooltip";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 
 export function SectionLabel({
   children,
@@ -20,11 +21,7 @@ export function SectionLabel({
   return (
     <h3 className="flex items-center gap-6 body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
       {children}
-      {certifyRequired && (
-        <span className="border border-[var(--color-border-primary)] px-4 py-1 text-[var(--color-text-secondary)]">
-          CERT<span className="sr-only">Required for certification</span>
-        </span>
-      )}
+      {certifyRequired && <CertificationFieldTag />}
       {hint != null && <InfoHint side="top">{hint}</InfoHint>}
     </h3>
   );

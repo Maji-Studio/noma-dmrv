@@ -99,6 +99,27 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="fieldIdentifier"]', "E2E-Field-01");
     await page.fill('input[name="cropType"]', "maize");
 
+    await expect(
+      page.locator('input[name="evidenceMethod"][value="visual"]')
+    ).toBeChecked();
+    await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
+
+    await page.getByText("Boundary records", { exact: true }).click();
+    await expect(
+      page.locator('input[name="evidenceMethod"][value="boundary"]')
+    ).toBeChecked();
+    await expect(page.locator('input[name="gisBoundaryReference"]')).toBeVisible();
+    await page.fill(
+      'input[name="gisBoundaryReference"]',
+      "https://maps.example.test/e2e-field-01",
+    );
+
+    await page.getByText("Visual proof", { exact: true }).click();
+    await expect(
+      page.locator('input[name="evidenceMethod"][value="visual"]')
+    ).toBeChecked();
+    await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
+
     await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
     await waitForSideSheetClose(page);
 
@@ -107,6 +128,31 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
+
+    await page.locator("table tbody tr").first().click();
+    await waitForSideSheet(page);
+    await page.getByRole("button", { name: "Edit Application" }).click();
+    const evidenceUpload = page.locator(
+      '[role="dialog"] input[type="file"][accept="image/*"]',
+    );
+    await evidenceUpload.setInputFiles({
+      name: "application-no-exif.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from([
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00,
+        0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xdb,
+        0x00, 0x43, 0x00, 0xff, 0xd9,
+      ]),
+    });
+    const uploadedEvidence = page.locator('[role="dialog"] li', {
+      hasText: "application-no-exif.jpg",
+    });
+    await expect(uploadedEvidence.first()).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(uploadedEvidence.first()).toContainText("No geotag:", {
+      timeout: 10000,
+    });
   });
 
   test("create credit batch via UI form", async ({

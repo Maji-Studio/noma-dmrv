@@ -23,6 +23,12 @@ export type ApplicationStatus = (typeof applicationStatuses)[number];
 export const applicationMethods = ["manual", "mechanical"] as const;
 export type ApplicationMethod = (typeof applicationMethods)[number];
 
+/**
+ * Application evidence methods (Soil Module §9.5, either visual or boundary).
+ */
+export const applicationEvidenceMethods = ["visual", "boundary"] as const;
+export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[number];
+
 // ============================================
 // GPS Coordinate Validation
 // ============================================
@@ -75,6 +81,7 @@ export const applicationFormSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.enum(applicationMethods).optional().nullable()
   ),
+  evidenceMethod: z.enum(applicationEvidenceMethods).default("visual"),
   gisBoundaryReference: z
     .string()
     .max(255, "GIS boundary reference must be less than 255 characters")
@@ -125,6 +132,7 @@ export const updateApplicationSchema = z.object({
   gpsLatitude: latitudeSchema,
   gpsLongitude: longitudeSchema,
   applicationMethodType: z.enum(applicationMethods).optional().nullable(),
+  evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
   gisBoundaryReference: z.string().max(255).optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
@@ -181,6 +189,14 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
   const labels: Record<ApplicationMethod, string> = {
     manual: "Manual",
     mechanical: "Mechanical",
+  };
+  return labels[method];
+}
+
+export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
+  const labels: Record<ApplicationEvidenceMethod, string> = {
+    visual: "Visual proof",
+    boundary: "Boundary records",
   };
   return labels[method];
 }

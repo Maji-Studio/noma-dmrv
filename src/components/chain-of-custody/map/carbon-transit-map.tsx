@@ -38,7 +38,6 @@ import {
   FIT_DURATION_MS,
   FIT_MAX_ZOOM,
   FIT_PADDING,
-  FIT_PADDING_RIGHT_WITH_RAIL,
   HIGHLIGHT_EASE_DURATION_MS,
   HIGHLIGHT_HOLD_MS,
   LEG_LINE_OPACITY,
@@ -65,6 +64,14 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 const SAT_TILE_SIZE = 256;
 const FALLBACK_LAYER_ID = `${LEGS_BASE_LAYER_ID}-fallback`;
+// Focus overlay — a single bold line drawn over the leg the user clicked in
+// the bottom strip, then cleared after a short hold.
+const FOCUS_SOURCE_ID = `${LEGS_SOURCE_ID}-focus`;
+const FOCUS_LAYER_ID = `${LEGS_BASE_LAYER_ID}-focus`;
+const FOCUS_LINE_WIDTH = 4.5;
+const FOCUS_HOLD_MS = 2200;
+// Extra bottom padding so a fit doesn't tuck markers under the legs strip.
+const STRIP_FIT_BOTTOM = 132;
 
 /**
  * No-basemap mode (missing NEXT_PUBLIC_MAPTILER_KEY): MapLibre still runs on
@@ -93,6 +100,8 @@ export interface CarbonTransitMapProps {
   railVisible: boolean;
   /** Cross-link from the DAG; nonce re-triggers for repeat clicks. */
   highlight: { nodeId: string; nonce: number } | null;
+  /** Leg the bottom strip asked to focus; nonce re-triggers repeat clicks. */
+  focusedLeg: { legId: string; nonce: number } | null;
   onMarkerClick?: (nodeId: string) => void;
 }
 
@@ -156,6 +165,7 @@ export default function CarbonTransitMap({
   popupContent,
   railVisible,
   highlight,
+  focusedLeg,
   onMarkerClick,
 }: CarbonTransitMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -165,6 +175,7 @@ export default function CarbonTransitMap({
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const pinnedRef = useRef<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Latest props for handlers that live as long as the map instance.
   const onMarkerClickRef = useRef(onMarkerClick);
   const railVisibleRef = useRef(railVisible);
@@ -189,7 +200,9 @@ export default function CarbonTransitMap({
     map.fitBounds(bounds, {
       padding: {
         ...FIT_PADDING,
-        right: railVisibleRef.current ? FIT_PADDING_RIGHT_WITH_RAIL : FIT_PADDING.right,
+        // The transport-legs strip sits along the bottom in map view — keep
+        // markers clear of it.
+        bottom: railVisibleRef.current ? STRIP_FIT_BOTTOM : FIT_PADDING.bottom,
       },
       maxZoom: FIT_MAX_ZOOM,
       duration: animate ? FIT_DURATION_MS : 0,
@@ -295,6 +308,23 @@ export default function CarbonTransitMap({
         },
       });
 
+      // Focus overlay — empty until a strip click flashes a single leg.
+      map.addSource(FOCUS_SOURCE_ID, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: FOCUS_LAYER_ID,
+        type: "line",
+        source: FOCUS_SOURCE_ID,
+        paint: {
+          "line-color": colorByKind,
+          "line-width": FOCUS_LINE_WIDTH,
+          "line-opacity": 0.95,
+          "line-blur": 0.6,
+        },
+      });
+
       setStyleReady(true);
     });
 
@@ -324,6 +354,7 @@ export default function CarbonTransitMap({
       clearInterval(antsTimer);
       resizeObserver.disconnect();
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       popupRef.current = null;
       markersRef.current = [];
       chipsRef.current = [];
@@ -448,6 +479,51 @@ export default function CarbonTransitMap({
       HIGHLIGHT_HOLD_MS
     );
   }, [highlight, styleReady]);
+
+  // Bottom-strip leg focus — fit the map to the clicked leg and flash it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusedLeg || !styleReady) return;
+
+    const { plottable } = resolveLegEndpoints(geo);
+    const entry = plottable.find((leg) => leg.leg.id === focusedLeg.legId);
+    if (!entry) return;
+    const { coordinates } = legLineCoordinates(
+      entry,
+      routeGeometries?.[entry.leg.id]
+    );
+    if (coordinates.length < 2) return;
+
+    const bounds = new maplibregl.LngLatBounds();
+    for (const coordinate of coordinates) bounds.extend(coordinate);
+    map.fitBounds(bounds, {
+      padding: { ...FIT_PADDING, bottom: STRIP_FIT_BOTTOM },
+      maxZoom: FIT_MAX_ZOOM,
+      duration: FIT_DURATION_MS,
+    });
+
+    const focusSource = map.getSource(FOCUS_SOURCE_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    focusSource?.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { kind: entry.leg.kind },
+          geometry: { type: "LineString", coordinates },
+        },
+      ],
+    });
+
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      const source = mapRef.current?.getSource(FOCUS_SOURCE_ID) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+      source?.setData({ type: "FeatureCollection", features: [] });
+    }, FOCUS_HOLD_MS);
+  }, [focusedLeg, styleReady, geo, routeGeometries]);
 
   const toggleSat = () => {
     const map = mapRef.current;

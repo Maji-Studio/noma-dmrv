@@ -205,14 +205,10 @@ export async function getStorageLocations(params: {
     }
   }
 
-  // Only show bins that are empty or already hold the same feedstock type
+  // A feedstock-type filter means the bin must already be declared for that
+  // exact type. Untyped bins are not proposed for type-specific workflows.
   if (feedstockTypeId) {
-    conditions.push(
-      or(
-        sql`${storageLocations.feedstockTypeId} IS NULL`,
-        eq(storageLocations.feedstockTypeId, feedstockTypeId)
-      )!
-    );
+    conditions.push(eq(storageLocations.feedstockTypeId, feedstockTypeId));
   }
 
   if (feedstockTypeUsage) {

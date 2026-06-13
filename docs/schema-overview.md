@@ -32,7 +32,7 @@ Current shape: 45 table exports across 14 schema files.
 | `incident_reports` | Production | Captures production exceptions, severity, and corrective actions. | Adaptive management log, audit evidence, RCA workflows. | `src/db/schema/production.ts:310` |
 | `production_run_feedstocks` | Production | Junction mapping feedstock batches consumed by each run. Auto-populated via proportional allocation from the selected feedstock bin. | Input mass traceability and mass-balance reconciliation. | `src/db/schema/production.ts:328` |
 | `formulations` | Products | Defines recipe templates for finished biochar products. `biocharRatio` is the primary compliance field (§9.4.2 <50% rule). | Product standardization, blend definition. | `src/db/schema/products.ts:37` |
-| `formulation_ingredients` | Products | Multi-ingredient rows per formulation with typed categories and ratios. Cascade-deletes with parent formulation. | Flexible recipe composition beyond simple biochar/compost split. | `src/db/schema/products.ts:57` |
+| `formulation_ingredients` | Products | Blend-material rows per formulation, each referencing a blend-usage `feedstock_types` catalog entry plus a ratio. Cascade-deletes with parent formulation. | Flexible recipe composition beyond simple biochar/compost split. | `src/db/schema/products.ts:44` |
 | `biochar_products` | Products | Stores produced product batches and composition/storage details. | Inventory release, run-to-product lineage, downstream order fulfillment. | `src/db/schema/products.ts:117` |
 | `vehicles` | Logistics | Master list of transport vehicles and fuel characteristics. | Transport planning, fuel/emissions parameterization. | `src/db/schema/logistics.ts:27` |
 | `orders` | Logistics | Customer order records linked to products and quantities. | Commercial order lifecycle, fulfillment planning. | `src/db/schema/logistics.ts:46` |
@@ -60,7 +60,7 @@ Current shape: 45 table exports across 14 schema files.
 |---|---|---|
 | `samplingMethod` | `method_a`, `method_b` | `reactors.sampling_method` — Isometric protocol sampling method selection |
 | `soilTemperatureSource` | `baseline`, `global_database` | Applications — soil temperature data source for durability calcs |
-| `ingredientType` | `compost`, `mineral`, `lime`, `binder`, `amendment`, `other` | `formulation_ingredients.ingredient_type` — categorizes non-biochar recipe components |
+| `feedstockTypeUsage` | `pyrolysis`, `blend` | `feedstock_types.usage` — separates registry-validated pyrolysis biomass from internal-only blend materials |
 
 ## Related References
 

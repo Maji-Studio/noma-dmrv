@@ -170,8 +170,7 @@ export async function createFormulationFn(
           biocharRatio: validated.biocharRatio ?? null,
           description: validated.description || null,
           ingredients: validated.ingredients?.map((ing) => ({
-            ingredientType: ing.ingredientType,
-            name: ing.name,
+            feedstockTypeId: ing.feedstockTypeId,
             ratio: ing.ratio ?? null,
           })),
         })
@@ -217,8 +216,7 @@ export async function updateFormulationFn(
       biocharRatio: validated.biocharRatio,
       description: validated.description || null,
       ingredients: validated.ingredients?.map((ing) => ({
-        ingredientType: ing.ingredientType,
-        name: ing.name,
+        feedstockTypeId: ing.feedstockTypeId,
         ratio: ing.ratio ?? null,
       })),
     });

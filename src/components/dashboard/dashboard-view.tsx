@@ -1,10 +1,10 @@
 /**
- * DashboardView — the facility monitoring dashboard (visual design plan,
- * Phase 5; target: the `01-dash` inspiration mock). Breadcrumb-style mono
- * eyebrow + display headline, period toggle, the 5-KPI strip with sparklines
- * and delta badges, the record-checks queue, the feedstock mix, and the
- * facility-wide custody-flow ribbon. Facility-scoped via the sidebar
- * selector like every other page.
+ * DashboardView — the facility operations dashboard. An operational header
+ * (facility name + live "updated" stamp, no marketing hero) over two halves:
+ * the measurement half (the 5-KPI strip, feedstock mix, custody-flow ribbon)
+ * and the action half restored from the operator dashboard (record checks,
+ * the live "Now" signal, the MRV pipeline funnel, evidence health). All
+ * facility-scoped via the sidebar selector like every other page.
  */
 "use client";
 
@@ -16,11 +16,21 @@ import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
 import { DashboardKpis } from "./dashboard-kpis";
 import { AttentionQueue } from "./attention-queue";
+import { NowPanel } from "./now-panel";
+import { ProgressPipeline } from "./progress-pipeline";
 import { FeedstockMix } from "./feedstock-mix";
-import { CustodyFlowRibbon } from "./custody-flow-ribbon";
+import { EvidenceHealth } from "./evidence-health";
+import { MapPreview } from "./map-preview";
 import { RangeToggle } from "./range-toggle";
 
 const DEFAULT_RANGE: DashboardRange = "30d";
+
+function formatUpdated(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
 
 export function DashboardView() {
   const { facilityId, selectedFacility } = useFacilityContext();
@@ -31,14 +41,19 @@ export function DashboardView() {
     <div className="container-max flex flex-col gap-32 py-32">
       <header className="flex flex-wrap items-end justify-between gap-24">
         <div className="flex min-w-0 flex-col gap-8">
-          <p className="title-chapter-title text-[var(--color-text-tertiary)]">
-            Noma · Biochar carbon removal
-            {selectedFacility ? ` · ${selectedFacility.name}` : ""}
+          <p className="label-micro text-[var(--color-text-tertiary)]">
+            Dashboard
           </p>
-          <h1 className="title-heading-1 max-w-[16ch]">
-            Carbon removal,{" "}
-            <span className="title-heading-1-thin">traced end to end.</span>
+          <h1 className="title-heading-1 truncate">
+            {facilityId ? (selectedFacility?.name ?? "Facility") : "Operations"}
           </h1>
+          <p className="body-medium text-[var(--color-text-secondary)]">
+            {facilityId
+              ? data
+                ? `Live operations · updated ${formatUpdated(data.generatedAt)}`
+                : "Live operations across this facility"
+              : "Select a facility to monitor its carbon removal."}
+          </p>
         </div>
         {facilityId && <RangeToggle value={range} onChange={setRange} />}
       </header>
@@ -64,11 +79,19 @@ export function DashboardView() {
               loading would read as a (false) signal. */}
           {data && (
             <>
-              <div className="grid grid-cols-1 gap-24 xl:grid-cols-[1.6fr_1fr]">
+              <div className="grid grid-cols-1 gap-24 xl:grid-cols-[1.4fr_1fr]">
                 <AttentionQueue items={data.attention} />
-                <FeedstockMix slices={data.feedstockMix} />
+                <NowPanel items={data.now} />
               </div>
-              <CustodyFlowRibbon flow={data.flow} facilityId={facilityId} />
+
+              <ProgressPipeline stages={data.progress} />
+
+              <div className="grid grid-cols-1 gap-24 xl:grid-cols-2">
+                <FeedstockMix slices={data.feedstockMix} />
+                <EvidenceHealth rows={data.evidence} facilityId={facilityId} />
+              </div>
+
+              <MapPreview points={data.mapPoints} />
             </>
           )}
         </>
