@@ -31,7 +31,7 @@ export async function dismissCertifierLinkDialog(page: Page) {
     .getByRole("dialog")
     .filter({ hasText: "Link Isometric project" });
   const appeared = await linkDialog
-    .waitFor({ state: "visible", timeout: 3000 })
+    .waitFor({ state: "visible", timeout: 10000 })
     .then(() => true)
     .catch(() => false);
   if (appeared) {

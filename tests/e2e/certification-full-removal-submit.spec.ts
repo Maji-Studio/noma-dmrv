@@ -126,26 +126,26 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       await expect(checkbox).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await checkbox.check();
 
-      // ── Confirm = deferred-create; advance to the Requirements step ─────
-      await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+      // ── Continue = deferred-create; advance to the confirm/submit step ───
+      await dialog.getByRole("button", { name: "Continue", exact: true }).click();
 
-      // The step rail's active item flips to Requirements...
+      // The step rail's active item flips to the final confirmation step...
       await expect(dialog.locator('[aria-current="step"]')).toContainText(
-        "Requirements",
+        "Confirm & submit",
         { timeout: COLD_COMPILE_TIMEOUT_MS },
       );
-      // ...and the requirements body renders (not the loading/error fallback) —
+      // ...and the requirements checklist renders (not the loading/error fallback) —
       // proof the removal context resolved against the real project.
       await expect(
-        dialog.getByRole("heading", { name: "Registry requirements" }),
+        dialog.getByRole("heading", { name: "Confirm & submit" }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
 
-      // Every facility-level check met ⇒ the footer "Submit" button is enabled.
+      // Every facility-level check met ⇒ the submit button is enabled.
       // This is the canonical "removal is ready to submit" signal (it gates on
       // `deriveRemovalReadiness(...).state === "ready"`). The COMMITTED assertion
       // stops here — no external write.
       const submitButton = dialog.getByRole("button", {
-        name: "Submit",
+        name: "Submit removal",
         exact: true,
       });
       await expect(submitButton).toBeEnabled({
@@ -163,13 +163,6 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
 
       // ── LIVE (opt-in): real sandbox submit + success-state assertions ───
       await submitButton.click();
-      await expect(
-        dialog.getByRole("heading", { name: "Submit", exact: true }),
-      ).toBeVisible();
-
-      await dialog
-        .getByRole("button", { name: "Submit removal", exact: true })
-        .click();
 
       // Success block: confirmation copy + external id + the verified deep link.
       await expect(

@@ -443,12 +443,25 @@ export async function teardownWizardRemovalForBatch(
 
 const READY_BIOCHAR_OUTPUT_KG = 150;
 const READY_BIOCHAR_DRY_MASS_KG = 147; // ≤ output (DB check constraint)
+const READY_FEEDSTOCK_WET_MASS_KG = 420;
+const READY_FEEDSTOCK_DRY_MASS_KG = 400;
+const READY_FEEDSTOCK_MOISTURE_PCT = 4.76;
+const READY_BIOCHAR_MOISTURE_PCT = 2;
+const READY_DIESEL_OPERATION_L = 0;
+const READY_PREPROCESSING_FUEL_L = 0;
+const READY_DIESEL_GENSET_L = 0;
+const READY_ELECTRICITY_KWH = 0;
 const SAMPLE_TOTAL_CARBON_PCT = 80;
 const SAMPLE_ORGANIC_CARBON_PCT = 78;
 const SAMPLE_H_TO_CORG_RATIO = 0.4;
 const TRANSPORT_LEG_DISTANCE_KM = 50;
 const TRANSPORT_LEG_LOAD_MASS_KG = 100;
 const TRANSPORT_LEG_EMISSION_FACTOR = 0.1;
+const READY_TRUCK_ARRIVAL_KG = 12_500;
+const READY_TRUCK_DEPARTURE_KG = 12_100;
+const READY_DELIVERY_TRUCK_ARRIVAL_KG = 9_100;
+const READY_DELIVERY_TRUCK_DEPARTURE_KG = 9_000;
+const READY_APPLICATION_EVIDENCE_URL = "https://example.com/e2e-geotagged-application.jpg";
 
 export interface SeededReadyBatch {
   creditBatchId: string;
@@ -470,11 +483,13 @@ export async function seedUngroupedReadyBatchWithChain(
   const id = {
     productionRun: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
+    productionRunReading: crypto.randomUUID(),
     sample: crypto.randomUUID(),
     biocharProduct: crypto.randomUUID(),
     order: crypto.randomUUID(),
     delivery: crypto.randomUUID(),
     application: crypto.randomUUID(),
+    applicationDocument: crypto.randomUUID(),
     creditBatch: crypto.randomUUID(),
     creditBatchApplication: crypto.randomUUID(),
     feedstockTransportLeg: crypto.randomUUID(),
@@ -514,10 +529,33 @@ export async function seedUngroupedReadyBatchWithChain(
         startTime: new Date(),
         endTime: new Date(),
         biocharOutputKg: READY_BIOCHAR_OUTPUT_KG,
+        biocharMoisturePercent: READY_BIOCHAR_MOISTURE_PCT,
         biocharDryMassKg: READY_BIOCHAR_DRY_MASS_KG,
+        feedstockWetMassKg: READY_FEEDSTOCK_WET_MASS_KG,
+        feedstockMoisturePercent: READY_FEEDSTOCK_MOISTURE_PCT,
+        feedstockMassDryKg: READY_FEEDSTOCK_DRY_MASS_KG,
+        dieselOperationLiters: READY_DIESEL_OPERATION_L,
+        preprocessingFuelLiters: READY_PREPROCESSING_FUEL_L,
+        dieselGensetLiters: READY_DIESEL_GENSET_L,
+        electricityKwh: READY_ELECTRICITY_KWH,
         biocharStorageLocationId: refs.biocharStorageLocationId,
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
       });
+      await tx.insert(schema.productionRunReadings).values({
+        id: id.productionRunReading,
+        productionRunId: id.productionRun,
+        timestamp: new Date(),
+        temperatureC: 550,
+        pressureBar: 0,
+        gasFlowRate: 0,
+      });
+      await tx
+        .update(schema.feedstocks)
+        .set({
+          truckMassOnArrivalKg: READY_TRUCK_ARRIVAL_KG,
+          truckMassOnDepartureKg: READY_TRUCK_DEPARTURE_KG,
+        })
+        .where(eq(schema.feedstocks.id, refs.feedstockId));
       await tx.insert(schema.productionRunFeedstocks).values({
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
@@ -568,6 +606,8 @@ export async function seedUngroupedReadyBatchWithChain(
         deliveredWetMassKg: 105,
         massDryKg: 100,
         moistureContentPercent: 5,
+        truckMassOnArrivalKg: READY_DELIVERY_TRUCK_ARRIVAL_KG,
+        truckMassOnDepartureKg: READY_DELIVERY_TRUCK_DEPARTURE_KG,
         status: "delivered",
         vehicleId: refs.vehicleId,
       });
@@ -585,6 +625,16 @@ export async function seedUngroupedReadyBatchWithChain(
         gpsLongitude: 37.0,
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
+      });
+      await tx.insert(schema.documents).values({
+        id: id.applicationDocument,
+        entityType: "application",
+        entityId: id.application,
+        documentType: "photo",
+        fileUrl: READY_APPLICATION_EVIDENCE_URL,
+        fileName: `e2e-geotagged-application-${testRunId}.jpg`,
+        uploadStatus: "uploaded",
+        metadata: { geotagStatus: "present" },
       });
       await tx.insert(schema.transportLegs).values([
         leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
@@ -637,6 +687,9 @@ export async function seedUngroupedReadyBatchWithChain(
               ]),
             );
           await tx
+            .delete(schema.documents)
+            .where(eq(schema.documents.id, id.applicationDocument));
+          await tx
             .delete(schema.applications)
             .where(eq(schema.applications.id, id.application));
           await tx
@@ -650,10 +703,22 @@ export async function seedUngroupedReadyBatchWithChain(
             .delete(schema.samples)
             .where(eq(schema.samples.id, id.sample));
           await tx
+            .delete(schema.productionRunReadings)
+            .where(
+              eq(schema.productionRunReadings.id, id.productionRunReading),
+            );
+          await tx
             .delete(schema.productionRunFeedstocks)
             .where(
               eq(schema.productionRunFeedstocks.id, id.productionRunFeedstock),
             );
+          await tx
+            .update(schema.feedstocks)
+            .set({
+              truckMassOnArrivalKg: null,
+              truckMassOnDepartureKg: null,
+            })
+            .where(eq(schema.feedstocks.id, refs.feedstockId));
           await tx
             .delete(schema.productionRuns)
             .where(eq(schema.productionRuns.id, id.productionRun));
