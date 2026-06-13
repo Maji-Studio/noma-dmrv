@@ -1,838 +1,696 @@
-import {
-  and,
-  count,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  or,
-  sql,
-  type AnyColumn,
-} from "drizzle-orm";
+/**
+ * Dashboard overview data access (visual design plan, Phase 5).
+ *
+ * One facility-scoped aggregate read powering the dashboard: the 5-KPI strip
+ * (value + delta vs the previous equal period + a 12-bucket sparkline series),
+ * the needs-attention queue (cheap checks derived from existing MRV records —
+ * no separate task lifecycle, the item disappears when the record is fixed),
+ * the feedstock mix, and the custody-flow ribbon (the batch Sankey's
+ * mass-balance grammar via `buildStageFlow`).
+ *
+ * Deliberately lean: row-level fetches are facility-scoped and column-narrow,
+ * aggregation happens in JS — facilities operate at hundreds of records, not
+ * millions, and this keeps the module free of fragile SQL bucketing.
+ */
+import { and, asc, desc, eq, gte, isNull, lt, ne, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications,
   biocharProducts,
-  certifierGhgStatements,
-  certifierRemovals,
-  certificationSubmissions,
-  creditBatchApplications,
   creditBatches,
   deliveries,
-  facilities,
   feedstocks,
+  feedstockTypes,
   productionRuns,
-  samples,
-  transportLegs,
 } from "@/db/schema";
-import { requireAuth } from "./utils";
 import {
-  attentionPriority,
-  buildCreditBatchAttention,
-  buildEvidenceAttention,
-  buildNowItems,
-  buildProductionAttention,
-  buildProgress,
-  buildSubmissionAttention,
-} from "./dashboard-overview-builders";
+  buildStageFlow,
+  type CreditBatchSankeyData,
+} from "@/lib/chain-of-custody/sankey";
+import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { requireAuth } from "./utils";
 
-const DEFAULT_PERIOD_DAYS = 30;
-const MAX_ATTENTION_ITEMS = 18;
-const ROW_LIMIT = 8;
-const ISOMETRIC = "isometric";
+export type DashboardRange = "30d" | "ytd" | "all";
 
-export type DashboardTone = "critical" | "blocked" | "ready" | "waiting" | "running";
+/** Sparkline resolution — every KPI series carries exactly this many buckets. */
+const SERIES_BUCKETS = 12;
+/** Per-check row cap for the attention queue (the queue is a sample, not a list page). */
+const ATTENTION_PER_CHECK = 4;
+/** Total attention-queue cap, flags first. */
+const ATTENTION_TOTAL = 8;
+/** Feedstock-mix slices shown before collapsing the tail into "Other". */
+const MIX_SLICES = 5;
+/** Fallback window when range="all" finds no dated records. */
+const ALL_RANGE_FALLBACK_DAYS = 365;
 
-export interface DashboardFacilityOption {
-  id: string;
-  code: string;
-  name: string;
-  lat: number | null;
-  lng: number | null;
+export type DashboardKpiKey =
+  | "feedstockProcessed"
+  | "biocharProduced"
+  | "pyrolysisYield"
+  | "appliedToSoil"
+  | "co2eStored";
+
+export interface DashboardKpi {
+  key: DashboardKpiKey;
+  label: string;
+  /** Display unit, e.g. "t", "%", "tCO₂e". */
+  unit: string;
+  /** Null = no data in range (render "—", not 0). */
+  value: number | null;
+  /** Percent change vs the previous equal-length period; null when not comparable. */
+  deltaPercent: number | null;
+  /** 12-bucket series across the range, oldest first. */
+  series: number[];
+  /** One-line context, e.g. "8 runs in period". */
+  detail: string;
 }
 
 export interface DashboardAttentionItem {
   id: string;
-  tone: DashboardTone;
-  label: string;
+  /** Entity code shown in the mono column, e.g. "PR-26-0042". */
+  entityCode: string;
   title: string;
-  detail: string;
-  facilityId: string;
-  facilityCode: string;
-  facilityName: string;
-  href: string;
-  entityCode: string | null;
-  occurredAt: string | null;
-}
-
-export interface DashboardNowItem {
-  id: string;
-  label: string;
-  title: string;
-  detail: string;
-  status: string;
-  facilityCode: string;
+  severity: "flag" | "pending";
   href: string;
 }
 
-export interface DashboardMetric {
-  label: string;
-  value: number;
-  detail: string;
-}
-
-export interface DashboardProgressStage {
-  key: string;
-  label: string;
-  total: number;
-  needsAttention: number;
-  detail: string;
-  href: string;
-}
-
-export interface DashboardEvidenceHealth {
-  missingFacilityGps: number;
-  missingApplicationGps: number;
-  missingFeedstockGps: number;
-  productionRunsWithoutSamples: number;
-  transportEndpointGaps: number;
-  transportDistanceEvidenceGaps: number;
-}
-
-export interface DashboardMapFacility {
-  id: string;
-  code: string;
+export interface DashboardFeedstockMixSlice {
+  feedstockTypeId: string | null;
   name: string;
-  lat: number | null;
-  lng: number | null;
-  attentionCount: number;
-  runningRunCount: number;
-}
-
-export interface DashboardMapCoverage {
-  facilities: DashboardMapFacility[];
-  facilityCount: number;
-  plottedFacilityCount: number;
-  missingFacilityGpsCount: number;
-  transportLegCount: number;
-  transportEndpointGapCount: number;
+  massDryKg: number;
+  /** Share of the period's total dry mass, 0–100. */
+  percent: number;
 }
 
 export interface DashboardOverview {
-  generatedAt: string;
-  periodDays: number;
-  selectedFacilityId: string | null;
-  facilities: DashboardFacilityOption[];
-  metrics: DashboardMetric[];
-  attentionItems: DashboardAttentionItem[];
-  nowItems: DashboardNowItem[];
-  progress: DashboardProgressStage[];
-  evidence: DashboardEvidenceHealth;
-  map: DashboardMapCoverage;
+  range: DashboardRange;
+  kpis: DashboardKpi[];
+  attention: DashboardAttentionItem[];
+  feedstockMix: DashboardFeedstockMixSlice[];
+  flow: CreditBatchSankeyData;
 }
 
-interface DashboardOverviewInput {
-  facilityId?: string | null;
-  periodDays?: number;
+interface RangeBounds {
+  /** Current-period start (ms); null = unbounded ("all"). */
+  startMs: number | null;
+  /** Previous-period start (ms); null when no delta comparison applies. */
+  previousStartMs: number | null;
+  nowMs: number;
 }
 
-export interface StatusCount {
-  status: string;
-  count: number;
-}
-
-export interface TransportAggregate {
-  facilityId: string;
-  total: number;
-  endpointGaps: number;
-  distanceEvidenceGaps: number;
-}
-
-function toDateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function scopedFacilityCondition(facilityIds: string[]) {
-  return facilityIds.length === 1
-    ? eq(facilities.id, facilityIds[0])
-    : inArray(facilities.id, facilityIds);
-}
-
-function scopedColumnCondition(column: AnyColumn, facilityIds: string[]) {
-  return facilityIds.length === 1
-    ? eq(column, facilityIds[0])
-    : inArray(column, facilityIds);
-}
-
-async function loadFacilities(
-  facilityId: string | null,
-): Promise<DashboardFacilityOption[]> {
-  const baseWhere = isNull(facilities.archivedAt);
-  const where = facilityId
-    ? and(baseWhere, eq(facilities.id, facilityId))
-    : baseWhere;
-
-  return db
-    .select({
-      id: facilities.id,
-      code: facilities.code,
-      name: facilities.name,
-      lat: facilities.gpsLatitude,
-      lng: facilities.gpsLongitude,
-    })
-    .from(facilities)
-    .where(where)
-    .orderBy(facilities.code);
-}
-
-async function loadAllFacilities(): Promise<DashboardFacilityOption[]> {
-  return db
-    .select({
-      id: facilities.id,
-      code: facilities.code,
-      name: facilities.name,
-      lat: facilities.gpsLatitude,
-      lng: facilities.gpsLongitude,
-    })
-    .from(facilities)
-    .where(isNull(facilities.archivedAt))
-    .orderBy(facilities.code);
-}
-
-async function loadStatusCounts(facilityIds: string[]) {
-  const scopeProduction = scopedColumnCondition(productionRuns.facilityId, facilityIds);
-  const scopeProducts = scopedColumnCondition(biocharProducts.facilityId, facilityIds);
-  const scopeDeliveries = scopedColumnCondition(deliveries.facilityId, facilityIds);
-  const scopeCreditBatches = scopedColumnCondition(creditBatches.facilityId, facilityIds);
-
-  const [
-    feedstockRows,
-    productionRows,
-    productRows,
-    deliveryRows,
-    applicationRows,
-    creditBatchRows,
-  ] = await Promise.all([
-    db
-      .select({ status: feedstocks.status, count: count() })
-      .from(feedstocks)
-      .where(
-        and(
-          scopedColumnCondition(feedstocks.facilityId, facilityIds),
-          isNull(feedstocks.archivedAt),
-        ),
-      )
-      .groupBy(feedstocks.status),
-    db
-      .select({ status: productionRuns.status, count: count() })
-      .from(productionRuns)
-      .where(and(scopeProduction, isNull(productionRuns.archivedAt)))
-      .groupBy(productionRuns.status),
-    db
-      .select({ status: biocharProducts.status, count: count() })
-      .from(biocharProducts)
-      .where(and(scopeProducts, isNull(biocharProducts.archivedAt)))
-      .groupBy(biocharProducts.status),
-    db
-      .select({ status: deliveries.status, count: count() })
-      .from(deliveries)
-      .where(and(scopeDeliveries, isNull(deliveries.archivedAt)))
-      .groupBy(deliveries.status),
-    db
-      .select({ status: applications.status, count: count() })
-      .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(and(scopeDeliveries, isNull(deliveries.archivedAt)))
-      .groupBy(applications.status),
-    db
-      .select({ status: creditBatches.status, count: count() })
-      .from(creditBatches)
-      .where(and(scopeCreditBatches, isNull(creditBatches.archivedAt)))
-      .groupBy(creditBatches.status),
-  ]);
-
-  return {
-    feedstocks: feedstockRows.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    })),
-    productionRuns: productionRows.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    })),
-    biocharProducts: productRows.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    })),
-    deliveries: deliveryRows.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    })),
-    applications: applicationRows.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    })),
-    creditBatches: creditBatchRows.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    })),
-  };
-}
-
-async function loadRunningRuns(facilityIds: string[]) {
-  return db
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
-      startTime: productionRuns.startTime,
-    })
-    .from(productionRuns)
-    .where(
-      and(
-        scopedColumnCondition(productionRuns.facilityId, facilityIds),
-        isNull(productionRuns.archivedAt),
-        eq(productionRuns.status, "running"),
-      ),
-    )
-    .orderBy(desc(productionRuns.startTime))
-    .limit(ROW_LIMIT);
-}
-
-async function loadRecentCompletedRuns(facilityIds: string[], sinceDate: string) {
-  return db
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
-    })
-    .from(productionRuns)
-    .where(
-      and(
-        scopedColumnCondition(productionRuns.facilityId, facilityIds),
-        isNull(productionRuns.archivedAt),
-        eq(productionRuns.status, "complete"),
-        gte(productionRuns.date, sinceDate),
-      ),
-    )
-    .orderBy(desc(productionRuns.date))
-    .limit(ROW_LIMIT);
-}
-
-async function loadRunsWithoutSamples(facilityIds: string[]) {
-  const sampleCounts = db
-    .select({
-      productionRunId: samples.productionRunId,
-      sampleCount: sql<number>`count(*)::int`.as("sample_count"),
-    })
-    .from(samples)
-    .groupBy(samples.productionRunId)
-    .as("sample_counts");
-
-  return db
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
-      sampleCount: sampleCounts.sampleCount,
-    })
-    .from(productionRuns)
-    .leftJoin(sampleCounts, eq(sampleCounts.productionRunId, productionRuns.id))
-    .where(
-      and(
-        scopedColumnCondition(productionRuns.facilityId, facilityIds),
-        isNull(productionRuns.archivedAt),
-        eq(productionRuns.status, "complete"),
-        sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
-      ),
-    )
-    .orderBy(desc(productionRuns.date))
-    .limit(ROW_LIMIT);
-}
-
-async function loadCreditBatchRows(facilityIds: string[]) {
-  const applicationCounts = db
-    .select({
-      creditBatchId: creditBatchApplications.creditBatchId,
-      applicationCount: sql<number>`count(*)::int`.as("application_count"),
-    })
-    .from(creditBatchApplications)
-    .groupBy(creditBatchApplications.creditBatchId)
-    .as("application_counts");
-
-  return db
-    .select({
-      id: creditBatches.id,
-      code: creditBatches.code,
-      facilityId: creditBatches.facilityId,
-      status: creditBatches.status,
-      endDate: creditBatches.endDate,
-      removalId: creditBatches.removalId,
-      totalCo2eStoredTons: creditBatches.totalCo2eStoredTons,
-      applicationCount: applicationCounts.applicationCount,
-    })
-    .from(creditBatches)
-    .leftJoin(
-      applicationCounts,
-      eq(applicationCounts.creditBatchId, creditBatches.id),
-    )
-    .where(
-      and(
-        scopedColumnCondition(creditBatches.facilityId, facilityIds),
-        isNull(creditBatches.archivedAt),
-        or(
-          eq(creditBatches.status, "draft"),
-          eq(creditBatches.status, "pending"),
-          eq(creditBatches.status, "rejected"),
-          isNull(creditBatches.totalCo2eStoredTons),
-          sql`coalesce(${applicationCounts.applicationCount}, 0) = 0`,
-        ),
-      ),
-    )
-    .orderBy(desc(creditBatches.endDate))
-    .limit(ROW_LIMIT);
-}
-
-function latestSubmission(submissionType: string, localEntityType: string) {
-  return db
-    .selectDistinctOn([certificationSubmissions.localEntityId], {
-      localEntityId: certificationSubmissions.localEntityId,
-      externalId: certificationSubmissions.externalId,
-      status: certificationSubmissions.status,
-      version: certificationSubmissions.version,
-      submittedAt: certificationSubmissions.submittedAt,
-      lockedAt: certificationSubmissions.lockedAt,
-    })
-    .from(certificationSubmissions)
-    .where(
-      and(
-        eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, submissionType),
-        eq(certificationSubmissions.localEntityType, localEntityType),
-      ),
-    )
-    .orderBy(
-      certificationSubmissions.localEntityId,
-      desc(certificationSubmissions.version),
-    );
-}
-
-async function loadRemovalRows(facilityIds: string[]) {
-  const latest = latestSubmission("removal", "removal").as("latest_submission");
-
-  return db
-    .select({
-      id: certifierRemovals.id,
-      facilityId: certifierRemovals.facilityId,
-      startedOn: certifierRemovals.startedOn,
-      completedOn: certifierRemovals.completedOn,
-      status: latest.status,
-      submittedAt: latest.submittedAt,
-      lockedAt: latest.lockedAt,
-      externalId: latest.externalId,
-    })
-    .from(certifierRemovals)
-    .leftJoin(latest, eq(latest.localEntityId, certifierRemovals.id))
-    .where(scopedColumnCondition(certifierRemovals.facilityId, facilityIds))
-    .orderBy(desc(certifierRemovals.createdAt))
-    .limit(ROW_LIMIT);
-}
-
-async function loadGhgStatementRows(facilityIds: string[]) {
-  const latest = latestSubmission("ghg_statement", "ghgStatement").as(
-    "latest_submission",
-  );
-
-  return db
-    .select({
-      id: certifierGhgStatements.id,
-      facilityId: certifierGhgStatements.facilityId,
-      reportingPeriodEndOn: certifierGhgStatements.reportingPeriodEndOn,
-      status: latest.status,
-      submittedAt: latest.submittedAt,
-      lockedAt: latest.lockedAt,
-      externalId: latest.externalId,
-    })
-    .from(certifierGhgStatements)
-    .leftJoin(latest, eq(latest.localEntityId, certifierGhgStatements.id))
-    .where(scopedColumnCondition(certifierGhgStatements.facilityId, facilityIds))
-    .orderBy(desc(certifierGhgStatements.reportingPeriodEndOn))
-    .limit(ROW_LIMIT);
-}
-
-async function loadMissingApplicationGps(facilityIds: string[]) {
-  return db
-    .select({
-      id: applications.id,
-      code: applications.code,
-      facilityId: deliveries.facilityId,
-      applicationDate: applications.applicationDate,
-    })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .where(
-      and(
-        scopedColumnCondition(deliveries.facilityId, facilityIds),
-        isNull(deliveries.archivedAt),
-        or(isNull(applications.gpsLatitude), isNull(applications.gpsLongitude)),
-      ),
-    )
-    .orderBy(desc(applications.applicationDate))
-    .limit(ROW_LIMIT);
-}
-
-async function loadGpsGapCounts(facilityIds: string[]) {
-  const [
-    [facilityGps],
-    [feedstockGps],
-    [applicationGps],
-  ] = await Promise.all([
-    db
-      .select({ count: count() })
-      .from(facilities)
-      .where(
-        and(
-          scopedFacilityCondition(facilityIds),
-          or(isNull(facilities.gpsLatitude), isNull(facilities.gpsLongitude)),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(feedstocks)
-      .where(
-        and(
-          scopedColumnCondition(feedstocks.facilityId, facilityIds),
-          isNull(feedstocks.archivedAt),
-          or(isNull(feedstocks.gpsLatitude), isNull(feedstocks.gpsLongitude)),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(
-        and(
-          scopedColumnCondition(deliveries.facilityId, facilityIds),
-          isNull(deliveries.archivedAt),
-          or(isNull(applications.gpsLatitude), isNull(applications.gpsLongitude)),
-        ),
-      ),
-  ]);
-
-  return {
-    missingFacilityGps: Number(facilityGps?.count ?? 0),
-    missingFeedstockGps: Number(feedstockGps?.count ?? 0),
-    missingApplicationGps: Number(applicationGps?.count ?? 0),
-  };
-}
-
-function transportAggregateSelect(facilityIdColumn: AnyColumn) {
-  return {
-    facilityId: sql<string>`${facilityIdColumn}`.as("facility_id"),
-    total: sql<number>`count(*)::int`,
-    endpointGaps: sql<number>`
-      sum(case when
-        ${transportLegs.originGpsLatitude} is null
-        or ${transportLegs.originGpsLongitude} is null
-        or ${transportLegs.destinationGpsLatitude} is null
-        or ${transportLegs.destinationGpsLongitude} is null
-      then 1 else 0 end)::int
-    `,
-    distanceEvidenceGaps: sql<number>`
-      sum(case when
-        ${transportLegs.distanceSource} is null
-        or ${transportLegs.distanceSource} <> 'document'
-      then 1 else 0 end)::int
-    `,
-  };
-}
-
-async function loadTransportAggregates(
-  facilityIds: string[],
-): Promise<TransportAggregate[]> {
-  const [feedstockRows, biocharRows, sampleRows] = await Promise.all([
-    db
-      .select(transportAggregateSelect(feedstocks.facilityId))
-      .from(transportLegs)
-      .innerJoin(
-        feedstocks,
-        and(
-          eq(transportLegs.entityType, "feedstock"),
-          eq(transportLegs.entityId, feedstocks.id),
-        ),
-      )
-      .where(scopedColumnCondition(feedstocks.facilityId, facilityIds))
-      .groupBy(feedstocks.facilityId),
-    db
-      .select(transportAggregateSelect(biocharProducts.facilityId))
-      .from(transportLegs)
-      .innerJoin(
-        biocharProducts,
-        and(
-          eq(transportLegs.entityType, "biochar"),
-          eq(transportLegs.entityId, biocharProducts.id),
-        ),
-      )
-      .where(scopedColumnCondition(biocharProducts.facilityId, facilityIds))
-      .groupBy(biocharProducts.facilityId),
-    db
-      .select(transportAggregateSelect(productionRuns.facilityId))
-      .from(transportLegs)
-      .innerJoin(
-        samples,
-        and(
-          eq(transportLegs.entityType, "sample"),
-          eq(transportLegs.entityId, samples.id),
-        ),
-      )
-      .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-      .where(scopedColumnCondition(productionRuns.facilityId, facilityIds))
-      .groupBy(productionRuns.facilityId),
-  ]);
-
-  const byFacility = new Map<string, TransportAggregate>();
-  for (const row of [...feedstockRows, ...biocharRows, ...sampleRows]) {
-    const current = byFacility.get(row.facilityId) ?? {
-      facilityId: row.facilityId,
-      total: 0,
-      endpointGaps: 0,
-      distanceEvidenceGaps: 0,
-    };
-    current.total += Number(row.total ?? 0);
-    current.endpointGaps += Number(row.endpointGaps ?? 0);
-    current.distanceEvidenceGaps += Number(row.distanceEvidenceGaps ?? 0);
-    byFacility.set(row.facilityId, current);
+function resolveRange(range: DashboardRange): RangeBounds {
+  const nowMs = Date.now();
+  if (range === "all") {
+    return { startMs: null, previousStartMs: null, nowMs };
   }
-  return Array.from(byFacility.values());
+  if (range === "ytd") {
+    const startMs = new Date(new Date().getFullYear(), 0, 1).getTime();
+    return { startMs, previousStartMs: startMs - (nowMs - startMs), nowMs };
+  }
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  return {
+    startMs: nowMs - THIRTY_DAYS_MS,
+    previousStartMs: nowMs - 2 * THIRTY_DAYS_MS,
+    nowMs,
+  };
 }
 
-async function loadPeriodCounts(facilityIds: string[], sinceDate: string) {
-  const [[completedRuns], [submittedRemovals]] = await Promise.all([
-    db
-      .select({ count: count() })
-      .from(productionRuns)
-      .where(
-        and(
-          scopedColumnCondition(productionRuns.facilityId, facilityIds),
-          isNull(productionRuns.archivedAt),
-          eq(productionRuns.status, "complete"),
-          gte(productionRuns.date, sinceDate),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(certifierRemovals)
-      .innerJoin(
-        certificationSubmissions,
-        and(
-          eq(certificationSubmissions.localEntityType, "removal"),
-          eq(certificationSubmissions.localEntityId, certifierRemovals.id),
-          eq(certificationSubmissions.status, "submitted"),
-        ),
-      )
-      .where(scopedColumnCondition(certifierRemovals.facilityId, facilityIds)),
-  ]);
-  return {
-    completedRuns: Number(completedRuns?.count ?? 0),
-    submittedRemovals: Number(submittedRemovals?.count ?? 0),
-  };
+/** Date-only columns ("YYYY-MM-DD") parse as UTC midnight — good enough for bucketing. */
+function toMs(value: string | Date | null): number | null {
+  if (value == null) return null;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+interface DatedValue {
+  ms: number;
+  value: number;
+}
+
+function inCurrentPeriod(ms: number, bounds: RangeBounds, allStartMs: number) {
+  const start = bounds.startMs ?? allStartMs;
+  return ms >= start && ms <= bounds.nowMs;
+}
+
+function inPreviousPeriod(ms: number, bounds: RangeBounds) {
+  if (bounds.previousStartMs == null || bounds.startMs == null) return false;
+  return ms >= bounds.previousStartMs && ms < bounds.startMs;
+}
+
+function bucketSeries(
+  points: DatedValue[],
+  startMs: number,
+  endMs: number,
+): number[] {
+  const series = new Array<number>(SERIES_BUCKETS).fill(0);
+  const span = Math.max(1, endMs - startMs);
+  for (const point of points) {
+    if (point.ms < startMs || point.ms > endMs) continue;
+    const index = Math.min(
+      SERIES_BUCKETS - 1,
+      Math.max(0, Math.floor(((point.ms - startMs) / span) * SERIES_BUCKETS)),
+    );
+    series[index] += point.value;
+  }
+  return series;
+}
+
+function deltaPercent(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function sum(values: number[]): number {
+  return values.reduce((acc, v) => acc + v, 0);
 }
 
 export async function getDashboardOverview(
   userId: string,
-  input?: DashboardOverviewInput,
+  facilityId: string,
+  range: DashboardRange,
 ): Promise<DashboardOverview> {
   requireAuth(userId);
 
-  const periodDays = input?.periodDays ?? DEFAULT_PERIOD_DAYS;
-  const selectedFacilityId = input?.facilityId ?? null;
-  const now = new Date();
-  const since = new Date(now);
-  since.setDate(since.getDate() - periodDays);
-  const sinceDate = toDateOnly(since);
+  const bounds = resolveRange(range);
+  // Fetch back to the previous-period start so delta needs no second query.
+  const fetchStart =
+    bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const [allFacilities, scopedFacilities] = await Promise.all([
-    loadAllFacilities(),
-    loadFacilities(selectedFacilityId),
-  ]);
-  const facilityIds = scopedFacilities.map((facility) => facility.id);
-  const facilityById = new Map(scopedFacilities.map((facility) => [facility.id, facility]));
+  const [runRows, lotRows, applicationRows, batchRows, feedstockRows] =
+    await Promise.all([
+      db
+        .select({
+          date: productionRuns.date,
+          feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+          biocharDryMassKg: productionRuns.biocharDryMassKg,
+        })
+        .from(productionRuns)
+        .where(
+          and(
+            eq(productionRuns.facilityId, facilityId),
+            isNull(productionRuns.archivedAt),
+            ne(productionRuns.status, "void"),
+            ...(fetchStart
+              ? [gte(productionRuns.date, fetchStart.toISOString().slice(0, 10))]
+              : []),
+          ),
+        ),
+      db
+        .select({
+          productionDate: biocharProducts.productionDate,
+          massKg: biocharProducts.massKg,
+          moistureContentPercent: biocharProducts.moistureContentPercent,
+        })
+        .from(biocharProducts)
+        .where(
+          and(
+            eq(biocharProducts.facilityId, facilityId),
+            isNull(biocharProducts.archivedAt),
+            ne(biocharProducts.status, "draft"),
+            ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+          ),
+        ),
+      db
+        .select({
+          applicationDate: applications.applicationDate,
+          biocharAppliedDryTons: applications.biocharAppliedDryTons,
+        })
+        .from(applications)
+        .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+        .where(
+          and(
+            eq(deliveries.facilityId, facilityId),
+            isNull(deliveries.archivedAt),
+            ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
+          ),
+        ),
+      db
+        .select({
+          endDate: creditBatches.endDate,
+          totalCo2eStoredTons: creditBatches.totalCo2eStoredTons,
+        })
+        .from(creditBatches)
+        .where(
+          and(
+            eq(creditBatches.facilityId, facilityId),
+            isNull(creditBatches.archivedAt),
+            ne(creditBatches.status, "rejected"),
+            ...(fetchStart
+              ? [gte(creditBatches.endDate, fetchStart.toISOString().slice(0, 10))]
+              : []),
+          ),
+        ),
+      db
+        .select({
+          feedstockTypeId: feedstocks.feedstockTypeId,
+          typeName: feedstockTypes.name,
+          massDryKg: feedstocks.massDryKg,
+          deliveryDate: feedstocks.deliveryDate,
+        })
+        .from(feedstocks)
+        .innerJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+        .where(
+          and(
+            eq(feedstocks.facilityId, facilityId),
+            isNull(feedstocks.archivedAt),
+            ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
+          ),
+        ),
+    ]);
 
-  if (facilityIds.length === 0) {
-    return {
-      generatedAt: now.toISOString(),
-      periodDays,
-      selectedFacilityId,
-      facilities: allFacilities,
-      metrics: [],
-      attentionItems: [],
-      nowItems: [],
-      progress: [],
-      evidence: {
-        missingFacilityGps: 0,
-        missingApplicationGps: 0,
-        missingFeedstockGps: 0,
-        productionRunsWithoutSamples: 0,
-        transportEndpointGaps: 0,
-        transportDistanceEvidenceGaps: 0,
-      },
-      map: {
-        facilities: [],
-        facilityCount: 0,
-        plottedFacilityCount: 0,
-        missingFacilityGpsCount: 0,
-        transportLegCount: 0,
-        transportEndpointGapCount: 0,
-      },
-    };
-  }
+  // ---- normalize to dated points -----------------------------------------
 
-  const [
-    counts,
-    runningRuns,
-    recentCompletedRuns,
-    runsWithoutSamples,
-    creditBatchRows,
-    removalRows,
-    statementRows,
-    missingApplications,
-    gpsGaps,
-    transportAggregates,
-    periodCounts,
-  ] = await Promise.all([
-    loadStatusCounts(facilityIds),
-    loadRunningRuns(facilityIds),
-    loadRecentCompletedRuns(facilityIds, sinceDate),
-    loadRunsWithoutSamples(facilityIds),
-    loadCreditBatchRows(facilityIds),
-    loadRemovalRows(facilityIds),
-    loadGhgStatementRows(facilityIds),
-    loadMissingApplicationGps(facilityIds),
-    loadGpsGapCounts(facilityIds),
-    loadTransportAggregates(facilityIds),
-    loadPeriodCounts(facilityIds, sinceDate),
-  ]);
-
-  const attentionItems = [
-    ...buildSubmissionAttention({ removalRows, statementRows, facilityById }),
-    ...buildEvidenceAttention({
-      missingApplications,
-      runsWithoutSamples,
-      transportAggregates,
-      facilityById,
-    }),
-    ...buildCreditBatchAttention({ creditBatchRows, facilityById }),
-    ...buildProductionAttention({ runningRuns, facilityById }),
-  ]
-    .sort((a, b) => attentionPriority(a.tone) - attentionPriority(b.tone))
-    .slice(0, MAX_ATTENTION_ITEMS);
-
-  const attentionCountByFacility = new Map<string, number>();
-  for (const item of attentionItems) {
-    attentionCountByFacility.set(
-      item.facilityId,
-      (attentionCountByFacility.get(item.facilityId) ?? 0) + 1,
+  const runPoints = runRows
+    .map((row) => ({ ms: toMs(row.date), row }))
+    .filter((p): p is { ms: number; row: (typeof runRows)[number] } => p.ms != null);
+  const lotPoints = lotRows
+    .map((row) => ({ ms: toMs(row.productionDate), row }))
+    .filter((p): p is { ms: number; row: (typeof lotRows)[number] } => p.ms != null);
+  const applicationPoints = applicationRows
+    .map((row) => ({ ms: toMs(row.applicationDate), row }))
+    .filter(
+      (p): p is { ms: number; row: (typeof applicationRows)[number] } =>
+        p.ms != null,
     );
-  }
+  const batchPoints = batchRows
+    .map((row) => ({ ms: toMs(row.endDate), row }))
+    .filter((p): p is { ms: number; row: (typeof batchRows)[number] } => p.ms != null);
+  const feedstockPoints = feedstockRows.map((row) => ({
+    // Feedstocks may predate the delivery-date backfill; created order keeps
+    // them in the "all" range without inventing a date.
+    ms: toMs(row.deliveryDate),
+    row,
+  }));
 
-  const runningCountByFacility = new Map<string, number>();
-  for (const run of runningRuns) {
-    runningCountByFacility.set(
-      run.facilityId,
-      (runningCountByFacility.get(run.facilityId) ?? 0) + 1,
-    );
-  }
+  // "all" range: anchor the series at the earliest dated record.
+  const allDates = [
+    ...runPoints.map((p) => p.ms),
+    ...lotPoints.map((p) => p.ms),
+    ...applicationPoints.map((p) => p.ms),
+    ...batchPoints.map((p) => p.ms),
+    ...feedstockPoints.map((p) => p.ms).filter((ms): ms is number => ms != null),
+  ];
+  const allStartMs =
+    allDates.length > 0
+      ? Math.min(...allDates)
+      : bounds.nowMs - ALL_RANGE_FALLBACK_DAYS * 24 * 60 * 60 * 1000;
+  const seriesStartMs = bounds.startMs ?? allStartMs;
 
-  const transportTotals = transportAggregates.reduce(
-    (acc, row) => ({
-      total: acc.total + row.total,
-      endpointGaps: acc.endpointGaps + row.endpointGaps,
-      distanceEvidenceGaps:
-        acc.distanceEvidenceGaps + row.distanceEvidenceGaps,
-    }),
-    { total: 0, endpointGaps: 0, distanceEvidenceGaps: 0 },
+  // ---- KPI assembly --------------------------------------------------------
+
+  const currentRuns = runPoints.filter((p) =>
+    inCurrentPeriod(p.ms, bounds, allStartMs),
+  );
+  const previousRuns = runPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
+
+  const currentFeedstockRuns = currentRuns.filter(
+    (p) => p.row.feedstockMassDryKg != null,
+  );
+  const previousFeedstockRuns = previousRuns.filter(
+    (p) => p.row.feedstockMassDryKg != null,
+  );
+  const currentOutputRuns = currentRuns.filter(
+    (p) => p.row.biocharDryMassKg != null,
+  );
+  const previousOutputRuns = previousRuns.filter(
+    (p) => p.row.biocharDryMassKg != null,
   );
 
-  const evidence: DashboardEvidenceHealth = {
-    missingFacilityGps: gpsGaps.missingFacilityGps,
-    missingApplicationGps: gpsGaps.missingApplicationGps,
-    missingFeedstockGps: gpsGaps.missingFeedstockGps,
-    productionRunsWithoutSamples: runsWithoutSamples.length,
-    transportEndpointGaps: transportTotals.endpointGaps,
-    transportDistanceEvidenceGaps: transportTotals.distanceEvidenceGaps,
-  };
+  const feedstockInCurrentKg = sum(
+    currentFeedstockRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
+  );
+  const feedstockInPreviousKg = sum(
+    previousFeedstockRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
+  );
+  const outputCurrentKg = sum(
+    currentOutputRuns.map((p) => p.row.biocharDryMassKg ?? 0),
+  );
+  const outputPreviousKg = sum(
+    previousOutputRuns.map((p) => p.row.biocharDryMassKg ?? 0),
+  );
 
-  const failedSubmissionCount = [
-    ...removalRows.filter((row) => row.status === "rejected"),
-    ...statementRows.filter((row) => row.status === "rejected"),
-  ].length;
-  const waitingSubmissionCount = [
-    ...removalRows.filter((row) => row.status === "submitted"),
-    ...statementRows.filter((row) => row.status === "submitted"),
-  ].length;
+  // Yield only counts runs that recorded both sides of the conversion.
+  const yieldRuns = currentRuns.filter(
+    (p) => p.row.feedstockMassDryKg != null && p.row.biocharDryMassKg != null,
+  );
+  const yieldInKg = sum(yieldRuns.map((p) => p.row.feedstockMassDryKg ?? 0));
+  const yieldOutKg = sum(yieldRuns.map((p) => p.row.biocharDryMassKg ?? 0));
+  const previousYieldRuns = previousRuns.filter(
+    (p) => p.row.feedstockMassDryKg != null && p.row.biocharDryMassKg != null,
+  );
+  const previousYieldInKg = sum(
+    previousYieldRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
+  );
+  const previousYieldOutKg = sum(
+    previousYieldRuns.map((p) => p.row.biocharDryMassKg ?? 0),
+  );
 
-  return {
-    generatedAt: now.toISOString(),
-    periodDays,
-    selectedFacilityId,
-    facilities: allFacilities,
-    metrics: [
-      {
-        label: "Running runs",
-        value: runningRuns.length,
-        detail: "Production runs active now",
-      },
-      {
-        label: "Completed runs",
-        value: periodCounts.completedRuns,
-        detail: `Last ${periodDays} days`,
-      },
-      {
-        label: "Evidence gaps",
-        value:
-          evidence.missingApplicationGps +
-          evidence.productionRunsWithoutSamples +
-          evidence.transportEndpointGaps,
-        detail: "Map, sample, and route gaps",
-      },
-      {
-        label: "Submissions",
-        value: waitingSubmissionCount + failedSubmissionCount,
-        detail: `${waitingSubmissionCount} waiting, ${failedSubmissionCount} failed`,
-      },
-    ],
-    attentionItems,
-    nowItems: buildNowItems({
-      runningRuns,
-      recentCompletedRuns,
-      removalRows,
-      statementRows,
-      facilityById,
-    }),
-    progress: buildProgress({
-      counts,
-      creditBatchRows,
-      removalRows,
-      statementRows,
-    }),
-    evidence,
-    map: {
-      facilities: scopedFacilities.map((facility) => ({
-        ...facility,
-        attentionCount: attentionCountByFacility.get(facility.id) ?? 0,
-        runningRunCount: runningCountByFacility.get(facility.id) ?? 0,
-      })),
-      facilityCount: scopedFacilities.length,
-      plottedFacilityCount: scopedFacilities.filter(
-        (facility) => facility.lat != null && facility.lng != null,
-      ).length,
-      missingFacilityGpsCount: evidence.missingFacilityGps,
-      transportLegCount: transportTotals.total,
-      transportEndpointGapCount: transportTotals.endpointGaps,
+  const currentApplications = applicationPoints.filter((p) =>
+    inCurrentPeriod(p.ms, bounds, allStartMs),
+  );
+  const previousApplications = applicationPoints.filter((p) =>
+    inPreviousPeriod(p.ms, bounds),
+  );
+  const appliedCurrentTons = sum(
+    currentApplications.map((p) => p.row.biocharAppliedDryTons ?? 0),
+  );
+  const appliedPreviousTons = sum(
+    previousApplications.map((p) => p.row.biocharAppliedDryTons ?? 0),
+  );
+
+  const currentBatches = batchPoints.filter((p) =>
+    inCurrentPeriod(p.ms, bounds, allStartMs),
+  );
+  const previousBatches = batchPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
+  const currentStoredBatches = currentBatches.filter(
+    (p) => p.row.totalCo2eStoredTons != null,
+  );
+  const previousStoredBatches = previousBatches.filter(
+    (p) => p.row.totalCo2eStoredTons != null,
+  );
+  const storedCurrentTons = sum(
+    currentStoredBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
+  );
+  const storedPreviousTons = sum(
+    previousStoredBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
+  );
+
+  const yieldSeriesIn = bucketSeries(
+    yieldRuns.map((p) => ({ ms: p.ms, value: p.row.feedstockMassDryKg ?? 0 })),
+    seriesStartMs,
+    bounds.nowMs,
+  );
+  const yieldSeriesOut = bucketSeries(
+    yieldRuns.map((p) => ({ ms: p.ms, value: p.row.biocharDryMassKg ?? 0 })),
+    seriesStartMs,
+    bounds.nowMs,
+  );
+
+  const kpis: DashboardKpi[] = [
+    {
+      key: "feedstockProcessed",
+      label: "Feedstock processed",
+      unit: "t",
+      value:
+        currentFeedstockRuns.length > 0 ? feedstockInCurrentKg / 1000 : null,
+      deltaPercent:
+        range === "all" || currentFeedstockRuns.length === 0
+          ? null
+          : deltaPercent(feedstockInCurrentKg, feedstockInPreviousKg),
+      series: bucketSeries(
+        currentFeedstockRuns.map((p) => ({
+          ms: p.ms,
+          value: (p.row.feedstockMassDryKg ?? 0) / 1000,
+        })),
+        seriesStartMs,
+        bounds.nowMs,
+      ),
+      detail:
+        currentFeedstockRuns.length > 0
+          ? `dry mass into ${currentFeedstockRuns.length} ${currentFeedstockRuns.length === 1 ? "run" : "runs"}`
+          : "no measured runs in period",
     },
-  };
+    {
+      key: "biocharProduced",
+      label: "Biochar produced",
+      unit: "t",
+      value: currentOutputRuns.length > 0 ? outputCurrentKg / 1000 : null,
+      deltaPercent:
+        range === "all" || currentOutputRuns.length === 0
+          ? null
+          : deltaPercent(outputCurrentKg, outputPreviousKg),
+      series: bucketSeries(
+        currentOutputRuns.map((p) => ({
+          ms: p.ms,
+          value: (p.row.biocharDryMassKg ?? 0) / 1000,
+        })),
+        seriesStartMs,
+        bounds.nowMs,
+      ),
+      detail:
+        currentOutputRuns.length > 0
+          ? "dry mass out of the reactors"
+          : "no measured runs in period",
+    },
+    {
+      key: "pyrolysisYield",
+      label: "Pyrolysis yield",
+      unit: "%",
+      value: yieldInKg > 0 ? (yieldOutKg / yieldInKg) * 100 : null,
+      deltaPercent:
+        range === "all" || previousYieldInKg <= 0 || yieldInKg <= 0
+          ? null
+          : deltaPercent(
+              (yieldOutKg / yieldInKg) * 100,
+              (previousYieldOutKg / previousYieldInKg) * 100,
+            ),
+      series: yieldSeriesIn.map((inKg, i) =>
+        inKg > 0 ? (yieldSeriesOut[i] / inKg) * 100 : 0,
+      ),
+      detail:
+        yieldInKg > 0
+          ? `${(yieldInKg / 1000).toFixed(1)} t in → ${(yieldOutKg / 1000).toFixed(1)} t out`
+          : "no measured runs in period",
+    },
+    {
+      key: "appliedToSoil",
+      label: "Applied to soil",
+      unit: "t",
+      value: currentApplications.length > 0 ? appliedCurrentTons : null,
+      deltaPercent:
+        range === "all"
+          ? null
+          : deltaPercent(appliedCurrentTons, appliedPreviousTons),
+      series: bucketSeries(
+        currentApplications.map((p) => ({
+          ms: p.ms,
+          value: p.row.biocharAppliedDryTons ?? 0,
+        })),
+        seriesStartMs,
+        bounds.nowMs,
+      ),
+      detail: `${currentApplications.length} ${currentApplications.length === 1 ? "application" : "applications"}`,
+    },
+    {
+      key: "co2eStored",
+      label: "CO₂e stored",
+      unit: "t",
+      value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
+      deltaPercent:
+        range === "all" || currentStoredBatches.length === 0
+          ? null
+          : deltaPercent(storedCurrentTons, storedPreviousTons),
+      series: bucketSeries(
+        currentStoredBatches.map((p) => ({
+          ms: p.ms,
+          value: p.row.totalCo2eStoredTons ?? 0,
+        })),
+        seriesStartMs,
+        bounds.nowMs,
+      ),
+      detail:
+        currentStoredBatches.length > 0
+          ? `${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
+          : "no verified storage in period",
+    },
+  ];
+
+  // ---- feedstock mix --------------------------------------------------------
+
+  const mixFeedstocks = feedstockPoints.filter(
+    (p) =>
+      p.ms == null
+        ? bounds.startMs == null
+        : inCurrentPeriod(p.ms, bounds, allStartMs),
+  );
+  const mixByType = new Map<string, DashboardFeedstockMixSlice>();
+  for (const { row } of mixFeedstocks) {
+    const existing = mixByType.get(row.feedstockTypeId);
+    if (existing) {
+      existing.massDryKg += row.massDryKg;
+    } else {
+      mixByType.set(row.feedstockTypeId, {
+        feedstockTypeId: row.feedstockTypeId,
+        name: row.typeName,
+        massDryKg: row.massDryKg,
+        percent: 0,
+      });
+    }
+  }
+  const mixSorted = Array.from(mixByType.values()).sort(
+    (a, b) => b.massDryKg - a.massDryKg,
+  );
+  const mixHead = mixSorted.slice(0, MIX_SLICES);
+  const mixTailKg = sum(mixSorted.slice(MIX_SLICES).map((s) => s.massDryKg));
+  if (mixTailKg > 0) {
+    mixHead.push({
+      feedstockTypeId: null,
+      name: "Other",
+      massDryKg: mixTailKg,
+      percent: 0,
+    });
+  }
+  const mixTotalKg = sum(mixHead.map((s) => s.massDryKg));
+  const feedstockMix = mixHead.map((slice) => ({
+    ...slice,
+    percent: mixTotalKg > 0 ? (slice.massDryKg / mixTotalKg) * 100 : 0,
+  }));
+
+  // ---- custody flow ribbon --------------------------------------------------
+
+  const currentLots = lotPoints.filter((p) =>
+    inCurrentPeriod(p.ms, bounds, allStartMs),
+  );
+  // The flow is dry kg end to end: `massKg` is the lot's wet mass, so derive
+  // dry via the recorded moisture (biochar runs 1–2%); a lot without a
+  // moisture reading counts at wet mass rather than vanishing into the
+  // "not bagged into lots" exit.
+  const lotDryKg = (row: (typeof lotRows)[number]) =>
+    computeClampedDryMass(row.massKg, row.moistureContentPercent) ??
+    row.massKg ??
+    0;
+  const flow = buildStageFlow({
+    feedstockInKg: feedstockInCurrentKg,
+    runOutputKg: outputCurrentKg,
+    lotMassKg: sum(currentLots.map((p) => lotDryKg(p.row))),
+    appliedKg: tonnesToKg(appliedCurrentTons),
+    counts: {
+      feedstocks: mixFeedstocks.length,
+      productionRuns: currentRuns.length,
+      biocharLots: currentLots.length,
+      applications: currentApplications.length,
+    },
+  });
+
+  const attention = await getAttentionItems(facilityId);
+
+  return { range, kpis, attention, feedstockMix, flow };
+}
+
+// ============================================
+// Needs-attention queue
+// ============================================
+
+/**
+ * Cheap record checks derived from existing MRV data. Each check is one
+ * narrow indexed query with a row cap; an item disappears the moment the
+ * underlying record is fixed (no independent lifecycle).
+ */
+async function getAttentionItems(
+  facilityId: string,
+): Promise<DashboardAttentionItem[]> {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [runsMissingMass, unlinkedLots, feedstocksMissingData, upcomingDeliveries, batchesAwaitingVerification] =
+    await Promise.all([
+      db
+        .select({ id: productionRuns.id, code: productionRuns.code })
+        .from(productionRuns)
+        .where(
+          and(
+            eq(productionRuns.facilityId, facilityId),
+            isNull(productionRuns.archivedAt),
+            eq(productionRuns.status, "complete"),
+            or(
+              isNull(productionRuns.biocharDryMassKg),
+              isNull(productionRuns.feedstockMassDryKg),
+            ),
+          ),
+        )
+        .orderBy(desc(productionRuns.date))
+        .limit(ATTENTION_PER_CHECK),
+      db
+        .select({ id: biocharProducts.id, code: biocharProducts.code })
+        .from(biocharProducts)
+        .where(
+          and(
+            eq(biocharProducts.facilityId, facilityId),
+            isNull(biocharProducts.archivedAt),
+            isNull(biocharProducts.linkedProductionRunId),
+          ),
+        )
+        .orderBy(desc(biocharProducts.productionDate))
+        .limit(ATTENTION_PER_CHECK),
+      db
+        .select({ id: feedstocks.id, code: feedstocks.code })
+        .from(feedstocks)
+        .where(
+          and(
+            eq(feedstocks.facilityId, facilityId),
+            isNull(feedstocks.archivedAt),
+            eq(feedstocks.status, "missing_data"),
+          ),
+        )
+        .orderBy(desc(feedstocks.createdAt))
+        .limit(ATTENTION_PER_CHECK),
+      db
+        .select({ id: deliveries.id, code: deliveries.code })
+        .from(deliveries)
+        .where(
+          and(
+            eq(deliveries.facilityId, facilityId),
+            isNull(deliveries.archivedAt),
+            eq(deliveries.status, "upcoming"),
+          ),
+        )
+        .orderBy(asc(deliveries.deliveryDate))
+        .limit(ATTENTION_PER_CHECK),
+      db
+        .select({ id: creditBatches.id, code: creditBatches.code })
+        .from(creditBatches)
+        .where(
+          and(
+            eq(creditBatches.facilityId, facilityId),
+            isNull(creditBatches.archivedAt),
+            eq(creditBatches.status, "pending"),
+            lt(creditBatches.endDate, todayStr),
+          ),
+        )
+        .orderBy(asc(creditBatches.endDate))
+        .limit(ATTENTION_PER_CHECK),
+    ]);
+
+  const facilityQuery = `?facility=${facilityId}`;
+  const flags: DashboardAttentionItem[] = [
+    ...runsMissingMass.map((row) => ({
+      id: `run-mass-${row.id}`,
+      entityCode: row.code,
+      title: "Complete run missing mass data",
+      severity: "flag" as const,
+      href: `/production-runs/${row.id}${facilityQuery}`,
+    })),
+    ...unlinkedLots.map((row) => ({
+      id: `lot-unlinked-${row.id}`,
+      entityCode: row.code,
+      title: "Production run not linked",
+      severity: "flag" as const,
+      href: `/biochar-products${facilityQuery}`,
+    })),
+    ...feedstocksMissingData.map((row) => ({
+      id: `feedstock-missing-${row.id}`,
+      entityCode: row.code,
+      title: "Feedstock record missing data",
+      severity: "flag" as const,
+      href: `/feedstocks${facilityQuery}`,
+    })),
+  ];
+  const pending: DashboardAttentionItem[] = [
+    ...batchesAwaitingVerification.map((row) => ({
+      id: `batch-pending-${row.id}`,
+      entityCode: row.code,
+      title: "Period ended · awaiting verification",
+      severity: "pending" as const,
+      href: `/credit-batches/${row.id}`,
+    })),
+    ...upcomingDeliveries.map((row) => ({
+      id: `delivery-upcoming-${row.id}`,
+      entityCode: row.code,
+      title: "Upcoming delivery",
+      severity: "pending" as const,
+      href: `/deliveries${facilityQuery}`,
+    })),
+  ];
+
+  return [...flags, ...pending].slice(0, ATTENTION_TOTAL);
 }
