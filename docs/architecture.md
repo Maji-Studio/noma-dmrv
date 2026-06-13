@@ -211,16 +211,16 @@ state). See ADR 0003 for the Removal submission model.
   into the Certification workspace.
 - `/certification` route group (`src/app/(app)/certification/`) — a
   first-class certification **workspace** (ADR 0007), reached from its own
-  titled **Certification** group in the sidebar with four routes: Overview ·
-  Removals · GHG Statements · Settings. Overview (`page.tsx` →
-  `CertificationOverview`) is an operator **work queue** ("needs attention"),
-  not a dashboard; Removals and GHG Statements are DataTables with read-only
-  side-sheets (`?removal=` / `?statement=`). New removals are created through
-  the New-Removal wizard: select ready ungrouped batches, review registry
-  requirements, then submit. Settings consolidates the facility↔project link
-  and emission/LCA config (the old `/admin/emission-estimates` redirects here).
-  Provider-neutral by design — Verra / Gold Standard / CSI surfaces may be
-  added as sibling routes later; today every surface is Isometric-specific.
+  titled **Certification** group in the sidebar with three concrete routes:
+  Removals · GHG Statements · Settings. The root `/certification` route is a
+  compatibility redirect to Removals, preserving `?facility=`. Removals and GHG
+  Statements are DataTables with read-only side-sheets (`?removal=` /
+  `?statement=`). New removals are created through the New-Removal wizard:
+  select ready ungrouped batches, review registry requirements, then submit.
+  Settings consolidates the facility↔project link and emission/LCA config (the
+  old `/admin/emission-estimates` redirects here). Provider-neutral by design —
+  Verra / Gold Standard / CSI surfaces may be added as sibling routes later;
+  today every surface is Isometric-specific.
 - Facility list side sheet — facility ↔ Isometric project mapping
   (`src/components/certification/facility-certifier-section.tsx`).
 
