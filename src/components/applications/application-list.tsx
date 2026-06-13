@@ -32,7 +32,9 @@ import {
 } from "@/hooks/use-applications";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
+  formatApplicationEvidenceMethod,
   formatApplicationMethod,
+  type ApplicationEvidenceMethod,
   type ApplicationMethod,
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
@@ -387,6 +389,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 value: sideSheetEntity.applicationMethodType
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
                   : null,
+              },
+              {
+                label: "Evidence Method",
+                value: formatApplicationEvidenceMethod(
+                  (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
+                ),
               },
               {
                 label: "Soil Temperature",

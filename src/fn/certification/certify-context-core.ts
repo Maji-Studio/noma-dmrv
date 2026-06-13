@@ -67,6 +67,7 @@ import {
   safeListIfConfigured,
   type TransportLegsByCategory,
 } from "./shared";
+import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
 
 // Each removal/batch in a facility-level fan-out rebuilds its own context (a
 // chain of DB queries + registry lookups). Bound how many run at once so a
@@ -715,6 +716,7 @@ export async function buildRemovalContext(
       runIdsRequiring1000YearDurability,
     ),
     ...(await buildTruckWeighingGaps(userId, lineages, entityIds)),
+    ...(await buildApplicationEvidenceGaps(userId, lineages)),
   ];
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.

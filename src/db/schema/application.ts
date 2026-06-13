@@ -1,6 +1,11 @@
 import { check, doublePrecision, pgTable, text, timestamp, uuid, real, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { applicationStatus, applicationMethod, soilTemperatureSource } from "./common";
+import {
+  applicationEvidenceMethod,
+  applicationStatus,
+  applicationMethod,
+  soilTemperatureSource,
+} from "./common";
 import { deliveries } from "./logistics";
 
 // ============================================
@@ -40,6 +45,9 @@ export const applications = pgTable(
     cropType: text("crop_type"),
     applicationMethodType: applicationMethod("application_method"), // manual/mechanical
     fieldIdentifier: text("field_identifier"), // Field name/parcel ID
+    evidenceMethod: applicationEvidenceMethod("evidence_method")
+      .default("visual")
+      .notNull(),
     gisBoundaryReference: text("gis_boundary_reference"), // Link to GIS layer data
 
     // --- Soil Temperature (Isometric: Soil Storage Module §5.1.1.3.1) ---
