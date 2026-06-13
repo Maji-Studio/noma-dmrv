@@ -17,7 +17,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, SectionLabel, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, ServerError, TruckWeighingSection } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -80,6 +80,7 @@ export function FeedstockForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
@@ -93,6 +94,8 @@ export function FeedstockForm({
       feedstockTypeId: feedstock?.feedstockTypeId ?? "",
       totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
       moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+      truckMassOnArrivalKg: feedstock?.truckMassOnArrivalKg ?? undefined,
+      truckMassOnDepartureKg: feedstock?.truckMassOnDepartureKg ?? undefined,
       allocations: feedstock
         ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
         : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
@@ -113,6 +116,8 @@ export function FeedstockForm({
   // Watch values for dry mass calculation
   const watchWetMass = useWatch({ control, name: "totalWetMassKg" });
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
+  const watchArrivalMass = useWatch({ control, name: "truckMassOnArrivalKg" });
+  const watchDepartureMass = useWatch({ control, name: "truckMassOnDepartureKg" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
@@ -198,6 +203,34 @@ export function FeedstockForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
+  useEffect(() => {
+    if (isEditMode || fields.length !== 1 || typeof watchWetMass !== "number") {
+      return;
+    }
+    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
+    if (typeof currentAllocation !== "number") {
+      setValue("allocations.0.allocatedWetMassKg", watchWetMass, {
+        shouldValidate: true,
+      });
+    }
+  }, [fields.length, getValues, isEditMode, setValue, watchWetMass]);
+
+  const suggestWetMassFromTruckWeighing = (wetMassKg: number) => {
+    const currentWetMass = getValues("totalWetMassKg");
+    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
+    setValue("totalWetMassKg", wetMassKg, { shouldValidate: true });
+    if (
+      !isEditMode &&
+      fields.length === 1 &&
+      (typeof currentAllocation !== "number" ||
+        currentAllocation === currentWetMass)
+    ) {
+      setValue("allocations.0.allocatedWetMassKg", wetMassKg, {
+        shouldValidate: true,
+      });
+    }
+  };
+
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FeedstockFormData);
   });
@@ -206,11 +239,7 @@ export function FeedstockForm({
     <>
       <form onSubmit={handleFormSubmit} className="space-y-20">
         {/* Delivery Information */}
-        <div className="space-y-20">
-          <SectionLabel>
-            Delivery Information
-          </SectionLabel>
-
+        <FormSection title="Delivery Information" divider={false}>
           {!contextFacilityId && !feedstock && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
               <FormEntitySelect
@@ -251,16 +280,13 @@ export function FeedstockForm({
               required
             />
           </div>
-        </div>
+        </FormSection>
 
         {/* Transport Details */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel
-            hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
-          >
-            Transport Details
-          </SectionLabel>
-
+        <FormSection
+          title="Transport Details"
+          hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
@@ -316,14 +342,10 @@ export function FeedstockForm({
               </div>
             </FormField>
           </div>
-        </div>
+        </FormSection>
 
         {/* Material Details */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>
-            Material
-          </SectionLabel>
-
+        <FormSection title="Material">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
@@ -336,6 +358,7 @@ export function FeedstockForm({
               allowCreate
               createLabel="Add new feedstock type"
               onCreateNew={() => feedstockTypeDialog.open()}
+              filterBy={{ usage: "pyrolysis" }}
               hideSearch
             />
           </div>
@@ -394,16 +417,33 @@ export function FeedstockForm({
               </span>
             )}
           </div>
-        </div>
+        </FormSection>
+
+        <TruckWeighingSection
+          arrivalMassKg={watchArrivalMass}
+          departureMassKg={watchDepartureMass}
+          wetMassKg={watchWetMass}
+          wetMassLabel="Entered wet mass"
+          onSuggestWetMass={suggestWetMassFromTruckWeighing}
+          arrivalRegister={register("truckMassOnArrivalKg", {
+            setValueAs: numericValue,
+          })}
+          departureRegister={register("truckMassOnDepartureKg", {
+            setValueAs: numericValue,
+          })}
+          arrivalError={errors.truckMassOnArrivalKg?.message}
+          departureError={errors.truckMassOnDepartureKg?.message}
+          arrivalCertifyRequired={isFeedstockCertifyField("truckMassOnArrivalKg")}
+          departureCertifyRequired={isFeedstockCertifyField("truckMassOnDepartureKg")}
+          isSubmitting={isSubmitting}
+        />
 
         {/* Bin Allocations — only shown after feedstock type is selected */}
         {watchedFeedstockTypeId ? (
-          <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-            <div className="flex items-center justify-between">
-              <SectionLabel>
-                Bin Allocations
-              </SectionLabel>
-              {!isEditMode && (
+          <FormSection
+            title="Bin Allocations"
+            actions={
+              !isEditMode && (
                 <Button
                   type="button"
                   variant="default"
@@ -414,9 +454,9 @@ export function FeedstockForm({
                   <Plus size={16} weight="bold" />
                   Add Bin
                 </Button>
-              )}
-            </div>
-
+              )
+            }
+          >
             {errors.allocations?.message && (
               <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
             )}
@@ -468,15 +508,11 @@ export function FeedstockForm({
                 disabled={isSubmitting}
               />
             )}
-          </div>
+          </FormSection>
         ) : null}
 
         {/* Documentation */}
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <SectionLabel>
-            Documentation
-          </SectionLabel>
-
+        <FormSection title="Documentation">
           <div className="grid grid-cols-1 gap-y-20">
             <FormField
               id="notes"
@@ -494,7 +530,7 @@ export function FeedstockForm({
               />
             </FormField>
           </div>
-        </div>
+        </FormSection>
 
         {/* Server Error */}
         {serverError && <ServerError message={serverError} />}
@@ -524,6 +560,7 @@ export function FeedstockForm({
           setValue("feedstockTypeId", feedstockType.id, SET_VALUE_OPTS);
           feedstockTypeDialog.close();
         }}
+        defaultUsage="pyrolysis"
       />
 
       {watchedFacilityId && (

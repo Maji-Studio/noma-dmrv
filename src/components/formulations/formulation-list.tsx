@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ListChecks, Plus } from "@phosphor-icons/react";
 import {
@@ -17,13 +17,12 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
-import { INGREDIENT_TYPE_LABELS } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 
 // ============================================
@@ -42,7 +41,7 @@ function formatIngredientsSummary(
   return ingredients
     .map((ing) => {
       const ratio = ing.ratio != null ? ` (${(ing.ratio * 100).toFixed(0)}%)` : "";
-      return `${ing.name}${ratio}`;
+      return `${ing.feedstockType.name}${ratio}`;
     })
     .join(", ");
 }
@@ -81,9 +80,7 @@ function createColumns(
       header: "Ingredients",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
-          {row.original.ingredients?.length
-            ? `${row.original.ingredients.length} ingredient${row.original.ingredients.length !== 1 ? "s" : ""}`
-            : "\u2014"}
+          {formatIngredientsSummary(row.original.ingredients)}
         </span>
       ),
     },
@@ -100,27 +97,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Button
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -215,7 +199,7 @@ export function FormulationList() {
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createFormulation.isPending || updateFormulation.isPending;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -251,8 +235,8 @@ export function FormulationList() {
       sections.push({
         title: "Ingredients",
         fields: entity.ingredients.map((ing) => ({
-          label: `${INGREDIENT_TYPE_LABELS[ing.ingredientType as keyof typeof INGREDIENT_TYPE_LABELS] ?? ing.ingredientType}`,
-          value: `${ing.name}${ing.ratio != null ? ` — ${(ing.ratio * 100).toFixed(0)}%` : ""}${ing.description ? ` (${ing.description})` : ""}`,
+          label: ing.feedstockType.name,
+          value: `${ing.feedstockType.category}${ing.ratio != null ? ` — ${(ing.ratio * 100).toFixed(0)}%` : ""}${ing.description ? ` (${ing.description})` : ""}`,
         })),
       });
     }
@@ -262,14 +246,17 @@ export function FormulationList() {
 
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Formulations</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Formulation
-        </Button>
-      </div>
+      <PageHeader
+        area="production"
+        title="Formulations"
+        subtitle="Biochar product recipes and blend ratios"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Formulation
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
@@ -334,7 +321,7 @@ export function FormulationList() {
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={sideSheet?.mode === "create" ? "Create Formulation" : (sideSheet?.entity?.code ?? "")}
-        subtitle={sideSheet?.mode === "create" ? "Fill in the form to create a new formulation." : sideSheet?.entity?.name}
+        subtitle={sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name}
         editLabel="Edit Formulation"
         sections={viewSections}
       >

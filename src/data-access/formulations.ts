@@ -3,13 +3,15 @@
  * CRUD operations for formulations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  feedstockTypes,
   formulations,
   formulationIngredients,
   storageLocations,
   type Formulation,
+  type FeedstockType,
   type FormulationIngredient,
 } from "@/db/schema";
 import { biocharProducts } from "@/db/schema/products";
@@ -19,8 +21,12 @@ import type { FormulationFilterData } from "@/schemas/formulations";
 // Types
 // ============================================
 
+export type FormulationIngredientWithFeedstockType = FormulationIngredient & {
+  feedstockType: FeedstockType;
+};
+
 export type FormulationWithIngredients = Formulation & {
-  ingredients: FormulationIngredient[];
+  ingredients: FormulationIngredientWithFeedstockType[];
 };
 
 export interface PaginatedFormulations {
@@ -32,8 +38,7 @@ export interface PaginatedFormulations {
 }
 
 export type IngredientInput = {
-  ingredientType: FormulationIngredient["ingredientType"];
-  name: string;
+  feedstockTypeId: string;
   ratio?: number | null;
 };
 
@@ -43,6 +48,29 @@ export type IngredientInput = {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+
+async function assertBlendFeedstockTypes(ingredients?: IngredientInput[]) {
+  const feedstockTypeIds = [
+    ...new Set((ingredients ?? []).map((ingredient) => ingredient.feedstockTypeId)),
+  ];
+  if (feedstockTypeIds.length === 0) return;
+
+  const rows = await db
+    .select({
+      id: feedstockTypes.id,
+      usage: feedstockTypes.usage,
+    })
+    .from(feedstockTypes)
+    .where(inArray(feedstockTypes.id, feedstockTypeIds));
+
+  if (rows.length !== feedstockTypeIds.length) {
+    throw new SafeError("Blend material not found");
+  }
+
+  if (rows.some((row) => row.usage !== "blend")) {
+    throw new SafeError("Formulation lines must use blend-usage feedstock types");
+  }
+}
 
 // ============================================
 // Formulation Read Operations
@@ -109,6 +137,9 @@ export async function getFormulations(
       with: {
         ingredients: {
           orderBy: [asc(formulationIngredients.sortOrder)],
+          with: {
+            feedstockType: true,
+          },
         },
       },
     }),
@@ -140,6 +171,9 @@ export async function getFormulationById(
     with: {
       ingredients: {
         orderBy: [asc(formulationIngredients.sortOrder)],
+        with: {
+          feedstockType: true,
+        },
       },
     },
   });
@@ -180,6 +214,8 @@ export async function createFormulation(
     throw new SafeError("A formulation with this code already exists");
   }
 
+  await assertBlendFeedstockTypes(data.ingredients);
+
   return db.transaction(async (tx) => {
     const [formulation] = await tx
       .insert(formulations)
@@ -191,21 +227,27 @@ export async function createFormulation(
       })
       .returning();
 
-    let ingredients: FormulationIngredient[] = [];
+    let ingredients: FormulationIngredientWithFeedstockType[] = [];
 
     if (data.ingredients && data.ingredients.length > 0) {
-      ingredients = await tx
+      await tx
         .insert(formulationIngredients)
         .values(
           data.ingredients.map((ing, index) => ({
             formulationId: formulation.id,
-            ingredientType: ing.ingredientType,
-            name: ing.name,
+            feedstockTypeId: ing.feedstockTypeId,
             ratio: ing.ratio ?? null,
             sortOrder: index,
           }))
-        )
-        .returning();
+        );
+
+      ingredients = await tx.query.formulationIngredients.findMany({
+        where: eq(formulationIngredients.formulationId, formulation.id),
+        orderBy: [asc(formulationIngredients.sortOrder)],
+        with: {
+          feedstockType: true,
+        },
+      });
     }
 
     return { ...formulation, ingredients };
@@ -254,6 +296,8 @@ export async function updateFormulation(
     }
   }
 
+  await assertBlendFeedstockTypes(data.ingredients);
+
   // Separate ingredients from formulation fields
   const { ingredients: ingredientData, ...formulationFields } = data;
 
@@ -267,7 +311,7 @@ export async function updateFormulation(
       .where(eq(formulations.id, formulationId))
       .returning();
 
-    let ingredients: FormulationIngredient[] = [];
+    let ingredients: FormulationIngredientWithFeedstockType[] = [];
 
     // If ingredients are provided, delete-and-reinsert
     if (ingredientData !== undefined) {
@@ -276,26 +320,34 @@ export async function updateFormulation(
         .where(eq(formulationIngredients.formulationId, formulationId));
 
       if (ingredientData.length > 0) {
-        ingredients = await tx
+        await tx
           .insert(formulationIngredients)
           .values(
             ingredientData.map((ing, index) => ({
               formulationId: formulationId,
-              ingredientType: ing.ingredientType,
-              name: ing.name,
+              feedstockTypeId: ing.feedstockTypeId,
               ratio: ing.ratio ?? null,
               sortOrder: index,
             }))
-          )
-          .returning();
+          );
       }
+
+      ingredients = await tx.query.formulationIngredients.findMany({
+        where: eq(formulationIngredients.formulationId, formulationId),
+        orderBy: [asc(formulationIngredients.sortOrder)],
+        with: {
+          feedstockType: true,
+        },
+      });
     } else {
       // If ingredients not provided, fetch existing ones
-      ingredients = await tx
-        .select()
-        .from(formulationIngredients)
-        .where(eq(formulationIngredients.formulationId, formulationId))
-        .orderBy(asc(formulationIngredients.sortOrder));
+      ingredients = await tx.query.formulationIngredients.findMany({
+        where: eq(formulationIngredients.formulationId, formulationId),
+        orderBy: [asc(formulationIngredients.sortOrder)],
+        with: {
+          feedstockType: true,
+        },
+      });
     }
 
     return { ...updated, ingredients };

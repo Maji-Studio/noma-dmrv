@@ -30,6 +30,7 @@ interface UploadedEntry extends FileEntry {
   status: "uploading" | "uploaded" | "failed";
   progress?: number;
   error?: string;
+  missingExif?: string[];
   tempKey: string;
 }
 
@@ -88,6 +89,13 @@ export function FormFileUpload({
 
   const isRealMode = !!(entityType && entityId && documentType);
 
+  function getMissingExif(metadata: Record<string, unknown>): string[] {
+    const missingExif = metadata.missingExif;
+    return Array.isArray(missingExif)
+      ? missingExif.filter((item): item is string => typeof item === "string")
+      : [];
+  }
+
   async function startUpload(file: File) {
     const tempKey = crypto.randomUUID();
     setUploads((prev) => [
@@ -103,7 +111,7 @@ export function FormFileUpload({
       },
     ]);
     try {
-      const { documentId } = await upload({
+      const { documentId, metadata } = await upload({
         entityType: entityType!,
         entityId: entityId!,
         documentType: documentType!,
@@ -119,7 +127,13 @@ export function FormFileUpload({
       setUploads((prev) =>
         prev.map((u) =>
           u.tempKey === tempKey
-            ? { ...u, status: "uploaded", documentId, progress: 1 }
+            ? {
+                ...u,
+                status: "uploaded",
+                documentId,
+                progress: 1,
+                missingExif: getMissingExif(metadata),
+              }
             : u
         )
       );
@@ -257,6 +271,13 @@ export function FormFileUpload({
                   {u.error}
                 </span>
               )}
+              {u.status === "uploaded" &&
+                u.missingExif &&
+                u.missingExif.length > 0 && (
+                  <span className="body-caption shrink-0 text-[var(--color-signal-orange-strong)]">
+                    No geotag: {u.missingExif.join(", ")}
+                  </span>
+                )}
               <Button
                 variant="noOutline"
                 size="icon"

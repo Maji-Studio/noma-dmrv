@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { deriveEntityCertifyReadiness } from "./entity-readiness";
-import { isCertifyFormField } from "./certify-field-registry";
+import {
+  isCertifyEntityField,
+  isCertifyFormField,
+} from "./certify-field-registry";
 
 describe("deriveEntityCertifyReadiness", () => {
   it("marks a complete production run ready", () => {
@@ -17,6 +20,30 @@ describe("deriveEntityCertifyReadiness", () => {
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("reports missing telemetry when a complete production run has no readings", () => {
+    const readiness = deriveEntityCertifyReadiness("productionRun", {
+      status: "complete",
+      feedstockWetMassKg: 5000,
+      feedstockMoisturePercent: 25,
+      biocharOutputKg: 1500,
+      biocharMoisturePercent: 10,
+      dieselOperationLiters: 0,
+      dieselGensetLiters: 12,
+      preprocessingFuelLiters: 3,
+      electricityKwh: 50,
+      readingsCount: 0,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "telemetryReadings",
+        label: "Telemetry readings",
+      },
+    ]);
   });
 
   it("reports missing entered fields", () => {
@@ -163,7 +190,27 @@ describe("isCertifyFormField", () => {
   });
 
   it("ignores fields outside the registry", () => {
-    expect(isCertifyFormField("delivery", "truckMassOnArrivalKg")).toBe(false);
     expect(isCertifyFormField("delivery", "distanceKmOverride")).toBe(false);
+  });
+
+  it("badges truck weighing fields for delivery and feedstock forms", () => {
+    expect(isCertifyFormField("delivery", "truckMassOnArrivalKg")).toBe(true);
+    expect(isCertifyFormField("delivery", "truckMassOnDepartureKg")).toBe(true);
+    expect(isCertifyFormField("feedstock", "truckMassOnArrivalKg")).toBe(true);
+    expect(isCertifyFormField("feedstock", "truckMassOnDepartureKg")).toBe(true);
+  });
+});
+
+describe("isCertifyEntityField", () => {
+  it("badges persisted fields used by read-only detail surfaces", () => {
+    expect(isCertifyEntityField("feedstock", "massWetKg")).toBe(true);
+    expect(isCertifyEntityField("feedstock", "totalWetMassKg")).toBe(true);
+    expect(isCertifyEntityField("delivery", "deliveredWetMassKg")).toBe(true);
+    expect(isCertifyEntityField("delivery", "truckMassOnArrivalKg")).toBe(true);
+  });
+
+  it("ignores non-certification detail fields", () => {
+    expect(isCertifyEntityField("delivery", "distanceKmOverride")).toBe(false);
+    expect(isCertifyEntityField("feedstock", "notes")).toBe(false);
   });
 });

@@ -18,7 +18,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, SectionLabel, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormSection, SectionLabel, FormActions } from "@/components/forms";
 import {
   creditBatchFormSchema,
   formatDurabilityOption,
@@ -345,10 +345,9 @@ export function CreditBatchForm({
   });
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-24">
+    <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* ── Overview ── */}
-      <div className="space-y-16">
-        <SectionLabel>Overview</SectionLabel>
+      <FormSection title="Overview" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -393,7 +392,7 @@ export function CreditBatchForm({
           </div>
         )}
 
-      </div>
+      </FormSection>
 
       {/* ── Matched Applications ── */}
       <AutoMatchedSection
@@ -424,20 +423,18 @@ export function CreditBatchForm({
       </AutoMatchedSection>
 
       {/* ── Durability ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel
-          hint={
-            <>
-              The durability crediting tier is a project-level (PDD) decision,
-              set per facility and snapshotted onto the batch when it&apos;s
-              created — not a per-batch claim. The <code>1000_year</code> tier
-              additionally requires reflectance lab data and is not yet
-              supported by the CO₂e preview.
-            </>
-          }
-        >
-          Durability
-        </SectionLabel>
+      <FormSection
+        title="Durability"
+        hint={
+          <>
+            The durability crediting tier is a project-level (PDD) decision,
+            set per facility and snapshotted onto the batch when it&apos;s
+            created — not a per-batch claim. The <code>1000_year</code> tier
+            additionally requires reflectance lab data and is not yet
+            supported by the CO₂e preview.
+          </>
+        }
+      >
 
         {/* Snapshotted from the facility's default at create; kept in form state
             so it round-trips on update, but not editable here. */}
@@ -454,11 +451,10 @@ export function CreditBatchForm({
             hint="Change it for future batches in the facility's settings."
           />
         </dl>
-      </div>
+      </FormSection>
 
       {/* ── Site Management Notes ── */}
-      <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Site Management</SectionLabel>
+      <FormSection title="Site Management">
 
         <FormField
           id="siteManagementNotes"
@@ -475,17 +471,15 @@ export function CreditBatchForm({
             {...register("siteManagementNotes")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
       {/* ── Registry & accounting (read-only, system-populated) ── */}
-      <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <div className="flex items-center justify-between">
-          <SectionLabel hint="Calculated by Isometric verification and registry issuance — not editable here.">
-            Registry &amp; accounting
-          </SectionLabel>
-          <ReadOnlyBadge />
-        </div>
-
+      <FormSection
+        title={<>Registry &amp; accounting</>}
+        hint="Calculated by Isometric verification and registry issuance — not editable here."
+        actions={<ReadOnlyBadge />}
+        className="space-y-12"
+      >
         <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-24 gap-y-20 p-20 bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
           <ReadOnlyField
             label="CO2e emissions"
@@ -523,7 +517,7 @@ export function CreditBatchForm({
             hint="Credit value"
           />
         </dl>
-      </div>
+      </FormSection>
 
       <FormActions
         sticky={stickyActions}

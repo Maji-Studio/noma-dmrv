@@ -382,12 +382,17 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.click('button:has-text("New Facility")');
       await waitForSideSheet(page);
+      const facilityDialog = page
+        .getByRole("dialog")
+        .filter({ has: page.getByRole("button", { name: "Create Facility" }) });
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Facility")').click();
-      await waitForSideSheetClose(page);
+      await facilityDialog
+        .getByRole("button", { name: "Create Facility" })
+        .click();
+      await facilityDialog.waitFor({ state: "hidden", timeout: 10000 });
 
       // Admins get an optional "Link Isometric project" prompt after create;
       // it aria-hides the page, so dismiss it before asserting on the list.
@@ -396,7 +401,9 @@ test.describe("Full Chain UI Smoke Test", () => {
       // Search for the new facility (list may be paginated). Scope to the list
       // card's heading — the sidebar FacilitySelector falls back to the first
       // facility, which is this one, so a bare getByText matches twice.
-      const facilitySearch = page.getByPlaceholder(/search/i);
+      const facilitySearch = page.getByRole("textbox", {
+        name: "Search facilities",
+      });
       await facilitySearch.fill(`Chain Facility ${runId}`);
       await page.waitForTimeout(500);
       await expect(

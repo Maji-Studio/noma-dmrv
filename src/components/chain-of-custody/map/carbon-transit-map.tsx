@@ -38,7 +38,6 @@ import {
   FIT_DURATION_MS,
   FIT_MAX_ZOOM,
   FIT_PADDING,
-  FIT_PADDING_RIGHT_WITH_RAIL,
   HIGHLIGHT_EASE_DURATION_MS,
   HIGHLIGHT_HOLD_MS,
   LEG_LINE_OPACITY,
@@ -65,11 +64,31 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 const SAT_TILE_SIZE = 256;
 const FALLBACK_LAYER_ID = `${LEGS_BASE_LAYER_ID}-fallback`;
+// Focus overlay — a single bold line drawn over the leg the user clicked in
+// the bottom strip, then cleared after a short hold.
+const FOCUS_SOURCE_ID = `${LEGS_SOURCE_ID}-focus`;
+const FOCUS_LAYER_ID = `${LEGS_BASE_LAYER_ID}-focus`;
+const FOCUS_LINE_WIDTH = 4.5;
+const FOCUS_HOLD_MS = 2200;
+// Extra bottom padding so a fit doesn't tuck markers under the legs strip.
+const STRIP_FIT_BOTTOM = 132;
 
-/** Popup body per chain node id (codes + detail lines from the lineage DAG). */
+/**
+ * No-basemap mode (missing NEXT_PUBLIC_MAPTILER_KEY): MapLibre still runs on
+ * a blank transparent style, so markers, legs, and distance chips plot over
+ * the container's tinted field — never a white void. The satellite raster is
+ * key-independent, so the SAT toggle keeps working too.
+ */
+const BLANK_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {},
+  layers: [],
+};
+
+/** Popup body per chain node id (codes + detail rows from the lineage DAG). */
 export type PopupContentByNodeId = Record<
   string,
-  Pick<PopupCardInput, "typeLabel" | "status" | "detailLines">
+  Pick<PopupCardInput, "typeLabel" | "status" | "details">
 >;
 
 export interface CarbonTransitMapProps {
@@ -81,6 +100,8 @@ export interface CarbonTransitMapProps {
   railVisible: boolean;
   /** Cross-link from the DAG; nonce re-triggers for repeat clicks. */
   highlight: { nodeId: string; nonce: number } | null;
+  /** Leg the bottom strip asked to focus; nonce re-triggers repeat clicks. */
+  focusedLeg: { legId: string; nonce: number } | null;
   onMarkerClick?: (nodeId: string) => void;
 }
 
@@ -144,6 +165,7 @@ export default function CarbonTransitMap({
   popupContent,
   railVisible,
   highlight,
+  focusedLeg,
   onMarkerClick,
 }: CarbonTransitMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,6 +175,7 @@ export default function CarbonTransitMap({
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const pinnedRef = useRef<string | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Latest props for handlers that live as long as the map instance.
   const onMarkerClickRef = useRef(onMarkerClick);
   const railVisibleRef = useRef(railVisible);
@@ -177,7 +200,9 @@ export default function CarbonTransitMap({
     map.fitBounds(bounds, {
       padding: {
         ...FIT_PADDING,
-        right: railVisibleRef.current ? FIT_PADDING_RIGHT_WITH_RAIL : FIT_PADDING.right,
+        // The transport-legs strip sits along the bottom in map view — keep
+        // markers clear of it.
+        bottom: railVisibleRef.current ? STRIP_FIT_BOTTOM : FIT_PADDING.bottom,
       },
       maxZoom: FIT_MAX_ZOOM,
       duration: animate ? FIT_DURATION_MS : 0,
@@ -187,13 +212,13 @@ export default function CarbonTransitMap({
   // Map instance lifecycle — the legitimate imperative-DOM exception.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !MAPTILER_KEY) return;
+    if (!container) return;
 
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
         container,
-        style: maptilerStyleUrl(MAPTILER_KEY),
+        style: MAPTILER_KEY ? maptilerStyleUrl(MAPTILER_KEY) : BLANK_STYLE,
         center: DEFAULT_MAP_CENTER,
         zoom: DEFAULT_MAP_ZOOM,
         attributionControl: { compact: true },
@@ -214,7 +239,7 @@ export default function CarbonTransitMap({
     });
 
     map.once("load", () => {
-      applyBrandRecolor(map);
+      if (MAPTILER_KEY) applyBrandRecolor(map);
 
       // SAT raster first so the leg layers added after naturally sit above it.
       map.addSource(SAT_SOURCE_ID, {
@@ -283,6 +308,23 @@ export default function CarbonTransitMap({
         },
       });
 
+      // Focus overlay — empty until a strip click flashes a single leg.
+      map.addSource(FOCUS_SOURCE_ID, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: FOCUS_LAYER_ID,
+        type: "line",
+        source: FOCUS_SOURCE_ID,
+        paint: {
+          "line-color": colorByKind,
+          "line-width": FOCUS_LINE_WIDTH,
+          "line-opacity": 0.95,
+          "line-blur": 0.6,
+        },
+      });
+
       setStyleReady(true);
     });
 
@@ -312,6 +354,7 @@ export default function CarbonTransitMap({
       clearInterval(antsTimer);
       resizeObserver.disconnect();
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       popupRef.current = null;
       markersRef.current = [];
       chipsRef.current = [];
@@ -374,7 +417,9 @@ export default function CarbonTransitMap({
             typeLabel: content?.typeLabel ?? node.kind,
             code: node.code,
             status: content?.status ?? null,
-            detailLines: content?.detailLines ?? (node.sub ? [node.sub] : []),
+            details:
+              content?.details ??
+              (node.sub ? [{ label: "Detail", value: node.sub }] : []),
           })
         )
         .addTo(map);
@@ -435,6 +480,51 @@ export default function CarbonTransitMap({
     );
   }, [highlight, styleReady]);
 
+  // Bottom-strip leg focus — fit the map to the clicked leg and flash it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusedLeg || !styleReady) return;
+
+    const { plottable } = resolveLegEndpoints(geo);
+    const entry = plottable.find((leg) => leg.leg.id === focusedLeg.legId);
+    if (!entry) return;
+    const { coordinates } = legLineCoordinates(
+      entry,
+      routeGeometries?.[entry.leg.id]
+    );
+    if (coordinates.length < 2) return;
+
+    const bounds = new maplibregl.LngLatBounds();
+    for (const coordinate of coordinates) bounds.extend(coordinate);
+    map.fitBounds(bounds, {
+      padding: { ...FIT_PADDING, bottom: STRIP_FIT_BOTTOM },
+      maxZoom: FIT_MAX_ZOOM,
+      duration: FIT_DURATION_MS,
+    });
+
+    const focusSource = map.getSource(FOCUS_SOURCE_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    focusSource?.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { kind: entry.leg.kind },
+          geometry: { type: "LineString", coordinates },
+        },
+      ],
+    });
+
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      const source = mapRef.current?.getSource(FOCUS_SOURCE_ID) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+      source?.setData({ type: "FeatureCollection", features: [] });
+    }, FOCUS_HOLD_MS);
+  }, [focusedLeg, styleReady, geo, routeGeometries]);
+
   const toggleSat = () => {
     const map = mapRef.current;
     if (!map?.getLayer(SAT_LAYER_ID)) return;
@@ -446,7 +536,7 @@ export default function CarbonTransitMap({
   if (mapFailed) {
     return (
       <div
-        className="flex h-full flex-col items-center justify-center gap-6 bg-[var(--color-background-light)] px-16 text-center"
+        className="cvm-field flex h-full flex-col items-center justify-center gap-6 px-16 text-center"
         data-testid="carbon-viewer-no-map"
       >
         <span className="label-button uppercase text-[var(--color-text-secondary)]">
@@ -464,9 +554,17 @@ export default function CarbonTransitMap({
     <div className={`cvm-map relative h-full w-full${satOn ? " cvm-sat" : ""}`}>
       <div
         ref={containerRef}
-        className="h-full w-full bg-[var(--color-background-white)]"
+        className={`h-full w-full ${MAPTILER_KEY ? "bg-[var(--color-background-white)]" : "cvm-field"}`}
         data-testid="carbon-viewer-map"
       />
+      {!MAPTILER_KEY && !satOn ? (
+        <div
+          className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+          data-testid="carbon-viewer-no-basemap-note"
+        >
+          Basemap unavailable — set NEXT_PUBLIC_MAPTILER_KEY
+        </div>
+      ) : null}
       <MapControls
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}

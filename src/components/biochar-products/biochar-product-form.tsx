@@ -13,7 +13,7 @@ import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, SectionLabel, FormActions } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormSection, FormActions } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -319,11 +319,10 @@ export function BiocharProductForm({
       : null;
 
   return (
-    <div className="space-y-24">
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-24">
+    <div className="space-y-20">
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Transfer Flow Preview */}
-      <div className="space-y-12">
-        <SectionLabel>Transfer Preview</SectionLabel>
+      <FormSection title="Transfer Preview" divider={false}>
         <TransferFlowPreview
           sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
           availableKg={linkedRunPreview?.biocharOutputKg ?? null}
@@ -337,12 +336,10 @@ export function BiocharProductForm({
               ?? null
           }
         />
-      </div>
+      </FormSection>
 
       {/* Source: Production Run */}
-      <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Source</SectionLabel>
-
+      <FormSection title="Source">
         <FormField
           id="linkedProductionRunId"
           label="Production Run"
@@ -477,6 +474,10 @@ export function BiocharProductForm({
             )}
           </div>
         )}
+      </FormSection>
+
+      {/* Destination + Product Details */}
+      <FormSection title="Destination & Product">
 
         {/* Formulation drives ingredient-bin rows and the destination bin filter.
             Leaving it empty produces a pure-biochar product. */}
@@ -504,11 +505,6 @@ export function BiocharProductForm({
 
         {/* Ingredient Bins */}
         <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
-      </div>
-
-      {/* Destination + Product Details */}
-      <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>Destination & Product</SectionLabel>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -561,7 +557,7 @@ export function BiocharProductForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       </form>
 

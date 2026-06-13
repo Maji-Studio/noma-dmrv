@@ -10,11 +10,11 @@ import { useDebounce } from "@/hooks/use-debounce";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Lightning, Flask, Plus, CheckCircle, Warning } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
@@ -132,29 +132,14 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-16">
-          <Button
-            type="button"
-            variant="default"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row.original);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row.original.id);
-            }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -276,21 +261,30 @@ export function ReactorList() {
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Reactor" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
+
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <div>
-          <h1 className="title-heading-2">Reactors</h1>
-          <p className="body-small text-[var(--color-text-secondary)] mt-1">
-            Pyrolysis equipment and sampling configuration
-          </p>
-        </div>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={18} weight="bold" />
-          New Reactor
-        </Button>
-      </div>
+      <PageHeader
+        area="infrastructure"
+        title="Reactors"
+        subtitle="Pyrolysis equipment and sampling configuration"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={18} weight="bold" />
+            New Reactor
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
@@ -373,57 +367,55 @@ export function ReactorList() {
       />
 
       {/* Unified Side Sheet */}
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-          title={sideSheet.mode === "create" ? "Create Reactor" : sideSheet.entity?.code ?? ""}
-          subtitle={sideSheet.mode === "create" ? "Add a new pyrolysis reactor" : sideSheet.entity?.identifier}
-          editLabel="Edit Reactor"
-          sections={sideSheet.entity ? [
-            {
-              title: "General Information",
-              fields: [
-                { label: "Code", value: sideSheet.entity.code },
-                { label: "Identifier", value: sideSheet.entity.identifier },
-                { label: "Reactor Type", value: formatReactorType(sideSheet.entity.reactorType) },
-                { label: "Sampling Method", value: formatSamplingMethod(sideSheet.entity.samplingMethod as SamplingMethod) },
-              ],
-            },
-            {
-              title: "Facility",
-              fields: [
-                { label: "Facility Name", value: sideSheet.entity.facilityName },
-                { label: "Facility Code", value: sideSheet.entity.facilityCode },
-              ],
-            },
-            {
-              title: "Method B Eligibility",
-              fields: [
-                { label: "Status", value: sideSheet.entity.methodBEligibility?.isEligible ? "Eligible" : "Not Eligible" },
-                { label: "Prior Method A Samples", value: (sideSheet.entity.methodBEligibility?.priorMethodASampleCount ?? 0) + " samples" },
-                { label: "Minimum Required", value: (sideSheet.entity.methodBEligibility?.minimumMethodASampleCount ?? 30) + " samples" },
-              ],
-            },
-          ] : undefined}
-        >
-          {(createError || updateError) && (
-            <div className="mb-24">
-              <ServerError message={createError || updateError || ""} />
-            </div>
-          )}
-          <ReactorForm
-            key={sideSheet.entity?.id ?? "create"}
-            reactor={sideSheet.entity as Reactor | undefined}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={closeSideSheet}
-            isSubmitting={createReactor.isPending || updateReactor.isPending}
-            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Reactor"}
-          />
-        </EntitySideSheet>
-      )}
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Reactor"
+        sections={sideSheetEntity ? [
+          {
+            title: "General Information",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Identifier", value: sideSheetEntity.identifier },
+              { label: "Reactor Type", value: formatReactorType(sideSheetEntity.reactorType) },
+              { label: "Sampling Method", value: formatSamplingMethod(sideSheetEntity.samplingMethod as SamplingMethod) },
+            ],
+          },
+          {
+            title: "Facility",
+            fields: [
+              { label: "Facility Name", value: sideSheetEntity.facilityName },
+              { label: "Facility Code", value: sideSheetEntity.facilityCode },
+            ],
+          },
+          {
+            title: "Method B Eligibility",
+            fields: [
+              { label: "Status", value: sideSheetEntity.methodBEligibility?.isEligible ? "Eligible" : "Not Eligible" },
+              { label: "Prior Method A Samples", value: (sideSheetEntity.methodBEligibility?.priorMethodASampleCount ?? 0) + " samples" },
+              { label: "Minimum Required", value: (sideSheetEntity.methodBEligibility?.minimumMethodASampleCount ?? 30) + " samples" },
+            ],
+          },
+        ] : undefined}
+      >
+        {(createError || updateError) && (
+          <div className="mb-24">
+            <ServerError message={createError || updateError || ""} />
+          </div>
+        )}
+        <ReactorForm
+          key={sideSheetEntity?.id ?? "create"}
+          reactor={sideSheetEntity as Reactor | undefined}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={createReactor.isPending || updateReactor.isPending}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Reactor"}
+        />
+      </EntitySideSheet>
     </div>
   );
 }

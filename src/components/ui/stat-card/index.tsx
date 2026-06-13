@@ -1,3 +1,12 @@
+/**
+ * StatCard — the one KPI card (visual design plan, Phase 2).
+ *
+ * White paper panel on the warm page field with a hairline border — the style
+ * the Energy summary cards pioneered, now canonical. Optional sparkline slot
+ * so the same card can build the dashboard KPI strip (Phase 5).
+ *
+ * Moved here from `src/components/dashboard/stat-card.tsx`.
+ */
 "use client";
 
 import * as React from "react";
@@ -11,11 +20,13 @@ import { TrendUp, TrendDown, Minus } from "@phosphor-icons/react";
  * -----------------------------------------------------------------------------------------------*/
 
 const statCardVariants = cva(
-  "group flex flex-col overflow-hidden bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)] transition-colors duration-300",
+  // Shared panel recipe (Phase 2.5) — paper + plum hairline, candidate
+  // treatments swap via the --panel-* tokens.
+  "group flex flex-col overflow-hidden bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)] transition-colors duration-300",
   {
     variants: {
       interactive: {
-        true: "cursor-pointer hover:border-[var(--color-border-primary)]",
+        true: "cursor-pointer hover:[border-color:var(--edge-soft)]",
         false: "",
       },
     },
@@ -30,8 +41,8 @@ const trendBadgeVariants = cva(
   {
     variants: {
       trend: {
-        up: "bg-[var(--color-status-success-bg)] text-[var(--color-status-success)]",
-        down: "bg-[var(--clr-red-10)] text-[var(--clr-red)]",
+        up: "bg-[var(--st-ok-bg)] text-[var(--st-ok)]",
+        down: "bg-[var(--st-bad-bg)] text-[var(--st-bad)]",
         neutral: "bg-[var(--color-background-medium)] text-[var(--color-text-secondary)]",
       },
     },
@@ -64,6 +75,8 @@ export interface StatCardProps
   trendValue?: string;
   /** Trend label (e.g., "from last month") */
   trendLabel?: string;
+  /** Optional sparkline slot rendered under the value row (dashboard KPI strip) */
+  sparkline?: React.ReactNode;
   /** Link destination for click-through navigation */
   href?: string;
   /** Loading state */
@@ -131,6 +144,7 @@ const StatCardContent = React.forwardRef<
       trend,
       trendValue,
       trendLabel,
+      sparkline,
       interactive,
       isLoading,
       ...props
@@ -153,10 +167,10 @@ const StatCardContent = React.forwardRef<
       >
         <div className="flex items-start justify-between gap-12">
           <div className="flex flex-col gap-2 min-w-0">
-            <span className="body-caption text-[var(--color-text-tertiary)] uppercase tracking-wide">
+            <span className="label-micro text-[var(--color-text-secondary)]">
               {title}
             </span>
-            <span className="title-heading-3 text-[var(--color-text-primary)]">
+            <span className="title-heading-3 tabular-nums tracking-tight text-[var(--color-text-primary)]">
               {value}
             </span>
             {/* Trend indicator or description */}
@@ -174,6 +188,7 @@ const StatCardContent = React.forwardRef<
             </div>
           )}
         </div>
+        {sparkline && <div className="mt-12">{sparkline}</div>}
       </div>
     );
   }

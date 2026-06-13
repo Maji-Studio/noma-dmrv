@@ -6,31 +6,20 @@
 "use client";
 
 import { nullableNumericValue } from "@/lib/form-utils";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormSelect, FormActions } from "@/components/forms";
+import { FormEntitySelect, FormField, FormInput, FormTextarea, FormSection, FormActions } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { Plus, Trash } from "@phosphor-icons/react";
 import {
   formulationFormSchema,
-  INGREDIENT_TYPES,
-  INGREDIENT_TYPE_LABELS,
+  FORMULATION_LINE_FEEDSTOCK_USAGE,
   type FormulationFormData,
 } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 
-// ============================================
-// Constants
-// ============================================
-
-const INGREDIENT_TYPE_OPTIONS = INGREDIENT_TYPES.map((type) => ({
-  value: type,
-  label: INGREDIENT_TYPE_LABELS[type],
-}));
-
 const EMPTY_INGREDIENT = {
-  ingredientType: "compost" as const,
-  name: "",
+  feedstockTypeId: "",
   ratio: null,
 };
 
@@ -59,7 +48,6 @@ export function FormulationForm({
     register,
     handleSubmit,
     control,
-    watch,
     formState: { errors },
   } = useForm<FormulationFormData>({
     resolver: zodResolver(formulationFormSchema),
@@ -68,8 +56,7 @@ export function FormulationForm({
       biocharRatio: formulation?.biocharRatio ?? null,
       description: formulation?.description ?? "",
       ingredients: formulation?.ingredients?.map((ing) => ({
-        ingredientType: ing.ingredientType,
-        name: ing.name,
+        feedstockTypeId: ing.feedstockTypeId,
         ratio: ing.ratio ?? null,
       })) ?? [],
     },
@@ -87,8 +74,8 @@ export function FormulationForm({
   });
 
   // Watch ratios for sum display
-  const biocharRatio = watch("biocharRatio");
-  const ingredients = watch("ingredients");
+  const biocharRatio = useWatch({ control, name: "biocharRatio" });
+  const ingredients = useWatch({ control, name: "ingredients" });
   const ingredientRatioSum = (ingredients ?? []).reduce(
     (sum, ing) => sum + (ing?.ratio ?? 0),
     0
@@ -98,11 +85,7 @@ export function FormulationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Required Information
-        </h3>
-
+      <FormSection title="Required Information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
@@ -120,14 +103,10 @@ export function FormulationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Biochar Ratio Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Biochar Ratio
-        </h3>
-
+      <FormSection title="Biochar Ratio">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharRatio"
@@ -148,14 +127,12 @@ export function FormulationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Ingredients Section */}
-      <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <div className="flex items-center justify-between">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Ingredients
-          </h3>
+      <FormSection
+        title="Ingredients"
+        actions={
           <Button
             type="button"
             variant="default"
@@ -166,8 +143,8 @@ export function FormulationForm({
             <Plus size={16} weight="bold" />
             Add Ingredient
           </Button>
-        </div>
-
+        }
+      >
         {fields.length === 0 && (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
             No ingredients added. Click &quot;Add Ingredient&quot; to add amendment components.
@@ -195,36 +172,22 @@ export function FormulationForm({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
-              <FormField
-                id={`ingredients.${index}.ingredientType`}
-                label="Type"
-                error={errors.ingredients?.[index]?.ingredientType?.message}
-                required
-              >
-                <FormSelect
-                  id={`ingredients.${index}.ingredientType`}
-                  options={INGREDIENT_TYPE_OPTIONS}
+              <div className="md:col-span-2">
+                <FormEntitySelect
+                  control={control}
+                  name={`ingredients.${index}.feedstockTypeId`}
+                  label="Blend Material"
+                  entityType="feedstockType"
+                  placeholder="Select a blend material..."
                   disabled={isSubmitting}
-                  error={!!errors.ingredients?.[index]?.ingredientType}
-                  {...register(`ingredients.${index}.ingredientType`)}
+                  required
+                  autoSelectSingle={false}
+                  allowCreate
+                  createLabel="Add blend material"
+                  filterBy={{ usage: FORMULATION_LINE_FEEDSTOCK_USAGE }}
+                  alwaysShowSearch
                 />
-              </FormField>
-
-              <FormField
-                id={`ingredients.${index}.name`}
-                label="Name"
-                error={errors.ingredients?.[index]?.name?.message}
-                required
-              >
-                <FormInput
-                  id={`ingredients.${index}.name`}
-                  type="text"
-                  placeholder="e.g., Mature compost"
-                  disabled={isSubmitting}
-                  error={!!errors.ingredients?.[index]?.name}
-                  {...register(`ingredients.${index}.name`)}
-                />
-              </FormField>
+              </div>
 
               <FormField
                 id={`ingredients.${index}.ratio`}
@@ -268,14 +231,10 @@ export function FormulationForm({
             )}
           </div>
         )}
-      </div>
+      </FormSection>
 
       {/* Description Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Additional Information
-        </h3>
-
+      <FormSection title="Additional Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
             <FormField
@@ -293,7 +252,7 @@ export function FormulationForm({
             </FormField>
           </div>
         </div>
-      </div>
+      </FormSection>
 
       <FormActions
         onCancel={onCancel}

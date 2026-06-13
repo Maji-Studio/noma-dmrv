@@ -17,18 +17,22 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { FormField, FormInput, FormSelect, PositionPicker, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, PositionPicker, FormActions } from "@/components/forms";
 import {
   applicationFormSchema,
+  applicationEvidenceMethods,
   applicationMethods,
   soilTemperatureSources,
+  formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatSoilTemperatureSource,
   type ApplicationFormData,
+  type ApplicationEvidenceMethod,
   type ApplicationMethod,
   type SoilTemperatureSource,
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
+import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import {
   applicationKgToTons,
   applicationTonsToKg,
@@ -59,6 +63,11 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
     label: formatSoilTemperatureSource(source as SoilTemperatureSource),
   }),
 );
+
+const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
+  visual: "Geotagged application photos",
+  boundary: "GIS boundary reference and logbook",
+};
 
 // ============================================
 // Dry Mass Calculation Card
@@ -214,6 +223,7 @@ export function ApplicationForm({
       gpsLatitude: application?.gpsLatitude ?? undefined,
       gpsLongitude: application?.gpsLongitude ?? undefined,
       applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
+      evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "visual",
       gisBoundaryReference: application?.gisBoundaryReference ?? "",
       soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
       soilTemperatureC: application?.soilTemperatureC ?? undefined,
@@ -223,6 +233,7 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
+  const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
 
@@ -330,17 +341,15 @@ export function ApplicationForm({
       ...data,
       biocharAppliedTons,
       biocharAppliedDryTons,
+      gisBoundaryReference:
+        data.evidenceMethod === "boundary" ? data.gisBoundaryReference : "",
     });
   });
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* === Section 1: Application Details === */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Application Details
-        </h3>
-
+      <FormSection title="Application Details" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
             <FormInput
@@ -430,14 +439,10 @@ export function ApplicationForm({
             moisturePercent={moisturePercent}
           />
         </div>
-      </div>
+      </FormSection>
 
       {/* === Section 2: Field Details === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Field Details
-        </h3>
-
+      <FormSection title="Field Details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="fieldSizeHa" label="Field Size (Ha)" error={errors.fieldSizeHa?.message}>
             <FormInput
@@ -513,30 +518,73 @@ export function ApplicationForm({
           disabled={isSubmitting}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="gisBoundaryReference"
-            label="GIS Boundary Reference"
-            error={errors.gisBoundaryReference?.message}
-            helperText="Link to GIS layer data"
-          >
-            <FormInput
-              id="gisBoundaryReference"
-              type="text"
-              placeholder="e.g., https://maps.example.com/dec/plot-a"
-              disabled={isSubmitting}
-              error={!!errors.gisBoundaryReference}
-              {...register("gisBoundaryReference")}
-            />
-          </FormField>
-        </div>
-      </div>
+      </FormSection>
 
-      {/* === Section 3: Soil Temperature === */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Soil Temperature
-        </h3>
+      {/* === Section 3: Evidence === */}
+      <FormSection title="Evidence Method">
+        <div
+          className="grid grid-cols-1 gap-8 md:grid-cols-2"
+          role="radiogroup"
+          aria-label="Evidence method"
+        >
+          {applicationEvidenceMethods.map((method) => (
+            <label
+              key={method}
+              className={[
+                "flex min-h-44 cursor-pointer flex-col gap-4 border px-14 py-12 transition-colors duration-300",
+                evidenceMethod === method
+                  ? "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]"
+                  : "border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]",
+              ].join(" ")}
+            >
+              <span className="flex items-center gap-8">
+                <input
+                  type="radio"
+                  value={method}
+                  disabled={isSubmitting}
+                  className="size-16"
+                  {...register("evidenceMethod")}
+                />
+                <span className="body-small font-medium text-[var(--color-text-primary)]">
+                  {formatApplicationEvidenceMethod(method)}
+                </span>
+              </span>
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {evidenceMethodDescriptions[method]}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        {evidenceMethod === "boundary" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <FormField
+              id="gisBoundaryReference"
+              label="GIS Boundary Reference"
+              error={errors.gisBoundaryReference?.message}
+              helperText="Link to GIS layer data"
+            >
+              <FormInput
+                id="gisBoundaryReference"
+                type="text"
+                placeholder="e.g., https://maps.example.com/dec/plot-a"
+                disabled={isSubmitting}
+                error={!!errors.gisBoundaryReference}
+                {...register("gisBoundaryReference")}
+              />
+            </FormField>
+          </div>
+        )}
+
+        <ApplicationEvidencePanel
+          applicationId={application?.id}
+          mode={evidenceMethod ?? "visual"}
+          disabled={isSubmitting}
+        />
+      </FormSection>
+
+      {/* === Section 4: Soil Temperature === */}
+      <FormSection title="Soil Temperature">
         <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
           Isometric Protocol: Used in 200-year durability calculation
         </p>
@@ -577,7 +625,7 @@ export function ApplicationForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       <FormActions
         onCancel={onCancel}

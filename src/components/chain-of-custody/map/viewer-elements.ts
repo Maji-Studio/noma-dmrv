@@ -5,7 +5,9 @@
  * data — never injected as HTML). Styled by carbon-viewer.css.
  */
 
+import { roundKmDisplay } from "@/lib/format-utils";
 import { STATUS_COLOR_FALLBACK, STATUS_COLORS } from "../chain-constants";
+import type { LineageDetailRow } from "../use-chain-graph";
 import type { ViewerMarkerKind } from "./viewer-constants";
 
 export interface SiteMarkerInput {
@@ -57,7 +59,7 @@ export function createDistanceChipElement(distanceKm: number): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "cvm-dist";
   el.dataset.testid = "carbon-viewer-distance-chip";
-  el.textContent = `${distanceKm} KM`;
+  el.textContent = `${roundKmDisplay(distanceKm)} KM`;
   return el;
 }
 
@@ -67,7 +69,8 @@ export interface PopupCardInput {
   typeLabel: string;
   code: string;
   status: string | null;
-  detailLines: string[];
+  /** Label/value rows — same grammar as the lineage cards. */
+  details: LineageDetailRow[];
 }
 
 export function createPopupCardElement(input: PopupCardInput): HTMLDivElement {
@@ -95,13 +98,20 @@ export function createPopupCardElement(input: PopupCardInput): HTMLDivElement {
   code.textContent = input.code;
   card.appendChild(code);
 
-  if (input.detailLines.length > 0) {
+  if (input.details.length > 0) {
     const details = document.createElement("div");
     details.className = "cvm-card-details";
-    for (const line of input.detailLines) {
+    for (const entry of input.details) {
       const row = document.createElement("div");
-      row.className = "cvm-card-line";
-      row.textContent = line;
+      row.className = "cvm-card-dr";
+      const label = document.createElement("span");
+      label.className = "cvm-card-dl";
+      label.textContent = entry.label;
+      row.appendChild(label);
+      const value = document.createElement("span");
+      value.className = "cvm-card-dv";
+      value.textContent = entry.value;
+      row.appendChild(value);
       details.appendChild(row);
     }
     card.appendChild(details);

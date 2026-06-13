@@ -31,6 +31,36 @@ export interface RequestUploadResult {
   headers: Record<string, string>;
   expiresAt: string;
   storageKey: string;
+  metadata: Record<string, unknown>;
+}
+
+function buildDocumentMetadata(input: {
+  documentType: DocumentType;
+  capturedAt?: string;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+}): Record<string, unknown> {
+  if (input.documentType !== "photo" && input.documentType !== "video") {
+    return {};
+  }
+
+  const missingExif: string[] = [];
+  if (!input.capturedAt) missingExif.push("timestamp");
+  if (input.gpsLatitude == null || input.gpsLongitude == null) {
+    missingExif.push("gps");
+  }
+
+  return {
+    geotagStatus: missingExif.length === 0 ? "present" : "missing",
+    missingExif,
+    exif: {
+      capturedAt: input.capturedAt ?? null,
+      gps:
+        input.gpsLatitude != null && input.gpsLongitude != null
+          ? { latitude: input.gpsLatitude, longitude: input.gpsLongitude }
+          : null,
+    },
+  };
 }
 
 export async function requestUpload(
@@ -75,6 +105,13 @@ export async function requestUpload(
       maxBytes: cap,
     });
 
+    const metadata = buildDocumentMetadata({
+      documentType: docType,
+      capturedAt: parsed.data.capturedAt,
+      gpsLatitude: parsed.data.gpsLatitude,
+      gpsLongitude: parsed.data.gpsLongitude,
+    });
+
     const row = await insertDocument(userId, {
       entityType: parsed.data.entityType,
       entityId: parsed.data.entityId,
@@ -91,6 +128,7 @@ export async function requestUpload(
         ? new Date(parsed.data.capturedAt)
         : null,
       description: parsed.data.description ?? null,
+      metadata,
       createdBy: userId,
     });
 
@@ -100,6 +138,7 @@ export async function requestUpload(
       headers: presign.headers,
       expiresAt: presign.expiresAt.toISOString(),
       storageKey,
+      metadata,
     };
   });
 }

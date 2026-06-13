@@ -44,10 +44,14 @@ roll-up" button leads back.
     *in storage / undelivered* exits before "Applied". The terminal node is
     the batch's applied mass; net tCO₂e is a label, not a ribbon.
     Inconsistent residuals clamp to zero and surface as warnings.
+    Columns follow the stage color ramp (rose biomass → orange production →
+    red biochar → purple field use) and ribbons blend between adjacent stage
+    colors with an animated flow centerline.
     The diagram sits on a React Flow canvas (same zoom/pan/controls chrome as
     the DAG); clicking a column or exit opens an info tooltip (mass, share of
     intake, record count) with a "See details" link through to the backing
-    entity route — the Sankey doubles as navigation.
+    entity route — the Sankey doubles as navigation. Mass-balance warnings
+    sit bottom-right, clear of the column-title row.
 - **Application (drill-down)** — view segment `Lineage | Map | Split | Trail`
   (the Phase 2 page unchanged, plus the Trail):
   - **Trail** — one merged reading of the concept canvas's "pipeline" and
@@ -73,13 +77,30 @@ roll-up" button leads back.
 
 ## Graph Behavior
 
-- Card hierarchy is **date-first**: the event date is the card's primary line,
-  the record code is secondary, then a headline mass stat ("960 kg biochar
-  out"), then detail lines. Dateless records (reactors) fall back to the code.
+- Card hierarchy is **date-first**: the event date is the card's primary line
+  (mono, readable at default zoom), the record code is secondary, then
+  label/value detail rows (mono micro-label left, value right). Dateless
+  records (reactors) fall back to the code.
+- **Accent triad with ink text**: cards carry a 3px accent left edge and an
+  accent-ink header chip — Production (`--acc-prod` orange: feedstock,
+  production run, biochar product) / Infrastructure (`--acc-infra` purple:
+  reactor) / Distribution (`--acc-dist` pink: order, delivery, application).
+  Ink variants (`--acc-*-ink`) keep accent text ≥ 4.5:1 on white.
+- The graph canvas sits on the `--sea` plum wash with a quiet dotted grid
+  (figure/ground); cards stay white. Shared canvas chrome constants live in
+  `chain-constants.ts` (`GRAPH_CANVAS_CLASS`, `GRAPH_DOTS`, …).
 - **Edges are labeled with the mass moving along them** (kg between records,
   t dry into the application), so hand-offs read directly off the graph.
-  Per-step CO₂e isn't recorded along the lineage — net removal lives on the
-  Sankey's header label.
+  Edges render through `ChainEdge` (chain-edge.tsx): a paper casing keeps
+  crossing lines separable, and the mass chip hides below
+  `EDGE_LABEL_MIN_ZOOM` (zoomed out the flow reads as shape; quantities
+  arrive as you move in). Per-step CO₂e isn't recorded along the lineage —
+  net removal lives on the Sankey's header label.
+- **Hover focus:** hovering a card fades back every card and edge outside
+  its lineage (ancestors + descendants) and thickens the path edges — dense
+  batch roll-ups stay readable. Interactive cards show a hover affordance
+  in the header (↗ opens the record; the trace icon marks batch-DAG
+  application cards that drill down).
 - `Feedstock` nodes show feedstock type, supplier, inbound delivery, and consumed mass.
 - `Production Run` shows feedstock-in and biochar-out dry mass.
 - `Biochar Product` shows the unsold remainder ("N kg in storage") when its
@@ -114,9 +135,12 @@ the *logical lineage* tool; the MapLibre map is the *geography* tool.
 - **Cross-linking** — split-view DAG card clicks locate the record on the map
   (links are disabled there); marker / rail / chip clicks ring-highlight the
   DAG card.
-- **Degradation** — no `NEXT_PUBLIC_MAPTILER_KEY` or no WebGL context → an
-  explicit "map unavailable" notice with the rails still rendered; no
-  ORS key → all legs draw as dashed arcs.
+- **Degradation** — no `NEXT_PUBLIC_MAPTILER_KEY` → MapLibre still runs on a
+  blank style over a sea-tinted dotted field: markers, legs, and distance
+  chips stay plotted (the satellite raster is key-independent, so the SAT
+  toggle keeps working) with a visible "basemap unavailable" note. No WebGL
+  context → an explicit "map unavailable" notice with the rails still
+  rendered; no ORS key → all legs draw as dashed arcs.
 
 Map components live in `src/components/chain-of-custody/map/`; the shared
 brand-recolored basemap treatment is `src/components/map/` (also used by

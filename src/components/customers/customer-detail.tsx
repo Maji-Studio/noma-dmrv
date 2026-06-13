@@ -16,6 +16,7 @@ import {
 } from "@/hooks/use-customers";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { CustomerLocationForm } from "./customer-location-form";
 import type { CustomerLocationFormData } from "@/schemas/customers";
@@ -260,6 +261,12 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
                     GPS
                   </th>
+                  <th className="px-16 py-12 text-left">
+                    <span className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                      Distance
+                      <CertificationFieldTag />
+                    </span>
+                  </th>
                   <th className="px-16 py-12 text-right text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
                     Actions
                   </th>
@@ -284,6 +291,11 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
+                        : "—"}
+                    </td>
+                    <td className="px-16 py-12 body-medium">
+                      {location.distanceFromFacilityKm != null
+                        ? `${location.distanceFromFacilityKm} km`
                         : "—"}
                     </td>
                     <td className="px-16 py-12 text-right">

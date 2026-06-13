@@ -56,6 +56,24 @@ export function getPaginationLabel(
   return `${start}-${end} of ${total} ${entityLabel}`;
 }
 
+/**
+ * Round a distance in km to a single decimal, locale-grouped, with no unit.
+ * Stored distances carry haversine noise (e.g. 61.52174); never surface those
+ * raw. Use when the caller appends its own unit casing (e.g. the map's "KM").
+ */
+export function roundKmDisplay(km: number): string {
+  return km.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+/**
+ * Format a distance in km for display — one decimal, locale-grouped, "km".
+ * Returns "—" for null/undefined.
+ */
+export function formatDistanceKm(km: number | null | undefined): string {
+  if (km == null) return "—";
+  return `${roundKmDisplay(km)} km`;
+}
+
 export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;
 

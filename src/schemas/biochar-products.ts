@@ -51,8 +51,9 @@ export const PURE_PRODUCT_BIN_FILTER = "pure" as const;
 
 const ingredientBinBaseSchema = z.object({
   formulationIngredientId: z.string().uuid(),
-  ingredientName: z.string(),
-  ingredientType: z.string(),
+  feedstockTypeId: z.string().uuid(),
+  feedstockTypeName: z.string(),
+  feedstockTypeCategory: z.string(),
   ratio: z.number().min(0).max(1).optional().nullable(),
   massKg: z.number().min(0).optional().nullable(),
 });

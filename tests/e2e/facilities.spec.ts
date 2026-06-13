@@ -46,6 +46,9 @@ test.describe("Facility + Reactor UI CRUD", () => {
 
     // Wait for the side sheet to be visible
     await page.waitForSelector('[role="dialog"]', { state: "visible" });
+    const facilityDialog = page
+      .getByRole("dialog")
+      .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
 
     // Fill in required fields
     await page.fill('input[name="name"]', facilityName);
@@ -54,11 +57,8 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Submit the form
     await page.getByRole("button", { name: /Create Facility/i }).click();
 
-    // Side sheet closes on success — wait for it to disappear
-    await page.waitForSelector('[role="dialog"]', {
-      state: "detached",
-      timeout: 10000,
-    });
+    // Side sheet closes on success. A separate optional certifier dialog may open.
+    await facilityDialog.waitFor({ state: "hidden", timeout: 10000 });
 
     // Admins get an optional "Link Isometric project" prompt after create
     // (facility-list.tsx); it aria-hides the page, so dismiss it before
@@ -66,7 +66,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await dismissCertifierLinkDialog(page);
 
     // Search for the new facility (list may be paginated with many entries)
-    const searchBox = page.getByPlaceholder(/search/i);
+    const searchBox = page.getByRole("textbox", { name: "Search facilities" });
     await searchBox.fill(facilityName);
     await page.waitForTimeout(500); // debounce
 
