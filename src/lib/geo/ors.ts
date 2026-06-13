@@ -13,6 +13,7 @@ import {
   ORS_BASE_URL,
   ORS_REQUEST_TIMEOUT_MS,
   ORS_ROUTING_PROFILE,
+  ORS_SNAP_RADIUS_METERS,
 } from "@/config/geo";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -157,6 +158,7 @@ export const orsProvider: GeoProvider = {
             [origin.lng, origin.lat],
             [destination.lng, destination.lat],
           ],
+          radiuses: [ORS_SNAP_RADIUS_METERS, ORS_SNAP_RADIUS_METERS],
         }),
       }
     )) as OrsDirectionsResponse;
@@ -187,6 +189,7 @@ export const orsProvider: GeoProvider = {
             [origin.lng, origin.lat],
             [destination.lng, destination.lat],
           ],
+          radiuses: [ORS_SNAP_RADIUS_METERS, ORS_SNAP_RADIUS_METERS],
         }),
       }
     )) as OrsDirectionsGeoJsonResponse;
