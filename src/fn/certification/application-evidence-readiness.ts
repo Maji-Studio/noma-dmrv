@@ -26,6 +26,10 @@ function isGeotaggedPhoto(row: DocumentRow): boolean {
   );
 }
 
+function hasBoundaryReference(value: string | null | undefined): boolean {
+  return (value?.trim() ?? "").length > 0;
+}
+
 export async function buildApplicationEvidenceGaps(
   userId: string,
   lineages: ChainOfCustodyData[],
@@ -57,7 +61,7 @@ export async function buildApplicationEvidenceGaps(
       continue;
     }
 
-    if (!application.gisBoundaryReference) {
+    if (!hasBoundaryReference(application.gisBoundaryReference)) {
       gaps.push(`Application ${application.code}: GIS boundary reference`);
     }
     const hasLogbook = applicationDocuments.some(
