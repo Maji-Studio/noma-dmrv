@@ -20,6 +20,16 @@ export const GEOCODE_MAX_RESULTS = 5;
 /** Outbound request timeout for ORS calls (ms). */
 export const ORS_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * Per-coordinate snap radius (m) sent to the directions endpoint. ORS defaults
+ * to 350 m and rejects the whole route (error 2010) when an endpoint — a
+ * supplier yard, farm, or application plot — sits further than that from the
+ * nearest mapped road, which silently degrades the map leg to a straight arc.
+ * A bounded value snaps such points to the nearest road while still refusing
+ * pathologically distant matches (unlimited `-1` could snap to the wrong road).
+ */
+export const ORS_SNAP_RADIUS_METERS = 5000;
+
 // Per-user abuse limits for the geo server actions (sliding window,
 // src/lib/rate-limit). Geocode fires per keystroke-debounce; routing is a
 // deliberate button press.
