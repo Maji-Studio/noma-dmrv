@@ -56,10 +56,6 @@ export const documents = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    check(
-      'documents_photo_video_require_captured_at',
-      sql`${table.documentType} <> all (array['photo', 'video']::documentation_type[]) or ${table.capturedAt} is not null`
-    ),
     // Every row must point to something: a storage object OR an external URL.
     check(
       'documents_resolvable',

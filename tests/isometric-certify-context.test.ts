@@ -6,6 +6,7 @@ import {
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getDeliveriesByIds } from "@/data-access/deliveries";
+import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getFeedstocksByIds } from "@/data-access/feedstocks";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
@@ -43,6 +44,10 @@ vi.mock("@/data-access/deliveries", () => ({
   getDeliveriesByIds: vi.fn(),
 }));
 
+vi.mock("@/data-access/documents", () => ({
+  listDocumentsForEntityIds: vi.fn(),
+}));
+
 vi.mock("@/data-access/transport-legs", () => ({
   getTransportLegsForEntities: vi.fn(),
 }));
@@ -64,6 +69,7 @@ const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetFeedstocksByIds = vi.mocked(getFeedstocksByIds);
 const mockedGetDeliveriesByIds = vi.mocked(getDeliveriesByIds);
+const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
 const mockedGetLegs = vi.mocked(getTransportLegsForEntities);
 const mockedListProjects = vi.mocked(listProjects);
 const mockedListTemplates = vi.mocked(listGhgEntryTemplates);
@@ -146,6 +152,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetRuns.mockResolvedValue([]);
     mockedGetFeedstocksByIds.mockResolvedValue([]);
     mockedGetDeliveriesByIds.mockResolvedValue([]);
+    mockedListDocuments.mockResolvedValue([]);
     mockedGetLegs.mockResolvedValue([]);
   });
 
@@ -297,6 +304,130 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.entityReadinessGaps).toEqual(
       expect.arrayContaining([
         expect.stringContaining("Production run PR-1: Telemetry readings"),
+      ]),
+    );
+  });
+
+  it("flags visual applications without a geotagged photo", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: null }),
+    );
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([template("rvt_1")]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: {
+        id: "app-1",
+        code: "APP-1",
+        evidenceMethod: "visual",
+        gisBoundaryReference: null,
+        biocharAppliedDryTons: 1,
+      } as never,
+      delivery: { id: "del-1" } as never,
+      order: null,
+      biocharProduct: {
+        id: "bp-1",
+        code: "BP-1",
+        linkedProductionRunId: "pr-1",
+      } as never,
+      productionRun: { id: "pr-1", code: "PR-1" } as never,
+      reactor: null,
+      feedstocks: [],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        biocharDryMassKg: 1000,
+        samples: [],
+        readingsCount: 1,
+      } as never,
+    ]);
+    mockedListDocuments.mockResolvedValue([
+      {
+        entityId: "app-1",
+        documentType: "photo",
+        uploadStatus: "uploaded",
+        fileUrl: null,
+        metadata: { geotagStatus: "missing" },
+      } as never,
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.entityReadinessGaps).toEqual(
+      expect.arrayContaining([
+        "Application APP-1: geotagged visual evidence",
+      ]),
+    );
+  });
+
+  it("flags boundary applications missing boundary reference and logbook", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: null }),
+    );
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([template("rvt_1")]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: {
+        id: "app-1",
+        code: "APP-1",
+        evidenceMethod: "boundary",
+        gisBoundaryReference: null,
+        biocharAppliedDryTons: 1,
+      } as never,
+      delivery: { id: "del-1" } as never,
+      order: null,
+      biocharProduct: {
+        id: "bp-1",
+        code: "BP-1",
+        linkedProductionRunId: "pr-1",
+      } as never,
+      productionRun: { id: "pr-1", code: "PR-1" } as never,
+      reactor: null,
+      feedstocks: [],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        biocharDryMassKg: 1000,
+        samples: [],
+        readingsCount: 1,
+      } as never,
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.entityReadinessGaps).toEqual(
+      expect.arrayContaining([
+        "Application APP-1: GIS boundary reference",
+        "Application APP-1: boundary logbook evidence",
       ]),
     );
   });
@@ -514,6 +645,7 @@ describe("requiredTransportCategories", () => {
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
     mockedGetRuns.mockResolvedValue([]);
+    mockedListDocuments.mockResolvedValue([]);
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListBlueprints.mockResolvedValue([]);
   });

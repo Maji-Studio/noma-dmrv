@@ -13,7 +13,11 @@ import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
-import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
+import type {
+  ApplicationEvidenceMethod,
+  CreateApplicationData,
+  UpdateApplicationData,
+} from "@/schemas/applications";
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -41,6 +45,10 @@ export interface ApplicationDeliveryOptionData {
   destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
 }
+
+type CreateApplicationInput = Omit<CreateApplicationData, "evidenceMethod"> & {
+  evidenceMethod?: ApplicationEvidenceMethod;
+};
 
 async function getDeliveryMoistureContentPercent(
   deliveryId: string,
@@ -238,6 +246,7 @@ export async function getApplications(
       gpsLatitude: applications.gpsLatitude,
       gpsLongitude: applications.gpsLongitude,
       applicationMethodType: applications.applicationMethodType,
+      evidenceMethod: applications.evidenceMethod,
       gisBoundaryReference: applications.gisBoundaryReference,
       soilTemperatureSource: applications.soilTemperatureSource,
       soilTemperatureC: applications.soilTemperatureC,
@@ -412,7 +421,7 @@ export async function getApplicationsByDeliveryId(
  */
 export async function createApplication(
   userId: string,
-  data: CreateApplicationData & { code: string }
+  data: CreateApplicationInput & { code: string }
 ): Promise<Application> {
   requireAuth(userId);
 
@@ -442,6 +451,7 @@ export async function createApplication(
         gpsLatitude: data.gpsLatitude ?? null,
         gpsLongitude: data.gpsLongitude ?? null,
         applicationMethodType: data.applicationMethodType ?? null,
+        evidenceMethod: data.evidenceMethod ?? "visual",
         gisBoundaryReference: data.gisBoundaryReference || null,
         soilTemperatureSource: data.soilTemperatureSource ?? null,
         soilTemperatureC: data.soilTemperatureC ?? null,
@@ -517,6 +527,7 @@ export async function updateApplication(
     if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
     if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
     if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
+    if (data.evidenceMethod !== undefined) updateData.evidenceMethod = data.evidenceMethod;
     if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
     if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
     if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;

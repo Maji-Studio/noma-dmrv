@@ -33,6 +33,8 @@ export interface ChainApplicationLineage {
   status: string | null;
   applicationDate: Date;
   fieldIdentifier: string | null;
+  evidenceMethod: "visual" | "boundary";
+  gisBoundaryReference: string | null;
   biocharAppliedDryTons: number | null;
   href: string;
 }
@@ -120,6 +122,8 @@ export async function getChainOfCustodyData(
       applicationStatus: applications.status,
       applicationDate: applications.applicationDate,
       fieldIdentifier: applications.fieldIdentifier,
+      evidenceMethod: applications.evidenceMethod,
+      gisBoundaryReference: applications.gisBoundaryReference,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,
       deliveryId: deliveries.id,
       deliveryCode: deliveries.code,
@@ -196,6 +200,8 @@ export async function getChainOfCustodyData(
       status: applicationRow.applicationStatus,
       applicationDate: applicationRow.applicationDate,
       fieldIdentifier: applicationRow.fieldIdentifier,
+      evidenceMethod: applicationRow.evidenceMethod,
+      gisBoundaryReference: applicationRow.gisBoundaryReference,
       biocharAppliedDryTons: applicationRow.biocharAppliedDryTons,
       href: "/applications",
     },
