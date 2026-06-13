@@ -185,9 +185,9 @@ function NavLink({
       href={href}
       onClick={onNavigate}
       className={cn(
-        // h-44 on touch gives a 44px tap target; md+ tightens to the original
-        // 36px density. gap/px stay constant so the icon+label don't shift.
-        "group relative flex items-center gap-10 h-44 md:h-36 px-12 transition-all duration-150",
+        // Mobile drawer breathes: 48px rows + roomier icon gap; md+ tightens to
+        // the original 36px density / 10px gap so the desktop rail is unchanged.
+        "group relative flex items-center gap-12 md:gap-10 h-48 md:h-36 px-12 transition-all duration-150",
         isActive
           ? "text-white"
           : "text-[var(--color-white-50)] hover:text-[var(--color-white-75)]",
@@ -225,7 +225,7 @@ function NavLink({
 
 function SectionLabel({ title, accent }: { title: string; accent: string }) {
   return (
-    <div className="flex items-center gap-8 px-12 pb-4 pt-2">
+    <div className="flex items-center gap-8 px-12 pb-6 pt-4 md:pb-4 md:pt-2">
       <span
         className="inline-block size-[5px] shrink-0 opacity-60"
         style={{ backgroundColor: accent }}
@@ -303,12 +303,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <FacilitySelector />
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-12 px-6">
-        <div className="flex flex-col gap-20">
+      <nav className="flex-1 overflow-y-auto py-16 px-8 md:py-12 md:px-6">
+        <div className="flex flex-col gap-24 md:gap-20">
           {sections.map((section, idx) => {
             const accent = section.accent ?? SECTION_ACCENTS.default;
             return (
-              <div key={section.title ?? idx} className="flex flex-col gap-1">
+              <div key={section.title ?? idx} className="flex flex-col gap-4 md:gap-1">
                 {section.title && (
                   <SectionLabel title={section.title} accent={accent} />
                 )}

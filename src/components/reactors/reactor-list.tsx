@@ -273,7 +273,7 @@ export function ReactorList() {
     sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="infrastructure"
         title="Reactors"

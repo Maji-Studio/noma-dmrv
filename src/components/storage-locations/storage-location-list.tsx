@@ -314,7 +314,7 @@ export function StorageLocationList() {
   }
 
   return (
-    <div className="container-max flex flex-col gap-32 py-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="infrastructure"
         title="Storage"
