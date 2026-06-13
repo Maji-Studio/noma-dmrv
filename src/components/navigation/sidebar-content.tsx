@@ -98,7 +98,6 @@ const navSections: NavSection[] = [
     items: [
       { href: "/feedstocks", label: "Feedstocks", icon: Leaf },
       { href: "/production-runs", label: "Production Runs", icon: Factory },
-      { href: "/energy", label: "Energy", icon: Lightning },
       { href: "/formulations", label: "Formulations", icon: ListChecks },
       { href: "/biochar-products", label: "Biochar Products", icon: Cube },
     ],
@@ -109,6 +108,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/reactors", label: "Reactors", icon: Flask },
       { href: "/storage-locations", label: "Storage Locations", icon: Package },
+      { href: "/energy", label: "Energy", icon: Lightning },
     ],
   },
   {
