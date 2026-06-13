@@ -35,6 +35,7 @@ import {
   certificationSubmissions,
   creditBatches,
   deliveries,
+  documents,
   facilities,
   feedstocks,
   productionRuns,
@@ -515,6 +516,37 @@ function buildProgress(args: {
 // ============================================
 
 async function loadGpsGapCounts(facilityId: string) {
+  const applicationEvidenceGap = or(
+    and(
+      eq(applications.evidenceMethod, "visual"),
+      or(
+        isNull(applications.gpsLatitude),
+        isNull(applications.gpsLongitude),
+        sql`not exists (
+          select 1
+          from ${documents}
+          where ${documents.entityType} = 'application'
+            and ${documents.entityId} = ${applications.id}
+            and ${documents.documentType} = 'photo'
+            and (${documents.uploadStatus} = 'uploaded' or ${documents.fileUrl} is not null)
+            and ${documents.metadata}->>'geotagStatus' = 'present'
+        )`,
+      )!,
+    )!,
+    and(
+      eq(applications.evidenceMethod, "boundary"),
+      isNull(applications.gisBoundaryReference),
+      sql`not exists (
+        select 1
+        from ${documents}
+        where ${documents.entityType} = 'application'
+          and ${documents.entityId} = ${applications.id}
+          and ${documents.documentType} = 'pdf'
+          and (${documents.uploadStatus} = 'uploaded' or ${documents.fileUrl} is not null)
+      )`,
+    )!,
+  );
+
   const [[facilityGps], [feedstockGps], [applicationGps]] = await Promise.all([
     db
       .select({ count: count() })
@@ -543,7 +575,7 @@ async function loadGpsGapCounts(facilityId: string) {
         and(
           eq(deliveries.facilityId, facilityId),
           isNull(deliveries.archivedAt),
-          or(isNull(applications.gpsLatitude), isNull(applications.gpsLongitude)),
+          applicationEvidenceGap,
         ),
       ),
   ]);

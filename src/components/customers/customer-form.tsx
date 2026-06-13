@@ -15,6 +15,7 @@ import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { InfoHint } from "@/components/ui/tooltip";
 import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-dialog";
 
 // ============================================
@@ -543,9 +544,15 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       </div>
 
       <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-distance" className="label-medium">
-          Distance from facility (km)
-        </label>
+        <div className="flex items-center gap-6">
+          <label htmlFor="pending-loc-distance" className="label-medium">
+            Distance from facility (km)
+          </label>
+          <InfoHint side="top" label="More about distance from facility">
+            Road distance from the facility to the site. Used for the biochar
+            distribution transport leg in certification.
+          </InfoHint>
+        </div>
         <input
           id="pending-loc-distance"
           type="number"
@@ -561,10 +568,6 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
           placeholder="e.g., 120"
           className={INPUT_CLASS}
         />
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Road distance facility → site. Auto-fills the biochar distribution
-          transport leg used for certification.
-        </p>
       </div>
 
       <label htmlFor="pending-loc-default" className="flex items-center gap-12 cursor-pointer">

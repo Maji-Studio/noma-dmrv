@@ -41,7 +41,11 @@ export function FormActions({
       className={cn(
         "flex items-center justify-start gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
-          ? "sticky bottom-0 -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
+          // `mt-auto!` pins the row to the bottom of a fill-height flex-column
+          // form on short forms (overriding the form's `space-y` margin); on
+          // long forms there is no free space, so `sticky bottom-0` keeps the
+          // CTA in view while the body scrolls.
+          ? "sticky bottom-0 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
           : "pt-20"
       )}
     >

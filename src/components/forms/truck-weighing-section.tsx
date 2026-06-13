@@ -88,11 +88,9 @@ export function TruckWeighingSection({
 
   return (
     <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-      <SectionLabel>Truck Weighing</SectionLabel>
-      <p className="body-small text-[var(--color-text-tertiary)]">
-        Weighbridge evidence for the wet mass: arrival - departure suggests the
-        unloaded mass.
-      </p>
+      <SectionLabel hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence.">
+        Truck Weighing
+      </SectionLabel>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField

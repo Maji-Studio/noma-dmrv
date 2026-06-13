@@ -159,6 +159,7 @@ function EntitySideSheet({
         <SlideOverPanel.Body
           className={isViewMode ? "flex flex-col gap-20" : undefined}
           noPaddingBottom={!isViewMode}
+          fillHeight={!isViewMode}
         >
           {isViewMode ? (
             <>
