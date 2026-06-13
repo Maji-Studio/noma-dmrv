@@ -266,3 +266,123 @@ export function buildBatchSankey(
     warnings,
   };
 }
+
+// ============================================
+// Facility-wide stage flow (dashboard custody ribbon, Phase 5)
+// ============================================
+
+/**
+ * Facility-wide dry-mass stage totals — already summed by the caller. Unlike
+ * `buildBatchSankey` there is no lineage walk: dashboard scale means "every
+ * run / lot / application at the facility in the period", which the data
+ * layer aggregates in SQL instead of resolving N per-application rollbacks.
+ */
+export interface StageFlowTotals {
+  /** Sum of the runs' recorded feedstock input (dry kg). */
+  feedstockInKg: number;
+  /** Sum of the runs' biochar output (dry kg). */
+  runOutputKg: number;
+  /** Sum of the biochar lots' mass (kg). */
+  lotMassKg: number;
+  /** Sum of the applications' applied dry mass (kg). */
+  appliedKg: number;
+  counts: {
+    feedstocks: number;
+    productionRuns: number;
+    biocharLots: number;
+    applications: number;
+  };
+}
+
+/**
+ * The dashboard's custody-flow ribbon reading — the same honest mass-balance
+ * grammar as the batch Sankey (columns + explicit labeled exits, negative
+ * residuals clamped to a warning) computed from facility-wide stage totals.
+ * The batch-level ineligible-feedstock exit has no facility-period analogue,
+ * so the exits here are conversion loss, unbagged output, and in-storage.
+ */
+export function buildStageFlow(totals: StageFlowTotals): CreditBatchSankeyData {
+  const warnings: string[] = [];
+
+  const conversionLoss = residual(
+    totals.feedstockInKg,
+    totals.runOutputKg,
+    "Production-run biochar output exceeds the feedstock mass entering the runs.",
+  );
+  if (conversionLoss.warning) warnings.push(conversionLoss.warning);
+
+  const unallocated = residual(
+    totals.runOutputKg,
+    totals.lotMassKg,
+    "Biochar lot mass exceeds the production runs' recorded output.",
+  );
+  if (unallocated.warning) warnings.push(unallocated.warning);
+
+  const inStorage = residual(
+    totals.lotMassKg,
+    totals.appliedKg,
+    "Applied mass exceeds the biochar lots' recorded mass.",
+  );
+  if (inStorage.warning) warnings.push(inStorage.warning);
+
+  const exits: SankeyExit[] = [];
+  if (conversionLoss.value > EXIT_EPSILON_KG) {
+    exits.push({
+      key: "conversion_loss",
+      label: "Conversion loss",
+      fromColumn: "productionRuns",
+      massKg: conversionLoss.value,
+      tone: "loss",
+    });
+  }
+  if (unallocated.value > EXIT_EPSILON_KG) {
+    exits.push({
+      key: "unallocated_output",
+      label: "Not bagged into lots",
+      fromColumn: "productionRuns",
+      massKg: unallocated.value,
+      tone: "loss",
+    });
+  }
+  if (inStorage.value > EXIT_EPSILON_KG) {
+    exits.push({
+      key: "in_storage",
+      label: "In storage / undelivered",
+      fromColumn: "biocharLots",
+      massKg: inStorage.value,
+      tone: "loss",
+    });
+  }
+
+  return {
+    columns: [
+      {
+        key: "feedstock",
+        label: "Feedstock",
+        massKg: totals.feedstockInKg,
+        count: totals.counts.feedstocks,
+      },
+      {
+        key: "productionRuns",
+        label: "Production runs",
+        massKg: totals.runOutputKg,
+        count: totals.counts.productionRuns,
+      },
+      {
+        key: "biocharLots",
+        label: "Biochar lots",
+        massKg: totals.lotMassKg,
+        count: totals.counts.biocharLots,
+      },
+      {
+        key: "applied",
+        label: "Applied",
+        massKg: totals.appliedKg,
+        count: totals.counts.applications,
+      },
+    ],
+    exits,
+    netCo2eRemovalTons: null,
+    warnings,
+  };
+}

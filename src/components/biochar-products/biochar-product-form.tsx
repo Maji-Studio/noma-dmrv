@@ -479,8 +479,8 @@ export function BiocharProductForm({
       {/* Destination + Product Details */}
       <FormSection title="Destination & Product">
 
-        {/* Formulation drives the bin filter, so it comes first. Leaving it empty
-            produces a pure-biochar product and limits the bin list to pure bins. */}
+        {/* Formulation drives ingredient-bin rows and the destination bin filter.
+            Leaving it empty produces a pure-biochar product. */}
         <FormField
           id="formulationId"
           label="Formulation"
@@ -502,6 +502,9 @@ export function BiocharProductForm({
             )}
           />
         </FormField>
+
+        {/* Ingredient Bins */}
+        <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -555,9 +558,6 @@ export function BiocharProductForm({
           </FormField>
         </div>
       </FormSection>
-
-      {/* Ingredient Bins */}
-      <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
 
       </form>
 

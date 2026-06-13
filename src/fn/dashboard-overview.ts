@@ -5,24 +5,51 @@ import {
   getDashboardOverview,
   type DashboardOverview,
 } from "@/data-access/dashboard-overview";
+import { getUser } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
-import { withAction } from "./with-action";
 
-const dashboardOverviewInputSchema = z.object({
-  facilityId: z.string().uuid().nullable().optional(),
-  periodDays: z.number().int().min(1).max(365).optional(),
+const getDashboardOverviewSchema = z.object({
+  facilityId: z.uuid(),
+  range: z.enum(["30d", "ytd", "all"]).default("30d"),
 });
 
-export type DashboardOverviewInput = z.input<typeof dashboardOverviewInputSchema>;
+export type GetDashboardOverviewInput = z.input<typeof getDashboardOverviewSchema>;
 
-export async function loadDashboardOverview(
-  input?: DashboardOverviewInput,
+/**
+ * Facility dashboard overview: KPI strip, needs-attention queue, feedstock
+ * mix, and the custody-flow ribbon — one aggregate read per range selection.
+ */
+export async function getDashboardOverviewFn(
+  input: GetDashboardOverviewInput,
 ): Promise<ActionResult<DashboardOverview>> {
-  return withAction(async (userId) => {
-    const validated = dashboardOverviewInputSchema.parse(input ?? {});
-    return getDashboardOverview(userId, {
-      facilityId: validated.facilityId ?? null,
-      periodDays: validated.periodDays,
-    });
-  });
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = getDashboardOverviewSchema.parse(input);
+
+    const overview = await getDashboardOverview(
+      user.id,
+      validated.facilityId,
+      validated.range,
+    );
+
+    return { success: true, data: overview };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load the dashboard overview",
+    };
+  }
 }

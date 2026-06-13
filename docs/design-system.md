@@ -1341,6 +1341,13 @@ Rules:
   secondary (name or date). Sections inside sheets use `FormSection`
   (forms) / `DetailSection` (read-only) — see `docs/forms.md`.
 
+**The one sanctioned exception is the Dashboard** (visual design plan,
+Phase 5): it keeps the container/gap shell but opens with the mock's display
+headline (`title-heading-1` + `title-heading-1-thin` span under a mono
+eyebrow) instead of `PageHeader`, its 5-card KPI strip is `xl:grid-cols-5`,
+and those cards carry **sparklines instead of icons** (`StatCard`'s
+`sparkline` slot). No other page gets a display headline.
+
 ### PageHeader Component
 
 The canonical list-page shell header (visual design plan, Phase 2). Every
