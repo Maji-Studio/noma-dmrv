@@ -39,6 +39,7 @@ import {
   useChainOfCustody,
   useCreditBatchChain,
 } from "@/hooks/use-chain-of-custody";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   GRAPH_CANVAS_CLASS,
   GRAPH_CONTROLS_CLASS,
@@ -301,6 +302,11 @@ export function ChainOfCustodyPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // The page is facility-scoped like the rest of the (app) shell: the batch
+  // selector only offers the current facility's batches, and a selection that
+  // resolves to another facility (a facility switch, or a foreign deep link)
+  // is dropped below so the chain never renders out-of-facility provenance.
+  const { facilityId } = useFacilityContext();
   const selectedApplicationId = searchParams.get("application");
   const selectedBatchId = searchParams.get("batch");
   const selectedRunId = searchParams.get("run");
@@ -436,6 +442,38 @@ export function ChainOfCustodyPage() {
     const query = nextParams.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
+
+  // Drop a stale / foreign selection: once the batch or application resolves,
+  // if its facility no longer matches the selected facility, clear the URL
+  // anchor so the page falls back to the empty "select a batch" state rather
+  // than showing another facility's chain. Covers both a sidebar facility
+  // switch (the prior selection lingers in the URL) and a deep link into a
+  // batch that belongs elsewhere.
+  useEffect(() => {
+    if (!facilityId) return;
+    const loadedFacilityId =
+      anchor === "application"
+        ? chainData?.facility.id
+        : anchor === "batch"
+          ? batchData?.facility.id
+          : undefined;
+    if (!loadedFacilityId || loadedFacilityId === facilityId) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("application");
+    params.delete("batch");
+    params.delete("run");
+    params.delete("view");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [
+    facilityId,
+    anchor,
+    chainData?.facility.id,
+    batchData?.facility.id,
+    searchParams,
+    router,
+    pathname,
+  ]);
 
   const handleBatchChange = (creditBatchId: string | undefined) => {
     setSelection(null);
@@ -684,6 +722,7 @@ export function ChainOfCustodyPage() {
                   entityType="creditBatch"
                   value={anchor === "batch" ? (selectedBatchId ?? undefined) : undefined}
                   onChange={handleBatchChange}
+                  filterBy={facilityId ? { facilityId } : undefined}
                   placeholder="Search batch code"
                   alwaysShowSearch
                   className="bg-[var(--color-background-white)]"
