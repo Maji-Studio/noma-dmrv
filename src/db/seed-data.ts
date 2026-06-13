@@ -13,6 +13,11 @@ import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from './schema';
 import { getPgPoolConfig } from '../lib/pg-pool-config';
+import {
+  buildApplicationBoundaryDocuments,
+  buildProductionRunReadings,
+  buildSoilTemperatureMeasurements,
+} from './seed-certification-evidence';
 
 config({ path: '.env.local' });
 
@@ -144,6 +149,9 @@ const ids = {
   application1: demoId(2100),
   application2: demoId(2101),
   application3: demoId(2102),
+  applicationBoundaryDocument1: demoId(3100),
+  applicationBoundaryDocument2: demoId(3101),
+  applicationBoundaryDocument3: demoId(3102),
 
   // Credit Batches
   creditBatch1: demoId(2200),
@@ -855,6 +863,48 @@ async function seedDemoData() {
         },
       ]);
 
+      const productionRunReadingRows = buildProductionRunReadings([
+        {
+          idBase: 2500,
+          productionRunId: ids.productionRun1,
+          start: demoTimestamps.run1Start,
+          end: demoTimestamps.run1End,
+          temperatureStartC: 418,
+          temperaturePeakC: 566,
+          pressureStartBar: 0.07,
+          pressurePeakBar: 0.12,
+          gasStartRate: 0.18,
+          gasPeakRate: 0.31,
+        },
+        {
+          idBase: 2650,
+          productionRunId: ids.productionRun2,
+          start: demoTimestamps.run2Start,
+          end: demoTimestamps.run2End,
+          temperatureStartC: 406,
+          temperaturePeakC: 548,
+          pressureStartBar: 0.065,
+          pressurePeakBar: 0.105,
+          gasStartRate: 0.16,
+          gasPeakRate: 0.28,
+        },
+        {
+          idBase: 2800,
+          productionRunId: ids.productionRun3,
+          start: demoTimestamps.run3Start,
+          end: demoTimestamps.run3End,
+          temperatureStartC: 392,
+          temperaturePeakC: 526,
+          pressureStartBar: 0.06,
+          pressurePeakBar: 0.098,
+          gasStartRate: 0.145,
+          gasPeakRate: 0.255,
+        },
+      ]);
+
+      console.log(`Creating ${productionRunReadingRows.length} production run readings...`);
+      await tx.insert(schema.productionRunReadings).values(productionRunReadingRows);
+
       console.log('Creating samples...');
       await tx.insert(schema.samples).values([
         {
@@ -1369,6 +1419,75 @@ async function seedDemoData() {
         },
       ]);
 
+      const soilTemperatureRows = buildSoilTemperatureMeasurements([
+        {
+          idBase: 3000,
+          applicationId: ids.application1,
+          baselineMonth: '2026-05',
+          baseTemperatureC: 24.5,
+          gpsLatitude: -3.245,
+          gpsLongitude: 37.425,
+          fieldIdentifier: 'KILEMA-N-12',
+        },
+        {
+          idBase: 3020,
+          applicationId: ids.application2,
+          baselineMonth: '2026-05',
+          baseTemperatureC: 22.8,
+          gpsLatitude: -4.789,
+          gpsLongitude: 38.312,
+          fieldIdentifier: 'USAMBARA-E-1',
+        },
+        {
+          idBase: 3040,
+          applicationId: ids.application3,
+          baselineMonth: '2026-05',
+          baseTemperatureC: 25.2,
+          gpsLatitude: -3.289,
+          gpsLongitude: 37.198,
+          fieldIdentifier: 'MACHAME-S-8',
+        },
+      ]);
+
+      console.log(`Creating ${soilTemperatureRows.length} soil temperature measurements...`);
+      await tx.insert(schema.soilTemperatureMeasurements).values(soilTemperatureRows);
+
+      console.log('Creating application boundary evidence documents...');
+      await tx.insert(schema.documents).values(
+        buildApplicationBoundaryDocuments([
+          {
+            id: ids.applicationBoundaryDocument1,
+            applicationId: ids.application1,
+            applicationCode: 'AP-26-001',
+            capturedAt: demoTimestamps.application1Date,
+            fieldIdentifier: 'KILEMA-N-12',
+            boundaryReference: 'TZ-KLM-KILEMA-N12-2026',
+            fileName: 'AP-26-001-boundary-logbook.pdf',
+            fileSizeBytes: 184_320,
+          },
+          {
+            id: ids.applicationBoundaryDocument2,
+            applicationId: ids.application2,
+            applicationCode: 'AP-26-002',
+            capturedAt: demoTimestamps.application2Date,
+            fieldIdentifier: 'USAMBARA-E-1',
+            boundaryReference: 'TZ-TGA-LUSHOTO-E1-2026',
+            fileName: 'AP-26-002-boundary-logbook.pdf',
+            fileSizeBytes: 171_008,
+          },
+          {
+            id: ids.applicationBoundaryDocument3,
+            applicationId: ids.application3,
+            applicationCode: 'AP-26-003',
+            capturedAt: demoTimestamps.application3Date,
+            fieldIdentifier: 'MACHAME-S-8',
+            boundaryReference: 'TZ-KLM-MACHAME-S8-2026',
+            fileName: 'AP-26-003-boundary-logbook.pdf',
+            fileSizeBytes: 176_640,
+          },
+        ])
+      );
+
       console.log('Creating credit batches...');
       await tx.insert(schema.creditBatches).values([
         {
@@ -1433,8 +1552,8 @@ async function seedDemoData() {
 
       // Links the Moshi facility to the Isometric sandbox project +
       // Dark Earth Carbon Template, with the Phase 3.7 emission-estimate
-      // config seeded from the Sifuri Halisi LCA. Lets a freshly seeded
-      // DB submit to the sandbox without the manual link step.
+      // config seeded from the Sifuri Halisi LCA. The Isometric facility
+      // id stays operator-managed because it must come from Certify UI.
       console.log('Creating Isometric certifier project (Moshi)...');
       await tx.insert(schema.certifierProjects).values([
         {
@@ -1446,6 +1565,7 @@ async function seedDemoData() {
           stageSplitBiomassPct: 32.2,
           stageSplitPyrolysisPct: 58.5,
           stageSplitBiocharPct: 9.3,
+          defaultSoilTemperatureC: 24.2,
         },
       ]);
 
@@ -1578,12 +1698,12 @@ async function seedDemoData() {
     console.log('  - 2 Drivers, 2 Operators, 2 Vehicles');
     console.log('  - 9 Feedstock Types');
     console.log('  - 3 Feedstock Deliveries -> 3 Feedstocks');
-    console.log('  - 3 Production Runs -> 3 Samples');
+    console.log('  - 3 Production Runs -> 285 telemetry readings -> 3 Samples');
     console.log('  - 9 Transport Legs (3 feedstock, 3 biochar, 3 sample)');
     console.log('  - 3 Formulations');
     console.log('  - 3 Biochar Products');
     console.log('  - 3 Orders -> 3 Deliveries');
-    console.log('  - 3 Applications');
+    console.log('  - 3 Applications -> 30 soil temperature measurements + 3 boundary PDFs');
     console.log('  - 2 Credit Batches (1 with 3 linked applications)');
     console.log('  - 1 Isometric certifier project (Moshi, sandbox)');
     console.log('');
