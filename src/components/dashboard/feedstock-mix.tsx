@@ -44,7 +44,7 @@ export function FeedstockMix({ slices }: FeedstockMixProps) {
         ) : undefined
       }
     >
-      {slices.length === 0 ? (
+      {totalKg <= 0 ? (
         <EmptyState
           padding="md"
           icon={<Leaf size={32} />}
@@ -68,7 +68,8 @@ export function FeedstockMix({ slices }: FeedstockMixProps) {
                 <div
                   className="absolute inset-y-0 left-0"
                   style={{
-                    width: `${Math.max(slice.percent, 1)}%`,
+                    width:
+                      slice.percent > 0 ? `${Math.max(slice.percent, 1)}%` : 0,
                     background:
                       slice.feedstockTypeId == null
                         ? MIX_TAIL_ACCENT
