@@ -16,6 +16,7 @@ export interface TestFacility {
   code: string;
   name: string;
   location: string;
+  timezone: string;
 }
 
 export interface TestSupplier {
@@ -100,6 +101,7 @@ export async function createTestFacility(
       code: overrides.code || `E2E-FAC-${testId}`,
       name: overrides.name || `E2E Test Facility ${testId}`,
       location: overrides.location || "Test Location",
+      timezone: overrides.timezone || "UTC",
     };
 
     await db.insert(schema.facilities).values({
@@ -107,6 +109,7 @@ export async function createTestFacility(
       code: facility.code,
       name: facility.name,
       location: facility.location,
+      timezone: facility.timezone,
     });
 
     return facility;

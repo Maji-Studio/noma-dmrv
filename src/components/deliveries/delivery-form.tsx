@@ -215,7 +215,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         required={["deliveryDate", "orderId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message}>
+          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message} required>
             <FormInput
               id="deliveryDate"
               type="date"

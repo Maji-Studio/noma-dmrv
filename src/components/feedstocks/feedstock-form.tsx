@@ -9,8 +9,7 @@
 import { useEffect, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "@phosphor-icons/react";
-import { Calendar, MapPin, Plant, Truck, Stack, Note } from "@phosphor-icons/react/dist/ssr";
+import { Calendar, MapPin, Note, Plant, Plus, Stack, Truck } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";

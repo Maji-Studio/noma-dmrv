@@ -21,7 +21,7 @@ export default async function CertificationHomeRedirect({
       for (const entry of value) {
         params.append(key, entry);
       }
-    } else if (value) {
+    } else if (value !== undefined) {
       params.set(key, value);
     }
   }

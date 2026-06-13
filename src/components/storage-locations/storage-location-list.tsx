@@ -332,24 +332,41 @@ export function StorageLocationList() {
           title="Feedstock On Hand"
           value={formatMass(onHandByType.feedstock_bin ?? 0)}
           icon={<Leaf size={24} weight="bold" color="var(--acc-prod)" />}
-          description="Dry mass across feedstock bins"
+          description={
+            isTruncated
+              ? "Loaded dry mass across feedstock bins"
+              : "Dry mass across feedstock bins"
+          }
           isLoading={isLoading}
         />
         <StatCard
           title="Biochar On Hand"
           value={formatMass(onHandByType.biochar_bin ?? 0)}
           icon={<Cube size={24} weight="bold" color="var(--acc-infra)" />}
-          description="Unallocated biochar in store"
+          description={
+            isTruncated
+              ? "Loaded unallocated biochar in store"
+              : "Unallocated biochar in store"
+          }
           isLoading={isLoading}
         />
         <StatCard
           title="Product On Hand"
           value={formatMass(onHandByType.product_bin ?? 0)}
           icon={<Package size={24} weight="bold" color="var(--acc-dist)" />}
-          description="Packed product ready to ship"
+          description={
+            isTruncated
+              ? "Loaded packed product ready to ship"
+              : "Packed product ready to ship"
+          }
           isLoading={isLoading}
         />
       </div>
+      {isTruncated && (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          Inventory totals and lane totals reflect the first {storageLocations.length} loaded bins.
+        </p>
+      )}
 
       <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <div className="flex flex-col gap-12 md:flex-row md:items-center md:justify-between">
@@ -426,7 +443,7 @@ export function StorageLocationList() {
                     </span>
                   </div>
                   <span className="shrink-0 body-caption text-[var(--color-text-tertiary)]">
-                    {formatMass(lane.onHandKg)} on hand
+                    {formatMass(lane.onHandKg)} {isTruncated ? "loaded" : ""} on hand
                   </span>
                 </div>
 

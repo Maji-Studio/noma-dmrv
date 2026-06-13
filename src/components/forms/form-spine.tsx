@@ -281,9 +281,22 @@ export function FormSpine({ control, children, className }: FormSpineProps) {
     [looseControl],
   );
 
+  const flattenChildren = (nodes: React.ReactNode): React.ReactNode[] =>
+    React.Children.toArray(nodes).flatMap((child) => {
+      if (
+        React.isValidElement(child) &&
+        child.type === React.Fragment
+      ) {
+        return flattenChildren(
+          (child.props as { children?: React.ReactNode }).children
+        );
+      }
+      return [child];
+    });
+
   // Count the spine sections that will actually render (falsy/hidden children
   // are skipped by React.Children), then inject contiguous index/first/last.
-  const childArray = React.Children.toArray(children);
+  const childArray = flattenChildren(children);
   const isSection = (c: React.ReactNode): c is React.ReactElement =>
     React.isValidElement(c) &&
     Boolean((c.type as { [SPINE_SECTION_TAG]?: boolean })?.[SPINE_SECTION_TAG]);
