@@ -51,6 +51,8 @@ function buildDocumentMetadata(input: {
   }
 
   return {
+    // Certification readiness uses this generated metadata to identify
+    // application photos that carry both timestamp and GPS EXIF.
     geotagStatus: missingExif.length === 0 ? "present" : "missing",
     missingExif,
     exif: {

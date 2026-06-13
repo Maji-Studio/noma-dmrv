@@ -120,16 +120,15 @@ export function TransportLegForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-20">
-      <p className="body-small text-[var(--color-text-secondary)]">
-        Distance-based leg: we record distance + cargo mass; Isometric applies the
-        emission factor (Transportation v1.1 Eq. 3).
-      </p>
-
       {errors.root?.serverError?.message && (
         <ServerError message={errors.root.serverError.message} />
       )}
 
-      <FormSection title="Route" divider={false}>
+      <FormSection
+        title="Route"
+        divider={false}
+        hint="We record distance and cargo mass; Isometric applies the transport emissions factor."
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <FormField
             id="originName"
@@ -214,7 +213,7 @@ export function TransportLegForm({
             id="distanceSource"
             label="Distance source"
             error={errors.distanceSource?.message}
-            helperText="Mark as Document when the distance comes from the bill of lading or weigh ticket."
+            helperText="Use Document when the distance comes from shipping evidence."
           >
             <FormSelect
               id="distanceSource"
@@ -241,7 +240,7 @@ export function TransportLegForm({
             label="Load mass (kg)"
             required
             error={errors.loadMassKg?.message}
-            helperText="Cargo mass moved on this leg (Eq. 3, W_j). Required so the Certify aggregator can mass-weight distance."
+            helperText="Mass moved on this leg. Used to weight transport emissions."
             certifyRequired={isTransportLegCertifyField("loadMassKg")}
           >
             <FormInput
