@@ -436,7 +436,7 @@ export function StorageLocationList() {
                     No {meta.label.toLowerCase()} bins
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-16">
+                  <div className="grid gap-16 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] lg:grid-cols-1">
                     {lane.bins.map((bin) => (
                       <StorageLocationCard
                         key={bin.id}

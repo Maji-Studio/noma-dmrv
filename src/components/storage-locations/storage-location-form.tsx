@@ -1,6 +1,6 @@
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useForm, useWatch } from "react-hook-form";
@@ -157,7 +157,7 @@ export function StorageLocationForm({
             placeholder="e.g., 5000"
             disabled={isSubmitting}
             error={!!errors.capacityKg}
-            {...register("capacityKg", { setValueAs: numericValue })}
+            {...register("capacityKg", { setValueAs: nullableNumericValue })}
           />
         </FormField>
 
