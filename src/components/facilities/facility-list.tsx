@@ -34,6 +34,7 @@ import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   FacilityCertifierLinkLoader,
   FacilityCertifierSummary,
@@ -66,6 +67,7 @@ export function FacilityList() {
   >(null);
 
   const isAdmin = useIsAdmin();
+  const { setFacilityId } = useFacilityContext();
 
   const filters: Partial<FacilityFilterData> = useMemo(
     () => ({
@@ -106,6 +108,7 @@ export function FacilityList() {
     setCreateError(null);
     try {
       const facility = await createFacility.mutateAsync(data);
+      setFacilityId(facility.id);
       setSideSheet(null);
       toast.success("Facility created successfully");
       // Offer the optional certifier link for the new facility. Admin-only

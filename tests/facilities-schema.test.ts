@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createFacilitySchema,
   facilityFormSchema,
   updateFacilitySchema,
 } from "@/schemas/facilities";
@@ -34,6 +35,56 @@ describe("facility schemas", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("rejects a facility create with only one GPS coordinate", () => {
+    const result = createFacilitySchema.safeParse({
+      ...baseFacilityInput,
+      timezone: "Africa/Nairobi",
+      gpsLatitude: -3.3349,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["gpsLatitude"],
+            message: "Both latitude and longitude must be provided together",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("allows clearing both GPS coordinates through the update action", () => {
+    const result = updateFacilitySchema.safeParse({
+      facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      gpsLatitude: null,
+      gpsLongitude: null,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects clearing only one GPS coordinate through the update action", () => {
+    const result = updateFacilitySchema.safeParse({
+      facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      gpsLatitude: null,
+      gpsLongitude: 37.3404,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["gpsLatitude"],
+            message: "Both latitude and longitude must be provided together",
+          }),
+        ]),
+      );
+    }
   });
 
   it("does not allow clearing timezone through the update action", () => {

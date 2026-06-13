@@ -530,8 +530,8 @@ export function ApplicationForm({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
-            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
