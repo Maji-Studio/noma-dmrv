@@ -45,6 +45,15 @@ function round(value: number): number {
   return Number(value.toFixed(COORD_DECIMALS));
 }
 
+function mapPoint(
+  latitude: number | null,
+  longitude: number | null,
+): [number, number] | null {
+  if (latitude == null || longitude == null) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  return [longitude, latitude];
+}
+
 export interface PositionPickerMapProps {
   latitude: number | null;
   longitude: number | null;
@@ -85,10 +94,10 @@ export default function PositionPickerMap({
     const container = containerRef.current;
     if (!container || !MAPTILER_KEY) return;
 
-    const initial =
-      latitude != null && longitude != null
-        ? { center: [longitude, latitude] as [number, number], zoom: FOCUSED_MAP_ZOOM }
-        : { center: DEFAULT_MAP_CENTER, zoom: DEFAULT_MAP_ZOOM };
+    const initialPoint = mapPoint(latitude, longitude);
+    const initial = initialPoint
+      ? { center: initialPoint, zoom: FOCUSED_MAP_ZOOM }
+      : { center: DEFAULT_MAP_CENTER, zoom: DEFAULT_MAP_ZOOM };
 
     let map: maplibregl.Map;
     try {
@@ -151,13 +160,13 @@ export default function PositionPickerMap({
     const map = mapRef.current;
     if (!map) return;
 
-    if (latitude == null || longitude == null) {
+    const lngLat = mapPoint(latitude, longitude);
+    if (!lngLat) {
       markerRef.current?.remove();
       markerRef.current = null;
       return;
     }
 
-    const lngLat: [number, number] = [longitude, latitude];
     if (!markerRef.current) {
       const marker = new maplibregl.Marker({
         element: createMarkerElement(accent),
