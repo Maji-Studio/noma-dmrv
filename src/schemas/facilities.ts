@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { latitudeSchema, longitudeSchema } from "./helpers";
+import {
+  GPS_PAIR_MESSAGE,
+  hasCompleteGpsPair,
+  latitudeSchema,
+  longitudeSchema,
+} from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -142,7 +147,7 @@ export const contactPhoneSchema = z
  * Schema for facility form (client-side validation)
  * Used in FacilityForm component for creating/editing facilities
  */
-export const facilityFormSchema = z.object({
+const facilityFormBaseSchema = z.object({
   // Required fields
   name: z
     .string()
@@ -170,6 +175,14 @@ export const facilityFormSchema = z.object({
     z.enum(timezones, { message: "Timezone is required" })
   ),
 });
+
+export const facilityFormSchema = facilityFormBaseSchema.refine(
+  hasCompleteGpsPair,
+  {
+    message: GPS_PAIR_MESSAGE,
+    path: ["gpsLatitude"],
+  }
+);
 
 // ============================================
 // Server Action Schemas
@@ -204,13 +217,9 @@ export const updateFacilitySchema = z.object({
   defaultDurabilityOption: z.enum(durabilityOptions).optional(),
   timezone: z.enum(timezones).optional(),
 }).refine(
-  (data) => {
-    const hasLat = data.gpsLatitude != null;
-    const hasLng = data.gpsLongitude != null;
-    return hasLat === hasLng;
-  },
+  hasCompleteGpsPair,
   {
-    message: "Both latitude and longitude must be provided together",
+    message: GPS_PAIR_MESSAGE,
     path: ["gpsLatitude"],
   }
 );
@@ -312,13 +321,9 @@ export const gpsCoordinatesRefinement = z
     gpsLongitude: longitudeSchema,
   })
   .refine(
-    (data) => {
-      const hasLat = data.gpsLatitude != null;
-      const hasLng = data.gpsLongitude != null;
-      return hasLat === hasLng;
-    },
+    hasCompleteGpsPair,
     {
-      message: "Both latitude and longitude must be provided together",
+      message: GPS_PAIR_MESSAGE,
       path: ["gpsCoordinates"],
     }
   );
@@ -326,17 +331,7 @@ export const gpsCoordinatesRefinement = z
 /**
  * Extended facility form schema with GPS validation
  */
-export const facilityFormSchemaWithGpsValidation = facilityFormSchema.refine(
-  (data) => {
-    const hasLat = data.gpsLatitude != null;
-    const hasLng = data.gpsLongitude != null;
-    return hasLat === hasLng;
-  },
-  {
-    message: "Both latitude and longitude must be provided together",
-    path: ["gpsLatitude"],
-  }
-);
+export const facilityFormSchemaWithGpsValidation = facilityFormSchema;
 
 /**
  * Quick-add facility schema for inline facility creation

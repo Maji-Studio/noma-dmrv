@@ -10,6 +10,7 @@ import {
   orders,
   facilities,
   customers,
+  applications,
   biocharProducts,
   drivers,
   vehicles,
@@ -792,6 +793,17 @@ export async function deleteDelivery(
 
   if (!existing) {
     throw new SafeError("Delivery not found");
+  }
+
+  const [{ value: applicationCount }] = await db
+    .select({ value: count() })
+    .from(applications)
+    .where(eq(applications.deliveryId, deliveryId));
+
+  if (Number(applicationCount) > 0) {
+    throw new SafeError(
+      "Cannot delete delivery with applications. Remove the applications first."
+    );
   }
 
   await db.delete(deliveries).where(eq(deliveries.id, deliveryId));

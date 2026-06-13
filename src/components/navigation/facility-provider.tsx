@@ -7,7 +7,7 @@
 
 import { type ReactNode, useEffect, useMemo } from "react";
 import { useQueryState, parseAsString } from "nuqs";
-import { useFacilities } from "@/hooks/use-facilities";
+import { useFacilities, useFacility } from "@/hooks/use-facilities";
 import { FacilityContext, type FacilityContextValue } from "@/hooks/use-facility-context";
 
 const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
@@ -50,6 +50,20 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
   // Keep within schema limit (max 100) so the sidebar facilities query does not fail.
   const { data: facilitiesData, isLoading, isError } = useFacilities({ pageSize: 100 });
   const facilities = useMemo(() => facilitiesData?.items ?? [], [facilitiesData]);
+  const hasFacilityInList = facilityId
+    ? facilities.some((facility) => facility.id === facilityId)
+    : false;
+  const shouldLoadSelectedFacility = Boolean(
+    facilityId && !hasFacilityInList && !isLoading
+  );
+  const {
+    data: selectedFacilityById,
+    isLoading: isSelectedFacilityLoading,
+  } = useFacility(facilityId ?? "", shouldLoadSelectedFacility);
+  const selectedFacilityFromLookup =
+    selectedFacilityById && selectedFacilityById.archivedAt == null
+      ? selectedFacilityById
+      : undefined;
 
   // Resolve facility selection from URL -> localStorage -> first facility.
   useEffect(() => {
@@ -65,9 +79,16 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const hasFacilityInList = facilityId
-      ? facilities.some((facility) => facility.id === facilityId)
-      : false;
+    if (facilityId && !hasFacilityInList) {
+      if (isSelectedFacilityLoading) {
+        return;
+      }
+
+      if (selectedFacilityFromLookup) {
+        writeStoredFacilityId(facilityId);
+        return;
+      }
+    }
 
     let nextFacilityId = hasFacilityInList ? facilityId : null;
 
@@ -85,14 +106,27 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     }
 
     writeStoredFacilityId(nextFacilityId);
-  }, [isLoading, facilities, facilityId, setFacilityId]);
+  }, [
+    isLoading,
+    facilities,
+    facilityId,
+    hasFacilityInList,
+    isSelectedFacilityLoading,
+    selectedFacilityFromLookup,
+    setFacilityId,
+  ]);
 
-  const hasSelectedFacility = facilityId
-    ? facilities.some((facility) => facility.id === facilityId)
-    : false;
+  const hasSelectedFacility =
+    hasFacilityInList || Boolean(facilityId && selectedFacilityFromLookup);
   const resolvedFacilityId =
     hasSelectedFacility ? facilityId : facilities[0]?.id ?? null;
-  const selectedFacility = facilities.find((f) => f.id === resolvedFacilityId);
+  const selectedFacility =
+    facilities.find((f) => f.id === resolvedFacilityId) ??
+    selectedFacilityFromLookup;
+  const availableFacilities =
+    selectedFacilityFromLookup && !hasFacilityInList
+      ? [selectedFacilityFromLookup, ...facilities]
+      : facilities;
 
   const value: FacilityContextValue = {
     facilityId: resolvedFacilityId,
@@ -100,9 +134,9 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
       writeStoredFacilityId(id);
       void setFacilityId(id);
     },
-    facilities,
+    facilities: availableFacilities,
     selectedFacility,
-    isLoading,
+    isLoading: isLoading || isSelectedFacilityLoading,
     isError,
   };
 
