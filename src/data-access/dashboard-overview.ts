@@ -130,7 +130,7 @@ interface DatedValue {
 
 function inCurrentPeriod(ms: number, bounds: RangeBounds, allStartMs: number) {
   const start = bounds.startMs ?? allStartMs;
-  return ms >= start;
+  return ms >= start && ms <= bounds.nowMs;
 }
 
 function inPreviousPeriod(ms: number, bounds: RangeBounds) {
@@ -146,6 +146,7 @@ function bucketSeries(
   const series = new Array<number>(SERIES_BUCKETS).fill(0);
   const span = Math.max(1, endMs - startMs);
   for (const point of points) {
+    if (point.ms < startMs || point.ms > endMs) continue;
     const index = Math.min(
       SERIES_BUCKETS - 1,
       Math.max(0, Math.floor(((point.ms - startMs) / span) * SERIES_BUCKETS)),
@@ -303,14 +304,31 @@ export async function getDashboardOverview(
   );
   const previousRuns = runPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
 
+  const currentFeedstockRuns = currentRuns.filter(
+    (p) => p.row.feedstockMassDryKg != null,
+  );
+  const previousFeedstockRuns = previousRuns.filter(
+    (p) => p.row.feedstockMassDryKg != null,
+  );
+  const currentOutputRuns = currentRuns.filter(
+    (p) => p.row.biocharDryMassKg != null,
+  );
+  const previousOutputRuns = previousRuns.filter(
+    (p) => p.row.biocharDryMassKg != null,
+  );
+
   const feedstockInCurrentKg = sum(
-    currentRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
+    currentFeedstockRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
   );
   const feedstockInPreviousKg = sum(
-    previousRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
+    previousFeedstockRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
   );
-  const outputCurrentKg = sum(currentRuns.map((p) => p.row.biocharDryMassKg ?? 0));
-  const outputPreviousKg = sum(previousRuns.map((p) => p.row.biocharDryMassKg ?? 0));
+  const outputCurrentKg = sum(
+    currentOutputRuns.map((p) => p.row.biocharDryMassKg ?? 0),
+  );
+  const outputPreviousKg = sum(
+    previousOutputRuns.map((p) => p.row.biocharDryMassKg ?? 0),
+  );
 
   // Yield only counts runs that recorded both sides of the conversion.
   const yieldRuns = currentRuns.filter(
@@ -345,11 +363,17 @@ export async function getDashboardOverview(
     inCurrentPeriod(p.ms, bounds, allStartMs),
   );
   const previousBatches = batchPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
+  const currentStoredBatches = currentBatches.filter(
+    (p) => p.row.totalCo2eStoredTons != null,
+  );
+  const previousStoredBatches = previousBatches.filter(
+    (p) => p.row.totalCo2eStoredTons != null,
+  );
   const storedCurrentTons = sum(
-    currentBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
+    currentStoredBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
   );
   const storedPreviousTons = sum(
-    previousBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
+    previousStoredBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
   );
 
   const yieldSeriesIn = bucketSeries(
@@ -368,37 +392,46 @@ export async function getDashboardOverview(
       key: "feedstockProcessed",
       label: "Feedstock processed",
       unit: "t",
-      value: currentRuns.length > 0 ? feedstockInCurrentKg / 1000 : null,
+      value:
+        currentFeedstockRuns.length > 0 ? feedstockInCurrentKg / 1000 : null,
       deltaPercent:
-        range === "all"
+        range === "all" || currentFeedstockRuns.length === 0
           ? null
           : deltaPercent(feedstockInCurrentKg, feedstockInPreviousKg),
       series: bucketSeries(
-        currentRuns.map((p) => ({
+        currentFeedstockRuns.map((p) => ({
           ms: p.ms,
           value: (p.row.feedstockMassDryKg ?? 0) / 1000,
         })),
         seriesStartMs,
         bounds.nowMs,
       ),
-      detail: `dry mass into ${currentRuns.length} ${currentRuns.length === 1 ? "run" : "runs"}`,
+      detail:
+        currentFeedstockRuns.length > 0
+          ? `dry mass into ${currentFeedstockRuns.length} ${currentFeedstockRuns.length === 1 ? "run" : "runs"}`
+          : "no measured runs in period",
     },
     {
       key: "biocharProduced",
       label: "Biochar produced",
       unit: "t",
-      value: currentRuns.length > 0 ? outputCurrentKg / 1000 : null,
+      value: currentOutputRuns.length > 0 ? outputCurrentKg / 1000 : null,
       deltaPercent:
-        range === "all" ? null : deltaPercent(outputCurrentKg, outputPreviousKg),
+        range === "all" || currentOutputRuns.length === 0
+          ? null
+          : deltaPercent(outputCurrentKg, outputPreviousKg),
       series: bucketSeries(
-        currentRuns.map((p) => ({
+        currentOutputRuns.map((p) => ({
           ms: p.ms,
           value: (p.row.biocharDryMassKg ?? 0) / 1000,
         })),
         seriesStartMs,
         bounds.nowMs,
       ),
-      detail: "dry mass out of the reactors",
+      detail:
+        currentOutputRuns.length > 0
+          ? "dry mass out of the reactors"
+          : "no measured runs in period",
     },
     {
       key: "pyrolysisYield",
@@ -443,25 +476,33 @@ export async function getDashboardOverview(
       key: "co2eStored",
       label: "CO₂e stored",
       unit: "t",
-      value: currentBatches.length > 0 ? storedCurrentTons : null,
+      value: currentStoredBatches.length > 0 ? storedCurrentTons : null,
       deltaPercent:
-        range === "all" ? null : deltaPercent(storedCurrentTons, storedPreviousTons),
+        range === "all" || currentStoredBatches.length === 0
+          ? null
+          : deltaPercent(storedCurrentTons, storedPreviousTons),
       series: bucketSeries(
-        currentBatches.map((p) => ({
+        currentStoredBatches.map((p) => ({
           ms: p.ms,
           value: p.row.totalCo2eStoredTons ?? 0,
         })),
         seriesStartMs,
         bounds.nowMs,
       ),
-      detail: `${currentBatches.length} ${currentBatches.length === 1 ? "credit batch" : "credit batches"}`,
+      detail:
+        currentStoredBatches.length > 0
+          ? `${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
+          : "no verified storage in period",
     },
   ];
 
   // ---- feedstock mix --------------------------------------------------------
 
   const mixFeedstocks = feedstockPoints.filter(
-    (p) => p.ms == null || inCurrentPeriod(p.ms, bounds, allStartMs),
+    (p) =>
+      p.ms == null
+        ? bounds.startMs == null
+        : inCurrentPeriod(p.ms, bounds, allStartMs),
   );
   const mixByType = new Map<string, DashboardFeedstockMixSlice>();
   for (const { row } of mixFeedstocks) {

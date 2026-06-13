@@ -2,7 +2,7 @@
  * CheckRow — one row of a certification checklist (icon · label · detail · fix
  * link). Shared by the removal-level requirements shown on the wizard's
  * confirm-&-submit step (`new-removal-dialog/submit-step.tsx`) and the
- * batch-level health panel (`credit-batches/credit-batch-health-panel.tsx`) so
+ * batch-level health strip (`credit-batches/credit-batch-health-strip.tsx`) so
  * the two surfaces can never disagree on how a met/unmet/skipped check renders.
  * Both feed status unions structurally equal to `CheckStatus`.
  */
@@ -37,7 +37,7 @@ interface CheckRowProps {
   detail?: string | null;
   /** First row omits the top divider. */
   isFirst: boolean;
-  /** Horizontal padding — requirements step uses 16, the health panel 20. */
+  /** Horizontal padding — requirements step uses 16, the health strip 20. */
   paddingX?: 16 | 20;
   /** Standard "fix this" link, rendered when present. */
   fix?: FixLink | null;
