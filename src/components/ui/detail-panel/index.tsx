@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -90,15 +91,17 @@ interface DetailFieldProps {
   label: string;
   value: React.ReactNode;
   className?: string;
+  certifyRequired?: boolean;
 }
 
-function DetailField({ label, value, className }: DetailFieldProps) {
+function DetailField({ label, value, className, certifyRequired }: DetailFieldProps) {
   const displayValue = value === null || value === undefined || value === "" ? "—" : value;
 
   return (
     <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>
-      <span className="body-small text-[var(--color-text-secondary)]">
+      <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
         {label}
+        {certifyRequired && <CertificationFieldTag />}
       </span>
       <span className="body-medium font-medium text-[var(--color-text-primary)]">
         {displayValue}
@@ -115,6 +118,7 @@ DetailField.displayName = "DetailField";
 export interface DetailPanelField {
   label: string;
   value: React.ReactNode;
+  certifyRequired?: boolean;
 }
 
 export interface DetailPanelSection {
@@ -166,6 +170,7 @@ function EntityDetailPanel({
                       key={`${rowIdx}-${fieldIdx}`}
                       label={field.label}
                       value={field.value}
+                      certifyRequired={field.certifyRequired}
                     />
                   ))}
                 </DetailRow>

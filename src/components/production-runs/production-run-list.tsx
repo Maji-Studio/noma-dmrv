@@ -45,6 +45,7 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
@@ -467,19 +468,20 @@ export function ProductionRunList() {
           {
             title: "Output",
             fields: [
-              { label: "Total Feedstock Mass", value: sideSheetEntity.totalFeedstockMassKg != null ? `${sideSheetEntity.totalFeedstockMassKg.toLocaleString()} kg` : null },
-              { label: "Biochar Wet Mass", value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
-              { label: "Biochar Moisture", value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
+              { label: "Feedstock Wet Mass", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
+              { label: "Feedstock Moisture", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
+              { label: "Biochar Wet Mass", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
+              { label: "Biochar Moisture", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
               { label: "Biochar Dry Mass", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
             ],
           },
           {
             title: "Energy",
             fields: [
-              { label: "Diesel Operation", value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
-              { label: "Diesel Genset", value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
-              { label: "Preprocessing Fuel", value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
-              { label: "Electricity", value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
+              { label: "Diesel Operation", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
+              { label: "Diesel Genset", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
+              { label: "Preprocessing Fuel", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
+              { label: "Electricity", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
             ],
           },
           {
