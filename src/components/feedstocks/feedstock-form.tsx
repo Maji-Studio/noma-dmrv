@@ -432,6 +432,8 @@ export function FeedstockForm({
           })}
           arrivalError={errors.truckMassOnArrivalKg?.message}
           departureError={errors.truckMassOnDepartureKg?.message}
+          arrivalCertifyRequired={isFeedstockCertifyField("truckMassOnArrivalKg")}
+          departureCertifyRequired={isFeedstockCertifyField("truckMassOnDepartureKg")}
           isSubmitting={isSubmitting}
         />
 

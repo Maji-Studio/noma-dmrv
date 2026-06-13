@@ -32,6 +32,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -467,16 +468,18 @@ export function SampleList() {
             title: "Carbon Analysis",
             fields: [
               { label: "Total Carbon", value: displaySideSheet.entity.totalCarbonPercent != null ? `${displaySideSheet.entity.totalCarbonPercent.toFixed(1)}%` : null },
-              { label: "Organic Carbon", value: displaySideSheet.entity.organicCarbonPercent != null ? `${displaySideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
+              { label: "Organic Carbon", ...certificationDetailField("sample", "organicCarbonPercent"), value: displaySideSheet.entity.organicCarbonPercent != null ? `${displaySideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
               { label: "Inorganic Carbon", value: displaySideSheet.entity.inorganicCarbonPercent != null ? `${displaySideSheet.entity.inorganicCarbonPercent.toFixed(1)}%` : null },
-              { label: "H:Corg Ratio", value: displaySideSheet.entity.hToCOrgRatio != null ? displaySideSheet.entity.hToCOrgRatio.toFixed(3) : null },
+              { label: "H:Corg Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio != null ? displaySideSheet.entity.hToCOrgRatio.toFixed(3) : null },
             ],
           },
           {
             title: "Durability",
             fields: [
               { label: "Durability Option", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
-              { label: "Random Reflectance R0", value: displaySideSheet.entity.randomReflectanceR0Percent != null ? `${displaySideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
+              { label: "Random Reflectance R0", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: displaySideSheet.entity.randomReflectanceR0Percent != null ? `${displaySideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
+              { label: "Reactive Carbon", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: displaySideSheet.entity.reactiveCarbonPercent != null ? `${displaySideSheet.entity.reactiveCarbonPercent.toFixed(1)}%` : null },
+              { label: "Residual Carbon", ...certificationDetailField("sample", "residualCarbonPercent"), value: displaySideSheet.entity.residualCarbonPercent != null ? `${displaySideSheet.entity.residualCarbonPercent.toFixed(1)}%` : null },
             ],
           },
           {

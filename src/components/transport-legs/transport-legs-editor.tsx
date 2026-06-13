@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -160,9 +161,19 @@ export function TransportLegsEditor({
             <thead>
               <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
                 <th className="py-8 pr-12 font-medium">Route</th>
-                <th className="py-8 pr-12 font-medium">Distance</th>
+                <th className="py-8 pr-12 font-medium">
+                  <span className="flex items-center gap-6">
+                    Distance
+                    <CertificationFieldTag />
+                  </span>
+                </th>
                 <th className="py-8 pr-12 font-medium">Method</th>
-                <th className="py-8 pr-12 font-medium">Load</th>
+                <th className="py-8 pr-12 font-medium">
+                  <span className="flex items-center gap-6">
+                    Load
+                    <CertificationFieldTag />
+                  </span>
+                </th>
                 {!readOnly && <th className="py-8 font-medium text-right">Actions</th>}
               </tr>
             </thead>

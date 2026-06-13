@@ -35,6 +35,7 @@ import {
   formatApplicationMethod,
   type ApplicationMethod,
 } from "@/schemas/applications";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 
 // ============================================
 // Column Definitions
@@ -358,12 +359,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             fields: [
               {
                 label: "Biochar Applied",
+                ...certificationDetailField("application", "biocharAppliedTons"),
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
               },
               {
                 label: "Biochar Applied Dry",
+                ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
                   : null,
@@ -383,6 +386,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 label: "Application Method",
                 value: sideSheetEntity.applicationMethodType
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
+                  : null,
+              },
+              {
+                label: "Soil Temperature",
+                ...certificationDetailField("application", "soilTemperatureC"),
+                value: sideSheetEntity.soilTemperatureC != null
+                  ? `${sideSheetEntity.soilTemperatureC} °C`
                   : null,
               },
               { label: "Crop Type", value: sideSheetEntity.cropType },

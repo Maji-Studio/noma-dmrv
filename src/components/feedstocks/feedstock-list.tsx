@@ -19,6 +19,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
@@ -457,6 +458,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               { label: "Category", value: sideSheetEntity.feedstockTypeCategory ? <span className="capitalize">{sideSheetEntity.feedstockTypeCategory}</span> : null },
               {
                 label: "Wet Mass",
+                ...certificationDetailField("feedstock", "massWetKg"),
                 value: sideSheetEntity.massWetKg !== null
                   ? formatMass(sideSheetEntity.massWetKg)
                   : <StatusBadge status="pending" label="Missing" size="small" />,
@@ -476,12 +478,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             fields: [
               {
                 label: "Before unloading",
+                ...certificationDetailField("feedstock", "truckMassOnArrivalKg"),
                 value: sideSheetEntity.truckMassOnArrivalKg !== null
                   ? formatMass(sideSheetEntity.truckMassOnArrivalKg)
                   : null,
               },
               {
                 label: "After unloading",
+                ...certificationDetailField("feedstock", "truckMassOnDepartureKg"),
                 value: sideSheetEntity.truckMassOnDepartureKg !== null
                   ? formatMass(sideSheetEntity.truckMassOnDepartureKg)
                   : null,
