@@ -29,6 +29,12 @@ describe("parseReactorDayCsv", () => {
 
     expect(result.fileReactorCode).toBe("TZ001B");
     expect(result.fileDate).toBe("2026-04-02");
+    expect(result.replacementWindowStart).toEqual(
+      new Date("2026-04-01T21:00:00.000Z"),
+    );
+    expect(result.replacementWindowEnd).toEqual(
+      new Date("2026-04-01T21:02:00.000Z"),
+    );
     expect(result.parsedRows).toBe(3);
     expect(result.inWindowRows).toBe(2);
     expect(result.droppedRows).toBe(1);
@@ -74,6 +80,55 @@ describe("parseReactorDayCsv", () => {
       gasFlow: "Main Gas Flow",
     });
     expect(result.warnings).toEqual([]);
+  });
+
+  it("rejects a file whose filename reactor does not match the selected run", () => {
+    const csv = [
+      "Time,Carbonization Outlet Temperature,Drying Drum Pressure",
+      "00:00:00,500,0.12",
+    ].join("\n");
+
+    expect(() =>
+      inspectReactorDayCsv({
+        fileName: "TZ999Z 2026-04-02 Data Evaluation.csv",
+        csvText: csv,
+        runReactorCode: "TZ001B",
+      }),
+    ).toThrow(
+      "Filename reactor TZ999Z does not match selected run reactor TZ001B.",
+    );
+  });
+
+  it("clips replacement to the reactor-day overlap instead of the whole run", () => {
+    const csv = [
+      "Time,Carbonization Outlet Temperature,Drying Drum Pressure",
+      "00:00:00,500,0.12",
+      "12:00:00,510,0.13",
+    ].join("\n");
+
+    const result = parseReactorDayCsv({
+      fileName: "TZ001B 2026-04-02 Data Evaluation.csv",
+      csvText: csv,
+      timezone: "Africa/Nairobi",
+      runWindowStart: new Date("2026-04-01T10:00:00.000Z"),
+      runWindowEnd: new Date("2026-04-03T10:00:00.000Z"),
+      mapping: {
+        temperature: "Carbonization Outlet Temperature",
+        pressure: "Drying Drum Pressure",
+        gasFlow: null,
+      },
+    });
+
+    expect(result.replacementWindowStart).toEqual(
+      new Date("2026-04-01T21:00:00.000Z"),
+    );
+    expect(result.replacementWindowEnd).toEqual(
+      new Date("2026-04-02T21:00:00.000Z"),
+    );
+    expect(result.readings.map((reading) => reading.timestamp)).toEqual([
+      new Date("2026-04-01T21:00:00.000Z"),
+      new Date("2026-04-02T09:00:00.000Z"),
+    ]);
   });
 
   it("suggests the production channels from the reactor-day export header", () => {

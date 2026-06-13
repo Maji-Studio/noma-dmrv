@@ -204,7 +204,9 @@ function makeMapping(): CertifierProjectRow {
   } as CertifierProjectRow;
 }
 
-function makeRun(biocharMassKg: number): ProductionRun & { samples: Sample[] } {
+function makeRun(
+  biocharMassKg: number,
+): ProductionRun & { samples: Sample[]; readingsCount: number } {
   return {
     id: PRODUCTION_RUN_ID,
     code: "PR-TEST-001",
@@ -218,6 +220,7 @@ function makeRun(biocharMassKg: number): ProductionRun & { samples: Sample[] } {
     electricityKwh: 0,
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
+    readingsCount: 1,
     samples: [
       {
         id: "smp-test-1",
@@ -229,7 +232,7 @@ function makeRun(biocharMassKg: number): ProductionRun & { samples: Sample[] } {
         moistureContentPercent: 10,
       } as unknown as Sample,
     ],
-  } as unknown as ProductionRun & { samples: Sample[] };
+  } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
 }
 
 function makeContext(

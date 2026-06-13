@@ -3086,11 +3086,12 @@
             "code"
           ]
         },
-        "feedstock_types_name_unique": {
-          "name": "feedstock_types_name_unique",
+        "feedstock_types_name_usage_unique": {
+          "name": "feedstock_types_name_usage_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "name"
+            "name",
+            "usage"
           ]
         }
       },
