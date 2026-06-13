@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { requireAuth } from "./utils";
@@ -37,8 +37,14 @@ export async function listDocumentsForEntityIds(
   requireAuth(userId);
   if (entityIds.length === 0) return [];
 
-  return db
-    .select()
+  const rankedDocuments = db
+    .select({
+      ...getTableColumns(documents),
+      documentRank: sql<number>`row_number() over (
+        partition by ${documents.entityId}
+        order by ${documents.createdAt} desc
+      )`.as("document_rank"),
+    })
     .from(documents)
     .where(
       and(
@@ -46,8 +52,36 @@ export async function listDocumentsForEntityIds(
         inArray(documents.entityId, entityIds),
       ),
     )
-    .orderBy(desc(documents.createdAt))
-    .limit(MAX_DOCUMENTS_PER_ENTITY);
+    .as("ranked_documents");
+
+  return db
+    .select({
+      id: rankedDocuments.id,
+      entityType: rankedDocuments.entityType,
+      entityId: rankedDocuments.entityId,
+      documentType: rankedDocuments.documentType,
+      storageProvider: rankedDocuments.storageProvider,
+      storageBucket: rankedDocuments.storageBucket,
+      storageKey: rankedDocuments.storageKey,
+      fileUrl: rankedDocuments.fileUrl,
+      fileName: rankedDocuments.fileName,
+      fileSizeBytes: rankedDocuments.fileSizeBytes,
+      mimeType: rankedDocuments.mimeType,
+      checksumSha256: rankedDocuments.checksumSha256,
+      visibility: rankedDocuments.visibility,
+      uploadStatus: rankedDocuments.uploadStatus,
+      issuedAt: rankedDocuments.issuedAt,
+      capturedAt: rankedDocuments.capturedAt,
+      description: rankedDocuments.description,
+      metadata: rankedDocuments.metadata,
+      createdBy: rankedDocuments.createdBy,
+      notes: rankedDocuments.notes,
+      createdAt: rankedDocuments.createdAt,
+      updatedAt: rankedDocuments.updatedAt,
+    })
+    .from(rankedDocuments)
+    .where(sql`${rankedDocuments.documentRank} <= ${MAX_DOCUMENTS_PER_ENTITY}`)
+    .orderBy(desc(rankedDocuments.createdAt));
 }
 
 export async function getDocumentById(

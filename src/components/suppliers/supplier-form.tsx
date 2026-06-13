@@ -211,7 +211,7 @@ export function SupplierForm({
             label="Default distance to facility (km)"
             error={errors.distanceToFacilityKm?.message}
             certifyRequired={isCertifyFormField("supplier", "distanceToFacilityKm")}
-            helperText="Road distance to the delivery facility. Used when a supplier location has no distance of its own; autofills a feedstock's transport leg (overridable per delivery)."
+            helperText="Fallback road distance for deliveries from this supplier."
             disabled={isSubmitting}
             distanceKm={distanceToFacilityKm}
             distanceSource={distanceSource}

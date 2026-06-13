@@ -205,10 +205,15 @@ export async function getStorageLocations(params: {
     }
   }
 
-  // A feedstock-type filter means the bin must already be declared for that
-  // exact type. Untyped bins are not proposed for type-specific workflows.
+  // A feedstock-type filter means the bin either already holds that exact type
+  // or is still untyped and can be claimed by its first type-specific intake.
   if (feedstockTypeId) {
-    conditions.push(eq(storageLocations.feedstockTypeId, feedstockTypeId));
+    conditions.push(
+      or(
+        eq(storageLocations.feedstockTypeId, feedstockTypeId),
+        isNull(storageLocations.feedstockTypeId),
+      )!
+    );
   }
 
   if (feedstockTypeUsage) {

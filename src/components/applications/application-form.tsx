@@ -584,11 +584,10 @@ export function ApplicationForm({
       </FormSection>
 
       {/* === Section 4: Soil Temperature === */}
-      <FormSection title="Soil Temperature">
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Isometric Protocol: Used in 200-year durability calculation
-        </p>
-
+      <FormSection
+        title="Soil Temperature"
+        hint="Used in the Isometric 200-year durability calculation."
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="soilTemperatureSource"

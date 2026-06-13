@@ -12,6 +12,7 @@ import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 
 interface StorageLocationQuickAddDialogProps {
   isOpen: boolean;
@@ -23,6 +24,10 @@ interface StorageLocationQuickAddDialogProps {
   allowedTypes?: readonly StorageLocationType[];
   /** Pre-selects the feedstock type the parent flow is working with */
   defaultFeedstockTypeId?: string;
+  /** Narrows selectable/quick-added feedstock types by usage. */
+  feedstockTypeUsage?: FeedstockTypeUsage;
+  /** Prevents changing a parent-selected feedstock type. */
+  lockFeedstockType?: boolean;
   /** Pre-selects the formulation the parent flow is working with */
   defaultFormulationId?: string;
   /** Facility ID (required for creation) */
@@ -36,6 +41,8 @@ export function StorageLocationQuickAddDialog({
   defaultBinType,
   allowedTypes,
   defaultFeedstockTypeId,
+  feedstockTypeUsage,
+  lockFeedstockType,
   defaultFormulationId,
   facilityId,
 }: StorageLocationQuickAddDialogProps) {
@@ -70,6 +77,8 @@ export function StorageLocationQuickAddDialog({
         defaultType={defaultBinType}
         allowedTypes={allowedTypes}
         defaultFeedstockTypeId={defaultFeedstockTypeId}
+        feedstockTypeUsage={feedstockTypeUsage}
+        lockFeedstockType={lockFeedstockType ?? Boolean(defaultFeedstockTypeId)}
         defaultFormulationId={defaultFormulationId}
         defaultFacilityId={facilityId}
       />

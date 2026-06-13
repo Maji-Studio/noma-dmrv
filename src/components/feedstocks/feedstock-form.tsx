@@ -574,6 +574,7 @@ export function FeedstockForm({
           defaultBinType={defaultStorageBinType}
           allowedTypes={FEEDSTOCK_BIN_TYPES}
           defaultFeedstockTypeId={watchedFeedstockTypeId || undefined}
+          feedstockTypeUsage="pyrolysis"
           facilityId={watchedFacilityId}
         />
       )}

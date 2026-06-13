@@ -8,6 +8,8 @@ import { FormError } from "./form-error";
 import { InfoHint } from "@/components/ui/tooltip";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 
+const INLINE_HELPER_MAX_CHARS = 64;
+
 interface FormFieldProps {
   id: string;
   label: string;
@@ -22,6 +24,22 @@ interface FormFieldProps {
   required?: boolean;
   certifyRequired?: boolean;
   children: ReactNode;
+}
+
+function shouldCollapseHelperText(helperText: string | undefined): helperText is string {
+  return (helperText?.trim().length ?? 0) > INLINE_HELPER_MAX_CHARS;
+}
+
+function composeHintContent(hint: ReactNode, collapsedHelperText: string | undefined) {
+  if (!collapsedHelperText) return hint;
+  if (hint == null) return collapsedHelperText;
+
+  return (
+    <span className="flex flex-col gap-6">
+      <span>{hint}</span>
+      <span>{collapsedHelperText}</span>
+    </span>
+  );
 }
 
 /**
@@ -66,10 +84,20 @@ export function FormField({
 }: FormFieldProps) {
   const errorId = `${id}-error`;
   const helperId = `${id}-helper`;
-  const showHelper = Boolean(helperText) && !error;
+  const collapsedHelperText = shouldCollapseHelperText(helperText)
+    ? helperText
+    : undefined;
+  const inlineHelperText = collapsedHelperText ? undefined : helperText;
+  const hintContent = composeHintContent(hint, collapsedHelperText);
+  const showInlineHelper = Boolean(inlineHelperText) && !error;
+  const showScreenReaderHelper = Boolean(collapsedHelperText) && !error;
 
   // Point the control at whichever message is actually rendered below it.
-  const describedBy = error ? errorId : showHelper ? helperId : undefined;
+  const describedBy = error
+    ? errorId
+    : showInlineHelper || showScreenReaderHelper
+      ? helperId
+      : undefined;
 
   return (
     <div>
@@ -89,17 +117,22 @@ export function FormField({
           )}
         </label>
         {certifyRequired && <CertificationFieldTag />}
-        {hint != null && <InfoHint side="top">{hint}</InfoHint>}
+        {hintContent != null && (
+          <InfoHint side="top" label={`More about ${label}`}>
+            {hintContent}
+          </InfoHint>
+        )}
       </div>
       {describeChild(children, describedBy, Boolean(error))}
-      {showHelper && (
+      {showInlineHelper && (
         <p
           id={helperId}
           className="body-caption text-[var(--color-text-tertiary)] mt-6"
         >
-          {helperText}
+          {inlineHelperText}
         </p>
       )}
+      {showScreenReaderHelper && <p id={helperId} className="sr-only">{collapsedHelperText}</p>}
       <FormError id={errorId} message={error} />
     </div>
   );

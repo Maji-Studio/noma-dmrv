@@ -9,17 +9,29 @@
  */
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
   useIsometricFeedstockTypes,
 } from "@/hooks/use-certification";
+import { FormInput } from "@/components/forms";
+import type { IsometricFeedstockType } from "@/lib/isometric";
 
 const settingsHref = (facilityId: string) =>
   `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
-export function IsometricFeedstockBrowser() {
+interface IsometricFeedstockBrowserProps {
+  onSelect?: (type: IsometricFeedstockType) => void;
+  selectedId?: string | null;
+}
+
+export function IsometricFeedstockBrowser({
+  onSelect,
+  selectedId,
+}: IsometricFeedstockBrowserProps) {
+  const [search, setSearch] = useState("");
   const { facilityId } = useFacilityContext();
   const summary = useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
   const isConnected = !!summary.data?.mapping;
@@ -74,27 +86,63 @@ export function IsometricFeedstockBrowser() {
     );
   }
 
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredTypes = normalizedSearch
+    ? catalogue.data.filter((type) => {
+        const reference = type.supplier_reference_id ?? "";
+        return [type.name, type.id, reference].some((value) =>
+          value.toLowerCase().includes(normalizedSearch)
+        );
+      })
+    : catalogue.data;
+
   return (
     <div className="flex flex-col gap-12">
       <p className="body-caption text-[var(--color-text-tertiary)]">
-        Read-only view of the registry catalogue — local feedstock types stay
-        separate and are managed in the General tab.
+        Choose the certified Isometric feedstock first. Noma will prefill the
+        local record, then you finish the category and save.
       </p>
+      <FormInput
+        id="isometric-feedstock-search"
+        type="search"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search certified feedstocks..."
+        aria-label="Search certified feedstocks"
+      />
       <ul className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]">
-        {catalogue.data.map((type) => (
-          <li key={type.id} className="flex flex-col gap-2 px-12 py-8">
-            <span className="body-small text-[var(--color-text-primary)]">
-              {type.name}
-            </span>
-            <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
-              {type.id}
-              {type.supplier_reference_id
-                ? ` · ref ${type.supplier_reference_id}`
-                : ""}
-            </span>
+        {filteredTypes.map((type) => (
+          <li key={type.id}>
+            <button
+              type="button"
+              onClick={() => onSelect?.(type)}
+              className="flex w-full items-start justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)]"
+              aria-pressed={selectedId === type.id}
+            >
+              <span className="flex flex-col gap-2">
+                <span className="body-small text-[var(--color-text-primary)]">
+                  {type.name}
+                </span>
+                <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+                  {type.id}
+                  {type.supplier_reference_id
+                    ? ` · ref ${type.supplier_reference_id}`
+                    : ""}
+                </span>
+              </span>
+              <span className="label-button shrink-0 text-[var(--color-interaction)]">
+                {selectedId === type.id ? "Selected" : "Use"}
+              </span>
+            </button>
           </li>
         ))}
       </ul>
+      {filteredTypes.length === 0 && (
+        <Message>
+          No matching certified feedstock. Add it in Isometric Certify before
+          using it for verified production.
+        </Message>
+      )}
     </div>
   );
 }

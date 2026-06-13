@@ -33,7 +33,7 @@ interface ApplicationEvidencePanelProps {
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object"
+  return value !== null && !Array.isArray(value) && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
 }

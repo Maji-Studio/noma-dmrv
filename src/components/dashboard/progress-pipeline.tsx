@@ -13,6 +13,8 @@ import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardProgressStage } from "@/data-access/dashboard-overview";
 import { DashboardPanel } from "./dashboard-panel";
 
+const MIN_ATTENTION_BAR_PERCENT = 4;
+
 interface ProgressPipelineProps {
   stages: DashboardProgressStage[];
 }
@@ -81,7 +83,7 @@ export function ProgressPipeline({ stages }: ProgressPipelineProps) {
                   {flagged && (
                     <div
                       className="h-full bg-[var(--st-wait)]"
-                      style={{ width: `${Math.max(attentionShare, 4)}%` }}
+                      style={{ width: `${Math.max(attentionShare, MIN_ATTENTION_BAR_PERCENT)}%` }}
                     />
                   )}
                   <div className="h-full flex-1 bg-[var(--clr-purple)]" />

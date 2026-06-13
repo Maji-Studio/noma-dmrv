@@ -57,6 +57,8 @@ export interface ParseReactorDayCsvResult {
   fileReactorCode: string;
   fileDate: string;
   headers: string[];
+  replacementWindowStart: Date;
+  replacementWindowEnd: Date;
   parsedRows: number;
   inWindowRows: number;
   droppedRows: number;
@@ -78,11 +80,10 @@ export function inspectReactorDayCsv(
   const requiresMapping =
     !storedMapping || storedMapping.headerSignature !== headerSignature;
 
-  const warnings: string[] = [];
   if (
     metadata.fileReactorCode.toLowerCase() !== args.runReactorCode.toLowerCase()
   ) {
-    warnings.push(
+    throw new Error(
       `Filename reactor ${metadata.fileReactorCode} does not match selected run reactor ${args.runReactorCode}.`,
     );
   }
@@ -99,7 +100,7 @@ export function inspectReactorDayCsv(
           pressure: storedMapping.pressure,
           gasFlow: storedMapping.gasFlow,
         },
-    warnings,
+    warnings: [],
   };
 }
 
@@ -118,6 +119,12 @@ export function parseReactorDayCsv(
   if (timeIndex < 0) {
     throw new Error("CSV file must include a Time column");
   }
+  const replacementWindow = clipWindowToFileDate({
+    fileDate: metadata.fileDate,
+    timezone: args.timezone,
+    runWindowStart: args.runWindowStart,
+    runWindowEnd: args.runWindowEnd,
+  });
 
   const readings: ReactorDayCsvReading[] = [];
   let parsedRows = 0;
@@ -151,11 +158,41 @@ export function parseReactorDayCsv(
   return {
     ...metadata,
     headers,
+    replacementWindowStart: replacementWindow.start,
+    replacementWindowEnd: replacementWindow.end,
     parsedRows,
     inWindowRows: readings.length,
     droppedRows: parsedRows - readings.length,
     readings,
   };
+}
+
+function clipWindowToFileDate(args: {
+  fileDate: string;
+  timezone: string;
+  runWindowStart: Date;
+  runWindowEnd: Date;
+}): { start: Date; end: Date } {
+  const fileDayStart = fromZonedTime(`${args.fileDate}T00:00:00`, args.timezone);
+  const fileDayEnd = fromZonedTime(
+    `${addIsoDateDays(args.fileDate, 1)}T00:00:00`,
+    args.timezone,
+  );
+  const start =
+    args.runWindowStart > fileDayStart ? args.runWindowStart : fileDayStart;
+  const end = args.runWindowEnd < fileDayEnd ? args.runWindowEnd : fileDayEnd;
+
+  if (start >= end) {
+    throw new Error("CSV file date is outside the production run window");
+  }
+
+  return { start, end };
+}
+
+function addIsoDateDays(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day! + days));
+  return date.toISOString().slice(0, 10);
 }
 
 export function parseFilenameMetadata(fileName: string): {

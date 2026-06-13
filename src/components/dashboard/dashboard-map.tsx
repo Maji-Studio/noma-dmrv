@@ -127,7 +127,8 @@ export default function DashboardMap({ points }: DashboardMapProps) {
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({ ...baseOptions, ...viewOptions });
-    } catch {
+    } catch (error) {
+      console.error("Dashboard map initialization failed", error);
       // maplibre throws "Failed to initialize WebGL" when no context exists.
       // Deferred so the effect never sets state synchronously (React Compiler).
       queueMicrotask(() => setMapFailed(true));

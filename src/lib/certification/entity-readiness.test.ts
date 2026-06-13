@@ -17,6 +17,7 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
+      readingsCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
@@ -46,6 +47,29 @@ describe("deriveEntityCertifyReadiness", () => {
     ]);
   });
 
+  it("reports missing telemetry when the reading count is omitted", () => {
+    const readiness = deriveEntityCertifyReadiness("productionRun", {
+      status: "complete",
+      feedstockWetMassKg: 5000,
+      feedstockMoisturePercent: 25,
+      biocharOutputKg: 1500,
+      biocharMoisturePercent: 10,
+      dieselOperationLiters: 0,
+      dieselGensetLiters: 12,
+      preprocessingFuelLiters: 3,
+      electricityKwh: 50,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "telemetryReadings",
+        label: "Telemetry readings",
+      },
+    ]);
+  });
+
   it("reports missing entered fields", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
@@ -57,6 +81,7 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: null,
+      readingsCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -80,6 +105,7 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 0,
       preprocessingFuelLiters: 0,
       electricityKwh: 0,
+      readingsCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
@@ -96,6 +122,7 @@ describe("deriveEntityCertifyReadiness", () => {
       dieselGensetLiters: 12,
       preprocessingFuelLiters: 3,
       electricityKwh: 50,
+      readingsCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -157,6 +184,43 @@ describe("deriveEntityCertifyReadiness", () => {
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("requires feedstock truck weighing only when transport context asks for it", () => {
+    const readiness = deriveEntityCertifyReadiness("feedstock", {
+      status: "complete",
+      massWetKg: 1500,
+      requiresTruckWeighing: true,
+      truckMassOnArrivalKg: null,
+      truckMassOnDepartureKg: 12_500,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "truckWeighing",
+        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+      },
+    ]);
+  });
+
+  it("requires delivery truck weighing only when transport context asks for it", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      deliveredWetMassKg: 1500,
+      requiresTruckWeighing: true,
+      truckMassOnArrivalKg: 8_000,
+      truckMassOnDepartureKg: null,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "truckWeighing",
+        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+      },
+    ]);
   });
 
   it("reports a feedstock missing wet mass via the entity column", () => {

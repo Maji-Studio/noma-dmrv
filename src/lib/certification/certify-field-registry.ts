@@ -35,6 +35,7 @@ export interface CertifyFieldCondition {
 
 export type CertifyFieldSatisfaction =
   | { mode: "field" }
+  | { mode: "allOf"; fields: readonly string[]; label: string }
   | { mode: "anyOf"; fields: readonly string[]; label: string };
 
 export interface CertifyFieldDescriptor {
@@ -315,6 +316,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       label: "Truck weighing",
       kind: "derived",
       formFields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+      condition: {
+        field: "requiresTruckWeighing",
+        equals: true,
+        label: "transport template",
+      },
+      satisfaction: {
+        mode: "allOf",
+        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+        label: "Arrival and departure truck masses",
+      },
       mappings: [mapping("feedstockTransportAvgDistanceKm")],
     },
   ],
@@ -391,6 +402,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       label: "Truck weighing",
       kind: "derived",
       formFields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+      condition: {
+        field: "requiresTruckWeighing",
+        equals: true,
+        label: "transport template",
+      },
+      satisfaction: {
+        mode: "allOf",
+        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+        label: "Arrival and departure truck masses",
+      },
       mappings: [mapping("biocharTransportAvgDistanceKm")],
     },
   ],

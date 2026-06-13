@@ -257,7 +257,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             id="deliveredWetMassKg"
             label="Wet Mass (kg)"
             error={errors.deliveredWetMassKg?.message}
-            helperText="As-received weight — prefilled from the truck weighing below when both masses are entered"
+            helperText="As-received weight. Truck weighing can prefill it."
             required
             certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
           >
@@ -387,7 +387,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             id="distanceNote"
             label="Distance note"
             error={errors.distanceNote?.message}
-            helperText="Why this delivery's distance differs from the stored distance (optional)"
+            helperText="Explain why this trip used a different route."
           >
             <FormTextarea
               id="distanceNote"

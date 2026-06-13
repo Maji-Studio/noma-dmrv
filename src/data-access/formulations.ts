@@ -64,7 +64,9 @@ async function assertBlendFeedstockTypes(ingredients?: IngredientInput[]) {
     .where(inArray(feedstockTypes.id, feedstockTypeIds));
 
   if (rows.length !== feedstockTypeIds.length) {
-    throw new SafeError("Blend material not found");
+    const returnedIds = new Set(rows.map((row) => row.id));
+    const missingIds = feedstockTypeIds.filter((id) => !returnedIds.has(id));
+    throw new SafeError(`Blend material(s) not found: ${missingIds.join(", ")}`);
   }
 
   if (rows.some((row) => row.usage !== "blend")) {
