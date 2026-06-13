@@ -27,9 +27,9 @@ import {
 // many removals can't fan out an unbounded burst of query chains at the pool.
 const READINESS_CONCURRENCY = 8;
 
-// One removal's place in the work queue: its identity, member batches, latest
-// submission identity, and the readiness verdict (the same one the Removals
-// table hint and the Review pre-flight will render).
+// One removal's place in the Removals hub: its identity, member batches, latest
+// submission identity, and the readiness verdict (the same one the table hint
+// and wizard submit step render).
 export interface RemovalPreflightSummary {
   removalId: string;
   startedOn: string | null;
@@ -50,25 +50,25 @@ export interface CertificationOverviewData {
    * Ungrouped batches whose own data is complete enough to start a removal —
    * the subset of `ungroupedBatchCount` that the New-Removal wizard would let
    * you select. Computed from the SAME per-batch health verdict the wizard
-   * shows, so the Overview's "Ready to start" count can never claim a batch is
-   * ready that the wizard then greys out.
+   * shows, so the Removals hub's "ready to start" affordance can never claim a
+   * batch is ready that the wizard then greys out.
    */
   readyToStartBatchCount: number;
   isProduction: boolean;
 }
 
 /**
- * Server-owned readiness for the Overview work queue. Computes a per-removal
+ * Server-owned readiness for the Removals hub. Computes a per-removal
  * verdict once, server-side, by reusing the same submission context the submit
- * pipeline does — so the queue, the table hint, and the pre-flight can never
- * disagree about whether a removal is submittable.
+ * pipeline does — so the table hint, detail sheet, and wizard submit step can
+ * never disagree about whether a removal is submittable.
  *
  * The facility-scoped certifier facts (mapping / template / blueprints) are
  * resolved ONCE via `loadFacilityCertifierFacts` and fed to every removal's
  * `buildRemovalContext`; each removal adds only its own lineage-level half. The
  * per-removal builds run in parallel. The readiness verdict comes from the
  * shared `toRemovalReadinessFacts` + `deriveRemovalReadiness` — the same
- * projection the Review pre-flight uses.
+ * projection the wizard submit step uses.
  */
 export async function loadCertificationOverview(
   facilityId: string,

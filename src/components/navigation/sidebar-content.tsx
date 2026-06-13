@@ -29,7 +29,6 @@ import {
   ShoppingCart,
   MapPin,
   Certificate,
-  SealCheck,
   Stack,
   FileText,
   TestTube,
@@ -51,12 +50,7 @@ interface NavItem {
   icon: ElementType;
   /** Skip appending the `?facility=` query param (e.g. admin pages with their own selectors). */
   skipFacilityParam?: boolean;
-  /**
-   * Match the active state on the exact path only, not the `href/` prefix.
-   * Needed for section-root items whose href is a prefix of their siblings
-   * (e.g. Certification → Overview at `/certification`, a prefix of
-   * `/certification/removals`), so the root doesn't stay highlighted on them.
-   */
+  /** Match the active state on the exact path only, not the `href/` prefix. */
   exact?: boolean;
 }
 
@@ -137,14 +131,12 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    // First-class section (ADR 0007, amended 2026-06-04): the four sub-routes
-    // are surfaced directly in the sidebar — mirroring the Verification group —
-    // rather than behind an in-page tab bar. Overview is `exact` because its
-    // href (`/certification`) is a prefix of every sibling.
+    // First-class section (ADR 0007, amended 2026-06-13): surface only the
+    // concrete artifact/setup routes. The root `/certification` route redirects
+    // to Removals for old bookmarks and broad entry points.
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification", label: "Overview", icon: SealCheck, exact: true },
       { href: "/certification/removals", label: "Removals", icon: Stack },
       { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileText },
       { href: "/certification/settings", label: "Settings", icon: GearSix },
