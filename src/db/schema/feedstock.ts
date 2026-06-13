@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, pgTable, text, timestamp, uuid, real } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, pgTable, text, timestamp, uuid, real, unique } from 'drizzle-orm/pg-core';
 import { feedstockEligibilityStatus, feedstockStatus, feedstockTypeUsage } from './common';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
@@ -62,18 +62,24 @@ export const feedstockDeliveries = pgTable(
 // Feedstock Types - Biomass classification
 // ============================================
 
-export const feedstockTypes = pgTable('feedstock_types', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
-  name: text('name').notNull().unique(), // e.g., "Mixed Wood Chips", "Hardwood"
-  category: text('category').notNull(), // forestry | agricultural | industrial | municipal | invasive
-  usage: feedstockTypeUsage('usage').notNull().default('pyrolysis'),
-  description: text('description'),
-  registryUrl: text('registry_url'), // Link to Isometric registry page
+export const feedstockTypes = pgTable(
+  'feedstock_types',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    name: text('name').notNull(), // e.g., "Mixed Wood Chips", "Hardwood"
+    category: text('category').notNull(), // forestry | agricultural | industrial | municipal | invasive
+    usage: feedstockTypeUsage('usage').notNull().default('pyrolysis'),
+    description: text('description'),
+    registryUrl: text('registry_url'), // Link to Isometric registry page
 
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('feedstock_types_name_usage_unique').on(table.name, table.usage),
+  ]
+);
 
 // ============================================
 // Feedstocks - Incoming biomass batches
