@@ -128,8 +128,12 @@ export async function getEntities(
     }
     case "vehicle":
       return getVehicles({ search, limit });
-    case "feedstockType":
-      return getFeedstockTypes({ search, limit });
+    case "feedstockType": {
+      const rawUsage = filterBy?.usage?.trim() ?? filterBy?.feedstockTypeUsage?.trim();
+      const usage =
+        rawUsage === "pyrolysis" || rawUsage === "blend" ? rawUsage : undefined;
+      return getFeedstockTypes({ search, usage, limit });
+    }
     case "feedstock":
       return getFeedstocks({ search, facilityId: filterBy?.facilityId, limit });
     case "productionRun": {

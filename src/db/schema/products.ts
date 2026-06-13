@@ -2,7 +2,6 @@ import {
   check,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -12,20 +11,8 @@ import {
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { biocharProductStatus } from './common';
 import { facilities, storageLocations } from './facilities';
+import { feedstockTypes } from './feedstock';
 import { productionRuns } from './production';
-
-// ============================================
-// Enums
-// ============================================
-
-export const ingredientType = pgEnum('ingredient_type', [
-  'compost',
-  'mineral',
-  'lime',
-  'binder',
-  'amendment',
-  'other',
-]);
 
 // ============================================
 // Formulations - Product recipes
@@ -61,8 +48,9 @@ export const formulationIngredients = pgTable(
     formulationId: uuid('formulation_id')
       .notNull()
       .references(() => formulations.id, { onDelete: 'cascade' }),
-    ingredientType: ingredientType('ingredient_type').notNull(),
-    name: text('name').notNull(), // Freeform: "cow manure compost", "rock dust", etc.
+    feedstockTypeId: uuid('feedstock_type_id')
+      .notNull()
+      .references(() => feedstockTypes.id),
     ratio: real('ratio'), // Ratio in [0, 1]
     description: text('description'),
     sortOrder: integer('sort_order').default(0).notNull(),
@@ -134,6 +122,10 @@ export const formulationIngredientsRelations = relations(
     formulation: one(formulations, {
       fields: [formulationIngredients.formulationId],
       references: [formulations.id],
+    }),
+    feedstockType: one(feedstockTypes, {
+      fields: [formulationIngredients.feedstockTypeId],
+      references: [feedstockTypes.id],
     }),
   })
 );

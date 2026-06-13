@@ -15,8 +15,9 @@ export const COMPOSITION_BIN_TYPE = "feedstock_bin" as const;
  */
 export interface IngredientBin {
   formulationIngredientId: string;
-  ingredientName: string;
-  ingredientType: string;
+  feedstockTypeId: string;
+  feedstockTypeName: string;
+  feedstockTypeCategory: string;
   ratio?: number | null;
   massKg?: number | null;
   storageLocationId?: string | null;
@@ -34,8 +35,9 @@ export interface CompositionRow {
   key: string;
   index: number;
   formulationIngredientId: string;
-  ingredientName: string;
-  ingredientType: string;
+  feedstockTypeId: string;
+  feedstockTypeName: string;
+  feedstockTypeCategory: string;
   ratio: number | null;
   removalKg: number | null;
   storageLocationFieldName: `ingredientBins.${number}.storageLocationId`;

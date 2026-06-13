@@ -61,24 +61,32 @@ import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 
-function getCompositionStorageLocationIds(composition: Record<string, unknown> | null | undefined): string[] {
+function getCompositionIngredientBinRefs(
+  composition: Record<string, unknown> | null | undefined
+): Array<{ storageLocationId: string; feedstockTypeId: string }> {
   const ingredients = composition?.ingredients;
   if (!Array.isArray(ingredients)) return [];
 
-  return [
-    ...new Set(
-      ingredients
-        .map((ingredient) =>
-          typeof ingredient === "object" &&
-          ingredient !== null &&
-          "storageLocationId" in ingredient &&
-          typeof ingredient.storageLocationId === "string"
-            ? ingredient.storageLocationId
-            : null
-        )
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
+  return ingredients
+    .map((ingredient) => {
+      if (
+        typeof ingredient !== "object" ||
+        ingredient === null ||
+        !("storageLocationId" in ingredient) ||
+        !("feedstockTypeId" in ingredient) ||
+        typeof ingredient.storageLocationId !== "string" ||
+        typeof ingredient.feedstockTypeId !== "string"
+      ) {
+        return null;
+      }
+      return {
+        storageLocationId: ingredient.storageLocationId,
+        feedstockTypeId: ingredient.feedstockTypeId,
+      };
+    })
+    .filter((ref): ref is { storageLocationId: string; feedstockTypeId: string } =>
+      Boolean(ref?.storageLocationId && ref.feedstockTypeId)
+    );
 }
 
 async function validateCompositionIngredientBins(
@@ -86,8 +94,17 @@ async function validateCompositionIngredientBins(
   composition: Record<string, unknown> | null | undefined,
   facilityId: string
 ) {
-  const storageLocationIds = getCompositionStorageLocationIds(composition);
+  const binRefs = getCompositionIngredientBinRefs(composition);
+  const storageLocationIds = [...new Set(binRefs.map((ref) => ref.storageLocationId))];
   if (storageLocationIds.length === 0) return;
+  const expectedFeedstockTypeByBinId = new Map<string, string>();
+  for (const ref of binRefs) {
+    const existing = expectedFeedstockTypeByBinId.get(ref.storageLocationId);
+    if (existing && existing !== ref.feedstockTypeId) {
+      throw new SafeError("Ingredient bin cannot be reused for different formulation materials");
+    }
+    expectedFeedstockTypeByBinId.set(ref.storageLocationId, ref.feedstockTypeId);
+  }
 
   const bins = await tx
     .select({
@@ -114,6 +131,9 @@ async function validateCompositionIngredientBins(
     }
     if (!bin.feedstockTypeId || bin.feedstockTypeUsage !== "blend") {
       throw new SafeError("Ingredient bin must hold blend-usage feedstock");
+    }
+    if (bin.feedstockTypeId !== expectedFeedstockTypeByBinId.get(bin.id)) {
+      throw new SafeError("Ingredient bin must match the formulation material");
     }
   }
 }
