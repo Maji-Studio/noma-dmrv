@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "@phosphor-icons/react";
+import { Calendar, MapPin, Plant, Truck, Stack, Note } from "@phosphor-icons/react/dist/ssr";
 import { numericValue } from "@/lib/form-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -17,7 +18,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, ServerError, TruckWeighingSection } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, TruckWeighingSection } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -84,6 +85,8 @@ export function FeedstockForm({
     formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
     defaultValues: {
       facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
       deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
@@ -238,8 +241,14 @@ export function FeedstockForm({
   return (
     <>
       <form onSubmit={handleFormSubmit} className="space-y-20">
+        <FormSpine control={control}>
         {/* Delivery Information */}
-        <FormSection title="Delivery Information" divider={false}>
+        <FormSection
+          title="Delivery Information"
+          icon={<Calendar size={14} weight="bold" />}
+          fields={["facilityId", "deliveryDate", "supplierId"]}
+          required={["deliveryDate", "supplierId"]}
+        >
           {!contextFacilityId && !feedstock && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
               <FormEntitySelect
@@ -285,7 +294,10 @@ export function FeedstockForm({
         {/* Transport Details */}
         <FormSection
           title="Transport Details"
+          icon={<MapPin size={14} weight="bold" />}
           hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
+          fields={["vehicleId", "transportDistanceKm"]}
+          required={["transportDistanceKm"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
@@ -345,7 +357,12 @@ export function FeedstockForm({
         </FormSection>
 
         {/* Material Details */}
-        <FormSection title="Material">
+        <FormSection
+          title="Material"
+          icon={<Plant size={14} weight="bold" />}
+          fields={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
+          required={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
@@ -419,29 +436,39 @@ export function FeedstockForm({
           </div>
         </FormSection>
 
-        <TruckWeighingSection
-          arrivalMassKg={watchArrivalMass}
-          departureMassKg={watchDepartureMass}
-          wetMassKg={watchWetMass}
-          wetMassLabel="Entered wet mass"
-          onSuggestWetMass={suggestWetMassFromTruckWeighing}
-          arrivalRegister={register("truckMassOnArrivalKg", {
-            setValueAs: numericValue,
-          })}
-          departureRegister={register("truckMassOnDepartureKg", {
-            setValueAs: numericValue,
-          })}
-          arrivalError={errors.truckMassOnArrivalKg?.message}
-          departureError={errors.truckMassOnDepartureKg?.message}
-          arrivalCertifyRequired={isFeedstockCertifyField("truckMassOnArrivalKg")}
-          departureCertifyRequired={isFeedstockCertifyField("truckMassOnDepartureKg")}
-          isSubmitting={isSubmitting}
-        />
+        <FormSection
+          title="Truck Weighing"
+          icon={<Truck size={14} weight="bold" />}
+          hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence."
+          fields={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
+          required={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
+        >
+          <TruckWeighingSection
+            bare
+            arrivalMassKg={watchArrivalMass}
+            departureMassKg={watchDepartureMass}
+            wetMassKg={watchWetMass}
+            wetMassLabel="Entered wet mass"
+            onSuggestWetMass={suggestWetMassFromTruckWeighing}
+            arrivalRegister={register("truckMassOnArrivalKg", {
+              setValueAs: numericValue,
+            })}
+            departureRegister={register("truckMassOnDepartureKg", {
+              setValueAs: numericValue,
+            })}
+            arrivalError={errors.truckMassOnArrivalKg?.message}
+            departureError={errors.truckMassOnDepartureKg?.message}
+            arrivalCertifyRequired={isFeedstockCertifyField("truckMassOnArrivalKg")}
+            departureCertifyRequired={isFeedstockCertifyField("truckMassOnDepartureKg")}
+            isSubmitting={isSubmitting}
+          />
+        </FormSection>
 
         {/* Bin Allocations — only shown after feedstock type is selected */}
         {watchedFeedstockTypeId ? (
           <FormSection
             title="Bin Allocations"
+            icon={<Stack size={14} weight="bold" />}
             actions={
               !isEditMode && (
                 <Button
@@ -512,7 +539,11 @@ export function FeedstockForm({
         ) : null}
 
         {/* Documentation */}
-        <FormSection title="Documentation">
+        <FormSection
+          title="Documentation"
+          icon={<Note size={14} weight="bold" />}
+          fields={["notes"]}
+        >
           <div className="grid grid-cols-1 gap-y-20">
             <FormField
               id="notes"
@@ -531,6 +562,7 @@ export function FeedstockForm({
             </FormField>
           </div>
         </FormSection>
+        </FormSpine>
 
         {/* Server Error */}
         {serverError && <ServerError message={serverError} />}
