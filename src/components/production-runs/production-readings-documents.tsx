@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { File, Trash, ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
+import { File, Trash, ArrowSquareOut, Warning } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormSelect, ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -29,10 +29,24 @@ interface ProductionReadingsDocumentsProps {
 
 const READINGS_DOC_TYPE: DocumentType = "sensor_data";
 const ENTITY_TYPE: DocumentEntityType = "production_run";
-// CSV / spreadsheet exports from PLC or sensor loggers.
-const READINGS_ACCEPT = ".csv,.xls,.xlsx";
+const READINGS_ACCEPT = ".csv";
 const READINGS_MAX_MB = 25;
 const EMPTY_SELECT_VALUE = "";
+
+function WarningBanner({ messages }: { messages: string[] }) {
+  if (messages.length === 0) return null;
+
+  return (
+    <div className="flex items-start gap-8 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange)]/10 p-12 text-[var(--color-signal-orange-strong)]">
+      <Warning size={16} weight="fill" className="mt-2 shrink-0" />
+      <div className="space-y-4 body-small" role="alert" aria-live="polite">
+        {messages.map((message) => (
+          <p key={message}>{message}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Readings CSV upload + file list for a production run, persisted as
@@ -230,14 +244,14 @@ export function ProductionReadingsDocuments({
                   Confirm channel alignment for {pendingPreview.fileName}
                 </p>
                 <p className="body-caption text-[var(--color-text-tertiary)]">
-                  Reactor-day {pendingPreview.fileReactorCode} ·{" "}
-                  {pendingPreview.fileDate}
+                  File reactor {pendingPreview.fileReactorCode} · Selected run{" "}
+                  reactor {pendingPreview.runReactorCode} ·{" "}
+                  Reactor-day {pendingPreview.fileDate} · Run date{" "}
+                  {pendingPreview.runDate}
                 </p>
               </div>
 
-              {pendingPreview.warnings.length > 0 && (
-                <ServerError message={pendingPreview.warnings.join(" ")} />
-              )}
+              <WarningBanner messages={pendingPreview.warnings} />
 
               <div className="grid gap-12 md:grid-cols-3">
                 <FormField id="temperatureColumn" label="Temperature column">

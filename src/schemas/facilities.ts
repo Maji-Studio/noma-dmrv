@@ -167,7 +167,7 @@ export const facilityFormSchema = z.object({
   defaultDurabilityOption: z.enum(durabilityOptions).default("200_year"),
   timezone: z.preprocess(
     (v) => (v === "" ? undefined : v),
-    z.enum(timezones).optional()
+    z.enum(timezones, { message: "Timezone is required" })
   ),
 });
 
@@ -202,7 +202,7 @@ export const updateFacilitySchema = z.object({
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   defaultDurabilityOption: z.enum(durabilityOptions).optional(),
-  timezone: z.enum(timezones).optional().nullable(),
+  timezone: z.enum(timezones).optional(),
 }).refine(
   (data) => {
     const hasLat = data.gpsLatitude != null;

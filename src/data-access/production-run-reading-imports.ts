@@ -24,6 +24,7 @@ export interface ProductionRunReadingsImportContext {
   mimeType: string | null;
   productionRunId: string;
   runCode: string;
+  runDate: string;
   runWindowStart: Date;
   runWindowEnd: Date;
   reactorId: string;
@@ -49,6 +50,7 @@ export async function getProductionRunReadingsImportContext(
       mimeType: documents.mimeType,
       productionRunId: productionRuns.id,
       runCode: productionRuns.code,
+      runDate: productionRuns.date,
       runWindowStart: productionRuns.startTime,
       runWindowEnd: productionRuns.endTime,
       reactorId: reactors.id,
@@ -85,6 +87,7 @@ export async function getProductionRunReadingsImportContext(
     mimeType: row.mimeType,
     productionRunId: row.productionRunId,
     runCode: row.runCode,
+    runDate: row.runDate,
     runWindowStart: row.runWindowStart,
     runWindowEnd: row.runWindowEnd,
     reactorId: row.reactorId,

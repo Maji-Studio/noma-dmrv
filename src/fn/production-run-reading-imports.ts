@@ -3,6 +3,7 @@
 import { getStorageProvider } from "@/lib/storage";
 import { SafeError } from "@/lib/errors";
 import {
+  getReactorDayCsvReplacementWindow,
   inspectReactorDayCsv,
   parseReactorDayCsv,
   type ReactorDayCsvMapping,
@@ -29,6 +30,8 @@ export interface ProductionRunReadingsImportPreview {
   documentId: string;
   fileName: string;
   runCode: string;
+  runDate: string;
+  runReactorCode: string;
   fileReactorCode: string;
   fileDate: string;
   headers: string[];
@@ -66,11 +69,19 @@ export async function previewProductionRunReadingsImportFn(
       runReactorCode: context.reactorCode,
       storedMapping: context.storedMapping,
     });
+    assertCsvOverlapsRunWindow({
+      fileDate: inspection.fileDate,
+      timezone: context.facilityTimezone,
+      runWindowStart: context.runWindowStart,
+      runWindowEnd: context.runWindowEnd,
+    });
 
     return {
       documentId,
       fileName: context.fileName,
       runCode: context.runCode,
+      runDate: context.runDate,
+      runReactorCode: context.reactorCode,
       ...inspection,
     };
   });
@@ -105,7 +116,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       );
     }
 
-    const parsed = parseReactorDayCsv({
+    const parsed = parseCsvForImport({
       fileName: context.fileName,
       csvText,
       timezone: context.facilityTimezone,
@@ -143,6 +154,33 @@ export async function importProductionRunReadingsFromDocumentFn(
       warnings: inspection.warnings,
     };
   });
+}
+
+function assertCsvOverlapsRunWindow(args: {
+  fileDate: string;
+  timezone: string;
+  runWindowStart: Date;
+  runWindowEnd: Date;
+}): void {
+  try {
+    getReactorDayCsvReplacementWindow(args);
+  } catch (error) {
+    throw new SafeError(
+      error instanceof Error
+        ? error.message
+        : "CSV file date is outside the selected production run window.",
+    );
+  }
+}
+
+function parseCsvForImport(args: Parameters<typeof parseReactorDayCsv>[0]) {
+  try {
+    return parseReactorDayCsv(args);
+  } catch (error) {
+    throw new SafeError(
+      error instanceof Error ? error.message : "Failed to parse readings CSV.",
+    );
+  }
 }
 
 async function readManagedDocumentText(storageKey: string): Promise<string> {
