@@ -1,7 +1,6 @@
 "use client";
 
 import { type ElementType } from "react";
-import Link from "next/link";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ArrowUpRight, TreeStructure } from "@phosphor-icons/react/dist/ssr";
 import type { LineageDetailRow } from "./use-chain-graph";
@@ -57,7 +56,6 @@ export function ChainNode({ data }: NodeProps) {
     icon: Icon,
     accent,
     accentInk,
-    href,
     status,
     date,
     details,
@@ -65,7 +63,10 @@ export function ChainNode({ data }: NodeProps) {
     dimmed,
     drillable,
   } = data as unknown as ChainNodeData;
-  const interactive = Boolean(href) || Boolean(drillable);
+  // Every card is clickable now — a click opens the detail side-sheet (or, in
+  // split view, locates the record on the map). Navigation moved into the
+  // sheet's "View full record" action.
+  const interactive = true;
 
   const card = (
     <div
@@ -165,13 +166,7 @@ export function ChainNode({ data }: NodeProps) {
         className="!bg-[var(--clr-purple)] !w-[6px] !h-[6px] !border-0"
       />
 
-      {href ? (
-        <Link href={href} prefetch={false} onClick={(event) => event.stopPropagation()}>
-          {card}
-        </Link>
-      ) : (
-        card
-      )}
+      {card}
 
       <Handle
         type="source"

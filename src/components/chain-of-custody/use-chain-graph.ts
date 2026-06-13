@@ -30,13 +30,41 @@ export interface LineageGraphNode {
 }
 
 // Stroke, casing, and the mass label chip live in ChainEdge (chain-edge.tsx).
-const EDGE_STYLE = {
-  type: "chainEdge" as const,
-  markerEnd: { type: MarkerType.ArrowClosed, color: "var(--clr-purple)" },
-};
+// Mass-flow lines are dark purple for contrast on the tinted canvas; the
+// reactor's equipment link is a quieter dashed tint of the same ink.
+const FLOW_EDGE_COLOR = "var(--clr-dark-purple)";
+const EQUIPMENT_EDGE_COLOR = "var(--clr-dark-purple-40)";
 
 /** Residual smaller than this is rounding noise, not a storage remainder. */
 const STORAGE_REMAINDER_EPSILON_KG = 0.5;
+
+/** Below this share, round-to-percent would read as a misleading "0%". */
+const SUB_ONE_PERCENT = 0.01;
+const NEAR_FULL_PERCENT = 0.995;
+
+/** A unit must never be mixed within one fan when normalizing to a share. */
+type EdgeMassUnit = "kg" | "tDry";
+
+interface EdgeMass {
+  value: number | null;
+  unit: EdgeMassUnit;
+}
+
+/**
+ * Data carried on every flow edge. `mass`/`unit` feed the branch-share %;
+ * `kgLabel`/`pctLabel` are the pre-formatted strings the toggle swaps between;
+ * `variant` distinguishes mass flow from the reactor's mass-less equipment
+ * link; `color` is the source-accent stroke.
+ */
+export interface ChainEdgeBuildData {
+  variant: "flow" | "equipment";
+  color: string;
+  mass: number | null;
+  unit: EdgeMassUnit | null;
+  kgLabel: string | null;
+  pctLabel: string | null;
+  [key: string]: unknown;
+}
 
 function formatKg(value: number | null | undefined): string | null {
   if (value == null) return null;
@@ -46,6 +74,57 @@ function formatKg(value: number | null | undefined): string | null {
 function formatDryTons(value: number | null | undefined): string | null {
   if (value == null) return null;
   return `${value.toFixed(2)} t dry`;
+}
+
+function massLabel(mass: EdgeMass | null): string | null {
+  if (!mass || mass.value == null) return null;
+  return mass.unit === "kg" ? formatKg(mass.value) : formatDryTons(mass.value);
+}
+
+function formatShare(fraction: number): string {
+  if (!Number.isFinite(fraction) || fraction <= 0) return "—";
+  if (fraction < SUB_ONE_PERCENT) return "<1%";
+  if (fraction >= NEAR_FULL_PERCENT) return "100%";
+  return `${Math.round(fraction * 100)}%`;
+}
+
+/**
+ * Branch-share % per edge (plan decision): an edge in a fan reads as its
+ * share of that fan. A split (one source → many targets) normalizes against
+ * the source's total outflow; a merge (many sources → one target) against the
+ * target's total inflow; a straight 1:1 hand-off reads 100%. Sums stay within
+ * one unit, since a fan never mixes kg and dry-tons.
+ */
+function computeEdgeShareLabels(edges: Edge[]): void {
+  const outSum = new Map<string, number>();
+  const outCount = new Map<string, number>();
+  const inSum = new Map<string, number>();
+  const inCount = new Map<string, number>();
+  for (const edge of edges) {
+    const data = edge.data as ChainEdgeBuildData | undefined;
+    if (!data || data.mass == null || data.unit == null) continue;
+    const outKey = `${edge.source}|${data.unit}`;
+    const inKey = `${edge.target}|${data.unit}`;
+    outSum.set(outKey, (outSum.get(outKey) ?? 0) + data.mass);
+    outCount.set(outKey, (outCount.get(outKey) ?? 0) + 1);
+    inSum.set(inKey, (inSum.get(inKey) ?? 0) + data.mass);
+    inCount.set(inKey, (inCount.get(inKey) ?? 0) + 1);
+  }
+  for (const edge of edges) {
+    const data = edge.data as ChainEdgeBuildData | undefined;
+    if (!data || data.mass == null || data.unit == null) continue;
+    const outKey = `${edge.source}|${data.unit}`;
+    const inKey = `${edge.target}|${data.unit}`;
+    let fraction: number;
+    if ((outCount.get(outKey) ?? 0) > 1) {
+      fraction = data.mass / (outSum.get(outKey) || 1);
+    } else if ((inCount.get(inKey) ?? 0) > 1) {
+      fraction = data.mass / (inSum.get(inKey) || 1);
+    } else {
+      fraction = 1;
+    }
+    data.pctLabel = formatShare(fraction);
+  }
 }
 
 function formatDateOrNull(value: Date | string | null | undefined): string | null {
@@ -196,13 +275,28 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
   return nodes;
 }
 
-function edge(source: string, target: string, label?: string | null): Edge {
+function edge(
+  source: string,
+  target: string,
+  opts?: { mass?: EdgeMass | null; variant?: "flow" | "equipment" }
+): Edge {
+  const variant = opts?.variant ?? "flow";
+  const mass = opts?.mass ?? null;
+  const color = variant === "equipment" ? EQUIPMENT_EDGE_COLOR : FLOW_EDGE_COLOR;
   return {
     id: `${source}->${target}`,
     source,
     target,
-    ...EDGE_STYLE,
-    ...(label ? { label } : {}),
+    type: "chainEdge",
+    markerEnd: { type: MarkerType.ArrowClosed, color },
+    data: {
+      variant,
+      color,
+      mass: mass?.value ?? null,
+      unit: mass?.unit ?? null,
+      kgLabel: massLabel(mass),
+      pctLabel: null,
+    } satisfies ChainEdgeBuildData,
   };
 }
 
@@ -217,16 +311,19 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
   if (data.productionRun) {
     for (const feedstock of data.feedstocks) {
       edges.push(
-        edge(
-          `feedstock:${feedstock.id}`,
-          `production-run:${data.productionRun.id}`,
-          formatKg(feedstock.massUsedKg)
-        )
+        edge(`feedstock:${feedstock.id}`, `production-run:${data.productionRun.id}`, {
+          mass: { value: feedstock.massUsedKg, unit: "kg" },
+        })
       );
     }
 
     if (data.reactor) {
-      edges.push(edge(`reactor:${data.reactor.id}`, `production-run:${data.productionRun.id}`));
+      // Equipment association, not a mass flow — drawn as a quiet dashed link.
+      edges.push(
+        edge(`reactor:${data.reactor.id}`, `production-run:${data.productionRun.id}`, {
+          variant: "equipment",
+        })
+      );
     }
   }
 
@@ -235,42 +332,36 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
       edge(
         `production-run:${data.productionRun.id}`,
         `biochar-product:${data.biocharProduct.id}`,
-        formatKg(data.biocharProduct.massKg)
+        { mass: { value: data.biocharProduct.massKg, unit: "kg" } }
       )
     );
   }
 
   if (data.biocharProduct && data.order) {
     edges.push(
-      edge(
-        `biochar-product:${data.biocharProduct.id}`,
-        `order:${data.order.id}`,
-        formatKg(data.order.quantityKg)
-      )
+      edge(`biochar-product:${data.biocharProduct.id}`, `order:${data.order.id}`, {
+        mass: { value: data.order.quantityKg, unit: "kg" },
+      })
     );
   }
 
-  const deliveryLabel = formatKg(data.delivery.massDryKg);
+  const deliveryMass: EdgeMass = { value: data.delivery.massDryKg, unit: "kg" };
   if (data.order) {
     edges.push(
-      edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`, deliveryLabel)
+      edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`, { mass: deliveryMass })
     );
   } else if (data.biocharProduct) {
     edges.push(
-      edge(
-        `biochar-product:${data.biocharProduct.id}`,
-        `delivery:${data.delivery.id}`,
-        deliveryLabel
-      )
+      edge(`biochar-product:${data.biocharProduct.id}`, `delivery:${data.delivery.id}`, {
+        mass: deliveryMass,
+      })
     );
   }
 
   edges.push(
-    edge(
-      `delivery:${data.delivery.id}`,
-      `application:${data.application.id}`,
-      formatDryTons(data.application.biocharAppliedDryTons)
-    )
+    edge(`delivery:${data.delivery.id}`, `application:${data.application.id}`, {
+      mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
+    })
   );
 
   return edges;
@@ -293,6 +384,10 @@ function layoutGraph(
   edges: Edge[],
   options: ChainGraphOptions
 ): { nodes: Node[]; edges: Edge[] } {
+  // Branch shares depend on the full (merged + deduped) edge set, so annotate
+  // here — covers both the single-rollback and batch roll-up graphs.
+  computeEdgeShareLabels(edges);
+
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph(DAGRE_CONFIG);

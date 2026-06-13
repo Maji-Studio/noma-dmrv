@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ListChecks, Plus } from "@phosphor-icons/react";
 import {
@@ -23,7 +23,6 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
-import { INGREDIENT_TYPE_LABELS } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 
 // ============================================
@@ -42,7 +41,7 @@ function formatIngredientsSummary(
   return ingredients
     .map((ing) => {
       const ratio = ing.ratio != null ? ` (${(ing.ratio * 100).toFixed(0)}%)` : "";
-      return `${ing.name}${ratio}`;
+      return `${ing.feedstockType.name}${ratio}`;
     })
     .join(", ");
 }
@@ -81,9 +80,7 @@ function createColumns(
       header: "Ingredients",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)] max-w-xs truncate block">
-          {row.original.ingredients?.length
-            ? `${row.original.ingredients.length} ingredient${row.original.ingredients.length !== 1 ? "s" : ""}`
-            : "\u2014"}
+          {formatIngredientsSummary(row.original.ingredients)}
         </span>
       ),
     },
@@ -202,7 +199,7 @@ export function FormulationList() {
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createFormulation.isPending || updateFormulation.isPending;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -238,8 +235,8 @@ export function FormulationList() {
       sections.push({
         title: "Ingredients",
         fields: entity.ingredients.map((ing) => ({
-          label: `${INGREDIENT_TYPE_LABELS[ing.ingredientType as keyof typeof INGREDIENT_TYPE_LABELS] ?? ing.ingredientType}`,
-          value: `${ing.name}${ing.ratio != null ? ` — ${(ing.ratio * 100).toFixed(0)}%` : ""}${ing.description ? ` (${ing.description})` : ""}`,
+          label: ing.feedstockType.name,
+          value: `${ing.feedstockType.category}${ing.ratio != null ? ` — ${(ing.ratio * 100).toFixed(0)}%` : ""}${ing.description ? ` (${ing.description})` : ""}`,
         })),
       });
     }

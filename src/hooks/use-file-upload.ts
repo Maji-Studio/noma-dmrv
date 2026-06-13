@@ -7,6 +7,12 @@ import {
 } from "@/hooks/use-documents";
 import type { DocumentType } from "@/schemas/documents";
 
+interface EvidenceExif {
+  capturedAt?: string;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+}
+
 export type UploadState =
   | { status: "idle" }
   | { status: "uploading"; progress: number }
@@ -19,13 +25,18 @@ export interface UploadParams {
   documentType: DocumentType;
   file: File;
   capturedAt?: string;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
   description?: string;
   onProgress?: (progress: number) => void;
   signal?: AbortSignal;
 }
 
 export interface UseFileUploadResult {
-  upload: (params: UploadParams) => Promise<{ documentId: string }>;
+  upload: (params: UploadParams) => Promise<{
+    documentId: string;
+    metadata: Record<string, unknown>;
+  }>;
   state: UploadState;
   reset: () => void;
   cancel: () => void;
@@ -64,6 +75,53 @@ function putWithProgress(
   });
 }
 
+function toIsoString(value: unknown): string | undefined {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value !== "string" && typeof value !== "number") return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function numberFrom(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+async function extractEvidenceExif(
+  file: File,
+  documentType: DocumentType,
+): Promise<EvidenceExif> {
+  if (documentType !== "photo" && documentType !== "video") {
+    return {};
+  }
+
+  try {
+    const exifr = await import("exifr");
+    const parsed = (await exifr.parse(file, {
+      gps: true,
+      tiff: true,
+      exif: true,
+      xmp: true,
+    })) as Record<string, unknown> | undefined;
+    if (!parsed) return {};
+
+    return {
+      capturedAt:
+        toIsoString(parsed.DateTimeOriginal) ??
+        toIsoString(parsed.CreateDate) ??
+        toIsoString(parsed.ModifyDate) ??
+        toIsoString(parsed.DateCreated),
+      gpsLatitude:
+        numberFrom(parsed.latitude) ?? numberFrom(parsed.GPSLatitude),
+      gpsLongitude:
+        numberFrom(parsed.longitude) ?? numberFrom(parsed.GPSLongitude),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export function useFileUpload(): UseFileUploadResult {
   const [state, setState] = useState<UploadState>({ status: "idle" });
   const requestMutation = useRequestUpload();
@@ -83,7 +141,18 @@ export function useFileUpload(): UseFileUploadResult {
   }, []);
 
   const upload = useCallback<UseFileUploadResult["upload"]>(
-    async ({ entityType, entityId, documentType, file, capturedAt, description, onProgress, signal }) => {
+    async ({
+      entityType,
+      entityId,
+      documentType,
+      file,
+      capturedAt,
+      gpsLatitude,
+      gpsLongitude,
+      description,
+      onProgress,
+      signal,
+    }) => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -95,6 +164,7 @@ export function useFileUpload(): UseFileUploadResult {
       const isActive = () => abortRef.current === controller;
       safeSetState({ status: "uploading", progress: 0 });
       try {
+        const parsedExif = await extractEvidenceExif(file, documentType);
         const presign = await requestMutation.mutateAsync({
           entityType,
           entityId,
@@ -102,7 +172,9 @@ export function useFileUpload(): UseFileUploadResult {
           fileName: file.name,
           contentType: file.type || "application/octet-stream",
           sizeBytes: file.size,
-          capturedAt,
+          capturedAt: capturedAt ?? parsedExif.capturedAt,
+          gpsLatitude: gpsLatitude ?? parsedExif.gpsLatitude,
+          gpsLongitude: gpsLongitude ?? parsedExif.gpsLongitude,
           description,
         });
         if (controller.signal.aborted) throw new Error("Upload aborted");
@@ -123,7 +195,10 @@ export function useFileUpload(): UseFileUploadResult {
         if (isActive()) {
           safeSetState({ status: "uploaded", documentId: presign.documentId });
         }
-        return { documentId: presign.documentId };
+        return {
+          documentId: presign.documentId,
+          metadata: presign.metadata,
+        };
       } catch (err) {
         if (isActive()) {
           const message = err instanceof Error ? err.message : "Upload failed";

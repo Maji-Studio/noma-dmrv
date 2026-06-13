@@ -24,7 +24,11 @@ function gated(): NextResponse | null {
 }
 
 function secret(): string {
-  return env.STORAGE_SIGNING_SECRET ?? getOrCreateEphemeralSigningSecret();
+  return (
+    env.STORAGE_SIGNING_SECRET ??
+    env.BETTER_AUTH_SECRET ??
+    getOrCreateEphemeralSigningSecret()
+  );
 }
 
 function rootDir(): string {

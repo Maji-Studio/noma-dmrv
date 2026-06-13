@@ -175,6 +175,7 @@ function EntitySideSheet({
                           key={field.label}
                           label={field.label}
                           value={field.value}
+                          certifyRequired={field.certifyRequired}
                         />
                       ))}
                     </DetailRow>

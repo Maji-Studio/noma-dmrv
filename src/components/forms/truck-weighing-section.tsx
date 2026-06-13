@@ -35,6 +35,8 @@ interface TruckWeighingSectionProps {
   departureRegister: UseFormRegisterReturn;
   arrivalError?: string;
   departureError?: string;
+  arrivalCertifyRequired?: boolean;
+  departureCertifyRequired?: boolean;
   isSubmitting?: boolean;
 }
 
@@ -48,6 +50,8 @@ export function TruckWeighingSection({
   departureRegister,
   arrivalError,
   departureError,
+  arrivalCertifyRequired,
+  departureCertifyRequired,
   isSubmitting = false,
 }: TruckWeighingSectionProps) {
   const weighbridgeWetMassKg = deriveWeighbridgeWetMass(
@@ -95,6 +99,7 @@ export function TruckWeighingSection({
           id="truckMassOnArrivalKg"
           label="Truck Mass Before Unloading (kg)"
           error={arrivalError}
+          certifyRequired={arrivalCertifyRequired}
         >
           <FormInput
             id="truckMassOnArrivalKg"
@@ -111,6 +116,7 @@ export function TruckWeighingSection({
           id="truckMassOnDepartureKg"
           label="Truck Mass After Unloading (kg)"
           error={departureError}
+          certifyRequired={departureCertifyRequired}
         >
           <FormInput
             id="truckMassOnDepartureKg"

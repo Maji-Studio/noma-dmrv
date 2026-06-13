@@ -161,6 +161,77 @@ describe("application mutations", () => {
     }
   });
 
+  it("defaults new applications to visual evidence", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-EVIDENCE`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+      });
+      fixture.applicationIds.push(application.id);
+
+      expect(application.evidenceMethod).toBe("visual");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("persists boundary evidence method with the GIS boundary reference", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-BOUNDARY`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+        evidenceMethod: "boundary",
+        gisBoundaryReference: "https://maps.example.test/field-a",
+      });
+      fixture.applicationIds.push(application.id);
+
+      expect(application.evidenceMethod).toBe("boundary");
+      expect(application.gisBoundaryReference).toBe(
+        "https://maps.example.test/field-a",
+      );
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("normalizes blank GIS boundary references to null", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-BLANK-GIS`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+        evidenceMethod: "boundary",
+        gisBoundaryReference: "   ",
+      });
+      fixture.applicationIds.push(application.id);
+
+      expect(application.gisBoundaryReference).toBeNull();
+
+      const updated = await updateApplication(TEST_USER_ID, application.id, {
+        gisBoundaryReference: "  https://maps.example.test/field-a  ",
+      });
+      expect(updated.gisBoundaryReference).toBe(
+        "https://maps.example.test/field-a",
+      );
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("includes location and facility soil temperature defaults in delivery options", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);

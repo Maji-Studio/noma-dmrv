@@ -2,27 +2,36 @@
  * Feedstock-type options for searchable entity selection.
  */
 
-import { ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { feedstockTypes } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 export async function getFeedstockTypes(params: {
   search?: string;
+  usage?: "pyrolysis" | "blend";
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, limit } = params;
+  const { search, usage, limit } = params;
 
-  let whereClause: SQL | undefined;
+  const conditions: SQL[] = [];
   if (search) {
     const searchPattern = `%${search}%`;
-    whereClause = or(
-      ilike(feedstockTypes.code, searchPattern),
-      ilike(feedstockTypes.name, searchPattern),
-      ilike(feedstockTypes.category, searchPattern),
-      ilike(feedstockTypes.usage, searchPattern)
+    conditions.push(
+      or(
+        ilike(feedstockTypes.code, searchPattern),
+        ilike(feedstockTypes.name, searchPattern),
+        ilike(feedstockTypes.category, searchPattern),
+        ilike(feedstockTypes.usage, searchPattern)
+      )!
     );
   }
+
+  if (usage) {
+    conditions.push(eq(feedstockTypes.usage, usage));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const results = await db
     .select({

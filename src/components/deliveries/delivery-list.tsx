@@ -31,6 +31,7 @@ import type {
   CreateDeliveryData,
 } from "@/schemas/deliveries";
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 
 // ============================================
 // Helper Functions
@@ -379,6 +380,7 @@ export function DeliveryList() {
                   fields: [
                     {
                       label: "Delivered Wet Mass",
+                      ...certificationDetailField("delivery", "deliveredWetMassKg"),
                       value:
                         sideSheetEntity.deliveredWetMassKg != null
                           ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
@@ -401,6 +403,7 @@ export function DeliveryList() {
                     { label: "Vehicle", value: sideSheetEntity.vehicleName },
                     {
                       label: "Truck Mass on Arrival",
+                      ...certificationDetailField("delivery", "truckMassOnArrivalKg"),
                       value:
                         sideSheetEntity.truckMassOnArrivalKg != null
                           ? `${sideSheetEntity.truckMassOnArrivalKg.toLocaleString()} kg`
@@ -408,6 +411,7 @@ export function DeliveryList() {
                     },
                     {
                       label: "Truck Mass on Departure",
+                      ...certificationDetailField("delivery", "truckMassOnDepartureKg"),
                       value:
                         sideSheetEntity.truckMassOnDepartureKg != null
                           ? `${sideSheetEntity.truckMassOnDepartureKg.toLocaleString()} kg`

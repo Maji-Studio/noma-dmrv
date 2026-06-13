@@ -37,7 +37,10 @@ function buildFromEnv(): StorageProvider {
   return new LocalFsProvider({
     root: env.STORAGE_LOCAL_FS_ROOT,
     appUrl: env.NEXT_PUBLIC_APP_URL,
-    signingSecret: env.STORAGE_SIGNING_SECRET ?? getOrCreateEphemeralSigningSecret(),
+    signingSecret:
+      env.STORAGE_SIGNING_SECRET ??
+      env.BETTER_AUTH_SECRET ??
+      getOrCreateEphemeralSigningSecret(),
   });
 }
 
