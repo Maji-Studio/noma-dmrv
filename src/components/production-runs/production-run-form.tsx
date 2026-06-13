@@ -13,7 +13,8 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
+import { Factory, Plant, Lightning, FlowArrow, FileCsv } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormActions, FormSection, FormSpine, SectionLabel } from "@/components/forms";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -245,6 +246,8 @@ export function ProductionRunForm({
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
+    // onTouched so the spine markers can turn red on blur, not just on submit.
+    mode: "onTouched",
     defaultValues: {
       facilityId: productionRun?.facilityId || contextFacilityId || "",
       date: productionRun?.date ?? formatLocalDate(new Date()),
@@ -343,9 +346,18 @@ export function ProductionRunForm({
 
   return (
     <div className="space-y-20">
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      <form id={formId} onSubmit={handleFormSubmit}>
+      <FormSpine control={control}>
       {/* ── Run Setup ── */}
-      <FormSection title="Run Setup" divider={false}>
+      <FormSection
+        title="Run Setup"
+        icon={<Factory size={14} weight="bold" />}
+        fields={["reactorId", "status", "date", "operatorId", "startTime", "endTime"]}
+        required={["reactorId", "date", "startTime"]}
+        // CERT: a run must be marked Complete before it's certification-ready,
+        // so the section can't go green while Status is still Draft.
+        certReady={(v) => v.status === "complete"}
+      >
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
@@ -431,7 +443,18 @@ export function ProductionRunForm({
       </FormSection>
 
       {/* ── Feedstock & Processing ── */}
-      <FormSection title="Feedstock & Processing">
+      <FormSection
+        title="Feedstock & Processing"
+        icon={<Plant size={14} weight="bold" />}
+        fields={[
+          "feedstockStorageLocationId",
+          "feedstockWetMassKg",
+          "feedstockMoisturePercent",
+          "feedingRateKgHr",
+          "residenceTimeMinutes",
+        ]}
+        required={["feedstockStorageLocationId", "feedstockWetMassKg", "feedstockMoisturePercent"]}
+      >
 
         {!watchedFacilityId && (
           <p className="text-[var(--color-text-tertiary)] body-caption">
@@ -547,7 +570,30 @@ export function ProductionRunForm({
       </FormSection>
 
       {/* ── Output & Energy ── */}
-      <FormSection title="Output & Energy">
+      <FormSection
+        title="Output & Energy"
+        icon={<Lightning size={14} weight="bold" />}
+        fields={[
+          "biocharStorageLocationId",
+          "biocharOutputKg",
+          "biocharMoisturePercent",
+          "dieselOperationLiters",
+          "dieselGensetLiters",
+          "preprocessingFuelLiters",
+          "electricityKwh",
+        ]}
+        // Cert-clean: every CERT-tagged output/energy value must be entered
+        // (a real 0 counts; blank does not) for this section to read complete.
+        required={[
+          "biocharStorageLocationId",
+          "biocharOutputKg",
+          "biocharMoisturePercent",
+          "dieselOperationLiters",
+          "dieselGensetLiters",
+          "preprocessingFuelLiters",
+          "electricityKwh",
+        ]}
+      >
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -694,26 +740,13 @@ export function ProductionRunForm({
 
       </FormSection>
 
-      {/* ── Process Flow ── */}
-      <FormSection title="Process Flow" className="space-y-12">
-        <ProcessFlowPreview
-          sourceBinName={selectedSourceBin?.name ?? null}
-          feedstockKg={typeof watchWetMass === "number" ? watchWetMass : null}
-          feedstockDryKg={previewDryMass}
-          reactorName={selectedReactor?.name ?? null}
-          biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
-          biocharDryKg={previewBiocharDryMass}
-          destinationBinName={selectedDestBin?.name ?? null}
-        />
-      </FormSection>
-
-      {/* ── Production Readings ── */}
-      <FormSection title="Production Readings">
+      {/* ── Readings CSV Import ── */}
+      <FormSection title="Readings CSV Import" icon={<FileCsv size={14} weight="bold" />}>
 
         <FormField
           id="readingsCsv"
-          label="Readings CSV"
-          helperText="Upload reactor-day PLC CSV files for this run."
+          label="Reactor-day CSV"
+          helperText="Upload reactor-day PLC CSV files. Imported rows populate the production readings table below."
           certifyRequired
         >
           {isEditMode && productionRun ? (
@@ -726,7 +759,27 @@ export function ProductionRunForm({
           )}
         </FormField>
       </FormSection>
+      </FormSpine>
 
+      {/* Process Flow — a derived recap of the run, not a data-entry step, so
+          it lives outside the numbered spine and only appears once there's
+          something to show. */}
+      {(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
+        <div className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-20">
+          <SectionLabel icon={<FlowArrow size={14} weight="bold" />}>
+            Process Flow
+          </SectionLabel>
+          <ProcessFlowPreview
+            sourceBinName={selectedSourceBin?.name ?? null}
+            feedstockKg={typeof watchWetMass === "number" ? watchWetMass : null}
+            feedstockDryKg={previewDryMass}
+            reactorName={selectedReactor?.name ?? null}
+            biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
+            biocharDryKg={previewBiocharDryMass}
+            destinationBinName={selectedDestBin?.name ?? null}
+          />
+        </div>
+      )}
       </form>
 
       {/* ── Extension content (e.g. readings/samples/incidents) — always before the CTA ── */}
