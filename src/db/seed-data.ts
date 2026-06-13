@@ -1642,6 +1642,8 @@ async function seedDemoData() {
         if (massKg <= 0) return; // leave a few bins empty on purpose
         const binId = demoId(extraBinBase + i);
         if (type === 'feedstock_bin') {
+          const moistureContentPercent = 15;
+          const moistureFactor = 1 - moistureContentPercent / 100;
           extraFeedstocks.push({
             id: demoId(extraBinBase + 100 + i),
             code: `FI-26-${900 + i}`,
@@ -1649,8 +1651,8 @@ async function seedDemoData() {
             status: 'complete',
             feedstockTypeId: feedstockTypeRotation[i % feedstockTypeRotation.length],
             massDryKg: massKg,
-            massWetKg: Math.round(massKg / 0.85),
-            moistureContentPercent: 15,
+            massWetKg: Math.round(massKg / moistureFactor),
+            moistureContentPercent,
             storageLocationId: binId,
           });
         } else if (type === 'biochar_bin') {
@@ -1669,6 +1671,9 @@ async function seedDemoData() {
             id: demoId(extraBinBase + 300 + i),
             code: `BP-26-${900 + i}`,
             facilityId: ids.facilityMoshi,
+            productionDate: new Date('2026-05-20T12:00:00.000Z'),
+            status: 'testing',
+            composition: {},
             massKg,
             storageLocationId: binId,
           });
