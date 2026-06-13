@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { getUser } from "@/lib/auth/server";
+import { toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
@@ -198,10 +199,7 @@ export async function createCreditBatchFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to create credit batch",
+      error: toActionError(error, "Failed to create credit batch"),
     };
   }
 }
@@ -275,10 +273,7 @@ export async function updateCreditBatchFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to update credit batch",
+      error: toActionError(error, "Failed to update credit batch"),
     };
   }
 }
@@ -315,10 +310,7 @@ export async function deleteCreditBatchFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to delete credit batch",
+      error: toActionError(error, "Failed to delete credit batch"),
     };
   }
 }

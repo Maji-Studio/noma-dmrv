@@ -166,7 +166,10 @@ describe("performRegistryCreate", () => {
   });
 
   it("rejects the row with a failed event carrying the registry response body when the POST fails and the lookup misses", async () => {
-    const registryBody = { errors: [{ detail: "quantity must be positive" }] };
+    const registryBody = {
+      errors: [{ detail: "quantity must be positive" }],
+      client_secret: "do-not-store",
+    };
     const args = makeArgs({
       create: vi.fn(async () => {
         throw new IsometricApiError("422 Unprocessable", 422, registryBody, "http");
@@ -174,7 +177,9 @@ describe("performRegistryCreate", () => {
     });
 
     await expect(performRegistryCreate(args)).rejects.toThrowError(
-      new SafeError(`${FAILURE_PREFIX}: 422 Unprocessable`),
+      new SafeError(
+        `${FAILURE_PREFIX}: Provider rejected the request (422): quantity must be positive`,
+      ),
     );
 
     expect(args.reconcile).toHaveBeenCalledTimes(1);
@@ -187,14 +192,20 @@ describe("performRegistryCreate", () => {
       requestPayload: REQUEST_PAYLOAD,
       responsePayload: {
         mapping_revision: MAPPING_REVISION,
-        body: registryBody,
+        body: {
+          errors: [{ detail: "quantity must be positive" }],
+          client_secret: "[REDACTED]",
+        },
       },
-      errorMessage: "422 Unprocessable",
+      errorMessage: "Provider rejected the request (422): quantity must be positive",
     });
     expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
       USER_ID,
       ROW_ID,
-      { errorMessage: "422 Unprocessable" },
+      {
+        errorMessage:
+          "Provider rejected the request (422): quantity must be positive",
+      },
     );
   });
 
@@ -212,7 +223,7 @@ describe("performRegistryCreate", () => {
       expect.objectContaining({
         status: "failed",
         responsePayload: { mapping_revision: MAPPING_REVISION },
-        errorMessage: "socket hang up",
+        errorMessage: "Registry create failed. Try again.",
       }),
     );
   });
