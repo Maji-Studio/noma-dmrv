@@ -12,28 +12,39 @@ const ING_B = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
 const ING_C = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
 const BIN_A = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
 const BIN_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2";
+const FT_A = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
+const FT_B = "cccccccc-cccc-4ccc-8ccc-ccccccccccc2";
+const FT_C = "cccccccc-cccc-4ccc-8ccc-ccccccccccc3";
+
+const feedstockType = (id: string, name: string, category = "compost") => ({
+  id,
+  name,
+  category,
+});
 
 describe("reconcileComposition", () => {
   it("preserves storageLocationId and massKg by formulationIngredientId across re-emissions", () => {
     const formulation = {
       ingredients: [
-        { id: ING_A, name: "Biochar", ingredientType: "biochar", ratio: 0.8 },
-        { id: ING_B, name: "Compost", ingredientType: "compost", ratio: 0.2 },
+        { id: ING_A, feedstockTypeId: FT_A, feedstockType: feedstockType(FT_A, "Biochar"), ratio: 0.8 },
+        { id: ING_B, feedstockTypeId: FT_B, feedstockType: feedstockType(FT_B, "Compost"), ratio: 0.2 },
       ],
     };
     const existing: IngredientBin[] = [
       {
         formulationIngredientId: ING_A,
-        ingredientName: "Biochar",
-        ingredientType: "biochar",
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Biochar",
+        feedstockTypeCategory: "compost",
         ratio: 0.8,
         massKg: 80,
         storageLocationId: BIN_A,
       },
       {
         formulationIngredientId: ING_B,
-        ingredientName: "Compost",
-        ingredientType: "compost",
+        feedstockTypeId: FT_B,
+        feedstockTypeName: "Compost",
+        feedstockTypeCategory: "compost",
         ratio: 0.2,
         massKg: 20,
         storageLocationId: BIN_B,
@@ -46,17 +57,18 @@ describe("reconcileComposition", () => {
     expect(next[1]).toMatchObject({ formulationIngredientId: ING_B, storageLocationId: BIN_B, massKg: 20 });
   });
 
-  it("ingests authoritative name/type/ratio from the formulation, overwriting prior values", () => {
+  it("ingests authoritative feedstock type metadata and ratio from the formulation", () => {
     const formulation = {
       ingredients: [
-        { id: ING_A, name: "Biochar v2", ingredientType: "biochar", ratio: 0.7 },
+        { id: ING_A, feedstockTypeId: FT_A, feedstockType: feedstockType(FT_A, "Biochar v2", "mineral"), ratio: 0.7 },
       ],
     };
     const existing: IngredientBin[] = [
       {
         formulationIngredientId: ING_A,
-        ingredientName: "Old Name",
-        ingredientType: "wrong",
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Old Name",
+        feedstockTypeCategory: "wrong",
         ratio: 0.99,
         massKg: 50,
         storageLocationId: BIN_A,
@@ -64,24 +76,49 @@ describe("reconcileComposition", () => {
     ];
 
     const next = reconcileComposition(formulation, existing);
-    expect(next[0].ingredientName).toBe("Biochar v2");
-    expect(next[0].ingredientType).toBe("biochar");
+    expect(next[0].feedstockTypeName).toBe("Biochar v2");
+    expect(next[0].feedstockTypeCategory).toBe("mineral");
     expect(next[0].ratio).toBe(0.7);
     expect(next[0].storageLocationId).toBe(BIN_A);
+    expect(next[0].massKg).toBe(50);
+  });
+
+  it("clears storageLocationId when the formulation line changes feedstock type", () => {
+    const formulation = {
+      ingredients: [
+        { id: ING_A, feedstockTypeId: FT_B, feedstockType: feedstockType(FT_B, "Compost"), ratio: 0.7 },
+      ],
+    };
+    const existing: IngredientBin[] = [
+      {
+        formulationIngredientId: ING_A,
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Biochar",
+        feedstockTypeCategory: "compost",
+        ratio: 0.99,
+        massKg: 50,
+        storageLocationId: BIN_A,
+      },
+    ];
+
+    const next = reconcileComposition(formulation, existing);
+    expect(next[0].feedstockTypeId).toBe(FT_B);
+    expect(next[0].storageLocationId).toBeNull();
     expect(next[0].massKg).toBe(50);
   });
 
   it("drops rows for ingredients no longer in the formulation", () => {
     const formulation = {
       ingredients: [
-        { id: ING_A, name: "Biochar", ingredientType: "biochar", ratio: 1 },
+        { id: ING_A, feedstockTypeId: FT_A, feedstockType: feedstockType(FT_A, "Biochar"), ratio: 1 },
       ],
     };
     const existing: IngredientBin[] = [
       {
         formulationIngredientId: ING_B,
-        ingredientName: "Compost",
-        ingredientType: "compost",
+        feedstockTypeId: FT_B,
+        feedstockTypeName: "Compost",
+        feedstockTypeCategory: "compost",
         ratio: 0.2,
         massKg: 20,
         storageLocationId: BIN_B,
@@ -96,15 +133,16 @@ describe("reconcileComposition", () => {
   it("adds new ingredients with null bin and mass", () => {
     const formulation = {
       ingredients: [
-        { id: ING_A, name: "Biochar", ingredientType: "biochar", ratio: 0.5 },
-        { id: ING_C, name: "New", ingredientType: "amendment", ratio: 0.5 },
+        { id: ING_A, feedstockTypeId: FT_A, feedstockType: feedstockType(FT_A, "Biochar"), ratio: 0.5 },
+        { id: ING_C, feedstockTypeId: FT_C, feedstockType: feedstockType(FT_C, "New", "amendment"), ratio: 0.5 },
       ],
     };
     const existing: IngredientBin[] = [
       {
         formulationIngredientId: ING_A,
-        ingredientName: "Biochar",
-        ingredientType: "biochar",
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Biochar",
+        feedstockTypeCategory: "compost",
         ratio: 0.5,
         massKg: 50,
         storageLocationId: BIN_A,
@@ -123,15 +161,16 @@ describe("reconcileComposition", () => {
   it("returns rows from a formulation when there are no existing rows", () => {
     const formulation = {
       ingredients: [
-        { id: ING_A, name: "Biochar", ingredientType: "biochar", ratio: 1 },
+        { id: ING_A, feedstockTypeId: FT_A, feedstockType: feedstockType(FT_A, "Biochar"), ratio: 1 },
       ],
     };
     const next = reconcileComposition(formulation, null);
     expect(next).toEqual([
       {
         formulationIngredientId: ING_A,
-        ingredientName: "Biochar",
-        ingredientType: "biochar",
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Biochar",
+        feedstockTypeCategory: "compost",
         ratio: 1,
         massKg: null,
         storageLocationId: null,
@@ -176,8 +215,9 @@ describe("fromCompositionJsonb", () => {
       ingredients: [
         {
           formulationIngredientId: ING_A,
-          ingredientName: "Biochar",
-          ingredientType: "biochar",
+          feedstockTypeId: FT_A,
+          feedstockTypeName: "Biochar",
+          feedstockTypeCategory: "compost",
           ratio: 1,
           massKg: 100,
           storageLocationId: BIN_A,
@@ -193,8 +233,9 @@ describe("fromCompositionJsonb", () => {
         { foo: "bar" },
         {
           formulationIngredientId: ING_A,
-          ingredientName: "Biochar",
-          ingredientType: "biochar",
+          feedstockTypeId: FT_A,
+          feedstockTypeName: "Biochar",
+          feedstockTypeCategory: "compost",
           ratio: 1,
           massKg: 100,
           storageLocationId: BIN_A,
@@ -210,8 +251,9 @@ describe("fromCompositionJsonb", () => {
 describe("toCompositionJsonb", () => {
   const bin: IngredientBin = {
     formulationIngredientId: ING_A,
-    ingredientName: "Biochar",
-    ingredientType: "biochar",
+    feedstockTypeId: FT_A,
+    feedstockTypeName: "Biochar",
+    feedstockTypeCategory: "compost",
     ratio: 1,
     massKg: 100,
     storageLocationId: BIN_A,

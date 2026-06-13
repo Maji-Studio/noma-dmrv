@@ -9,26 +9,7 @@ import { z } from "zod";
 // Constants
 // ============================================
 
-export const INGREDIENT_TYPES = [
-  "compost",
-  "mineral",
-  "lime",
-  "binder",
-  "amendment",
-  "other",
-] as const;
-
-export const INGREDIENT_TYPE_LABELS: Record<
-  (typeof INGREDIENT_TYPES)[number],
-  string
-> = {
-  compost: "Compost",
-  mineral: "Mineral",
-  lime: "Lime",
-  binder: "Binder",
-  amendment: "Amendment",
-  other: "Other",
-};
+export const FORMULATION_LINE_FEEDSTOCK_USAGE = "blend" as const;
 
 // ============================================
 // Ratio Validation (0 to 1)
@@ -46,13 +27,10 @@ const optionalRatioSchema = z
 // ============================================
 
 export const formulationIngredientSchema = z.object({
-  ingredientType: z.enum(INGREDIENT_TYPES, {
-    error: "Ingredient type is required",
-  }),
-  name: z
+  feedstockTypeId: z
     .string()
-    .min(1, "Ingredient name is required")
-    .max(255, "Name must be less than 255 characters"),
+    .min(1, "Blend material is required")
+    .uuid("Select a valid blend material"),
   ratio: optionalRatioSchema,
 });
 

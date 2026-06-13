@@ -201,8 +201,8 @@ const TABLE_META: Record<string, TableMeta> = {
   formulation_ingredients: {
     area: "Products",
     modulePath: "src/db/schema/products.ts",
-    summary: "Individual ingredient entries within a formulation recipe.",
-    useCases: ["Blend composition tracking", "Ingredient ratio validation"],
+    summary: "Blend feedstock-type entries within a formulation recipe.",
+    useCases: ["Blend composition tracking", "Blend material ratio validation"],
   },
   biochar_products: {
     area: "Products",

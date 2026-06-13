@@ -73,7 +73,10 @@ export function useBiocharComposition(
   // Sync rows when the formulation changes. Guarded by a ref so initial mount
   // (when `defaultValues.ingredientBins` was hydrated from the existing
   // product) does not overwrite user-entered fields.
-  const syncedFormulationIdRef = useRef(initialFormulationId ?? "");
+  const initialRows = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
+  const syncedFormulationIdRef = useRef(
+    initialFormulationId && initialRows.length > 0 ? initialFormulationId : ""
+  );
   useEffect(() => {
     // Pure-biochar product (no formulation) → no ingredient bins. Clear any rows
     // left over from a previously-selected formulation.
@@ -116,8 +119,9 @@ export function useBiocharComposition(
     key: field.id,
     index,
     formulationIngredientId: field.formulationIngredientId,
-    ingredientName: field.ingredientName,
-    ingredientType: field.ingredientType,
+    feedstockTypeId: field.feedstockTypeId,
+    feedstockTypeName: field.feedstockTypeName,
+    feedstockTypeCategory: field.feedstockTypeCategory,
     ratio: field.ratio ?? null,
     removalKg: deriveBinRemovalKg(productMass, biocharRatio, field.ratio ?? null),
     storageLocationFieldName: `ingredientBins.${index}.storageLocationId` as const,

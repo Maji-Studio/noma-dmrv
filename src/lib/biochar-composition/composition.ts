@@ -10,18 +10,23 @@ import type { IngredientBin } from "./types";
 
 interface FormulationIngredientLike {
   id: string;
-  name: string;
-  ingredientType: string;
+  feedstockTypeId: string;
+  feedstockType: {
+    id: string;
+    name: string;
+    category: string;
+  };
   ratio: number | null;
 }
 
 /**
  * Reconcile rows against a formulation's ingredient list.
  *
- * Identity is by `formulationIngredientId`. User-entered `storageLocationId`
- * and `massKg` are preserved; `name`/`type`/`ratio` are taken from the
- * formulation as the authoritative source. Rows for ingredients no longer in
- * the formulation are dropped; new ingredients enter with null bin/mass.
+ * Identity is by `formulationIngredientId`. User-entered `massKg` is
+ * preserved; `storageLocationId` is preserved only while the line still points
+ * at the same feedstock type. Catalog name/category/ratio are taken from the
+ * formulation as the authoritative source. Rows for lines no longer in the
+ * formulation are dropped; new lines enter with null bin/mass.
  */
 export function reconcileComposition(
   formulation: { ingredients: FormulationIngredientLike[] },
@@ -32,12 +37,14 @@ export function reconcileComposition(
     const prior = liveBins.find(
       (eb) => eb.formulationIngredientId === ing.id,
     );
+    const sameFeedstockType = prior?.feedstockTypeId === ing.feedstockTypeId;
     return {
       formulationIngredientId: ing.id,
-      ingredientName: ing.name,
-      ingredientType: ing.ingredientType,
+      feedstockTypeId: ing.feedstockTypeId,
+      feedstockTypeName: ing.feedstockType.name,
+      feedstockTypeCategory: ing.feedstockType.category,
       ratio: ing.ratio ?? null,
-      storageLocationId: prior?.storageLocationId ?? null,
+      storageLocationId: sameFeedstockType ? prior?.storageLocationId ?? null : null,
       massKg: prior?.massKg ?? null,
     };
   });
@@ -79,8 +86,9 @@ export function fromCompositionJsonb(raw: unknown): IngredientBin[] {
     const bin = b as Partial<IngredientBin>;
     return (
       typeof bin.formulationIngredientId === "string" &&
-      typeof bin.ingredientName === "string" &&
-      typeof bin.ingredientType === "string" &&
+      typeof bin.feedstockTypeId === "string" &&
+      typeof bin.feedstockTypeName === "string" &&
+      typeof bin.feedstockTypeCategory === "string" &&
       (bin.ratio == null || Number.isFinite(bin.ratio)) &&
       (bin.massKg == null ||
         (Number.isFinite(bin.massKg) && bin.massKg >= 0)) &&

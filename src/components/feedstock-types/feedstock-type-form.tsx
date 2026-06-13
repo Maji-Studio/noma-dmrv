@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
 import { FormField, FormInput, FormTextarea } from "@/components/forms";
@@ -9,10 +9,12 @@ import { FormSelect } from "@/components/forms/form-select";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   feedstockTypeFormSchema,
-  FEEDSTOCK_CATEGORY_OPTIONS,
+  BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
   FEEDSTOCK_TYPE_USAGE_OPTIONS,
+  PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
   feedstockCategories,
   feedstockTypeUsages,
+  type FeedstockTypeUsage,
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
 import type { FeedstockType } from "@/db/schema/feedstock";
@@ -38,6 +40,7 @@ interface FeedstockTypeFormProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  defaultUsage?: FeedstockTypeUsage;
   /** Optional hint text shown above the form fields */
   hint?: string;
 }
@@ -48,6 +51,7 @@ export function FeedstockTypeForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  defaultUsage,
   hint,
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
@@ -75,6 +79,8 @@ export function FeedstockTypeForm({
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<FeedstockTypeFormData>({
     resolver: zodResolver(feedstockTypeFormSchema),
@@ -85,13 +91,19 @@ export function FeedstockTypeForm({
         : undefined,
       usage: feedstockType?.usage && (feedstockTypeUsages as readonly string[]).includes(feedstockType.usage)
         ? (feedstockType.usage as FeedstockTypeFormData["usage"])
-        : "pyrolysis",
+        : defaultUsage ?? "pyrolysis",
       description: feedstockType?.description ?? "",
       // No form field anymore (UI-only removal) — kept in form state so
       // edit-mode submits pass the persisted value through unchanged.
       registryUrl: feedstockType?.registryUrl ?? "",
     },
   });
+
+  const selectedUsage = useWatch({ control, name: "usage" });
+  const categoryOptions =
+    selectedUsage === "blend"
+      ? BLEND_FEEDSTOCK_CATEGORY_OPTIONS
+      : PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS;
 
   return (
     <div className="space-y-20">
@@ -146,18 +158,20 @@ export function FeedstockTypeForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
-            id="category"
-            label="Category"
-            error={errors.category?.message}
+            id="usage"
+            label="Usage"
+            error={errors.usage?.message}
             required
           >
             <FormSelect
-              id="category"
-              placeholder="Select category..."
+              id="usage"
+              placeholder="Select usage..."
               disabled={isSubmitting}
-              error={!!errors.category}
-              options={FEEDSTOCK_CATEGORY_OPTIONS}
-              {...register("category")}
+              error={!!errors.usage}
+              options={FEEDSTOCK_TYPE_USAGE_OPTIONS}
+              {...register("usage", {
+                onChange: () => setValue("category", "" as FeedstockTypeFormData["category"]),
+              })}
             />
           </FormField>
 
@@ -174,18 +188,18 @@ export function FeedstockTypeForm({
           </FormField>
 
           <FormField
-            id="usage"
-            label="Usage"
-            error={errors.usage?.message}
+            id="category"
+            label="Category"
+            error={errors.category?.message}
             required
           >
             <FormSelect
-              id="usage"
-              placeholder="Select usage..."
+              id="category"
+              placeholder="Select category..."
               disabled={isSubmitting}
-              error={!!errors.usage}
-              options={FEEDSTOCK_TYPE_USAGE_OPTIONS}
-              {...register("usage")}
+              error={!!errors.category}
+              options={categoryOptions}
+              {...register("category")}
             />
           </FormField>
         </div>

@@ -157,6 +157,11 @@ const ENTITY_TYPE_LABELS = {
 
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 
+function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
+  const usage = filterBy?.usage ?? filterBy?.feedstockTypeUsage;
+  return usage === "pyrolysis" || usage === "blend" ? usage : undefined;
+}
+
 export function EntitySelect({
   entityType,
   value,
@@ -535,6 +540,7 @@ export function EntitySelect({
         isOpen={isFeedstockTypeDialogOpen}
         onClose={() => setIsFeedstockTypeDialogOpen(false)}
         onSuccess={handleCreatedEntity}
+        defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
       />
     </div>
   );
