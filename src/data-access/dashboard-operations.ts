@@ -52,6 +52,13 @@ const MAX_NOW_ITEMS = 8;
 /** A completed run stops being "now" after this many days. */
 const NOW_COMPLETED_LOOKBACK_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const EVIDENCE_METHOD_VISUAL = "visual";
+const EVIDENCE_METHOD_BOUNDARY = "boundary";
+const ENTITY_TYPE_APPLICATION = "application";
+const DOC_TYPE_PHOTO = "photo";
+const DOC_TYPE_PDF = "pdf";
+const UPLOAD_STATUS_UPLOADED = "uploaded";
+const GEOTAG_STATUS_PRESENT = "present";
 
 export type DashboardNowKind = "production" | "registry" | "verifier";
 export type DashboardNowStatus = "running" | "complete" | "submitted" | "locked";
@@ -518,32 +525,35 @@ function buildProgress(args: {
 async function loadGpsGapCounts(facilityId: string) {
   const applicationEvidenceGap = or(
     and(
-      eq(applications.evidenceMethod, "visual"),
+      eq(applications.evidenceMethod, EVIDENCE_METHOD_VISUAL),
       or(
         isNull(applications.gpsLatitude),
         isNull(applications.gpsLongitude),
         sql`not exists (
           select 1
           from ${documents}
-          where ${documents.entityType} = 'application'
+          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
             and ${documents.entityId} = ${applications.id}
-            and ${documents.documentType} = 'photo'
-            and (${documents.uploadStatus} = 'uploaded' or ${documents.fileUrl} is not null)
-            and ${documents.metadata}->>'geotagStatus' = 'present'
+            and ${documents.documentType} = ${DOC_TYPE_PHOTO}
+            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
+            and ${documents.metadata}->>'geotagStatus' = ${GEOTAG_STATUS_PRESENT}
         )`,
       )!,
     )!,
     and(
-      eq(applications.evidenceMethod, "boundary"),
-      isNull(applications.gisBoundaryReference),
-      sql`not exists (
-        select 1
-        from ${documents}
-        where ${documents.entityType} = 'application'
-          and ${documents.entityId} = ${applications.id}
-          and ${documents.documentType} = 'pdf'
-          and (${documents.uploadStatus} = 'uploaded' or ${documents.fileUrl} is not null)
-      )`,
+      eq(applications.evidenceMethod, EVIDENCE_METHOD_BOUNDARY),
+      or(
+        isNull(applications.gisBoundaryReference),
+        sql`trim(${applications.gisBoundaryReference}::text) = ''`,
+        sql`not exists (
+          select 1
+          from ${documents}
+          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
+            and ${documents.entityId} = ${applications.id}
+            and ${documents.documentType} = ${DOC_TYPE_PDF}
+            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
+        )`,
+      )!,
     )!,
   );
 
