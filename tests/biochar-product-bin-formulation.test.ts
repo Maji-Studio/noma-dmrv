@@ -17,7 +17,11 @@ import { createBiocharProduct } from "@/data-access/biochar-products";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
-import { biocharProducts, formulations } from "@/db/schema/products";
+import {
+  biocharProducts,
+  formulationIngredients,
+  formulations,
+} from "@/db/schema/products";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -28,6 +32,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   let runId: string;
   let formulationAId: string;
   let formulationBId: string;
+  let formulationIngredientAId: string;
   let pyrolysisTypeId: string;
   let blendTypeAId: string;
   let blendTypeBId: string;
@@ -102,6 +107,16 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
       })
       .returning({ id: feedstockTypes.id });
     blendTypeBId = blendTypeB.id;
+
+    const [formulationIngredientA] = await db
+      .insert(formulationIngredients)
+      .values({
+        formulationId: formulationAId,
+        feedstockTypeId: blendTypeAId,
+        ratio: 0.2,
+      })
+      .returning({ id: formulationIngredients.id });
+    formulationIngredientAId = formulationIngredientA.id;
   });
 
   afterAll(async () => {
@@ -134,6 +149,13 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const formulationIds = [formulationAId, formulationBId].filter(
       (id): id is string => id != null,
     );
+    if (formulationIngredientAId) {
+      await cleanup(() =>
+        db
+          .delete(formulationIngredients)
+          .where(eq(formulationIngredients.id, formulationIngredientAId)),
+      );
+    }
     if (formulationIds.length > 0) {
       await cleanup(() =>
         db.delete(formulations).where(inArray(formulations.id, formulationIds)),
@@ -251,10 +273,10 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
         composition: {
           ingredients: [
             {
-              formulationIngredientId: crypto.randomUUID(),
-              feedstockTypeId: pyrolysisTypeId,
-              feedstockTypeName: "Pyrolysis-only stock",
-              feedstockTypeCategory: "forestry",
+              formulationIngredientId: formulationIngredientAId,
+              feedstockTypeId: blendTypeAId,
+              feedstockTypeName: "Compost",
+              feedstockTypeCategory: "compost",
               ratio: 0.2,
               massKg: 100,
               storageLocationId: pyrolysisBinId,
@@ -277,7 +299,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
         composition: {
           ingredients: [
             {
-              formulationIngredientId: crypto.randomUUID(),
+              formulationIngredientId: formulationIngredientAId,
               feedstockTypeId: blendTypeAId,
               feedstockTypeName: "Compost",
               feedstockTypeCategory: "compost",

@@ -127,8 +127,8 @@ export async function importProductionRunReadingsFromDocumentFn(
 
     const insertedRows = await replaceProductionRunReadingsInWindow(userId, {
       productionRunId: context.productionRunId,
-      windowStart: context.runWindowStart,
-      windowEnd: context.runWindowEnd,
+      windowStart: parsed.replacementWindowStart,
+      windowEnd: parsed.replacementWindowEnd,
       readings: parsed.readings,
     });
 

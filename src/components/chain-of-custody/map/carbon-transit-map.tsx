@@ -70,7 +70,8 @@ const FOCUS_SOURCE_ID = `${LEGS_SOURCE_ID}-focus`;
 const FOCUS_LAYER_ID = `${LEGS_BASE_LAYER_ID}-focus`;
 const FOCUS_LINE_WIDTH = 4.5;
 const FOCUS_HOLD_MS = 2200;
-// Extra bottom padding so a fit doesn't tuck markers under the legs strip.
+// Extra bottom padding so a fit doesn't tuck markers under the legs strip:
+// 72px strip body + 24px vertical padding + 36px breathing room.
 const STRIP_FIT_BOTTOM = 132;
 
 /**

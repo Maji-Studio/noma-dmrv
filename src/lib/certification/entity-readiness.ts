@@ -68,13 +68,19 @@ function descriptorSatisfied(
   descriptor: CertifyFieldDescriptor,
   entity: EntityReadinessRecord,
 ): boolean {
-  if (descriptor.kind === "derived") return true;
+  if (descriptor.satisfaction?.mode === "allOf") {
+    return descriptor.satisfaction.fields.every((field) =>
+      isPresent(fieldValue(entity, field)),
+    );
+  }
 
   if (descriptor.satisfaction?.mode === "anyOf") {
     return descriptor.satisfaction.fields.some((field) =>
       isPresent(fieldValue(entity, field)),
     );
   }
+
+  if (descriptor.kind === "derived") return true;
 
   return descriptorFields(descriptor).every((field) =>
     isPresent(fieldValue(entity, field)),
@@ -83,7 +89,8 @@ function descriptorSatisfied(
 
 function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
   const fields =
-    descriptor.satisfaction?.mode === "anyOf"
+    descriptor.satisfaction?.mode === "anyOf" ||
+    descriptor.satisfaction?.mode === "allOf"
       ? descriptor.satisfaction.fields
       : descriptorFields(descriptor);
   const requirement =
@@ -133,7 +140,11 @@ export function deriveEntityCertifyReadiness(
 
   if (entityKind === "productionRun") {
     const readingsCount = fieldValue(entity, "readingsCount");
-    if (typeof readingsCount === "number" && readingsCount === 0) {
+    if (
+      typeof readingsCount !== "number" ||
+      !Number.isFinite(readingsCount) ||
+      readingsCount <= 0
+    ) {
       gaps.push(TELEMETRY_GAP);
     }
   }

@@ -9,7 +9,16 @@
 // OpenRouteService (server-side only — key never reaches the browser)
 // ---------------------------------------------------------------------------
 
-export const ORS_BASE_URL = "https://api.openrouteservice.org";
+// HeiGIT unified API hosts (api.openrouteservice.org is deprecated and shuts
+// down 2026-08-24; the same key works on api.heigit.org). Routing and geocoding
+// now live under separate path prefixes, so they need separate bases.
+// Announcement: https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912
+
+/** Base for ORS routing (directions). Path: `/v2/directions/<profile>`. */
+export const ORS_ROUTING_BASE_URL = "https://api.heigit.org/openrouteservice";
+
+/** Base for Pelias geocoding. Paths: `/search`, `/reverse`. */
+export const ORS_GEOCODE_BASE_URL = "https://api.heigit.org/pelias/v1";
 
 /** Road-vehicle routing profile (Transportation module: road method only). */
 export const ORS_ROUTING_PROFILE = "driving-car";
@@ -19,6 +28,16 @@ export const GEOCODE_MAX_RESULTS = 5;
 
 /** Outbound request timeout for ORS calls (ms). */
 export const ORS_REQUEST_TIMEOUT_MS = 10_000;
+
+/**
+ * Per-coordinate snap radius (m) sent to the directions endpoint. ORS defaults
+ * to 350 m and rejects the whole route (error 2010) when an endpoint — a
+ * supplier yard, farm, or application plot — sits further than that from the
+ * nearest mapped road, which silently degrades the map leg to a straight arc.
+ * A bounded value snaps such points to the nearest road while still refusing
+ * pathologically distant matches (unlimited `-1` could snap to the wrong road).
+ */
+export const ORS_SNAP_RADIUS_METERS = 5000;
 
 // Per-user abuse limits for the geo server actions (sliding window,
 // src/lib/rate-limit). Geocode fires per keystroke-debounce; routing is a

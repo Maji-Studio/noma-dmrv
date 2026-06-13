@@ -7,6 +7,7 @@ import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from 
 import { db } from "@/db";
 import {
   biocharProducts,
+  formulationIngredients,
   formulations,
   facilities,
   storageLocations,
@@ -61,9 +62,15 @@ import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 
-function getCompositionIngredientBinRefs(
-  composition: Record<string, unknown> | null | undefined
-): Array<{ storageLocationId: string; feedstockTypeId: string }> {
+interface CompositionIngredientRef {
+  formulationIngredientId: string;
+  feedstockTypeId: string;
+  storageLocationId: string | null;
+}
+
+function getCompositionIngredientRefs(
+  composition: Record<string, unknown> | null | undefined,
+): CompositionIngredientRef[] {
   const ingredients = composition?.ingredients;
   if (!Array.isArray(ingredients)) return [];
 
@@ -72,36 +79,103 @@ function getCompositionIngredientBinRefs(
       if (
         typeof ingredient !== "object" ||
         ingredient === null ||
-        !("storageLocationId" in ingredient) ||
+        !("formulationIngredientId" in ingredient) ||
         !("feedstockTypeId" in ingredient) ||
-        typeof ingredient.storageLocationId !== "string" ||
+        typeof ingredient.formulationIngredientId !== "string" ||
         typeof ingredient.feedstockTypeId !== "string"
       ) {
         return null;
       }
       return {
-        storageLocationId: ingredient.storageLocationId,
+        formulationIngredientId: ingredient.formulationIngredientId,
         feedstockTypeId: ingredient.feedstockTypeId,
+        storageLocationId:
+          "storageLocationId" in ingredient &&
+          typeof ingredient.storageLocationId === "string"
+            ? ingredient.storageLocationId
+            : null,
       };
     })
-    .filter((ref): ref is { storageLocationId: string; feedstockTypeId: string } =>
-      Boolean(ref?.storageLocationId && ref.feedstockTypeId)
+    .filter((ref): ref is CompositionIngredientRef =>
+      Boolean(ref?.formulationIngredientId && ref.feedstockTypeId),
     );
 }
 
 async function validateCompositionIngredientBins(
   tx: Pick<typeof db, "select">,
   composition: Record<string, unknown> | null | undefined,
-  facilityId: string
+  formulationId: string | null,
+  facilityId: string,
 ) {
-  const binRefs = getCompositionIngredientBinRefs(composition);
-  const storageLocationIds = [...new Set(binRefs.map((ref) => ref.storageLocationId))];
+  const ingredientRefs = getCompositionIngredientRefs(composition);
+  if (ingredientRefs.length > 0) {
+    if (!formulationId) {
+      throw new SafeError("Formulation is required for ingredient composition");
+    }
+
+    const ingredientIds = [
+      ...new Set(ingredientRefs.map((ref) => ref.formulationIngredientId)),
+    ];
+    const ingredientRows = await tx
+      .select({
+        id: formulationIngredients.id,
+        formulationId: formulationIngredients.formulationId,
+        feedstockTypeId: formulationIngredients.feedstockTypeId,
+      })
+      .from(formulationIngredients)
+      .where(inArray(formulationIngredients.id, ingredientIds));
+    const ingredientById = new Map(
+      ingredientRows.map((row) => [row.id, row]),
+    );
+    const missingIngredientIds = ingredientIds.filter(
+      (id) => !ingredientById.has(id),
+    );
+    if (missingIngredientIds.length > 0) {
+      throw new SafeError(
+        `Composition ingredient line(s) not found: ${missingIngredientIds.join(", ")}`,
+      );
+    }
+    const wrongFormulationIds = ingredientRefs
+      .filter(
+        (ref) =>
+          ingredientById.get(ref.formulationIngredientId)?.formulationId !==
+          formulationId,
+      )
+      .map((ref) => ref.formulationIngredientId);
+    if (wrongFormulationIds.length > 0) {
+      throw new SafeError(
+        `Composition ingredient line(s) must belong to the selected formulation: ${wrongFormulationIds.join(", ")}`,
+      );
+    }
+    const mismatchedIngredientIds = ingredientRefs
+      .filter(
+        (ref) =>
+          ingredientById.get(ref.formulationIngredientId)?.feedstockTypeId !==
+          ref.feedstockTypeId,
+      )
+      .map((ref) => ref.formulationIngredientId);
+    if (mismatchedIngredientIds.length > 0) {
+      throw new SafeError(
+        `Composition ingredient line(s) must match the selected formulation material: ${mismatchedIngredientIds.join(", ")}`,
+      );
+    }
+  }
+
+  const binRefs = ingredientRefs.filter(
+    (ref): ref is CompositionIngredientRef & { storageLocationId: string } =>
+      Boolean(ref.storageLocationId),
+  );
+  const storageLocationIds = [
+    ...new Set(binRefs.map((ref) => ref.storageLocationId)),
+  ];
   if (storageLocationIds.length === 0) return;
   const expectedFeedstockTypeByBinId = new Map<string, string>();
   for (const ref of binRefs) {
     const existing = expectedFeedstockTypeByBinId.get(ref.storageLocationId);
     if (existing && existing !== ref.feedstockTypeId) {
-      throw new SafeError("Ingredient bin cannot be reused for different formulation materials");
+      throw new SafeError(
+        "Ingredient bin cannot be reused for different formulation materials",
+      );
     }
     expectedFeedstockTypeByBinId.set(ref.storageLocationId, ref.feedstockTypeId);
   }
@@ -515,7 +589,12 @@ export async function createBiocharProduct(
   // so two products with different formulations can't both pass the reservation
   // check and strand a mismatched product (the claim-after-insert TOCTOU).
   const product = await db.transaction(async (tx) => {
-    await validateCompositionIngredientBins(tx, data.composition, data.facilityId);
+    await validateCompositionIngredientBins(
+      tx,
+      data.composition,
+      formulationId,
+      data.facilityId
+    );
 
     const [storage] = await tx
       .select({
@@ -732,8 +811,13 @@ export async function updateBiocharProduct(
   const updated = await db.transaction(async (tx) => {
     let claimBinFormulationId: string | null = null;
 
-    if (data.composition !== undefined || facilityChanged) {
-      await validateCompositionIngredientBins(tx, effectiveComposition, effectiveFacilityId);
+    if (data.composition !== undefined || data.formulationId !== undefined || facilityChanged) {
+      await validateCompositionIngredientBins(
+        tx,
+        effectiveComposition,
+        effectiveFormulationId,
+        effectiveFacilityId
+      );
     }
 
     if (

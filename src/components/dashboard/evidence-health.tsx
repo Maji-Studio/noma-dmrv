@@ -75,7 +75,7 @@ export function EvidenceHealth({ rows, facilityId }: EvidenceHealthProps) {
           );
         })}
       </ul>
-      <div className="border-t border-[var(--color-border-tertiary)] px-20 py-14">
+      <div className="border-t border-[var(--color-border-tertiary)] px-20 py-20">
         <Link
           href={`/certification?facility=${encodeURIComponent(facilityId)}`}
           className="group inline-flex items-center gap-8 label-micro text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"

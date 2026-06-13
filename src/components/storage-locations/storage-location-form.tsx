@@ -17,6 +17,7 @@ import {
   type StorageLocationFormData,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
+import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
 interface StorageLocationFormProps {
@@ -31,6 +32,10 @@ interface StorageLocationFormProps {
   allowedTypes?: readonly StorageLocationType[];
   /** Pre-selects the feedstock type the parent flow is working with */
   defaultFeedstockTypeId?: string;
+  /** Narrows selectable/quick-added feedstock types by usage. */
+  feedstockTypeUsage?: FeedstockTypeUsage;
+  /** Prevents changing a parent-selected feedstock type. */
+  lockFeedstockType?: boolean;
   /** Pre-selects the formulation the parent flow is working with */
   defaultFormulationId?: string;
   /** Pre-selects the facility when rendered outside FacilityProvider context */
@@ -46,6 +51,8 @@ export function StorageLocationForm({
   defaultType,
   allowedTypes,
   defaultFeedstockTypeId,
+  feedstockTypeUsage,
+  lockFeedstockType = false,
   defaultFormulationId,
   defaultFacilityId,
 }: StorageLocationFormProps) {
@@ -83,6 +90,12 @@ export function StorageLocationForm({
   const typeDescription = watchedType
     ? STORAGE_LOCATION_TYPE_DESCRIPTIONS[watchedType]
     : undefined;
+  const feedstockTypeFilter = feedstockTypeUsage
+    ? { usage: feedstockTypeUsage }
+    : undefined;
+  const feedstockTypeHelperText = lockFeedstockType
+    ? "Fixed from the parent feedstock record so this bin cannot be assigned to the wrong type."
+    : "Restricts this bin to one feedstock type. For certified production, choose a Pyrolysis type that matches Isometric.";
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
@@ -172,9 +185,12 @@ export function StorageLocationForm({
             label="Feedstock Type"
             entityType="feedstockType"
             placeholder="Select feedstock type..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || lockFeedstockType}
             required
-            helperText="Restricts this bin to one feedstock type"
+            helperText={feedstockTypeHelperText}
+            allowCreate={!lockFeedstockType}
+            createLabel="Add new feedstock type"
+            filterBy={feedstockTypeFilter}
           />
         </div>
       )}

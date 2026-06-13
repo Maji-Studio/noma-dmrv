@@ -282,24 +282,34 @@ function buildEntityReadinessGaps(
   return Array.from(new Set(gaps));
 }
 
-function hasCompleteTruckWeighing(row: {
-  truckMassOnArrivalKg: number | null;
-  truckMassOnDepartureKg: number | null;
-}): boolean {
-  return row.truckMassOnArrivalKg != null && row.truckMassOnDepartureKg != null;
-}
-
 function uniqueIds(ids: (string | null | undefined)[]): string[] {
   return Array.from(new Set(ids.filter((id): id is string => !!id)));
 }
 
-async function buildTruckWeighingGaps(
+function formatReadinessGapLabels(
+  entityLabel: string,
+  readinessGaps: ReturnType<typeof deriveEntityCertifyReadiness>["gaps"],
+): string[] {
+  if (readinessGaps.length === 0) return [];
+  return [
+    `${entityLabel}: ${readinessGaps.map((gap) => gap.label).join(" · ")}`,
+  ];
+}
+
+async function buildTransportSourceReadinessGaps(
   userId: string,
   lineages: ChainOfCustodyData[],
   entityIds: ReturnType<typeof collectTransportEntityIds>,
+  requiredTransportCategories: readonly TransportCategory[],
 ): Promise<string[]> {
-  const feedstockIds = entityIds.feedstockIds;
-  const deliveryIds = uniqueIds(lineages.map((lineage) => lineage.delivery?.id));
+  const requireFeedstockWeighing =
+    requiredTransportCategories.includes("feedstock");
+  const requireDeliveryWeighing =
+    requiredTransportCategories.includes("biochar");
+  const feedstockIds = requireFeedstockWeighing ? entityIds.feedstockIds : [];
+  const deliveryIds = requireDeliveryWeighing
+    ? uniqueIds(lineages.map((lineage) => lineage.delivery?.id))
+    : [];
 
   const [feedstockRows, deliveryRows] = await Promise.all([
     feedstockIds.length > 0
@@ -310,14 +320,28 @@ async function buildTruckWeighingGaps(
       : Promise.resolve([]),
   ]);
 
-  const feedstockGaps = (feedstockRows ?? [])
-    .filter((feedstock) => !hasCompleteTruckWeighing(feedstock))
-    .map((feedstock) => `Feedstock ${feedstock.code}: truck weighing`);
-  const deliveryGaps = (deliveryRows ?? [])
-    .filter((delivery) => !hasCompleteTruckWeighing(delivery))
-    .map((delivery) => `Delivery ${delivery.code}: truck weighing`);
+  const gaps = [
+    ...(feedstockRows ?? []).flatMap((feedstock) =>
+      formatReadinessGapLabels(
+        `Feedstock ${feedstock.code}`,
+        deriveEntityCertifyReadiness("feedstock", {
+          ...feedstock,
+          requiresTruckWeighing: true,
+        }).gaps.filter((gap) => gap.key === "truckWeighing"),
+      ),
+    ),
+    ...(deliveryRows ?? []).flatMap((delivery) =>
+      formatReadinessGapLabels(
+        `Delivery ${delivery.code}`,
+        deriveEntityCertifyReadiness("delivery", {
+          ...delivery,
+          requiresTruckWeighing: true,
+        }).gaps.filter((gap) => gap.key === "truckWeighing"),
+      ),
+    ),
+  ];
 
-  return [...feedstockGaps, ...deliveryGaps];
+  return Array.from(new Set(gaps));
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
@@ -715,7 +739,12 @@ export async function buildRemovalContext(
       facilityFacts.requiredTransportCategories,
       runIdsRequiring1000YearDurability,
     ),
-    ...(await buildTruckWeighingGaps(userId, lineages, entityIds)),
+    ...(await buildTransportSourceReadinessGaps(
+      userId,
+      lineages,
+      entityIds,
+      facilityFacts.requiredTransportCategories,
+    )),
     ...(await buildApplicationEvidenceGaps(userId, lineages)),
   ];
   // One mass-accounting walk: the per-run attribution the submit pipeline

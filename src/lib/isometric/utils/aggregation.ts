@@ -3,7 +3,7 @@ import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
 export type ProductionRunWithSamples = ProductionRun & {
   samples: Sample[];
-  readingsCount?: number;
+  readingsCount: number;
 };
 
 export interface AggregatedProductionData {
