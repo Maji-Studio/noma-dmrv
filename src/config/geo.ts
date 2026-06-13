@@ -9,7 +9,16 @@
 // OpenRouteService (server-side only — key never reaches the browser)
 // ---------------------------------------------------------------------------
 
-export const ORS_BASE_URL = "https://api.openrouteservice.org";
+// HeiGIT unified API hosts (api.openrouteservice.org is deprecated and shuts
+// down 2026-08-24; the same key works on api.heigit.org). Routing and geocoding
+// now live under separate path prefixes, so they need separate bases.
+// Announcement: https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912
+
+/** Base for ORS routing (directions). Path: `/v2/directions/<profile>`. */
+export const ORS_ROUTING_BASE_URL = "https://api.heigit.org/openrouteservice";
+
+/** Base for Pelias geocoding. Paths: `/search`, `/reverse`. */
+export const ORS_GEOCODE_BASE_URL = "https://api.heigit.org/pelias/v1";
 
 /** Road-vehicle routing profile (Transportation module: road method only). */
 export const ORS_ROUTING_PROFILE = "driving-car";
