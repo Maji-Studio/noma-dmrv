@@ -3,7 +3,7 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
 import { db } from "@/db";
 import {
   deliveries,
@@ -305,6 +305,34 @@ export async function getDeliveryById(
   }
 
   return delivery;
+}
+
+export async function getDeliveriesByIds(
+  userId: string,
+  deliveryIds: string[],
+): Promise<
+  {
+    id: string;
+    code: string;
+    truckMassOnArrivalKg: number | null;
+    truckMassOnDepartureKg: number | null;
+  }[]
+> {
+  requireAuth(userId);
+  if (deliveryIds.length === 0) return [];
+
+  const deliveryColumns = await getDeliveryColumnAvailability();
+  const baseSelection = getDeliveryBaseSelection(deliveryColumns);
+
+  return db
+    .select({
+      id: deliveries.id,
+      code: deliveries.code,
+      truckMassOnArrivalKg: baseSelection.truckMassOnArrivalKg,
+      truckMassOnDepartureKg: baseSelection.truckMassOnDepartureKg,
+    })
+    .from(deliveries)
+    .where(inArray(deliveries.id, deliveryIds));
 }
 
 /**

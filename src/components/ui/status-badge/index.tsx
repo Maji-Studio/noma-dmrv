@@ -15,7 +15,8 @@ import { cn } from "@/lib/utils"
  */
 
 const statusBadgeVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap body-caption-fit font-medium rounded-[4px] border transition-colors",
+  // Square corners — Maji DS brutalist rule; chips/pills never get radii.
+  "inline-flex items-center justify-center whitespace-nowrap body-caption-fit font-medium border transition-colors",
   {
     variants: {
       /**

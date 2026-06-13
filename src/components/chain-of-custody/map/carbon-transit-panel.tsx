@@ -6,12 +6,14 @@
  * banner, empty state); the MapLibre half is dynamically imported so
  * maplibre-gl stays out of the route bundle.
  *
- * Graceful degradation (plan decision 5): no NEXT_PUBLIC_MAPTILER_KEY → no
- * basemap, a "map unavailable" notice with the rails still rendered; no
- * routing key → legs draw as dashed arcs (route geometries resolve to null).
+ * Graceful degradation (plan decision 5): no NEXT_PUBLIC_MAPTILER_KEY → the
+ * map still runs on a blank style over a tinted field (markers/legs/chips
+ * plotted, "basemap unavailable" note); no routing key → legs draw as dashed
+ * arcs (route geometries resolve to null).
  */
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import { MapTrifold } from "@phosphor-icons/react/dist/ssr";
 import type {
   ChainGeoLeg,
@@ -30,15 +32,11 @@ import type { PopupContentByNodeId } from "./carbon-transit-map";
 import {
   MapWarningBanner,
   NotGeolocatedChips,
-  NotGeolocatedRail,
   TransportLegsRail,
   ViewerEmptyState,
   ViewerLegend,
 } from "./viewer-rails";
 import { resolveLegEndpoints } from "./viewer-utils";
-
-// Inlined at build time — public, domain-locked key (browser-safe).
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 
 // maplibre-gl is ~250 kB gzipped — fetch it only when the map view renders.
 const CarbonTransitMap = dynamic(() => import("./carbon-transit-map"), {
@@ -86,9 +84,10 @@ function buildPopupContent(
       content[node.id] = {
         typeLabel: LINEAGE_NODE_STYLES[node.kind].label,
         status: node.status ?? null,
-        detailLines: [node.date, node.stat, ...node.detailLines].filter(
-          (line): line is string => Boolean(line)
-        ),
+        details: [
+          ...(node.date ? [{ label: "Date", value: node.date }] : []),
+          ...node.details,
+        ],
       };
     }
   }
@@ -96,7 +95,7 @@ function buildPopupContent(
   content[`facility:${facility.id}`] = {
     typeLabel: "Facility",
     status: null,
-    detailLines: [facility.name],
+    details: [{ label: "Name", value: facility.name }],
   };
   return content;
 }
@@ -134,6 +133,14 @@ export function CarbonTransitPanel({
   );
   const { data: geo, isLoading, isError, error } =
     source.kind === "application" ? applicationGeo : batchGeo;
+
+  // Clicking a leg in the bottom strip zooms/flashes that segment on the map.
+  // The nonce lets a repeat click on the same leg re-trigger the ease-to.
+  const [focusedLeg, setFocusedLeg] = useState<{ legId: string; nonce: number } | null>(
+    null
+  );
+  const focusLeg = (legId: string) =>
+    setFocusedLeg((current) => ({ legId, nonce: (current?.nonce ?? 0) + 1 }));
 
   const plottableLegs = geo ? resolveLegEndpoints(geo).plottable : [];
   const { data: routeGeometries } = useRouteGeometries(
@@ -182,50 +189,37 @@ export function CarbonTransitPanel({
 
   return (
     <div
-      className="relative h-full overflow-hidden border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]"
+      className="relative h-full overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]"
       data-testid="carbon-viewer-panel"
     >
       {!anythingPlotted ? (
         <ViewerEmptyState message="No record in this chain carries GPS coordinates yet. Set a position on the facility, suppliers, or application to plot it here." />
       ) : (
         <>
-          {MAPTILER_KEY ? (
-            <CarbonTransitMap
-              geo={geo}
-              routeGeometries={routeGeometries}
-              popupContent={popupContent}
-              railVisible={view === "map"}
-              highlight={highlight}
-              onMarkerClick={onNodeSelect}
-            />
-          ) : (
-            <div
-              className="flex h-full flex-col items-center justify-center gap-6 bg-[var(--color-background-light)] px-16 text-center"
-              data-testid="carbon-viewer-no-map"
-            >
-              <span className="label-button uppercase text-[var(--color-text-secondary)]">
-                Map unavailable
-              </span>
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                Set NEXT_PUBLIC_MAPTILER_KEY to enable the basemap. Transport
-                legs are listed in the rail.
-              </span>
-            </div>
-          )}
+          {/* Keyless mode degrades inside the map: tinted field, markers
+              still plotted, a visible "basemap unavailable" note. */}
+          <CarbonTransitMap
+            geo={geo}
+            routeGeometries={routeGeometries}
+            popupContent={popupContent}
+            railVisible={view === "map"}
+            highlight={highlight}
+            focusedLeg={focusedLeg}
+            onMarkerClick={onNodeSelect}
+          />
 
           <MapWarningBanner warnings={geo.warnings} />
           <ViewerLegend />
 
           {view === "map" ? (
-            <div className="absolute right-16 top-16 z-10 flex w-[252px] flex-col gap-12">
+            <div className="absolute bottom-16 left-16 right-16 z-10">
               <TransportLegsRail
                 legs={geo.legs}
-                onSelectLeg={(leg) => onNodeSelect(legAnchorNodeId(geo, leg))}
-              />
-              <NotGeolocatedRail
-                nodes={ungeolocated}
-                facilityCode={geo.facility.code}
-                onSelectNode={onNodeSelect}
+                selectedLegId={focusedLeg?.legId ?? null}
+                onFocusLeg={(leg) => {
+                  focusLeg(leg.id);
+                  onNodeSelect(legAnchorNodeId(geo, leg));
+                }}
               />
             </div>
           ) : (

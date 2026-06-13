@@ -62,8 +62,9 @@ describe("updateBiocharProductFn composition handling", () => {
     const bins = [
       {
         formulationIngredientId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        ingredientName: "Biochar",
-        ingredientType: "biochar",
+        feedstockTypeId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        feedstockTypeName: "Compost",
+        feedstockTypeCategory: "compost",
         ratio: 0.8,
         massKg: 80,
       },

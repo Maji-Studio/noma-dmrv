@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { requireAuth } from "./utils";
@@ -24,6 +24,27 @@ export async function listDocumentsForEntity(
     .from(documents)
     .where(
       and(eq(documents.entityType, entityType), eq(documents.entityId, entityId))
+    )
+    .orderBy(desc(documents.createdAt))
+    .limit(MAX_DOCUMENTS_PER_ENTITY);
+}
+
+export async function listDocumentsForEntityIds(
+  userId: string,
+  entityType: string,
+  entityIds: string[],
+): Promise<DocumentRow[]> {
+  requireAuth(userId);
+  if (entityIds.length === 0) return [];
+
+  return db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.entityType, entityType),
+        inArray(documents.entityId, entityIds),
+      ),
     )
     .orderBy(desc(documents.createdAt))
     .limit(MAX_DOCUMENTS_PER_ENTITY);

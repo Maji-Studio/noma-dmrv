@@ -157,13 +157,17 @@ function EntitySideSheet({
 
         {/* Body */}
         <SlideOverPanel.Body
-          className={isViewMode ? "flex flex-col gap-32" : undefined}
+          className={isViewMode ? "flex flex-col gap-20" : undefined}
           noPaddingBottom={!isViewMode}
         >
           {isViewMode ? (
             <>
-              {sections?.map((section) => (
-                <DetailSection key={section.title} title={section.title}>
+              {sections?.map((section, sectionIdx) => (
+                <DetailSection
+                  key={section.title}
+                  title={section.title}
+                  divider={sectionIdx > 0}
+                >
                   {chunkFields(section.fields).map((row, rowIdx) => (
                     <DetailRow key={rowIdx}>
                       {row.map((field) => (
@@ -171,6 +175,7 @@ function EntitySideSheet({
                           key={field.label}
                           label={field.label}
                           value={field.value}
+                          certifyRequired={field.certifyRequired}
                         />
                       ))}
                     </DetailRow>

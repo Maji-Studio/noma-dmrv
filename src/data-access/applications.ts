@@ -13,7 +13,11 @@ import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
-import type { CreateApplicationData, UpdateApplicationData } from "@/schemas/applications";
+import type {
+  ApplicationEvidenceMethod,
+  CreateApplicationData,
+  UpdateApplicationData,
+} from "@/schemas/applications";
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -40,6 +44,15 @@ export interface ApplicationDeliveryOptionData {
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
   alreadyAppliedWetKg: number;
+}
+
+type CreateApplicationInput = Omit<CreateApplicationData, "evidenceMethod"> & {
+  evidenceMethod?: ApplicationEvidenceMethod;
+};
+
+function optionalText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 async function getDeliveryMoistureContentPercent(
@@ -238,6 +251,7 @@ export async function getApplications(
       gpsLatitude: applications.gpsLatitude,
       gpsLongitude: applications.gpsLongitude,
       applicationMethodType: applications.applicationMethodType,
+      evidenceMethod: applications.evidenceMethod,
       gisBoundaryReference: applications.gisBoundaryReference,
       soilTemperatureSource: applications.soilTemperatureSource,
       soilTemperatureC: applications.soilTemperatureC,
@@ -412,7 +426,7 @@ export async function getApplicationsByDeliveryId(
  */
 export async function createApplication(
   userId: string,
-  data: CreateApplicationData & { code: string }
+  data: CreateApplicationInput & { code: string }
 ): Promise<Application> {
   requireAuth(userId);
 
@@ -437,12 +451,13 @@ export async function createApplication(
         biocharAppliedTons: data.biocharAppliedTons,
         biocharAppliedDryTons,
         fieldSizeHa: data.fieldSizeHa ?? null,
-        fieldIdentifier: data.fieldIdentifier || null,
-        cropType: data.cropType || null,
+        fieldIdentifier: optionalText(data.fieldIdentifier),
+        cropType: optionalText(data.cropType),
         gpsLatitude: data.gpsLatitude ?? null,
         gpsLongitude: data.gpsLongitude ?? null,
         applicationMethodType: data.applicationMethodType ?? null,
-        gisBoundaryReference: data.gisBoundaryReference || null,
+        evidenceMethod: data.evidenceMethod ?? "visual",
+        gisBoundaryReference: optionalText(data.gisBoundaryReference),
         soilTemperatureSource: data.soilTemperatureSource ?? null,
         soilTemperatureC: data.soilTemperatureC ?? null,
       })
@@ -512,12 +527,13 @@ export async function updateApplication(
     if (data.deliveryId !== undefined) updateData.deliveryId = data.deliveryId;
     if (data.biocharAppliedTons !== undefined) updateData.biocharAppliedTons = data.biocharAppliedTons;
     if (data.fieldSizeHa !== undefined) updateData.fieldSizeHa = data.fieldSizeHa;
-    if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = data.fieldIdentifier || null;
-    if (data.cropType !== undefined) updateData.cropType = data.cropType || null;
+    if (data.fieldIdentifier !== undefined) updateData.fieldIdentifier = optionalText(data.fieldIdentifier);
+    if (data.cropType !== undefined) updateData.cropType = optionalText(data.cropType);
     if (data.gpsLatitude !== undefined) updateData.gpsLatitude = data.gpsLatitude;
     if (data.gpsLongitude !== undefined) updateData.gpsLongitude = data.gpsLongitude;
     if (data.applicationMethodType !== undefined) updateData.applicationMethodType = data.applicationMethodType;
-    if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = data.gisBoundaryReference || null;
+    if (data.evidenceMethod !== undefined) updateData.evidenceMethod = data.evidenceMethod;
+    if (data.gisBoundaryReference !== undefined) updateData.gisBoundaryReference = optionalText(data.gisBoundaryReference);
     if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
     if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
 

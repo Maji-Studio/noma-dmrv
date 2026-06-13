@@ -5,8 +5,7 @@
  */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Warning } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
@@ -14,7 +13,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, TruckWeighingSection } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -35,10 +34,6 @@ const statusOptions: readonly { value: string; label: string }[] = deliveryStatu
 
 const isDeliveryCertifyField = (field: string) =>
   isCertifyFormField("delivery", field);
-
-// The entered delivered wet mass may deviate from the weighbridge difference
-// (arrival − departure) by this fraction before the mismatch warning shows.
-const WEIGHBRIDGE_MISMATCH_TOLERANCE_RATIO = 0.01;
 
 // ============================================
 // Formatting helpers
@@ -91,7 +86,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     handleSubmit,
     watch,
     setValue,
-    getValues,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
@@ -191,43 +185,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       setValue("massDryKg", undefined as unknown as number);
     }
   }, [calculatedDryMass, setValue]);
-
-  // Weighbridge difference: arrival − departure = the unloaded mass. It is
-  // the measurement evidence for `deliveredWetMassKg` (the CERT value that
-  // becomes the derived biochar transport leg's load mass).
-  const weighbridgeWetMassKg =
-    typeof watchArrivalMass === "number" &&
-    typeof watchDepartureMass === "number" &&
-    watchDepartureMass >= 0 &&
-    watchArrivalMass >= watchDepartureMass
-      ? Math.round((watchArrivalMass - watchDepartureMass) * 100) / 100
-      : null;
-
-  // Prefill the delivered wet mass from the weighbridge difference while the
-  // field is empty or still holds our own previous fill; stop as soon as the
-  // user enters their own value (then the mismatch warning takes over).
-  const lastWeighbridgeFillRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (weighbridgeWetMassKg === null) {
-      lastWeighbridgeFillRef.current = null;
-      return;
-    }
-    const current = getValues("deliveredWetMassKg");
-    if (current == null || current === lastWeighbridgeFillRef.current) {
-      setValue("deliveredWetMassKg", weighbridgeWetMassKg, {
-        shouldValidate: true,
-      });
-      lastWeighbridgeFillRef.current = weighbridgeWetMassKg;
-    }
-  }, [weighbridgeWetMassKg, getValues, setValue]);
-
-  const weighbridgeMismatch =
-    weighbridgeWetMassKg !== null &&
-    typeof watchWetMass === "number" &&
-    Math.abs(watchWetMass - weighbridgeWetMassKg) >
-      weighbridgeWetMassKg * WEIGHBRIDGE_MISMATCH_TOLERANCE_RATIO
-      ? { enteredKg: watchWetMass, weighbridgeKg: weighbridgeWetMassKg }
-      : null;
 
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
@@ -358,73 +315,26 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
       </div>
 
-      {/* Truck Weighing Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Truck Weighing at Delivery Site
-        </h3>
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          Weighbridge evidence for the delivered wet mass: arrival − departure
-          suggests the unloaded mass.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="truckMassOnArrivalKg"
-            label="Truck Mass Before Unloading (kg)"
-            error={errors.truckMassOnArrivalKg?.message}
-          >
-            <FormInput
-              id="truckMassOnArrivalKg"
-              type="number"
-              step="any"
-              placeholder="e.g., 15000"
-              disabled={isSubmitting}
-              error={!!errors.truckMassOnArrivalKg}
-              {...register("truckMassOnArrivalKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="truckMassOnDepartureKg"
-            label="Truck Mass After Unloading (kg)"
-            error={errors.truckMassOnDepartureKg?.message}
-          >
-            <FormInput
-              id="truckMassOnDepartureKg"
-              type="number"
-              step="any"
-              placeholder="e.g., 5000"
-              disabled={isSubmitting}
-              error={!!errors.truckMassOnDepartureKg}
-              {...register("truckMassOnDepartureKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
-
-        {weighbridgeMismatch && (
-          <div
-            role="alert"
-            className="flex items-start gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber)]/5 p-16"
-          >
-            <Warning
-              size={20}
-              weight="fill"
-              className="text-[var(--color-signal-amber)] mt-1 shrink-0"
-            />
-            <p className="body-small text-[var(--color-text-secondary)]">
-              Entered wet mass ({weighbridgeMismatch.enteredKg.toFixed(2)} kg)
-              deviates from the weighbridge difference (
-              {weighbridgeMismatch.weighbridgeKg.toFixed(2)} kg = arrival −
-              departure). Double-check the weighing or the entered mass.
-            </p>
-          </div>
-        )}
-      </div>
+      <TruckWeighingSection
+        arrivalMassKg={watchArrivalMass}
+        departureMassKg={watchDepartureMass}
+        wetMassKg={watchWetMass}
+        wetMassLabel="Entered wet mass"
+        onSuggestWetMass={(wetMassKg) =>
+          setValue("deliveredWetMassKg", wetMassKg, { shouldValidate: true })
+        }
+        arrivalRegister={register("truckMassOnArrivalKg", {
+          setValueAs: numericValue,
+        })}
+        departureRegister={register("truckMassOnDepartureKg", {
+          setValueAs: numericValue,
+        })}
+        arrivalError={errors.truckMassOnArrivalKg?.message}
+        departureError={errors.truckMassOnDepartureKg?.message}
+        arrivalCertifyRequired={isDeliveryCertifyField("truckMassOnArrivalKg")}
+        departureCertifyRequired={isDeliveryCertifyField("truckMassOnDepartureKg")}
+        isSubmitting={isSubmitting}
+      />
 
       {/* Transport Section */}
       <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">

@@ -6,7 +6,7 @@
  * (Facility → Reactor → Production Run → Sample → Order → Delivery → Application → Credit Batch)
  * through the browser UI.
  */
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 import { createDbConnection } from "./db";
@@ -377,13 +377,30 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             )
           );
         if (facilityRuns.length > 0) {
+          const facilityRunIds = facilityRuns.map((r) => r.id);
+          await tx
+            .delete(schema.documents)
+            .where(
+              and(
+                eq(schema.documents.entityType, "production_run"),
+                inArray(schema.documents.entityId, facilityRunIds)
+              )
+            );
+          await tx
+            .delete(schema.productionRunReadings)
+            .where(
+              inArray(
+                schema.productionRunReadings.productionRunId,
+                facilityRunIds
+              )
+            );
           // Delete samples linked to production runs
           await tx
             .delete(schema.samples)
             .where(
               inArray(
                 schema.samples.productionRunId,
-                facilityRuns.map((r) => r.id)
+                facilityRunIds
               )
             );
           // Delete in-process production samples linked to production runs
@@ -392,7 +409,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             .where(
               inArray(
                 schema.productionSamples.productionRunId,
-                facilityRuns.map((r) => r.id)
+                facilityRunIds
               )
             );
           // Delete production run feedstocks
@@ -401,7 +418,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             .where(
               inArray(
                 schema.productionRunFeedstocks.productionRunId,
-                facilityRuns.map((r) => r.id)
+                facilityRunIds
               )
             );
           await tx

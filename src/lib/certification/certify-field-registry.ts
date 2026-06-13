@@ -310,6 +310,13 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       formFields: ["transportDistanceKm"],
       mappings: [mapping("feedstockTransportAvgDistanceKm")],
     },
+    {
+      key: "truckWeighing",
+      label: "Truck weighing",
+      kind: "derived",
+      formFields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
+      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+    },
   ],
   transportLeg: [
     {
@@ -377,6 +384,13 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "deliveredWetMassKg",
       label: "Delivered wet mass",
       kind: "entered",
+      mappings: [mapping("biocharTransportAvgDistanceKm")],
+    },
+    {
+      key: "truckWeighing",
+      label: "Truck weighing",
+      kind: "derived",
+      formFields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
       mappings: [mapping("biocharTransportAvgDistanceKm")],
     },
   ],
@@ -456,4 +470,26 @@ export function isCertifyFormField(
       field.formFields ?? (field.kind === "entered" ? [field.key] : []);
     return formFields.includes(fieldName);
   });
+}
+
+export function isCertifyEntityField(
+  entityKind: CertifyEntityKind,
+  fieldName: string,
+): boolean {
+  return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+    const satisfactionFields =
+      field.satisfaction?.mode === "anyOf" ? field.satisfaction.fields : [];
+    return (
+      field.key === fieldName ||
+      field.formFields?.includes(fieldName) ||
+      satisfactionFields.includes(fieldName)
+    );
+  });
+}
+
+export function certificationDetailField(
+  entityKind: CertifyEntityKind,
+  fieldName: string,
+): { certifyRequired: boolean } {
+  return { certifyRequired: isCertifyEntityField(entityKind, fieldName) };
 }

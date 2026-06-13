@@ -39,12 +39,13 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Button, EmptyState } from "@/components/ui";
+import { StatCard } from "@/components/ui/stat-card";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
@@ -140,23 +141,15 @@ function createColumns(
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-8">
-          <Button
-            type="button"
-            variant="default"
-            size="small"
-            onClick={(e) => { e.stopPropagation(); onEdit(row.original); }}
-          >
-            Edit
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="small"
-            onClick={(e) => { e.stopPropagation(); onDelete(row.original.id); }}
-          >
-            Delete
-          </Button>
+        <div className="flex items-center justify-end">
+          <RowActionsMenu
+            label={`Actions for ${row.original.code}`}
+            actions={[
+              { label: "Open details", href: `/production-runs/${row.original.id}` },
+              { label: "Edit", onSelect: () => onEdit(row.original) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+            ]}
+          />
         </div>
       ),
       enableSorting: false,
@@ -295,16 +288,34 @@ export function ProductionRunList() {
     );
   }
 
+  // Derived values for the side sheet
+  const sideSheetOpen = !!sideSheet;
+  const sideSheetMode = sideSheet?.mode ?? "create";
+  const sideSheetEntity = sideSheet?.entity ?? null;
+
+  const sideSheetTitle =
+    sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create"
+      ? undefined
+      : sideSheetEntity
+        ? formatDateField(sideSheetEntity.date)
+        : undefined;
+
   return (
     <div className="container-max py-32 flex flex-col gap-32">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-24">
-        <h1 className="title-heading-2">Production Runs</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={20} weight="bold" />
-          New Production Run
-        </Button>
-      </div>
+      <PageHeader
+        area="production"
+        title="Production Runs"
+        subtitle="Pyrolysis batches from feedstock to biochar output"
+        actions={
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={20} weight="bold" />
+            New Production Run
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
@@ -394,124 +405,117 @@ export function ProductionRunList() {
         isPending={deleteRun.isPending}
       />
 
-      {sideSheet && (
-        <EntitySideSheet
-          open
-          onOpenChange={(open) => !open && closeSideSheet()}
-          mode={sideSheet.mode}
-          onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
-          title={sideSheet.mode === "create" ? "Create Production Run" : sideSheet.entity?.code ?? ""}
-          subtitle={
-            sideSheet.mode === "create"
-              ? undefined
-              : sideSheet.entity
-                ? formatDateField(sideSheet.entity.date)
-                : undefined
-          }
-          editLabel="Edit Production Run"
-          size="wide"
-          viewModeChildren={sideSheet.entity ? (
+      <EntitySideSheet
+        open={sideSheetOpen}
+        onOpenChange={(open) => !open && closeSideSheet()}
+        mode={sideSheetMode}
+        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
+        editLabel="Edit Production Run"
+        size="wide"
+        viewModeChildren={sideSheetEntity ? (
+          <>
+            <ProductionRunReadingTable
+              productionRunId={sideSheetEntity.id}
+              readOnly
+            />
+            <ProductionSampleTable
+              productionRunId={sideSheetEntity.id}
+              readOnly
+            />
+            <ProductionIncidentTable
+              productionRunId={sideSheetEntity.id}
+              readOnly
+            />
+          </>
+        ) : undefined}
+        sections={sideSheetEntity ? [
+          {
+            title: "General",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Date", value: formatDateField(sideSheetEntity.date) },
+              { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
+              {
+                label: "Certifier",
+                value: (
+                  <EntityCertifyReadinessBadge
+                    readiness={deriveEntityCertifyReadiness(
+                      "productionRun",
+                      sideSheetEntity,
+                    )}
+                  />
+                ),
+              },
+            ],
+          },
+          {
+            title: "Location",
+            fields: [
+              { label: "Facility", value: sideSheetEntity.facilityName },
+              { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
+            ],
+          },
+          {
+            title: "Operations",
+            fields: [
+              { label: "Operator", value: sideSheetEntity.operatorName },
+              { label: "Feeding Rate", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
+              { label: "Residence Time", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
+            ],
+          },
+          {
+            title: "Output",
+            fields: [
+              { label: "Feedstock Wet Mass", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
+              { label: "Feedstock Moisture", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
+              { label: "Biochar Wet Mass", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
+              { label: "Biochar Moisture", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
+              { label: "Biochar Dry Mass", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
+            ],
+          },
+          {
+            title: "Energy",
+            fields: [
+              { label: "Diesel Operation", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
+              { label: "Diesel Genset", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
+              { label: "Preprocessing Fuel", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
+              { label: "Electricity", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
+            ],
+          },
+          {
+            title: "Storage",
+            fields: [
+              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
+              { label: "Feedstock Storage", value: sideSheetEntity.feedstockStorageLocationCode },
+            ],
+          },
+        ] : undefined}
+      >
+        {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
+        <ProductionRunForm
+          key={sideSheetEntity?.id ?? "create"}
+          productionRun={sideSheetEntity ?? undefined}
+          onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
+          onCancel={closeSideSheet}
+          isSubmitting={createRun.isPending || updateRun.isPending}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Production Run"}
+        >
+          {sideSheetEntity && sideSheetMode === "edit" ? (
             <>
-              <ProductionRunReadingTable
-                productionRunId={sideSheet.entity.id}
-                readOnly
-              />
-              <ProductionSampleTable
-                productionRunId={sideSheet.entity.id}
-                readOnly
-              />
+              <ProductionRunReadingTable productionRunId={sideSheetEntity.id} />
+              <ProductionSampleTable productionRunId={sideSheetEntity.id} />
               <ProductionIncidentTable
-                productionRunId={sideSheet.entity.id}
-                readOnly
+                productionRunId={sideSheetEntity.id}
+                facilityId={sideSheetEntity.facilityId}
+                defaultReactorId={sideSheetEntity.reactorId}
+                defaultOperatorId={sideSheetEntity.operatorId}
               />
             </>
-          ) : undefined}
-          sections={sideSheet.entity ? [
-            {
-              title: "General",
-              fields: [
-                { label: "Code", value: sideSheet.entity.code },
-                { label: "Date", value: formatDateField(sideSheet.entity.date) },
-                { label: "Status", value: <RunStatusBadge status={sideSheet.entity.status} /> },
-                {
-                  label: "Certifier",
-                  value: (
-                    <EntityCertifyReadinessBadge
-                      readiness={deriveEntityCertifyReadiness(
-                        "productionRun",
-                        sideSheet.entity,
-                      )}
-                    />
-                  ),
-                },
-              ],
-            },
-            {
-              title: "Location",
-              fields: [
-                { label: "Facility", value: sideSheet.entity.facilityName },
-                { label: "Reactor", value: sideSheet.entity.reactorIdentifier },
-              ],
-            },
-            {
-              title: "Operations",
-              fields: [
-                { label: "Operator", value: sideSheet.entity.operatorName },
-                { label: "Feeding Rate", value: sideSheet.entity.feedingRateKgHr != null ? `${sideSheet.entity.feedingRateKgHr} kg/hr` : null },
-                { label: "Residence Time", value: sideSheet.entity.residenceTimeMinutes != null ? `${sideSheet.entity.residenceTimeMinutes} min` : null },
-              ],
-            },
-            {
-              title: "Output",
-              fields: [
-                { label: "Total Feedstock Mass", value: sideSheet.entity.totalFeedstockMassKg != null ? `${sideSheet.entity.totalFeedstockMassKg.toLocaleString()} kg` : null },
-                { label: "Biochar Wet Mass", value: sideSheet.entity.biocharOutputKg != null ? `${sideSheet.entity.biocharOutputKg.toLocaleString()} kg` : null },
-                { label: "Biochar Moisture", value: sideSheet.entity.biocharMoisturePercent != null ? `${sideSheet.entity.biocharMoisturePercent}%` : null },
-                { label: "Biochar Dry Mass", value: sideSheet.entity.biocharDryMassKg != null ? `${sideSheet.entity.biocharDryMassKg.toLocaleString()} kg` : null },
-              ],
-            },
-            {
-              title: "Energy",
-              fields: [
-                { label: "Diesel Operation", value: sideSheet.entity.dieselOperationLiters != null ? `${sideSheet.entity.dieselOperationLiters} L` : null },
-                { label: "Diesel Genset", value: sideSheet.entity.dieselGensetLiters != null ? `${sideSheet.entity.dieselGensetLiters} L` : null },
-                { label: "Preprocessing Fuel", value: sideSheet.entity.preprocessingFuelLiters != null ? `${sideSheet.entity.preprocessingFuelLiters} L` : null },
-                { label: "Electricity", value: sideSheet.entity.electricityKwh != null ? `${sideSheet.entity.electricityKwh} kWh` : null },
-              ],
-            },
-            {
-              title: "Storage",
-              fields: [
-                { label: "Biochar Storage", value: sideSheet.entity.biocharStorageLocationCode },
-                { label: "Feedstock Storage", value: sideSheet.entity.feedstockStorageLocationCode },
-              ],
-            },
-          ] : undefined}
-        >
-          {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
-          <ProductionRunForm
-            key={sideSheet.entity?.id ?? "create"}
-            productionRun={sideSheet.entity ?? undefined}
-            onSubmit={sideSheet.entity && sideSheet.mode === "edit" ? handleUpdate : handleCreate}
-            onCancel={closeSideSheet}
-            isSubmitting={createRun.isPending || updateRun.isPending}
-            submitLabel={sideSheet.entity && sideSheet.mode === "edit" ? "Save Changes" : "Create Production Run"}
-          >
-            {sideSheet.entity && sideSheet.mode === "edit" ? (
-              <>
-                <ProductionRunReadingTable productionRunId={sideSheet.entity.id} />
-                <ProductionSampleTable productionRunId={sideSheet.entity.id} />
-                <ProductionIncidentTable
-                  productionRunId={sideSheet.entity.id}
-                  facilityId={sideSheet.entity.facilityId}
-                  defaultReactorId={sideSheet.entity.reactorId}
-                  defaultOperatorId={sideSheet.entity.operatorId}
-                />
-              </>
-            ) : null}
-          </ProductionRunForm>
-        </EntitySideSheet>
-      )}
+          ) : null}
+        </ProductionRunForm>
+      </EntitySideSheet>
     </div>
   );
 }

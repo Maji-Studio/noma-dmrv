@@ -98,6 +98,11 @@ const ids = {
   feedstockCoffeeHusk: demoId(1601),
   feedstockRiceHusk: demoId(1602),
   feedstockCoconut: demoId(1603),
+  feedstockCowCompost: demoId(1604),
+  feedstockGreenCompost: demoId(1605),
+  feedstockRockDust: demoId(1606),
+  feedstockVermicompost: demoId(1607),
+  feedstockAgriculturalLime: demoId(1608),
 
   // Feedstock Deliveries
   deliveryFeed1: demoId(1700),
@@ -555,6 +560,7 @@ async function seedDemoData() {
           code: 'FT-26-001',
           name: 'Mixed Hardwood Chips',
           category: 'forestry',
+          usage: 'pyrolysis',
           description: 'Pruned branches and sawmill residues from local forestry operations',
         },
         {
@@ -562,6 +568,7 @@ async function seedDemoData() {
           code: 'FT-26-002',
           name: 'Arabica Coffee Husk',
           category: 'agricultural',
+          usage: 'pyrolysis',
           description: 'Coffee processing residue from wet mills',
         },
         {
@@ -569,6 +576,7 @@ async function seedDemoData() {
           code: 'FT-26-003',
           name: 'Rice Husk',
           category: 'agricultural',
+          usage: 'pyrolysis',
           description: 'Rice milling byproduct with high silica content',
         },
         {
@@ -576,7 +584,48 @@ async function seedDemoData() {
           code: 'FT-26-004',
           name: 'Coconut Shell',
           category: 'agricultural',
+          usage: 'pyrolysis',
           description: 'Coconut processing waste shells',
+        },
+        {
+          id: ids.feedstockCowCompost,
+          code: 'FT-26-005',
+          name: 'Cow Manure Compost',
+          category: 'compost',
+          usage: 'blend',
+          description: 'Matured cow manure compost used as a blend material',
+        },
+        {
+          id: ids.feedstockGreenCompost,
+          code: 'FT-26-006',
+          name: 'Green Waste Compost',
+          category: 'compost',
+          usage: 'blend',
+          description: 'Screened green waste compost used as a blend material',
+        },
+        {
+          id: ids.feedstockRockDust,
+          code: 'FT-26-007',
+          name: 'Rock Dust',
+          category: 'mineral',
+          usage: 'blend',
+          description: 'Fine mineral amendment for premium blends',
+        },
+        {
+          id: ids.feedstockVermicompost,
+          code: 'FT-26-008',
+          name: 'Vermicompost',
+          category: 'compost',
+          usage: 'blend',
+          description: 'Certified vermicompost for organic blends',
+        },
+        {
+          id: ids.feedstockAgriculturalLime,
+          code: 'FT-26-009',
+          name: 'Agricultural Lime',
+          category: 'lime',
+          usage: 'blend',
+          description: 'Agricultural lime used to adjust blend pH',
         },
       ]);
 
@@ -878,38 +927,33 @@ async function seedDemoData() {
         // Standard Biochar Blend: 60% cow manure compost
         {
           formulationId: ids.formulationStandard,
-          ingredientType: 'compost',
-          name: 'Cow manure compost',
+          feedstockTypeId: ids.feedstockCowCompost,
           ratio: 0.6,
           sortOrder: 0,
         },
         // Premium: 20% green waste compost, 10% rock dust
         {
           formulationId: ids.formulationPremium,
-          ingredientType: 'compost',
-          name: 'Green waste compost',
+          feedstockTypeId: ids.feedstockGreenCompost,
           ratio: 0.2,
           sortOrder: 0,
         },
         {
           formulationId: ids.formulationPremium,
-          ingredientType: 'mineral',
-          name: 'Rock dust',
+          feedstockTypeId: ids.feedstockRockDust,
           ratio: 0.1,
           sortOrder: 1,
         },
         // Organic: 40% vermicompost, 10% agricultural lime
         {
           formulationId: ids.formulationOrganic,
-          ingredientType: 'compost',
-          name: 'Vermicompost',
+          feedstockTypeId: ids.feedstockVermicompost,
           ratio: 0.4,
           sortOrder: 0,
         },
         {
           formulationId: ids.formulationOrganic,
-          ingredientType: 'lime',
-          name: 'Agricultural lime',
+          feedstockTypeId: ids.feedstockAgriculturalLime,
           ratio: 0.1,
           sortOrder: 1,
         },

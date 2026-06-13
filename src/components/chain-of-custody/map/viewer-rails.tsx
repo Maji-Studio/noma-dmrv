@@ -11,9 +11,14 @@ import type {
   ChainGeoLeg,
   ChainGeoNode,
 } from "@/data-access/chain-of-custody-geo";
-import { LINEAGE_NODE_STYLES } from "../chain-constants";
+import { formatDistanceKm } from "@/lib/format-utils";
+import { cn } from "@/lib/utils";
 import { NODE_ACCENT_VAR } from "./viewer-constants";
 import { totalLegDistanceKm } from "./viewer-utils";
+
+function legAccent(leg: ChainGeoLeg): string {
+  return leg.kind === "inbound" ? "var(--acc-prod)" : "var(--acc-dist)";
+}
 
 const RAIL_BOX_CLASS =
   "border-[1.5px] border-[var(--clr-dark-purple-20)] " +
@@ -23,33 +28,24 @@ const RAIL_HEAD_CLASS =
   "flex justify-between gap-8 border-b border-[var(--clr-dark-purple-10)] px-12 py-10 " +
   "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]";
 
-const RAIL_FOOT_CLASS =
-  "px-12 py-[9px] font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-40)]";
-
 function legKindLabel(leg: ChainGeoLeg): string {
   return leg.kind === "inbound" ? "feedstock inbound" : "biochar outbound";
 }
 
-function nodeKindLabel(node: ChainGeoNode): string {
-  return node.kind === "facility"
-    ? "Facility"
-    : LINEAGE_NODE_STYLES[node.kind].label;
-}
-
 // ---------------------------------------------------------------------------
-// Legend (bottom-left) — swatches mirror the marker shapes
+// Legend (top-right) — swatches mirror the marker shapes
 // ---------------------------------------------------------------------------
 
 const LEGEND_ROWS = [
-  { accent: "var(--clr-orange)", diamond: false, label: "Supplier · feedstock origin" },
-  { accent: "var(--clr-purple)", diamond: false, label: "Facility · pyrolysis hub" },
-  { accent: "var(--clr-pink)", diamond: true, label: "Application field · stored" },
+  { accent: "var(--acc-prod)", diamond: false, label: "Supplier · feedstock origin" },
+  { accent: "var(--acc-infra)", diamond: false, label: "Facility · pyrolysis hub" },
+  { accent: "var(--acc-dist)", diamond: true, label: "Application field · stored" },
 ] as const;
 
 export function ViewerLegend() {
   return (
     <div
-      className={`absolute bottom-16 left-16 z-10 flex flex-col gap-[9px] px-[14px] py-12 ${RAIL_BOX_CLASS}`}
+      className={`absolute right-16 top-16 z-10 flex flex-col gap-[9px] px-[14px] py-12 ${RAIL_BOX_CLASS}`}
       data-testid="carbon-viewer-legend"
     >
       {LEGEND_ROWS.map((row) => (
@@ -73,115 +69,97 @@ export function ViewerLegend() {
 }
 
 // ---------------------------------------------------------------------------
-// Transport legs rail
+// Transport legs strip (map view) — horizontal, scrollable, click to focus
 // ---------------------------------------------------------------------------
 
 interface TransportLegsRailProps {
   legs: ChainGeoLeg[];
-  /** Highlight the leg's origin-side node (falls back to facility). */
-  onSelectLeg: (leg: ChainGeoLeg) => void;
+  /** Currently focused leg (its card reads selected). */
+  selectedLegId: string | null;
+  /** Zoom/flash this leg on the map. */
+  onFocusLeg: (leg: ChainGeoLeg) => void;
 }
 
-export function TransportLegsRail({ legs, onSelectLeg }: TransportLegsRailProps) {
+/**
+ * Bottom strip: a summary cell pinned left, then one scrollable card per leg.
+ * Clicking a card zooms the map to that hop, so each in-between step is
+ * inspectable on its own.
+ */
+export function TransportLegsRail({
+  legs,
+  selectedLegId,
+  onFocusLeg,
+}: TransportLegsRailProps) {
+  if (legs.length === 0) return null;
   return (
-    <div className={RAIL_BOX_CLASS} data-testid="carbon-viewer-legs-rail">
-      <div className={RAIL_HEAD_CLASS}>
-        <span>Transport legs</span>
-        <span>{totalLegDistanceKm(legs)} km total</span>
+    <div
+      className={`flex items-stretch overflow-hidden ${RAIL_BOX_CLASS}`}
+      data-testid="carbon-viewer-legs-rail"
+    >
+      <div className="flex shrink-0 flex-col justify-center gap-2 border-r-[1.5px] border-[var(--clr-dark-purple-10)] px-[14px] py-10">
+        <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]">
+          Transport legs
+        </span>
+        <span className="whitespace-nowrap font-mono text-[12px] font-medium tracking-[0.02em] text-[var(--clr-dark-purple)]">
+          {formatDistanceKm(totalLegDistanceKm(legs))} total
+        </span>
       </div>
-      {legs.map((leg) => (
-        <button
-          key={leg.id}
-          type="button"
-          onClick={() => onSelectLeg(leg)}
-          className="flex w-full cursor-pointer items-center gap-10 border-b border-[var(--clr-dark-purple-10)] px-12 py-[9px] text-left font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--clr-dark-purple)] last:border-b-0 hover:bg-[var(--clr-dark-purple-1)]"
-        >
-          <span
-            className="size-[7px] shrink-0"
-            style={{
-              background:
-                leg.kind === "inbound" ? "var(--clr-orange)" : "var(--clr-pink)",
-            }}
-            aria-hidden="true"
-          />
-          <span className="min-w-0 flex-1 overflow-hidden">
-            <span className="block truncate">
-              {leg.originName ?? "Unknown"} → {leg.destinationName ?? "Unknown"}
-            </span>
-            <span className="mt-2 block truncate text-[8.5px] tracking-[0.06em] text-[var(--clr-dark-purple-40)]">
-              {legKindLabel(leg)}
-            </span>
-          </span>
-          <span className="whitespace-nowrap text-[10px] text-[var(--clr-dark-purple-60)]">
-            {leg.distanceKm} km
-          </span>
-        </button>
-      ))}
-      <div className={RAIL_FOOT_CLASS}>
-        Distance drives transport emissions in the carbon accounting.
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Not geolocated rail (map view) + chip box (split view)
-// ---------------------------------------------------------------------------
-
-interface NotGeolocatedProps {
-  nodes: ChainGeoNode[];
-  facilityCode: string;
-  onSelectNode: (nodeId: string) => void;
-}
-
-export function NotGeolocatedRail({
-  nodes,
-  facilityCode,
-  onSelectNode,
-}: NotGeolocatedProps) {
-  return (
-    <div className={RAIL_BOX_CLASS} data-testid="carbon-viewer-ungeo-rail">
-      <div className={RAIL_HEAD_CLASS}>
-        <span>Not geolocated</span>
-        <span>{nodes.length}</span>
-      </div>
-      {nodes.length === 0 ? (
-        <div className={RAIL_FOOT_CLASS}>All records carry coordinates.</div>
-      ) : (
-        <>
-          {nodes.map((node) => (
+      <div className="flex min-w-0 flex-1 overflow-x-auto">
+        {legs.map((leg) => {
+          const selected = leg.id === selectedLegId;
+          return (
             <button
-              key={node.id}
+              key={leg.id}
               type="button"
-              onClick={() => onSelectNode(node.id)}
-              className="flex w-full cursor-pointer items-center gap-10 border-b border-[var(--clr-dark-purple-10)] px-12 py-[9px] text-left font-mono text-[10px] uppercase tracking-[0.04em] text-[var(--clr-dark-purple)] last:border-b-0 hover:bg-[var(--clr-dark-purple-1)]"
+              onClick={() => onFocusLeg(leg)}
+              aria-pressed={selected}
+              className={cn(
+                "flex w-[190px] shrink-0 cursor-pointer flex-col gap-4 border-r border-[var(--clr-dark-purple-10)] px-12 py-10 text-left last:border-r-0 hover:bg-[var(--clr-dark-purple-1)]",
+                selected && "bg-[var(--clr-dark-purple-1)]"
+              )}
+              style={
+                selected
+                  ? { boxShadow: `inset 0 -2px 0 ${legAccent(leg)}` }
+                  : undefined
+              }
             >
-              <span
-                className="size-[7px] shrink-0"
-                style={{ background: NODE_ACCENT_VAR[node.kind] }}
-                aria-hidden="true"
-              />
-              <span className="min-w-0 flex-1 overflow-hidden">
-                <span className="block truncate">{node.code}</span>
-                <span className="mt-2 block truncate text-[8.5px] tracking-[0.06em] text-[var(--clr-dark-purple-40)]">
-                  {nodeKindLabel(node)} · no GPS — inherits facility
+              <span className="flex items-center gap-6">
+                <span
+                  className="size-[7px] shrink-0"
+                  style={{ background: legAccent(leg) }}
+                  aria-hidden="true"
+                />
+                <span className="font-mono text-[8.5px] font-medium uppercase tracking-[0.07em] text-[var(--clr-dark-purple-40)]">
+                  {legKindLabel(leg)}
+                </span>
+                <span className="ml-auto whitespace-nowrap font-mono text-[10px] font-medium text-[var(--clr-dark-purple)]">
+                  {formatDistanceKm(leg.distanceKm)}
                 </span>
               </span>
+              <span className="truncate font-mono text-[10px] uppercase tracking-[0.03em] text-[var(--clr-dark-purple)]">
+                {leg.originName ?? "Unknown"} → {leg.destinationName ?? "Unknown"}
+              </span>
             </button>
-          ))}
-          <div className={RAIL_FOOT_CLASS}>
-            Records without coordinates resolve to {facilityCode}.
-          </div>
-        </>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Not geolocated chip box (split view only)
+// ---------------------------------------------------------------------------
+
+interface NotGeolocatedChipsProps {
+  nodes: ChainGeoNode[];
+  onSelectNode: (nodeId: string) => void;
 }
 
 export function NotGeolocatedChips({
   nodes,
   onSelectNode,
-}: Omit<NotGeolocatedProps, "facilityCode">) {
+}: NotGeolocatedChipsProps) {
   if (nodes.length === 0) return null;
   return (
     <div

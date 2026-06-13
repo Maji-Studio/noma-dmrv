@@ -104,6 +104,15 @@ const baseInput = {
   sizeBytes: 1024,
 };
 
+const photoInput = {
+  entityType: "application",
+  entityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  documentType: "photo" as const,
+  fileName: "application-field.jpg",
+  contentType: "image/jpeg",
+  sizeBytes: 1024,
+};
+
 describe("requestUpload", () => {
   it("returns Unauthorized when user is not signed in", async () => {
     vi.mocked(getUser).mockResolvedValueOnce(null);
@@ -159,6 +168,29 @@ describe("requestUpload", () => {
         visibility: "private",
         storageProvider: "local-fs",
       })
+    );
+  });
+
+  it("accepts application photos without EXIF timestamp or GPS and flags the gap", async () => {
+    vi.mocked(insertDocument).mockResolvedValueOnce({
+      id: "11111111-2222-4333-8444-555555555555",
+      uploadStatus: "pending",
+    } as never);
+
+    const result = await requestUpload(photoInput);
+
+    expect(result.success).toBe(true);
+    expect(insertDocument).toHaveBeenCalledWith(
+      mockUser.id,
+      expect.objectContaining({
+        entityType: "application",
+        documentType: "photo",
+        capturedAt: null,
+        metadata: expect.objectContaining({
+          geotagStatus: "missing",
+          missingExif: expect.arrayContaining(["gps", "timestamp"]),
+        }),
+      }),
     );
   });
 });

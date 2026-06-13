@@ -50,7 +50,7 @@ const tableVariants = cva(
     variants: {
       variant: {
         default: "",
-        bordered: "border border-[var(--color-border-secondary)]",
+        bordered: "[border:var(--panel-border)]",
       },
       size: {
         default: "",
@@ -66,15 +66,17 @@ const tableVariants = cva(
 );
 
 const tableRowVariants = cva(
-  "border-b border-[var(--color-border-tertiary)] align-middle transition-colors",
+  // 1px 10%-plum divider between rows (--hair-3 weight); the panel frame
+  // closes the bottom, so the last row drops its divider.
+  "[border-bottom:var(--row-divider)] last:[border-bottom:none] align-middle transition-colors",
   {
     variants: {
       striped: {
-        true: "even:bg-[var(--color-background-light)]",
+        true: "even:bg-[var(--row-stripe-bg)]",
         false: "",
       },
       hoverable: {
-        true: "hover:bg-[var(--color-background-medium)]",
+        true: "hover:bg-[var(--row-hover-bg)]",
         false: "",
       },
       selected: {
@@ -83,7 +85,7 @@ const tableRowVariants = cva(
       },
     },
     defaultVariants: {
-      striped: true,
+      striped: false,
       hoverable: false,
       selected: false,
     },
@@ -226,7 +228,7 @@ function DataTableRoot<TData, TValue>({
   columnVisibility: externalColumnVisibility,
   onColumnVisibilityChange,
   // Row options
-  striped = true,
+  striped = false,
   hoverable = false,
   // Callbacks
   onRowClick,
@@ -353,12 +355,34 @@ function DataTableRoot<TData, TValue>({
     [table]
   );
 
+  // Slot partition: pagination renders BELOW the table (visually and in DOM —
+  // keyboard/screen-reader order must match the visual order inside the
+  // framed panel); everything else (toolbar, filters) stays above.
+  const childArray = React.Children.toArray(children);
+  const footerChildren = childArray.filter(
+    (child) => React.isValidElement(child) && child.type === DataTablePagination,
+  );
+  const headerChildren = childArray.filter(
+    (child) => !(React.isValidElement(child) && child.type === DataTablePagination),
+  );
+  const framed = variant !== "default";
+
   return (
     <DataTableContext.Provider value={contextValue as DataTableContextValue<unknown>}>
-      <div className={cn("flex flex-col gap-16", containerClassName)}>
-        {children}
+      {/* Panel frame (md+): toolbar, table, and pagination live inside one
+          bordered paper panel so the table never sits flush on the warm
+          field. Mobile keeps the stacked card layout with gaps. */}
+      <div
+        className={cn(
+          "flex flex-col gap-16 md:gap-0",
+          framed &&
+            "md:bg-[var(--panel-bg)] md:[border:var(--panel-border)] md:[box-shadow:var(--panel-shadow)]",
+          containerClassName,
+        )}
+      >
+        {headerChildren}
         {/* Desktop: real table (hidden on mobile in favor of the card view) */}
-        <div className={cn("hidden md:block bg-[var(--color-background-white)] overflow-auto", variant === "bordered" && "border border-[var(--color-border-secondary)]")}>
+        <div className="hidden md:block overflow-auto">
           <table
             className={cn(tableVariants({ variant: "default", size }), className)}
             aria-label={ariaLabel}
@@ -368,7 +392,7 @@ function DataTableRoot<TData, TValue>({
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr
                   key={headerGroup.id}
-                  className="bg-[var(--color-background-medium)] border-b border-[var(--color-border-primary)]"
+                  className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]"
                 >
                   {headerGroup.headers.map((header) => {
                     const isSortable = header.column.getCanSort() && enableSorting;
@@ -378,8 +402,10 @@ function DataTableRoot<TData, TValue>({
                         key={header.id}
                         scope="col"
                         className={cn(
-                          "body-caption-fit-bold py-10 px-12 text-left text-[var(--color-text-primary)]",
-                          isSortable && "cursor-pointer select-none hover:bg-[var(--color-background-light)]"
+                          // Mono uppercase micro-label — every label is GT Flexa
+                          // Mono Medium per the Maji DS (incl. table headers).
+                          "label-micro py-10 px-12 text-left text-[var(--color-text-secondary)]",
+                          isSortable && "cursor-pointer select-none hover:bg-[var(--clr-dark-purple-5)]"
                         )}
                         style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                         onClick={isSortable ? header.column.getToggleSortingHandler() : undefined}
@@ -565,6 +591,7 @@ function DataTableRoot<TData, TValue>({
             ))
           )}
         </div>
+        {footerChildren}
       </div>
     </DataTableContext.Provider>
   );
@@ -584,8 +611,10 @@ function DataTableToolbar({ children, className }: DataTableToolbarProps) {
     <div
       className={cn(
         // Stack vertically on mobile so search + actions get full rows; the
-        // original single-row layout returns at sm+.
+        // original single-row layout returns at sm+. At md+ the toolbar sits
+        // inside the panel frame, so it carries its own padding + hairline.
         "flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between sm:gap-16 sm:flex-wrap",
+        "md:px-16 md:py-12 md:[border-bottom:var(--panel-head-border)]",
         className,
       )}
     >
@@ -657,7 +686,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
         Columns
       </Button>
       {isOpen && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)] shadow-lg">
+        <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
           {table.getAllLeafColumns().map((column) => {
             if (!column.getCanHide()) return null;
             return (
@@ -719,7 +748,14 @@ function DataTablePagination({
   const selectedCount = Object.keys(table.getState().rowSelection).length;
 
   return (
-    <div className={cn("flex items-center justify-between gap-16 flex-wrap", className)}>
+    <div
+      className={cn(
+        // At md+ pagination sits inside the panel frame as its footer row.
+        "flex items-center justify-between gap-16 flex-wrap",
+        "md:px-16 md:py-10 md:[border-top:var(--panel-head-border)]",
+        className,
+      )}
+    >
       <div className="flex items-center gap-16">
         {showSelectedCount && selectedCount > 0 && (
           <span className="body-small text-[var(--color-text-secondary)]">

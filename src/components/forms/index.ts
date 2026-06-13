@@ -12,7 +12,9 @@ export { FormTextarea } from "./form-textarea";
 export { FormSelect } from "./form-select";
 export { FormFileUpload } from "./form-file-upload";
 export { SectionLabel } from "./section-label";
+export { FormSection } from "./form-section";
 export { DistanceCalcField } from "./distance-calc-field";
+export { TruckWeighingSection } from "./truck-weighing-section";
 
 // Position Picker (map preview + address search + manual lat/lng)
 export { PositionPicker, type PositionValue, type PickerAccent } from "./position-picker";

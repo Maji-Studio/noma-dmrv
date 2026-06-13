@@ -2,7 +2,6 @@
 
 import { Controller, type Control, type FieldValues } from "react-hook-form";
 import { FormField, EntitySelect } from "@/components/forms";
-import { INGREDIENT_TYPE_LABELS } from "@/schemas/formulations";
 import { COMPOSITION_BIN_TYPE, type CompositionRow } from "@/lib/biochar-composition";
 
 const INGREDIENT_BIN_PREFIX = "Ingredient Bin · ";
@@ -20,10 +19,6 @@ export function IngredientBinField({
   isSubmitting,
   facilityId,
 }: IngredientBinFieldProps) {
-  const typeLabel =
-    INGREDIENT_TYPE_LABELS[row.ingredientType as keyof typeof INGREDIENT_TYPE_LABELS]
-    ?? row.ingredientType;
-
   const formatLabel = (entity: { name: string; subtitle?: string }) => {
     const parts = [entity.name];
     if (entity.subtitle) parts.push(entity.subtitle.replace(INGREDIENT_BIN_PREFIX, ""));
@@ -38,8 +33,8 @@ export function IngredientBinField({
       render={({ field, fieldState }) => (
         <FormField
           id={row.storageLocationFieldName}
-          label={row.ingredientName}
-          helperText={typeLabel}
+          label={row.feedstockTypeName}
+          helperText={row.feedstockTypeCategory}
           error={fieldState.error?.message}
         >
           <EntitySelect
@@ -51,6 +46,7 @@ export function IngredientBinField({
             filterBy={{
               ...(facilityId ? { facilityId } : {}),
               type: COMPOSITION_BIN_TYPE,
+              feedstockTypeId: row.feedstockTypeId,
               feedstockTypeUsage: "blend",
             }}
             formatSelectedLabel={formatLabel}

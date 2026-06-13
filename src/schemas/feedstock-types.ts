@@ -9,13 +9,26 @@ import { z } from "zod";
 // Constants
 // ============================================
 
-export const feedstockCategories = [
+export const pyrolysisFeedstockCategories = [
   "forestry",
   "agricultural",
   "industrial",
   "municipal",
   "invasive",
-  "ingredient",
+] as const;
+
+export const blendFeedstockCategories = [
+  "compost",
+  "mineral",
+  "lime",
+  "binder",
+  "amendment",
+  "other",
+] as const;
+
+export const feedstockCategories = [
+  ...pyrolysisFeedstockCategories,
+  ...blendFeedstockCategories,
 ] as const;
 
 export type FeedstockCategory = (typeof feedstockCategories)[number];
@@ -24,19 +37,57 @@ export const feedstockTypeUsages = ["pyrolysis", "blend"] as const;
 
 export type FeedstockTypeUsage = (typeof feedstockTypeUsages)[number];
 
-export const FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
+export const PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
   { value: "forestry", label: "Forestry" },
   { value: "agricultural", label: "Agricultural" },
   { value: "industrial", label: "Industrial" },
   { value: "municipal", label: "Municipal" },
   { value: "invasive", label: "Invasive Species" },
-  { value: "ingredient", label: "Ingredient" },
+];
+
+export const BLEND_FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
+  { value: "compost", label: "Compost" },
+  { value: "mineral", label: "Mineral" },
+  { value: "lime", label: "Lime" },
+  { value: "binder", label: "Binder" },
+  { value: "amendment", label: "Amendment" },
+  { value: "other", label: "Other Blend Material" },
+];
+
+export const FEEDSTOCK_CATEGORY_OPTIONS: ReadonlyArray<{ value: FeedstockCategory; label: string }> = [
+  ...PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
+  ...BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
 ];
 
 export const FEEDSTOCK_TYPE_USAGE_OPTIONS: ReadonlyArray<{ value: FeedstockTypeUsage; label: string }> = [
   { value: "pyrolysis", label: "Pyrolysis" },
   { value: "blend", label: "Blend" },
 ];
+
+const pyrolysisCategorySet = new Set<string>(pyrolysisFeedstockCategories);
+const blendCategorySet = new Set<string>(blendFeedstockCategories);
+
+function validateCategoryUsage(
+  data: { category?: FeedstockCategory; usage?: FeedstockTypeUsage },
+  ctx: z.RefinementCtx
+) {
+  if (!data.category || !data.usage) return;
+  const allowed =
+    data.usage === "pyrolysis"
+      ? pyrolysisCategorySet.has(data.category)
+      : blendCategorySet.has(data.category);
+
+  if (!allowed) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["category"],
+      message:
+        data.usage === "pyrolysis"
+          ? "Select a pyrolysis feedstock category"
+          : "Select a blend material category",
+    });
+  }
+}
 
 // ============================================
 // Feedstock Type Form Schema (Client-side validation)
@@ -61,7 +112,7 @@ export const feedstockTypeFormSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal("")),
-});
+}).superRefine(validateCategoryUsage);
 
 // ============================================
 // Server Action Schemas
@@ -76,7 +127,7 @@ export const updateFeedstockTypeSchema = z.object({
   usage: z.enum(feedstockTypeUsages).optional(),
   description: z.string().max(1000).optional().nullable(),
   registryUrl: z.string().max(500).optional().nullable(),
-});
+}).superRefine(validateCategoryUsage);
 
 export const deleteFeedstockTypeSchema = z.object({
   feedstockTypeId: z.string().uuid("Invalid feedstock type ID"),

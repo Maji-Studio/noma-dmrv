@@ -63,6 +63,11 @@ export const applicationMethod = pgEnum('application_method', [
   'mechanical',
 ]);
 
+export const applicationEvidenceMethod = pgEnum('application_evidence_method', [
+  'visual',
+  'boundary',
+]);
+
 export const documentationType = pgEnum('documentation_type', [
   'weighbridge_ticket',
   'bill_of_lading',

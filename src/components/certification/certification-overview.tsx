@@ -22,7 +22,7 @@ import {
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useCertificationOverview,
