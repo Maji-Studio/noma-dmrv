@@ -47,7 +47,8 @@ import {
   GRAPH_MINIMAP_MASK,
 } from "./chain-constants";
 import { ChainEdge } from "./chain-edge";
-import { ChainNode } from "./chain-node";
+import { ChainNode, type ChainNodeData } from "./chain-node";
+import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel } from "./map";
 import { RunFilterSelect, type RunFilterOption } from "./run-filter-select";
 import { BatchSankey } from "./sankey";
@@ -113,6 +114,15 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
   { value: "sankey", label: "Sankey" },
 ];
 
+const MASS_UNIT_MODES: Array<{
+  value: "kg" | "pct";
+  label: string;
+  title: string;
+}> = [
+  { value: "kg", label: "kg", title: "Show mass moving along each step" },
+  { value: "pct", label: "%", title: "Show each step's share of its branch" },
+];
+
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
 const DEFAULT_BATCH_VIEW: BatchViewMode = "dag";
 
@@ -152,11 +162,19 @@ interface ChainFlowGraphProps {
   nodes: Node[];
   edges: Edge[];
   warnings: string[];
+  /** Edge labels show mass (kg) or branch-share (%). */
+  labelMode: "kg" | "pct";
   onNodeClick: (event: React.MouseEvent, node: Node) => void;
 }
 
 /** Shared ReactFlow chrome for the single-rollback and merged batch DAGs. */
-function ChainFlowGraph({ nodes, edges, warnings, onNodeClick }: ChainFlowGraphProps) {
+function ChainFlowGraph({
+  nodes,
+  edges,
+  warnings,
+  labelMode,
+  onNodeClick,
+}: ChainFlowGraphProps) {
   // Hover focus — hovering a card fades back everything outside its lineage
   // and emphasizes the path edges.
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -168,16 +186,23 @@ function ChainFlowGraph({ nodes, edges, warnings, onNodeClick }: ChainFlowGraphP
           : { ...node, data: { ...node.data, dimmed: true } }
       )
     : nodes;
-  const displayEdges = related
-    ? edges.map((edge) => {
-        const onPath = related.has(edge.source) && related.has(edge.target);
-        return {
-          ...edge,
-          zIndex: onPath ? 1 : 0,
-          data: { ...edge.data, dimmed: !onPath, emphasized: onPath },
-        };
-      })
-    : edges;
+  // Always re-stamp the label mode onto edge data; layer hover focus on top.
+  // NB: never raise an edge's zIndex above 0 — xyflow would float the line
+  // above the HTML edge-label layer and bisect the chip text on hover. Hover
+  // emphasis reads through stroke width + dimming the rest, not stacking.
+  const displayEdges = edges.map((edge) => {
+    const onPath = related
+      ? related.has(edge.source) && related.has(edge.target)
+      : true;
+    return {
+      ...edge,
+      data: {
+        ...edge.data,
+        labelMode,
+        ...(related ? { dimmed: !onPath, emphasized: onPath } : {}),
+      },
+    };
+  });
 
   return (
     <div className="h-full w-full">
@@ -296,6 +321,26 @@ export function ChainOfCustodyPage() {
   );
   const selectNode = (nodeId: string) =>
     setSelection((current) => ({ nodeId, nonce: (current?.nonce ?? 0) + 1 }));
+
+  // Edge-label unit toggle (kg ⇄ branch-share %) for the graph views.
+  const [massUnit, setMassUnit] = useState<"kg" | "pct">("kg");
+  // Node detail side-sheet — opened by a card click instead of navigating.
+  const [sheetNode, setSheetNode] = useState<ChainNodeSheetNode | null>(null);
+  const openNodeSheet = (node: Node) => {
+    const data = node.data as unknown as ChainNodeData;
+    setSheetNode({
+      id: node.id,
+      label: data.label,
+      code: data.code,
+      icon: data.icon,
+      accentInk: data.accentInk,
+      status: data.status,
+      date: data.date,
+      details: data.details,
+      href: data.href,
+      drillable: data.drillable,
+    });
+  };
 
   const {
     data: chainData,
@@ -445,23 +490,25 @@ export function ChainOfCustodyPage() {
   };
 
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
+    // Split view keeps the map cross-link (click locates the record); every
+    // other graph view opens the detail sheet.
     if (applicationView === "split") {
       selectNode(node.id);
       return;
     }
-    const href = (node.data as { href?: string | null }).href;
-    if (href) {
-      router.push(href);
-    }
+    openNodeSheet(node);
   };
 
   const handleBatchNodeClick = (_event: React.MouseEvent, node: Node) => {
-    const [kind, entityId] = node.id.split(":");
+    openNodeSheet(node);
+  };
+
+  /** Sheet "Trace rollback" — drill the batch into the application's lineage. */
+  const traceFromSheet = (nodeId: string) => {
+    const [kind, entityId] = nodeId.split(":");
     if (kind === "application" && entityId) {
       drillDownToApplication(entityId);
-      return;
     }
-    selectNode(node.id);
   };
 
   const facility =
@@ -471,6 +518,12 @@ export function ChainOfCustodyPage() {
   const activeView = anchor === "batch" ? batchView : applicationView;
   const defaultView =
     anchor === "batch" ? DEFAULT_BATCH_VIEW : DEFAULT_APPLICATION_VIEW;
+  // The kg/% toggle only applies to the graph views (it labels edges).
+  const showMassToggle =
+    anchor === "batch"
+      ? batchView === "dag"
+      : anchor === "application" &&
+        (applicationView === "lineage" || applicationView === "split");
 
   const applicationBody = (() => {
     if (!selectedApplicationId) return null;
@@ -490,6 +543,7 @@ export function ChainOfCustodyPage() {
           nodes={nodes}
           edges={edges}
           warnings={chainData?.warnings ?? []}
+          labelMode={massUnit}
           onNodeClick={handleNodeClick}
         />
       );
@@ -520,6 +574,7 @@ export function ChainOfCustodyPage() {
             nodes={nodes}
             edges={edges}
             warnings={chainData?.warnings ?? []}
+            labelMode={massUnit}
             onNodeClick={handleNodeClick}
           />
         </div>
@@ -570,6 +625,7 @@ export function ChainOfCustodyPage() {
           nodes={batchNodes}
           edges={batchEdges}
           warnings={batchWarnings}
+          labelMode={massUnit}
           onNodeClick={handleBatchNodeClick}
         />
       );
@@ -660,28 +716,56 @@ export function ChainOfCustodyPage() {
             </div>
 
             {anchor !== "none" ? (
-              <div
-                className="flex border-[1.5px] border-[var(--clr-dark-purple-20)]"
-                role="group"
-                aria-label="View mode"
-                data-testid="chain-view-segment"
-              >
-                {viewModes.map((mode) => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    aria-pressed={activeView === mode.value}
-                    onClick={() => handleViewChange(mode.value, defaultView)}
-                    className={cn(
-                      "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
-                      activeView === mode.value
-                        ? "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
-                        : "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
-                    )}
+              <div className="flex flex-wrap items-end gap-12">
+                {showMassToggle ? (
+                  <div
+                    className="flex border-[1.5px] border-[var(--clr-dark-purple-20)]"
+                    role="group"
+                    aria-label="Edge label unit"
+                    data-testid="chain-mass-toggle"
                   >
-                    {mode.label}
-                  </button>
-                ))}
+                    {MASS_UNIT_MODES.map((mode) => (
+                      <button
+                        key={mode.value}
+                        type="button"
+                        aria-pressed={massUnit === mode.value}
+                        onClick={() => setMassUnit(mode.value)}
+                        title={mode.title}
+                        className={cn(
+                          "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
+                          massUnit === mode.value
+                            ? "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
+                            : "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
+                        )}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div
+                  className="flex border-[1.5px] border-[var(--clr-dark-purple-20)]"
+                  role="group"
+                  aria-label="View mode"
+                  data-testid="chain-view-segment"
+                >
+                  {viewModes.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      aria-pressed={activeView === mode.value}
+                      onClick={() => handleViewChange(mode.value, defaultView)}
+                      className={cn(
+                        "cursor-pointer border-r-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] py-10 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0",
+                        activeView === mode.value
+                          ? "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]"
+                          : "text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
+                      )}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : null}
           </div>
@@ -700,6 +784,23 @@ export function ChainOfCustodyPage() {
           )}
         </div>
       </main>
+
+      <ChainNodeSheet
+        node={sheetNode}
+        onOpenChange={(open) => {
+          if (!open) setSheetNode(null);
+        }}
+        onViewRecord={
+          sheetNode?.href
+            ? () => {
+                if (sheetNode.href) router.push(sheetNode.href);
+              }
+            : undefined
+        }
+        onTrace={
+          sheetNode?.drillable ? () => traceFromSheet(sheetNode.id) : undefined
+        }
+      />
     </div>
   );
 }
