@@ -10,9 +10,9 @@
  * design doc §4) — it replaces the old per-batch "Group into…" dropdown:
  * pick ready batches → continue (deferred create) → confirm & submit.
  *
- * Readiness is server-owned: rows come from `useCertificationOverview` (the
- * shared `deriveRemovalReadiness` classifier), so the table hint, the Overview
- * queue, and the Review pre-flight can never disagree.
+ * Readiness is server-owned: rows come from `useCertificationOverview` (legacy
+ * hook name, shared `deriveRemovalReadiness` classifier), so the table hint,
+ * detail sheet, and wizard submit step can never disagree.
  */
 "use client";
 
@@ -55,7 +55,7 @@ export function RemovalsList() {
   };
 
   return (
-    <div className="container-max flex flex-col gap-32 py-32">
+    <div className="container-max page-shell">
       <header className="flex items-start justify-between gap-16">
         <div className="flex flex-col gap-8">
           <span className="title-chapter-title text-[var(--color-text-tertiary)]">

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { latitudeSchema, longitudeSchema } from "./helpers";
+import {
+  GPS_PAIR_MESSAGE,
+  hasCompleteGpsPair,
+  latitudeSchema,
+  longitudeSchema,
+} from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -46,7 +51,7 @@ export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[numb
  * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Soil Temperature — soilTemperatureSource, soilTemperatureC
  */
-export const applicationFormSchema = z.object({
+const applicationFormBaseSchema = z.object({
   // === Section 1: Application Details ===
   applicationDate: z.coerce.date({ error: "Application date is required" }),
   deliveryId: z.string().min(1, "Please select a delivery").uuid("Invalid delivery"),
@@ -102,6 +107,14 @@ export const applicationFormSchema = z.object({
 
 });
 
+export const applicationFormSchema = applicationFormBaseSchema.refine(
+  hasCompleteGpsPair,
+  {
+    message: GPS_PAIR_MESSAGE,
+    path: ["gpsLatitude"],
+  }
+);
+
 // ============================================
 // Server Action Schemas
 // ============================================
@@ -136,7 +149,13 @@ export const updateApplicationSchema = z.object({
   gisBoundaryReference: z.string().max(255).optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-});
+}).refine(
+  hasCompleteGpsPair,
+  {
+    message: GPS_PAIR_MESSAGE,
+    path: ["gpsLatitude"],
+  }
+);
 
 /**
  * Schema for deleting an application
@@ -162,17 +181,7 @@ export type DeleteApplicationData = z.infer<typeof deleteApplicationSchema>;
  * Extended application form schema with GPS validation
  * Both latitude and longitude must be provided together
  */
-export const applicationFormSchemaWithGpsValidation = applicationFormSchema.refine(
-  (data) => {
-    const hasLat = data.gpsLatitude != null;
-    const hasLng = data.gpsLongitude != null;
-    return hasLat === hasLng;
-  },
-  {
-    message: "Both latitude and longitude must be provided together",
-    path: ["gpsLatitude"],
-  }
-);
+export const applicationFormSchemaWithGpsValidation = applicationFormSchema;
 
 /**
  * Formatting helpers for display

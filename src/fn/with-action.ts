@@ -2,9 +2,10 @@
 
 import { z } from "zod";
 import { getUser } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
+import { toActionError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
+import { logActionError } from "./action-errors";
 
 interface WithActionOptions {
   /** Prefix for ZodError messages. Default: "Validation error" */
@@ -60,17 +61,12 @@ export async function withAction<T>(
         error: `${zodErrorPrefix}: ${error.issues.map((e) => e.message).join(", ")}`,
       };
     }
-    // Deliberately no debug log here — `error.message` may carry PII per
-    // CLAUDE.md, and `error.name` alone duplicates what dev tooling already
-    // shows on the thrown error. Callers that need richer diagnostics should
-    // throw a `SafeError` (message is then exposed to the client) or rely on
-    // the framework's server error reporting.
+    logActionError(error, {
+      message: "server action failed",
+    });
     return {
       success: false,
-      error:
-        error instanceof SafeError || process.env.NODE_ENV === "development"
-          ? (error instanceof Error ? error.message : fallbackMessage)
-          : fallbackMessage,
+      error: toActionError(error, fallbackMessage),
     };
   }
 }

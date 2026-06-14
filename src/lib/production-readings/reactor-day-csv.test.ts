@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getReactorDayCsvReplacementWindow,
   inspectReactorDayCsv,
   parseReactorDayCsv,
 } from "./reactor-day-csv";
@@ -82,20 +83,23 @@ describe("parseReactorDayCsv", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it("rejects a file whose filename reactor does not match the selected run", () => {
+  it("warns and forces confirmation when filename reactor differs from the selected run", () => {
     const csv = [
       "Time,Carbonization Outlet Temperature,Drying Drum Pressure",
       "00:00:00,500,0.12",
     ].join("\n");
 
-    expect(() =>
-      inspectReactorDayCsv({
-        fileName: "TZ999Z 2026-04-02 Data Evaluation.csv",
-        csvText: csv,
-        runReactorCode: "TZ001B",
-      }),
-    ).toThrow(
-      "Filename reactor TZ999Z does not match selected run reactor TZ001B.",
+    const result = inspectReactorDayCsv({
+      fileName: "TZ999Z 2026-04-02 Data Evaluation.csv",
+      csvText: csv,
+      runReactorCode: "TZ001B",
+    });
+
+    expect(result.requiresMapping).toBe(true);
+    expect(result.warnings).toEqual(
+      [
+        "Filename reactor TZ999Z does not match selected run reactor TZ001B. Confirm this is the correct reactor-day file before importing.",
+      ],
     );
   });
 
@@ -129,6 +133,19 @@ describe("parseReactorDayCsv", () => {
       new Date("2026-04-01T21:00:00.000Z"),
       new Date("2026-04-02T09:00:00.000Z"),
     ]);
+  });
+
+  it("explains the selected run window when the CSV date has no overlap", () => {
+    expect(() =>
+      getReactorDayCsvReplacementWindow({
+        fileDate: "2026-04-02",
+        timezone: "Africa/Dar_es_Salaam",
+        runWindowStart: new Date("2026-06-13T10:44:53.693Z"),
+        runWindowEnd: new Date("2026-06-13T10:44:53.693Z"),
+      }),
+    ).toThrow(
+      "CSV file date 2026-04-02 is outside the selected production run window 2026-06-13 13:44 - 2026-06-13 13:44 (Africa/Dar_es_Salaam). Select a production run that covers 2026-04-02, or update the run start/end times.",
+    );
   });
 
   it("suggests the production channels from the reactor-day export header", () => {

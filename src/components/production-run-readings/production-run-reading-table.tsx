@@ -129,7 +129,7 @@ export function ProductionRunReadingTable({
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Production Readings
+          Production Reading Records
         </h3>
         {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
@@ -149,12 +149,15 @@ export function ProductionRunReadingTable({
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {readOnly
             ? "No readings recorded yet."
-            : "No readings recorded yet. Click \"Add Reading\" to record monitoring data."}
+            : "No readings recorded yet. Upload a readings CSV or click \"Add Reading\" to record monitoring data."}
         </p>
       ) : readings?.length ? (
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[420px]">
           <table className="w-full body-small">
-            <thead>
+            {/* Sticky header so the column labels stay visible once the body
+                scrolls past the capped height. bg matches the side-sheet paper
+                so rows don't bleed through behind it. */}
+            <thead className="sticky top-0 z-10 bg-[var(--color-background-white)]">
               <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Temp (&deg;C)</th>

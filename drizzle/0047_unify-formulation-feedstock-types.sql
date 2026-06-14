@@ -1,6 +1,23 @@
 ALTER TABLE "formulation_ingredients" ADD COLUMN "feedstock_type_id" uuid;--> statement-breakpoint
 ALTER TABLE "feedstock_types" DROP CONSTRAINT "feedstock_types_name_unique";--> statement-breakpoint
 ALTER TABLE "feedstock_types" ADD CONSTRAINT "feedstock_types_name_usage_unique" UNIQUE("name","usage");--> statement-breakpoint
+DO $$
+DECLARE
+  conflicting_names text;
+BEGIN
+  SELECT string_agg("name", ', ' ORDER BY "name")
+  INTO conflicting_names
+  FROM (
+    SELECT "name"
+    FROM "formulation_ingredients"
+    GROUP BY "name"
+    HAVING count(DISTINCT "ingredient_type") > 1
+  ) AS "ambiguous_formulation_ingredient_names";
+
+  IF conflicting_names IS NOT NULL THEN
+    RAISE EXCEPTION 'Cannot migrate formulation ingredients with multiple ingredient types for the same name: %', conflicting_names;
+  END IF;
+END $$;--> statement-breakpoint
 INSERT INTO "feedstock_types" ("code", "name", "category", "usage", "description")
 SELECT DISTINCT
   'FT-BLEND-' || upper(substr(md5(lower("name") || ':' || "ingredient_type"::text), 1, 8)),

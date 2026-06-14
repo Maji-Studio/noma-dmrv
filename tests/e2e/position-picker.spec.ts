@@ -28,6 +28,8 @@ const DAR = STUB_GEOCODE_FIXTURES[1]; // "Dar es Salaam, Tanzania"
 
 const SEED_FACILITY_POINT = { lat: -6.163, lng: 35.7516 };
 const SEED_SUPPLIER_POINT = { lat: -6.8, lng: 39.28 };
+const OUT_OF_RANGE_LATITUDE = "91";
+const OUT_OF_RANGE_LONGITUDE = "181";
 
 /** Keep the suite offline: basemap/style/tile hosts are never real deps. */
 async function blockExternalMapHosts(page: Page) {
@@ -83,6 +85,23 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(
       dialog.getByTestId("position-picker-resolved-label")
     ).toContainText(DAR.label);
+  });
+
+  test("manual coordinate entry rejects invalid map bounds without crashing", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Supplier" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    await dialog.locator("#gps-latitude").fill(OUT_OF_RANGE_LATITUDE);
+    await dialog.locator("#gps-longitude").fill(OUT_OF_RANGE_LONGITUDE);
+
+    await expect(dialog).toBeVisible();
+    await expect(page.getByText("Application error")).toBeHidden();
   });
 
   test("map preview degrades gracefully without a basemap", async ({

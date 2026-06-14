@@ -23,9 +23,9 @@ import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 
 // General = the local record (the only editable surface). Isometric =
-// read-only browse of the registry catalogue (browse-only by design: no import,
-// no local record created from it). The Registry URL column stays in the schema;
-// it just no longer has a form field.
+// read-only browse of the registry catalogue. Selecting a registry row pre-fills
+// the local record, but nothing is created until the operator saves. The
+// Registry URL column stays in the schema; it just no longer has a form field.
 const SECTIONS = [
   {
     key: "general",
@@ -77,9 +77,13 @@ export function FeedstockTypeForm({
   const [activeSection, setActiveSection] = useState<SectionKey>("general");
   const [selectedIsometricFeedstock, setSelectedIsometricFeedstock] =
     useState<IsometricFeedstockType | null>(null);
-  // Mount the registry browser lazily on first open, then keep it mounted so
-  // its local state (search, scroll) survives section switches.
+  // Fetch the registry browser lazily on first open; React Query keeps the
+  // catalogue warm if the operator switches sections.
   const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
+  const sections =
+    lockUsage && defaultUsage === "blend"
+      ? SECTIONS.filter((section) => section.key === "general")
+      : SECTIONS;
 
   const selectSection = (key: SectionKey) => {
     setActiveSection(key);
@@ -92,7 +96,7 @@ export function FeedstockTypeForm({
     event.preventDefault();
     const delta = event.key === "ArrowRight" ? 1 : -1;
     const nextKey =
-      SECTIONS[(index + delta + SECTIONS.length) % SECTIONS.length].key;
+      sections[(index + delta + sections.length) % sections.length].key;
     selectSection(nextKey);
     document.getElementById(getSelectorId(nextKey))?.focus();
   };
@@ -136,6 +140,20 @@ export function FeedstockTypeForm({
 
   const handleSelectIsometricFeedstock = (type: IsometricFeedstockType) => {
     setSelectedIsometricFeedstock(type);
+    if (!lockUsage || defaultUsage === "pyrolysis") {
+      setValue("usage", "pyrolysis", {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      if (selectedUsage !== "pyrolysis") {
+        setValue("category", "" as FeedstockTypeFormData["category"], {
+          shouldDirty: true,
+          shouldTouch: true,
+          shouldValidate: true,
+        });
+      }
+    }
     setValue("name", type.name, {
       shouldDirty: true,
       shouldTouch: true,
@@ -148,8 +166,35 @@ export function FeedstockTypeForm({
       shouldTouch: true,
       shouldValidate: true,
     });
-    selectSection("general");
   };
+  const defaultSubmitLabel = isEditMode
+    ? "Update Feedstock Type"
+    : "Create Feedstock Type";
+  const selectedIsometricSummary = selectedIsometricFeedstock && (
+    <div className="flex gap-10 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-12 py-10">
+      <SealCheck
+        aria-hidden
+        className="mt-1 size-18 shrink-0 text-[var(--st-ok)]"
+        weight="bold"
+      />
+      <div className="flex flex-col gap-2">
+        <p className="body-small text-[var(--color-text-primary)]">
+          Selected from Isometric: {selectedIsometricFeedstock.name}
+        </p>
+        <p className="body-caption font-mono text-[var(--color-text-tertiary)]">
+          {selectedIsometricFeedstock.id}
+          {selectedIsometricFeedstock.supplier_reference_id
+            ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
+            : ""}
+        </p>
+        {selectedIsometricNameChanged && (
+          <p className="body-caption text-[var(--st-wait)]">
+            The local name no longer matches the selected Isometric feedstock.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-20">
@@ -158,7 +203,7 @@ export function FeedstockTypeForm({
         role="radiogroup"
         aria-label="Feedstock type source"
       >
-        {SECTIONS.map(({ key, label, description, icon: Icon }, index) => {
+        {sections.map(({ key, label, description, icon: Icon }, index) => {
           const isActive = key === activeSection;
           return (
             <button
@@ -202,147 +247,167 @@ export function FeedstockTypeForm({
         })}
       </div>
 
-      <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
-        <WarningCircle
-          aria-hidden
-          className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
-          weight="bold"
-        />
-        <p className="body-small text-[var(--color-text-primary)]">
-          {CERTIFIED_FEEDSTOCK_WARNING}
-        </p>
-      </div>
-
-      {/* Both panels stay mounted (inactive one hidden) so RHF field state
-          survives section switches. */}
-      <form
-        id={getPanelId("general")}
-        aria-labelledby={getSelectorId("general")}
-        onSubmit={handleSubmit((data) => onSubmit(data))}
-        className={cn("space-y-20", activeSection !== "general" && "hidden")}
-      >
-        {hint && (
-          <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-            {hint}
+      {activeSection === "general" && !selectedIsometricFeedstock && (
+        <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
+          <WarningCircle
+            aria-hidden
+            className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
+            weight="bold"
+          />
+          <p className="body-small text-[var(--color-text-primary)]">
+            {CERTIFIED_FEEDSTOCK_WARNING}
           </p>
-        )}
+        </div>
+      )}
 
-        {selectedIsometricFeedstock && (
-          <div className="flex gap-10 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-12 py-10">
-            <SealCheck
-              aria-hidden
-              className="mt-1 size-18 shrink-0 text-[var(--st-ok)]"
-              weight="bold"
-            />
-            <div className="flex flex-col gap-2">
-              <p className="body-small text-[var(--color-text-primary)]">
-                Selected from Isometric: {selectedIsometricFeedstock.name}
-              </p>
-              <p className="body-caption font-mono text-[var(--color-text-tertiary)]">
-                {selectedIsometricFeedstock.id}
-                {selectedIsometricFeedstock.supplier_reference_id
-                  ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
-                  : ""}
-              </p>
-              {selectedIsometricNameChanged && (
-                <p className="body-caption text-[var(--st-wait)]">
-                  The local name no longer matches the selected Isometric
-                  feedstock.
+      <form
+        onSubmit={handleSubmit((data) => onSubmit(data))}
+        className="space-y-20"
+      >
+        <div
+          id={getPanelId("general")}
+          aria-labelledby={getSelectorId("general")}
+          className={cn(activeSection !== "general" && "hidden")}
+        >
+          {activeSection === "general" && (
+            <div className="space-y-20">
+              {hint && (
+                <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
+                  {hint}
                 </p>
               )}
+
+              {selectedIsometricSummary}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+                <FormField
+                  id="usage"
+                  label="Usage"
+                  error={errors.usage?.message}
+                  required
+                >
+                  <FormSelect
+                    id="usage"
+                    placeholder="Select usage..."
+                    disabled={isSubmitting}
+                    error={!!errors.usage}
+                    options={usageOptions}
+                    {...register("usage", {
+                      onChange: () =>
+                        setValue(
+                          "category",
+                          "" as FeedstockTypeFormData["category"]
+                        ),
+                    })}
+                  />
+                  {lockUsage && (
+                    <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
+                      Fixed by the parent workflow so this type cannot be
+                      created with the wrong usage.
+                    </p>
+                  )}
+                </FormField>
+
+                <FormField id="name" label="Name" error={errors.name?.message} required>
+                  <FormInput
+                    id="name"
+                    type="text"
+                    placeholder="e.g., Coffee husks"
+                    disabled={isSubmitting}
+                    error={!!errors.name}
+                    autoFocus
+                    {...register("name")}
+                  />
+                </FormField>
+
+                <FormField
+                  id="category"
+                  label="Category"
+                  error={errors.category?.message}
+                  required
+                >
+                  <FormSelect
+                    id="category"
+                    placeholder="Select category..."
+                    disabled={isSubmitting}
+                    error={!!errors.category}
+                    options={categoryOptions}
+                    {...register("category")}
+                  />
+                </FormField>
+              </div>
+
+              <FormField
+                id="description"
+                label="Description"
+                error={errors.description?.message}
+              >
+                <FormTextarea
+                  id="description"
+                  placeholder="Optional description of the residue stream, sourcing context, or preparation"
+                  disabled={isSubmitting}
+                  error={!!errors.description}
+                  {...register("description")}
+                />
+              </FormField>
+
+              <FormActions
+                onCancel={onCancel}
+                isSubmitting={isSubmitting}
+                submitLabel={submitLabel}
+                defaultSubmitLabel={defaultSubmitLabel}
+              />
             </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="usage"
-            label="Usage"
-            error={errors.usage?.message}
-            required
-          >
-            <FormSelect
-              id="usage"
-              placeholder="Select usage..."
-              disabled={isSubmitting}
-              error={!!errors.usage}
-              options={usageOptions}
-              {...register("usage", {
-                onChange: () => setValue("category", "" as FeedstockTypeFormData["category"]),
-              })}
-            />
-            {lockUsage && (
-              <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
-                Fixed by the parent workflow so this type cannot be created with
-                the wrong usage.
-              </p>
-            )}
-          </FormField>
-
-          <FormField id="name" label="Name" error={errors.name?.message} required>
-            <FormInput
-              id="name"
-              type="text"
-              placeholder="e.g., Coffee husks"
-              disabled={isSubmitting}
-              error={!!errors.name}
-              autoFocus
-              {...register("name")}
-            />
-          </FormField>
-
-          <FormField
-            id="category"
-            label="Category"
-            error={errors.category?.message}
-            required
-          >
-            <FormSelect
-              id="category"
-              placeholder="Select category..."
-              disabled={isSubmitting}
-              error={!!errors.category}
-              options={categoryOptions}
-              {...register("category")}
-            />
-          </FormField>
+          )}
         </div>
 
-        <FormField
-          id="description"
-          label="Description"
-          error={errors.description?.message}
+        <div
+          id={getPanelId("isometric")}
+          aria-labelledby={getSelectorId("isometric")}
+          className={cn(activeSection !== "isometric" && "hidden")}
         >
-          <FormTextarea
-            id="description"
-            placeholder="Optional description of the residue stream, sourcing context, or preparation"
-            disabled={isSubmitting}
-            error={!!errors.description}
-            {...register("description")}
-          />
-        </FormField>
+          {activeSection === "isometric" && (
+            <div className="space-y-20">
+              {/* Only fetch once the section has first been opened. */}
+              {hasOpenedIsometric && (
+                <IsometricFeedstockBrowser
+                  onSelect={handleSelectIsometricFeedstock}
+                  selectedId={selectedIsometricFeedstock?.id ?? null}
+                />
+              )}
 
-        <FormActions
-          onCancel={onCancel}
-          isSubmitting={isSubmitting}
-          submitLabel={submitLabel}
-          defaultSubmitLabel={isEditMode ? "Update Feedstock Type" : "Create Feedstock Type"}
-        />
+              {selectedIsometricFeedstock && (
+                <div className="space-y-20 border-t border-[var(--color-border-secondary)] pt-20">
+                  {selectedIsometricSummary}
+
+                  <FormField
+                    id="isometric-category"
+                    label="Local category"
+                    error={errors.category?.message}
+                    required
+                  >
+                    <FormSelect
+                      id="isometric-category"
+                      placeholder="Select category..."
+                      disabled={isSubmitting}
+                      error={!!errors.category}
+                      options={PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS}
+                      {...register("category")}
+                    />
+                  </FormField>
+
+                  <FormActions
+                    onCancel={onCancel}
+                    isSubmitting={isSubmitting}
+                    submitLabel={submitLabel}
+                    defaultSubmitLabel={defaultSubmitLabel}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </form>
-
-      <div
-        id={getPanelId("isometric")}
-        aria-labelledby={getSelectorId("isometric")}
-        className={cn(activeSection !== "isometric" && "hidden")}
-      >
-        {/* Only fetch once the section has first been opened. */}
-        {hasOpenedIsometric && (
-          <IsometricFeedstockBrowser
-            onSelect={handleSelectIsometricFeedstock}
-            selectedId={selectedIsometricFeedstock?.id ?? null}
-          />
-        )}
-      </div>
     </div>
   );
 }

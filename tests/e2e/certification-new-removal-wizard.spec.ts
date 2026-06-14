@@ -106,7 +106,7 @@ test.describe("Certification — New-Removal wizard", () => {
         `/certification/removals/${removal.removalId}/review?facility=${facilityId}`,
       );
 
-      // The old /review route now redirects to the overview with ?resume=.
+      // The old /review route now redirects to the Removals hub with ?resume=.
       await expect(page).toHaveURL(
         new RegExp(`/certification/removals\\?.*resume=${removal.removalId}`),
         { timeout: COLD_COMPILE_TIMEOUT_MS },

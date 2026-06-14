@@ -118,7 +118,12 @@ export function FacilityForm({
       </div>
 
       <div className="grid grid-cols-1 gap-y-20">
-        <FormField id="timezone" label="Timezone" error={errors.timezone?.message}>
+        <FormField
+          id="timezone"
+          label="Timezone"
+          error={errors.timezone?.message}
+          required
+        >
           <FormSelect
             id="timezone"
             placeholder="Select timezone..."
@@ -161,8 +166,8 @@ export function FacilityForm({
         latitude={gpsLatitude ?? null}
         longitude={gpsLongitude ?? null}
         onPositionChange={({ lat, lng }) => {
-          setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
-          setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+          setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
+          setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
         }}
         latitudeError={errors.gpsLatitude?.message}
         longitudeError={errors.gpsLongitude?.message}

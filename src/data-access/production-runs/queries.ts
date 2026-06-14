@@ -20,6 +20,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
+import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
   productionRunReadings,
@@ -89,11 +90,11 @@ export async function getProductionRuns(
   }
 
   if (startDate) {
-    conditions.push(gte(productionRuns.date, startDate.toISOString().split('T')[0]));
+    conditions.push(gte(productionRuns.date, formatLocalDate(startDate)));
   }
 
   if (endDate) {
-    conditions.push(lte(productionRuns.date, endDate.toISOString().split('T')[0]));
+    conditions.push(lte(productionRuns.date, formatLocalDate(endDate)));
   }
 
   const whereClause = and(...conditions);

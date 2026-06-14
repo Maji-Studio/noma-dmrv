@@ -209,9 +209,9 @@ export function useCreateFacility(
     },
     onSuccess: async (data, variables) => {
       // Invalidate all facility lists
-      queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
+      await queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       // Invalidate countries in case a new country was added
-      queryClient.invalidateQueries({ queryKey: facilityKeys.countries() });
+      await queryClient.invalidateQueries({ queryKey: facilityKeys.countries() });
 
       // Pre-populate the detail cache with the new facility
       queryClient.setQueryData(facilityKeys.detail(data.id), data);

@@ -114,6 +114,16 @@ function createColumns(
       accessorFn: (row) => row.reactorIdentifier ?? "",
     },
     {
+      accessorKey: "totalFeedstockMassKg",
+      header: "Feedstock (kg)",
+      cell: ({ row }) => row.original.totalFeedstockMassKg?.toLocaleString() ?? "\u2014",
+    },
+    {
+      accessorKey: "biocharOutputKg",
+      header: "Biochar Wet (kg)",
+      cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
+    },
+    {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
@@ -126,16 +136,6 @@ function createColumns(
           readiness={deriveEntityCertifyReadiness("productionRun", row.original)}
         />
       ),
-    },
-    {
-      accessorKey: "totalFeedstockMassKg",
-      header: "Feedstock (kg)",
-      cell: ({ row }) => row.original.totalFeedstockMassKg?.toLocaleString() ?? "\u2014",
-    },
-    {
-      accessorKey: "biocharOutputKg",
-      header: "Biochar Wet (kg)",
-      cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
     },
     {
       id: "actions",
@@ -304,7 +304,7 @@ export function ProductionRunList() {
         : undefined;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="production"
         title="Production Runs"

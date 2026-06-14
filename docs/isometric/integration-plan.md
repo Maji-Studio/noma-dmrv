@@ -158,12 +158,12 @@ src/hooks/use-certification.ts         # all React Query hooks
 src/schemas/certification.ts           # all Zod schemas
 src/components/certification/          # all UI: facility section + dialog,
                                        #   certify-panel (read-only bridge),
-                                       #   certification-overview/-settings,
+                                       #   certification-settings,
                                        #   submission-status-badge, sync-event-log,
                                        #   removals-list, ghg-statements-list,
                                        #   ghg-statement-create-drawer + submit-dialog,
                                        #   new-removal-dialog/
-src/app/(app)/certification/           # route group: overview + removals +
+src/app/(app)/certification/           # route group: root redirect + removals +
                                        #   ghg-statements + settings
 ```
 

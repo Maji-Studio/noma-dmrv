@@ -2,7 +2,9 @@ import { markSubmissionRejected } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import {
+  describeIsometricApiError,
   IsometricApiError,
+  sanitizeIsometricErrorBody,
   type GhgStatementReconciliation,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
@@ -135,13 +137,19 @@ export async function performRegistryCreate(
     const reconciled = await reconcileToResult(args);
     if (reconciled) return reconciled;
 
-    const message = err instanceof Error ? err.message : String(err);
+    const message =
+      err instanceof IsometricApiError
+        ? describeIsometricApiError(err)
+        : "Registry create failed. Try again.";
     // The failure event keeps `mapping_revision` (so the audit trail names
     // which mapping revision produced the failed payload — ADR 0005 / B3)
     // AND the registry's response body when there is one: an Isometric 4xx
     // carries the actionable detail; a bare status code is undebuggable
     // without it.
-    const body = err instanceof IsometricApiError ? err.body : undefined;
+    const body =
+      err instanceof IsometricApiError
+        ? sanitizeIsometricErrorBody(err.body)
+        : undefined;
     await appendSyncEventBestEffort(
       args.userId,
       {

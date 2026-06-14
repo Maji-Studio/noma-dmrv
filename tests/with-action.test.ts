@@ -10,6 +10,14 @@ vi.mock("@/lib/auth/server", () => ({
   getUser: vi.fn(),
 }));
 
+vi.mock("@/lib/log", () => ({
+  logger: {
+    error: vi.fn(),
+  },
+  sanitizeErrorMessage: (error: unknown) =>
+    error instanceof Error ? error.message : String(error),
+}));
+
 import { withAction } from "@/fn/with-action";
 import { SafeError } from "@/lib/errors";
 import { getUser } from "@/lib/auth/server";
@@ -113,6 +121,21 @@ describe("withAction", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("suppresses raw database-like Error.message in default mode", async () => {
+    vi.mocked(getUser).mockResolvedValue(mockUser);
+
+    const result = await withAction(async () => {
+      throw new Error(
+        'Failed query: insert into "storage_locations" values ($1) -- params: ["11111111-1111-4111-8111-111111111111"]',
+      );
+    }, { fallbackMessage: "Failed to create storage location" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Failed to create storage location",
+    });
   });
 
   it("uses default fallbackMessage for non-Error throws", async () => {

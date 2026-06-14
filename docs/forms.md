@@ -507,6 +507,9 @@ import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-uti
 - `nullableNumericValue` — for nullable fields with `z.number().nullable().optional()`
 - `integerValue` — for integer-only fields
 
+> **Gotcha — clearing a value on edit must use `nullableNumericValue`.**
+> For any nullable column the user can *clear* in an edit form, use `nullableNumericValue` (empty → `null`), **not** `numericValue` (empty → `undefined`). Drizzle's `.set()` **drops `undefined` keys**, so an update built from `undefined` leaves the old value in the database — the field appears un-clearable and the change silently reverts. `null` is an explicit value Drizzle persists. (Reference: storage-location capacity, `storage-location-form.tsx`.)
+
 ## Zod Preprocessors for Nullable Numeric Fields
 
 For Zod schemas that need string-to-number coercion (e.g., form inputs → nullable numbers), use the shared preprocessors from `@/schemas/helpers`:

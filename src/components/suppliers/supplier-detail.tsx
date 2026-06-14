@@ -102,7 +102,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
   }
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       {/* Breadcrumb */}
       <div className="flex items-center gap-16 text-[var(--text-s)]">
         <Link
