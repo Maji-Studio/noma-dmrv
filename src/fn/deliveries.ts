@@ -33,6 +33,18 @@ import {
 } from "@/schemas/deliveries";
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function deliveryActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "delivery action failed",
+    context: { op },
+  });
+}
 
 // A biochar product's distribution transport leg is auto-derived from the
 // aggregate of its deliveries (customer-location distance + delivered mass), so
@@ -293,7 +305,11 @@ export async function createDeliveryFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to create delivery",
+      error: deliveryActionError(
+        error,
+        "Failed to create delivery",
+        "delivery:create",
+      ),
     };
   }
 }
@@ -356,7 +372,11 @@ export async function updateDeliveryFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to update delivery",
+      error: deliveryActionError(
+        error,
+        "Failed to update delivery",
+        "delivery:update",
+      ),
     };
   }
 }
@@ -393,7 +413,11 @@ export async function deleteDeliveryFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to delete delivery",
+      error: deliveryActionError(
+        error,
+        "Failed to delete delivery",
+        "delivery:delete",
+      ),
     };
   }
 }

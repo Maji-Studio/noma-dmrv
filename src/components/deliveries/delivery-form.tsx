@@ -13,7 +13,8 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, TruckWeighingSection } from "@/components/forms";
+import { Calendar, Scales, Truck, MapPin } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, TruckWeighingSection } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -89,6 +90,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     formState: { errors },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
     defaultValues: {
       orderId: delivery?.orderId ?? "",
       deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
@@ -203,14 +206,16 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <FormSpine control={control}>
       {/* Delivery Information Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Delivery Information
-        </h3>
-
+      <FormSection
+        title="Delivery Information"
+        icon={<Calendar size={14} weight="bold" />}
+        fields={["deliveryDate", "status", "orderId"]}
+        required={["deliveryDate", "orderId"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message}>
+          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message} required>
             <FormInput
               id="deliveryDate"
               type="date"
@@ -244,14 +249,15 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           disabled={isSubmitting || !contextFacilityId}
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
         />
-      </div>
+      </FormSection>
 
       {/* Mass & Moisture Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Mass & Moisture
-        </h3>
-
+      <FormSection
+        title="Mass & Moisture"
+        icon={<Scales size={14} weight="bold" />}
+        fields={["deliveredWetMassKg", "moistureContentPercent", "massDryKg"]}
+        required={["deliveredWetMassKg", "moistureContentPercent"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="deliveredWetMassKg"
@@ -313,35 +319,44 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
         )}
         <input type="hidden" {...register("massDryKg", { setValueAs: numericValue })} />
-      </div>
+      </FormSection>
 
-      <TruckWeighingSection
-        arrivalMassKg={watchArrivalMass}
-        departureMassKg={watchDepartureMass}
-        wetMassKg={watchWetMass}
-        wetMassLabel="Entered wet mass"
-        onSuggestWetMass={(wetMassKg) =>
-          setValue("deliveredWetMassKg", wetMassKg, { shouldValidate: true })
-        }
-        arrivalRegister={register("truckMassOnArrivalKg", {
-          setValueAs: numericValue,
-        })}
-        departureRegister={register("truckMassOnDepartureKg", {
-          setValueAs: numericValue,
-        })}
-        arrivalError={errors.truckMassOnArrivalKg?.message}
-        departureError={errors.truckMassOnDepartureKg?.message}
-        arrivalCertifyRequired={isDeliveryCertifyField("truckMassOnArrivalKg")}
-        departureCertifyRequired={isDeliveryCertifyField("truckMassOnDepartureKg")}
-        isSubmitting={isSubmitting}
-      />
+      <FormSection
+        title="Truck Weighing"
+        icon={<Truck size={14} weight="bold" />}
+        hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence."
+        fields={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
+        required={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
+      >
+        <TruckWeighingSection
+          bare
+          arrivalMassKg={watchArrivalMass}
+          departureMassKg={watchDepartureMass}
+          wetMassKg={watchWetMass}
+          wetMassLabel="Entered wet mass"
+          onSuggestWetMass={(wetMassKg) =>
+            setValue("deliveredWetMassKg", wetMassKg, { shouldValidate: true })
+          }
+          arrivalRegister={register("truckMassOnArrivalKg", {
+            setValueAs: numericValue,
+          })}
+          departureRegister={register("truckMassOnDepartureKg", {
+            setValueAs: numericValue,
+          })}
+          arrivalError={errors.truckMassOnArrivalKg?.message}
+          departureError={errors.truckMassOnDepartureKg?.message}
+          arrivalCertifyRequired={isDeliveryCertifyField("truckMassOnArrivalKg")}
+          departureCertifyRequired={isDeliveryCertifyField("truckMassOnDepartureKg")}
+          isSubmitting={isSubmitting}
+        />
+      </FormSection>
 
       {/* Transport Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Transport
-        </h3>
-
+      <FormSection
+        title="Transport"
+        icon={<MapPin size={14} weight="bold" />}
+        fields={["distanceKmOverride", "distanceNote"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="distanceKmOverride"
@@ -398,7 +413,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
         )}
-      </div>
+      </FormSection>
+      </FormSpine>
 
       <FormActions
         onCancel={onCancel}

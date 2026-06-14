@@ -1,12 +1,17 @@
 /**
- * StorageLocationList component
- * Visual storage overview with type-aware inventory cards and CRUD operations
+ * StorageLocationList — a material-flow board. Bins are grouped into three
+ * lanes ordered the way material moves through the facility
+ * (Feedstock → Biochar → Product) and each bin is a silo tile whose gauge
+ * shows what's still in it. Replaces the old paginated card grid so 20+ bins
+ * stay legible at a glance. The page is already facility-scoped, so the
+ * facility is not repeated per bin.
  */
 "use client";
 
 import { useMemo, useState } from "react";
 import {
   Cube,
+  Leaf,
   MagnifyingGlass,
   Package,
   Plus,
@@ -21,7 +26,7 @@ import {
   useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { formatMass, formatSafeDate, getPaginationLabel } from "@/lib/format-utils";
+import { formatMass, formatSafeDate } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -33,12 +38,42 @@ import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { StorageLocationForm } from "./storage-location-form";
 import { StorageLocationCard } from "./storage-location-card";
+import { STORAGE_LANE_ORDER, binCurrentMassKg } from "./bin-display";
 import {
   formatStorageLocationType,
   type StorageLocationFormData,
   type StorageLocationFilterData,
+  type StorageLocationType,
 } from "@/schemas/storage-locations";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
+
+// Bins per facility are few enough to load in one pass; the flow board groups
+// them client-side rather than paging across the lanes.
+const BIN_FETCH_LIMIT = 100;
+
+const LANE_META: Record<
+  StorageLocationType,
+  { label: string; icon: React.ReactNode; accent: string; ink: string }
+> = {
+  feedstock_bin: {
+    label: "Feedstock",
+    icon: <Leaf size={18} weight="bold" />,
+    accent: "var(--acc-prod)",
+    ink: "var(--acc-prod-ink)",
+  },
+  biochar_bin: {
+    label: "Biochar",
+    icon: <Cube size={18} weight="bold" />,
+    accent: "var(--acc-infra)",
+    ink: "var(--acc-infra-ink)",
+  },
+  product_bin: {
+    label: "Product",
+    icon: <Package size={18} weight="bold" />,
+    accent: "var(--acc-dist)",
+    ink: "var(--acc-dist-ink)",
+  },
+};
 
 type SideSheetState =
   | { mode: "create"; entity: null }
@@ -157,35 +192,22 @@ export function StorageLocationList() {
   const { facilityId } = useFacilityContext();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filterKey = `${facilityId ?? ""}-${typeFilter}-${searchQuery}`;
-  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
-  if (filterKey !== lastFilterKey) {
-    setLastFilterKey(filterKey);
-    if (currentPage !== 1) setCurrentPage(1);
-  }
-
-  const effectivePage = filterKey !== lastFilterKey ? 1 : currentPage;
-
   const filters: Partial<StorageLocationFilterData> = useMemo(
     () => ({
       search: searchQuery || undefined,
       facilityId: facilityId || undefined,
-      type: (typeFilter as StorageLocationFilterData["type"]) || undefined,
-      page: effectivePage,
-      pageSize,
+      page: 1,
+      pageSize: BIN_FETCH_LIMIT,
       sortBy: "code",
       sortOrder: "asc",
     }),
-    [searchQuery, facilityId, typeFilter, effectivePage, pageSize]
+    [searchQuery, facilityId]
   );
 
   const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters);
@@ -197,26 +219,19 @@ export function StorageLocationList() {
 
   const storageLocations = storageLocationsData?.items ?? [];
   const totalStorageLocations = storageLocationsData?.total ?? 0;
-  const totalPages = storageLocationsData?.totalPages ?? 0;
-  const pageCapacity = storageLocations.reduce(
-    (sum, storageLocation) => sum + (storageLocation.capacityKg ?? 0),
-    0
-  );
-  const feedstockDryKg = storageLocations.reduce(
-    (sum, storageLocation) => sum + storageLocation.feedstockInventory.currentDryMassKg,
-    0
-  );
-  const activeStorageCount = storageLocations.filter((storageLocation) => {
-    if (storageLocation.type === "feedstock_bin") {
-      return storageLocation.feedstockInventory.currentDryMassKg > 0;
-    }
+  const isTruncated = totalStorageLocations > storageLocations.length;
 
-    if (storageLocation.type === "biochar_bin") {
-      return storageLocation.biocharInventory.currentMassKg > 0;
-    }
+  // Group into lanes in production-flow order, and tally on-hand mass per lane.
+  // (React Compiler memoizes these derivations — no manual useMemo.)
+  const lanes = STORAGE_LANE_ORDER.map((type) => {
+    const bins = storageLocations.filter((bin) => bin.type === type);
+    const onHandKg = bins.reduce((sum, bin) => sum + binCurrentMassKg(bin), 0);
+    return { type, bins, onHandKg };
+  });
 
-    return storageLocation.productInventory.currentMassKg > 0;
-  }).length;
+  const onHandByType = Object.fromEntries(
+    lanes.map((lane) => [lane.type, lane.onHandKg])
+  ) as Record<StorageLocationType, number>;
 
   const handleCreate = async (data: StorageLocationFormData) => {
     setFormError(null);
@@ -284,13 +299,9 @@ export function StorageLocationList() {
     setSideSheet({ mode: mode === "edit" ? "edit" : "view", entity: sideSheet.entity });
   };
 
-  const clearFilters = () => {
-    setSearchQuery("");
-    setTypeFilter("");
-    setCurrentPage(1);
-  };
+  const clearFilters = () => setSearchQuery("");
 
-  const hasActiveFilters = Boolean(searchQuery || typeFilter);
+  const hasActiveFilters = Boolean(searchQuery);
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
 
@@ -303,11 +314,11 @@ export function StorageLocationList() {
   }
 
   return (
-    <div className="container-max flex flex-col gap-32 py-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="infrastructure"
         title="Storage"
-        subtitle="Bins and stores for feedstock and biochar"
+        subtitle="Bins and stores for feedstock, biochar, and finished product"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <Plus size={20} weight="bold" />
@@ -316,81 +327,70 @@ export function StorageLocationList() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          title="Storage Bins"
-          value={totalStorageLocations}
-          icon={<Warehouse size={24} weight="bold" />}
-          description="Bins matching the current filters"
-          isLoading={isLoading}
-        />
+      <div className="grid grid-cols-1 gap-24 md:grid-cols-3">
         <StatCard
           title="Feedstock On Hand"
-          value={formatMass(feedstockDryKg)}
-          icon={<Package size={24} weight="bold" />}
-          description="Dry-mass view across visible feedstock bins"
+          value={formatMass(onHandByType.feedstock_bin ?? 0)}
+          icon={<Leaf size={24} weight="bold" color="var(--acc-prod)" />}
+          description={
+            isTruncated
+              ? "Loaded dry mass across feedstock bins"
+              : "Dry mass across feedstock bins"
+          }
           isLoading={isLoading}
         />
         <StatCard
-          title="Used Bins"
-          value={activeStorageCount}
-          icon={<Cube size={24} weight="bold" />}
-          description={`Combined capacity ${formatMass(pageCapacity)}`}
+          title="Biochar On Hand"
+          value={formatMass(onHandByType.biochar_bin ?? 0)}
+          icon={<Cube size={24} weight="bold" color="var(--acc-infra)" />}
+          description={
+            isTruncated
+              ? "Loaded unallocated biochar in store"
+              : "Unallocated biochar in store"
+          }
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Product On Hand"
+          value={formatMass(onHandByType.product_bin ?? 0)}
+          icon={<Package size={24} weight="bold" color="var(--acc-dist)" />}
+          description={
+            isTruncated
+              ? "Loaded packed product ready to ship"
+              : "Packed product ready to ship"
+          }
           isLoading={isLoading}
         />
       </div>
+      {isTruncated && (
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          Inventory totals and lane totals reflect the first {storageLocations.length} loaded bins.
+        </p>
+      )}
 
       <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
-        <div className="flex flex-col gap-16 xl:flex-row xl:items-end xl:justify-between">
-          <div className="grid flex-1 gap-12 md:grid-cols-[minmax(0,1fr)_220px]">
-            <div className="relative">
-              <MagnifyingGlass
-                size={18}
-                className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
-              />
-              <input
-                type="text"
-                placeholder="Search storage..."
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setCurrentPage(1);
-                }}
-                className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                aria-label="Search storage"
-              />
-            </div>
-
-            <select
-              value={typeFilter}
-              onChange={(event) => {
-                setTypeFilter(event.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
-            >
-              <option value="">All Storage Types</option>
-              <option value="feedstock_bin">Feedstock Bin</option>
-              <option value="biochar_bin">Biochar Bin</option>
-              <option value="product_bin">Product Bin</option>
-            </select>
+        <div className="flex flex-col gap-12 md:flex-row md:items-center md:justify-between">
+          <div className="relative md:max-w-[360px] md:flex-1">
+            <MagnifyingGlass
+              size={18}
+              className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
+            />
+            <input
+              type="text"
+              placeholder="Search storage by code or name..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+              aria-label="Search storage"
+            />
           </div>
 
-          <div className="flex flex-wrap items-center gap-8">
-            <select
-              value={String(pageSize)}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setCurrentPage(1);
-              }}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
-              aria-label="Storage bins per page"
-            >
-              <option value="12">12 per page</option>
-              <option value="24">24 per page</option>
-              <option value="36">36 per page</option>
-            </select>
-
+          <div className="flex items-center gap-12">
+            <span className="body-small text-[var(--color-text-secondary)]">
+              {totalStorageLocations}{" "}
+              {totalStorageLocations === 1 ? "bin" : "bins"}
+              {isTruncated ? ` · showing first ${storageLocations.length}` : ""}
+            </span>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
                 <X size={16} weight="bold" />
@@ -408,7 +408,7 @@ export function StorageLocationList() {
           title={hasActiveFilters ? "No storage bins found" : "No storage bins yet"}
           description={
             hasActiveFilters
-              ? "Try adjusting your search or storage-type filter."
+              ? "Try adjusting your search."
               : "Create your first storage bin to track feedstock, biochar, and finished product inventory."
           }
           action={
@@ -421,47 +421,54 @@ export function StorageLocationList() {
           }
         />
       ) : (
-        <>
-          <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">
-            {storageLocations.map((storageLocation) => (
-              <StorageLocationCard
-                key={storageLocation.id}
-                storageLocation={storageLocation}
-                onView={openView}
-                onEdit={openEdit}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+        <div className="flex flex-col gap-32 lg:flex-row lg:items-start lg:gap-24">
+          {lanes.map((lane) => {
+            const meta = LANE_META[lane.type];
+            return (
+              <div key={lane.type} className="flex flex-1 flex-col gap-16">
+                {/* Lane header */}
+                <div
+                  className="flex items-center justify-between gap-12 border-b-2 pb-10"
+                  style={{ borderColor: meta.accent }}
+                >
+                  <div
+                    className="flex items-center gap-8"
+                    style={{ color: meta.ink }}
+                  >
+                    {meta.icon}
+                    <span className="title-chapter-title">{meta.label}</span>
+                    <span className="body-caption text-[var(--color-text-tertiary)]">
+                      {lane.bins.length}{" "}
+                      {lane.bins.length === 1 ? "bin" : "bins"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 body-caption text-[var(--color-text-tertiary)]">
+                    {formatMass(lane.onHandKg)} {isTruncated ? "loaded" : ""} on hand
+                  </span>
+                </div>
 
-          <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16 md:flex-row md:items-center md:justify-between">
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {getPaginationLabel(currentPage, pageSize, totalStorageLocations, "storage bins")}
-            </p>
-
-            <div className="flex items-center gap-8">
-              <Button
-                variant="default"
-                size="small"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              >
-                Previous
-              </Button>
-              <span className="px-8 body-small text-[var(--color-text-secondary)]">
-                Page {currentPage} of {Math.max(totalPages, 1)}
-              </span>
-              <Button
-                variant="default"
-                size="small"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </>
+                {/* Bins */}
+                {lane.bins.length === 0 ? (
+                  <div className="flex items-center justify-center border border-dashed border-[var(--color-border-tertiary)] px-16 py-32 text-center body-caption text-[var(--color-text-tertiary)]">
+                    No {meta.label.toLowerCase()} bins
+                  </div>
+                ) : (
+                  <div className="grid gap-16 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] lg:grid-cols-1">
+                    {lane.bins.map((bin) => (
+                      <StorageLocationCard
+                        key={bin.id}
+                        storageLocation={bin}
+                        onView={openView}
+                        onEdit={openEdit}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {deleteError && <ServerError message={deleteError} />}
@@ -517,13 +524,6 @@ export function StorageLocationList() {
                 {
                   title: "Inventory",
                   fields: buildStorageDetailFields(sideSheet.entity),
-                },
-                {
-                  title: "Facility",
-                  fields: [
-                    { label: "Facility Name", value: sideSheet.entity.facilityName },
-                    { label: "Facility Code", value: sideSheet.entity.facilityCode },
-                  ],
                 },
               ]
             : undefined

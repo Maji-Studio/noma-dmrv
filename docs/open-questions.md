@@ -1232,17 +1232,17 @@ Sizing: (S) small, (M) medium, (L) large.
 - **Resolve via:** decide server-side paging UX (page size, infinite-scroll vs. pages),
   then add `.limit`/offset + `@tanstack/react-virtual` (M). UX decision first.
 
-### Overview loader lineage fan-out (`perf/overview-lineage-nplus1`) — opened 2026-06-07, **deferred**
+### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — opened 2026-06-07, **deferred**
 
 - `loadCertificationOverview` rebuilds a full submission context per removal; each walks
   every application through `getChainOfCustodyData`, which issues ~5–6 sequential single-row
-  queries → on the order of R×A×6 round-trips per landing-page load, uncached. Same root
+  queries → on the order of R×A×6 round-trips per Removals load, uncached. Same root
   pattern as the per-batch `getCo2eStoredPreview` fan-out (`credit-batches.ts:380`) and the
   per-row `getCreditBatchById`/`getLatestSubmission` loops in `certify-context-core.ts`.
-- **Why it matters:** the certification landing page latency grows linearly with
-  removals×applications; every navigation re-runs the full fan-out.
+- **Why it matters:** the Removals hub readiness payload grows linearly with
+  removals×applications; every navigation to Removals re-runs the full fan-out.
 - **Resolve via:** batch lineage with set-based `inArray` queries (delivery→order→
-  product→run in one pass, zip in JS) and/or memoize the Overview payload (React Query
+  product→run in one pass, zip in JS) and/or memoize the readiness payload (React Query
   staleTime or a server cache). The batched primitive `getCreditBatchSummariesByRemovalIds`
   already exists as a model (L). Owner decides read/write/cache tradeoff.
 

@@ -26,7 +26,8 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, FormActions, FormSection } from "@/components/forms";
+import { Flask, Fire, Atom, Scales, Cube, Calculator, Eye, Thermometer, Leaf } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
@@ -98,6 +99,8 @@ export function SampleForm({
   } = useForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(sampleFormSchema) as any,
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
     defaultValues: {
       productionRunId: preselectedProductionRunId || sample?.productionRunId || "",
       samplingTime: sample?.samplingTime
@@ -194,8 +197,14 @@ export function SampleForm({
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      <FormSpine control={control}>
         {/* ── Sample Information ── */}
-        <FormSection title="Sample Information" divider={false}>
+        <FormSection
+          title="Sample Information"
+          icon={<Flask size={14} weight="bold" />}
+          fields={["productionRunId", "samplingTime", "analysisDate", "labName", "labAccreditation", "weightGrams", "volumeMl"]}
+          required={["productionRunId", "samplingTime"]}
+        >
               <FormField
                 id="productionRunId"
                 label="Production Run"
@@ -327,7 +336,12 @@ export function SampleForm({
         </FormSection>
 
         {/* ── Carbon Analysis ── */}
-        <FormSection title="Carbon Analysis">
+        <FormSection
+          title="Carbon Analysis"
+          icon={<Fire size={14} weight="bold" />}
+          fields={["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"]}
+          required={["totalCarbonPercent", "organicCarbonPercent"]}
+        >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
@@ -390,7 +404,11 @@ export function SampleForm({
         </FormSection>
 
         {/* ── Elemental Analysis ── */}
-        <FormSection title="Elemental Analysis">
+        <FormSection
+          title="Elemental Analysis"
+          icon={<Atom size={14} weight="bold" />}
+          fields={["totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent"]}
+        >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="totalHydrogenPercent"
@@ -467,7 +485,11 @@ export function SampleForm({
         </FormSection>
 
         {/* ── Proximate Analysis ── */}
-        <FormSection title="Proximate Analysis">
+        <FormSection
+          title="Proximate Analysis"
+          icon={<Scales size={14} weight="bold" />}
+          fields={["ashContentPercent", "volatileMatterPercent", "moistureContentPercent"]}
+        >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="ashContentPercent"
@@ -526,7 +548,11 @@ export function SampleForm({
         </FormSection>
 
         {/* ── Physical Properties ── */}
-        <FormSection title="Physical Properties">
+        <FormSection
+          title="Physical Properties"
+          icon={<Cube size={14} weight="bold" />}
+          fields={["bulkDensityKgPerM3", "ph", "surfaceAreaM2PerG", "saltContentGPerKg"]}
+        >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="bulkDensityKgPerM3"
@@ -605,7 +631,11 @@ export function SampleForm({
         </FormSection>
 
         {/* ── Stability Ratios ── */}
-        <FormSection title="Stability Ratios">
+        <FormSection
+          title="Stability Ratios"
+          icon={<Calculator size={14} weight="bold" />}
+          fields={["durabilityOption", "hToCOrgRatio", "oToCOrgRatio"]}
+        >
               <FormField
                 id="durabilityOption"
                 label="Durability Option"
@@ -663,7 +693,12 @@ export function SampleForm({
         {/* ── 1000-Year Durability (conditional, two flat sibling sections) ── */}
         {watchedDurabilityOption === "1000_year" && (
           <>
-            <FormSection title="1000-Year Durability · R₀ Reflectance">
+            <FormSection
+              title="1000-Year Durability · R₀ Reflectance"
+              icon={<Eye size={14} weight="bold" />}
+              fields={["randomReflectanceR0Percent", "r0MeasurementCount", "r0AnalysisDate"]}
+              required={["randomReflectanceR0Percent"]}
+            >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
@@ -721,7 +756,16 @@ export function SampleForm({
                 </FormField>
             </FormSection>
 
-            <FormSection title="TGA Non-Reactive Carbon">
+            <FormSection
+              title="TGA Non-Reactive Carbon"
+              icon={<Thermometer size={14} weight="bold" />}
+              fields={["reactiveCarbonPercent", "residualCarbonPercent", "tgaAnalysisDate"]}
+              // anyOf: at least one carbon split satisfies the CERT requirement.
+              certReady={(v) =>
+                typeof v.reactiveCarbonPercent === "number" ||
+                typeof v.residualCarbonPercent === "number"
+              }
+            >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
@@ -782,7 +826,11 @@ export function SampleForm({
         )}
 
         {/* ── Nutrient Claims ── */}
-        <FormSection title="Nutrient Claims">
+        <FormSection
+          title="Nutrient Claims"
+          icon={<Leaf size={14} weight="bold" />}
+          fields={["phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent"]}
+        >
               <label
                 htmlFor="nutrientClaimEnabled"
                 className="flex items-center gap-12 cursor-pointer"
@@ -893,6 +941,7 @@ export function SampleForm({
                 </div>
               )}
         </FormSection>
+      </FormSpine>
       </form>
 
       {/* Extension content (e.g. transport legs) — always before the CTA */}

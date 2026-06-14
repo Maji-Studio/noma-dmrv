@@ -1,5 +1,5 @@
 /**
- * Certification workspace E2E — section navigation across the four routes and
+ * Certification workspace E2E — section navigation across the three routes and
  * the consolidated Settings surface (Stage 3 remodel).
  *
  * Two scenarios live here; the create→submit happy path is its own file
@@ -7,10 +7,10 @@
  *
  *  1. Section navigation — NO sandbox creds needed. Seeds a DB-only
  *     `certifier_projects` row with a throwaway project id so the facility is
- *     "linked" — the operational routes (Overview / Removals / GHG Statements)
- *     are gated behind a registry link (ADR 0007), and the gate reads the
+ *     "linked" — the operational routes (Removals / GHG Statements) are gated
+ *     behind a registry link (ADR 0007), and the gate reads the
  *     DB-only `loadFacilityCertifierSummary`, so no real project is required.
- *     Then visits each of the four routes via its nav link and asserts the
+ *     Then visits each of the three routes via its nav link and asserts the
  *     per-route heading plus that the active `?facility=` scope is preserved on
  *     every hop. Links are addressed by accessible name (sidebar section per
  *     ADR 0007, amended 2026-06-04).
@@ -37,7 +37,6 @@ import {
 } from "./fixtures/certification-helpers";
 
 const SECTIONS = [
-  { label: "Overview", path: "/certification" },
   { label: "Removals", path: "/certification/removals" },
   { label: "GHG Statements", path: "/certification/ghg-statements" },
   { label: "Settings", path: "/certification/settings" },
@@ -74,11 +73,16 @@ test.describe("Certification workspace — section navigation", () => {
     try {
       await page.goto(`/certification?facility=${facilityId}`);
 
-      // Await the landing heading so the shell has hydrated before we navigate.
+      // The retired root route redirects to Removals; await the landing heading
+      // so the shell has hydrated before we navigate.
       // The section links are unique in the page, so we address them by name
       // rather than scoping to a particular nav landmark.
+      await page.waitForURL(
+        new RegExp(`/certification/removals\\?facility=${facilityId}`),
+        { timeout: COLD_COMPILE_TIMEOUT_MS },
+      );
       await expect(
-        page.getByRole("heading", { name: "Overview", level: 1 }),
+        page.getByRole("heading", { name: "Removals", level: 1 }),
       ).toBeVisible({ timeout: 20000 });
       const navLink = (label: string) =>
         page.getByRole("link", { name: label, exact: true });
@@ -200,12 +204,9 @@ async function assertOnSection(
   path: string,
   facilityId: string,
 ) {
-  // Overview is the section root (exact path); the others are nested segments.
-  const urlPattern =
-    path === "/certification"
-      ? new RegExp(`/certification\\?facility=${facilityId}`)
-      : new RegExp(`${path}\\?facility=${facilityId}`);
-  await page.waitForURL(urlPattern, { timeout: COLD_COMPILE_TIMEOUT_MS });
+  await expect(page).toHaveURL(new RegExp(`${path}\\?facility=${facilityId}`), {
+    timeout: COLD_COMPILE_TIMEOUT_MS,
+  });
 
   await expect(
     page.getByRole("heading", { name: label, level: 1 }),

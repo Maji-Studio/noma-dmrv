@@ -2,10 +2,11 @@
  * Certification registry guard
  *
  * Certification is a conditional workspace (ADR 0007): its operational routes
- * (Overview, Removals, GHG Statements) are only reachable once the current
- * facility is linked to a registry. This guard mirrors the sidebar's nav-hiding
- * (`app-sidebar.tsx`) for direct URL access — without a link it redirects to
- * Settings, the one route that stays open because it's where the link is made.
+ * (Removals, GHG Statements, plus legacy root redirects) are only reachable
+ * once the current facility is linked to a registry. This guard mirrors the
+ * sidebar's nav-hiding (`app-sidebar.tsx`) for direct URL access — without a
+ * link it redirects to Settings, the one route that stays open because it's
+ * where the link is made.
  */
 "use client";
 

@@ -35,6 +35,18 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAutoCode } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
+import { toLoggedActionError } from "./action-errors";
+
+function facilityActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "facility action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -282,7 +294,7 @@ export async function createFacilityFn(
           address: validated.address || null,
           gpsLatitude: validated.gpsLatitude ?? null,
           gpsLongitude: validated.gpsLongitude ?? null,
-          timezone: validated.timezone ?? null,
+          timezone: validated.timezone,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
           defaultDurabilityOption: validated.defaultDurabilityOption,
@@ -299,8 +311,11 @@ export async function createFacilityFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create facility",
+      error: facilityActionError(
+        error,
+        "Failed to create facility",
+        "facility:create",
+      ),
     };
   }
 }
@@ -347,8 +362,11 @@ export async function updateFacilityFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update facility",
+      error: facilityActionError(
+        error,
+        "Failed to update facility",
+        "facility:update",
+      ),
     };
   }
 }
@@ -407,8 +425,11 @@ export async function archiveFacilityFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to archive facility",
+      error: facilityActionError(
+        error,
+        "Failed to archive facility",
+        "facility:archive",
+      ),
     };
   }
 }
@@ -438,8 +459,11 @@ export async function restoreFacilityFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to restore facility",
+      error: facilityActionError(
+        error,
+        "Failed to restore facility",
+        "facility:restore",
+      ),
     };
   }
 }

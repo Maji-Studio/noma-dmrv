@@ -245,7 +245,7 @@ export function FormulationList() {
   })();
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="production"
         title="Formulations"

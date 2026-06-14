@@ -42,10 +42,13 @@ import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
   createGhgStatement,
+  describeIsometricApiError,
   getGhgStatement,
+  IsometricApiError,
   payloadHash,
   reconcileGhgStatement,
   resubmitGhgStatement,
+  sanitizeIsometricErrorBody,
   submitGhgStatement,
   type GhgStatement,
   type GhgStatementStatus,
@@ -488,6 +491,13 @@ export async function submitGhgStatementToVerifier(
               ghg_statement_report_url: parsed.reportUrl,
             });
     } catch (err) {
+      const providerFailure =
+        err instanceof IsometricApiError
+          ? {
+              status: err.status ?? null,
+              body: sanitizeIsometricErrorBody(err.body),
+            }
+          : null;
       logger.warn(
         {
           op: `ghg-statement:${submitMode}`,
@@ -495,6 +505,9 @@ export async function submitGhgStatementToVerifier(
           submissionId: submission.id,
           submissionAttemptId,
           errorName: err instanceof Error ? err.name : typeof err,
+          ...(providerFailure
+            ? { providerStatus: providerFailure.status }
+            : {}),
         },
         "ghg statement submit failed; attempting reconciliation",
       );
@@ -527,7 +540,13 @@ export async function submitGhgStatementToVerifier(
         return { externalId: submission.externalId, remoteStatus: after.status };
       }
 
-      const message = err instanceof Error ? err.message : String(err);
+      const message =
+        err instanceof IsometricApiError
+          ? describeIsometricApiError(
+              err,
+              "The verifier rejected the GHG statement submit.",
+            )
+          : "Submit failed. Try again.";
       await appendSyncEvent(userId, {
         provider: ISOMETRIC_PROVIDER,
         entityType: GHG_STATEMENT_ENTITY_TYPE,
@@ -535,9 +554,10 @@ export async function submitGhgStatementToVerifier(
         operation: `ghg_statement:${submitMode}`,
         status: "failed",
         requestPayload: submitRequestPayload,
+        responsePayload: providerFailure ?? undefined,
         errorMessage: message,
       });
-      throw new SafeError(`Submit failed: ${message}`);
+      throw new SafeError(message);
     }
 
     await appendSyncEvent(userId, {

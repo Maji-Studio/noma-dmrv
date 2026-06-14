@@ -81,7 +81,7 @@ export function MobileNav() {
         <Dialog.Popup
           aria-label="Navigation menu"
           className={cn(
-            "md:hidden fixed top-0 right-0 z-50 h-full w-[280px] max-w-[85vw]",
+            "md:hidden fixed top-0 right-0 z-50 h-full w-[304px] max-w-[88vw]",
             "shadow-[-8px_0_32px_rgba(0,0,0,0.4)] outline-none",
             "transition-transform duration-300 ease-out",
             "data-[open]:translate-x-0",

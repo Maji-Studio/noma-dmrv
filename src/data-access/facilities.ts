@@ -541,7 +541,7 @@ export async function createFacility(
     address?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
-    timezone?: string | null;
+    timezone: string;
     contactEmail?: string | null;
     contactPhone?: string | null;
     defaultDurabilityOption?: "200_year" | "1000_year";
@@ -569,7 +569,7 @@ export async function createFacility(
       address: data.address ?? null,
       gpsLatitude: data.gpsLatitude ?? null,
       gpsLongitude: data.gpsLongitude ?? null,
-      timezone: data.timezone ?? null,
+      timezone: data.timezone,
       contactEmail: data.contactEmail ?? null,
       contactPhone: data.contactPhone ?? null,
       defaultDurabilityOption: data.defaultDurabilityOption ?? "200_year",
@@ -597,7 +597,7 @@ export async function updateFacility(
     address?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
-    timezone?: string | null;
+    timezone?: string;
     contactEmail?: string | null;
     contactPhone?: string | null;
     defaultDurabilityOption?: "200_year" | "1000_year";

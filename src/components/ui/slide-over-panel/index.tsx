@@ -115,11 +115,9 @@ const slideOverContentVariants = cva(
     // menus and dialogs reserve white) + full-ink hairline — no shadow, the
     // scrim + border do the elevation (Maji DS).
     "bg-[var(--paper)] [border-left:var(--hair)]",
-    // Animation
-    "transition-transform duration-300 ease-out",
-    "data-[open]:translate-x-0",
-    "data-[starting-style]:translate-x-full",
-    "data-[ending-style]:translate-x-full",
+    // Stateful translate lives in globals.css so Base UI transition states do
+    // not depend on Tailwind variant ordering.
+    "slide-over-panel-popup transition-transform duration-300 ease-out",
     "outline-none",
   ],
   {
