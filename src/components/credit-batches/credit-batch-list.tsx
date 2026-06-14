@@ -545,7 +545,7 @@ export function CreditBatchList({
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingBatchId(null)}
         title="Delete Credit Batch"
-        message="Are you sure you want to delete this credit batch? This action cannot be undone and will remove all associated application links."
+        message="Delete this credit batch? Its applications stay in the system but will be unlinked from this batch, and you can re-link them to another batch later. This can't be undone."
         isPending={deleteCreditBatch.isPending}
       />
 
