@@ -695,12 +695,6 @@ export async function updateBiocharProduct(
     throw new SafeError("Biochar product not found");
   }
 
-  await assertCanMutateCertifiedLineage(
-    db,
-    { entityType: "biocharProduct", entityId: productId },
-    "update",
-  );
-
   // If code is being changed, check for duplicates
   if (data.code && data.code !== existing.code) {
     const [duplicate] = await db
@@ -816,6 +810,12 @@ export async function updateBiocharProduct(
   // all atomically. Locking the bin row serializes concurrent placements so two
   // products with different formulations can't strand a mismatch in one bin.
   const updated = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "biocharProduct", entityId: productId },
+      "update",
+    );
+
     let claimBinFormulationId: string | null = null;
 
     if (data.composition !== undefined || data.formulationId !== undefined || facilityChanged) {
@@ -910,29 +910,33 @@ export async function deleteBiocharProduct(
     throw new SafeError("Biochar product not found");
   }
 
-  await assertCanMutateCertifiedLineage(
-    db,
-    { entityType: "biocharProduct", entityId: productId },
-    "delete",
-  );
-
-  const [[orderCount], [deliveryCount]] = await Promise.all([
-    db.select({ count: count() }).from(orders).where(eq(orders.biocharProductId, productId)),
-    db.select({ count: count() }).from(deliveries).where(eq(deliveries.biocharProductId, productId)),
-  ]);
-
-  if (Number(orderCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete biochar product with associated orders. Remove orders first."
-    );
-  }
-  if (Number(deliveryCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete biochar product with associated deliveries. Remove deliveries first."
-    );
-  }
-
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "biocharProduct", entityId: productId },
+      "delete",
+    );
+
+    const [orderCount] = await tx
+      .select({ count: count() })
+      .from(orders)
+      .where(eq(orders.biocharProductId, productId));
+    const [deliveryCount] = await tx
+      .select({ count: count() })
+      .from(deliveries)
+      .where(eq(deliveries.biocharProductId, productId));
+
+    if (Number(orderCount.count) > 0) {
+      throw new SafeError(
+        "Cannot delete biochar product with associated orders. Remove orders first."
+      );
+    }
+    if (Number(deliveryCount.count) > 0) {
+      throw new SafeError(
+        "Cannot delete biochar product with associated deliveries. Remove deliveries first."
+      );
+    }
+
     await deleteTransportLegsForEntity(tx, "biochar", productId);
     await tx.delete(biocharProducts).where(eq(biocharProducts.id, productId));
   });

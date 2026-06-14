@@ -5,7 +5,11 @@ import {
   creditBatchApplications,
   type CreditBatch,
 } from "@/db/schema/credits";
-import { certifierProjects } from "@/db/schema/certification";
+import {
+  certificationSubmissions,
+  certifierProjects,
+  certifierRemovals,
+} from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { applications } from "@/db/schema/application";
 import { deliveries } from "@/db/schema/logistics";
@@ -15,10 +19,7 @@ import type {
 } from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
-import {
-  gcRemovalIfOrphaned,
-  removalHasBlockingSubmission,
-} from "./certifier-removals";
+import { gcRemovalIfOrphaned } from "./certifier-removals";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import { getProductionRunsWithSamples } from "./production-runs";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
@@ -28,6 +29,8 @@ import {
 } from "@/lib/calculations/biochar-removal";
 import { formatUtcDate } from "@/lib/date-utils";
 import { aggregateProductionRuns } from "@/lib/isometric/utils/aggregation";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -50,6 +53,8 @@ type CreditBatchWithOptionalPreview = Omit<
 };
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
+const CERTIFIER_PROVIDER = "isometric" as const;
+const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
 export interface ApplicationCo2eStoredPreview {
   applicationId: string;
@@ -109,6 +114,87 @@ async function resolveCreditBatchCertifier(
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+async function assertRemovalAllowsCreditBatchMutation(
+  tx: DbTransaction,
+  removalId: string | null,
+  mutation: "update" | "delete",
+): Promise<void> {
+  if (!removalId) return;
+
+  const [removal] = await tx
+    .select({
+      id: certifierRemovals.id,
+      ghgStatementId: certifierRemovals.ghgStatementId,
+    })
+    .from(certifierRemovals)
+    .where(eq(certifierRemovals.id, removalId))
+    .for("update")
+    .limit(1);
+  if (!removal) return;
+
+  await acquireCertificationArtifactLocksSorted(tx, [
+    {
+      provider: CERTIFIER_PROVIDER,
+      localEntityType: "removal",
+      localEntityId: removal.id,
+    },
+    ...(removal.ghgStatementId
+      ? [
+          {
+            provider: CERTIFIER_PROVIDER,
+            localEntityType: "ghgStatement",
+            localEntityId: removal.ghgStatementId,
+          },
+        ]
+      : []),
+  ]);
+
+  const [removalSubmission] = await tx
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
+        eq(certificationSubmissions.localEntityType, "removal"),
+        eq(certificationSubmissions.localEntityId, removal.id),
+        inArray(
+          certificationSubmissions.submissionType,
+          REMOVAL_SCOPED_SUBMISSION_TYPES,
+        ),
+        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+      ),
+    )
+    .limit(1);
+
+  let ghgStatementSubmission:
+    | { id: (typeof certificationSubmissions.$inferSelect)["id"] }
+    | undefined;
+  if (removal.ghgStatementId) {
+    [ghgStatementSubmission] = await tx
+      .select({ id: certificationSubmissions.id })
+      .from(certificationSubmissions)
+      .where(
+        and(
+          eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
+          eq(certificationSubmissions.localEntityType, "ghgStatement"),
+          eq(certificationSubmissions.submissionType, "ghg_statement"),
+          eq(certificationSubmissions.localEntityId, removal.ghgStatementId),
+          inArray(
+            certificationSubmissions.status,
+            BLOCKING_SUBMISSION_STATUSES,
+          ),
+        ),
+      )
+      .limit(1);
+  }
+
+  if (!removalSubmission && !ghgStatementSubmission) return;
+
+  throw new SafeError(
+    `Cannot ${mutation} credit batch because it is part of a submitted certification artifact. Create a correction instead of editing locked source data.`,
+  );
 }
 
 async function buildCo2eStoredPreview(
@@ -617,13 +703,21 @@ export async function updateCreditBatch(
         facilityId: creditBatches.facilityId,
         startDate: creditBatches.startDate,
         endDate: creditBatches.endDate,
+        removalId: creditBatches.removalId,
       })
       .from(creditBatches)
-      .where(eq(creditBatches.id, id));
+      .where(eq(creditBatches.id, id))
+      .for("update");
 
     if (!existingBatch) {
       throw new SafeError("Credit batch not found");
     }
+
+    await assertRemovalAllowsCreditBatchMutation(
+      tx,
+      existingBatch.removalId,
+      "update",
+    );
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
     const facilityChanged =
@@ -702,16 +796,11 @@ export async function deleteCreditBatch(userId: string, id: string): Promise<voi
       .for("update")
       .limit(1);
 
-    // Refuse to delete a batch whose removal has been sent to the certifier —
-    // it would silently change what a live Isometric Removal represents.
-    if (
-      batch?.removalId &&
-      (await removalHasBlockingSubmission(tx, batch.removalId))
-    ) {
-      throw new SafeError(
-        "This credit batch belongs to a removal that has been submitted to the certifier. Supersede or reject that submission before deleting.",
-      );
+    if (!batch) {
+      throw new SafeError("Credit batch not found");
     }
+
+    await assertRemovalAllowsCreditBatchMutation(tx, batch.removalId, "delete");
 
     // Delete junction table links first, then the credit batch.
     await tx

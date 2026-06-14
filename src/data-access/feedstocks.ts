@@ -488,12 +488,6 @@ export async function updateFeedstock(
     throw new SafeError("Feedstock not found");
   }
 
-  await assertCanMutateCertifiedLineage(
-    db,
-    { entityType: "feedstock", entityId: feedstockId },
-    "update",
-  );
-
   // Validate storage bin compatibility if changing storage location or feedstock type
   if (data.storageLocationId || data.feedstockTypeId) {
     const binId = data.storageLocationId ?? existing.storageLocationId;
@@ -543,14 +537,22 @@ export async function updateFeedstock(
   const mergedData = { ...existing, ...data };
   const status = determineFeedstockStatus(mergedData);
 
-  await db
-    .update(feedstocks)
-    .set({
-      ...data,
-      status,
-      updatedAt: new Date(),
-    })
-    .where(eq(feedstocks.id, feedstockId));
+  await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "feedstock", entityId: feedstockId },
+      "update",
+    );
+
+    await tx
+      .update(feedstocks)
+      .set({
+        ...data,
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(feedstocks.id, feedstockId));
+  });
 
   return getFeedstockById(userId, feedstockId);
 }
@@ -574,25 +576,25 @@ export async function deleteFeedstock(
     throw new SafeError("Feedstock not found");
   }
 
-  await assertCanMutateCertifiedLineage(
-    db,
-    { entityType: "feedstock", entityId: feedstockId },
-    "delete",
-  );
-
-  // Block deletion if used in production runs
-  const [usageCount] = await db
-    .select({ count: count() })
-    .from(productionRunFeedstocks)
-    .where(eq(productionRunFeedstocks.feedstockId, feedstockId));
-
-  if (Number(usageCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete feedstock that is used in production runs. Remove production run associations first."
-    );
-  }
-
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "feedstock", entityId: feedstockId },
+      "delete",
+    );
+
+    // Block deletion if used in production runs
+    const [usageCount] = await tx
+      .select({ count: count() })
+      .from(productionRunFeedstocks)
+      .where(eq(productionRunFeedstocks.feedstockId, feedstockId));
+
+    if (Number(usageCount.count) > 0) {
+      throw new SafeError(
+        "Cannot delete feedstock that is used in production runs. Remove production run associations first."
+      );
+    }
+
     await deleteTransportLegsForEntity(tx, "feedstock", feedstockId);
     const result = await tx
       .delete(feedstocks)

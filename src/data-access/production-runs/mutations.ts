@@ -284,12 +284,6 @@ export async function updateProductionRun(
     throw new SafeError("Production run not found");
   }
 
-  await assertCanMutateCertifiedLineage(
-    db,
-    { entityType: "productionRun", entityId: productionRunId },
-    "update",
-  );
-
   // If code is being changed, check for duplicates
   if (data.code && data.code !== existing.code) {
     const [duplicate] = await db
@@ -386,6 +380,12 @@ export async function updateProductionRun(
     data.feedstockMoisturePercent !== undefined;
 
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "update",
+    );
+
     await tx
       .update(productionRuns)
       .set(updateData)
@@ -459,18 +459,18 @@ export async function deleteProductionRun(
     throw new SafeError("Production run not found");
   }
 
-  await assertCanMutateCertifiedLineage(
-    db,
-    { entityType: "productionRun", entityId: productionRunId },
-    "delete",
-  );
-
   // Run all four deletes in one transaction so the child-row deletes roll back
   // if the final productionRuns delete fails. Foreign-key constraints prevent
   // the run delete when dependent samples or credit batches exist; without the
   // transaction the children would already be gone, leaving a half-deleted run.
   // The FK violation propagates out and is caught by the server action.
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "delete",
+    );
+
     await tx
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, productionRunId));

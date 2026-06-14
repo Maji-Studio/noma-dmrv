@@ -72,6 +72,7 @@ export interface OrderDetail extends Order {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Read Operations
@@ -569,14 +570,23 @@ export async function updateOrder(
     );
   }
 
-  const [updated] = await db
-    .update(orders)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(orders.id, orderId))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "order", entityId: orderId },
+      "update",
+    );
+
+    const [row] = await tx
+      .update(orders)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return row;
+  });
 
   return updated;
 }
@@ -605,19 +615,27 @@ export async function deleteOrder(
     throw new SafeError("Order not found");
   }
 
-  // Check for associated deliveries
-  const [deliveryCount] = await db
-    .select({ count: count() })
-    .from(deliveries)
-    .where(eq(deliveries.orderId, orderId));
-
-  if (Number(deliveryCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete order with associated deliveries. Remove deliveries first."
+  await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "order", entityId: orderId },
+      "delete",
     );
-  }
 
-  await db.delete(orders).where(eq(orders.id, orderId));
+    // Check for associated deliveries
+    const [deliveryCount] = await tx
+      .select({ count: count() })
+      .from(deliveries)
+      .where(eq(deliveries.orderId, orderId));
+
+    if (Number(deliveryCount.count) > 0) {
+      throw new SafeError(
+        "Cannot delete order with associated deliveries. Remove deliveries first."
+      );
+    }
+
+    await tx.delete(orders).where(eq(orders.id, orderId));
+  });
 }
 
 // ============================================

@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
+import {
+  createApplication,
+  deleteApplication,
+  updateApplication,
+} from "@/data-access/applications";
 import { updateBiocharProduct } from "@/data-access/biochar-products";
+import {
+  deleteCreditBatch,
+  updateCreditBatch,
+} from "@/data-access/credit-batches";
 import { updateDelivery } from "@/data-access/deliveries";
 import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateOrder } from "@/data-access/orders";
 import {
   deleteProductionRun,
   updateProductionRun,
@@ -374,5 +384,65 @@ describe("certification lineage guards", () => {
         }),
       ).rejects.toThrow(LOCKED_COPY);
     });
+  });
+
+  it("rejects order edits once linked to a submitted removal lineage", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        updateOrder(TEST_USER_ID, fixture.orderId, {
+          quantityKg: 301,
+        }),
+      ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects new applications on a submitted delivery lineage", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        createApplication(TEST_USER_ID, {
+          code: `AP-LOCKED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          deliveryId: fixture.deliveryId,
+          applicationDate: new Date("2026-06-17T00:00:00Z"),
+          biocharAppliedTons: 0.01,
+          biocharAppliedDryTons: 0.01,
+        }),
+      ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects application edits once linked to a submitted removal", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        updateApplication(TEST_USER_ID, fixture.applicationId, {
+          fieldIdentifier: "locked-field",
+        }),
+      ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects deleting applications from a submitted removal", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        deleteApplication(TEST_USER_ID, fixture.applicationId),
+      ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects credit batch edits once its removal is submitted", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        updateCreditBatch(TEST_USER_ID, fixture.batchId, {
+          siteManagementNotes: "locked notes",
+        }),
+      ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects credit batch deletion once its removal is verifier-bound through a GHG statement", async () => {
+    await withFixture(async (fixture) => {
+      await expect(
+        deleteCreditBatch(TEST_USER_ID, fixture.batchId),
+      ).rejects.toThrow(LOCKED_COPY);
+    }, "ghgStatement");
   });
 });

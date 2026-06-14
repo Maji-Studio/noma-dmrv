@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNotNull, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { db, type DbTransaction } from "@/db";
+import type { DbTransaction } from "@/db";
 import {
   applications,
   biocharProducts,
@@ -15,15 +15,16 @@ import {
   productionRuns,
   samples,
 } from "@/db/schema";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
-
-type Executor = typeof db | DbTransaction;
 
 export type CertifiedLineageEntityType =
   | "productionRun"
   | "sample"
+  | "application"
   | "delivery"
+  | "order"
   | "biocharProduct"
   | "feedstock";
 
@@ -37,7 +38,9 @@ const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 const ENTITY_LABELS: Record<CertifiedLineageEntityType, string> = {
   productionRun: "production run",
   sample: "sample",
+  application: "application",
   delivery: "delivery",
+  order: "order",
   biocharProduct: "biochar product",
   feedstock: "feedstock",
 };
@@ -57,8 +60,12 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
       return eq(productionRuns.id, target.entityId);
     case "sample":
       return eq(samples.id, target.entityId);
+    case "application":
+      return eq(applications.id, target.entityId);
     case "delivery":
       return eq(deliveries.id, target.entityId);
+    case "order":
+      return eq(orders.id, target.entityId);
     case "biocharProduct":
       return eq(biocharProducts.id, target.entityId);
     case "feedstock":
@@ -66,18 +73,14 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
-/**
- * Blocks upstream source-data mutation once the record is part of a live
- * certification artifact. The lineage path is re-derived from current DB state
- * instead of trusting UI context or stale denormalized membership.
- */
-export async function assertCanMutateCertifiedLineage(
-  executor: Executor,
-  target: CertifiedLineageTarget,
-  mutation: "create" | "update" | "delete",
-): Promise<void> {
-  const [hit] = await executor
-    .select({ id: creditBatches.id })
+function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
+  return tx
+    .selectDistinct({
+      removalId: certifierRemovals.id,
+      ghgStatementId: certifierRemovals.ghgStatementId,
+      removalSubmissionId: removalSubmission.id,
+      ghgStatementSubmissionId: ghgStatementSubmission.id,
+    })
     .from(creditBatches)
     .innerJoin(
       creditBatchApplications,
@@ -133,16 +136,38 @@ export async function assertCanMutateCertifiedLineage(
         inArray(ghgStatementSubmission.status, BLOCKING_SUBMISSION_STATUSES),
       ),
     )
-    .where(
-      and(
-        targetCondition(target),
-        or(
-          isNotNull(removalSubmission.id),
-          isNotNull(ghgStatementSubmission.id),
-        )!,
-      ),
-    )
-    .limit(1);
+    .where(targetCondition(target));
+}
+
+/**
+ * Blocks upstream source-data mutation once the record is part of a live
+ * certification artifact. The lineage path is re-derived from current DB state
+ * instead of trusting UI context or stale denormalized membership.
+ */
+export async function assertCanMutateCertifiedLineage(
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+  mutation: "create" | "update" | "delete",
+): Promise<void> {
+  const lineage = await lineageQuery(tx, target);
+  await acquireCertificationArtifactLocksSorted(tx, [
+    ...lineage.map((row) => ({
+      provider: "isometric",
+      localEntityType: "removal",
+      localEntityId: row.removalId,
+    })),
+    ...lineage
+      .filter((row) => row.ghgStatementId)
+      .map((row) => ({
+        provider: "isometric",
+        localEntityType: "ghgStatement",
+        localEntityId: row.ghgStatementId!,
+      })),
+  ]);
+
+  const hit = (await lineageQuery(tx, target)).find(
+    (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
+  );
 
   if (!hit) return;
 

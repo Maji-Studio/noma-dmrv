@@ -209,10 +209,11 @@ Statement has a blocking submission ledger row (`draft`, `submitted`, or
 `accepted`), its upstream operational records are locked at the data-access
 boundary. The guard re-derives membership from the current credit-batch
 lineage before every mutation and blocks edits/deletes to production runs,
-samples, deliveries, biochar products, and feedstocks that would desync live
-MRV views from an immutable certification payload snapshot. Corrections must
-be represented as correction workflow records or a new submission version, not
-as in-place edits to locked source data.
+samples, applications, deliveries, orders, biochar products, feedstocks, and
+credit-batch grouping records that would desync live MRV views from an
+immutable certification payload snapshot. Corrections must be represented as
+correction workflow records or a new submission version, not as in-place edits
+to locked source data.
 
 **UI surfaces:**
 
