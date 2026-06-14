@@ -156,6 +156,15 @@ row ⋯ menu (already separated), and confirm dialogs (already present).
   "Status" column. Display-only; no test pinned the old header.
 - **Reactors: column "Sampling" → "Sampling Method"** — disambiguates from the adjacent
   "Method B Status" column.
+- **Energy page eyebrow "Production" → "Infrastructure"** (`src/components/energy/energy-summary.tsx`,
+  all three `PageHeader area=` props). Energy lives in the Infrastructure nav group, and the
+  eyebrow's contract is to name its nav area; it previously read "Production". Verified in
+  Chromium (eyebrow now renders "INFRASTRUCTURE" in the infra accent).
+- **Admin "Emission estimates" tile → direct link to Certification → Settings**
+  (`src/app/(app)/admin/page.tsx`). Was a double-hop through the deprecated
+  `/admin/emission-estimates` `permanentRedirect`; now points straight at `/certification/settings`
+  with copy that says where the config lives. Implements the deferred item below. Verified in
+  Chromium (tile navigates to `/certification/settings`).
 
 ---
 
@@ -163,9 +172,9 @@ row ⋯ menu (already separated), and confirm dialogs (already present).
 
 - Samples "Sampling Time": replace raw `toLocaleString()` with a standard formatter — needs a
   decision on whether time-of-day matters (only `formatSafeDate`, date-only, exists today).
-- Energy / `/admin/emission-estimates` cross-area redirect: make the path to the emissions form
-  feel intentional (e.g. label the admin tile "→ Certification Settings") and improve the
-  unlinked-facility message on that destination.
+- Energy / `/admin/emission-estimates` cross-area redirect: the admin tile relabel + direct link
+  is now **done** (see §6); still deferred is improving the unlinked-facility message on the
+  Certification Settings destination so the cross-area landing feels intentional.
 - "What next" cue after linking a facility to Isometric (Settings → "Create your first GHG statement").
 - Dashboard / list "last updated" + data-freshness affordances.
 - Breadcrumb consistency on detail routes.
