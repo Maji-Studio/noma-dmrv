@@ -2,7 +2,7 @@
 
 Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
-Current shape: 45 table exports across 14 schema files.
+Current shape: 46 table exports across 14 table-bearing schema files.
 
 **Facility archive (soft delete):** `facilities` and the 11 operational facility-scoped tables (`reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence`) carry a nullable `archived_at` stamped by the facility archive cascade; `NULL` = active. Grandchildren and certifier mirror tables hide transitively. See `docs/database.md` → "Soft Delete — Facility Archive".
 
@@ -12,7 +12,7 @@ Current shape: 45 table exports across 14 schema files.
 | `session` | Auth | Tracks active login sessions and expiry tokens. | Session validation, logout-all, auth auditing. | `src/db/schema/auth.ts:35` |
 | `account` | Auth | Stores provider credentials and token material per user. | Password auth, OAuth account linking. | `src/db/schema/auth.ts:60` |
 | `verification` | Auth | Stores one-time verification/reset values and expirations. | Email verification, password reset flows. | `src/db/schema/auth.ts:88` |
-| `facilities` | Facilities | Master record for production sites and defaults. | Facility onboarding, regional reporting, durability defaults. | `src/db/schema/facilities.ts:9` |
+| `facilities` | Facilities | Master record for production sites, including required facility timezone (`UTC` default) and durability defaults. | Facility onboarding, local-time reporting, durability defaults. | `src/db/schema/facilities.ts:9` |
 | `reactors` | Facilities | Defines pyrolysis units installed at facilities. | Run-to-reactor traceability, capacity planning, reactor compliance checks, sampling-method selection. | `src/db/schema/facilities.ts:45` |
 | `storage_locations` | Facilities | Defines physical material storage points at facilities. | Feedstock/biochar inventory location tracking. | `src/db/schema/facilities.ts:66` |
 | `biochar_storage_inventory` | Facilities | Tracks biochar inventory movements and storage state. | Stored-product inventory, dispatch readiness, mass-balance support. | `src/db/schema/storage-inventory.ts` |
@@ -26,7 +26,7 @@ Current shape: 45 table exports across 14 schema files.
 | `feedstock_types` | Feedstock | Controlled catalog of feedstock classes/categories. | Standardized material classification and filtering. | `src/db/schema/feedstock.ts:71` |
 | `feedstocks` | Feedstock | Canonical feedstock batch records with mass and quality fields. | Carbon accounting inputs, sustainability/counterfactual evidence, batch traceability. | `src/db/schema/feedstock.ts:87` |
 | `production_runs` | Production | Core pyrolysis batch records with energy inputs and output mass. Tracks biochar wet mass, moisture %, and derived dry mass. Operator selects a feedstock bin (`feedstockStorageLocationId`) and total mass; batch-level M:M rows in `production_run_feedstocks` are auto-allocated proportionally from bin contents. Temperatures via `production_run_readings`; emissions calculated at query time. | Process tracking, run-level energy accounting, operational history. | `src/db/schema/production.ts:24` |
-| `production_run_readings` | Production | Time-series telemetry for temperature/pressure/gas composition. | Monitoring-plan evidence, compliance checks, diagnostics. | `src/db/schema/production.ts:101` |
+| `production_run_readings` | Production | Time-series telemetry for temperature/pressure/gas flow, entered manually or imported from reactor-day CSV files. | Monitoring-plan evidence, compliance checks, diagnostics. | `src/db/schema/production.ts:101` |
 | `production_samples` | Production | In-process field measurements taken during pyrolysis runs (weight, temperature, proximate analysis). | Real-time run monitoring, in-process QC, operator accountability. | `src/db/schema/production.ts:220` |
 | `samples` | Production | Lab and field sample measurements for biochar quality/compliance. | Eligibility checks, durability inputs, contaminant screening. | `src/db/schema/production.ts:156` |
 | `incident_reports` | Production | Captures production exceptions, severity, and corrective actions. | Adaptive management log, audit evidence, RCA workflows. | `src/db/schema/production.ts:310` |
@@ -53,6 +53,7 @@ Current shape: 45 table exports across 14 schema files.
 | `certifier_sync_events` | Certification | Operation log of outbound/inbound certifier sync attempts. | Integration observability, retry/error handling, support debugging. | `src/db/schema/certification.ts:148` |
 | `stockpile_events` | Compliance | Time-bounded storage events for biochar and feedstock stockpiling. DB enforces `exception_ref` is required when duration exceeds 12 months (P0-07). | Stockpile duration auditing, risk-level tracking, exception evidence linkage. | `src/db/schema/compliance.ts` |
 | `power_procurement_evidence` | Compliance | EC1–EC5 low-carbon electricity procurement evidence keyed to facility and reporting period (P0-11). Stores hard-to-derive regulatory facts; pass/fail outcomes derived by app logic. | Low-carbon electricity claims, PPA/EAC retirement verification, COD and grid region traceability. | `src/db/schema/compliance.ts` |
+| `geo_route_cache` | Geo | Cached server-side route geometries keyed by routing profile and rounded origin/destination coordinates. | Chain-of-custody map polylines without repeat ORS calls. | `src/db/schema/geo.ts` |
 
 ## Notable Enums
 
@@ -61,6 +62,7 @@ Current shape: 45 table exports across 14 schema files.
 | `samplingMethod` | `method_a`, `method_b` | `reactors.sampling_method` — Isometric protocol sampling method selection |
 | `soilTemperatureSource` | `baseline`, `global_database` | Applications — soil temperature data source for durability calcs |
 | `feedstockTypeUsage` | `pyrolysis`, `blend` | `feedstock_types.usage` — separates registry-validated pyrolysis biomass from internal-only blend materials |
+| `applicationEvidenceMethod` | `visual`, `boundary` | Applications — declared evidence route: geotagged visual proof or GIS boundary + logbook |
 
 ## Related References
 

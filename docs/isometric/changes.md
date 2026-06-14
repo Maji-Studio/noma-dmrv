@@ -34,6 +34,27 @@ Isometric.
   deletion, delivery edits through a GHG Statement, biochar product edits, and
   feedstock edits.
 
+## 2026-06-13 (application evidence method drives removal readiness)
+
+Applications now declare which Soil Module application-proof path they satisfy:
+`visual` (geotagged photo evidence) or `boundary` (GIS boundary reference plus
+logbook PDF). Readiness follows the declared method instead of treating all
+applications as the same evidence shape.
+
+- **Schema/UI** — `applications.evidence_method` defaults to `visual`;
+  `gis_boundary_reference` is required for the boundary path at readiness time.
+  The application form switches evidence upload between image files and PDF
+  boundary logbooks.
+- **Document metadata** — photo uploads without timestamp/GPS EXIF are accepted
+  but marked with `metadata.geotagStatus = "missing"` and `missingExif`; this is
+  a certification gap, not an upload failure.
+- **Readiness** — `buildApplicationEvidenceGaps` flags visual applications that
+  lack an uploaded geotagged photo and boundary applications that lack either a
+  boundary reference or uploaded PDF logbook.
+- **Migration** — `0048_application-evidence-method` backfills boundary mode for
+  applications that already had a GIS boundary reference and removes the old
+  blanket `captured_at` photo/video DB check.
+
 ## 2026-06-12 (phantom link dialog explained — post-create certifier prompt is intentional)
 
 Closes open question `facilities/phantom-link-dialog`.

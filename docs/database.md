@@ -57,9 +57,14 @@ Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`
 | Documentation | `documentation.ts` | Evidence documents and storage metadata. |
 | Certification | `certification.ts` | Certifier linkage, removals, GHG statements, submissions, document uploads, sync events, sensors, project-emission journal rows. |
 | Compliance | `compliance.ts` | Stockpile events and power-procurement evidence. |
+| Geo | `geo.ts` | Server-side route geometry cache for map/chain-of-custody views. |
 | Shared enums | `common.ts` | Domain enums used by the schema files above. |
 
-After the 2026-06-08 schema slim-down the app has 45 table exports across 14 schema files. Removed protocol-stub tables and the legacy starter `projects` / `items` cluster are documented in `docs/open-questions.md`.
+After the 2026-06-08 schema slim-down plus the map/certification updates, the
+app has 46 table exports across 14 table-bearing schema files (16 files
+including `common.ts` and `index.ts`). Removed protocol-stub tables and the
+legacy starter `projects` / `items` cluster are documented in
+`docs/open-questions.md`.
 
 ## Access Model
 
@@ -146,6 +151,18 @@ Recent notable migrations:
 | `0035_deterministic_product_bin_formulation` | Data ownership and credit-batch handling updates. |
 | `0036_cultured_rattler` | UX-review schema constraints and indexes. |
 | `0037_sour_lethal_legion` | Schema slim-down: dropped unused protocol-stub tables plus legacy starter project/item tables. |
+| `0038_messy_bromley` | Provider/external-facility uniqueness for certifier project mappings. |
+| `0039_true_hellfire_club` | Customer/supplier locations, default-location flags, and delivery distance override fields. |
+| `0040_simple_spyke` | Adds `sensor_data` documents and removes the legacy production-run PLC file URL. |
+| `0041_outgoing_paper_doll` | Facility archive cascade columns on facility-scoped operational tables. |
+| `0042_fresh_richard_fisk` | Adds distance provenance (`distance_source`) to stored and derived transport distances. |
+| `0043_nice_dreadnoughts` | Adds `geo_route_cache` for server-side route geometry caching. |
+| `0044_lonely_oracle` | Adds default soil-temperature fields to facility certifier config and customer locations. |
+| `0045_pale_doctor_spectrum` | Adds feedstock-type usage and folds `ingredient_bin` into feedstock-bin capability. |
+| `0046_outgoing_stryfe` | Adds feedstock truck-weighing mass fields and range/order checks. |
+| `0047_unify-formulation-feedstock-types` | Migrates formulation ingredients to blend-usage feedstock types. |
+| `0048_application-evidence-method` | Adds application evidence method and backfills boundary references. |
+| `0049_backfill_facility_timezone` | Backfills and enforces non-null facility timezone with `UTC` default. |
 
 When a migration is destructive, document the rationale in the related feature doc or `docs/open-questions.md` if the dropped surface may return later.
 
