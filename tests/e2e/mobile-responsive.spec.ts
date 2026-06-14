@@ -146,4 +146,33 @@ test.describe("Mobile responsiveness (390×844)", () => {
 
     await expectNoHorizontalOverflow(page, "/reactors (card view)");
   });
+
+  test("entity view sheet stacks paired detail fields to one column on mobile", async ({
+    adminPage,
+    seededData,
+  }) => {
+    const page = adminPage;
+    // Open the seeded reactor's read-only view sheet via its mobile card row.
+    await page.goto(`/reactors?facility=${seededData.facility.id}`);
+    await expect(hamburger(page)).toBeVisible();
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await page.locator('div[role="button"][tabindex="0"]').first().click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible({ timeout: 15000 });
+
+    // "Code" and "Identifier" are paired in one DetailRow. At desktop they sit
+    // side-by-side (same row); below `sm` the row must stack so a long value
+    // gets the full sheet width instead of a wrapping ~170px half-column. Assert
+    // the Identifier label renders clearly BELOW the Code label — i.e. stacked,
+    // not beside it. (Guards the DetailRow `flex-col sm:flex-row` contract.)
+    const codeBox = await sheet.getByText("Code", { exact: true }).boundingBox();
+    const idBox = await sheet.getByText("Identifier", { exact: true }).boundingBox();
+    expect(codeBox).not.toBeNull();
+    expect(idBox).not.toBeNull();
+    expect(
+      idBox!.y,
+      "Identifier should stack below Code on a phone, not sit beside it",
+    ).toBeGreaterThan(codeBox!.y + 16);
+  });
 });
