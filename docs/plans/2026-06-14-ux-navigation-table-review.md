@@ -192,6 +192,9 @@ Filed:
   plumbing.
 - **#264 — Distribution tables (Orders & Applications).** Order status + delivery-progress
   indicator; Applications Customer/Location + Evidence-method columns and filters.
+- **#265 — Verification tables (Lab Samples & Credit Batches).** Sample product lineage,
+  lab method, and a pass/fail / ready-to-certify signal + durability filter; credit-batch
+  list-level durability + removal/certification-state badge and the CO₂e "Pending" display.
 
 Tracked elsewhere: admin user management + organizations (multi-tenancy, ADR 0010 / existing work);
 menu setup-vs-daily ordering (consider an onboarding checklist rather than reordering).
