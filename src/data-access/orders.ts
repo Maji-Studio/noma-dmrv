@@ -395,6 +395,26 @@ export async function getOrdersForSelect(
 // Create Operations
 // ============================================
 
+async function validateCustomerLocationBelongsToCustomer(
+  customerId: string,
+  customerLocationId: string | null | undefined
+): Promise<void> {
+  if (!customerLocationId) return;
+
+  const [location] = await db
+    .select({ customerId: customerLocations.customerId })
+    .from(customerLocations)
+    .where(eq(customerLocations.id, customerLocationId));
+
+  if (!location) {
+    throw new SafeError("Customer location not found");
+  }
+
+  if (location.customerId !== customerId) {
+    throw new SafeError("Delivery location belongs to a different customer");
+  }
+}
+
 /**
  * Create a new order
  */
@@ -437,6 +457,11 @@ export async function createOrder(
   if (product.facilityId !== data.facilityId) {
     throw new SafeError("Biochar product belongs to a different facility");
   }
+
+  await validateCustomerLocationBelongsToCustomer(
+    data.customerId,
+    data.customerLocationId
+  );
 
   try {
     const [order] = await db
@@ -513,6 +538,11 @@ export async function updateOrder(
 
   const effectiveFacilityId = data.facilityId ?? existing.facilityId;
   const effectiveProductId = data.biocharProductId ?? existing.biocharProductId;
+  const effectiveCustomerId = data.customerId ?? existing.customerId;
+  const effectiveCustomerLocationId =
+    data.customerLocationId !== undefined
+      ? data.customerLocationId
+      : existing.customerLocationId;
 
   if (
     (data.facilityId !== undefined || data.biocharProductId !== undefined) &&
@@ -530,6 +560,13 @@ export async function updateOrder(
     if (product.facilityId !== effectiveFacilityId) {
       throw new SafeError("Biochar product belongs to a different facility");
     }
+  }
+
+  if (data.customerId !== undefined || data.customerLocationId !== undefined) {
+    await validateCustomerLocationBelongsToCustomer(
+      effectiveCustomerId,
+      effectiveCustomerLocationId
+    );
   }
 
   const [updated] = await db

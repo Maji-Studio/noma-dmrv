@@ -81,6 +81,7 @@ export interface DeliveryStats {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Read Operations
@@ -680,6 +681,12 @@ export async function updateDelivery(
     throw new SafeError("Delivery not found");
   }
 
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "delivery", entityId: deliveryId },
+    "update",
+  );
+
   // Validate massDryKg <= deliveredWetMassKg with merged data
   const finalWetMass = data.deliveredWetMassKg !== undefined
     ? data.deliveredWetMassKg
@@ -794,6 +801,12 @@ export async function deleteDelivery(
   if (!existing) {
     throw new SafeError("Delivery not found");
   }
+
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "delivery", entityId: deliveryId },
+    "delete",
+  );
 
   const [{ value: applicationCount }] = await db
     .select({ value: count() })

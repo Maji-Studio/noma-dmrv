@@ -22,6 +22,7 @@ import { requireAuth } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
+import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 
 /**
  * Proportionally allocate total mass across feedstock batches stored in a bin.
@@ -283,6 +284,12 @@ export async function updateProductionRun(
     throw new SafeError("Production run not found");
   }
 
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "productionRun", entityId: productionRunId },
+    "update",
+  );
+
   // If code is being changed, check for duplicates
   if (data.code && data.code !== existing.code) {
     const [duplicate] = await db
@@ -451,6 +458,12 @@ export async function deleteProductionRun(
   if (!existing) {
     throw new SafeError("Production run not found");
   }
+
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "productionRun", entityId: productionRunId },
+    "delete",
+  );
 
   // Run all four deletes in one transaction so the child-row deletes roll back
   // if the final productionRuns delete fails. Foreign-key constraints prevent

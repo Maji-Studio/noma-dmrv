@@ -61,6 +61,7 @@ export interface PaginatedBiocharProducts {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 interface CompositionIngredientRef {
   formulationIngredientId: string;
@@ -694,6 +695,12 @@ export async function updateBiocharProduct(
     throw new SafeError("Biochar product not found");
   }
 
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "biocharProduct", entityId: productId },
+    "update",
+  );
+
   // If code is being changed, check for duplicates
   if (data.code && data.code !== existing.code) {
     const [duplicate] = await db
@@ -902,6 +909,12 @@ export async function deleteBiocharProduct(
   if (!existing) {
     throw new SafeError("Biochar product not found");
   }
+
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "biocharProduct", entityId: productId },
+    "delete",
+  );
 
   const [[orderCount], [deliveryCount]] = await Promise.all([
     db.select({ count: count() }).from(orders).where(eq(orders.biocharProductId, productId)),

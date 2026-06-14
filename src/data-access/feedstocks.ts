@@ -26,6 +26,7 @@ import {
   replaceDerivedTransportLeg,
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 
@@ -487,6 +488,12 @@ export async function updateFeedstock(
     throw new SafeError("Feedstock not found");
   }
 
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "feedstock", entityId: feedstockId },
+    "update",
+  );
+
   // Validate storage bin compatibility if changing storage location or feedstock type
   if (data.storageLocationId || data.feedstockTypeId) {
     const binId = data.storageLocationId ?? existing.storageLocationId;
@@ -557,6 +564,21 @@ export async function deleteFeedstock(
   feedstockId: string
 ): Promise<void> {
   requireAuth(userId);
+
+  const [existing] = await db
+    .select({ id: feedstocks.id })
+    .from(feedstocks)
+    .where(eq(feedstocks.id, feedstockId));
+
+  if (!existing) {
+    throw new SafeError("Feedstock not found");
+  }
+
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "feedstock", entityId: feedstockId },
+    "delete",
+  );
 
   // Block deletion if used in production runs
   const [usageCount] = await db

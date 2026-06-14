@@ -107,6 +107,7 @@ export interface SampleStats {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Sample Read Operations
@@ -466,6 +467,12 @@ export async function createSample(
     throw new SafeError("Production run not found");
   }
 
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "productionRun", entityId: data.productionRunId },
+    "create",
+  );
+
   // Create sample
   const [sample] = await db
     .insert(samples)
@@ -577,6 +584,23 @@ export async function updateSample(
     throw new SafeError("Sample not found");
   }
 
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "sample", entityId: sampleId },
+    "update",
+  );
+
+  if (
+    data.productionRunId !== undefined &&
+    data.productionRunId !== existing.productionRunId
+  ) {
+    await assertCanMutateCertifiedLineage(
+      db,
+      { entityType: "productionRun", entityId: data.productionRunId },
+      "update",
+    );
+  }
+
   // If code is being changed, check for duplicates
   if (data.sampleCode && data.sampleCode !== existing.sampleCode) {
     const [duplicate] = await db
@@ -669,6 +693,12 @@ export async function deleteSample(
   if (!existing) {
     throw new SafeError("Sample not found");
   }
+
+  await assertCanMutateCertifiedLineage(
+    db,
+    { entityType: "sample", entityId: sampleId },
+    "delete",
+  );
 
   await db.transaction(async (tx) => {
     await deleteTransportLegsForEntity(tx, "sample", sampleId);

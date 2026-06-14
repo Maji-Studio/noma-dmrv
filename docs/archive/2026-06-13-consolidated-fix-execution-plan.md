@@ -279,6 +279,21 @@ Browser retest:
 
 ### 2C. Cross-Parent And Cross-Facility Write Guards
 
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Added data-access guards so order create/update rejects a `customerLocationId` that
+  belongs to a different customer.
+- Chose the cross-facility credit-batch detail behavior: redirect the detail URL to the
+  batch's actual `?facility=` before rendering the edit surface.
+- Added focused regressions:
+  - `tests/order-cross-parent-guard.test.ts`
+  - `tests/e2e/credit-batch-facility-scope.spec.ts`
+- Browser retested with a local authenticated admin session: direct navigation to a
+  credit-batch detail URL with a wrong facility query redirected to the batch facility,
+  rendered the expected batch/facility, and showed no app error boundary.
+
 Problems:
 
 - Orders can accept a `customerLocationId` belonging to a different customer.
@@ -328,6 +343,21 @@ Browser retest:
 - Verify either clear blocking feedback or explicit decoupled-state messaging.
 
 ### 2E. Certification Immutability Below Application
+
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Added a shared data-access lineage guard that re-derives whether an upstream
+  record participates in a credit batch whose Removal or GHG Statement has a
+  blocking certification submission.
+- Guarded production run, sample, delivery, biochar product, and feedstock
+  mutation boundaries, including adding a sample to an already locked production
+  run.
+- Added focused regressions in `tests/certification-lineage-guards.test.ts`
+  covering production run dry-mass edits, production run deletion, sample edits,
+  sample evidence deletion, delivery edits through a verifier-bound GHG
+  Statement, biochar product edits, and feedstock edits.
 
 Problem:
 
@@ -563,8 +593,12 @@ Before declaring the execution complete:
 5. Propagate Isometric 400 body safely.
 6. Unify GPS validation and clearing.
 7. Fix active facility after create.
-8. Add cross-parent and state-transition guards.
-9. Resolve certification policy issues #245, #246, #247 and implement the decisions.
-10. Restore full E2E green.
-11. Sweep UX and accessibility consistency.
-
+8. Add cross-parent guards. Completed 2026-06-14 for order customer/location writes and
+   credit-batch detail facility canonicalization.
+9. Resolve production-run state-transition policy issue #254 and implement the chosen
+   `Complete` behavior. Skipped pending product decision.
+10. Add certification immutability below application. Completed 2026-06-14 with
+   upstream lineage guards for submitted Removal and GHG Statement artifacts.
+11. Resolve certification policy issues #245, #246, #247 and implement the decisions.
+12. Restore full E2E green.
+13. Sweep UX and accessibility consistency.
