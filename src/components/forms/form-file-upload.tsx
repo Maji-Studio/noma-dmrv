@@ -17,6 +17,10 @@ import { UploadSimple, File, X, CheckCircle, WarningCircle, Spinner } from "@pho
 import { Button } from "@/components/ui/button";
 import { formatFileSize } from "@/lib/format-utils";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import type {
+  ApplicationBoundaryLogbookEvidenceType,
+  ApplicationVisualEvidenceRole,
+} from "@/lib/certification/application-evidence";
 import type { DocumentType } from "@/schemas/documents";
 
 interface FileEntry {
@@ -46,6 +50,8 @@ interface FormFileUploadProps {
   entityType?: string;
   entityId?: string;
   documentType?: DocumentType;
+  applicationEvidenceRole?: ApplicationVisualEvidenceRole;
+  applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
   onUploaded?: (documentId: string) => void;
   onUploadError?: (error: string) => void;
 }
@@ -78,6 +84,8 @@ export function FormFileUpload({
   entityType,
   entityId,
   documentType,
+  applicationEvidenceRole,
+  applicationLogbookEvidenceType,
   onUploaded,
   onUploadError,
 }: FormFileUploadProps) {
@@ -116,6 +124,8 @@ export function FormFileUpload({
         entityId: entityId!,
         documentType: documentType!,
         file,
+        applicationEvidenceRole,
+        applicationLogbookEvidenceType,
         onProgress: (p) => {
           setUploads((prev) =>
             prev.map((u) =>

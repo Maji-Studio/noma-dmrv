@@ -8,7 +8,7 @@ import {
   Trash,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
-import { FormFileUpload, ServerError } from "@/components/forms";
+import { FormFileUpload, FormSelect, ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -16,13 +16,35 @@ import {
   documentKeys,
   useDeleteDocument,
   useDocumentsForEntity,
+  useUpdateApplicationEvidenceMetadata,
 } from "@/hooks/use-documents";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
+  APPLICATION_VISUAL_EVIDENCE_ROLES,
+  isApplicationBoundaryLogbookEvidenceType,
+  isApplicationVisualEvidenceRole,
+  type ApplicationBoundaryLogbookEvidenceType,
+  type ApplicationVisualEvidenceRole,
+} from "@/lib/certification/application-evidence";
 import { formatFileSize } from "@/lib/format-utils";
+import type { DocumentRow } from "@/data-access/documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 
 const ENTITY_TYPE: DocumentEntityType = "application";
 const VISUAL_DOC_TYPE: DocumentType = "photo";
 const BOUNDARY_DOC_TYPE: DocumentType = "pdf";
+
+const VISUAL_ROLE_OPTIONS = APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
+  value: role,
+  label: APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[role],
+}));
+const LOGBOOK_EVIDENCE_TYPE_OPTIONS =
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => ({
+    value: type,
+    label: APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type],
+  }));
 
 type EvidenceMode = "visual" | "boundary";
 
@@ -44,6 +66,160 @@ function missingExifLabel(metadata: unknown): string | null {
   return missing.filter((item) => typeof item === "string").join(", ");
 }
 
+function isUploadedDocument(doc: DocumentRow): boolean {
+  return doc.uploadStatus === "uploaded" || doc.fileUrl != null;
+}
+
+function documentEvidenceRole(
+  doc: DocumentRow,
+): ApplicationVisualEvidenceRole | null {
+  const value = metadataRecord(doc.metadata).evidenceRole;
+  return isApplicationVisualEvidenceRole(value) ? value : null;
+}
+
+function documentLogbookEvidenceType(
+  doc: DocumentRow,
+): ApplicationBoundaryLogbookEvidenceType | null {
+  const value = metadataRecord(doc.metadata).logbookEvidenceType;
+  return isApplicationBoundaryLogbookEvidenceType(value) ? value : null;
+}
+
+function isBoundaryEvidenceDocument(doc: DocumentRow): boolean {
+  return (
+    doc.documentType === BOUNDARY_DOC_TYPE ||
+    doc.documentType === "weighbridge_ticket" ||
+    doc.documentType === "affidavit"
+  );
+}
+
+function EvidenceDocumentList({
+  docs,
+  disabled,
+  deleteMutationPending,
+  classifyMutationPending,
+  classifyingDocumentId,
+  onDelete,
+  onSetVisualRole,
+  onSetLogbookEvidenceType,
+}: {
+  docs: DocumentRow[];
+  disabled: boolean;
+  deleteMutationPending: boolean;
+  classifyMutationPending: boolean;
+  classifyingDocumentId: string | null;
+  onDelete: (id: string) => void;
+  onSetVisualRole?: (id: string, role: ApplicationVisualEvidenceRole) => void;
+  onSetLogbookEvidenceType?: (
+    id: string,
+    type: ApplicationBoundaryLogbookEvidenceType,
+  ) => void;
+}) {
+  if (docs.length === 0) {
+    return (
+      <p className="body-small text-[var(--color-text-secondary)]">
+        No evidence files attached yet.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-8">
+      {docs.map((doc) => {
+        const missingExif = missingExifLabel(doc.metadata);
+        const evidenceRole = documentEvidenceRole(doc);
+        const logbookEvidenceType = documentLogbookEvidenceType(doc);
+        const isClassifying =
+          classifyMutationPending && classifyingDocumentId === doc.id;
+        return (
+          <li
+            key={doc.id}
+            className="flex flex-wrap items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
+          >
+            <File
+              size={16}
+              weight="bold"
+              className="shrink-0 text-[var(--color-text-tertiary)]"
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <span className="body-small truncate text-[var(--color-text-primary)]">
+                {doc.fileName}
+              </span>
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                {formatFileSize(doc.fileSizeBytes)}
+                {doc.capturedAt
+                  ? ` · ${new Date(doc.capturedAt).toLocaleDateString()}`
+                  : ""}
+                {logbookEvidenceType
+                  ? ` · ${APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[logbookEvidenceType]}`
+                  : ""}
+              </span>
+              {missingExif && (
+                <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange-strong)]">
+                  <WarningCircle size={14} weight="bold" />
+                  No geotag: {missingExif}
+                </span>
+              )}
+            </div>
+            {onSetVisualRole && doc.documentType === VISUAL_DOC_TYPE && (
+              <div className="w-full sm:w-200">
+                <FormSelect
+                  aria-label={`Evidence role for ${doc.fileName}`}
+                  value={evidenceRole ?? ""}
+                  placeholder="Classify evidence"
+                  options={VISUAL_ROLE_OPTIONS}
+                  disabled={disabled || classifyMutationPending}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (isApplicationVisualEvidenceRole(value)) {
+                      onSetVisualRole(doc.id, value);
+                    }
+                  }}
+                />
+              </div>
+            )}
+            {onSetLogbookEvidenceType && doc.documentType === BOUNDARY_DOC_TYPE && (
+              <div className="w-full sm:w-200">
+                <FormSelect
+                  aria-label={`Logbook evidence type for ${doc.fileName}`}
+                  value={logbookEvidenceType ?? ""}
+                  placeholder="Classify logbook"
+                  options={LOGBOOK_EVIDENCE_TYPE_OPTIONS}
+                  disabled={disabled || classifyMutationPending}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (isApplicationBoundaryLogbookEvidenceType(value)) {
+                      onSetLogbookEvidenceType(doc.id, value);
+                    }
+                  }}
+                />
+              </div>
+            )}
+            <a
+              href={`/api/documents/${doc.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 p-4 text-[var(--color-text-tertiary)] transition-colors duration-300 hover:text-[var(--color-interaction)]"
+              aria-label={`Open ${doc.fileName}`}
+            >
+              <ArrowSquareOut size={16} weight="bold" />
+            </a>
+            <Button
+              variant="destructive"
+              size="icon"
+              onClick={() => onDelete(doc.id)}
+              disabled={deleteMutationPending || disabled || isClassifying}
+              className="shrink-0"
+              aria-label={`Delete ${doc.fileName}`}
+            >
+              <Trash size={16} weight="bold" />
+            </Button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function ApplicationEvidencePanel({
   applicationId,
   mode,
@@ -52,6 +228,11 @@ export function ApplicationEvidencePanel({
   const toast = useToast();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [classifyingDocumentId, setClassifyingDocumentId] = useState<
+    string | null
+  >(null);
+  const [logbookEvidenceType, setLogbookEvidenceType] =
+    useState<ApplicationBoundaryLogbookEvidenceType>("weighbridge");
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
     applicationId,
@@ -61,13 +242,15 @@ export function ApplicationEvidencePanel({
     ? documentKeys.forEntity(ENTITY_TYPE, applicationId)
     : undefined;
   const deleteMutation = useDeleteDocument(invalidateKey);
+  const classifyMutation =
+    useUpdateApplicationEvidenceMetadata(invalidateKey);
 
-  const documentType = mode === "visual" ? VISUAL_DOC_TYPE : BOUNDARY_DOC_TYPE;
-  const visibleDocs = (docs ?? []).filter(
-    (doc) =>
-      doc.documentType === documentType &&
-      (doc.uploadStatus === "uploaded" || doc.fileUrl),
+  const uploadedDocs = (docs ?? []).filter(isUploadedDocument);
+  const visualDocs = uploadedDocs.filter(
+    (doc) => doc.documentType === VISUAL_DOC_TYPE,
   );
+  const boundaryDocs = uploadedDocs.filter(isBoundaryEvidenceDocument);
+  const visibleDocs = mode === "visual" ? visualDocs : boundaryDocs;
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -80,6 +263,48 @@ export function ApplicationEvidencePanel({
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to delete evidence",
       );
+    }
+  };
+
+  const setVisualRole = async (
+    documentId: string,
+    role: ApplicationVisualEvidenceRole,
+  ) => {
+    setErrorMessage(null);
+    setClassifyingDocumentId(documentId);
+    try {
+      await classifyMutation.mutateAsync({
+        documentId,
+        applicationEvidenceRole: role,
+      });
+      toast.success("Evidence classified");
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to classify evidence",
+      );
+    } finally {
+      setClassifyingDocumentId(null);
+    }
+  };
+
+  const setLogbookEvidenceTypeForDocument = async (
+    documentId: string,
+    type: ApplicationBoundaryLogbookEvidenceType,
+  ) => {
+    setErrorMessage(null);
+    setClassifyingDocumentId(documentId);
+    try {
+      await classifyMutation.mutateAsync({
+        documentId,
+        applicationLogbookEvidenceType: type,
+      });
+      toast.success("Evidence classified");
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to classify evidence",
+      );
+    } finally {
+      setClassifyingDocumentId(null);
     }
   };
 
@@ -122,78 +347,114 @@ export function ApplicationEvidencePanel({
         <p className="body-small text-[var(--color-text-secondary)]">
           Loading evidence...
         </p>
-      ) : visibleDocs.length === 0 ? (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          No evidence files attached yet.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-8">
-          {visibleDocs.map((doc) => {
-            const missingExif = missingExifLabel(doc.metadata);
+      ) : mode === "visual" ? (
+        <div className="flex flex-col gap-12">
+          {APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => {
+            const roleDocs = visualDocs.filter(
+              (doc) => documentEvidenceRole(doc) === role,
+            );
             return (
-              <li
-                key={doc.id}
-                className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
+              <div
+                key={role}
+                className="flex flex-col gap-10 border border-[var(--color-border-tertiary)] p-12"
               >
-                <File
-                  size={16}
-                  weight="bold"
-                  className="shrink-0 text-[var(--color-text-tertiary)]"
-                />
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <span className="body-small truncate text-[var(--color-text-primary)]">
-                    {doc.fileName}
-                  </span>
+                <div className="flex items-center justify-between gap-8">
+                  <h4 className="body-small-bold">
+                    {APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[role]}
+                  </h4>
                   <span className="body-caption text-[var(--color-text-tertiary)]">
-                    {formatFileSize(doc.fileSizeBytes)}
-                    {doc.capturedAt
-                      ? ` · ${new Date(doc.capturedAt).toLocaleDateString()}`
-                      : ""}
+                    {roleDocs.length} {roleDocs.length === 1 ? "file" : "files"}
                   </span>
-                  {missingExif && (
-                    <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange-strong)]">
-                      <WarningCircle size={14} weight="bold" />
-                      No geotag: {missingExif}
-                    </span>
-                  )}
                 </div>
-                <a
-                  href={`/api/documents/${doc.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 p-4 text-[var(--color-text-tertiary)] transition-colors duration-300 hover:text-[var(--color-interaction)]"
-                  aria-label={`Open ${doc.fileName}`}
-                >
-                  <ArrowSquareOut size={16} weight="bold" />
-                </a>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  onClick={() => setDeleteId(doc.id)}
-                  disabled={deleteMutation.isPending || disabled}
-                  className="shrink-0"
-                  aria-label={`Delete ${doc.fileName}`}
-                >
-                  <Trash size={16} weight="bold" />
-                </Button>
-              </li>
+                <EvidenceDocumentList
+                  docs={roleDocs}
+                  disabled={disabled}
+                  deleteMutationPending={deleteMutation.isPending}
+                  classifyMutationPending={classifyMutation.isPending}
+                  classifyingDocumentId={classifyingDocumentId}
+                  onDelete={setDeleteId}
+                  onSetVisualRole={setVisualRole}
+                />
+                <FormFileUpload
+                  id={`application-${applicationId}-${role}-evidence-upload`}
+                  accept="image/*"
+                  multiple
+                  maxSizeMb={25}
+                  disabled={disabled}
+                  entityType={ENTITY_TYPE}
+                  entityId={applicationId}
+                  documentType={VISUAL_DOC_TYPE}
+                  applicationEvidenceRole={role}
+                  onUploaded={() => setErrorMessage(null)}
+                  onUploadError={(err) => setErrorMessage(err)}
+                />
+              </div>
             );
           })}
-        </ul>
-      )}
 
-      <FormFileUpload
-        id={`application-${applicationId}-${mode}-evidence-upload`}
-        accept={mode === "visual" ? "image/*" : "application/pdf,.pdf"}
-        multiple={mode === "visual"}
-        maxSizeMb={mode === "visual" ? 25 : 50}
-        disabled={disabled}
-        entityType={ENTITY_TYPE}
-        entityId={applicationId}
-        documentType={documentType}
-        onUploaded={() => setErrorMessage(null)}
-        onUploadError={(err) => setErrorMessage(err)}
-      />
+          {visualDocs.some((doc) => documentEvidenceRole(doc) === null) && (
+            <div className="flex flex-col gap-10 border border-[var(--color-border-tertiary)] p-12">
+              <div className="flex items-center justify-between gap-8">
+                <h4 className="body-small-bold">Unclassified</h4>
+              </div>
+              <EvidenceDocumentList
+                docs={visualDocs.filter(
+                  (doc) => documentEvidenceRole(doc) === null,
+                )}
+                disabled={disabled}
+                deleteMutationPending={deleteMutation.isPending}
+                classifyMutationPending={classifyMutation.isPending}
+                classifyingDocumentId={classifyingDocumentId}
+                onDelete={setDeleteId}
+                onSetVisualRole={setVisualRole}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-12">
+          <div className="flex flex-wrap gap-8">
+            {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
+              <label
+                key={type}
+                className="inline-flex min-h-44 items-center gap-8 border border-[var(--color-border-secondary)] px-12 body-small"
+              >
+                <input
+                  type="radio"
+                  name={`application-${applicationId}-logbook-evidence-type`}
+                  value={type}
+                  checked={logbookEvidenceType === type}
+                  onChange={() => setLogbookEvidenceType(type)}
+                  disabled={disabled}
+                />
+                {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
+              </label>
+            ))}
+          </div>
+          <EvidenceDocumentList
+            docs={boundaryDocs}
+            disabled={disabled}
+            deleteMutationPending={deleteMutation.isPending}
+            classifyMutationPending={classifyMutation.isPending}
+            classifyingDocumentId={classifyingDocumentId}
+            onDelete={setDeleteId}
+            onSetLogbookEvidenceType={setLogbookEvidenceTypeForDocument}
+          />
+          <FormFileUpload
+            id={`application-${applicationId}-boundary-evidence-upload`}
+            accept="application/pdf,.pdf"
+            multiple={false}
+            maxSizeMb={50}
+            disabled={disabled}
+            entityType={ENTITY_TYPE}
+            entityId={applicationId}
+            documentType={BOUNDARY_DOC_TYPE}
+            applicationLogbookEvidenceType={logbookEvidenceType}
+            onUploaded={() => setErrorMessage(null)}
+            onUploadError={(err) => setErrorMessage(err)}
+          />
+        </div>
+      )}
 
       <DeleteConfirmDialog
         isOpen={!!deleteId}

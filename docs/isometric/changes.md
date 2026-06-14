@@ -34,6 +34,27 @@ Isometric.
   deletion, delivery edits through a GHG Statement, biochar product edits, and
   feedstock edits.
 
+## 2026-06-14 (application evidence readiness tightened)
+
+Application evidence readiness now matches the Soil Module application-proof
+shape more closely instead of treating "any photo" or "any PDF" as enough.
+
+- **Visual path** — uploaded application photos carry
+  `metadata.evidenceRole = stockpile | spreading | incorporation`; readiness
+  requires one geotagged uploaded photo for each role.
+- **Boundary path** — generic uploaded PDFs no longer satisfy the logbook check.
+  A boundary logbook PDF must carry
+  `metadata.logbookEvidenceType = weighbridge | inventory | affidavit`, while
+  dedicated `weighbridge_ticket` and `affidavit` document types also satisfy
+  the semantic evidence requirement.
+- **UI/upload metadata** — the application evidence panel exposes separate
+  visual upload targets for stockpile, spreading, and incorporation evidence,
+  plus a boundary logbook evidence-type selector. Existing untyped application
+  photos/PDFs remain visible and can be classified in place without reuploading.
+- **Tests** — `tests/application-evidence-readiness.test.ts` covers missing
+  roles, the single-photo false pass, all-role success, untyped PDF rejection,
+  and typed boundary logbook success.
+
 ## 2026-06-13 (application evidence method drives removal readiness)
 
 Applications now declare which Soil Module application-proof path they satisfy:
@@ -49,8 +70,8 @@ applications as the same evidence shape.
   but marked with `metadata.geotagStatus = "missing"` and `missingExif`; this is
   a certification gap, not an upload failure.
 - **Readiness** — `buildApplicationEvidenceGaps` flags visual applications that
-  lack an uploaded geotagged photo and boundary applications that lack either a
-  boundary reference or uploaded PDF logbook.
+  lack the required uploaded geotagged photo roles and boundary applications
+  that lack either a boundary reference or typed logbook evidence.
 - **Migration** — `0048_application-evidence-method` backfills boundary mode for
   applications that already had a GIS boundary reference and removes the old
   blanket `captured_at` photo/video DB check.

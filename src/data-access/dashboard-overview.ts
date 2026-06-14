@@ -213,8 +213,12 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const [runRows, lotRows, applicationRows, batchRows, feedstockRows] =
-    await Promise.all([
+  const [
+    [runRows, lotRows, applicationRows, batchRows, feedstockRows],
+    attention,
+    operations,
+  ] = await Promise.all([
+    Promise.all([
       db
         .select({
           date: productionRuns.date,
@@ -293,7 +297,10 @@ export async function getDashboardOverview(
             ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
           ),
         ),
-    ]);
+    ]),
+    getAttentionItems(facilityId),
+    getDashboardOperations(userId, facilityId),
+  ]);
 
   // ---- normalize to dated points -----------------------------------------
 
@@ -598,11 +605,6 @@ export async function getDashboardOverview(
       applications: currentApplications.length,
     },
   });
-
-  const [attention, operations] = await Promise.all([
-    getAttentionItems(facilityId),
-    getDashboardOperations(userId, facilityId),
-  ]);
 
   return {
     range,

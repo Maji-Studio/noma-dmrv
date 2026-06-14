@@ -1,8 +1,6 @@
 import { z } from "zod";
 import {
-  GPS_PAIR_MESSAGE,
   gpsPairSuperRefine,
-  hasCompleteGpsPair,
   latitudeSchema,
   longitudeSchema,
 } from "./helpers";
@@ -297,31 +295,6 @@ export type UpdateFacilityData = z.infer<typeof updateFacilitySchema>;
 export type ArchiveFacilityData = z.infer<typeof archiveFacilitySchema>;
 export type FacilityFilterData = z.infer<typeof facilityFilterSchema>;
 export type FacilitySelectData = z.infer<typeof facilitySelectSchema>;
-
-// ============================================
-// Validation Helpers
-// ============================================
-
-/**
- * Validates GPS coordinates - both must be present or both absent
- */
-export const gpsCoordinatesRefinement = z
-  .object({
-    gpsLatitude: latitudeSchema,
-    gpsLongitude: longitudeSchema,
-  })
-  .refine(
-    hasCompleteGpsPair,
-    {
-      message: GPS_PAIR_MESSAGE,
-      path: ["gpsCoordinates"],
-    }
-  );
-
-/**
- * Extended facility form schema with GPS validation
- */
-export const facilityFormSchemaWithGpsValidation = facilityFormSchema;
 
 /**
  * Quick-add facility schema for inline facility creation
