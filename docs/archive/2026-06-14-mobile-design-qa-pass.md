@@ -63,17 +63,25 @@ sign-in, real dev server on :3100).
    viewport. Regression assertion added to the `mobile-responsive.spec.ts` nav
    drawer test.
 
+4. **Production-run energy fields cramped at two columns on phones** (follow-up,
+   on user report — `src/components/production-runs/production-run-form.tsx`).
+   The energy block (`grid-cols-2 md:grid-cols-4`: Startup/Plant Diesel, Genset
+   Diesel, Preprocess Fuel, Electricity) stayed two-column on phones; a parallel
+   rename to longer labels ("Startup / Plant Diesel (L)") made each one wrap to
+   three lines with the `CERT` badge + info icon floating. Changed to
+   `grid-cols-1 sm:grid-cols-2 md:grid-cols-4` — one column on phones (label +
+   badge + icon on one line, full-width input), unchanged at `sm`+. This was the
+   only non-stacking grid left in the form (every other section already used
+   `grid-cols-1 md:grid-cols-2`). The single-column fields and the FormSpine
+   rail are fine width-wise, so no further change. Verified in Chromium at
+   390×844.
+
+   _(Originally deferred during the first pass because this file was under active
+   parallel edits; applied once that work landed and the file was clean.)_
+
 ## Deferred (actionable later)
 
-- **Production-run energy fields cramped at two columns on phones**
-  (`src/components/production-runs/production-run-form.tsx`, the
-  `grid-cols-2 md:grid-cols-4` block of Diesel Ops / Diesel Genset / Preprocess
-  Fuel / Electricity). At 390px the label + `CERT` badge wrap awkwardly.
-  Proposed fix: `grid-cols-1 sm:grid-cols-2 md:grid-cols-4`.
-  **Not applied** — this file (and `production-run-list.tsx`,
-  `use-production-runs.ts`, the new `[productionRunId]/` detail route) were under
-  active **parallel edits** during this pass; touching it would mix unrelated
-  changes into the commit. Apply once that work lands.
+- None outstanding from this pass.
 
 ## Verified
 
