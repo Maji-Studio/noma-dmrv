@@ -308,6 +308,46 @@ describe("application mutations", () => {
     }
   });
 
+  it("clears both GPS coordinates when they are explicitly set to null", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-GPS-CLEAR`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+        gpsLatitude: -3.3349,
+        gpsLongitude: 37.3404,
+      });
+      fixture.applicationIds.push(application.id);
+
+      const updated = await updateApplication(TEST_USER_ID, application.id, {
+        gpsLatitude: null,
+        gpsLongitude: null,
+      });
+
+      expect(updated.gpsLatitude).toBeNull();
+      expect(updated.gpsLongitude).toBeNull();
+
+      const [persisted] = await db
+        .select({
+          gpsLatitude: applications.gpsLatitude,
+          gpsLongitude: applications.gpsLongitude,
+        })
+        .from(applications)
+        .where(eq(applications.id, application.id));
+
+      expect(persisted).toEqual({
+        gpsLatitude: null,
+        gpsLongitude: null,
+      });
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("leaves the existing application unchanged after rejected capacity update", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);

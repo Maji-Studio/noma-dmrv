@@ -129,7 +129,9 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
 
-    await page.locator("table tbody tr").first().click();
+    const applicationRow = page.locator("table tbody tr[role='button']").first();
+    await applicationRow.focus();
+    await page.keyboard.press("Enter");
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit Application" }).click();
     const evidenceUpload = page.locator(

@@ -5,7 +5,13 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, toNumberOrNull, toIntOrNull, optionalPercent } from "./helpers";
+import {
+  emptyToNull,
+  optionalPercent,
+  requiredDateOnly,
+  toIntOrNull,
+  toNumberOrNull,
+} from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -34,19 +40,7 @@ export type ProductionRunStatus = (typeof productionRunStatuses)[number];
 export const productionRunFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
-  date: z.union([
-    z.date(),
-    z.string().min(1, "Please enter a date").transform((val, ctx) => {
-      // Accept "YYYY-MM-DD" strings (from form input, converted to Date in submit handler)
-      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]),
+  date: requiredDateOnly,
   reactorId: z.string().min(1, "Please select a reactor").uuid("Please select a valid reactor"),
 
   // Status
@@ -131,17 +125,7 @@ export const updateProductionRunSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   facilityId: z.string().uuid().optional(),
-  date: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]).optional(),
+  date: requiredDateOnly.optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
   startTime: z.union([

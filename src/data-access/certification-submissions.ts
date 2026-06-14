@@ -23,6 +23,7 @@ import {
   certifierProjects,
 } from "@/db/schema/certification";
 import { SafeError } from "@/lib/errors";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
@@ -190,6 +191,7 @@ async function resumeDraft<H>(
 ): Promise<ClaimOutcome> {
   return db.transaction(async (tx) => {
     await lockAndVerifyMapping(tx, args.guard);
+    await lockSubmissionArtifact(tx, args.key);
 
     const latest = await getLatestSubmissionWithExecutor(tx, args.key);
     const decided = decideSubmissionClaim({
@@ -250,6 +252,7 @@ async function createDraft<H>(
   try {
     return await db.transaction(async (tx): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(tx, args.guard);
+      await lockSubmissionArtifact(tx, args.key);
       if (args.mirrorDocumentIds && args.mirrorDocumentIds.length > 0) {
         await acquireMirrorLocksSorted(tx, args.mirrorDocumentIds);
       }
@@ -439,6 +442,19 @@ async function lockAndVerifyMapping(
   }
 }
 
+async function lockSubmissionArtifact(
+  tx: DbTransaction,
+  key: Pick<SubmissionKey, "provider" | "localEntityType" | "localEntityId">,
+): Promise<void> {
+  await acquireCertificationArtifactLocksSorted(tx, [
+    {
+      provider: key.provider,
+      localEntityType: key.localEntityType,
+      localEntityId: key.localEntityId,
+    },
+  ]);
+}
+
 // =====================================================================
 // Draft insert / reset primitives
 // =====================================================================
@@ -544,6 +560,7 @@ export async function insertDraftSubmissionWithMappingLock(
   requireAuth(userId);
   return db.transaction(async (tx) => {
     await lockAndVerifyMapping(tx, guard);
+    await lockSubmissionArtifact(tx, input);
     return withUniqueViolationGuard(() => insertDraftSubmissionRow(tx, input));
   });
 }
@@ -559,6 +576,17 @@ export async function resetSubmissionToDraftWithMappingLock(
   requireAuth(userId);
   return db.transaction(async (tx) => {
     await lockAndVerifyMapping(tx, guard);
+    const [rowToReset] = await tx
+      .select({
+        provider: certificationSubmissions.provider,
+        localEntityType: certificationSubmissions.localEntityType,
+        localEntityId: certificationSubmissions.localEntityId,
+      })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.id, id))
+      .limit(1);
+    if (!rowToReset) throw new SafeError("Submission not found");
+    await lockSubmissionArtifact(tx, rowToReset);
     const row = await resetSubmissionToDraftCas(tx, id, lockTtlMs);
     if (!row) throw new SafeError("Submission already in progress");
     return row;

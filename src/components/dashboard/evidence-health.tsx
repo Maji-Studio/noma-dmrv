@@ -3,7 +3,7 @@
  * from the operator dashboard): missing GPS, runs without lab samples, and
  * transport-leg provenance holes. Each row is a count chip (green clear /
  * orange open) linking to where the gap is closed; the footer opens the
- * facility's certification overview.
+ * facility's certification removals hub.
  */
 "use client";
 
@@ -77,10 +77,10 @@ export function EvidenceHealth({ rows, facilityId }: EvidenceHealthProps) {
       </ul>
       <div className="border-t border-[var(--color-border-tertiary)] px-20 py-20">
         <Link
-          href={`/certification?facility=${encodeURIComponent(facilityId)}`}
+          href={`/certification/removals?facility=${encodeURIComponent(facilityId)}`}
           className="group inline-flex items-center gap-8 label-micro text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
-          Open certification overview
+          Open certification removals
           <ArrowRight
             size={13}
             weight="bold"

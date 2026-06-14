@@ -95,6 +95,7 @@ export function useProductionRun(productionRunId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!productionRunId,
+    retry: false,
     staleTime: 30000,
   });
 }

@@ -58,6 +58,12 @@ v3 is proprietary.
 
 - Dev/CI without a routing key is not broken: the feature degrades instead of
   failing env validation.
+- Implementation note (2026-06-13): ORS calls use the HeiGIT unified API
+  hosts because `api.openrouteservice.org` is deprecated. Routing uses
+  `https://api.heigit.org/openrouteservice`; Pelias geocoding uses
+  `https://api.heigit.org/pelias/v1`. The adapter sends a bounded snap radius
+  to directions requests so off-road farms/yards can snap to nearby roads
+  without allowing unlimited wrong-road matches.
 - A routed distance is a *map estimate*, never a measurement — provenance is
   tracked via `distanceSource` (see the plan). The geo client logs entity IDs
   and action only, never addresses or coordinates.

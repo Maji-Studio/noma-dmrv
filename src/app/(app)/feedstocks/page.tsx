@@ -6,7 +6,7 @@ import { FeedstockList, FeedstockStats } from "@/components/feedstocks";
 
 export default function FeedstocksPage() {
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <FeedstockList stats={<FeedstockStats />} />
     </div>
   );

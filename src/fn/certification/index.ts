@@ -27,8 +27,8 @@ export {
 // Per-batch data-completeness verdict for the credit-batch detail page +
 // New-Removal wizard selection gate (classifier shared via batch-health.ts).
 export { loadBatchHealth } from "./batch-health";
-// Server-owned per-removal readiness for the Overview work queue (reuses the
-// submit pipeline's context; classifier shared with table hint + pre-flight).
+// Server-owned per-removal readiness for the Removals hub (reuses the submit
+// pipeline's context; classifier shared with table hint + wizard submit step).
 export {
   loadCertificationOverview,
   type CertificationOverviewData,

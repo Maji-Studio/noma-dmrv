@@ -62,6 +62,14 @@ const MIX_SLICES = 5;
 /** Fallback window when range="all" finds no dated records. */
 const ALL_RANGE_FALLBACK_DAYS = 365;
 
+function productionRunHref(facilityId: string, productionRunId: string): string {
+  const params = new URLSearchParams({
+    facility: facilityId,
+    run: productionRunId,
+  });
+  return `/production-runs?${params.toString()}`;
+}
+
 export type DashboardKpiKey =
   | "feedstockProcessed"
   | "biocharProduced"
@@ -700,7 +708,7 @@ async function getAttentionItems(
       entityCode: row.code,
       title: "Complete run missing mass data",
       severity: "flag" as const,
-      href: `/production-runs/${row.id}${facilityQuery}`,
+      href: productionRunHref(facilityId, row.id),
     })),
     ...unlinkedLots.map((row) => ({
       id: `lot-unlinked-${row.id}`,

@@ -17,10 +17,12 @@ import {
   feedstockTypes,
 } from "@/db/schema";
 import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { formatLocalDate } from "@/lib/date-utils";
 import { requireAuth } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
+import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 
 /**
  * Proportionally allocate total mass across feedstock batches stored in a bin.
@@ -188,7 +190,7 @@ export async function createProductionRun(
       .values({
         code: data.code,
         facilityId: data.facilityId,
-        date: data.date.toISOString().split('T')[0],
+        date: formatLocalDate(data.date),
         status: data.status ?? "draft",
         startTime: data.startTime,
         endTime: data.endTime,
@@ -334,7 +336,7 @@ export async function updateProductionRun(
 
   if (data.code !== undefined) updateData.code = data.code;
   if (data.facilityId !== undefined) updateData.facilityId = data.facilityId;
-  if (data.date !== undefined) updateData.date = data.date.toISOString().split('T')[0];
+  if (data.date !== undefined) updateData.date = formatLocalDate(data.date);
   if (data.reactorId !== undefined) updateData.reactorId = data.reactorId;
   if (data.status !== undefined) updateData.status = data.status;
   if (data.startTime !== undefined) updateData.startTime = data.startTime;
@@ -378,6 +380,12 @@ export async function updateProductionRun(
     data.feedstockMoisturePercent !== undefined;
 
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "update",
+    );
+
     await tx
       .update(productionRuns)
       .set(updateData)
@@ -457,6 +465,12 @@ export async function deleteProductionRun(
   // transaction the children would already be gone, leaving a half-deleted run.
   // The FK violation propagates out and is caught by the server action.
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "delete",
+    );
+
     await tx
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, productionRunId));

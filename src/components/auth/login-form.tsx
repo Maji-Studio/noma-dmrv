@@ -72,7 +72,7 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
+    <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-24">
       <FormField id="email" label="Email" error={errors.email?.message}>
         <FormInput
           id="email"

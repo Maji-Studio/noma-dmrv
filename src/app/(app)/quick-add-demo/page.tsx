@@ -78,7 +78,7 @@ export default function QuickAddDemoPage() {
   };
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <div>
         <h1 className="title-heading-2">Quick Add Dialogs Demo</h1>
         <p className="text-[var(--color-text-secondary)]">

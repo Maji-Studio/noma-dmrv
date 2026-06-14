@@ -388,6 +388,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
+      await page.selectOption('select[name="timezone"]', "Africa/Dar_es_Salaam");
 
       await facilityDialog
         .getByRole("button", { name: "Create Facility" })

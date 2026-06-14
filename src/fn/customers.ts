@@ -40,6 +40,18 @@ import {
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function customerActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "customer action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // Customer List/Query Operations
@@ -265,8 +277,11 @@ export async function createCustomerFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create customer",
+      error: customerActionError(
+        error,
+        "Failed to create customer",
+        "customer:create",
+      ),
     };
   }
 }
@@ -308,8 +323,11 @@ export async function updateCustomerFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update customer",
+      error: customerActionError(
+        error,
+        "Failed to update customer",
+        "customer:update",
+      ),
     };
   }
 }
@@ -343,8 +361,11 @@ export async function deleteCustomerFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete customer",
+      error: customerActionError(
+        error,
+        "Failed to delete customer",
+        "customer:delete",
+      ),
     };
   }
 }
@@ -420,10 +441,11 @@ export async function createCustomerLocationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to create customer location",
+      error: customerActionError(
+        error,
+        "Failed to create customer location",
+        "customer-location:create",
+      ),
     };
   }
 }
@@ -485,10 +507,11 @@ export async function updateCustomerLocationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to update customer location",
+      error: customerActionError(
+        error,
+        "Failed to update customer location",
+        "customer-location:update",
+      ),
     };
   }
 }
@@ -518,10 +541,11 @@ export async function deleteCustomerLocationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to delete customer location",
+      error: customerActionError(
+        error,
+        "Failed to delete customer location",
+        "customer-location:delete",
+      ),
     };
   }
 }
