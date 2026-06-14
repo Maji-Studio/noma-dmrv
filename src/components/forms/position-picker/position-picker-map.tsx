@@ -50,6 +50,7 @@ function mapPoint(
   longitude: number | null,
 ): [number, number] | null {
   if (latitude == null || longitude == null) return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
   return [longitude, latitude];
 }

@@ -30,6 +30,10 @@ import { requireAuth } from "./utils";
  * separately (architecture audit, Phase 3).
  */
 const MAX_DOCUMENTS_PER_ENTITY = 200;
+const DELIVERY_TABLE_NAME = "deliveries";
+const DELIVERY_ARCHIVED_AT_COLUMN = "archived_at";
+
+let deliveryArchivedAtColumnAvailablePromise: Promise<boolean> | null = null;
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
@@ -61,6 +65,22 @@ function entityMissingError(entityType: DocumentEntityType) {
   );
 }
 
+async function hasDeliveryArchivedAtColumn(): Promise<boolean> {
+  if (!deliveryArchivedAtColumnAvailablePromise) {
+    deliveryArchivedAtColumnAvailablePromise = db
+      .execute<{ column_name: string }>(sql`
+        select column_name
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = ${DELIVERY_TABLE_NAME}
+          and column_name = ${DELIVERY_ARCHIVED_AT_COLUMN}
+      `)
+      .then(({ rows }) => rows.length > 0);
+  }
+
+  return deliveryArchivedAtColumnAvailablePromise;
+}
+
 export async function assertCanManageDocumentEntity(
   userId: string,
   entityType: string,
@@ -82,12 +102,14 @@ export async function assertCanManageDocumentEntity(
       return;
     }
     case "delivery": {
+      const conditions = [eq(deliveries.id, entityId)];
+      if (await hasDeliveryArchivedAtColumn()) {
+        conditions.push(isNull(deliveries.archivedAt));
+      }
       const [row] = await db
         .select({ id: deliveries.id })
         .from(deliveries)
-        .where(
-          and(eq(deliveries.id, entityId), isNull(deliveries.archivedAt))
-        );
+        .where(and(...conditions));
       if (!row) throw entityMissingError(entityType);
       return;
     }

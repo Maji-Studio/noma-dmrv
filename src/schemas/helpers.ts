@@ -176,6 +176,15 @@ export const requiredDateOnly = z.union([
     const date = dateOnly
       ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
       : new Date(val);
+    if (
+      dateOnly &&
+      (date.getFullYear() !== Number(dateOnly[1]) ||
+        date.getMonth() !== Number(dateOnly[2]) - 1 ||
+        date.getDate() !== Number(dateOnly[3]))
+    ) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      return z.NEVER;
+    }
     if (isNaN(date.getTime())) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
       return z.NEVER;

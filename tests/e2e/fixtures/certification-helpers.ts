@@ -480,6 +480,12 @@ export async function seedUngroupedReadyBatchWithChain(
   testRunId: string,
 ): Promise<SeededReadyBatch> {
   const { db, pool } = createDbConnection();
+  let originalFeedstockMasses:
+    | {
+        truckMassOnArrivalKg: number | null;
+        truckMassOnDepartureKg: number | null;
+      }
+    | undefined;
   const id = {
     productionRun: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
@@ -518,6 +524,14 @@ export async function seedUngroupedReadyBatchWithChain(
   });
 
   try {
+    [originalFeedstockMasses] = await db
+      .select({
+        truckMassOnArrivalKg: schema.feedstocks.truckMassOnArrivalKg,
+        truckMassOnDepartureKg: schema.feedstocks.truckMassOnDepartureKg,
+      })
+      .from(schema.feedstocks)
+      .where(eq(schema.feedstocks.id, refs.feedstockId));
+
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
         id: id.productionRun,
@@ -715,8 +729,10 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .update(schema.feedstocks)
             .set({
-              truckMassOnArrivalKg: null,
-              truckMassOnDepartureKg: null,
+              truckMassOnArrivalKg:
+                originalFeedstockMasses?.truckMassOnArrivalKg ?? null,
+              truckMassOnDepartureKg:
+                originalFeedstockMasses?.truckMassOnDepartureKg ?? null,
             })
             .where(eq(schema.feedstocks.id, refs.feedstockId));
           await tx

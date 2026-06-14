@@ -45,4 +45,16 @@ describe("production run date-only handling", () => {
     expect(formatLocalDate(parsed.date as Date)).toBe(RUN_DATE);
     expect(formatLocalDate(new Date(RUN_DATE))).toBe("2026-06-12");
   });
+
+  it("rejects overflowed calendar dates", () => {
+    const parsed = createProductionRunSchema.safeParse({
+      facilityId: FACILITY_ID,
+      date: "2026-02-31",
+      reactorId: REACTOR_ID,
+      status: "draft",
+      startTime: "10:00",
+    });
+
+    expect(parsed.success).toBe(false);
+  });
 });
