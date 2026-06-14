@@ -18,7 +18,7 @@ test.describe("Dashboard (Phase 5)", () => {
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
 
     await expect(
-      page.getByRole("heading", { name: /Carbon removal/i }),
+      page.getByRole("heading", { name: seededData.facility.name }),
     ).toBeVisible();
 
     // 5-card KPI strip
@@ -33,7 +33,7 @@ test.describe("Dashboard (Phase 5)", () => {
     // Panels
     await expect(page.getByText("Record checks")).toBeVisible();
     await expect(page.getByText("Feedstock mix")).toBeVisible();
-    await expect(page.getByText("Custody flow")).toBeVisible();
+    await expect(page.getByText("Pipeline")).toBeVisible();
 
     // Period toggle switches the active segment
     const ytd = page.getByRole("button", { name: "YTD" });

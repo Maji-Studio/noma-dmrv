@@ -474,6 +474,33 @@ Browser retest:
 
 ## Phase 4 - Restore Full Browser E2E Green
 
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Restored the red browser/E2E clusters without changing product behavior:
+  - Chain of Custody and Carbon Viewer deep links now carry the active `facility=`
+    scope in tests, matching the app's stale/foreign anchor clearing behavior.
+  - Chain tests now follow the current node side-sheet and `Trace rollback`
+    interactions instead of obsolete direct-link assumptions.
+  - Dashboard assertions now expect the active facility heading and the `Pipeline`
+    panel label.
+  - Certification Settings tests target the ARIA `tab` controls and the current
+    Settings-based facility/project management surface.
+  - Applications CRUD uses the DataTable row's keyboard activation path, avoiding
+    flaky pointer hits on nested interactive row content.
+- Verification run:
+  - Phase 4 targeted E2E cluster: `32 passed`.
+  - `pnpm test:e2e`: `134 passed`, `2 skipped`.
+  - `pnpm typecheck`: passed.
+  - `pnpm lint`: passed with existing warnings only.
+- Browser retested in the in-app browser against `http://localhost:3100`:
+  - Dashboard rendered in facility scope with KPI strip and `Pipeline`.
+  - Chain of Custody rendered the facility-scoped batch selector and empty state.
+  - Certification Settings tabs switched between Connection, Emissions, and
+    Environment without app errors.
+  - Applications rendered the facility-scoped empty state and primary create action.
+
 Known red clusters from today's full run:
 
 - Chain of Custody / Carbon Viewer interactions.
@@ -600,5 +627,6 @@ Before declaring the execution complete:
 10. Add certification immutability below application. Completed 2026-06-14 with
    upstream lineage guards for submitted Removal and GHG Statement artifacts.
 11. Resolve certification policy issues #245, #246, #247 and implement the decisions.
-12. Restore full E2E green.
+12. Restore full E2E green. Completed 2026-06-14 with full E2E green and
+   in-app browser retest.
 13. Sweep UX and accessibility consistency.

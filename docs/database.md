@@ -166,6 +166,14 @@ When a migration is destructive, document the rationale in the related feature d
 
 `certifier_sources` was removed in `0037`; submission source references are derived at submit time unless a future source-management feature reintroduces local source rows.
 
+`certification_submissions` is also the freeze point for certification source
+data. A blocking ledger status (`draft`, `submitted`, or `accepted`) on a
+Removal, telemetry data upload, or GHG Statement prevents in-place mutation of
+upstream production runs, lab samples, deliveries, biochar products, and
+feedstocks reached through current credit-batch lineage. The guard lives in
+data-access (`certification-lineage-guards.ts`) so browser state and stale UI
+membership cannot bypass it.
+
 ## Sampling Method Enforcement
 
 Sampling method is stored on `reactors.sampling_method`.
