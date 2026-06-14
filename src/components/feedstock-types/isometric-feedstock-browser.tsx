@@ -1,22 +1,20 @@
 /**
  * IsometricFeedstockBrowser
  * Read-only browse of the Isometric registry's feedstock-type catalogue for
- * the feedstock-type form's Isometric tab. Browse-only by design (locked
- * decision: no local record is created from registry entries, no import).
+ * the feedstock-type form's Isometric tab. Selection fills the surrounding
+ * local form; creation still happens only when that form is saved.
  * Gated on the selected facility having a registry link — the catalogue is
  * account-global on Isometric, but browsing it is only meaningful for
  * facilities that participate in certification.
  */
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
   useIsometricFeedstockTypes,
 } from "@/hooks/use-certification";
-import { FormInput } from "@/components/forms";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 
 const settingsHref = (facilityId: string) =>
@@ -31,7 +29,6 @@ export function IsometricFeedstockBrowser({
   onSelect,
   selectedId,
 }: IsometricFeedstockBrowserProps) {
-  const [search, setSearch] = useState("");
   const { facilityId } = useFacilityContext();
   const summary = useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
   const isConnected = !!summary.data?.mapping;
@@ -86,36 +83,22 @@ export function IsometricFeedstockBrowser({
     );
   }
 
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredTypes = normalizedSearch
-    ? catalogue.data.filter((type) => {
-        const reference = type.supplier_reference_id ?? "";
-        return [type.name, type.id, reference].some((value) =>
-          value.toLowerCase().includes(normalizedSearch)
-        );
-      })
-    : catalogue.data;
-
   return (
     <div className="flex flex-col gap-12">
       <p className="body-caption text-[var(--color-text-tertiary)]">
         Choose the certified Isometric feedstock first. Noma will prefill the
         local record, then you finish the category and save.
       </p>
-      <FormInput
-        id="isometric-feedstock-search"
-        type="search"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search certified feedstocks..."
-        aria-label="Search certified feedstocks"
-      />
-      <ul className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]">
-        {filteredTypes.map((type) => (
+      <ul
+        className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]"
+        data-testid="isometric-feedstock-list"
+      >
+        {catalogue.data.map((type) => (
           <li key={type.id}>
             <button
               type="button"
               onClick={() => onSelect?.(type)}
+              data-testid={`isometric-feedstock-option-${type.id}`}
               className="flex w-full items-start justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)]"
               aria-pressed={selectedId === type.id}
             >
@@ -137,12 +120,6 @@ export function IsometricFeedstockBrowser({
           </li>
         ))}
       </ul>
-      {filteredTypes.length === 0 && (
-        <Message>
-          No matching certified feedstock. Add it in Isometric Certify before
-          using it for verified production.
-        </Message>
-      )}
     </div>
   );
 }

@@ -129,31 +129,36 @@ export function TransportLegForm({
         divider={false}
         hint="We record distance and cargo mass; Isometric applies the transport emissions factor."
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-          <FormField
-            id="originName"
-            label="Origin name"
-            error={errors.originName?.message}
-          >
-            <FormInput
+        <div className="flex flex-col gap-16">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+            <FormField
               id="originName"
-              placeholder="e.g. Loading bay A"
-              error={!!errors.originName}
-              {...register("originName")}
-            />
-          </FormField>
-          <FormField
-            id="destinationName"
-            label="Destination name"
-            error={errors.destinationName?.message}
-          >
-            <FormInput
+              label="Origin name"
+              error={errors.originName?.message}
+            >
+              <FormInput
+                id="originName"
+                placeholder="e.g. Loading bay A"
+                error={!!errors.originName}
+                {...register("originName")}
+              />
+            </FormField>
+            <FormField
               id="destinationName"
-              placeholder="e.g. Storage yard"
-              error={!!errors.destinationName}
-              {...register("destinationName")}
-            />
-          </FormField>
+              label="Destination name"
+              error={errors.destinationName?.message}
+            >
+              <FormInput
+                id="destinationName"
+                placeholder="e.g. Storage yard"
+                error={!!errors.destinationName}
+                {...register("destinationName")}
+              />
+            </FormField>
+          </div>
+
+          {/* Origin/destination maps stack full-width — side-by-side cramps
+              each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
             label="Origin position"
@@ -182,6 +187,8 @@ export function TransportLegForm({
             longitudeError={errors.destinationGpsLongitude?.message}
             disabled={isSubmitting}
           />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <DistanceCalcField
             id="distanceKm"
             label="Distance (km)"
@@ -265,6 +272,7 @@ export function TransportLegForm({
               {...register("vehicleType")}
             />
           </FormField>
+          </div>
         </div>
       </FormSection>
 

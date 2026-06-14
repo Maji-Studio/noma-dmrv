@@ -1309,7 +1309,7 @@ is a bug** (this is how the Energy page drifted: bare-text empty state,
 icon-less KPI cards, off-canon grid breakpoints).
 
 ```tsx
-<div className="container-max py-32 flex flex-col gap-32">
+<div className="container-max page-shell">
   {/* 1. Header — area eyebrow → title → one-line subtitle → actions */}
   <PageHeader area="production" title="Orders" subtitle="…" actions={<Button …/>} />
 
@@ -1325,8 +1325,12 @@ icon-less KPI cards, off-canon grid breakpoints).
 
 Rules:
 
-- Container is always `container-max py-32 flex flex-col gap-32` — no custom
-  page padding (Chain of Custody's deviation was fixed in Phase 2).
+- Container is always `container-max page-shell` — no custom page padding
+  (Chain of Custody's deviation was fixed in Phase 2). `page-shell` is the
+  flex-column vertical rhythm (`globals.css`): it replaces the old literal
+  `py-32 flex flex-col gap-32` and scales the section gap + vertical padding
+  responsively — **20px mobile → 24px tablet (≥768px) → 32px desktop (≥1024px)**
+  — so pages don't carry a fixed 32px gap on small screens.
 - KPI strips: `gap-24` grid, `md:grid-cols-2 lg:grid-cols-3` (3 cards) or
   `lg:grid-cols-4` (4 cards). StatCards always have an icon.
 - Empty, "select a facility", and filtered-empty states use `EmptyState` —
@@ -1339,7 +1343,12 @@ Rules:
 - Side sheets: header title = entity code (or `Create X` in create mode —
   **no filler subtitle in create mode**); view/edit subtitle = identifying
   secondary (name or date). Sections inside sheets use `FormSection`
-  (forms) / `DetailSection` (read-only) — see `docs/forms.md`.
+  (forms) / `DetailSection` (read-only) — see `docs/forms.md`. The panel is
+  `w-full` below `sm` (full-screen on phones), then locks to its size token
+  (`narrow`/`default`/`wide`/`full`) at `sm`+. Read-only `DetailRow` pairs
+  stack to one column below `sm` and sit side-by-side at `sm`+ so long values
+  (codes, names) get the full width on a phone instead of a wrapping
+  half-column.
 
 **The one sanctioned exception is the Dashboard** (visual design plan,
 Phase 5): it keeps the container/gap shell but opens with the mock's display

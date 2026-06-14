@@ -52,6 +52,13 @@ const MAX_NOW_ITEMS = 8;
 /** A completed run stops being "now" after this many days. */
 const NOW_COMPLETED_LOOKBACK_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const EVIDENCE_METHOD_VISUAL = "visual";
+const EVIDENCE_METHOD_BOUNDARY = "boundary";
+const ENTITY_TYPE_APPLICATION = "application";
+const DOC_TYPE_PHOTO = "photo";
+const DOC_TYPE_PDF = "pdf";
+const UPLOAD_STATUS_UPLOADED = "uploaded";
+const GEOTAG_STATUS_PRESENT = "present";
 
 export type DashboardNowKind = "production" | "registry" | "verifier";
 export type DashboardNowStatus = "running" | "complete" | "submitted" | "locked";
@@ -113,6 +120,12 @@ function toDateOnly(date: Date): string {
 
 function facilityHref(path: string, facilityId: string): string {
   return `${path}?facility=${encodeURIComponent(facilityId)}`;
+}
+
+function productionRunHref(facilityId: string, productionRunId: string): string {
+  return `/production-runs?facility=${encodeURIComponent(
+    facilityId,
+  )}&run=${encodeURIComponent(productionRunId)}`;
 }
 
 function removalHref(facilityId: string, removalId: string): string {
@@ -218,6 +231,13 @@ interface SubmissionRow {
   periodEndOn: string | null;
 }
 
+interface SubmissionProgressCounts {
+  removalTotal: number;
+  removalNeedsAttention: number;
+  statementTotal: number;
+  statementNeedsAttention: number;
+}
+
 /** Latest submission row per local entity (highest version wins). */
 function latestSubmission(submissionType: string, localEntityType: string) {
   return db
@@ -241,6 +261,46 @@ function latestSubmission(submissionType: string, localEntityType: string) {
       certificationSubmissions.localEntityId,
       desc(certificationSubmissions.version),
     );
+}
+
+async function loadSubmissionProgressCounts(
+  facilityId: string,
+): Promise<SubmissionProgressCounts> {
+  const removalLatest = latestSubmission("removal", "removal").as(
+    "latest_removal_submission",
+  );
+  const statementLatest = latestSubmission("ghg_statement", "ghgStatement").as(
+    "latest_statement_submission",
+  );
+
+  const [[removalCounts], [statementCounts]] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`count(${certifierRemovals.id})::int`,
+        needsAttention: sql<number>`coalesce(sum(case when ${removalLatest.status} is null or ${removalLatest.status} in ('draft', 'rejected') then 1 else 0 end), 0)::int`,
+      })
+      .from(certifierRemovals)
+      .leftJoin(removalLatest, eq(removalLatest.localEntityId, certifierRemovals.id))
+      .where(eq(certifierRemovals.facilityId, facilityId)),
+    db
+      .select({
+        total: sql<number>`count(${certifierGhgStatements.id})::int`,
+        needsAttention: sql<number>`coalesce(sum(case when ${statementLatest.status} in ('submitted', 'rejected') then 1 else 0 end), 0)::int`,
+      })
+      .from(certifierGhgStatements)
+      .leftJoin(
+        statementLatest,
+        eq(statementLatest.localEntityId, certifierGhgStatements.id),
+      )
+      .where(eq(certifierGhgStatements.facilityId, facilityId)),
+  ]);
+
+  return {
+    removalTotal: Number(removalCounts?.total ?? 0),
+    removalNeedsAttention: Number(removalCounts?.needsAttention ?? 0),
+    statementTotal: Number(statementCounts?.total ?? 0),
+    statementNeedsAttention: Number(statementCounts?.needsAttention ?? 0),
+  };
 }
 
 async function loadRemovalRows(facilityId: string): Promise<SubmissionRow[]> {
@@ -372,7 +432,7 @@ function buildNow(args: {
       code: row.code,
       detail: "Running now",
       status: "running",
-      href: facilityHref(`/production-runs/${row.id}`, facilityId),
+      href: productionRunHref(facilityId, row.id),
     });
   }
 
@@ -407,7 +467,7 @@ function buildNow(args: {
       code: row.code,
       detail: `Completed ${row.date}`,
       status: "complete",
-      href: facilityHref(`/production-runs/${row.id}`, facilityId),
+      href: productionRunHref(facilityId, row.id),
     });
   }
 
@@ -420,16 +480,9 @@ function buildNow(args: {
 
 function buildProgress(args: {
   counts: Awaited<ReturnType<typeof loadStatusCounts>>;
-  removalRows: SubmissionRow[];
-  statementRows: SubmissionRow[];
+  submissionProgress: SubmissionProgressCounts;
 }): DashboardProgressStage[] {
-  const { counts } = args;
-  const removalAttention = args.removalRows.filter(
-    (row) => !row.status || row.status === "draft" || row.status === "rejected",
-  ).length;
-  const statementAttention = args.statementRows.filter(
-    (row) => row.status === "submitted" || row.status === "rejected",
-  ).length;
+  const { counts, submissionProgress } = args;
 
   return [
     {
@@ -497,15 +550,15 @@ function buildProgress(args: {
     {
       key: "removals",
       label: "Removals",
-      total: args.removalRows.length,
-      needsAttention: removalAttention,
+      total: submissionProgress.removalTotal,
+      needsAttention: submissionProgress.removalNeedsAttention,
       href: "/certification/removals",
     },
     {
       key: "statements",
       label: "GHG statements",
-      total: args.statementRows.length,
-      needsAttention: statementAttention,
+      total: submissionProgress.statementTotal,
+      needsAttention: submissionProgress.statementNeedsAttention,
       href: "/certification/ghg-statements",
     },
   ];
@@ -518,32 +571,31 @@ function buildProgress(args: {
 async function loadGpsGapCounts(facilityId: string) {
   const applicationEvidenceGap = or(
     and(
-      eq(applications.evidenceMethod, "visual"),
+      eq(applications.evidenceMethod, EVIDENCE_METHOD_VISUAL),
+      sql`not exists (
+          select 1
+          from ${documents}
+          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
+            and ${documents.entityId} = ${applications.id}
+            and ${documents.documentType} = ${DOC_TYPE_PHOTO}
+            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
+            and ${documents.metadata}->>'geotagStatus' = ${GEOTAG_STATUS_PRESENT}
+        )`,
+    )!,
+    and(
+      eq(applications.evidenceMethod, EVIDENCE_METHOD_BOUNDARY),
       or(
-        isNull(applications.gpsLatitude),
-        isNull(applications.gpsLongitude),
+        isNull(applications.gisBoundaryReference),
+        sql`trim(${applications.gisBoundaryReference}::text) = ''`,
         sql`not exists (
           select 1
           from ${documents}
-          where ${documents.entityType} = 'application'
+          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
             and ${documents.entityId} = ${applications.id}
-            and ${documents.documentType} = 'photo'
-            and (${documents.uploadStatus} = 'uploaded' or ${documents.fileUrl} is not null)
-            and ${documents.metadata}->>'geotagStatus' = 'present'
+            and ${documents.documentType} = ${DOC_TYPE_PDF}
+            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
         )`,
       )!,
-    )!,
-    and(
-      eq(applications.evidenceMethod, "boundary"),
-      isNull(applications.gisBoundaryReference),
-      sql`not exists (
-        select 1
-        from ${documents}
-        where ${documents.entityType} = 'application'
-          and ${documents.entityId} = ${applications.id}
-          and ${documents.documentType} = 'pdf'
-          and (${documents.uploadStatus} = 'uploaded' or ${documents.fileUrl} is not null)
-      )`,
     )!,
   );
 
@@ -583,7 +635,7 @@ async function loadGpsGapCounts(facilityId: string) {
   return {
     missingFacilityGps: Number(facilityGps?.count ?? 0),
     missingFeedstockGps: Number(feedstockGps?.count ?? 0),
-    missingApplicationGps: Number(applicationGps?.count ?? 0),
+    missingApplicationEvidence: Number(applicationGps?.count ?? 0),
   };
 }
 
@@ -705,9 +757,9 @@ function buildEvidence(args: {
       href: facilityHref("/feedstocks", facilityId),
     },
     {
-      key: "application-gps",
-      label: "Application GPS missing",
-      count: gpsGaps.missingApplicationGps,
+      key: "application-evidence",
+      label: "Application evidence gaps",
+      count: gpsGaps.missingApplicationEvidence,
       href: facilityHref("/applications", facilityId),
     },
     {
@@ -854,6 +906,7 @@ export async function getDashboardOperations(
     recentCompletedRuns,
     removalRows,
     statementRows,
+    submissionProgress,
     gpsGaps,
     runsWithoutSamples,
     transportGaps,
@@ -864,6 +917,7 @@ export async function getDashboardOperations(
     loadRecentCompletedRuns(facilityId, completedSince),
     loadRemovalRows(facilityId),
     loadStatementRows(facilityId),
+    loadSubmissionProgressCounts(facilityId),
     loadGpsGapCounts(facilityId),
     loadRunsWithoutSamplesCount(facilityId),
     loadTransportGapTotals(facilityId),
@@ -879,7 +933,7 @@ export async function getDashboardOperations(
       removalRows,
       statementRows,
     }),
-    progress: buildProgress({ counts, removalRows, statementRows }),
+    progress: buildProgress({ counts, submissionProgress }),
     evidence: buildEvidence({
       facilityId,
       gpsGaps,

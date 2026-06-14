@@ -109,6 +109,7 @@ export function GhgStatementSubmitDialog({
           <FormField
             id="reportUrl"
             label="Report URL"
+            helperText="Link to the published PDF report the verifier will open."
             required
             error={errors.reportUrl?.message}
           >
@@ -125,6 +126,7 @@ export function GhgStatementSubmitDialog({
             <FormField
               id="summaryOfChanges"
               label="Summary of changes"
+              helperText="What you changed since the last submission, for the verifier."
               required
               error={errors.summaryOfChanges?.message}
             >

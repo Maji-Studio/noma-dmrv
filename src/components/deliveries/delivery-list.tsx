@@ -18,6 +18,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   useCreateDelivery,
   useDeleteDelivery,
@@ -32,18 +33,12 @@ import type {
 } from "@/schemas/deliveries";
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { formatSafeDate } from "@/lib/format-utils";
 
 // ============================================
 // Helper Functions
 // ============================================
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function formatMass(value: number | null): string {
   if (value === null || value === undefined) return "—";
@@ -72,7 +67,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <Calendar size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatDate(row.original.deliveryDate)}</span>
+          <span>{formatSafeDate(row.original.deliveryDate)}</span>
         </div>
       ),
     },
@@ -109,6 +104,15 @@ function createColumns(
       header: "Status",
       cell: ({ row }) => (
         <StatusBadge status={row.original.status} />
+      ),
+    },
+    {
+      id: "certifyReadiness",
+      header: "Certifier",
+      cell: ({ row }) => (
+        <EntityCertifyReadinessBadge
+          readiness={deriveEntityCertifyReadiness("delivery", row.original)}
+        />
       ),
     },
     {
@@ -265,7 +269,7 @@ export function DeliveryList() {
       : sideSheetEntity?.customerName || sideSheetEntity?.orderCode || undefined;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="distribution"
         title="Deliveries"
@@ -358,11 +362,22 @@ export function DeliveryList() {
                   title: "General",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery Date", value: formatSafeDate(sideSheetEntity.deliveryDate) },
                     {
                       label: "Status",
                       value: (
                         <StatusBadge status={sideSheetEntity.status} />
+                      ),
+                    },
+                    {
+                      label: "Certifier",
+                      value: (
+                        <EntityCertifyReadinessBadge
+                          readiness={deriveEntityCertifyReadiness(
+                            "delivery",
+                            sideSheetEntity,
+                          )}
+                        />
                       ),
                     },
                   ],

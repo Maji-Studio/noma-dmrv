@@ -8,6 +8,7 @@ import { db } from "@/db";
 import {
   customers,
   customerLocations,
+  orders,
   type Customer,
   type CustomerLocation,
 } from "@/db/schema";
@@ -428,13 +429,25 @@ export async function deleteCustomer(
     throw new SafeError("Customer not found");
   }
 
-  // Check for associated locations
-  const [locationCount] = await db
-    .select({ count: count() })
-    .from(customerLocations)
-    .where(eq(customerLocations.customerId, customerId));
+  const [[{ value: locationCount }], [{ value: orderCount }]] =
+    await Promise.all([
+      db
+        .select({ value: count() })
+        .from(customerLocations)
+        .where(eq(customerLocations.customerId, customerId)),
+      db
+        .select({ value: count() })
+        .from(orders)
+        .where(eq(orders.customerId, customerId)),
+    ]);
 
-  if (Number(locationCount.count) > 0) {
+  if (Number(orderCount) > 0) {
+    throw new SafeError(
+      "Cannot delete customer with orders. Cancel or reassign those orders first."
+    );
+  }
+
+  if (Number(locationCount) > 0) {
     throw new SafeError(
       "Cannot delete customer with associated locations. Remove locations first."
     );

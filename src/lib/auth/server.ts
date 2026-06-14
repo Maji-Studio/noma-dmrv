@@ -3,6 +3,9 @@
  * For use in Server Components and Server Actions
  */
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import {
   getBetterAuthSession,
@@ -18,11 +21,29 @@ import type { AuthUser } from "./providers/better-auth-client";
 export async function getUser(): Promise<AuthUser | null> {
   const session = await getBetterAuthSession();
 
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return null;
   }
 
-  return mapBetterAuthUser(session.user);
+  const [user] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      emailVerified: users.emailVerified,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  if (!user) {
+    return null;
+  }
+
+  return mapBetterAuthUser(user);
 }
 
 /**

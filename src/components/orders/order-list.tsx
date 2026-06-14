@@ -20,10 +20,7 @@ import { useToast } from "@/components/ui/toast";
 import { OrderForm } from "./order-form";
 import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
 import type { OrderWithRelations } from "@/data-access/orders";
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
+import { formatSafeDate } from "@/lib/format-utils";
 
 // ============================================
 // Column Definitions
@@ -42,7 +39,7 @@ function createColumns(
     {
       accessorKey: "orderDate",
       header: "Date",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatDate(row.original.orderDate)}</span>,
+      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatSafeDate(row.original.orderDate)}</span>,
     },
     {
       id: "customer",
@@ -222,7 +219,7 @@ export function OrderList() {
       : sideSheetEntity?.customerName || undefined;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="distribution"
         title="Orders"
@@ -292,7 +289,7 @@ export function OrderList() {
                   title: "General",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
+                    { label: "Order Date", value: formatSafeDate(sideSheetEntity.orderDate) },
                   ],
                 },
                 {

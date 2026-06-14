@@ -10,3 +10,15 @@ export class SafeError extends Error {
     this.name = "SafeError";
   }
 }
+
+/**
+ * Convert an arbitrary server-side error into a client-safe action message.
+ * Only intentional SafeError messages cross the server/client boundary.
+ */
+export function toActionError(
+  error: unknown,
+  fallbackMessage: string,
+): string {
+  if (error instanceof SafeError) return error.message;
+  return fallbackMessage;
+}

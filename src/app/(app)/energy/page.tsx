@@ -7,7 +7,7 @@ import { EnergySummary } from "@/components/energy/energy-summary";
 
 export default function EnergyPage() {
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <EnergySummary />
     </div>
   );

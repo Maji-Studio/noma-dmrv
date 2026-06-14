@@ -111,12 +111,12 @@ export const creditBatchFormSchema = z
       .nullable(),
     totalCo2eEmissionsTons: z
       .number()
-      .min(0, "CO2e emissions must be positive")
+      .min(0, "CO₂e emissions must be positive")
       .optional()
       .nullable(),
     totalCo2eCounterfactualTons: z
       .number()
-      .min(0, "CO2e counterfactual must be positive")
+      .min(0, "CO₂e counterfactual must be positive")
       .optional()
       .nullable(),
     bufferPoolPercent: z

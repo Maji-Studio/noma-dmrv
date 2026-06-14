@@ -4,7 +4,7 @@
  * Covers two behaviours that the Phase 1 plan deferred:
  *  - N facilities can map to the same Isometric project (validates the
  *    dropped `certifier_projects_provider_external_unique` constraint
- *    end-to-end through the side-sheet view-mode UI).
+ *    end-to-end through Certification Settings).
  *  - Unlinking is refused when the facility has any
  *    `certificationSubmissions` row (validates the SafeError surfaced
  *    by `UnlinkConfirmDialog`).
@@ -87,18 +87,11 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
         ]);
       });
 
-      await page.goto("/facilities");
-      await expect(page.getByText("Active Facilities")).toBeVisible({
-        timeout: 15000,
-      });
-
-      await openFacilityCard(page, facilityF1.code);
+      await openCertificationSettings(page, facilityF1.id);
       await assertCertifierLinked(page, sharedProjectId);
-      await closeSideSheet(page);
 
-      await openFacilityCard(page, facilityF2.code);
+      await openCertificationSettings(page, facilityF2.id);
       await assertCertifierLinked(page, sharedProjectId);
-      await closeSideSheet(page);
 
       const rows = await db
         .select({
@@ -174,20 +167,12 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
         });
       });
 
-      await page.goto("/facilities");
-      await expect(page.getByText("Active Facilities")).toBeVisible({
-        timeout: 15000,
+      await openCertificationSettings(page, facility.id);
+      await page.getByRole("button", { name: "Unlink", exact: true }).click();
+
+      const confirmDialog = page.getByRole("dialog", {
+        name: "Unlink Isometric project",
       });
-      await openFacilityCard(page, facility.code);
-
-      const sideSheet = page.locator('[role="dialog"]').first();
-      await sideSheet
-        .getByRole("button", { name: "Unlink", exact: true })
-        .click();
-
-      const confirmDialog = page.locator(
-        'dialog[aria-labelledby="unlink-dialog-title"]',
-      );
       await expect(confirmDialog).toBeVisible({ timeout: 5000 });
 
       await confirmDialog
@@ -222,47 +207,31 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
   });
 });
 
-async function openFacilityCard(
+async function openCertificationSettings(
   page: import("@playwright/test").Page,
-  facilityCode: string,
+  facilityId: string,
 ) {
-  const searchBox = page.getByPlaceholder(/Search facilities/i);
-  await searchBox.fill(facilityCode);
-  await page.waitForTimeout(500);
-
-  const card = page.locator("article").filter({ hasText: facilityCode });
-  await expect(card).toBeVisible({ timeout: 10000 });
-  await card.click();
-
-  await page.waitForSelector('[role="dialog"]', {
-    state: "visible",
-    timeout: 10000,
-  });
-}
-
-async function closeSideSheet(page: import("@playwright/test").Page) {
-  await page.keyboard.press("Escape");
-  await page.waitForSelector('[role="dialog"]', {
-    state: "hidden",
-    timeout: 10000,
-  });
+  await page.goto(`/certification/settings?facility=${facilityId}`);
+  await expect(
+    page.getByRole("heading", { name: "Settings", level: 1 }),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.getByRole("heading", {
+      name: "Registry connection — Isometric",
+      level: 2,
+    }),
+  ).toBeVisible();
 }
 
 async function assertCertifierLinked(
   page: import("@playwright/test").Page,
   externalProjectId: string,
 ) {
-  const sideSheet = page.locator('[role="dialog"]').first();
-  await expect(sideSheet.getByText("Certification", { exact: true })).toBeVisible({
+  await expect(page.getByText(externalProjectId).first()).toBeVisible({
     timeout: 10000,
   });
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
   await expect(
-    sideSheet.getByText(externalProjectId, { exact: true }),
-  ).toBeVisible({ timeout: 10000 });
-  await expect(
-    sideSheet.getByRole("button", { name: "Edit", exact: true }),
-  ).toBeVisible();
-  await expect(
-    sideSheet.getByRole("button", { name: "Unlink", exact: true }),
+    page.getByRole("button", { name: "Unlink", exact: true }),
   ).toBeVisible();
 }
