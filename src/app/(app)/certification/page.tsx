@@ -7,6 +7,7 @@
  * the active facility scope.
  */
 import { redirect } from "next/navigation";
+import { certificationRemovalsHref } from "@/lib/certification/links";
 
 export default async function CertificationHomeRedirect({
   searchParams,
@@ -14,18 +15,5 @@ export default async function CertificationHomeRedirect({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(sp)) {
-    if (Array.isArray(value)) {
-      for (const entry of value) {
-        params.append(key, entry);
-      }
-    } else if (value !== undefined) {
-      params.set(key, value);
-    }
-  }
-
-  const query = params.toString();
-  redirect(`/certification/removals${query ? `?${query}` : ""}`);
+  redirect(certificationRemovalsHref(sp));
 }

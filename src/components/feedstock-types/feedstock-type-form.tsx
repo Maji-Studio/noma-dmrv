@@ -11,7 +11,6 @@ import { FormActions } from "@/components/forms/form-actions";
 import {
   feedstockTypeFormSchema,
   BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
-  FEEDSTOCK_TYPE_USAGE_OPTIONS,
   PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
   feedstockCategories,
   feedstockTypeUsages,
@@ -21,6 +20,13 @@ import {
 import type { FeedstockType } from "@/db/schema/feedstock";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
+import {
+  feedstockTypeUsageOptionsFor,
+  isometricFeedstockRegistryRef,
+  shouldClearCategoryForIsometricSelection,
+  shouldSetUsageToPyrolysisForIsometricSelection,
+  shouldShowIsometricFeedstockSection,
+} from "./feedstock-type-form-logic";
 
 // General = the local record (the only editable surface). Isometric =
 // read-only browse of the registry catalogue. Selecting a registry row pre-fills
@@ -48,7 +54,6 @@ const getPanelId = (key: SectionKey) => `feedstock-type-panel-${key}`;
 
 const CERTIFIED_FEEDSTOCK_WARNING =
   "Only feedstock types that exist in Isometric can pass verification. If this material is missing from the registry catalogue, create or approve it in Certify before using it for certified production.";
-const ISOMETRIC_FEEDSTOCK_REF_PREFIX = "isometric:feedstock_type:";
 
 interface FeedstockTypeFormProps {
   feedstockType?: FeedstockType;
@@ -80,10 +85,9 @@ export function FeedstockTypeForm({
   // Fetch the registry browser lazily on first open; React Query keeps the
   // catalogue warm if the operator switches sections.
   const [hasOpenedIsometric, setHasOpenedIsometric] = useState(false);
-  const sections =
-    lockUsage && defaultUsage === "blend"
-      ? SECTIONS.filter((section) => section.key === "general")
-      : SECTIONS;
+  const sections = shouldShowIsometricFeedstockSection(lockUsage, defaultUsage)
+    ? SECTIONS
+    : SECTIONS.filter((section) => section.key === "general");
 
   const selectSection = (key: SectionKey) => {
     setActiveSection(key);
@@ -131,22 +135,22 @@ export function FeedstockTypeForm({
       ? BLEND_FEEDSTOCK_CATEGORY_OPTIONS
       : PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS;
   const usageOptions =
-    lockUsage && defaultUsage
-      ? FEEDSTOCK_TYPE_USAGE_OPTIONS.filter((option) => option.value === defaultUsage)
-      : FEEDSTOCK_TYPE_USAGE_OPTIONS;
+    feedstockTypeUsageOptionsFor(lockUsage, defaultUsage);
   const selectedIsometricNameChanged =
     !!selectedIsometricFeedstock &&
     selectedName.trim() !== selectedIsometricFeedstock.name.trim();
 
   const handleSelectIsometricFeedstock = (type: IsometricFeedstockType) => {
     setSelectedIsometricFeedstock(type);
-    if (!lockUsage || defaultUsage === "pyrolysis") {
+    if (
+      shouldSetUsageToPyrolysisForIsometricSelection(lockUsage, defaultUsage)
+    ) {
       setValue("usage", "pyrolysis", {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
       });
-      if (selectedUsage !== "pyrolysis") {
+      if (shouldClearCategoryForIsometricSelection(selectedUsage)) {
         setValue("category", "" as FeedstockTypeFormData["category"], {
           shouldDirty: true,
           shouldTouch: true,
@@ -161,7 +165,7 @@ export function FeedstockTypeForm({
     });
     // Until a dedicated external-feedstock-id column lands, keep the selected
     // Isometric id in the existing registry reference field.
-    setValue("registryUrl", `${ISOMETRIC_FEEDSTOCK_REF_PREFIX}${type.id}`, {
+    setValue("registryUrl", isometricFeedstockRegistryRef(type.id), {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,

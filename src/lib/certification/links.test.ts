@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { certificationSettingsHref } from "./links";
+import {
+  certificationRemovalsHref,
+  certificationSettingsHref,
+} from "./links";
 
 describe("certificationSettingsHref", () => {
   it("defaults to the connection tab", () => {
@@ -45,5 +48,59 @@ describe("certificationSettingsHref", () => {
     const href = certificationSettingsHref("facility-id");
     const url = new URL(href, "http://localhost");
     expect(url.searchParams.get("tab")).toBe("connection");
+  });
+});
+
+describe("certificationRemovalsHref", () => {
+  it("redirects to removals without a query when searchParams is empty", () => {
+    expect(certificationRemovalsHref({})).toBe("/certification/removals");
+  });
+
+  it("preserves a single facility param", () => {
+    expect(certificationRemovalsHref({ facility: "fac-abc123" })).toBe(
+      "/certification/removals?facility=fac-abc123",
+    );
+  });
+
+  it("preserves multiple distinct params", () => {
+    const target = certificationRemovalsHref({
+      facility: "fac-1",
+      removal: "rem-2",
+    });
+    const url = new URL(target, "http://localhost");
+    expect(url.searchParams.get("facility")).toBe("fac-1");
+    expect(url.searchParams.get("removal")).toBe("rem-2");
+  });
+
+  it("appends all entries for array-valued params", () => {
+    const target = certificationRemovalsHref({ tag: ["a", "b", "c"] });
+    const url = new URL(target, "http://localhost");
+    expect(url.searchParams.getAll("tag")).toEqual(["a", "b", "c"]);
+  });
+
+  it("filters out undefined-valued params", () => {
+    const target = certificationRemovalsHref({
+      facility: "fac-1",
+      missing: undefined,
+    });
+    const url = new URL(target, "http://localhost");
+    expect(url.searchParams.has("missing")).toBe(false);
+    expect(url.searchParams.get("facility")).toBe("fac-1");
+  });
+
+  it("preserves empty-string params as empty query values", () => {
+    const target = certificationRemovalsHref({
+      facility: "fac-1",
+      empty: "",
+    });
+    const url = new URL(target, "http://localhost");
+    expect(url.searchParams.has("empty")).toBe(true);
+    expect(url.searchParams.get("empty")).toBe("");
+  });
+
+  it("URL-encodes special characters in param values", () => {
+    expect(certificationRemovalsHref({ facility: "my facility/1" })).toContain(
+      "facility=my+facility%2F1",
+    );
   });
 });
