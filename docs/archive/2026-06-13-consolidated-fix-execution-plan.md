@@ -112,6 +112,19 @@ Browser retest:
 
 ## Phase 1 - Security And Correctness Blockers
 
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Production-run date-only create/update parsing uses the shared local-date helper pattern,
+  with focused regressions in `tests/production-run-date-only.test.ts`.
+- Server action error boundaries now have a central `toActionError(...)` helper that
+  preserves `SafeError` messages and suppresses unexpected raw provider/database errors.
+- Storage-location, customer, and delivery deletes have data-access dependency guards with
+  focused regressions in `tests/delete-dependency-guards.test.ts`.
+- Isometric API error bodies are sanitized, persisted on failed sync events where relevant,
+  and summarized through operator-safe `SafeError` copy.
+
 ### 1A. Date-Only Handling
 
 Problem:
@@ -542,6 +555,20 @@ Browser retest:
 This phase should happen after correctness fixes so polish does not mask data issues.
 
 ### Cross-Cutting UI Consistency
+
+Status: Partially completed 2026-06-14.
+
+Completion notes:
+
+- Centralized date-only display handling in `formatSafeDate(...)` so `YYYY-MM-DD` values
+  render as calendar dates without UTC drift.
+- Routed production runs, deliveries, orders, biochar products, applications, application
+  delivery labels, and sample production-run filters through the shared formatter.
+- Added `tests/format-utils.test.ts` for date-only display drift and invalid date handling.
+- Normalized visible credit-batch `CO₂e` labels and related validation copy.
+- Confirmed `?create=true` is already cleared centrally by `useOpenCreateIntent(...)`.
+- Remaining cross-cutting items still need a later pass: row action/pagination audit, sheet
+  CTA order alignment, empty-state CTA de-duplication, and broader status badge semantics.
 
 Fix:
 

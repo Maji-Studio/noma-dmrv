@@ -331,7 +331,7 @@ export function CreditBatchList({
                   : null,
             },
             {
-              label: "Total CO2e Stored",
+              label: "Total CO₂e stored",
               value:
                 sideSheetEntity.co2eStoredPreview?.co2eStoredTonnes != null
                   ? `${sideSheetEntity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO₂e`
@@ -387,7 +387,7 @@ export function CreditBatchList({
           isLoading={isLoading}
         />
         <StatCard
-          title="CO2e Stored"
+          title="CO₂e stored"
           value={hasPendingCo2e ? "Pending" : `${totalCo2e.toFixed(2)} t`}
           icon={<Leaf size={24} weight="bold" />}
           description="Current page carbon stored"

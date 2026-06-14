@@ -5,14 +5,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { parseLocalDateString } from "@/lib/date-utils";
-
-function formatDateField(d: string): string {
-  const dateObj = /^\d{4}-\d{2}-\d{2}$/.test(d)
-    ? parseLocalDateString(d)
-    : new Date(d);
-  return dateObj.toLocaleDateString();
-}
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -46,6 +38,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { formatSafeDate } from "@/lib/format-utils";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
@@ -93,7 +86,7 @@ function createColumns(
     {
       accessorKey: "date",
       header: "Date",
-      cell: ({ row }) => formatDateField(row.original.date),
+      cell: ({ row }) => formatSafeDate(row.original.date),
     },
     {
       id: "facility",
@@ -300,7 +293,7 @@ export function ProductionRunList() {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatDateField(sideSheetEntity.date)
+        ? formatSafeDate(sideSheetEntity.date)
         : undefined;
 
   return (
@@ -435,7 +428,7 @@ export function ProductionRunList() {
             title: "General",
             fields: [
               { label: "Code", value: sideSheetEntity.code },
-              { label: "Date", value: formatDateField(sideSheetEntity.date) },
+              { label: "Date", value: formatSafeDate(sideSheetEntity.date) },
               { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
               {
                 label: "Certifier",

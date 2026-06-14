@@ -3,6 +3,9 @@
  */
 
 import { format, isValid, parseISO } from "date-fns";
+import { parseLocalDateString } from "@/lib/date-utils";
+
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Format a mass value in kg, auto-converting to tonnes when >= 1000.
@@ -37,7 +40,19 @@ export function formatSafeDate(
   fmt = "MMM d, yyyy"
 ): string {
   if (!dateStr) return "—";
-  const date = typeof dateStr === "string" ? parseISO(dateStr) : dateStr;
+  let date: Date;
+
+  try {
+    date =
+      typeof dateStr === "string" && DATE_ONLY_PATTERN.test(dateStr)
+        ? parseLocalDateString(dateStr)
+        : typeof dateStr === "string"
+          ? parseISO(dateStr)
+          : dateStr;
+  } catch {
+    return "—";
+  }
+
   return isValid(date) ? format(date, fmt) : "—";
 }
 

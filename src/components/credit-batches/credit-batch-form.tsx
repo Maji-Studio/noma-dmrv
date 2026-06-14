@@ -482,12 +482,12 @@ export function CreditBatchForm({
       >
         <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-24 gap-y-20 p-20 bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
           <ReadOnlyField
-            label="CO2e emissions"
+            label="CO₂e emissions"
             value={formatTons(creditBatch?.totalCo2eEmissionsTons ?? null)}
             hint="Project emissions"
           />
           <ReadOnlyField
-            label="CO2e counterfactual"
+            label="CO₂e counterfactual"
             value={formatTons(creditBatch?.totalCo2eCounterfactualTons ?? null)}
             hint="Baseline emissions"
           />
