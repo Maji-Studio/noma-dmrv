@@ -74,8 +74,27 @@ All edits are copy/label/helper/grouping only — no behavior change.
   (`data-access/credit-batches.ts`): only the `creditBatchApplications` join
   rows are deleted, not the applications.
 
+### Validation messages (session 2)
+- **Per-field GPS error**: both-or-neither GPS validation now points at the
+  coordinate the operator still needs to enter, instead of the one they already
+  filled. New shared `gpsPairSuperRefine` (`schemas/helpers.ts`) replaces the
+  single-message `.refine(hasCompleteGpsPair, … path:["gpsLatitude"])` on the
+  facility form/update (`schemas/facilities.ts`) and application form/update
+  (`schemas/applications.ts`). Messages: "Longitude is required when a latitude
+  is entered." / "Latitude is required when a longitude is entered." The
+  standalone `gpsCoordinatesRefinement` (path `["gpsCoordinates"]`) was left as
+  is. Schema tests updated (`facilities-schema.test.ts`,
+  `applications-schema.test.ts`) — 9/9 pass.
+
 ## Verified in browser (desktop + mobile)
 
+- **Per-field GPS error (session 2)**: drove the facility create sheet with name
+  + country + timezone + latitude only → the error rendered on the **GPS
+  Longitude** field ("Longitude is required when a latitude is entered."), the
+  filled latitude stayed clean, the old generic message was gone, no console
+  errors. (Note: Zod skips object-level refinements until the base required
+  fields pass — same as before the change — so the GPS error appears once name/
+  country/timezone are valid.)
 - Production-run create form renders cleanly desktop + mobile; KPI cards stack,
   empty state + CTA correct on 390px.
 - Energy page **already** clarifies scope ("All production runs" on each card,
@@ -113,11 +132,11 @@ Verifying against the glossary overrode several agent suggestions:
 - **Biochar-product form** (`biochar-products/biochar-product-form.tsx`): the
   run → mass → bin flow is implicit; would benefit from explicit `FormSection`
   framing ("Where did this biochar come from?" → "How much?" → "Where to?").
-- **Facility GPS error** (`schemas/facilities.ts`): "Both latitude and longitude
-  required" could target the specific missing field.
-- **Reactor sampling-method helper** (`reactors/reactor-form.tsx`): Method B
-  30-sample-minimum message presumes protocol knowledge; add a stable
-  explanatory helper.
+- ~~**Facility GPS error**~~ — **DONE (session 2)**, see Validation above.
+- ~~**Reactor sampling-method helper**~~ — **Resolved as already-clear (session
+  2)**: the dropdown options read "Method A (Every Batch)" / "Method B (Every
+  10th Batch)" (`schemas/reactors.ts`) and the helper already states the
+  requirement and current sample count. No change made.
 - **"Advanced binding → Certification Settings"** link
   (`facility-isometric-connector.tsx`): admin-only; "binding" is borderline
   domain term — reword once confirmed.
@@ -128,9 +147,9 @@ Verifying against the glossary overrode several agent suggestions:
   (operators store biochar not CO₂e; `t` vs `t dry` units; "Feedstock
   processed" / "Pyrolysis yield" / "Applied to soil" wording). Deferred because
   `dashboard-overview.ts` was in the parallel branch's in-flight set.
-- **Vehicle fuel-consumption unit** (`schemas/quick-add.ts`): the main vehicle
-  form is correct (L/100km, max 1000, converts via `lPer100KmToLPerKm`). The
-  **quick-add** path stores `fuelConsumptionLPerKm` with `.max(10)` and relies on
-  the dialog converting L/100km→L/km *before* validation — verify the
-  convert-then-validate order so a realistic entry (e.g. 40 L/100km) isn't
-  rejected.
+- ~~**Vehicle fuel-consumption unit**~~ — **Resolved as a non-issue (session
+  2)**: the quick-add dialog (`forms/entity-select/vehicle-quick-add-dialog.tsx`)
+  embeds the full `VehicleForm`, which validates `fuelConsumptionLPer100Km`
+  (L/100km, max 1000) and converts via `lPer100KmToLPerKm` **after** validation.
+  The `.max(10)` `vehicleQuickAddSchema` is not on the operator-facing path. A
+  realistic entry (e.g. 40 L/100km) is accepted. No change made.
