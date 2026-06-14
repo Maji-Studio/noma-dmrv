@@ -16,78 +16,15 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { useBatchHealth } from "@/hooks/use-certification";
-import type {
-  BatchHealthCheck,
-  BatchHealthCheckKey,
-  BatchHealthFixTarget,
-} from "@/lib/certification/batch-health";
-import { certificationSettingsHref } from "@/lib/certification/links";
+import type { BatchHealthCheck } from "@/lib/certification/batch-health";
+import {
+  batchHealthFixLinkFor,
+  compactBatchHealthDetail,
+  skippedBatchHealthFixLink,
+} from "@/lib/certification/batch-health-links";
 import { InfoHint } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
-
-interface FixLink {
-  label: string;
-  href: string;
-}
-
-const NEXT_ACTION_DETAIL_MAX_CHARS = 180;
-
-function compactDetail(detail: string, maxChars: number): string {
-  if (detail.length <= maxChars) {
-    return detail;
-  }
-  return `${detail.slice(0, maxChars).trimEnd()}…`;
-}
-
-// Where each unmet batch-level check is fixed (design doc §6) — mirrors the
-// full panel's mapping. `batchDetails` resolves on this page: the chip
-// anchors to the read/edit section below.
-function fixLinkFor(check: BatchHealthCheck, facilityId: string): FixLink {
-  const target = check.fixTarget ?? fallbackFixTarget(check.key);
-  switch (target) {
-    case "batchDetails":
-      return {
-        label:
-          check.key === "production" ? "Link applications" : "Edit details",
-        href: "#batch-details",
-      };
-    case "productionRuns":
-      return {
-        label: "Link production data",
-        href: `/production-runs?facility=${facilityId}`,
-      };
-    case "biocharProducts":
-      return {
-        label: "Link production run",
-        href: `/biochar-products?facility=${facilityId}`,
-      };
-    case "deliveries":
-    case "deliveryDistances":
-      return {
-        label: "Review deliveries",
-        href: `/deliveries?facility=${facilityId}`,
-      };
-    case "sourceData":
-      return {
-        label: "Review source data",
-        href: `/production-runs?facility=${facilityId}`,
-      };
-  }
-}
-
-function fallbackFixTarget(key: BatchHealthCheckKey): BatchHealthFixTarget {
-  switch (key) {
-    case "carbon":
-      return "batchDetails";
-    case "production":
-      return "productionRuns";
-    case "transport":
-      return "deliveryDistances";
-    case "entityReadiness":
-      return "sourceData";
-  }
-}
 
 function CheckChip({
   check,
@@ -106,14 +43,9 @@ function CheckChip({
     );
 
   const fix =
-    check.status === "unmet" ? fixLinkFor(check, facilityId) : null;
+    check.status === "unmet" ? batchHealthFixLinkFor(check, facilityId) : null;
   const skippedFix =
-    check.status === "skipped"
-      ? {
-          label: "Finish facility setup",
-          href: certificationSettingsHref(facilityId),
-        }
-      : null;
+    check.status === "skipped" ? skippedBatchHealthFixLink(facilityId) : null;
 
   return (
     <div
@@ -173,13 +105,10 @@ function NextAction({
 }) {
   const fix =
     check.status === "skipped"
-      ? {
-          label: "Finish facility setup",
-          href: certificationSettingsHref(facilityId),
-        }
-      : fixLinkFor(check, facilityId);
+      ? skippedBatchHealthFixLink(facilityId)
+      : batchHealthFixLinkFor(check, facilityId);
   const visibleDetail = check.detail
-    ? compactDetail(check.detail, NEXT_ACTION_DETAIL_MAX_CHARS)
+    ? compactBatchHealthDetail(check.detail)
     : null;
 
   return (
