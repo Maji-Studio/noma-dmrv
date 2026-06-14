@@ -29,18 +29,11 @@ import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import { formatSafeDate } from "@/lib/format-utils";
 
 // ============================================
 // Helpers
 // ============================================
-
-function formatDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function formatMass(massKg: number | null): string {
   if (massKg === null || massKg === undefined) return "\u2014";
@@ -76,7 +69,7 @@ function createColumns(
     {
       accessorKey: "productionDate",
       header: "Production Date",
-      cell: ({ row }) => formatDate(row.original.productionDate),
+      cell: ({ row }) => formatSafeDate(row.original.productionDate),
     },
     {
       id: "facility",
@@ -369,14 +362,14 @@ export function BiocharProductList() {
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Biochar Product" : (displaySideSheet?.entity?.code ?? "")}
-        subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
+        subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatSafeDate(displaySideSheet.entity.productionDate) : undefined)}
         editLabel="Edit Product"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
             title: "Product",
             fields: [
               { label: "Code", value: displaySideSheet.entity.code },
-              { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
+              { label: "Production Date", value: formatSafeDate(displaySideSheet.entity.productionDate) },
               { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
               { label: "Wet Mass", value: formatMass(displaySideSheet.entity.massKg) },
               { label: "Moisture", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : undefined },

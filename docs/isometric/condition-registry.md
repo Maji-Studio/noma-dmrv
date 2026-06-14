@@ -20,7 +20,7 @@ Requiredness levels:
 | `durability.lock_after_verification` | `credit_batches` | `status in (verified, issued)` on `UPDATE` | durability fields become immutable (`durability_option`, durability inputs, durability output) | Planned (not implemented in current migration) |
 | `sample.nutrient_claim` | `samples` | nutrient claim flag = true | nutrient fields required when claim is made | Schema validation only |
 | `documents.metadata_present` | `documents` | document row exists | `metadata` object (non-null) | DB default + schema validation |
-| `documents.photo_video_capture_time` | `documents` | `document_type in (photo, video)` | `captured_at` | DB check + schema validation |
+| `application.evidence_method` | `applications` + `documents` | `evidence_method = visual` or `boundary` | visual: uploaded application photo with `metadata.geotagStatus = present`; boundary: nonblank `gis_boundary_reference` plus uploaded application PDF | Certification readiness check (`buildApplicationEvidenceGaps`) + dashboard evidence health. Upload accepts photos missing EXIF and records the gap in metadata rather than rejecting. |
 | `deliveries.dry_mass_relation` | `deliveries` | `mass_dry_kg` provided | `mass_dry_kg >= 0` and `mass_dry_kg <= delivered_wet_mass_kg` when wet mass exists | DB check + schema validation |
 | `stockpile.exception_ref_required` | `stockpile_events` | `ended_at > started_at + interval '12 months'` | `exception_ref` must be non-null | DB check |
 

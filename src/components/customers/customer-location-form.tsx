@@ -242,7 +242,7 @@ export function CustomerLocationForm({
             label="Distance from facility (km)"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("customerLocation", "distanceFromFacilityKm")}
-            helperText="Road distance from facility to site for certification transport."
+            helperText="Road distance to this site, used for transport emissions."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

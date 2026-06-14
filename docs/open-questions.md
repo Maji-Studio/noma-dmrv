@@ -1149,23 +1149,10 @@ two oversized data-access files. The remainder is still open:
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
 Surfaced by a manual walkthrough of every entity + certification; most findings
-were fixed in that pass and the two below were deferred by product decision. The
+were fixed in that pass and the remaining item below was deferred by product decision. The
 dated run context and the registry counts that prompted these questions are
 archived in
 [docs/archive/2026-06-07-e2e-walkthrough-snapshot.md](archive/2026-06-07-e2e-walkthrough-snapshot.md).
-
-### Production-run Readings: wire-in vs. remove (`production-runs/readings`) — opened 2026-06-07, **deferred**
-
-- `ProductionRunReadingForm` + `ProductionRunReadingTable` (plus the schema and
-  `src/data-access/production-runs` reading queries/hooks) exist but are
-  **imported nowhere**. The only readings UI on the prod-run form is a
-  non-functional CSV stub labelled "UI mock only … not uploaded or saved yet".
-- **Why it matters:** a half-built feature plus a stub that looks functional
-  invites confusion (an operator may believe CSV readings are persisted).
-- **Resolve via:** decide between (a) wire the Reading table/form into the
-  prod-run **edit** sheet like Samples/Incidents and implement real CSV upload
-  + persistence (L), or (b) remove the dead components and the CSV stub (S).
-  Record the decision and remove this entry.
 
 ### Certification view is local-first; doesn't mirror the registry (`isometric/registry-mirror`) — opened 2026-06-07, **deferred**
 

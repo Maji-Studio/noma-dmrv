@@ -1343,7 +1343,12 @@ Rules:
 - Side sheets: header title = entity code (or `Create X` in create mode —
   **no filler subtitle in create mode**); view/edit subtitle = identifying
   secondary (name or date). Sections inside sheets use `FormSection`
-  (forms) / `DetailSection` (read-only) — see `docs/forms.md`.
+  (forms) / `DetailSection` (read-only) — see `docs/forms.md`. The panel is
+  `w-full` below `sm` (full-screen on phones), then locks to its size token
+  (`narrow`/`default`/`wide`/`full`) at `sm`+. Read-only `DetailRow` pairs
+  stack to one column below `sm` and sit side-by-side at `sm`+ so long values
+  (codes, names) get the full width on a phone instead of a wrapping
+  half-column.
 
 **The one sanctioned exception is the Dashboard** (visual design plan,
 Phase 5): it keeps the container/gap shell but opens with the mock's display

@@ -57,13 +57,14 @@ export function OperatorForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="credentials"
-          label="Credentials"
+          label="Role / credentials"
+          hint="The operator's job role or any relevant qualifications and certifications. Optional."
           error={errors.credentials?.message}
         >
           <FormInput
             id="credentials"
             type="text"
-            placeholder="Optional role or certification"
+            placeholder="e.g. Lead operator, lab certification"
             disabled={isSubmitting}
             error={!!errors.credentials}
             {...register("credentials")}

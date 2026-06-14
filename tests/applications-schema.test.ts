@@ -18,8 +18,8 @@ describe("application schemas", () => {
       expect(result.error.issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            path: ["gpsLatitude"],
-            message: "Both latitude and longitude must be provided together",
+            path: ["gpsLongitude"],
+            message: "Longitude is required when a latitude is entered.",
           }),
         ]),
       );
@@ -49,7 +49,7 @@ describe("application schemas", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["gpsLatitude"],
-            message: "Both latitude and longitude must be provided together",
+            message: "Latitude is required when a longitude is entered.",
           }),
         ]),
       );

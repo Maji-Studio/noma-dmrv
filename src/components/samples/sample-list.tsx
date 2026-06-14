@@ -33,6 +33,7 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { formatSafeDate } from "@/lib/format-utils";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -410,7 +411,7 @@ export function SampleList() {
               <option value="">All Production Runs</option>
               {productionRunsData?.items?.map((run) => (
                 <option key={run.id} value={run.id}>
-                  {[run.facilityName, new Date(run.date).toLocaleDateString()].filter(Boolean).join(" - ")}
+                  {[run.facilityName, formatSafeDate(run.date)].filter(Boolean).join(" - ")}
                 </option>
               ))}
             </select>
