@@ -104,6 +104,17 @@ test.describe("Mobile responsiveness (390×844)", () => {
     await hamburger(page).click();
     const drawer = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(drawer).toBeVisible();
+
+    // On a phone the drawer is full-screen width — no sliver of the page peeks
+    // behind the scrim. (`w-full` below `sm`; it locks to a fixed width at
+    // `sm`+ for small tablets, which still see the drawer up to `md`.)
+    const drawerBox = await drawer.boundingBox();
+    expect(drawerBox).not.toBeNull();
+    expect(
+      drawerBox!.width,
+      "nav drawer should fill the phone viewport width",
+    ).toBeGreaterThanOrEqual(MOBILE_VIEWPORT.width - 1);
+
     await expect(drawer.getByRole("link", { name: /Dashboard/i })).toBeVisible();
 
     // Close button dismisses.
