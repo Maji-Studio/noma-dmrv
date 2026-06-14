@@ -63,8 +63,7 @@ export async function getCreditBatchesFn(
     logCreditBatchError("Failed to get credit batches", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to get credit batches",
+      error: toActionError(error, "Failed to get credit batches"),
     };
   }
 }
@@ -91,8 +90,7 @@ export async function getCreditBatchByIdFn(
     logCreditBatchError("Failed to get credit batch", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to get credit batch",
+      error: toActionError(error, "Failed to get credit batch"),
     };
   }
 }
@@ -119,10 +117,7 @@ export async function getCo2eStoredPreviewsFn(
     logCreditBatchError("Failed to get CO2e stored previews", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to get CO2e stored previews",
+      error: toActionError(error, "Failed to get CO2e stored previews"),
     };
   }
 }
@@ -146,10 +141,10 @@ export async function getCreditBatchApplicationOptionsFn(
     logCreditBatchError("Failed to get credit batch application options", error);
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to get credit batch application options",
+      error: toActionError(
+        error,
+        "Failed to get credit batch application options",
+      ),
     };
   }
 }

@@ -116,13 +116,20 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     setFacilityId,
   ]);
 
+  const isResolvingOutOfListSelection = Boolean(
+    facilityId && !hasFacilityInList && isSelectedFacilityLoading
+  );
   const hasSelectedFacility =
     hasFacilityInList || Boolean(facilityId && selectedFacilityFromLookup);
-  const resolvedFacilityId =
-    hasSelectedFacility ? facilityId : facilities[0]?.id ?? null;
-  const selectedFacility =
-    facilities.find((f) => f.id === resolvedFacilityId) ??
-    selectedFacilityFromLookup;
+  const resolvedFacilityId = isResolvingOutOfListSelection
+    ? facilityId
+    : hasSelectedFacility
+      ? facilityId
+      : facilities[0]?.id ?? null;
+  const selectedFacility = isResolvingOutOfListSelection
+    ? undefined
+    : facilities.find((f) => f.id === resolvedFacilityId) ??
+      selectedFacilityFromLookup;
   const availableFacilities =
     selectedFacilityFromLookup && !hasFacilityInList
       ? [selectedFacilityFromLookup, ...facilities]

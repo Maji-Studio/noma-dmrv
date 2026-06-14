@@ -505,7 +505,9 @@ export async function submitGhgStatementToVerifier(
           submissionId: submission.id,
           submissionAttemptId,
           errorName: err instanceof Error ? err.name : typeof err,
-          ...(providerFailure ? { providerFailure } : {}),
+          ...(providerFailure
+            ? { providerStatus: providerFailure.status }
+            : {}),
         },
         "ghg statement submit failed; attempting reconciliation",
       );

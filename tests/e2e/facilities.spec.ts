@@ -133,7 +133,6 @@ test.describe("Facility + Reactor UI CRUD", () => {
     const reactorSearchBox = page.getByPlaceholder(/search/i);
     await reactorSearchBox.click();
     await reactorSearchBox.fill(reactorIdentifier);
-    await page.waitForTimeout(1500);
 
     await expect(
       page.getByRole("button", { name: reactorIdentifier }).first()
