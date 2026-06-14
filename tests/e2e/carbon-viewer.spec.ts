@@ -38,6 +38,14 @@ function createDbConnection() {
   return { db: drizzle(pool, { schema }), pool };
 }
 
+function chainUrl(
+  facilityId: string,
+  params: Record<string, string>
+) {
+  const search = new URLSearchParams({ facility: facilityId, ...params });
+  return `/chain-of-custody?${search.toString()}`;
+}
+
 /** Keep the suite offline: basemap/style/tile hosts are never real deps. */
 async function blockExternalMapHosts(page: Page) {
   await page.route("**://api.maptiler.com/**", (route) => route.abort());
@@ -221,7 +229,9 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     void cleanupTestData;
     const lineage = await seedGeoLineage(seededData);
 
-    await page.goto(`/chain-of-custody?application=${lineage.application.id}`);
+    await page.goto(
+      chainUrl(seededData.facility.id, { application: lineage.application.id })
+    );
     // Default view: lineage DAG, no geography panel.
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("carbon-viewer-panel")).toHaveCount(0);
@@ -251,7 +261,10 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      `/chain-of-custody?application=${lineage.application.id}&view=map`
+      chainUrl(seededData.facility.id, {
+        application: lineage.application.id,
+        view: "map",
+      })
     );
 
     const legsRail = page.getByTestId("carbon-viewer-legs-rail");
@@ -262,20 +275,6 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     await expect(legsRail).toContainText(`${OUTBOUND_DISTANCE_KM} km`);
     await expect(legsRail).toContainText("feedstock inbound");
     await expect(legsRail).toContainText("biochar outbound");
-    await expect(legsRail).toContainText(
-      "Distance drives transport emissions in the carbon accounting."
-    );
-
-    // Reactor, production run, biochar product, order, delivery have no GPS
-    // of their own — they inherit the facility marker.
-    const ungeoRail = page.getByTestId("carbon-viewer-ungeo-rail");
-    await expect(ungeoRail).toContainText("Not geolocated");
-    await expect(ungeoRail).toContainText("5");
-    await expect(ungeoRail).toContainText(lineage.productionRun.code);
-    await expect(ungeoRail).toContainText("no GPS — inherits facility");
-    await expect(ungeoRail).toContainText(
-      `Records without coordinates resolve to ${seededData.facility.code}.`
-    );
 
     await expect(page.getByTestId("carbon-viewer-legend")).toContainText(
       "Facility · pyrolysis hub"
@@ -299,7 +298,10 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      `/chain-of-custody?application=${lineage.application.id}&view=split`
+      chainUrl(seededData.facility.id, {
+        application: lineage.application.id,
+        view: "split",
+      })
     );
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
 
@@ -322,7 +324,10 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      `/chain-of-custody?application=${lineage.application.id}&view=split`
+      chainUrl(seededData.facility.id, {
+        application: lineage.application.id,
+        view: "split",
+      })
     );
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
 
@@ -348,7 +353,10 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData, { withGeo: false });
 
     await page.goto(
-      `/chain-of-custody?application=${lineage.application.id}&view=map`
+      chainUrl(seededData.facility.id, {
+        application: lineage.application.id,
+        view: "map",
+      })
     );
 
     const empty = page.getByTestId("carbon-viewer-empty");

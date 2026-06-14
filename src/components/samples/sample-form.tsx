@@ -366,7 +366,7 @@ export function SampleForm({
                   id="organicCarbonPercent"
                   label="Organic Carbon (%)"
                   error={errors.organicCarbonPercent?.message}
-                  helperText="C_org for stability calculations"
+                  helperText="Used to estimate biochar durability."
                   required
                   certifyRequired={isSampleCertifyField("organicCarbonPercent")}
                 >

@@ -533,7 +533,7 @@ export function ProductionRunForm({
           </span>
           {previewDryMass !== null && (
             <span className="body-small text-[var(--color-text-quaternary)]">
-              = {Number(watchWetMass ?? 0).toFixed(2)} × (1 − {Number(watchMoisture ?? 0).toFixed(2)}%)
+              = {Number(watchWetMass ?? 0).toFixed(2)} kg × (100% − {Number(watchMoisture ?? 0).toFixed(2)}% moisture)
             </span>
           )}
         </div>
@@ -553,7 +553,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="residenceTimeMinutes" label="Residence (min)" error={errors.residenceTimeMinutes?.message}>
+          <FormField id="residenceTimeMinutes" label="Residence Time (min)" error={errors.residenceTimeMinutes?.message}>
             <FormInput
               id="residenceTimeMinutes"
               type="number"
@@ -594,6 +594,11 @@ export function ProductionRunForm({
           "electricityKwh",
         ]}
       >
+
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          These values feed the certification emissions calculation. Enter 0
+          where nothing was used — a blank field reads as missing, not zero.
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -660,10 +665,11 @@ export function ProductionRunForm({
           </p>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-16 gap-y-16">
           <FormField
             id="dieselOperationLiters"
-            label="Diesel Ops (L)"
+            label="Startup / Plant Diesel (L)"
+            hint="Diesel for reactor startup and running on-site plant equipment during this run — not the generator. Shown as “Startup / Plant Diesel” on the Energy page."
             error={errors.dieselOperationLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
           >
@@ -682,7 +688,8 @@ export function ProductionRunForm({
 
           <FormField
             id="dieselGensetLiters"
-            label="Diesel Genset (L)"
+            label="Genset Diesel (L)"
+            hint="Diesel burned by the generator that supplied this run's electricity."
             error={errors.dieselGensetLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselGensetLiters")}
           >
@@ -702,6 +709,7 @@ export function ProductionRunForm({
           <FormField
             id="preprocessingFuelLiters"
             label="Preprocess Fuel (L)"
+            hint="Fuel used to dry, chip, or otherwise prepare the feedstock before pyrolysis."
             error={errors.preprocessingFuelLiters?.message}
             certifyRequired={isProductionRunCertifyField("preprocessingFuelLiters")}
           >
@@ -721,6 +729,7 @@ export function ProductionRunForm({
           <FormField
             id="electricityKwh"
             label="Electricity (kWh)"
+            hint="Grid (or other non-generator) electricity consumed during this run."
             error={errors.electricityKwh?.message}
             certifyRequired={isProductionRunCertifyField("electricityKwh")}
           >

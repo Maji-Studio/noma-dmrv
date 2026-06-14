@@ -112,6 +112,19 @@ Browser retest:
 
 ## Phase 1 - Security And Correctness Blockers
 
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Production-run date-only create/update parsing uses the shared local-date helper pattern,
+  with focused regressions in `tests/production-run-date-only.test.ts`.
+- Server action error boundaries now have a central `toActionError(...)` helper that
+  preserves `SafeError` messages and suppresses unexpected raw provider/database errors.
+- Storage-location, customer, and delivery deletes have data-access dependency guards with
+  focused regressions in `tests/delete-dependency-guards.test.ts`.
+- Isometric API error bodies are sanitized, persisted on failed sync events where relevant,
+  and summarized through operator-safe `SafeError` copy.
+
 ### 1A. Date-Only Handling
 
 Problem:
@@ -279,6 +292,21 @@ Browser retest:
 
 ### 2C. Cross-Parent And Cross-Facility Write Guards
 
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Added data-access guards so order create/update rejects a `customerLocationId` that
+  belongs to a different customer.
+- Chose the cross-facility credit-batch detail behavior: redirect the detail URL to the
+  batch's actual `?facility=` before rendering the edit surface.
+- Added focused regressions:
+  - `tests/order-cross-parent-guard.test.ts`
+  - `tests/e2e/credit-batch-facility-scope.spec.ts`
+- Browser retested with a local authenticated admin session: direct navigation to a
+  credit-batch detail URL with a wrong facility query redirected to the batch facility,
+  rendered the expected batch/facility, and showed no app error boundary.
+
 Problems:
 
 - Orders can accept a `customerLocationId` belonging to a different customer.
@@ -328,6 +356,21 @@ Browser retest:
 - Verify either clear blocking feedback or explicit decoupled-state messaging.
 
 ### 2E. Certification Immutability Below Application
+
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Added a shared data-access lineage guard that re-derives whether an upstream
+  record participates in a credit batch whose Removal or GHG Statement has a
+  blocking certification submission.
+- Guarded production run, sample, delivery, biochar product, and feedstock
+  mutation boundaries, including adding a sample to an already locked production
+  run.
+- Added focused regressions in `tests/certification-lineage-guards.test.ts`
+  covering production run dry-mass edits, production run deletion, sample edits,
+  sample evidence deletion, delivery edits through a verifier-bound GHG
+  Statement, biochar product edits, and feedstock edits.
 
 Problem:
 
@@ -444,6 +487,33 @@ Browser retest:
 
 ## Phase 4 - Restore Full Browser E2E Green
 
+Status: Completed 2026-06-14.
+
+Completion notes:
+
+- Restored the red browser/E2E clusters without changing product behavior:
+  - Chain of Custody and Carbon Viewer deep links now carry the active `facility=`
+    scope in tests, matching the app's stale/foreign anchor clearing behavior.
+  - Chain tests now follow the current node side-sheet and `Trace rollback`
+    interactions instead of obsolete direct-link assumptions.
+  - Dashboard assertions now expect the active facility heading and the `Pipeline`
+    panel label.
+  - Certification Settings tests target the ARIA `tab` controls and the current
+    Settings-based facility/project management surface.
+  - Applications CRUD uses the DataTable row's keyboard activation path, avoiding
+    flaky pointer hits on nested interactive row content.
+- Verification run:
+  - Phase 4 targeted E2E cluster: `32 passed`.
+  - `pnpm test:e2e`: `134 passed`, `2 skipped`.
+  - `pnpm typecheck`: passed.
+  - `pnpm lint`: passed with existing warnings only.
+- Browser retested in the in-app browser against `http://localhost:3100`:
+  - Dashboard rendered in facility scope with KPI strip and `Pipeline`.
+  - Chain of Custody rendered the facility-scoped batch selector and empty state.
+  - Certification Settings tabs switched between Connection, Emissions, and
+    Environment without app errors.
+  - Applications rendered the facility-scoped empty state and primary create action.
+
 Known red clusters from today's full run:
 
 - Chain of Custody / Carbon Viewer interactions.
@@ -485,6 +555,20 @@ Browser retest:
 This phase should happen after correctness fixes so polish does not mask data issues.
 
 ### Cross-Cutting UI Consistency
+
+Status: Partially completed 2026-06-14.
+
+Completion notes:
+
+- Centralized date-only display handling in `formatSafeDate(...)` so `YYYY-MM-DD` values
+  render as calendar dates without UTC drift.
+- Routed production runs, deliveries, orders, biochar products, applications, application
+  delivery labels, and sample production-run filters through the shared formatter.
+- Added `tests/format-utils.test.ts` for date-only display drift and invalid date handling.
+- Normalized visible credit-batch `CO₂e` labels and related validation copy.
+- Confirmed `?create=true` is already cleared centrally by `useOpenCreateIntent(...)`.
+- Remaining cross-cutting items still need a later pass: row action/pagination audit, sheet
+  CTA order alignment, empty-state CTA de-duplication, and broader status badge semantics.
 
 Fix:
 
@@ -563,8 +647,13 @@ Before declaring the execution complete:
 5. Propagate Isometric 400 body safely.
 6. Unify GPS validation and clearing.
 7. Fix active facility after create.
-8. Add cross-parent and state-transition guards.
-9. Resolve certification policy issues #245, #246, #247 and implement the decisions.
-10. Restore full E2E green.
-11. Sweep UX and accessibility consistency.
-
+8. Add cross-parent guards. Completed 2026-06-14 for order customer/location writes and
+   credit-batch detail facility canonicalization.
+9. Resolve production-run state-transition policy issue #254 and implement the chosen
+   `Complete` behavior. Skipped pending product decision.
+10. Add certification immutability below application. Completed 2026-06-14 with
+   upstream lineage guards for submitted Removal and GHG Statement artifacts.
+11. Resolve certification policy issues #245, #246, #247 and implement the decisions.
+12. Restore full E2E green. Completed 2026-06-14 with full E2E green and
+   in-app browser retest.
+13. Sweep UX and accessibility consistency.

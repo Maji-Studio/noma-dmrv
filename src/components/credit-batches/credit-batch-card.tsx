@@ -89,7 +89,7 @@ export function CreditBatchCard({
           </div>
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              CO2e Stored
+              CO₂e stored
             </p>
             <p
               className={`title-heading-3 ${
@@ -106,7 +106,7 @@ export function CreditBatchCard({
         {hasPendingCo2e && (
           <div className="flex items-center justify-between border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] px-12 py-8">
             <span className="body-caption text-[var(--color-text-tertiary)]">
-              CO2e Preview
+              CO₂e preview
             </span>
             <span className="body-small font-medium text-[var(--color-text-secondary)]">
               Pending inputs

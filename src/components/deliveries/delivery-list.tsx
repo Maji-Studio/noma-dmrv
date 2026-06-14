@@ -34,18 +34,11 @@ import type {
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { formatSafeDate } from "@/lib/format-utils";
 
 // ============================================
 // Helper Functions
 // ============================================
-
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function formatMass(value: number | null): string {
   if (value === null || value === undefined) return "—";
@@ -74,7 +67,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <Calendar size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatDate(row.original.deliveryDate)}</span>
+          <span>{formatSafeDate(row.original.deliveryDate)}</span>
         </div>
       ),
     },
@@ -369,7 +362,7 @@ export function DeliveryList() {
                   title: "General",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery Date", value: formatSafeDate(sideSheetEntity.deliveryDate) },
                     {
                       label: "Status",
                       value: (

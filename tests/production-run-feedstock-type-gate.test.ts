@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { createProductionRun } from "@/data-access/production-runs";
+import {
+  createProductionRun,
+  getProductionRunById,
+} from "@/data-access/production-runs";
 import { getEntities } from "@/data-access/entities";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
@@ -180,6 +183,23 @@ describe("createProductionRun — feedstock type usage gate", () => {
     createdRunIds.push(run.id);
 
     expect(run.feedstockStorageLocationId).toBe(pyrolysisBinId);
+  });
+
+  it("does not return archived production runs by id", async () => {
+    const run = await createProductionRun(
+      TEST_USER_ID,
+      baseRunInput("ARCHIVED", pyrolysisBinId),
+    );
+    createdRunIds.push(run.id);
+
+    await db
+      .update(productionRuns)
+      .set({ archivedAt: new Date() })
+      .where(eq(productionRuns.id, run.id));
+
+    await expect(getProductionRunById(TEST_USER_ID, run.id)).rejects.toThrow(
+      "Production run not found",
+    );
   });
 
   it("rejects a source bin holding blend-usage feedstock", async () => {

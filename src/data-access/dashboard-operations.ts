@@ -122,6 +122,12 @@ function facilityHref(path: string, facilityId: string): string {
   return `${path}?facility=${encodeURIComponent(facilityId)}`;
 }
 
+function productionRunHref(facilityId: string, productionRunId: string): string {
+  return `/production-runs?facility=${encodeURIComponent(
+    facilityId,
+  )}&run=${encodeURIComponent(productionRunId)}`;
+}
+
 function removalHref(facilityId: string, removalId: string): string {
   return `/certification/removals?facility=${encodeURIComponent(
     facilityId,
@@ -426,7 +432,7 @@ function buildNow(args: {
       code: row.code,
       detail: "Running now",
       status: "running",
-      href: facilityHref(`/production-runs/${row.id}`, facilityId),
+      href: productionRunHref(facilityId, row.id),
     });
   }
 
@@ -461,7 +467,7 @@ function buildNow(args: {
       code: row.code,
       detail: `Completed ${row.date}`,
       status: "complete",
-      href: facilityHref(`/production-runs/${row.id}`, facilityId),
+      href: productionRunHref(facilityId, row.id),
     });
   }
 

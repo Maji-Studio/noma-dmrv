@@ -7,7 +7,6 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
 import { MapPin, Plus, Leaf } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -41,6 +40,7 @@ import {
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { formatSafeDate } from "@/lib/format-utils";
 
 // ============================================
 // Column Definitions
@@ -62,7 +62,7 @@ function createColumns(
       accessorKey: "applicationDate",
       header: "Date",
       cell: ({ row }) => (
-        <span>{format(new Date(row.original.applicationDate), "MMM d, yyyy")}</span>
+        <span>{formatSafeDate(row.original.applicationDate)}</span>
       ),
     },
     {
@@ -261,7 +261,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy")
+        ? formatSafeDate(sideSheetEntity.applicationDate)
         : undefined;
 
   return (
@@ -369,7 +369,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               { label: "Code", value: sideSheetEntity.code },
               {
                 label: "Application Date",
-                value: format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy"),
+                value: formatSafeDate(sideSheetEntity.applicationDate),
               },
               {
                 label: "Status",

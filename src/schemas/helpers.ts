@@ -69,6 +69,33 @@ export function hasCompleteGpsPair(data: {
   return hasLat === hasLng;
 }
 
+/**
+ * Both-or-neither GPS validation that points the error at the coordinate the
+ * operator still needs to enter — not the one they already filled, which the
+ * old single-message refine did. Use via `.superRefine(gpsPairSuperRefine)` on
+ * any schema carrying `gpsLatitude` / `gpsLongitude`.
+ */
+export function gpsPairSuperRefine(
+  data: { gpsLatitude?: number | null; gpsLongitude?: number | null },
+  ctx: z.RefinementCtx,
+): void {
+  const hasLat = data.gpsLatitude != null;
+  const hasLng = data.gpsLongitude != null;
+  if (hasLat && !hasLng) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gpsLongitude"],
+      message: "Longitude is required when a latitude is entered.",
+    });
+  } else if (hasLng && !hasLat) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gpsLatitude"],
+      message: "Latitude is required when a longitude is entered.",
+    });
+  }
+}
+
 // ============================================
 // Zod Preprocessors for Form String → Number Coercion
 // ============================================

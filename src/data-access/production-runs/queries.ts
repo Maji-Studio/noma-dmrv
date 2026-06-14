@@ -304,7 +304,12 @@ export async function getProductionRunById(
     .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
     .leftJoin(reactors, eq(productionRuns.reactorId, reactors.id))
     .leftJoin(operators, eq(productionRuns.operatorId, operators.id))
-    .where(eq(productionRuns.id, productionRunId));
+    .where(
+      and(
+        eq(productionRuns.id, productionRunId),
+        isNull(productionRuns.archivedAt),
+      ),
+    );
 
   if (!run) {
     throw new SafeError("Production run not found");

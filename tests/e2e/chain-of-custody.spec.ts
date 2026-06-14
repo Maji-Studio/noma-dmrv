@@ -14,6 +14,14 @@ function createDbConnection() {
   return { db: drizzle(pool, { schema }), pool };
 }
 
+function chainUrl(
+  facilityId: string,
+  params: Record<string, string> = {}
+) {
+  const search = new URLSearchParams({ facility: facilityId, ...params });
+  return `/chain-of-custody?${search.toString()}`;
+}
+
 async function seedApplicationLineage(seededData: SeededChainData) {
   const { db, pool } = createDbConnection();
   const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
@@ -328,7 +336,7 @@ test.describe("Chain of Custody Visualization", () => {
     const lineage = await seedApplicationLineage(seededData);
 
     await adminPage.goto(
-      `/chain-of-custody?application=${lineage.application.id}`
+      chainUrl(seededData.facility.id, { application: lineage.application.id })
     );
 
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
@@ -364,7 +372,9 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const lineage = await seedApplicationLineage(seededData);
 
-    await adminPage.goto(`/chain-of-custody?application=${lineage.application.id}`);
+    await adminPage.goto(
+      chainUrl(seededData.facility.id, { application: lineage.application.id })
+    );
 
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
@@ -388,7 +398,9 @@ test.describe("Chain of Custody Visualization", () => {
     void cleanupTestData;
     const lineage = await seedApplicationLineage(seededData);
 
-    await adminPage.goto(`/chain-of-custody?application=${lineage.application.id}`);
+    await adminPage.goto(
+      chainUrl(seededData.facility.id, { application: lineage.application.id })
+    );
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
     });
@@ -397,10 +409,11 @@ test.describe("Chain of Custody Visualization", () => {
       '[data-testid="rf__node-reactor:' + seededData.reactor.id + '"]'
     );
     await expect(reactorNode).toBeVisible({ timeout: 10000 });
-    await expect(reactorNode.locator("a").first()).toHaveAttribute(
-      "href",
-      "/reactors"
-    );
+    await reactorNode.click();
+    const sheet = adminPage.locator('[role="dialog"]').first();
+    await expect(sheet.getByRole("heading", { name: seededData.reactor.code })).toBeVisible();
+    await sheet.getByRole("button", { name: "View full record" }).click();
+    await expect(adminPage).toHaveURL(/\/reactors/);
   });
 });
 
@@ -413,7 +426,9 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     void cleanupTestData;
     const batch = await seedBatchChain(seededData);
 
-    await adminPage.goto(`/chain-of-custody?batch=${batch.ids.creditBatch}`);
+    await adminPage.goto(
+      chainUrl(seededData.facility.id, { batch: batch.ids.creditBatch })
+    );
 
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
@@ -455,7 +470,7 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     void cleanupTestData;
     const batch = await seedBatchChain(seededData);
 
-    await adminPage.goto("/chain-of-custody");
+    await adminPage.goto(chainUrl(seededData.facility.id));
     await selectEntity(
       adminPage,
       "chain-batch-select",
@@ -473,6 +488,9 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     // Clicking a member application card drills down, keeping the batch.
     await adminPage
       .locator(`[data-testid="rf__node-application:${batch.ids.applicationA}"]`)
+      .click();
+    await adminPage
+      .getByRole("button", { name: "Trace rollback" })
       .click();
     await expect(adminPage).toHaveURL(
       new RegExp(`application=${batch.ids.applicationA}`)
@@ -503,7 +521,9 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     void cleanupTestData;
     const batch = await seedBatchChain(seededData);
 
-    await adminPage.goto(`/chain-of-custody?batch=${batch.ids.creditBatch}`);
+    await adminPage.goto(
+      chainUrl(seededData.facility.id, { batch: batch.ids.creditBatch })
+    );
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
     });
@@ -544,7 +564,10 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const batch = await seedBatchChain(seededData);
 
     await adminPage.goto(
-      `/chain-of-custody?batch=${batch.ids.creditBatch}&view=sankey`
+      chainUrl(seededData.facility.id, {
+        batch: batch.ids.creditBatch,
+        view: "sankey",
+      })
     );
 
     const sankey = adminPage.getByTestId("batch-sankey");
@@ -580,7 +603,10 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const batch = await seedBatchChain(seededData);
 
     await adminPage.goto(
-      `/chain-of-custody?application=${batch.ids.applicationA}&view=trail`
+      chainUrl(seededData.facility.id, {
+        application: batch.ids.applicationA,
+        view: "trail",
+      })
     );
 
     const trail = adminPage.getByTestId("application-trail");

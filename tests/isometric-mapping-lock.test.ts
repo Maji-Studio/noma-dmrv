@@ -59,6 +59,7 @@ function mockTransaction(stubTx: unknown): void {
 function buildTxStub(opts: {
   lockedRow: LockedRow | null;
   insertReturn?: unknown;
+  submissionLockRow?: unknown;
   updateReturn?: unknown;
 }) {
   const insertCalls: unknown[] = [];
@@ -66,7 +67,19 @@ function buildTxStub(opts: {
 
   const limitMock = vi.fn(() => Promise.resolve(opts.lockedRow ? [opts.lockedRow] : []));
   const forUpdateMock = vi.fn(() => ({ limit: limitMock }));
-  const whereSelectMock = vi.fn(() => ({ for: forUpdateMock }));
+  const submissionLimitMock = vi.fn(() =>
+    Promise.resolve([
+      opts.submissionLockRow ?? {
+        provider: baseInput.provider,
+        localEntityType: baseInput.localEntityType,
+        localEntityId: baseInput.localEntityId,
+      },
+    ]),
+  );
+  const whereSelectMock = vi.fn(() => ({
+    for: forUpdateMock,
+    limit: submissionLimitMock,
+  }));
   const fromMock = vi.fn(() => ({ where: whereSelectMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
@@ -90,7 +103,12 @@ function buildTxStub(opts: {
   const updateMock = vi.fn(() => ({ set: updateSetMock }));
 
   return {
-    tx: { select: selectMock, insert: insertMock, update: updateMock },
+    tx: {
+      execute: vi.fn(() => Promise.resolve()),
+      select: selectMock,
+      insert: insertMock,
+      update: updateMock,
+    },
     insertCalls,
     updateCalls,
   };

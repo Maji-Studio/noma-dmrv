@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
-  GPS_PAIR_MESSAGE,
-  hasCompleteGpsPair,
+  gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
 } from "./helpers";
@@ -107,13 +106,8 @@ const applicationFormBaseSchema = z.object({
 
 });
 
-export const applicationFormSchema = applicationFormBaseSchema.refine(
-  hasCompleteGpsPair,
-  {
-    message: GPS_PAIR_MESSAGE,
-    path: ["gpsLatitude"],
-  }
-);
+export const applicationFormSchema =
+  applicationFormBaseSchema.superRefine(gpsPairSuperRefine);
 
 // ============================================
 // Server Action Schemas
@@ -149,13 +143,7 @@ export const updateApplicationSchema = z.object({
   gisBoundaryReference: z.string().max(255).optional().nullable(),
   soilTemperatureSource: z.enum(soilTemperatureSources).optional().nullable(),
   soilTemperatureC: z.number().min(-50).max(60).optional().nullable(),
-}).refine(
-  hasCompleteGpsPair,
-  {
-    message: GPS_PAIR_MESSAGE,
-    path: ["gpsLatitude"],
-  }
-);
+}).superRefine(gpsPairSuperRefine);
 
 /**
  * Schema for deleting an application

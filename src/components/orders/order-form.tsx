@@ -219,7 +219,7 @@ export function OrderForm({
 
           <FormField
             id="customerLocationId"
-            label="Delivery Location"
+            label="Customer location"
             error={errors.customerLocationId?.message}
           >
             <FormSelect

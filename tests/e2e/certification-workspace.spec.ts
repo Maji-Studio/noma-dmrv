@@ -181,13 +181,13 @@ test.describe("Certification workspace — Settings", { tag: "@live" }, () => {
       // B/C · Admin-only sections live behind tabs (redesign): Connection is the
       // default tab, so switch to each admin tab and assert its section mounts.
       await page
-        .getByRole("button", { name: "Emissions", exact: true })
+        .getByRole("tab", { name: "Emissions", exact: true })
         .click();
       await expect(
         page.getByRole("heading", { name: "Emission estimates", level: 2 }),
       ).toBeVisible();
       await page
-        .getByRole("button", { name: "Environment", exact: true })
+        .getByRole("tab", { name: "Environment", exact: true })
         .click();
       await expect(
         page.getByRole("heading", { name: "Environment & health", level: 2 }),

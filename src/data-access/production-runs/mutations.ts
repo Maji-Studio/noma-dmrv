@@ -22,6 +22,7 @@ import { requireAuth } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
+import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 
 /**
  * Proportionally allocate total mass across feedstock batches stored in a bin.
@@ -379,6 +380,12 @@ export async function updateProductionRun(
     data.feedstockMoisturePercent !== undefined;
 
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "update",
+    );
+
     await tx
       .update(productionRuns)
       .set(updateData)
@@ -458,6 +465,12 @@ export async function deleteProductionRun(
   // transaction the children would already be gone, leaving a half-deleted run.
   // The FK violation propagates out and is caught by the server action.
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "delete",
+    );
+
     await tx
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, productionRunId));

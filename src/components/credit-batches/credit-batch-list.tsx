@@ -331,7 +331,7 @@ export function CreditBatchList({
                   : null,
             },
             {
-              label: "Total CO2e Stored",
+              label: "Total CO₂e stored",
               value:
                 sideSheetEntity.co2eStoredPreview?.co2eStoredTonnes != null
                   ? `${sideSheetEntity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO₂e`
@@ -387,7 +387,7 @@ export function CreditBatchList({
           isLoading={isLoading}
         />
         <StatCard
-          title="CO2e Stored"
+          title="CO₂e stored"
           value={hasPendingCo2e ? "Pending" : `${totalCo2e.toFixed(2)} t`}
           icon={<Leaf size={24} weight="bold" />}
           description="Current page carbon stored"
@@ -545,7 +545,7 @@ export function CreditBatchList({
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingBatchId(null)}
         title="Delete Credit Batch"
-        message="Are you sure you want to delete this credit batch? This action cannot be undone and will remove all associated application links."
+        message="Delete this credit batch? Its applications stay in the system but will be unlinked from this batch, and you can re-link them to another batch later. This can't be undone."
         isPending={deleteCreditBatch.isPending}
       />
 

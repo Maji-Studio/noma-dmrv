@@ -81,7 +81,12 @@ export function MobileNav() {
         <Dialog.Popup
           aria-label="Navigation menu"
           className={cn(
-            "md:hidden fixed top-0 right-0 z-50 h-full w-[304px] max-w-[88vw]",
+            // Full-screen on phones (no sliver of page peeking behind the
+            // scrim); locks to a fixed drawer width at `sm`+ so it isn't an
+            // unwieldy full-bleed sheet on a small tablet (still shown up to
+            // `md`). Mirrors the `w-full sm:w-[Npx]` convention of Modal /
+            // SlideOverPanel. No `max-w` cap — it would clip the full width.
+            "md:hidden fixed top-0 right-0 z-50 h-full w-full sm:w-[360px]",
             "shadow-[-8px_0_32px_rgba(0,0,0,0.4)] outline-none",
             "transition-transform duration-300 ease-out",
             "data-[open]:translate-x-0",

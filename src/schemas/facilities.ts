@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   GPS_PAIR_MESSAGE,
+  gpsPairSuperRefine,
   hasCompleteGpsPair,
   latitudeSchema,
   longitudeSchema,
@@ -176,13 +177,8 @@ const facilityFormBaseSchema = z.object({
   ),
 });
 
-export const facilityFormSchema = facilityFormBaseSchema.refine(
-  hasCompleteGpsPair,
-  {
-    message: GPS_PAIR_MESSAGE,
-    path: ["gpsLatitude"],
-  }
-);
+export const facilityFormSchema =
+  facilityFormBaseSchema.superRefine(gpsPairSuperRefine);
 
 // ============================================
 // Server Action Schemas
@@ -216,13 +212,7 @@ export const updateFacilitySchema = z.object({
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   defaultDurabilityOption: z.enum(durabilityOptions).optional(),
   timezone: z.enum(timezones).optional(),
-}).refine(
-  hasCompleteGpsPair,
-  {
-    message: GPS_PAIR_MESSAGE,
-    path: ["gpsLatitude"],
-  }
-);
+}).superRefine(gpsPairSuperRefine);
 
 /**
  * Schema for archiving a facility (soft delete, cascades to child data)

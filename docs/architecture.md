@@ -204,6 +204,17 @@ keyed `localEntityType:'removal'`, `localEntityId: certifierRemovals.id`
 to `certifier_sync_events` (append-only audit log; never used for
 state). See ADR 0003 for the Removal submission model.
 
+**Source-data immutability:** once a Removal, telemetry upload, or GHG
+Statement has a blocking submission ledger row (`draft`, `submitted`, or
+`accepted`), its upstream operational records are locked at the data-access
+boundary. The guard re-derives membership from the current credit-batch
+lineage before every mutation and blocks edits/deletes to production runs,
+samples, applications, deliveries, orders, biochar products, feedstocks, and
+credit-batch grouping records that would desync live MRV views from an
+immutable certification payload snapshot. Corrections must be represented as
+correction workflow records or a new submission version, not as in-place edits
+to locked source data.
+
 **UI surfaces:**
 
 - Credit-batch detail and health surfaces show readiness, membership, and
@@ -229,17 +240,74 @@ state). See ADR 0003 for the Removal submission model.
 source-upload presigned-URL flow (Phase 3.5), webhook ingestion,
 PATCH-vs-supersede for Removals, and external amendment claiming.
 
+## Dashboard
+
+Facility-scoped operations dashboard at `/dashboard`.
+
+- **Route**: `src/app/(app)/dashboard/page.tsx` -> `DashboardView`.
+- **Data**: `src/data-access/dashboard-overview.ts` is the one aggregate read
+  for the selected facility. It returns the KPI strip, 12-bucket sparkline
+  series, range deltas, feedstock mix, custody-flow ribbon, attention queue,
+  live "Now" signals, MRV pipeline, evidence health, and map preview points.
+- **Operations half**: `src/data-access/dashboard-operations.ts` is
+  range-independent and answers "where does this facility stand right now":
+  running/completed runs, in-flight registry/verifier submissions, structural
+  evidence gaps, and plottable facility/application/feedstock sites.
+- **Attention items**: computed from existing MRV records only. They have no
+  independent lifecycle, assignee, or completion state; they disappear when the
+  underlying record is fixed (see `CONTEXT.md`).
+- **Boundary**: dashboard queries still follow the standard
+  UI -> hooks -> fn -> data-access -> db flow and are facility-scoped at the
+  data-access layer.
+
+## Production Run Readings Import
+
+Production-run telemetry is document-backed and can be entered manually or
+imported from reactor-day CSV files.
+
+- **Upload**: `ProductionReadingsDocuments` stores files as
+  `documents.entity_type='production_run'` and `document_type='sensor_data'`
+  through the normal presigned storage flow.
+- **Preview/import**: `src/fn/production-run-reading-imports.ts` reads the
+  uploaded object, validates CSV format, extracts reactor/date from the
+  filename, checks overlap with the selected run window in the facility
+  timezone, and asks the operator to confirm column mapping when needed.
+- **Persistence**: confirmed imports replace readings only inside the
+  file-day/run-window overlap and write rows to `production_run_readings`.
+  Accepted header mappings are stored on the reactor specifications under
+  `reactorDayCsvMapping`.
+- **Performance note**: readings can become high-cardinality. The current UI
+  caps table height, but server-side pagination/virtualization remains tracked
+  in `docs/open-questions.md`.
+
 ## Chain of Custody Visualization
 
-Application-first lineage graph that traces the upstream rollback path from a selected application back to its originating feedstock batches.
+Credit-batch anchored lineage view at `/chain-of-custody`, with dual
+deep-link selectors:
 
-- **Route**: `/chain-of-custody?application=<id>`
-- **Components**: `src/components/chain-of-custody/` (constants, node, page, hook)
-- **Data**: `src/data-access/chain-of-custody.ts` resolves the upstream lineage for one application
-- **Layout**: dagre auto-layout (LR direction), 7 node types
-- **Node types**: Feedstock (orange), Reactor (purple), Production Run (orange), Biochar Product (orange), Order (rose), Delivery (rose), Application (rose)
-- **Selection**: Users search for an application via the shared `EntitySelect`; facility is resolved from the selected application
-- **Lineage**: Supports multiple feedstocks branching into the same production run; shows a warning card when upstream links are missing
+- `?batch=<id>` opens the batch roll-up.
+- `?application=<id>` opens an application drill-down.
+
+Batch roll-up merges every member application's rollback, dedupes production
+runs, and exposes **DAG | Map | Sankey**. Application drill-down exposes
+**Lineage | Map | Split | Trail**. The Sankey is a dry-mass balance with
+explicit exits for ineligible feedstock, conversion loss, and in-storage mass;
+net CO2e is a label, not a ribbon width.
+
+- **Components**: `src/components/chain-of-custody/` (page, graph, map,
+  sankey, trail, constants).
+- **Data**:
+  `src/data-access/chain-of-custody.ts`,
+  `src/data-access/chain-of-custody-batch.ts`, and
+  `src/data-access/chain-of-custody-trail.ts`.
+- **Layout**: dagre LR graph layout with React Flow canvas controls, minimap,
+  hover focus, and record-opening side sheets.
+- **Node types**: Feedstock, Reactor, Production Run, Biochar Product, Order,
+  Delivery, Application. Accent groups are Production, Infrastructure, and
+  Distribution.
+- **Facility scope**: selectors and resolved anchors are filtered against the
+  active facility so stale or foreign deep links cannot render another
+  facility's provenance.
 
 ## Facility Context
 
