@@ -10,7 +10,7 @@ interface EntityCertifyReadinessBadgeProps {
 }
 
 /**
- * Certification readiness pill — a StatusBadge, so the "Certifier" column is
+ * Certification readiness pill — a StatusBadge, so the "Certification" column is
  * literally the same primitive as the adjacent "Status" column (same anatomy,
  * same status ramp), not a lookalike.
  *

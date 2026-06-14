@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { BYTES_PER_MB } from "@/lib/format-utils";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_ROLES,
+} from "@/lib/certification/application-evidence";
 
 export const DOCUMENT_TYPES = [
   "weighbridge_ticket",
@@ -93,6 +97,12 @@ export const requestUploadSchema = z.object({
   gpsLatitude: z.number().min(-90).max(90).optional(),
   gpsLongitude: z.number().min(-180).max(180).optional(),
   description: z.string().max(2000).optional(),
+  applicationEvidenceRole: z
+    .enum(APPLICATION_VISUAL_EVIDENCE_ROLES)
+    .optional(),
+  applicationLogbookEvidenceType: z
+    .enum(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)
+    .optional(),
 });
 export type RequestUploadInput = z.infer<typeof requestUploadSchema>;
 
@@ -104,6 +114,23 @@ export const setVisibilitySchema = z.object({
   documentId: z.string().uuid(),
   visibility: z.enum(DOCUMENT_VISIBILITIES),
 });
+
+export const updateApplicationEvidenceMetadataSchema = z
+  .object({
+    documentId: z.string().uuid(),
+    applicationEvidenceRole: z
+      .enum(APPLICATION_VISUAL_EVIDENCE_ROLES)
+      .optional(),
+    applicationLogbookEvidenceType: z
+      .enum(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      data.applicationEvidenceRole !== undefined ||
+      data.applicationLogbookEvidenceType !== undefined,
+    { message: "Choose an evidence classification" },
+  );
 
 export const deleteDocumentSchema = z.object({
   documentId: z.string().uuid(),

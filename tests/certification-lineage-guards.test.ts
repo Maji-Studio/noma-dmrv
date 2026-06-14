@@ -60,7 +60,7 @@ interface LineageFixture {
 }
 
 async function createLineageFixture(
-  blockingVia: "removal" | "ghgStatement" = "removal",
+  blockingVia: "none" | "removal" | "ghgStatement" = "removal",
 ): Promise<LineageFixture> {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
 
@@ -226,20 +226,22 @@ async function createLineageFixture(
       applicationId: application.id,
     });
 
-    await tx.insert(certificationSubmissions).values({
-      provider: "isometric",
-      submissionType:
-        blockingVia === "ghgStatement" ? "ghg_statement" : "removal",
-      localEntityType:
-        blockingVia === "ghgStatement" ? "ghgStatement" : "removal",
-      localEntityId: ghgStatementId ?? removal.id,
-      externalId: `ext_clg_${tag}`,
-      version: 1,
-      status: "submitted",
-      payloadHash: `hash-${tag}`,
-      payloadSnapshot: { fixture: "certification-lineage-guards" },
-      submittedAt: new Date("2026-06-17T00:00:00Z"),
-    });
+    if (blockingVia !== "none") {
+      await tx.insert(certificationSubmissions).values({
+        provider: "isometric",
+        submissionType:
+          blockingVia === "ghgStatement" ? "ghg_statement" : "removal",
+        localEntityType:
+          blockingVia === "ghgStatement" ? "ghgStatement" : "removal",
+        localEntityId: ghgStatementId ?? removal.id,
+        externalId: `ext_clg_${tag}`,
+        version: 1,
+        status: "submitted",
+        payloadHash: `hash-${tag}`,
+        payloadSnapshot: { fixture: "certification-lineage-guards" },
+        submittedAt: new Date("2026-06-17T00:00:00Z"),
+      });
+    }
 
     return {
       applicationId: application.id,
@@ -309,7 +311,7 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
 
 async function withFixture<T>(
   testFn: (fixture: LineageFixture) => Promise<T>,
-  blockingVia: "removal" | "ghgStatement" = "removal",
+  blockingVia: "none" | "removal" | "ghgStatement" = "removal",
 ): Promise<T> {
   const fixture = await createLineageFixture(blockingVia);
   try {
@@ -320,6 +322,30 @@ async function withFixture<T>(
 }
 
 describe("certification lineage guards", () => {
+  it("allows production run edits while the lineage has no submitted certification artifact", async () => {
+    await withFixture(async (fixture) => {
+      const updated = await updateProductionRun(
+        TEST_USER_ID,
+        fixture.productionRunId,
+        {
+          feedstockWetMassKg: 1_100,
+        },
+      );
+
+      expect(updated.feedstockWetMassKg).toBe(1_100);
+    }, "none");
+  });
+
+  it("allows application edits while the lineage has no submitted certification artifact", async () => {
+    await withFixture(async (fixture) => {
+      const updated = await updateApplication(TEST_USER_ID, fixture.applicationId, {
+        fieldIdentifier: "editable-field",
+      });
+
+      expect(updated.fieldIdentifier).toBe("editable-field");
+    }, "none");
+  });
+
   it("rejects production run dry-mass edits once a linked removal is submitted", async () => {
     await withFixture(async (fixture) => {
       await expect(
