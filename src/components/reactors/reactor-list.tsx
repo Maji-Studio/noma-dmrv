@@ -109,7 +109,7 @@ function createColumns(
     },
     {
       accessorKey: "samplingMethod",
-      header: "Sampling",
+      header: "Sampling Method",
       cell: ({ row }) => (
         <span className={row.original.samplingMethod === "method_b" ? "text-[var(--color-signal-green)]" : ""}>
           {formatSamplingMethod(row.original.samplingMethod as SamplingMethod)}

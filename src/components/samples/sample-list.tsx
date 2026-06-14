@@ -120,7 +120,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certifier",
+      header: "Certification",
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("sample", row.original)}
@@ -453,7 +453,7 @@ export function SampleList() {
               { label: "Production Run", value: displaySideSheet.entity.productionRunCode },
               { label: "Facility", value: displaySideSheet.entity.facilityName },
               {
-                label: "Certifier",
+                label: "Certification",
                 value: (
                   <EntityCertifyReadinessBadge
                     readiness={deriveEntityCertifyReadiness(

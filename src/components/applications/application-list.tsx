@@ -110,7 +110,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certifier",
+      header: "Certification",
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("application", row.original)}
@@ -376,7 +376,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 value: <StatusBadge status={sideSheetEntity.status} />,
               },
               {
-                label: "Certifier",
+                label: "Certification",
                 value: (
                   <EntityCertifyReadinessBadge
                     readiness={deriveEntityCertifyReadiness(
