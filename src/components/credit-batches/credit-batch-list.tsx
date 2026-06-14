@@ -290,7 +290,7 @@ export function CreditBatchList({
               ),
             },
             {
-              label: "Certifier",
+              label: "Certification",
               value: sideSheetEntity.certifier
                 ? formatCertifierProvider(
                     sideSheetEntity.certifier as CertifierProvider
