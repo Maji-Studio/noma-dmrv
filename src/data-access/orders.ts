@@ -3,7 +3,7 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   orders,
@@ -16,6 +16,10 @@ import {
 } from "@/db/schema";
 import type { OrderFilterData } from "@/schemas/orders";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
+import {
+  deriveOrderFulfillmentStatus,
+  type OrderFulfillmentStatus,
+} from "@/lib/orders/fulfillment";
 
 // ============================================
 // Types
@@ -26,7 +30,12 @@ export interface OrderWithRelations extends Order {
   customerName: string | null;
   customerLocationName: string | null;
   biocharProductCode: string | null;
+  /** Total deliveries linked to this order (non-archived). */
   deliveryCount: number;
+  /** Deliveries in the `delivered` status — drives the `x/y delivered` progress. */
+  deliveredCount: number;
+  /** Fulfillment derived from delivery counts; see lib/orders/fulfillment. */
+  fulfillmentStatus: OrderFulfillmentStatus;
 }
 
 export interface PaginatedOrders {
@@ -92,6 +101,7 @@ export async function getOrders(
     search,
     facilityId,
     customerId,
+    status,
     fromDate,
     toDate,
     page = 1,
@@ -99,6 +109,32 @@ export async function getOrders(
     sortBy = "orderDate",
     sortOrder = "desc",
   } = filters ?? {};
+
+  // Per-order delivery aggregate (non-archived): total + delivered counts.
+  // Powers both the `x/y delivered` progress and the derived fulfillment status.
+  const deliveryAgg = db
+    .select({
+      orderId: deliveries.orderId,
+      total: count().as("delivery_total"),
+      delivered:
+        sql<number>`count(*) filter (where ${deliveries.status} = 'delivered')`.as(
+          "delivery_delivered",
+        ),
+    })
+    .from(deliveries)
+    .where(isNull(deliveries.archivedAt))
+    .groupBy(deliveries.orderId)
+    .as("delivery_agg");
+
+  // SQL mirror of deriveOrderFulfillmentStatus — keep the two thresholds in sync.
+  const fulfillmentExpr = sql<OrderFulfillmentStatus>`
+    case
+      when coalesce(${deliveryAgg.total}, 0) = 0 then 'no_deliveries'
+      when coalesce(${deliveryAgg.delivered}, 0) = 0 then 'pending'
+      when coalesce(${deliveryAgg.delivered}, 0) < coalesce(${deliveryAgg.total}, 0) then 'partial'
+      else 'fulfilled'
+    end
+  `;
 
   // Build where conditions — archived orders (facility archive cascade) are hidden
   const conditions: SQL[] = [isNull(orders.archivedAt)];
@@ -114,6 +150,10 @@ export async function getOrders(
 
   if (customerId) {
     conditions.push(eq(orders.customerId, customerId));
+  }
+
+  if (status) {
+    conditions.push(sql`(${fulfillmentExpr}) = ${status}`);
   }
 
   if (fromDate) {
@@ -137,17 +177,19 @@ export async function getOrders(
 
   const orderFn = sortOrder === "desc" ? desc : asc;
 
-  // Count total for pagination
+  // Count total for pagination. Join the aggregate so a status filter resolves;
+  // the grouped subquery is one row per order, so count() stays accurate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(orders)
+    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
     .where(whereClause);
 
   const total = Number(totalCount);
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // Get orders with related entity names
+  // Get orders with related entity names + delivery aggregate
   const orderList = await db
     .select({
       id: orders.id,
@@ -168,41 +210,31 @@ export async function getOrders(
       customerName: customers.name,
       customerLocationName: customerLocations.name,
       biocharProductCode: biocharProducts.code,
+      deliveryCount: sql<number>`coalesce(${deliveryAgg.total}, 0)`,
+      deliveredCount: sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
     })
     .from(orders)
     .leftJoin(facilities, eq(orders.facilityId, facilities.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(customerLocations, eq(orders.customerLocationId, customerLocations.id))
     .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
     .offset(offset);
 
-  // Get delivery counts for each order
-  const orderIds = orderList.map((o) => o.id);
-
-  const deliveryCounts =
-    orderIds.length > 0
-      ? await db
-          .select({
-            orderId: deliveries.orderId,
-            count: count(),
-          })
-          .from(deliveries)
-          .where(inArray(deliveries.orderId, orderIds))
-          .groupBy(deliveries.orderId)
-      : [];
-
-  const deliveryCountMap = new Map(
-    deliveryCounts.map((d) => [d.orderId, Number(d.count)])
-  );
-
-  // Combine data
-  const items: OrderWithRelations[] = orderList.map((o) => ({
-    ...o,
-    deliveryCount: deliveryCountMap.get(o.id) ?? 0,
-  }));
+  // Combine data — derive fulfillment status from the counts (single source of truth)
+  const items: OrderWithRelations[] = orderList.map((o) => {
+    const deliveryCount = Number(o.deliveryCount);
+    const deliveredCount = Number(o.deliveredCount);
+    return {
+      ...o,
+      deliveryCount,
+      deliveredCount,
+      fulfillmentStatus: deriveOrderFulfillmentStatus(deliveryCount, deliveredCount),
+    };
+  });
 
   return {
     items,

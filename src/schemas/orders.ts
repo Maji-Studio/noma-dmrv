@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { emptyToNull } from "@/schemas/helpers";
+import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
 
 // ============================================
 // Constants and Enums
@@ -108,6 +109,9 @@ export const orderFilterSchema = z.object({
 
   // Filter by customer
   customerId: z.string().uuid().optional(),
+
+  // Filter by derived fulfillment status (computed from deliveries, not stored)
+  status: z.enum(orderFulfillmentStatuses).optional(),
 
   // Filter by date range
   fromDate: z.coerce.date().optional(),
