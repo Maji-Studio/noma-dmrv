@@ -142,9 +142,12 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.keyboard.press("Enter");
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit Application" }).click();
-    const evidenceUpload = page.locator(
-      '[role="dialog"] input[type="file"][accept="image/*"]',
-    );
+    // The visual-evidence panel renders one image upload slot per evidence role
+    // (APPLICATION_VISUAL_EVIDENCE_ROLES), so target the first; the no-geotag
+    // check is role-independent.
+    const evidenceUpload = page
+      .locator('[role="dialog"] input[type="file"][accept="image/*"]')
+      .first();
     await evidenceUpload.setInputFiles({
       name: "application-no-exif.jpg",
       mimeType: "image/jpeg",
