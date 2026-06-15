@@ -172,7 +172,6 @@ export function OrderForm({
         title="Order Information"
         icon={<Calendar size={14} weight="bold" />}
         fields={["orderDate"]}
-        required={["orderDate"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -198,7 +197,6 @@ export function OrderForm({
         title="Customer Details"
         icon={<Storefront size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
-        required={["customerId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -250,7 +248,6 @@ export function OrderForm({
         title="Product Details"
         icon={<Package size={14} weight="bold" />}
         fields={["biocharProductId", "packaging", "quantityKg", "value", "currency"]}
-        required={["biocharProductId", "packaging", "quantityKg"]}
       >
         <FormEntitySelect
           control={control}

@@ -6,6 +6,10 @@ import {
   useRequestUpload,
 } from "@/hooks/use-documents";
 import { resolveUploadContentType } from "@/lib/documents/content-type";
+import type {
+  ApplicationBoundaryLogbookEvidenceType,
+  ApplicationVisualEvidenceRole,
+} from "@/lib/certification/application-evidence";
 import type { DocumentType } from "@/schemas/documents";
 
 interface EvidenceExif {
@@ -29,6 +33,8 @@ export interface UploadParams {
   gpsLatitude?: number;
   gpsLongitude?: number;
   description?: string;
+  applicationEvidenceRole?: ApplicationVisualEvidenceRole;
+  applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
   onProgress?: (progress: number) => void;
   signal?: AbortSignal;
 }
@@ -151,6 +157,8 @@ export function useFileUpload(): UseFileUploadResult {
       gpsLatitude,
       gpsLongitude,
       description,
+      applicationEvidenceRole,
+      applicationLogbookEvidenceType,
       onProgress,
       signal,
     }) => {
@@ -180,6 +188,8 @@ export function useFileUpload(): UseFileUploadResult {
           gpsLatitude: gpsLatitude ?? parsedExif.gpsLatitude,
           gpsLongitude: gpsLongitude ?? parsedExif.gpsLongitude,
           description,
+          applicationEvidenceRole,
+          applicationLogbookEvidenceType,
         });
         if (controller.signal.aborted) throw new Error("Upload aborted");
 

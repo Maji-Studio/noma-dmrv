@@ -112,11 +112,12 @@ test.describe("Order + Delivery UI CRUD", () => {
 
     // --- Verify the new order appears in the list ---
 
-    // Look for the seeded customer name in the table (the Order list shows the customer)
-    const customerCellLocator = adminPage.getByText(
-      seededData.customer.name,
-      { exact: false }
-    );
+    // Look for the seeded customer name in the table (the Order list shows the customer).
+    // Scope to the table body so the customer-filter <select> options (added in #264,
+    // which render the same names but are hidden while collapsed) don't shadow the cell.
+    const customerCellLocator = adminPage
+      .locator("table tbody")
+      .getByText(seededData.customer.name, { exact: false });
     await expect(customerCellLocator.first()).toBeVisible({ timeout: 8000 });
 
     // Verify the order appears in the list

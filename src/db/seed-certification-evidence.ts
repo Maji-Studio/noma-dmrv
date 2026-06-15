@@ -135,6 +135,7 @@ export function buildApplicationBoundaryDocuments(
       evidenceMethod: 'boundary',
       fieldIdentifier: spec.fieldIdentifier,
       boundaryReference: spec.boundaryReference,
+      logbookEvidenceType: 'inventory',
       coordinateSystem: 'EPSG:4326',
       includesApplicatorSignature: true,
     },

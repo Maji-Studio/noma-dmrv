@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { MapPin, Plus, Leaf } from "@phosphor-icons/react";
+import { MapPin, Plus, Leaf, X } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -23,7 +23,7 @@ import {
   formatApplicationKgFromTons,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
-import type { Application } from "@/db/schema/application";
+import type { ApplicationListItem } from "@/data-access/applications";
 import {
   useApplications,
   useApplicationDeliveryOptions,
@@ -33,10 +33,14 @@ import {
 } from "@/hooks/use-applications";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
+  applicationStatuses,
+  applicationEvidenceMethods,
   formatApplicationEvidenceMethod,
   formatApplicationMethod,
+  formatApplicationStatus,
   type ApplicationEvidenceMethod,
   type ApplicationMethod,
+  type ApplicationStatus,
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -47,9 +51,9 @@ import { formatSafeDate } from "@/lib/format-utils";
 // ============================================
 
 function createColumns(
-  onEdit: (application: Application) => void,
+  onEdit: (application: ApplicationListItem) => void,
   onDelete: (applicationId: string) => void,
-): ColumnDef<Application>[] {
+): ColumnDef<ApplicationListItem>[] {
   return [
     {
       accessorKey: "code",
@@ -64,6 +68,22 @@ function createColumns(
       cell: ({ row }) => (
         <span>{formatSafeDate(row.original.applicationDate)}</span>
       ),
+    },
+    {
+      id: "customer",
+      header: "Customer / Location",
+      accessorFn: (row) => `${row.customerName ?? ""} ${row.locationName ?? ""}`.trim(),
+      cell: ({ row }) => {
+        const { customerName, locationName } = row.original;
+        return (
+          <div className="flex flex-col">
+            <span className="text-[var(--color-text-primary)]">{customerName ?? "—"}</span>
+            {locationName && (
+              <span className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">{locationName}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "biocharAppliedTons",
@@ -100,6 +120,17 @@ function createColumns(
           {row.original.applicationMethodType
             ? formatApplicationMethod(row.original.applicationMethodType as ApplicationMethod)
             : "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "evidenceMethod",
+      header: "Evidence",
+      cell: ({ row }) => (
+        <span>
+          {formatApplicationEvidenceMethod(
+            (row.original.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
+          )}
         </span>
       ),
     },
@@ -149,7 +180,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
-    entity: Application | null;
+    entity: ApplicationListItem | null;
     mode: SideSheetMode;
   } | null>(null);
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
@@ -158,6 +189,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Filter state (client-side facets over the loaded rows)
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">("");
+  const [evidenceFilter, setEvidenceFilter] = useState<ApplicationEvidenceMethod | "">("");
 
   // Data fetching
   const { data: applications, isLoading, error } = useApplications(
@@ -229,8 +264,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
-  const openView = (application: Application) => { setSideSheet({ entity: application, mode: "view" }); };
-  const openEdit = (application: Application) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
+  const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
+  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
   const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
 
   // Memoize columns
@@ -240,6 +275,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deliveryOptions = scopedDeliveries ?? deliveries;
   const totalApplications = items.length;
   const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
+
+  // Client-side facet filters (the list loads all rows for the facility)
+  const filteredItems = items.filter((a) =>
+    (!statusFilter || a.status === statusFilter) &&
+    (!evidenceFilter || a.evidenceMethod === evidenceFilter)
+  );
+  const hasActiveFilters = !!statusFilter || !!evidenceFilter;
+  const clearFilters = () => { setStatusFilter(""); setEvidenceFilter(""); };
 
   if (error) {
     return (
@@ -301,7 +344,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       {/* Data Table */}
       <DataTable
         columns={columns}
-        data={items}
+        data={filteredItems}
         enableSorting
         enableFiltering
         enablePagination
@@ -312,14 +355,22 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           <EmptyState
             padding="md"
             icon={<MapPin size={48} />}
-            title={contextFacilityId ? "No applications yet" : "Select a facility"}
+            title={
+              !contextFacilityId
+                ? "Select a facility"
+                : hasActiveFilters
+                  ? "No applications match"
+                  : "No applications yet"
+            }
             description={
-              contextFacilityId
-                ? "Create your first field application to get started"
-                : "Choose a facility from the sidebar to view applications"
+              !contextFacilityId
+                ? "Choose a facility from the sidebar to view applications"
+                : hasActiveFilters
+                  ? "Try adjusting or clearing the filters."
+                  : "Create your first field application to get started"
             }
             action={
-              contextFacilityId ? (
+              contextFacilityId && !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <Plus size={18} weight="bold" />
                   New Application
@@ -331,6 +382,34 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       >
         <DataTable.Toolbar>
           <DataTable.Search placeholder="Search applications..." />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "")}
+            className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
+            aria-label="Filter by status"
+          >
+            <option value="">All Statuses</option>
+            {applicationStatuses.map((s) => (
+              <option key={s} value={s}>{formatApplicationStatus(s)}</option>
+            ))}
+          </select>
+          <select
+            value={evidenceFilter}
+            onChange={(e) => setEvidenceFilter(e.target.value as ApplicationEvidenceMethod | "")}
+            className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
+            aria-label="Filter by evidence method"
+          >
+            <option value="">All Evidence</option>
+            {applicationEvidenceMethods.map((m) => (
+              <option key={m} value={m}>{formatApplicationEvidenceMethod(m)}</option>
+            ))}
+          </select>
+          {hasActiveFilters && (
+            <Button variant="noOutline" size="small" onClick={clearFilters}>
+              <X size={16} weight="bold" />
+              Clear
+            </Button>
+          )}
           <DataTable.ColumnVisibility />
         </DataTable.Toolbar>
         <DataTable.Pagination />
