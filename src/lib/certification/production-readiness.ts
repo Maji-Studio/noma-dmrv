@@ -2,7 +2,8 @@ export type ProductionReadinessFixTarget =
   | "batchDetails"
   | "deliveries"
   | "biocharProducts"
-  | "productionRuns";
+  | "productionRuns"
+  | "applications";
 
 export type ProductionReadinessGapKind =
   | "noApplications"
