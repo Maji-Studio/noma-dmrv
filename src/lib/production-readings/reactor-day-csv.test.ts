@@ -39,6 +39,7 @@ describe("parseReactorDayCsv", () => {
     expect(result.parsedRows).toBe(3);
     expect(result.inWindowRows).toBe(2);
     expect(result.droppedRows).toBe(1);
+    expect(result.skippedRows).toBe(0);
     expect(result.readings).toEqual([
       {
         timestamp: new Date("2026-04-01T21:00:00.000Z"),
@@ -53,6 +54,34 @@ describe("parseReactorDayCsv", () => {
         gasFlowRate: null,
       },
     ]);
+  });
+
+  it("counts rows with malformed timestamps separately from outside-window drops", () => {
+    const csv = [
+      "Time,Carbonization Outlet Temperature,Drying Drum Pressure",
+      "00:00:00,500,0.12",
+      "25:00:00,501,0.13",
+      "not-a-time,502,0.14",
+      "00:02:00,503,0.15",
+    ].join("\n");
+
+    const result = parseReactorDayCsv({
+      fileName: "TZ001B 2026-04-02 Data Evaluation.csv",
+      csvText: csv,
+      timezone: "Africa/Nairobi",
+      runWindowStart: new Date("2026-04-01T21:00:00.000Z"),
+      runWindowEnd: new Date("2026-04-01T21:01:00.000Z"),
+      mapping: {
+        temperature: "Carbonization Outlet Temperature",
+        pressure: "Drying Drum Pressure",
+        gasFlow: null,
+      },
+    });
+
+    expect(result.parsedRows).toBe(2);
+    expect(result.inWindowRows).toBe(1);
+    expect(result.droppedRows).toBe(1);
+    expect(result.skippedRows).toBe(2);
   });
 
   it("requires channel alignment when the saved header signature drifts", () => {

@@ -8,7 +8,7 @@ import {
 import { certifierProjects } from "@/db/schema/certification";
 import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
 import { deliveries, orders } from "@/db/schema/logistics";
-import { customerLocations } from "@/db/schema/parties";
+import { customers, customerLocations } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
@@ -211,10 +211,20 @@ async function resolveApplicationDryMassTons(
 /**
  * Get applications with pagination
  */
+/**
+ * Application list row enriched with distribution context (customer + field
+ * location) resolved via the delivery → order chain. The location prefers the
+ * delivery's override, falling back to the order's customer location.
+ */
+export interface ApplicationListItem extends Application {
+  customerName: string | null;
+  locationName: string | null;
+}
+
 export async function getApplications(
   userId: string,
   options?: { page?: number; pageSize?: number; facilityId?: string }
-): Promise<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }> {
+): Promise<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
   requireAuth(userId);
 
   const page = options?.page ?? 1;
@@ -259,9 +269,20 @@ export async function getApplications(
       co2eStoredTonnes: applications.co2eStoredTonnes,
       createdAt: applications.createdAt,
       updatedAt: applications.updatedAt,
+      customerName: customers.name,
+      locationName: customerLocations.name,
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .leftJoin(
+      customerLocations,
+      eq(
+        customerLocations.id,
+        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+      ),
+    )
     .where(whereClause)
     .orderBy(desc(applications.applicationDate))
     .limit(pageSize)

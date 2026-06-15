@@ -62,6 +62,7 @@ export interface ParseReactorDayCsvResult {
   parsedRows: number;
   inWindowRows: number;
   droppedRows: number;
+  skippedRows: number;
   readings: ReactorDayCsvReading[];
 }
 
@@ -134,6 +135,7 @@ export function parseReactorDayCsv(
 
   const readings: ReactorDayCsvReading[] = [];
   let parsedRows = 0;
+  let skippedRows = 0;
 
   for (const rawRow of rows) {
     const row = padRow(rawRow, headers.length);
@@ -141,7 +143,10 @@ export function parseReactorDayCsv(
     if (!timeCell) continue;
 
     const time = parseTimeCell(timeCell);
-    if (!time) continue;
+    if (!time) {
+      skippedRows += 1;
+      continue;
+    }
 
     parsedRows += 1;
     const timestamp = fromZonedTime(
@@ -169,6 +174,7 @@ export function parseReactorDayCsv(
     parsedRows,
     inWindowRows: readings.length,
     droppedRows: parsedRows - readings.length,
+    skippedRows,
     readings,
   };
 }

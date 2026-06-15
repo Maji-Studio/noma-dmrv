@@ -29,7 +29,7 @@ Open or archived items I treated as known:
 
 ## Finding 1 - Shared slide-over drawers remain open or blank after close/success
 
-Priority: P1  
+Priority: P1\
 Likely layer: UI / hooks, specifically `SlideOverPanel`, `EntitySideSheet`, entity form containers, and the GHG create drawer close lifecycle.
 GitHub: #255
 
@@ -84,7 +84,7 @@ Operators can believe a save failed, re-enter or retry a completed action, or ge
 
 ## Finding 2 - Clickable table rows expose nested duplicate action buttons
 
-Priority: P2  
+Priority: P2\
 Likely layer: UI / accessibility, specifically shared `DataTable` row-click semantics plus `RowActionsMenu`.
 GitHub: #256
 
@@ -116,7 +116,7 @@ Operators using assistive technology or keyboard navigation can encounter duplic
 
 ## Finding 3 - GHG zero-removal confirmation does not carry forward the preview warning
 
-Priority: P2  
+Priority: P2\
 Likely layer: UI / product policy. Tracked by #245; included here as browser-confirmed context, not a duplicate issue.
 
 ### Steps to Reproduce
@@ -145,7 +145,7 @@ Resolve #245 and enforce the chosen policy in both Preview and Confirm. If allow
 
 ## Finding 4 - Facilities list flashes an incorrect empty state before data loads
 
-Priority: P3  
+Priority: P3\
 Likely layer: UI / hooks loading state.
 
 ### Steps to Reproduce

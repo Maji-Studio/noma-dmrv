@@ -67,6 +67,33 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **To resolve:** revisit when a client asks for white-labeling; scope is
   wildcard domain routing, per-org theme tokens, branded Resend templates.
 
+### Document access is authorized by UUID only — no entity/facility scoping (`security/document-authz`, opened 2026-06-15)
+
+- **Current behavior:** `getDocumentById` / `updateDocument` / `setDocumentVisibility`
+  and `assertCanManageDocumentEntity` (`src/data-access/documents.ts`) gate on
+  `requireAuth(userId)` only. Any authenticated user who knows a document or
+  owning-entity UUID can read a *private* document (including the
+  `/api/documents/[id]` presigned-download redirect) or flip its visibility,
+  without proving access to the owning `(entityType, entityId)`.
+- **Why it's accepted for now (explicit decision, not a missed bug):** the app is
+  single-tenant in practice — `requireProjectMember` is used in 0 data-access
+  files; all 44 use `requireAuth`. Every account is admin-invited (no
+  self-signup) and is a fully-trusted operator of the one org, so no boundary is
+  crossed today. The only trust split is `admin` vs `user` (gates `/admin` + a
+  few certification-settings actions) and it isn't applied to any domain entity,
+  so documents are consistent with every other entity — not a regression.
+- **When this becomes a real hole (fix before then):** the moment any
+  *non-fully-trusted* account exists (external auditor, customer, limited
+  reviewer) before per-facility/org scoping lands. The `visibility: public |
+  private` column already encodes an intended boundary, so documents are the
+  first surface to scope.
+- **To resolve:** fold document reads/mutations through facility/entity-scoped
+  authorization as part of the multi-tenancy work (ADR 0010,
+  `docs/plans/2026-06-11-multi-tenancy.md`, [[multi-tenancy-plan]]). A
+  `createdBy`-only stopgap is too tight — operators share documents on shared
+  entities. Implement the `it.todo` negative tests in
+  `tests/documents-authz.test.ts` against the scoped helper when scoping lands.
+
 ### Facility-wide monitoring dashboard / live map (`coc/facility-dashboard`, opened 2026-06-11)
 
 - **Recorded as future, out of scope (2026-06-11 chain-of-custody-views

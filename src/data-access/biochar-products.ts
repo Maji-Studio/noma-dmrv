@@ -590,6 +590,15 @@ export async function createBiocharProduct(
   // so two products with different formulations can't both pass the reservation
   // check and strand a mismatched product (the claim-after-insert TOCTOU).
   const product = await db.transaction(async (tx) => {
+    // A submitted production run can't gain new source inventory after
+    // certification. Mirror the update/delete guards so the create path can't
+    // bypass certification locking by attaching a fresh product to a locked run.
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: run.id },
+      "create",
+    );
+
     await validateCompositionIngredientBins(
       tx,
       data.composition,

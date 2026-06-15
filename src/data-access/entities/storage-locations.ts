@@ -216,8 +216,18 @@ export async function getStorageLocations(params: {
     );
   }
 
+  // The usage filter must not cancel the untyped-bin inclusion above: an untyped
+  // bin has no joined feedstock type (NULL usage), so when a type filter is also
+  // active we keep the IS NULL branch claimable instead of dropping it here.
   if (feedstockTypeUsage) {
-    conditions.push(eq(heldFeedstockTypes.usage, feedstockTypeUsage));
+    conditions.push(
+      feedstockTypeId
+        ? or(
+            eq(heldFeedstockTypes.usage, feedstockTypeUsage),
+            isNull(storageLocations.feedstockTypeId),
+          )!
+        : eq(heldFeedstockTypes.usage, feedstockTypeUsage)
+    );
   }
 
   // Keep product bins clean: a pure-biochar product can only land in an unassigned
