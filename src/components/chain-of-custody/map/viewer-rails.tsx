@@ -221,7 +221,14 @@ function AreaCard({
     return (
       <div
         className="flex shrink-0 flex-col justify-center gap-[5px] py-[13px] pl-[14px] pr-12"
-        style={{ width: RAIL_AREA_CARD_WIDTH_PX, borderLeft: `2px solid ${accent}` }}
+        style={{
+          width: RAIL_AREA_CARD_WIDTH_PX,
+          borderLeft: `2px solid ${accent}`,
+          // Application closes the rail — a grey hairline matching the dividers.
+          ...(side === "outbound" && {
+            borderRight: "1.5px solid var(--clr-dark-purple-20)",
+          }),
+        }}
       >
         <span className="flex items-center gap-[6px] font-mono text-[8.5px] font-medium uppercase tracking-[0.12em] text-[var(--clr-dark-purple-40)]">
           <span className="size-[6px] shrink-0" style={{ background: accent }} aria-hidden="true" />
@@ -245,6 +252,10 @@ function AreaCard({
             style={{
               width: RAIL_AREA_CARD_WIDTH_PX,
               borderLeft: `${narrowed ? 3 : 2}px solid ${accent}`,
+              // Application closes the rail — a grey hairline matching the dividers.
+              ...(side === "outbound" && {
+                borderRight: "1.5px solid var(--clr-dark-purple-20)",
+              }),
             }}
           />
         }
@@ -336,7 +347,14 @@ function TransportLegPill({ side, legs, focusLegIds }: TransportLegPillProps) {
 
   return (
     <Tooltip content={`${label} transported`}>
-      <div className="flex shrink-0 flex-col items-center justify-center gap-[5px] px-10">
+      <div
+        className={cn(
+          "flex shrink-0 flex-col items-center justify-center gap-[5px] px-10",
+          // Divide the feedstock card from its leg; the hub's border-x and the
+          // application card's accent stripe already divide the other cells.
+          side === "inbound" && "border-l-[1.5px] border-[var(--clr-dark-purple-20)]"
+        )}
+      >
         <span className="flex items-center gap-[5px] whitespace-nowrap font-mono text-[10px] font-medium tracking-[0.02em] text-[var(--clr-dark-purple)]">
           <Truck size={12} className="shrink-0" style={{ color: accent }} aria-hidden="true" />
           {label}
