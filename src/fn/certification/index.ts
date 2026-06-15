@@ -43,6 +43,13 @@ export {
   loadRemovalBreakdown,
   type RemovalBreakdownData,
 } from "./removal-breakdown";
+// Statement-level roll-up of the same breakdown — the sum across a GHG
+// statement's member removals (local estimate, or the registry GHG entries
+// aggregated once every member is submitted).
+export {
+  loadGhgStatementBreakdown,
+  type GhgStatementBreakdownData,
+} from "./ghg-statement-breakdown";
 // Deferred-create — the New-Removal wizard's "Confirm" step. Server re-derives
 // each selected batch's health before atomically creating the removal.
 export { createRemovalWithBatchesAction } from "./create-removal-with-batches";
