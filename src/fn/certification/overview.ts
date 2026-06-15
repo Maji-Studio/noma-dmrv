@@ -1,11 +1,15 @@
 "use server";
 
+import { z } from "zod";
 import { env } from "@/config/env";
 import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
 } from "@/data-access/certifier-removals";
-import { deriveBatchHealth } from "@/lib/certification/batch-health";
+import {
+  deriveBatchHealth,
+  type BatchHealthState,
+} from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import {
   deriveRemovalReadiness,
@@ -26,6 +30,22 @@ import {
 // half is resolved once up front). Bound how many run at once so a facility with
 // many removals can't fan out an unbounded burst of query chains at the pool.
 const READINESS_CONCURRENCY = 8;
+
+// Upper bound on how many batch health verdicts one overview request computes —
+// the Credit Batches list pages at most 36 cards, so 50 leaves headroom while
+// capping the cost of a single fan-out.
+const MAX_HEALTH_SUMMARIES = 50;
+
+/**
+ * One credit batch's certification-readiness verdict for the overview cards —
+ * the lightweight projection of `BatchHealth` (state + open-issue count) needed
+ * to render a card's cert tag without shipping the full checklist.
+ */
+export interface CreditBatchHealthSummary {
+  state: BatchHealthState;
+  /** Count of unmet (blocking) checks; 0 when ready. */
+  issueCount: number;
+}
 
 // One removal's place in the Removals hub: its identity, member batches, latest
 // submission identity, and the readiness verdict (the same one the table hint
@@ -140,5 +160,59 @@ export async function loadCertificationOverview(
       readyToStartBatchCount,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
     };
+  });
+}
+
+/**
+ * Per-batch certification-readiness verdicts for the Credit Batches overview,
+ * keyed by batch id. Reuses the SAME `deriveBatchHealth` classifier the detail
+ * page's submission gate (`CreditBatchHealthStrip`) and the New-Removal wizard
+ * use, so a card's cert tag can never disagree with the gate it links into.
+ *
+ * The caller passes the visible page's batch ids (all belonging to `facilityId`,
+ * since the list is facility-scoped). The facility certifier facts are resolved
+ * once and shared across every batch; the per-batch context builds run in
+ * bounded chunks so a wide page can't fan out an unbounded burst at the pool.
+ */
+export async function loadCreditBatchHealthSummaries(
+  facilityId: string,
+  batchIds: string[],
+): Promise<ActionResult<Record<string, CreditBatchHealthSummary>>> {
+  return withAction(async (userId) => {
+    const validFacilityId = z.string().uuid().parse(facilityId);
+    const ids = z
+      .array(z.string().uuid())
+      .max(
+        MAX_HEALTH_SUMMARIES,
+        `Request at most ${MAX_HEALTH_SUMMARIES} batch health verdicts`,
+      )
+      .parse(batchIds);
+    if (ids.length === 0) return {};
+
+    const facilityFacts = await loadFacilityCertifierFacts(
+      userId,
+      validFacilityId,
+    );
+    const summaries: Record<string, CreditBatchHealthSummary> = {};
+    for (let i = 0; i < ids.length; i += READINESS_CONCURRENCY) {
+      const verdicts = await Promise.all(
+        ids.slice(i, i + READINESS_CONCURRENCY).map(async (batchId) => {
+          const ctx = await buildCreditBatchContextWithFacts(
+            userId,
+            batchId,
+            facilityFacts,
+          );
+          const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
+          return [
+            batchId,
+            { state: health.state, issueCount: health.issueCount },
+          ] as const;
+        }),
+      );
+      for (const [batchId, summary] of verdicts) {
+        summaries[batchId] = summary;
+      }
+    }
+    return summaries;
   });
 }

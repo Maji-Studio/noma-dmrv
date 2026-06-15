@@ -18,6 +18,30 @@ export function formatMass(kg: number | null | undefined): string {
 }
 
 /**
+ * Format a CO₂e mass in kg with accounting-grade precision — tonnes (up to 3
+ * decimals, trailing zeros trimmed) once the magnitude reaches 1 t, otherwise
+ * whole kg. Unlike `formatMass` (1-decimal tonnes) this keeps small deltas
+ * legible, so a 15 kg uncertainty haircut next to a 1.04 t sequestration both
+ * read true. Returns "—" for null/undefined. `signed` prepends +/− (zero stays
+ * unsigned). The unit suffix is dropped when `unit` is the empty string.
+ */
+export function formatCo2e(
+  kg: number | null | undefined,
+  opts?: { signed?: boolean; unit?: string }
+): string {
+  if (kg == null || Number.isNaN(kg)) return "—";
+  const { signed = false, unit } = opts ?? {};
+  const abs = Math.abs(kg);
+  const inTonnes = abs >= 1000;
+  const magnitude = inTonnes
+    ? (abs / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 })
+    : Math.round(abs).toLocaleString();
+  const suffix = unit ?? (inTonnes ? "t CO₂e" : "kg CO₂e");
+  const sign = signed && kg !== 0 ? (kg > 0 ? "+" : "−") : "";
+  return `${sign}${magnitude}${suffix ? ` ${suffix}` : ""}`;
+}
+
+/**
  * Format a value already expressed in tonnes (NOT kg — use `formatMass` for kg).
  * Returns "—" for null/undefined. Defaults to 2 decimals and a "t" unit; pass
  * `unit: "t CO₂e"` for stored-carbon displays.

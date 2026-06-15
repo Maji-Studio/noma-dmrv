@@ -24,6 +24,7 @@ import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
 import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
+import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SubmitConfirmDialog } from "./submit-confirm-dialog";
 
 interface RemovalDetailSheetProps {
@@ -175,6 +176,8 @@ export function RemovalDetailSheet({
             </span>
             <StatusBadge status={derived.value} label={derived.label} />
           </div>
+
+          <RemovalCarbonBreakdown removalId={summary.removalId} enabled={open} />
 
           <Field label="Reporting window">{window}</Field>
 
