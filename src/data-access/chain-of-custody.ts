@@ -12,6 +12,7 @@ import {
   feedstockDeliveries,
   feedstockTypes,
   feedstocks,
+  formulations,
   orders,
   productionRunFeedstocks,
   productionRuns,
@@ -62,6 +63,8 @@ export interface ChainBiocharProductLineage {
   status: string | null;
   productionDate: Date;
   massKg: number | null;
+  /** Blend name (formulations.name); null = pure biochar (no formulation). */
+  formulationName: string | null;
   linkedProductionRunId: string | null;
   href: string;
 }
@@ -240,9 +243,11 @@ async function getBiocharProductLineage(
       status: biocharProducts.status,
       productionDate: biocharProducts.productionDate,
       massKg: biocharProducts.massKg,
+      formulationName: formulations.name,
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
     })
     .from(biocharProducts)
+    .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
     .where(eq(biocharProducts.id, biocharProductId))
     .limit(1);
 

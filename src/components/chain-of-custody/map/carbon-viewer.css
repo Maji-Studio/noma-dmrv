@@ -149,6 +149,12 @@
 .cvm-dist.cvm-dim {
   opacity: 0.28;
 }
+/* Transient hover isolation — deeper than focus dim so the hovered leg's chip
+   reads alone. Opacity mirrors LEG_HOVER_DIM_OPACITY in viewer-constants.ts;
+   wins over .cvm-dim (declared after it). */
+.cvm-dist.cvm-hoverdim {
+  opacity: 0.08;
+}
 
 /* ── distance chips at the line apex ───────────────────────────────────── */
 .cvm-dist {

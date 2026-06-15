@@ -68,6 +68,21 @@ export interface ChainGeoLeg {
   distanceKm: number;
   distanceSource: DistanceSourceValue | null;
   isDerived: boolean;
+  /**
+   * Cargo mass moving along the leg (transport_legs.load_mass_kg — the carbon
+   * number the rail card shows, distinct from distance). Null when not stored.
+   */
+  loadMassKg: number | null;
+  /**
+   * What's moving: the feedstock type ("Coffee husk") for inbound, the biochar
+   * formulation name (or "Biochar" when pure) for outbound. Drives the card's
+   * material line. Enriched from the lineage in `getChainOfCustodyGeoData`.
+   */
+  materialLabel: string | null;
+  /** Detail-page link for the leg's outer party (feedstock / application). */
+  outerHref: string | null;
+  /** Record code of the outer party (feedstock code / application code). */
+  outerCode: string | null;
 }
 
 export interface ChainOfCustodyGeoData {
@@ -99,12 +114,14 @@ export async function getChainOfCustodyGeoData(
   const chain = await getChainOfCustodyData(userId, applicationId);
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
 
-  const [facilityGps, applicationGps, feedstockGpsById, legs] = await Promise.all([
+  const [facilityGps, applicationGps, feedstockGpsById, rawLegs] = await Promise.all([
     getFacilityGps(chain.facility.id),
     getApplicationGps(chain.application.id),
     getFeedstockGps(feedstockIds),
     getChainLegs(feedstockIds, chain.biocharProduct?.id ?? null),
   ]);
+
+  const legs = enrichLegs(chain, rawLegs);
 
   const warnings: string[] = [];
   const nodes = buildGeoNodes(chain, {
@@ -141,6 +158,40 @@ export async function getChainOfCustodyGeoData(
     legs,
     warnings,
   };
+}
+
+/**
+ * Attach the rail-card fields (material moving along the leg + a detail link)
+ * from the already-resolved lineage. Inbound legs key on the feedstock; the
+ * card's mass is the leg's own `loadMassKg` (set in `getChainLegs`).
+ *
+ * Outbound legs key on the biochar product, but the card represents the
+ * destination application — so the link/code point at this payload's single
+ * application. (One product split across several applications via separate
+ * legs is rare pre-prod; the leg's `loadMassKg` + `destinationName` stay exact,
+ * only the link target could resolve to a sibling application in that case.)
+ */
+function enrichLegs(
+  chain: ChainOfCustodyData,
+  legs: ChainGeoLeg[]
+): ChainGeoLeg[] {
+  return legs.map((leg) => {
+    if (leg.kind === "inbound") {
+      const feedstock = chain.feedstocks.find((fs) => fs.id === leg.entityId);
+      return {
+        ...leg,
+        materialLabel: feedstock?.feedstockTypeName ?? null,
+        outerHref: feedstock?.href ?? null,
+        outerCode: feedstock?.code ?? null,
+      };
+    }
+    return {
+      ...leg,
+      materialLabel: chain.biocharProduct?.formulationName ?? "Biochar",
+      outerHref: chain.application.href,
+      outerCode: chain.application.code,
+    };
+  });
 }
 
 interface GeoNodeInputs {
@@ -327,6 +378,7 @@ async function getChainLegs(
       distanceKm: transportLegs.distanceKm,
       distanceSource: transportLegs.distanceSource,
       isDerived: transportLegs.isDerived,
+      loadMassKg: transportLegs.loadMassKg,
     })
     .from(transportLegs)
     .where(or(...conditions));
@@ -334,5 +386,9 @@ async function getChainLegs(
   return rows.map((row) => ({
     ...row,
     kind: row.entityType === "feedstock" ? ("inbound" as const) : ("outbound" as const),
+    // Material / link / code are enriched from the lineage by the caller.
+    materialLabel: null,
+    outerHref: null,
+    outerCode: null,
   }));
 }

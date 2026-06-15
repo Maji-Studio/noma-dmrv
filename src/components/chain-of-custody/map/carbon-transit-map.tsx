@@ -41,10 +41,14 @@ import {
   FOCUS_DIM_OPACITY,
   HIGHLIGHT_EASE_DURATION_MS,
   HIGHLIGHT_HOLD_MS,
+  LEG_HIT_WIDTH,
+  LEG_HOVER_DIM_OPACITY,
+  LEG_HOVER_OPACITY,
   LEG_LINE_OPACITY,
   LEG_LINE_WIDTH,
   LEGS_BASE_LAYER_ID,
   LEGS_DASH_LAYER_ID,
+  LEGS_HIT_LAYER_ID,
   LEGS_SOURCE_ID,
   POPUP_OFFSET_PX,
   POPUP_WIDTH_PX,
@@ -104,7 +108,15 @@ export interface CarbonTransitMapProps {
    * these sets dim. Null = nothing focused (everything full strength).
    */
   focus: { nodeIds: Set<string>; legIds: Set<string> } | null;
+  /**
+   * Transient hover isolation — the one leg under the pointer (map line or
+   * rail card). While set, every other leg line + chip ghosts back so the
+   * hovered hop reads alone. Null = nothing hovered.
+   */
+  hoverLegId: string | null;
   onMarkerClick?: (nodeId: string) => void;
+  /** Hovering a map leg line reports up so the rail card can echo it. */
+  onLegHover?: (legId: string | null) => void;
   /** Clear the shared focus (basemap click). */
   onClear?: () => void;
 }
@@ -140,6 +152,25 @@ function focusOpacity(full: number): maplibregl.ExpressionSpecification {
     ["==", ["get", "focused"], false],
     FOCUS_DIM_OPACITY,
     full,
+  ] as maplibregl.ExpressionSpecification;
+}
+
+/**
+ * Resolve a line layer's opacity. With a leg hovered, that leg pops to
+ * `hoverFull` and every other line ghosts to {@link LEG_HOVER_DIM_OPACITY};
+ * with nothing hovered it falls back to the persistent focus expression.
+ */
+function legLineOpacity(
+  hoverLegId: string | null,
+  restingFull: number,
+  hoverFull: number
+): maplibregl.ExpressionSpecification {
+  if (!hoverLegId) return focusOpacity(restingFull);
+  return [
+    "case",
+    ["==", ["get", "legId"], hoverLegId],
+    hoverFull,
+    LEG_HOVER_DIM_OPACITY,
   ] as maplibregl.ExpressionSpecification;
 }
 
@@ -195,7 +226,9 @@ export default function CarbonTransitMap({
   railVisible,
   highlight,
   focus,
+  hoverLegId,
   onMarkerClick,
+  onLegHover,
   onClear,
 }: CarbonTransitMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -212,7 +245,10 @@ export default function CarbonTransitMap({
   // Latest props for handlers that live as long as the map instance.
   const onMarkerClickRef = useRef(onMarkerClick);
   const onClearRef = useRef(onClear);
+  const onLegHoverRef = useRef(onLegHover);
   const railVisibleRef = useRef(railVisible);
+  // Latest hover so the geo-sync rebuild re-applies the right line opacity.
+  const hoverLegIdRef = useRef(hoverLegId);
   const [styleReady, setStyleReady] = useState(false);
   const [satOn, setSatOn] = useState(false);
   // WebGL can be unavailable (headless browsers, exhausted contexts) — the
@@ -222,7 +258,9 @@ export default function CarbonTransitMap({
   useEffect(() => {
     onMarkerClickRef.current = onMarkerClick;
     onClearRef.current = onClear;
+    onLegHoverRef.current = onLegHover;
     railVisibleRef.current = railVisible;
+    hoverLegIdRef.current = hoverLegId;
     // geo-sync (a separate effect) reads the latest focus to flag newly built
     // markers/chips/legs; the dedicated focus effect handles focus-only changes.
     focusRef.current = focus;
@@ -347,6 +385,25 @@ export default function CarbonTransitMap({
           "line-opacity": focusOpacity(1),
           "line-dasharray": ANTS_DASH_SEQUENCE[0],
         },
+      });
+
+      // Invisible wide line on top — a forgiving hover hit-target so the thin
+      // visible lines don't demand pixel-perfect aim.
+      map.addLayer({
+        id: LEGS_HIT_LAYER_ID,
+        type: "line",
+        source: LEGS_SOURCE_ID,
+        paint: { "line-color": ink, "line-width": LEG_HIT_WIDTH, "line-opacity": 0 },
+      });
+      const reportHover = (event: maplibregl.MapLayerMouseEvent) => {
+        const legId = event.features?.[0]?.properties?.legId as string | undefined;
+        map.getCanvas().style.cursor = legId ? "pointer" : "";
+        onLegHoverRef.current?.(legId ?? null);
+      };
+      map.on("mousemove", LEGS_HIT_LAYER_ID, reportHover);
+      map.on("mouseleave", LEGS_HIT_LAYER_ID, () => {
+        map.getCanvas().style.cursor = "";
+        onLegHoverRef.current?.(null);
       });
 
       setStyleReady(true);
@@ -558,6 +615,45 @@ export default function CarbonTransitMap({
       | undefined;
     source?.setData({ type: "FeatureCollection", features });
   }, [focus, styleReady]);
+
+  // Transient hover isolation — the hovered leg's line + chip stay lit while
+  // every other leg ghosts back. Layered over the persistent focus dimming
+  // (line opacity is a layer property, so it survives a geo re-sync); reverts
+  // to the focus state when the pointer leaves.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+
+    const layers: ReadonlyArray<readonly [string, number, number]> = [
+      [LEGS_BASE_LAYER_ID, LEG_LINE_OPACITY, LEG_HOVER_OPACITY],
+      [FALLBACK_LAYER_ID, LEG_LINE_OPACITY, LEG_HOVER_OPACITY],
+      [LEGS_DASH_LAYER_ID, 1, 1],
+    ];
+    for (const [layerId, resting, hover] of layers) {
+      if (map.getLayer(layerId)) {
+        map.setPaintProperty(
+          layerId,
+          "line-opacity",
+          legLineOpacity(hoverLegId, resting, hover)
+        );
+      }
+    }
+
+    const currentFocus = focusRef.current;
+    for (const chip of chipsRef.current) {
+      const element = chip.getElement();
+      const legId = element.dataset.legId ?? "";
+      // Hover wins while active; otherwise the persistent focus dim applies.
+      element.classList.toggle(
+        "cvm-hoverdim",
+        hoverLegId !== null && legId !== hoverLegId
+      );
+      element.classList.toggle(
+        DIM_CLASS,
+        hoverLegId === null && currentFocus !== null && !currentFocus.legIds.has(legId)
+      );
+    }
+  }, [hoverLegId, styleReady]);
 
   const toggleSat = () => {
     const map = mapRef.current;
