@@ -20,6 +20,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
+import { formatLocalDate } from "@/lib/date-utils";
 import {
   productionRuns,
   productionRunReadings,
@@ -89,11 +90,11 @@ export async function getProductionRuns(
   }
 
   if (startDate) {
-    conditions.push(gte(productionRuns.date, startDate.toISOString().split('T')[0]));
+    conditions.push(gte(productionRuns.date, formatLocalDate(startDate)));
   }
 
   if (endDate) {
-    conditions.push(lte(productionRuns.date, endDate.toISOString().split('T')[0]));
+    conditions.push(lte(productionRuns.date, formatLocalDate(endDate)));
   }
 
   const whereClause = and(...conditions);
@@ -303,7 +304,12 @@ export async function getProductionRunById(
     .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
     .leftJoin(reactors, eq(productionRuns.reactorId, reactors.id))
     .leftJoin(operators, eq(productionRuns.operatorId, operators.id))
-    .where(eq(productionRuns.id, productionRunId));
+    .where(
+      and(
+        eq(productionRuns.id, productionRunId),
+        isNull(productionRuns.archivedAt),
+      ),
+    );
 
   if (!run) {
     throw new SafeError("Production run not found");

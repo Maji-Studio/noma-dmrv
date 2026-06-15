@@ -1149,23 +1149,10 @@ two oversized data-access files. The remainder is still open:
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
 Surfaced by a manual walkthrough of every entity + certification; most findings
-were fixed in that pass and the two below were deferred by product decision. The
+were fixed in that pass and the remaining item below was deferred by product decision. The
 dated run context and the registry counts that prompted these questions are
 archived in
 [docs/archive/2026-06-07-e2e-walkthrough-snapshot.md](archive/2026-06-07-e2e-walkthrough-snapshot.md).
-
-### Production-run Readings: wire-in vs. remove (`production-runs/readings`) — opened 2026-06-07, **deferred**
-
-- `ProductionRunReadingForm` + `ProductionRunReadingTable` (plus the schema and
-  `src/data-access/production-runs` reading queries/hooks) exist but are
-  **imported nowhere**. The only readings UI on the prod-run form is a
-  non-functional CSV stub labelled "UI mock only … not uploaded or saved yet".
-- **Why it matters:** a half-built feature plus a stub that looks functional
-  invites confusion (an operator may believe CSV readings are persisted).
-- **Resolve via:** decide between (a) wire the Reading table/form into the
-  prod-run **edit** sheet like Samples/Incidents and implement real CSV upload
-  + persistence (L), or (b) remove the dead components and the CSV stub (S).
-  Record the decision and remove this entry.
 
 ### Certification view is local-first; doesn't mirror the registry (`isometric/registry-mirror`) — opened 2026-06-07, **deferred**
 
@@ -1232,17 +1219,17 @@ Sizing: (S) small, (M) medium, (L) large.
 - **Resolve via:** decide server-side paging UX (page size, infinite-scroll vs. pages),
   then add `.limit`/offset + `@tanstack/react-virtual` (M). UX decision first.
 
-### Overview loader lineage fan-out (`perf/overview-lineage-nplus1`) — opened 2026-06-07, **deferred**
+### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — opened 2026-06-07, **deferred**
 
 - `loadCertificationOverview` rebuilds a full submission context per removal; each walks
   every application through `getChainOfCustodyData`, which issues ~5–6 sequential single-row
-  queries → on the order of R×A×6 round-trips per landing-page load, uncached. Same root
+  queries → on the order of R×A×6 round-trips per Removals load, uncached. Same root
   pattern as the per-batch `getCo2eStoredPreview` fan-out (`credit-batches.ts:380`) and the
   per-row `getCreditBatchById`/`getLatestSubmission` loops in `certify-context-core.ts`.
-- **Why it matters:** the certification landing page latency grows linearly with
-  removals×applications; every navigation re-runs the full fan-out.
+- **Why it matters:** the Removals hub readiness payload grows linearly with
+  removals×applications; every navigation to Removals re-runs the full fan-out.
 - **Resolve via:** batch lineage with set-based `inArray` queries (delivery→order→
-  product→run in one pass, zip in JS) and/or memoize the Overview payload (React Query
+  product→run in one pass, zip in JS) and/or memoize the readiness payload (React Query
   staleTime or a server cache). The batched primitive `getCreditBatchSummariesByRemovalIds`
   already exists as a model (L). Owner decides read/write/cache tradeoff.
 

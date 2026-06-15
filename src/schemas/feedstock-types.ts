@@ -72,19 +72,20 @@ function validateCategoryUsage(
   ctx: z.RefinementCtx
 ) {
   if (!data.category || !data.usage) return;
-  const allowed =
-    data.usage === "pyrolysis"
-      ? pyrolysisCategorySet.has(data.category)
-      : blendCategorySet.has(data.category);
+  const allowedSet =
+    data.usage === "pyrolysis" ? pyrolysisCategorySet : blendCategorySet;
+  const allowed = allowedSet.has(data.category);
 
   if (!allowed) {
+    const allowedList = Array.from(allowedSet).sort().join(", ");
+    const suffix = allowedList ? `. Allowed: ${allowedList}` : ". No allowed categories";
     ctx.addIssue({
       code: "custom",
       path: ["category"],
       message:
         data.usage === "pyrolysis"
-          ? "Select a pyrolysis feedstock category"
-          : "Select a blend material category",
+          ? `Select a pyrolysis feedstock category${suffix}`
+          : `Select a blend material category${suffix}`,
     });
   }
 }

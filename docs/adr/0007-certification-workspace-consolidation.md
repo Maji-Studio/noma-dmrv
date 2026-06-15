@@ -6,21 +6,23 @@
 > ADR 0006 (telemetry as its own sub-status). Does **not** change the submission
 > domain model — only where submission lives in the UI and how status is read.
 > **Amendment (2026-06-04) — sidebar nav, no in-page tabs.** The in-page
-> `CertificationTabBar` was removed; the four sub-routes (Overview · Removals ·
-> GHG Statements · Settings) are promoted back to a titled **Certification**
-> group in the left sidebar, mirroring the Verification section, per operator
-> preference for one persistent nav. This changes only the *nav topology* of
-> decisions 1 and 5 below — a sidebar group instead of a single entry + tab bar.
-> Everything else stands unchanged: the workspace routes, the work-queue
-> Overview, the one submit entry point (decision 2), the shared status model
-> (decision 3), and Settings consolidation (decision 4). Overview's sidebar item
-> matches on its exact path (`/certification`) since that href prefixes every
-> sibling route.
+> `CertificationTabBar` was removed; the workspace routes were promoted back to
+> a titled **Certification** group in the left sidebar, mirroring the
+> Verification section, per operator preference for one persistent nav. This
+> changed only the *nav topology* of decisions 1 and 5 below — a sidebar group
+> instead of a single entry + tab bar. The 2026-06-13 amendment below later
+> retired the standalone Overview route.
 > **Amendment (2026-06-08) — New-Removal wizard replaces the review route.**
 > The workspace remains the only submission entry point, but the complex path is
 > now the New-Removal wizard (`select ready batches -> registry requirements ->
 > submit`) rather than `/certification/removals/[id]/review`. Credit-batch health
 > and entity-readiness surfaces push completeness earlier in the workflow.
+> **Amendment (2026-06-13) — Overview route retired.** The standalone Overview
+> work-queue page did not earn a permanent navigation slot once Removals and GHG
+> Statements became full DataTable hubs and Settings became the durable setup
+> home. The sidebar now exposes three concrete routes: Removals · GHG Statements
+> · Settings. `/certification` remains as a compatibility redirect to Removals
+> and preserves `?facility=`.
 
 ## Context
 
@@ -48,12 +50,13 @@ Make certification a **first-class section** alongside `facilities` /
 `production-runs`, using the same primitives, and consolidate **all submission
 into that workspace**.
 
-1. **Sidebar workspace at `/certification`** — a persistent Certification
-   sidebar group exposes four routes (Overview · Removals · GHG Statements ·
-   Settings), with no in-page tabs. The Overview is a **work queue** ("needs
-   attention"), not a dashboard. Lists are **DataTables** (the `production-runs`
-   idiom); quick view is a **read-only side-sheet** (`?removal=` /
-   `?statement=`). The complex removal path is the **New-Removal wizard**:
+1. **Sidebar workspace under `/certification`** — a persistent Certification
+   sidebar group exposes three concrete routes (Removals · GHG Statements ·
+   Settings), with no in-page tabs. The root `/certification` route redirects
+   to Removals for old bookmarks and broad entry points. Lists are
+   **DataTables** (the `production-runs` idiom); quick view is a
+   **read-only side-sheet** (`?removal=` / `?statement=`). The complex removal
+   path is the **New-Removal wizard**:
    select ready ungrouped credit batches, review registry requirements, then
    submit. Evidence upload and transport-document completion are handled on the
    relevant entity surfaces before a batch is selectable.
@@ -84,9 +87,9 @@ into that workspace**.
    read-only **Environment & health** panel surfaces non-secret integration
    status.
 
-5. **Four-item sidebar group.** Certification is a titled sidebar group with
-   Overview (`/certification`), Removals, GHG Statements, and Settings entries
-   under the same section; there is no `CertificationTabBar`.
+5. **Three-item sidebar group.** Certification is a titled sidebar group with
+   Removals, GHG Statements, and Settings entries under the same section; there
+   is no `CertificationTabBar` and no standalone Overview nav item.
 
 ## Consequences
 

@@ -120,41 +120,45 @@ export function TransportLegForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-20">
-      <p className="body-small text-[var(--color-text-secondary)]">
-        Distance-based leg: we record distance + cargo mass; Isometric applies the
-        emission factor (Transportation v1.1 Eq. 3).
-      </p>
-
       {errors.root?.serverError?.message && (
         <ServerError message={errors.root.serverError.message} />
       )}
 
-      <FormSection title="Route" divider={false}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-          <FormField
-            id="originName"
-            label="Origin name"
-            error={errors.originName?.message}
-          >
-            <FormInput
+      <FormSection
+        title="Route"
+        divider={false}
+        hint="We record distance and cargo mass; Isometric applies the transport emissions factor."
+      >
+        <div className="flex flex-col gap-16">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+            <FormField
               id="originName"
-              placeholder="e.g. Loading bay A"
-              error={!!errors.originName}
-              {...register("originName")}
-            />
-          </FormField>
-          <FormField
-            id="destinationName"
-            label="Destination name"
-            error={errors.destinationName?.message}
-          >
-            <FormInput
+              label="Origin name"
+              error={errors.originName?.message}
+            >
+              <FormInput
+                id="originName"
+                placeholder="e.g. Loading bay A"
+                error={!!errors.originName}
+                {...register("originName")}
+              />
+            </FormField>
+            <FormField
               id="destinationName"
-              placeholder="e.g. Storage yard"
-              error={!!errors.destinationName}
-              {...register("destinationName")}
-            />
-          </FormField>
+              label="Destination name"
+              error={errors.destinationName?.message}
+            >
+              <FormInput
+                id="destinationName"
+                placeholder="e.g. Storage yard"
+                error={!!errors.destinationName}
+                {...register("destinationName")}
+              />
+            </FormField>
+          </div>
+
+          {/* Origin/destination maps stack full-width — side-by-side cramps
+              each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
             label="Origin position"
@@ -183,6 +187,8 @@ export function TransportLegForm({
             longitudeError={errors.destinationGpsLongitude?.message}
             disabled={isSubmitting}
           />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <DistanceCalcField
             id="distanceKm"
             label="Distance (km)"
@@ -214,7 +220,7 @@ export function TransportLegForm({
             id="distanceSource"
             label="Distance source"
             error={errors.distanceSource?.message}
-            helperText="Mark as Document when the distance comes from the bill of lading or weigh ticket."
+            helperText="Use Document when the distance comes from shipping evidence."
           >
             <FormSelect
               id="distanceSource"
@@ -241,7 +247,7 @@ export function TransportLegForm({
             label="Load mass (kg)"
             required
             error={errors.loadMassKg?.message}
-            helperText="Cargo mass moved on this leg (Eq. 3, W_j). Required so the Certify aggregator can mass-weight distance."
+            helperText="Mass moved on this leg. Used to weight transport emissions."
             certifyRequired={isTransportLegCertifyField("loadMassKg")}
           >
             <FormInput
@@ -266,6 +272,7 @@ export function TransportLegForm({
               {...register("vehicleType")}
             />
           </FormField>
+          </div>
         </div>
       </FormSection>
 

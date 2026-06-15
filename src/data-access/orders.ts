@@ -72,6 +72,7 @@ export interface OrderDetail extends Order {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Read Operations
@@ -395,6 +396,26 @@ export async function getOrdersForSelect(
 // Create Operations
 // ============================================
 
+async function validateCustomerLocationBelongsToCustomer(
+  customerId: string,
+  customerLocationId: string | null | undefined
+): Promise<void> {
+  if (!customerLocationId) return;
+
+  const [location] = await db
+    .select({ customerId: customerLocations.customerId })
+    .from(customerLocations)
+    .where(eq(customerLocations.id, customerLocationId));
+
+  if (!location) {
+    throw new SafeError("Customer location not found");
+  }
+
+  if (location.customerId !== customerId) {
+    throw new SafeError("Delivery location belongs to a different customer");
+  }
+}
+
 /**
  * Create a new order
  */
@@ -437,6 +458,11 @@ export async function createOrder(
   if (product.facilityId !== data.facilityId) {
     throw new SafeError("Biochar product belongs to a different facility");
   }
+
+  await validateCustomerLocationBelongsToCustomer(
+    data.customerId,
+    data.customerLocationId
+  );
 
   try {
     const [order] = await db
@@ -513,6 +539,11 @@ export async function updateOrder(
 
   const effectiveFacilityId = data.facilityId ?? existing.facilityId;
   const effectiveProductId = data.biocharProductId ?? existing.biocharProductId;
+  const effectiveCustomerId = data.customerId ?? existing.customerId;
+  const effectiveCustomerLocationId =
+    data.customerLocationId !== undefined
+      ? data.customerLocationId
+      : existing.customerLocationId;
 
   if (
     (data.facilityId !== undefined || data.biocharProductId !== undefined) &&
@@ -532,14 +563,30 @@ export async function updateOrder(
     }
   }
 
-  const [updated] = await db
-    .update(orders)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(orders.id, orderId))
-    .returning();
+  if (data.customerId !== undefined || data.customerLocationId !== undefined) {
+    await validateCustomerLocationBelongsToCustomer(
+      effectiveCustomerId,
+      effectiveCustomerLocationId
+    );
+  }
+
+  const updated = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "order", entityId: orderId },
+      "update",
+    );
+
+    const [row] = await tx
+      .update(orders)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return row;
+  });
 
   return updated;
 }
@@ -568,19 +615,27 @@ export async function deleteOrder(
     throw new SafeError("Order not found");
   }
 
-  // Check for associated deliveries
-  const [deliveryCount] = await db
-    .select({ count: count() })
-    .from(deliveries)
-    .where(eq(deliveries.orderId, orderId));
-
-  if (Number(deliveryCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete order with associated deliveries. Remove deliveries first."
+  await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "order", entityId: orderId },
+      "delete",
     );
-  }
 
-  await db.delete(orders).where(eq(orders.id, orderId));
+    // Check for associated deliveries
+    const [deliveryCount] = await tx
+      .select({ count: count() })
+      .from(deliveries)
+      .where(eq(deliveries.orderId, orderId));
+
+    if (Number(deliveryCount.count) > 0) {
+      throw new SafeError(
+        "Cannot delete order with associated deliveries. Remove deliveries first."
+      );
+    }
+
+    await tx.delete(orders).where(eq(orders.id, orderId));
+  });
 }
 
 // ============================================

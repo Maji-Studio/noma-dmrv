@@ -1,8 +1,8 @@
 /**
  * IsometricFeedstockBrowser
  * Read-only browse of the Isometric registry's feedstock-type catalogue for
- * the feedstock-type form's Isometric tab. Browse-only by design (locked
- * decision: no local record is created from registry entries, no import).
+ * the feedstock-type form's Isometric tab. Selection fills the surrounding
+ * local form; creation still happens only when that form is saved.
  * Gated on the selected facility having a registry link — the catalogue is
  * account-global on Isometric, but browsing it is only meaningful for
  * facilities that participate in certification.
@@ -15,11 +15,20 @@ import {
   useFacilityCertifierSummary,
   useIsometricFeedstockTypes,
 } from "@/hooks/use-certification";
+import type { IsometricFeedstockType } from "@/lib/isometric";
 
 const settingsHref = (facilityId: string) =>
   `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
 
-export function IsometricFeedstockBrowser() {
+interface IsometricFeedstockBrowserProps {
+  onSelect?: (type: IsometricFeedstockType) => void;
+  selectedId?: string | null;
+}
+
+export function IsometricFeedstockBrowser({
+  onSelect,
+  selectedId,
+}: IsometricFeedstockBrowserProps) {
   const { facilityId } = useFacilityContext();
   const summary = useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
   const isConnected = !!summary.data?.mapping;
@@ -77,21 +86,37 @@ export function IsometricFeedstockBrowser() {
   return (
     <div className="flex flex-col gap-12">
       <p className="body-caption text-[var(--color-text-tertiary)]">
-        Read-only view of the registry catalogue — local feedstock types stay
-        separate and are managed in the General tab.
+        Choose the certified Isometric feedstock first. Noma will prefill the
+        local record, then you finish the category and save.
       </p>
-      <ul className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]">
+      <ul
+        className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]"
+        data-testid="isometric-feedstock-list"
+      >
         {catalogue.data.map((type) => (
-          <li key={type.id} className="flex flex-col gap-2 px-12 py-8">
-            <span className="body-small text-[var(--color-text-primary)]">
-              {type.name}
-            </span>
-            <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
-              {type.id}
-              {type.supplier_reference_id
-                ? ` · ref ${type.supplier_reference_id}`
-                : ""}
-            </span>
+          <li key={type.id}>
+            <button
+              type="button"
+              onClick={() => onSelect?.(type)}
+              data-testid={`isometric-feedstock-option-${type.id}`}
+              className="flex w-full items-start justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)]"
+              aria-pressed={selectedId === type.id}
+            >
+              <span className="flex flex-col gap-2">
+                <span className="body-small text-[var(--color-text-primary)]">
+                  {type.name}
+                </span>
+                <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+                  {type.id}
+                  {type.supplier_reference_id
+                    ? ` · ref ${type.supplier_reference_id}`
+                    : ""}
+                </span>
+              </span>
+              <span className="label-button shrink-0 text-[var(--color-interaction)]">
+                {selectedId === type.id ? "Selected" : "Use"}
+              </span>
+            </button>
           </li>
         ))}
       </ul>

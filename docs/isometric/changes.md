@@ -4,6 +4,57 @@ Certification remodel implementation notes from 2026-06-03 and 2026-06-04 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-certification-remodel.md`](../archive/isometric-changes-archive-2026-06-certification-remodel.md).
 
+Feedstock type certification guardrail implementation notes from 2026-06-13 are
+archived in
+[`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
+
+## 2026-06-14 (submitted certification artifacts lock upstream source data)
+
+Submitted certification artifacts now freeze the source data they represent,
+not just their direct credit-batch/removal membership. This keeps live noma
+views from drifting away from the immutable payload snapshot already sent to
+Isometric.
+
+- **Data-access guard** — `src/data-access/certification-lineage-guards.ts`
+  re-derives the current chain from credit batch → application → delivery →
+  biochar product/order → production run/feedstock/sample and checks whether
+  the chain reaches a Removal or GHG Statement with a blocking
+  `certification_submissions` row.
+- **Blocked mutations** — updates and deletes for production runs, lab samples,
+  deliveries, biochar products, and feedstocks now fail with a `SafeError` when
+  the record participates in a submitted Removal, telemetry data upload, or
+  verifier-bound GHG Statement. Creating a new lab sample under a locked
+  production run is also blocked.
+- **Operator copy** — the surfaced failure explains that the record is part of
+  a submitted certification artifact and directs the operator to create a
+  correction instead of editing locked source data. Raw SQL/internal errors
+  remain hidden.
+- **Tests** — `tests/certification-lineage-guards.test.ts` covers production
+  run dry-mass edits, production run deletion, sample edits, sample evidence
+  deletion, delivery edits through a GHG Statement, biochar product edits, and
+  feedstock edits.
+
+## 2026-06-13 (application evidence method drives removal readiness)
+
+Applications now declare which Soil Module application-proof path they satisfy:
+`visual` (geotagged photo evidence) or `boundary` (GIS boundary reference plus
+logbook PDF). Readiness follows the declared method instead of treating all
+applications as the same evidence shape.
+
+- **Schema/UI** — `applications.evidence_method` defaults to `visual`;
+  `gis_boundary_reference` is required for the boundary path at readiness time.
+  The application form switches evidence upload between image files and PDF
+  boundary logbooks.
+- **Document metadata** — photo uploads without timestamp/GPS EXIF are accepted
+  but marked with `metadata.geotagStatus = "missing"` and `missingExif`; this is
+  a certification gap, not an upload failure.
+- **Readiness** — `buildApplicationEvidenceGaps` flags visual applications that
+  lack an uploaded geotagged photo and boundary applications that lack either a
+  boundary reference or uploaded PDF logbook.
+- **Migration** — `0048_application-evidence-method` backfills boundary mode for
+  applications that already had a GIS boundary reference and removes the old
+  blanket `captured_at` photo/video DB check.
+
 ## 2026-06-12 (phantom link dialog explained — post-create certifier prompt is intentional)
 
 Closes open question `facilities/phantom-link-dialog`.

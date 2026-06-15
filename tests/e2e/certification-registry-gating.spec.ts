@@ -2,7 +2,7 @@
  * Certification registry-gating E2E tests
  *
  * Certification is a conditional workspace (ADR 0007): its operational routes
- * (Overview, Removals, GHG Statements) only surface once the current facility
+ * (Removals, GHG Statements) only surface once the current facility
  * is linked to a registry. Settings stays reachable always — it's where the
  * link is created. These tests cover both the sidebar nav-hiding
  * (`app-sidebar.tsx`) and the route guard (`certification-registry-guard.tsx`).
@@ -19,7 +19,7 @@ import {
 } from "./fixtures/certification-helpers";
 
 const CERTIFICATION_SETTINGS_URL = "/certification/settings";
-const CERTIFICATION_OVERVIEW_URL = "/certification";
+const CERTIFICATION_ROOT_URL = "/certification";
 const CERTIFICATION_REMOVALS_URL = "/certification/removals";
 
 // DB-only link target; never reaches Isometric, so any string is fine.
@@ -27,7 +27,7 @@ const FAKE_PROJECT_ID = "e2e-gating-fake-project";
 
 // Operational links hidden until a registry is linked; Settings is the lone
 // always-visible entry point.
-const OPERATIONAL_LINKS = ["Overview", "Removals", "GHG Statements"] as const;
+const OPERATIONAL_LINKS = ["Removals", "GHG Statements"] as const;
 
 // First navigation to a not-yet-compiled certification route can take 10-30s in
 // dev (Turbopack cold compile) before the client-side guard can run its
@@ -82,9 +82,9 @@ test.describe("Certification registry gating", () => {
       { timeout: REDIRECT_TIMEOUT_MS },
     );
 
-    // The Overview root redirects too.
+    // The retired root route redirects through Removals, which is also guarded.
     await adminPage.goto(
-      `${CERTIFICATION_OVERVIEW_URL}?facility=${seededData.facility.id}`,
+      `${CERTIFICATION_ROOT_URL}?facility=${seededData.facility.id}`,
     );
     await expect(adminPage).toHaveURL(
       new RegExp(`${CERTIFICATION_SETTINGS_URL}`),
@@ -129,6 +129,15 @@ test.describe("Certification registry gating", () => {
       // And it did NOT bounce to Settings.
       await expect(adminPage).not.toHaveURL(
         new RegExp(`${CERTIFICATION_SETTINGS_URL}`),
+      );
+
+      // The root entry point now lands on the first concrete route.
+      await adminPage.goto(
+        `${CERTIFICATION_ROOT_URL}?facility=${seededData.facility.id}`,
+      );
+      await expect(adminPage).toHaveURL(
+        new RegExp(`${CERTIFICATION_REMOVALS_URL}`),
+        { timeout: REDIRECT_TIMEOUT_MS },
       );
     } finally {
       await mapping.cleanup();

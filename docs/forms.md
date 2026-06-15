@@ -263,6 +263,50 @@ under the form element:
   (`@/components/ui/detail-panel`), which mirrors this treatment so the
   view ↔ edit toggle reads as the same surface.
 
+### FormSpine
+
+Use `FormSpine` for long, process-shaped side-sheet forms where operators need
+orientation across several sections. It is a passive rail, not a wizard: all
+sections stay visible and the parent form still owns submit/validation.
+
+```typescript
+const { control } = useForm<MyFormData>({ resolver, defaultValues });
+
+<form className="space-y-20" onSubmit={handleSubmit(onSubmit)}>
+  <FormSpine control={control}>
+    <FormSection
+      title="Run Setup"
+      icon={<Factory size={14} weight="bold" />}
+      fields={["date", "reactorId", "status"]}
+      required={["date", "reactorId"]}
+      certReady={(values) => values.status === "complete"}
+    >
+      …fields…
+    </FormSection>
+
+    <FormSection
+      title="Transfer Preview"
+      icon={<ArrowsLeftRight size={14} weight="bold" />}
+    >
+      …read-only recap…
+    </FormSection>
+  </FormSpine>
+
+  <FormActions onCancel={onCancel} isSubmitting={isSubmitting} />
+</form>
+```
+
+- `control` is the form's React Hook Form control object.
+- `fields` names the section's owned fields and scopes the live subscription.
+- `required` is the subset that must be filled before the section can turn
+  complete. `completion="all"` treats every field in `fields` as required.
+- `certReady` is the local domain gate for CERT obligations. A section turns
+  green only when required fields are filled and `certReady` passes.
+- Field-less sections render as numbered orientation steps with no completion
+  claim. Use them for previews/recaps, not for required input.
+- Conditional `FormSection` children can mount/unmount inside the spine;
+  numbering is derived from rendered order and stays contiguous.
+
 ### Vertical rhythm (spacing rule)
 
 - **`space-y-20`** — standard for all side-sheet forms (top-level form element),
@@ -506,6 +550,9 @@ import { numericValue, nullableNumericValue, integerValue } from "@/lib/form-uti
 - `numericValue` — most common, for optional numeric fields with `z.number().optional()`
 - `nullableNumericValue` — for nullable fields with `z.number().nullable().optional()`
 - `integerValue` — for integer-only fields
+
+> **Gotcha — clearing a value on edit must use `nullableNumericValue`.**
+> For any nullable column the user can *clear* in an edit form, use `nullableNumericValue` (empty → `null`), **not** `numericValue` (empty → `undefined`). Drizzle's `.set()` **drops `undefined` keys**, so an update built from `undefined` leaves the old value in the database — the field appears un-clearable and the change silently reverts. `null` is an explicit value Drizzle persists. (Reference: storage-location capacity, `storage-location-form.tsx`.)
 
 ## Zod Preprocessors for Nullable Numeric Fields
 

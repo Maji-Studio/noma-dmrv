@@ -4,7 +4,7 @@
  * Minimal field requirements for rapid entity creation
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { drivers, operators, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -196,6 +196,8 @@ export async function createFeedstockType(
   data: CreateFeedstockTypeData
 ): Promise<EntityOption> {
   requireAuth(userId);
+  const name = data.name.trim();
+  const usage = data.usage ?? "pyrolysis";
 
   // Check for duplicate code
   const [existingCode] = await db
@@ -207,14 +209,14 @@ export async function createFeedstockType(
     throw new SafeError("A feedstock type with this code already exists");
   }
 
-  // Check for duplicate name (unique constraint)
+  // Check for duplicate name + usage (unique constraint)
   const [existingName] = await db
     .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
-    .where(eq(feedstockTypes.name, data.name));
+    .where(and(eq(feedstockTypes.name, name), eq(feedstockTypes.usage, usage)));
 
   if (existingName) {
-    throw new SafeError("A feedstock type with this name already exists");
+    throw new SafeError("A feedstock type with this name and usage already exists");
   }
 
   try {
@@ -222,9 +224,9 @@ export async function createFeedstockType(
       .insert(feedstockTypes)
       .values({
         code: data.code,
-        name: data.name,
+        name,
         category: data.category,
-        usage: data.usage ?? "pyrolysis",
+        usage,
         description: data.description ?? null,
         registryUrl: data.registryUrl ?? null,
       })
@@ -238,7 +240,7 @@ export async function createFeedstockType(
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("A feedstock type with this code or name already exists");
+      throw new SafeError("A feedstock type with this code or name and usage already exists");
     }
     throw error;
   }

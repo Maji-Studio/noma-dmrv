@@ -216,7 +216,7 @@ export function CustomerLocationForm({
           id="defaultSoilTemperatureC"
           label="Default soil temperature (°C)"
           error={errors.defaultSoilTemperatureC?.message}
-          helperText="Optional site default for new application durability calculations. Applications can still override it."
+          helperText="Default for new applications; editable per application."
         >
           <FormInput
             id="defaultSoilTemperatureC"
@@ -242,7 +242,7 @@ export function CustomerLocationForm({
             label="Distance from facility (km)"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("customerLocation", "distanceFromFacilityKm")}
-            helperText="Road distance facility → site. Auto-fills the biochar distribution transport leg used for certification."
+            helperText="Road distance to this site, used for transport emissions."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

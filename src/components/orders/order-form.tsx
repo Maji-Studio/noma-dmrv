@@ -9,7 +9,8 @@ import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormEntitySelect, FormActions } from "@/components/forms";
+import { Calendar, Storefront, Package } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormEntitySelect, FormActions, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import {
   orderFormSchema,
@@ -82,6 +83,8 @@ export function OrderForm({
     formState: { errors },
   } = useForm({
     resolver: zodResolver(orderFormSchema),
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
     defaultValues: {
       facilityId: order?.facilityId ?? contextFacilityId ?? "",
       customerId: order?.customerId ?? "",
@@ -163,12 +166,14 @@ export function OrderForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Required Fields Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Order Information
-        </h3>
-
+      <FormSpine control={control}>
+      {/* Order Information */}
+      <FormSection
+        title="Order Information"
+        icon={<Calendar size={14} weight="bold" />}
+        fields={["orderDate"]}
+        required={["orderDate"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="orderDate"
@@ -186,14 +191,15 @@ export function OrderForm({
           </FormField>
 
         </div>
-      </div>
+      </FormSection>
 
       {/* Customer Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Customer Details
-        </h3>
-
+      <FormSection
+        title="Customer Details"
+        icon={<Storefront size={14} weight="bold" />}
+        fields={["customerId", "customerLocationId"]}
+        required={["customerId"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="customerId"
@@ -213,7 +219,7 @@ export function OrderForm({
 
           <FormField
             id="customerLocationId"
-            label="Delivery Location"
+            label="Customer location"
             error={errors.customerLocationId?.message}
           >
             <FormSelect
@@ -237,14 +243,15 @@ export function OrderForm({
             facility={formFacility}
           />
         )}
-      </div>
+      </FormSection>
 
       {/* Product Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Product Details
-        </h3>
-
+      <FormSection
+        title="Product Details"
+        icon={<Package size={14} weight="bold" />}
+        fields={["biocharProductId", "packaging", "quantityKg", "value", "currency"]}
+        required={["biocharProductId", "packaging", "quantityKg"]}
+      >
         <FormEntitySelect
           control={control}
           name="biocharProductId"
@@ -326,7 +333,8 @@ export function OrderForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
+      </FormSpine>
 
       <FormActions
         onCancel={onCancel}

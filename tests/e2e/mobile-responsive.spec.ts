@@ -104,6 +104,17 @@ test.describe("Mobile responsiveness (390×844)", () => {
     await hamburger(page).click();
     const drawer = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(drawer).toBeVisible();
+
+    // On a phone the drawer is full-screen width — no sliver of the page peeks
+    // behind the scrim. (`w-full` below `sm`; it locks to a fixed width at
+    // `sm`+ for small tablets, which still see the drawer up to `md`.)
+    const drawerBox = await drawer.boundingBox();
+    expect(drawerBox).not.toBeNull();
+    expect(
+      drawerBox!.width,
+      "nav drawer should fill the phone viewport width",
+    ).toBeGreaterThanOrEqual(MOBILE_VIEWPORT.width - 1);
+
     await expect(drawer.getByRole("link", { name: /Dashboard/i })).toBeVisible();
 
     // Close button dismisses.
@@ -145,5 +156,34 @@ test.describe("Mobile responsiveness (390×844)", () => {
     await expect(card).toBeFocused();
 
     await expectNoHorizontalOverflow(page, "/reactors (card view)");
+  });
+
+  test("entity view sheet stacks paired detail fields to one column on mobile", async ({
+    adminPage,
+    seededData,
+  }) => {
+    const page = adminPage;
+    // Open the seeded reactor's read-only view sheet via its mobile card row.
+    await page.goto(`/reactors?facility=${seededData.facility.id}`);
+    await expect(hamburger(page)).toBeVisible();
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await page.locator('div[role="button"][tabindex="0"]').first().click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible({ timeout: 15000 });
+
+    // "Code" and "Identifier" are paired in one DetailRow. At desktop they sit
+    // side-by-side (same row); below `sm` the row must stack so a long value
+    // gets the full sheet width instead of a wrapping ~170px half-column. Assert
+    // the Identifier label renders clearly BELOW the Code label — i.e. stacked,
+    // not beside it. (Guards the DetailRow `flex-col sm:flex-row` contract.)
+    const codeBox = await sheet.getByText("Code", { exact: true }).boundingBox();
+    const idBox = await sheet.getByText("Identifier", { exact: true }).boundingBox();
+    expect(codeBox).not.toBeNull();
+    expect(idBox).not.toBeNull();
+    expect(
+      idBox!.y,
+      "Identifier should stack below Code on a phone, not sit beside it",
+    ).toBeGreaterThan(codeBox!.y + 16);
   });
 });

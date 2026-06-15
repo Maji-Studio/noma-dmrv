@@ -57,6 +57,45 @@ export const gpsCoordinatesSchema = z.object({
 
 export type GpsCoordinates = z.infer<typeof gpsCoordinatesSchema>;
 
+export const GPS_PAIR_MESSAGE =
+  "Both latitude and longitude must be provided together";
+
+export function hasCompleteGpsPair(data: {
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+}): boolean {
+  const hasLat = data.gpsLatitude != null;
+  const hasLng = data.gpsLongitude != null;
+  return hasLat === hasLng;
+}
+
+/**
+ * Both-or-neither GPS validation that points the error at the coordinate the
+ * operator still needs to enter — not the one they already filled, which the
+ * old single-message refine did. Use via `.superRefine(gpsPairSuperRefine)` on
+ * any schema carrying `gpsLatitude` / `gpsLongitude`.
+ */
+export function gpsPairSuperRefine(
+  data: { gpsLatitude?: number | null; gpsLongitude?: number | null },
+  ctx: z.RefinementCtx,
+): void {
+  const hasLat = data.gpsLatitude != null;
+  const hasLng = data.gpsLongitude != null;
+  if (hasLat && !hasLng) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gpsLongitude"],
+      message: "Longitude is required when a latitude is entered.",
+    });
+  } else if (hasLng && !hasLat) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gpsLatitude"],
+      message: "Latitude is required when a longitude is entered.",
+    });
+  }
+}
+
 // ============================================
 // Zod Preprocessors for Form String → Number Coercion
 // ============================================
@@ -150,6 +189,36 @@ export const defaultSoilTemperatureSchema = optionalNumber.pipe(
 // ============================================
 // Date-Only Input Helpers
 // ============================================
+
+/**
+ * Required date field fed by `<input type="date">` ("YYYY-MM-DD").
+ *
+ * Parses date-only strings at LOCAL midnight for the same reason as
+ * optionalDateOnly below: the field represents a calendar day, not an instant.
+ */
+export const requiredDateOnly = z.union([
+  z.date(),
+  z.string().min(1, "Required").transform((val, ctx): Date => {
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+    const date = dateOnly
+      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+      : new Date(val);
+    if (
+      dateOnly &&
+      (date.getFullYear() !== Number(dateOnly[1]) ||
+        date.getMonth() !== Number(dateOnly[2]) - 1 ||
+        date.getDate() !== Number(dateOnly[3]))
+    ) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      return z.NEVER;
+    }
+    if (isNaN(date.getTime())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      return z.NEVER;
+    }
+    return date;
+  }),
+]);
 
 /**
  * Optional date field fed by `<input type="date">` ("YYYY-MM-DD").

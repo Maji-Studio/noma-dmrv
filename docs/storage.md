@@ -122,6 +122,28 @@ providers, so the HEAD verification step is the security boundary.
 If `confirmUpload` rejects, the object is immediately deleted and
 `upload_status` is set to `'failed'`.
 
+## Production-run Readings Import
+
+Production-run telemetry uses the same document pipeline, but persistence is a
+two-step operation:
+
+1. Upload a `sensor_data` document against the `production_run`.
+2. Preview/import that uploaded document through
+   `src/fn/production-run-reading-imports.ts`.
+
+The importer accepts **CSV reactor-day files only**. The filename must include a
+reactor code and ISO date, for example `TZ001B 2026-04-02.csv`. Preview reads
+the managed object from storage, checks that the file day overlaps the selected
+run window in the facility timezone, suggests column mappings from the header,
+and warns when the filename reactor does not match the run reactor.
+
+Confirmed imports replace only readings inside the file-day/run-window overlap
+and store the accepted header mapping on `reactors.specifications` under
+`reactorDayCsvMapping` so the next file with the same header can import without
+re-mapping. XLSX files may still be stored as generic `sensor_data` evidence
+because the upload rule is tabular, but they are not parsed into
+`production_run_readings`.
+
 ## CORS configuration (production buckets only)
 
 The browser PUT is cross-origin. DO Spaces / S3 must allow it:
@@ -155,7 +177,7 @@ tune:
 | `pdd` | 50 MB | PDF |
 | `video` | 100 MB | mp4, webm |
 | `photo` | 25 MB | png, jpeg, gif, webp |
-| `sensor_data` | 25 MB | CSV, XLSX (production readings) |
+| `sensor_data` | 25 MB | CSV, XLSX for storage; production-run readings import parses CSV only |
 | (others) | 25 MB | PDF + images |
 
 The local-fs route also enforces a hard `LOCAL_FS_GLOBAL_MAX_BYTES =
@@ -178,6 +200,8 @@ The local-fs route also enforces a hard `LOCAL_FS_GLOBAL_MAX_BYTES =
 - `src/lib/storage/` — provider implementations.
 - `src/fn/documents.ts` — server actions.
 - `src/hooks/use-file-upload.ts` — client-side upload orchestration.
+- `src/fn/production-run-reading-imports.ts` — document-backed readings
+  preview/import.
 - `src/components/forms/form-file-upload.tsx` — UI component.
 - `src/components/samples/sample-documents-panel.tsx` — first
   production integration (sample evidence panel).

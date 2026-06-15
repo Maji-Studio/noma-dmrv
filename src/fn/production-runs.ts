@@ -28,6 +28,7 @@ import {
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
 import { getUser } from "@/lib/auth/server";
+import { toLoggedActionError } from "./action-errors";
 import {
   createProductionRunSchema,
   deleteProductionRunSchema,
@@ -36,6 +37,17 @@ import {
   productionRunReadingSchema,
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
+
+function productionRunActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "production run action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -68,8 +80,11 @@ export async function getProductionRunsFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load production runs",
+      error: productionRunActionError(
+        error,
+        "Failed to load production runs",
+        "production-run:list",
+      ),
     };
   }
 }
@@ -91,7 +106,11 @@ export async function getProductionRunByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load production run",
+      error: productionRunActionError(
+        error,
+        "Failed to load production run",
+        "production-run:get",
+      ),
     };
   }
 }
@@ -130,7 +149,11 @@ export async function getProductionRunBiocharPreviewFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load production run preview",
+      error: productionRunActionError(
+        error,
+        "Failed to load production run preview",
+        "production-run:preview",
+      ),
     };
   }
 }
@@ -152,8 +175,11 @@ export async function getProductionRunStatsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load production run stats",
+      error: productionRunActionError(
+        error,
+        "Failed to load production run stats",
+        "production-run:stats",
+      ),
     };
   }
 }
@@ -175,10 +201,11 @@ export async function getFacilityEnergyTotalsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load facility energy totals",
+      error: productionRunActionError(
+        error,
+        "Failed to load facility energy totals",
+        "production-run:energy-totals",
+      ),
     };
   }
 }
@@ -200,8 +227,11 @@ export async function getProductionRunReadingsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load production run readings",
+      error: productionRunActionError(
+        error,
+        "Failed to load production run readings",
+        "production-run:readings",
+      ),
     };
   }
 }
@@ -228,10 +258,11 @@ export async function checkProductionRunCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check production run code",
+      error: productionRunActionError(
+        error,
+        "Failed to check production run code",
+        "production-run:check-code",
+      ),
     };
   }
 }
@@ -300,8 +331,11 @@ export async function createProductionRunFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create production run",
+      error: productionRunActionError(
+        error,
+        "Failed to create production run",
+        "production-run:create",
+      ),
     };
   }
 }
@@ -338,8 +372,11 @@ export async function addProductionRunReadingFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to add reading",
+      error: productionRunActionError(
+        error,
+        "Failed to add reading",
+        "production-run:add-reading",
+      ),
     };
   }
 }
@@ -395,8 +432,11 @@ export async function updateProductionRunFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update production run",
+      error: productionRunActionError(
+        error,
+        "Failed to update production run",
+        "production-run:update",
+      ),
     };
   }
 }
@@ -430,8 +470,11 @@ export async function deleteProductionRunFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete production run",
+      error: productionRunActionError(
+        error,
+        "Failed to delete production run",
+        "production-run:delete",
+      ),
     };
   }
 }

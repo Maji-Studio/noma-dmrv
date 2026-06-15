@@ -17,7 +17,8 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { FormField, FormInput, FormSelect, FormSection, PositionPicker, FormActions } from "@/components/forms";
+import { Package, MapPin, Camera, Thermometer } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions } from "@/components/forms";
 import {
   applicationFormSchema,
   applicationEvidenceMethods,
@@ -210,6 +211,8 @@ export function ApplicationForm({
     formState: { errors },
   } = useForm<z.input<typeof applicationFormSchema>, unknown, ApplicationFormData>({
     resolver: zodResolver(applicationFormSchema),
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
     defaultValues: {
       applicationDate: application?.applicationDate
         ? formatLocalDate(new Date(application.applicationDate))
@@ -348,8 +351,21 @@ export function ApplicationForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <FormSpine control={control}>
       {/* === Section 1: Application Details === */}
-      <FormSection title="Application Details" divider={false}>
+      <FormSection
+        title="Application Details"
+        icon={<Package size={14} weight="bold" />}
+        fields={["applicationDate", "deliveryId", "biocharAppliedTons", "biocharAppliedDryTons"]}
+        required={["applicationDate", "deliveryId", "biocharAppliedTons"]}
+        // When the delivery has no moisture %, dry mass is entered manually and
+        // is a CERT field — require it before the section reads complete.
+        certReady={(v) =>
+          moisturePercent == null && selectedDelivery
+            ? typeof v.biocharAppliedDryTons === "number"
+            : true
+        }
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
             <FormInput
@@ -442,7 +458,11 @@ export function ApplicationForm({
       </FormSection>
 
       {/* === Section 2: Field Details === */}
-      <FormSection title="Field Details">
+      <FormSection
+        title="Field Details"
+        icon={<MapPin size={14} weight="bold" />}
+        fields={["fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethodType", "gpsLatitude", "gpsLongitude"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="fieldSizeHa" label="Field Size (Ha)" error={errors.fieldSizeHa?.message}>
             <FormInput
@@ -510,8 +530,8 @@ export function ApplicationForm({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
-            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLatitude", lat, { shouldDirty: true, shouldValidate: true });
+            setValue("gpsLongitude", lng, { shouldDirty: true, shouldValidate: true });
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
@@ -521,7 +541,11 @@ export function ApplicationForm({
       </FormSection>
 
       {/* === Section 3: Evidence === */}
-      <FormSection title="Evidence Method">
+      <FormSection
+        title="Evidence Method"
+        icon={<Camera size={14} weight="bold" />}
+        fields={["evidenceMethod", "gisBoundaryReference"]}
+      >
         <div
           className="grid grid-cols-1 gap-8 md:grid-cols-2"
           role="radiogroup"
@@ -584,11 +608,13 @@ export function ApplicationForm({
       </FormSection>
 
       {/* === Section 4: Soil Temperature === */}
-      <FormSection title="Soil Temperature">
-        <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
-          Isometric Protocol: Used in 200-year durability calculation
-        </p>
-
+      <FormSection
+        title="Soil Temperature"
+        icon={<Thermometer size={14} weight="bold" />}
+        hint="Used in the Isometric 200-year durability calculation."
+        fields={["soilTemperatureSource", "soilTemperatureC"]}
+        required={["soilTemperatureC"]}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="soilTemperatureSource"
@@ -626,6 +652,7 @@ export function ApplicationForm({
           </FormField>
         </div>
       </FormSection>
+      </FormSpine>
 
       <FormActions
         onCancel={onCancel}

@@ -10,6 +10,7 @@ import {
   orders,
   facilities,
   customers,
+  applications,
   biocharProducts,
   drivers,
   vehicles,
@@ -80,6 +81,7 @@ export interface DeliveryStats {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Read Operations
@@ -744,29 +746,39 @@ export async function updateDelivery(
     }
   }
 
-  const [updated] = await db
-    .update(deliveries)
-    .set({
-      ...data,
-      ...(deliveryColumns.truckMassOnArrivalKg
-        ? {}
-        : { truckMassOnArrivalKg: undefined }),
-      ...(deliveryColumns.truckMassOnDepartureKg
-        ? {}
-        : { truckMassOnDepartureKg: undefined }),
-      ...(deliveryColumns.distanceKmOverride
-        ? {}
-        : { distanceKmOverride: undefined }),
-      ...(deliveryColumns.distanceSource
-        ? {}
-        : { distanceSource: undefined }),
-      ...(deliveryColumns.distanceNote
-        ? {}
-        : { distanceNote: undefined }),
-      updatedAt: new Date(),
-    })
-    .where(eq(deliveries.id, deliveryId))
-    .returning(getDeliveryBaseSelection(deliveryColumns));
+  const updated = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "delivery", entityId: deliveryId },
+      "update",
+    );
+
+    const [row] = await tx
+      .update(deliveries)
+      .set({
+        ...data,
+        ...(deliveryColumns.truckMassOnArrivalKg
+          ? {}
+          : { truckMassOnArrivalKg: undefined }),
+        ...(deliveryColumns.truckMassOnDepartureKg
+          ? {}
+          : { truckMassOnDepartureKg: undefined }),
+        ...(deliveryColumns.distanceKmOverride
+          ? {}
+          : { distanceKmOverride: undefined }),
+        ...(deliveryColumns.distanceSource
+          ? {}
+          : { distanceSource: undefined }),
+        ...(deliveryColumns.distanceNote
+          ? {}
+          : { distanceNote: undefined }),
+        updatedAt: new Date(),
+      })
+      .where(eq(deliveries.id, deliveryId))
+      .returning(getDeliveryBaseSelection(deliveryColumns));
+
+    return row;
+  });
 
   return updated;
 }
@@ -794,7 +806,26 @@ export async function deleteDelivery(
     throw new SafeError("Delivery not found");
   }
 
-  await db.delete(deliveries).where(eq(deliveries.id, deliveryId));
+  await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "delivery", entityId: deliveryId },
+      "delete",
+    );
+
+    const [{ value: applicationCount }] = await tx
+      .select({ value: count() })
+      .from(applications)
+      .where(eq(applications.deliveryId, deliveryId));
+
+    if (Number(applicationCount) > 0) {
+      throw new SafeError(
+        "Cannot delete delivery with applications. Remove the applications first."
+      );
+    }
+
+    await tx.delete(deliveries).where(eq(deliveries.id, deliveryId));
+  });
 }
 
 // ============================================

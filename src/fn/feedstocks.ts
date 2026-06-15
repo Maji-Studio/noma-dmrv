@@ -33,6 +33,18 @@ import {
 } from "@/schemas/feedstocks";
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function feedstockActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "feedstock action failed",
+    context: { op },
+  });
+}
 
 // The leg sync runs AFTER the feedstock write has committed, so a failure here
 // must not surface as a failed mutation — the UI would invite a retry of a
@@ -209,7 +221,11 @@ export async function createFeedstockFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to create feedstock",
+      error: feedstockActionError(
+        error,
+        "Failed to create feedstock",
+        "feedstock:create",
+      ),
     };
   }
 }
@@ -249,7 +265,11 @@ export async function updateFeedstockFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to update feedstock",
+      error: feedstockActionError(
+        error,
+        "Failed to update feedstock",
+        "feedstock:update",
+      ),
     };
   }
 }
@@ -278,7 +298,11 @@ export async function deleteFeedstockFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to delete feedstock",
+      error: feedstockActionError(
+        error,
+        "Failed to delete feedstock",
+        "feedstock:delete",
+      ),
     };
   }
 }

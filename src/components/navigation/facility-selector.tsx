@@ -80,7 +80,7 @@ export function FacilitySelector() {
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-controls={listboxId}
-          className="w-full h-36 pl-32 pr-28 bg-[var(--color-white-100)]/[0.06] border border-[var(--color-white-10)] text-white body-caption cursor-pointer text-left hover:bg-[var(--color-white-100)]/[0.10] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clr-purple)] transition-colors duration-150"
+          className="w-full h-44 md:h-36 pl-32 pr-28 bg-[var(--color-white-100)]/[0.06] border border-[var(--color-white-10)] text-white body-caption cursor-pointer text-left hover:bg-[var(--color-white-100)]/[0.10] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clr-purple)] transition-colors duration-150"
         >
           <span className="block truncate">{selectedFacilityName}</span>
         </button>

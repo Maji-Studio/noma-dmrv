@@ -1,6 +1,24 @@
 @import "tailwindcss";
 @import "../styles/fonts.css";
 
+.slide-over-panel-popup {
+  transform: translateX(100%);
+}
+
+.slide-over-panel-popup[data-ending-style] {
+  transform: translateX(100%);
+}
+
+.slide-over-panel-popup[data-closed] {
+  transform: translateX(100%);
+  transition: none;
+  pointer-events: none;
+}
+
+.slide-over-panel-popup[data-open] {
+  transform: translateX(0);
+}
+
 :root {
   /* ===== BRAND COLORS ===== */
   --clr-dark-purple: rgba(15, 2, 26, 1);
@@ -812,6 +830,20 @@ p,
   padding-right: 24px;
 }
 
+/*
+ * Canonical page shell — vertical rhythm for routed pages.
+ * Replaces the literal `py-32 flex flex-col gap-32` so the gap between
+ * header / KPI strip / content scales down on small screens instead of
+ * staying a fixed 32px. Mobile 20px → tablet 24px → desktop 32px.
+ */
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
 /* Responsive adjustments at breakpoints */
 @media (min-width: 768px) {
   .gap-xs {
@@ -969,9 +1001,20 @@ p,
     padding-left: 32px;
     padding-right: 32px;
   }
+
+  .page-shell {
+    gap: 24px;
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
 }
 
 @media (min-width: 1024px) {
+  .page-shell {
+    gap: 32px;
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
   .gap-xs {
     gap: 24px;
   }
