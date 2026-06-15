@@ -23,13 +23,16 @@ export const supplierFormSchema = z.object({
     .max(255, "Supplier name must be less than 255 characters"),
 
   // Location fields
+  // General region text only — precise coordinates/distance live per-location
+  // in supplierLocations (mirrors customers). Supplier-level GPS stays optional
+  // for backward compatibility with suppliers created before multi-location.
   location: z
     .string()
     .max(255, "Location must be less than 255 characters")
     .optional()
     .or(z.literal("")),
-  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
-  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
+  gpsLatitude: latitudeSchema,
+  gpsLongitude: longitudeSchema,
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")
