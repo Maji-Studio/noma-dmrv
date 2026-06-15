@@ -4,16 +4,9 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
-import { parseLocalDateString } from "@/lib/date-utils";
-
-function formatDateField(d: string): string {
-  const dateObj = /^\d{4}-\d{2}-\d{2}$/.test(d)
-    ? parseLocalDateString(d)
-    : new Date(d);
-  return dateObj.toLocaleDateString();
-}
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
+import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Fire,
@@ -29,6 +22,7 @@ import {
 import {
   useCreateProductionRun,
   useDeleteProductionRun,
+  useProductionRun,
   useProductionRuns,
   useUpdateProductionRun,
   useProductionRunStats,
@@ -46,6 +40,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { formatSafeDate } from "@/lib/format-utils";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
@@ -58,6 +53,14 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 
 const TOAST_GAP_PREVIEW_LIMIT = 3;
+
+function productionRunDetailHref(run: ProductionRunWithRelations) {
+  const params = new URLSearchParams({
+    facility: run.facilityId,
+    run: run.id,
+  });
+  return `/production-runs?${params.toString()}`;
+}
 
 // ============================================
 // Status Badge
@@ -93,7 +96,7 @@ function createColumns(
     {
       accessorKey: "date",
       header: "Date",
-      cell: ({ row }) => formatDateField(row.original.date),
+      cell: ({ row }) => formatSafeDate(row.original.date),
     },
     {
       id: "facility",
@@ -114,6 +117,16 @@ function createColumns(
       accessorFn: (row) => row.reactorIdentifier ?? "",
     },
     {
+      accessorKey: "totalFeedstockMassKg",
+      header: "Feedstock (kg)",
+      cell: ({ row }) => row.original.totalFeedstockMassKg?.toLocaleString() ?? "\u2014",
+    },
+    {
+      accessorKey: "biocharOutputKg",
+      header: "Biochar Wet (kg)",
+      cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
+    },
+    {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
@@ -128,16 +141,6 @@ function createColumns(
       ),
     },
     {
-      accessorKey: "totalFeedstockMassKg",
-      header: "Feedstock (kg)",
-      cell: ({ row }) => row.original.totalFeedstockMassKg?.toLocaleString() ?? "\u2014",
-    },
-    {
-      accessorKey: "biocharOutputKg",
-      header: "Biochar Wet (kg)",
-      cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
-    },
-    {
       id: "actions",
       header: "",
       cell: ({ row }) => (
@@ -145,7 +148,10 @@ function createColumns(
           <RowActionsMenu
             label={`Actions for ${row.original.code}`}
             actions={[
-              { label: "Open details", href: `/production-runs/${row.original.id}` },
+              {
+                label: "Open details",
+                href: productionRunDetailHref(row.original),
+              },
               { label: "Edit", onSelect: () => onEdit(row.original) },
               { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
             ]}
@@ -164,6 +170,11 @@ function createColumns(
 export function ProductionRunList() {
   // Global facility context
   const { facilityId } = useFacilityContext();
+  const [focusedRunId, setFocusedRunId] = useQueryState(
+    "run",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const handledInvalidRunIdRef = useRef<string | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -195,6 +206,7 @@ export function ProductionRunList() {
   );
 
   const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters);
+  const focusedRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
   const { data: statsData, isLoading: statsLoading } = useProductionRunStats(facilityId || undefined);
 
   const createRun = useCreateProductionRun();
@@ -262,6 +274,9 @@ export function ProductionRunList() {
     setDeleteError(null);
     try {
       await deleteRun.mutateAsync(deletingRunId);
+      if (focusedRunId === deletingRunId) {
+        setFocusedRunId(null);
+      }
       setDeletingRunId(null);
       toast.success("Production run deleted successfully");
     } catch (error) {
@@ -269,16 +284,64 @@ export function ProductionRunList() {
     }
   };
 
-  const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
-  const openView = (run: ProductionRunWithRelations) => { setSideSheet({ entity: run, mode: "view" }); };
+  const openCreate = () => { setFocusedRunId(null); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openView = (run: ProductionRunWithRelations) => { setFocusedRunId(run.id); setSideSheet({ entity: run, mode: "view" }); };
   const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
-  const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => { setFocusedRunId(null); setSideSheet(null); setCreateError(null); setUpdateError(null); };
   useOpenCreateIntent(openCreate);
 
   const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || statusFilter;
 
   const columns = createColumns(openEdit, handleDelete);
+
+  useEffect(() => {
+    if (!focusedRunId) {
+      handledInvalidRunIdRef.current = null;
+      return;
+    }
+    if (focusedRun.isLoading || focusedRun.isFetching || focusedRun.isPending) return;
+    if (handledInvalidRunIdRef.current === focusedRunId) return;
+
+    if (focusedRun.data && facilityId && focusedRun.data.facilityId !== facilityId) {
+      handledInvalidRunIdRef.current = focusedRunId;
+      toast.error("Linked production run is not in the selected facility");
+      setFocusedRunId(null);
+      return;
+    }
+
+    if (focusedRun.isError || (focusedRun.isSuccess && !focusedRun.data)) {
+      handledInvalidRunIdRef.current = focusedRunId;
+      toast.error("Linked production run could not be opened");
+      setFocusedRunId(null);
+    }
+  }, [
+    facilityId,
+    focusedRun.data,
+    focusedRun.isError,
+    focusedRun.isFetching,
+    focusedRun.isLoading,
+    focusedRun.isPending,
+    focusedRun.isSuccess,
+    focusedRunId,
+    setFocusedRunId,
+    toast,
+  ]);
+
+  const deepLinkedSideSheet =
+    focusedRunId &&
+    focusedRun.data &&
+    (!facilityId || focusedRun.data.facilityId === facilityId)
+      ? ({ entity: focusedRun.data, mode: "view" } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  const handleModeChange = (mode: SideSheetMode) => {
+    if (!displaySideSheet?.entity) return;
+    setCreateError(null);
+    setUpdateError(null);
+    setSideSheet({ entity: displaySideSheet.entity, mode });
+  };
 
   if (fetchError) {
     return (
@@ -289,9 +352,9 @@ export function ProductionRunList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
@@ -300,11 +363,11 @@ export function ProductionRunList() {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatDateField(sideSheetEntity.date)
+        ? formatSafeDate(sideSheetEntity.date)
         : undefined;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="production"
         title="Production Runs"
@@ -409,7 +472,7 @@ export function ProductionRunList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Production Run"
@@ -435,7 +498,7 @@ export function ProductionRunList() {
             title: "General",
             fields: [
               { label: "Code", value: sideSheetEntity.code },
-              { label: "Date", value: formatDateField(sideSheetEntity.date) },
+              { label: "Date", value: formatSafeDate(sideSheetEntity.date) },
               { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
               {
                 label: "Certifier",

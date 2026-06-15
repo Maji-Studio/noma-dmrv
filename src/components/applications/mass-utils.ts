@@ -1,5 +1,6 @@
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { formatSafeDate } from "@/lib/format-utils";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 
 /** The only source a delivery-derived prefill can assert (approved global dataset). */
@@ -124,7 +125,7 @@ export function formatKg(value: number | null | undefined): string {
 }
 
 function formatDeliveryDate(value: Date | string): string {
-  return new Date(value).toLocaleDateString();
+  return formatSafeDate(value);
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {

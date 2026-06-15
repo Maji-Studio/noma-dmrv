@@ -21,6 +21,7 @@ import type {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Application Data Access Layer
@@ -431,6 +432,12 @@ export async function createApplication(
   requireAuth(userId);
 
   return db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "delivery", entityId: data.deliveryId },
+      "create",
+    );
+
     const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
     const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
     if (!check.ok) throw new SafeError(check.errorMessage!);
@@ -488,12 +495,29 @@ export async function updateApplication(
       throw new SafeError("Application not found");
     }
 
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "application", entityId: id },
+      "update",
+    );
+
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
     const effectiveDeliveryId = data.deliveryId ?? existingApplication.deliveryId;
     const effectiveAppliedTons = data.biocharAppliedTons ?? existingApplication.biocharAppliedTons;
+
+    if (
+      data.deliveryId !== undefined &&
+      data.deliveryId !== existingApplication.deliveryId
+    ) {
+      await assertCanMutateCertifiedLineage(
+        tx,
+        { entityType: "delivery", entityId: data.deliveryId },
+        "update",
+      );
+    }
 
     if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
       const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id, tx);
@@ -562,6 +586,12 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
     if (!existing) {
       throw new SafeError("Application not found");
     }
+
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "application", entityId: id },
+      "delete",
+    );
 
     const linkedCreditBatches = await getLinkedCreditBatches(tx, id);
     const blockingBatches = linkedCreditBatches.filter((batch) =>

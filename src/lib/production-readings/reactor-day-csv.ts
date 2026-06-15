@@ -1,4 +1,4 @@
-import { fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 const FILE_DATE_RE = /([A-Za-z0-9_-]+)[\s_-]+(\d{4}-\d{2}-\d{2})/;
 const TIME_RE = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
@@ -57,10 +57,19 @@ export interface ParseReactorDayCsvResult {
   fileReactorCode: string;
   fileDate: string;
   headers: string[];
+  replacementWindowStart: Date;
+  replacementWindowEnd: Date;
   parsedRows: number;
   inWindowRows: number;
   droppedRows: number;
   readings: ReactorDayCsvReading[];
+}
+
+export interface ReactorDayCsvReplacementWindowArgs {
+  fileDate: string;
+  timezone: string;
+  runWindowStart: Date;
+  runWindowEnd: Date;
 }
 
 export function inspectReactorDayCsv(
@@ -75,24 +84,22 @@ export function inspectReactorDayCsv(
   const headers = rawHeaders.map(normalizeHeader);
   const headerSignature = buildHeaderSignature(headers);
   const storedMapping = args.storedMapping ?? null;
-  const requiresMapping =
+  const requiresHeaderMapping =
     !storedMapping || storedMapping.headerSignature !== headerSignature;
-
-  const warnings: string[] = [];
-  if (
+  const hasReactorMismatch =
     metadata.fileReactorCode.toLowerCase() !== args.runReactorCode.toLowerCase()
-  ) {
-    warnings.push(
-      `Filename reactor ${metadata.fileReactorCode} does not match selected run reactor ${args.runReactorCode}.`,
-    );
-  }
+  const warnings = hasReactorMismatch
+    ? [
+        `Filename reactor ${metadata.fileReactorCode} does not match selected run reactor ${args.runReactorCode}. Confirm this is the correct reactor-day file before importing.`,
+      ]
+    : [];
 
   return {
     ...metadata,
     headers,
     headerSignature,
-    requiresMapping,
-    suggestedMapping: requiresMapping
+    requiresMapping: requiresHeaderMapping || hasReactorMismatch,
+    suggestedMapping: requiresHeaderMapping
       ? suggestMapping(headers)
       : {
           temperature: storedMapping.temperature,
@@ -118,6 +125,12 @@ export function parseReactorDayCsv(
   if (timeIndex < 0) {
     throw new Error("CSV file must include a Time column");
   }
+  const replacementWindow = getReactorDayCsvReplacementWindow({
+    fileDate: metadata.fileDate,
+    timezone: args.timezone,
+    runWindowStart: args.runWindowStart,
+    runWindowEnd: args.runWindowEnd,
+  });
 
   const readings: ReactorDayCsvReading[] = [];
   let parsedRows = 0;
@@ -151,11 +164,50 @@ export function parseReactorDayCsv(
   return {
     ...metadata,
     headers,
+    replacementWindowStart: replacementWindow.start,
+    replacementWindowEnd: replacementWindow.end,
     parsedRows,
     inWindowRows: readings.length,
     droppedRows: parsedRows - readings.length,
     readings,
   };
+}
+
+export function getReactorDayCsvReplacementWindow(
+  args: ReactorDayCsvReplacementWindowArgs,
+): { start: Date; end: Date } {
+  const fileDayStart = fromZonedTime(`${args.fileDate}T00:00:00`, args.timezone);
+  const fileDayEnd = fromZonedTime(
+    `${addIsoDateDays(args.fileDate, 1)}T00:00:00`,
+    args.timezone,
+  );
+  const start =
+    args.runWindowStart > fileDayStart ? args.runWindowStart : fileDayStart;
+  const end = args.runWindowEnd < fileDayEnd ? args.runWindowEnd : fileDayEnd;
+
+  if (start >= end) {
+    throw new Error(
+      `CSV file date ${args.fileDate} is outside the selected production run window ${formatRunWindowForMessage(args.runWindowStart, args.runWindowEnd, args.timezone)}. Select a production run that covers ${args.fileDate}, or update the run start/end times.`,
+    );
+  }
+
+  return { start, end };
+}
+
+function formatRunWindowForMessage(
+  start: Date,
+  end: Date,
+  timezone: string,
+): string {
+  const formattedStart = formatInTimeZone(start, timezone, "yyyy-MM-dd HH:mm");
+  const formattedEnd = formatInTimeZone(end, timezone, "yyyy-MM-dd HH:mm");
+  return `${formattedStart} - ${formattedEnd} (${timezone})`;
+}
+
+function addIsoDateDays(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day! + days));
+  return date.toISOString().slice(0, 10);
 }
 
 export function parseFilenameMetadata(fileName: string): {

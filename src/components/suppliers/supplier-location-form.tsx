@@ -216,7 +216,7 @@ export function SupplierLocationForm({
             label="Distance to facility (km)"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
-            helperText="Road distance site → facility. Overrides the supplier's default distance for feedstock from this location."
+            helperText="Road distance from this source location to the facility."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

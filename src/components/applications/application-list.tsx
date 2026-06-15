@@ -7,17 +7,18 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
 import { MapPin, Plus, Leaf } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { ApplicationForm } from "./application-form";
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   formatApplicationKgFromTons,
   type ApplicationDeliveryOption,
@@ -38,6 +39,8 @@ import {
   type ApplicationMethod,
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { formatSafeDate } from "@/lib/format-utils";
 
 // ============================================
 // Column Definitions
@@ -59,7 +62,7 @@ function createColumns(
       accessorKey: "applicationDate",
       header: "Date",
       cell: ({ row }) => (
-        <span>{format(new Date(row.original.applicationDate), "MMM d, yyyy")}</span>
+        <span>{formatSafeDate(row.original.applicationDate)}</span>
       ),
     },
     {
@@ -98,6 +101,20 @@ function createColumns(
             ? formatApplicationMethod(row.original.applicationMethodType as ApplicationMethod)
             : "—"}
         </span>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+    {
+      id: "certifyReadiness",
+      header: "Certifier",
+      cell: ({ row }) => (
+        <EntityCertifyReadinessBadge
+          readiness={deriveEntityCertifyReadiness("application", row.original)}
+        />
       ),
     },
     {
@@ -244,11 +261,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy")
+        ? formatSafeDate(sideSheetEntity.applicationDate)
         : undefined;
 
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <PageHeader
         area="distribution"
         title="Applications"
@@ -352,7 +369,22 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               { label: "Code", value: sideSheetEntity.code },
               {
                 label: "Application Date",
-                value: format(new Date(sideSheetEntity.applicationDate), "MMM d, yyyy"),
+                value: formatSafeDate(sideSheetEntity.applicationDate),
+              },
+              {
+                label: "Status",
+                value: <StatusBadge status={sideSheetEntity.status} />,
+              },
+              {
+                label: "Certifier",
+                value: (
+                  <EntityCertifyReadinessBadge
+                    readiness={deriveEntityCertifyReadiness(
+                      "application",
+                      sideSheetEntity,
+                    )}
+                  />
+                ),
               },
             ],
           },

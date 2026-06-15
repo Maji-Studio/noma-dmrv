@@ -73,7 +73,8 @@ async function main(): Promise<void> {
       maxBytes: SMOKE_MAX_BYTES,
       expiresInSeconds: PRESIGN_TTL_SECONDS,
     });
-    const putRes = await fetch(upload.url, {
+    console.log(`PUT target: ${safeUrlSummary(upload.url)}`);
+    const putRes = await fetchOrFail("PUT", upload.url, {
       method: upload.method,
       headers: upload.headers,
       body,
@@ -105,7 +106,8 @@ async function main(): Promise<void> {
       key,
       expiresInSeconds: PRESIGN_TTL_SECONDS,
     });
-    const getRes = await fetch(downloadUrl);
+    console.log(`GET target: ${safeUrlSummary(downloadUrl)}`);
+    const getRes = await fetchOrFail("GET", downloadUrl);
     if (!getRes.ok) {
       const detail = await safeReadBody(getRes);
       fail(`GET failed: ${getRes.status} ${getRes.statusText}${detail}`);
@@ -154,6 +156,43 @@ async function safeReadBody(res: Response): Promise<string> {
   } catch {
     return "";
   }
+}
+
+async function fetchOrFail(
+  label: string,
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    throw new Error(
+      `${label} network request failed for ${safeUrlSummary(url)}: ${formatError(err)}`,
+    );
+  }
+}
+
+function safeUrlSummary(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    return `${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
+function formatError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const details = [err.message];
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    details.push(`cause=${cause.message}`);
+    const code = (cause as { code?: unknown }).code;
+    if (code) details.push(`code=${String(code)}`);
+  } else if (cause) {
+    details.push(`cause=${String(cause)}`);
+  }
+  return details.join(" ");
 }
 
 main().catch((err) => {

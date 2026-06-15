@@ -18,6 +18,7 @@ import {
   insertDocument,
   listDocumentsForEntity,
   updateDocument,
+  assertCanManageDocumentEntity,
   type DocumentRow,
 } from "@/data-access/documents";
 import { getDocumentUploadByDocument } from "@/data-access/certifier-document-uploads";
@@ -51,6 +52,8 @@ function buildDocumentMetadata(input: {
   }
 
   return {
+    // Certification readiness uses this generated metadata to identify
+    // application photos that carry both timestamp and GPS EXIF.
     geotagStatus: missingExif.length === 0 ? "present" : "missing",
     missingExif,
     exif: {
@@ -90,6 +93,11 @@ export async function requestUpload(
         `File exceeds ${Math.round(cap / BYTES_PER_MB)} MB limit for ${docType}`
       );
     }
+    await assertCanManageDocumentEntity(
+      userId,
+      parsed.data.entityType,
+      parsed.data.entityId,
+    );
 
     const provider = getStorageProvider();
     const storageKey = buildStorageKey({
@@ -151,6 +159,7 @@ export async function confirmUpload(
 
     const row = await getDocumentById(userId, documentId);
     if (!row) throw new SafeError("Document not found");
+    await assertCanManageDocumentEntity(userId, row.entityType, row.entityId);
     if (!row.storageKey) throw new SafeError("Document has no storage key");
     if (row.uploadStatus !== "pending") {
       throw new SafeError(`Document already in '${row.uploadStatus}' state`);
@@ -216,6 +225,7 @@ export async function deleteDocument(
 
     const row = await getDocumentById(userId, documentId);
     if (!row) throw new SafeError("Document not found");
+    await assertCanManageDocumentEntity(userId, row.entityType, row.entityId);
 
     // Fast user-facing path; the FK-backed delete below remains the real race
     // guard in case a mirror appears after this check.

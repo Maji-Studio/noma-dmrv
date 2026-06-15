@@ -60,7 +60,7 @@ export function MapPreview({ points }: MapPreviewProps) {
           <div className={`relative ${MAP_HEIGHT_CLASS}`}>
             <DashboardMap points={points} />
           </div>
-          <div className="flex flex-wrap items-center gap-x-20 gap-y-8 border-t border-[var(--color-border-tertiary)] px-20 py-12">
+          <div className="flex flex-wrap items-center gap-x-20 gap-y-8 border-t border-[var(--color-border-tertiary)] px-20 py-20">
             {LEGEND.map((entry) => (
               <span
                 key={entry.kind}

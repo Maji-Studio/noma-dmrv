@@ -159,7 +159,7 @@ See `docs/forms.md` and `docs/troubleshooting.md`.
 ### Style
 - TypeScript strict — avoid `any`; prefer `z.infer<typeof schema>` over hand-written types
 - Magic numbers → constants; use design-system tokens (`docs/design-system.md`), never hardcoded values
-- **Every routed page follows the Canonical Page Shell** (`docs/design-system.md` → Canonical Page Shell): `container-max py-32 flex flex-col gap-32` → `PageHeader` (area eyebrow, title, one-line subtitle) → iconed `StatCard` KPI strip (`gap-24`) → content; `EmptyState` for all empty/"select a facility" states, never bare text
+- **Every routed page follows the Canonical Page Shell** (`docs/design-system.md` → Canonical Page Shell): `container-max page-shell` → `PageHeader` (area eyebrow, title, one-line subtitle) → iconed `StatCard` KPI strip (`gap-24`) → content; `EmptyState` for all empty/"select a facility" states, never bare text
 - Sheet forms: sections via `FormSection`, CTA via `FormActions`, `space-y-20` top-level (`docs/forms.md`); read-only sheets mirror with `DetailSection`
 - For JSONB columns keep create/update defaults identical (match the schema's `.default()`)
 

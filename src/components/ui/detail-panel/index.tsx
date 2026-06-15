@@ -66,7 +66,7 @@ function DetailSection({ title, children, divider = true, className }: DetailSec
 DetailSection.displayName = "DetailSection";
 
 /* -------------------------------------------------------------------------------------------------
- * DetailRow - Two-column row for fields
+ * DetailRow - Field row: stacks to one column on phones, two columns at `sm`+
  * -----------------------------------------------------------------------------------------------*/
 
 interface DetailRowProps {
@@ -75,8 +75,11 @@ interface DetailRowProps {
 }
 
 function DetailRow({ children, className }: DetailRowProps) {
+  // Below `sm` the paired fields stack so long values (codes, names, "Method A
+  // (Every Batch)") get the full sheet width instead of a ~170px half-column
+  // that wraps. At `sm`+ they sit side-by-side as before — desktop unchanged.
   return (
-    <div className={cn("flex gap-16", className)}>
+    <div className={cn("flex flex-col gap-16 sm:flex-row", className)}>
       {children}
     </div>
   );

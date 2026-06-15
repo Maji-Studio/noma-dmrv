@@ -13,7 +13,8 @@ import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, EntitySelect, FormSection, FormActions } from "@/components/forms";
+import { Factory, Package, FlowArrow } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -174,6 +175,8 @@ export function BiocharProductForm({
 
   const form = useForm({
     resolver: zodResolver(biocharProductFormSchema),
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
     defaultValues: {
       facilityId: product?.facility?.id ?? contextFacilityId ?? "",
       formulationId: product?.formulation?.id ?? "",
@@ -321,25 +324,37 @@ export function BiocharProductForm({
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Transfer Flow Preview */}
-      <FormSection title="Transfer Preview" divider={false}>
-        <TransferFlowPreview
-          sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
-          availableKg={linkedRunPreview?.biocharOutputKg ?? null}
-          sourceMassKg={massKgNum}
-          destinationMassKg={effectiveWetMassKg}
-          destinationBinLabel={
-            selectedStorageLocation?.name
-              ?? ((storageLocationId == null || storageLocationId === "")
-                ? product?.storageLocation?.name ?? null
-                : null)
-              ?? null
-          }
-        />
-      </FormSection>
+      {/* Transfer Preview — a derived recap of the transfer, not a data-entry
+          step, so it sits above the numbered spine and only when it has data. */}
+      {(linkedRunPreview || selectedStorageLocation || massKgNum != null) && (
+        <div className="space-y-12">
+          <SectionLabel icon={<FlowArrow size={14} weight="bold" />}>
+            Transfer Preview
+          </SectionLabel>
+          <TransferFlowPreview
+            sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
+            availableKg={linkedRunPreview?.biocharOutputKg ?? null}
+            sourceMassKg={massKgNum}
+            destinationMassKg={effectiveWetMassKg}
+            destinationBinLabel={
+              selectedStorageLocation?.name
+                ?? ((storageLocationId == null || storageLocationId === "")
+                  ? product?.storageLocation?.name ?? null
+                  : null)
+                ?? null
+            }
+          />
+        </div>
+      )}
 
+      <FormSpine control={control}>
       {/* Source: Production Run */}
-      <FormSection title="Source">
+      <FormSection
+        title="Source"
+        icon={<Factory size={14} weight="bold" />}
+        fields={["linkedProductionRunId", "massKg", "moistureContentPercent", "waterAddedKg", "densityKgM3"]}
+        required={["linkedProductionRunId", "massKg", "moistureContentPercent", "waterAddedKg"]}
+      >
         <FormField
           id="linkedProductionRunId"
           label="Production Run"
@@ -477,7 +492,12 @@ export function BiocharProductForm({
       </FormSection>
 
       {/* Destination + Product Details */}
-      <FormSection title="Destination & Product">
+      <FormSection
+        title="Destination & Product"
+        icon={<Package size={14} weight="bold" />}
+        fields={["formulationId", "storageLocationId", "productionDate"]}
+        required={["storageLocationId"]}
+      >
 
         {/* Formulation drives ingredient-bin rows and the destination bin filter.
             Leaving it empty produces a pure-biochar product. */}
@@ -558,6 +578,7 @@ export function BiocharProductForm({
           </FormField>
         </div>
       </FormSection>
+      </FormSpine>
 
       </form>
 

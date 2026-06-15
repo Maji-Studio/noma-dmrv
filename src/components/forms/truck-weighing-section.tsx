@@ -38,6 +38,12 @@ interface TruckWeighingSectionProps {
   arrivalCertifyRequired?: boolean;
   departureCertifyRequired?: boolean;
   isSubmitting?: boolean;
+  /**
+   * Render only the fields + mismatch alert, without the section header and
+   * top divider — used when the caller wraps this in a FormSpine `FormSection`
+   * that supplies its own marker, icon and label.
+   */
+  bare?: boolean;
 }
 
 export function TruckWeighingSection({
@@ -53,6 +59,7 @@ export function TruckWeighingSection({
   arrivalCertifyRequired,
   departureCertifyRequired,
   isSubmitting = false,
+  bare = false,
 }: TruckWeighingSectionProps) {
   const weighbridgeWetMassKg = deriveWeighbridgeWetMass(
     arrivalMassKg,
@@ -86,14 +93,8 @@ export function TruckWeighingSection({
       ? { enteredKg: wetMassKg, weighbridgeKg: weighbridgeWetMassKg }
       : null;
 
-  return (
-    <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-      <SectionLabel>Truck Weighing</SectionLabel>
-      <p className="body-small text-[var(--color-text-tertiary)]">
-        Weighbridge evidence for the wet mass: arrival - departure suggests the
-        unloaded mass.
-      </p>
-
+  const body = (
+    <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="truckMassOnArrivalKg"
@@ -148,6 +149,21 @@ export function TruckWeighingSection({
           </p>
         </div>
       )}
+    </>
+  );
+
+  // Bare: just the fields, for nesting inside a FormSpine FormSection that owns
+  // the header. Otherwise the standalone section with its own label + divider.
+  if (bare) {
+    return <div className="space-y-20">{body}</div>;
+  }
+
+  return (
+    <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
+      <SectionLabel hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence.">
+        Truck Weighing
+      </SectionLabel>
+      {body}
     </div>
   );
 }

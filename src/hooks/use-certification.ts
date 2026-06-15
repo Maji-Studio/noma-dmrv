@@ -87,7 +87,7 @@ export const certificationKeys = {
   health: () => [...certificationKeys.all, "health"] as const,
 };
 
-// Server-owned readiness work queue for the Overview. Heavier than the other
+// Server-owned readiness payload for the Removals hub. Heavier than the other
 // reads (walks lineage/coverage per removal), so it leans on React Query
 // caching; mutations invalidate `certificationKeys.all`, refreshing it.
 export function useCertificationOverview(facilityId: string, enabled = true) {

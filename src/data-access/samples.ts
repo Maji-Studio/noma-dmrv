@@ -107,6 +107,7 @@ export interface SampleStats {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // ============================================
 // Sample Read Operations
@@ -467,52 +468,61 @@ export async function createSample(
   }
 
   // Create sample
-  const [sample] = await db
-    .insert(samples)
-    .values({
-      sampleCode: data.sampleCode,
-      productionRunId: data.productionRunId,
-      samplingTime: data.samplingTime,
-      labName: data.labName ?? null,
-      labAccreditation: data.labAccreditation ?? null,
-      analysisDate: data.analysisDate
-        ? data.analysisDate.toISOString().split("T")[0]
-        : null,
-      weightGrams: data.weightGrams ?? null,
-      volumeMl: data.volumeMl ?? null,
-      totalCarbonPercent: data.totalCarbonPercent,
-      organicCarbonPercent: data.organicCarbonPercent,
-      inorganicCarbonPercent: data.inorganicCarbonPercent ?? null,
-      totalHydrogenPercent: data.totalHydrogenPercent ?? null,
-      totalNitrogenPercent: data.totalNitrogenPercent ?? null,
-      totalOxygenPercent: data.totalOxygenPercent ?? null,
-      totalSulfurPercent: data.totalSulfurPercent ?? null,
-      ashContentPercent: data.ashContentPercent ?? null,
-      moistureContentPercent: data.moistureContentPercent ?? null,
-      bulkDensityKgPerM3: data.bulkDensityKgPerM3 ?? null,
-      ph: data.ph ?? null,
-      saltContentGPerKg: data.saltContentGPerKg ?? null,
-      hToCOrgRatio: data.hToCOrgRatio ?? null,
-      oToCOrgRatio: data.oToCOrgRatio ?? null,
-      randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
-      r0MeasurementCount: data.r0MeasurementCount ?? null,
-      r0AnalysisDate: data.r0AnalysisDate
-        ? data.r0AnalysisDate.toISOString().split("T")[0]
-        : null,
-      r0HistogramFileUrl: data.r0HistogramFileUrl ?? null,
-      reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
-      residualCarbonPercent: data.residualCarbonPercent ?? null,
-      tgaAnalysisDate: data.tgaAnalysisDate
-        ? data.tgaAnalysisDate.toISOString().split("T")[0]
-        : null,
-      tgaThermogramFileUrl: data.tgaThermogramFileUrl ?? null,
-      phosphorusPercent: data.phosphorusPercent ?? null,
-      potassiumPercent: data.potassiumPercent ?? null,
-      magnesiumPercent: data.magnesiumPercent ?? null,
-      calciumPercent: data.calciumPercent ?? null,
-      ironPercent: data.ironPercent ?? null,
-    })
-    .returning();
+  const sample = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "productionRun", entityId: data.productionRunId },
+      "create",
+    );
+
+    const [created] = await tx
+      .insert(samples)
+      .values({
+        sampleCode: data.sampleCode,
+        productionRunId: data.productionRunId,
+        samplingTime: data.samplingTime,
+        labName: data.labName ?? null,
+        labAccreditation: data.labAccreditation ?? null,
+        analysisDate: data.analysisDate
+          ? data.analysisDate.toISOString().split("T")[0]
+          : null,
+        weightGrams: data.weightGrams ?? null,
+        volumeMl: data.volumeMl ?? null,
+        totalCarbonPercent: data.totalCarbonPercent,
+        organicCarbonPercent: data.organicCarbonPercent,
+        inorganicCarbonPercent: data.inorganicCarbonPercent ?? null,
+        totalHydrogenPercent: data.totalHydrogenPercent ?? null,
+        totalNitrogenPercent: data.totalNitrogenPercent ?? null,
+        totalOxygenPercent: data.totalOxygenPercent ?? null,
+        totalSulfurPercent: data.totalSulfurPercent ?? null,
+        ashContentPercent: data.ashContentPercent ?? null,
+        moistureContentPercent: data.moistureContentPercent ?? null,
+        bulkDensityKgPerM3: data.bulkDensityKgPerM3 ?? null,
+        ph: data.ph ?? null,
+        saltContentGPerKg: data.saltContentGPerKg ?? null,
+        hToCOrgRatio: data.hToCOrgRatio ?? null,
+        oToCOrgRatio: data.oToCOrgRatio ?? null,
+        randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+        r0MeasurementCount: data.r0MeasurementCount ?? null,
+        r0AnalysisDate: data.r0AnalysisDate
+          ? data.r0AnalysisDate.toISOString().split("T")[0]
+          : null,
+        r0HistogramFileUrl: data.r0HistogramFileUrl ?? null,
+        reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
+        residualCarbonPercent: data.residualCarbonPercent ?? null,
+        tgaAnalysisDate: data.tgaAnalysisDate
+          ? data.tgaAnalysisDate.toISOString().split("T")[0]
+          : null,
+        tgaThermogramFileUrl: data.tgaThermogramFileUrl ?? null,
+        phosphorusPercent: data.phosphorusPercent ?? null,
+        potassiumPercent: data.potassiumPercent ?? null,
+        magnesiumPercent: data.magnesiumPercent ?? null,
+        calciumPercent: data.calciumPercent ?? null,
+        ironPercent: data.ironPercent ?? null,
+      })
+      .returning();
+    return created;
+  });
 
   return getSampleById(userId, sample.id);
 }
@@ -642,7 +652,26 @@ export async function updateSample(
   if (data.calciumPercent !== undefined) updateData.calciumPercent = data.calciumPercent;
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
-  await db.update(samples).set(updateData).where(eq(samples.id, sampleId));
+  await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "sample", entityId: sampleId },
+      "update",
+    );
+
+    if (
+      data.productionRunId !== undefined &&
+      data.productionRunId !== existing.productionRunId
+    ) {
+      await assertCanMutateCertifiedLineage(
+        tx,
+        { entityType: "productionRun", entityId: data.productionRunId },
+        "update",
+      );
+    }
+
+    await tx.update(samples).set(updateData).where(eq(samples.id, sampleId));
+  });
 
   return getSampleById(userId, sampleId);
 }
@@ -671,6 +700,12 @@ export async function deleteSample(
   }
 
   await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      { entityType: "sample", entityId: sampleId },
+      "delete",
+    );
+
     await deleteTransportLegsForEntity(tx, "sample", sampleId);
     await tx.delete(samples).where(eq(samples.id, sampleId));
   });

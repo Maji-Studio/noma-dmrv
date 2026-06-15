@@ -17,3 +17,32 @@ export function certificationSettingsHref(
     tab,
   )}&facility=${encodeURIComponent(facilityId)}`;
 }
+
+export type CertificationSearchParams = Record<
+  string,
+  string | string[] | undefined
+>;
+
+/**
+ * Compatibility target for the retired certification overview route. Preserve
+ * incoming query params, including empty strings, so old scoped bookmarks keep
+ * the same URLSearchParams semantics as Next.js supplied.
+ */
+export function certificationRemovalsHref(
+  searchParams: CertificationSearchParams = {},
+): string {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        params.append(key, entry);
+      }
+    } else if (value !== undefined) {
+      params.set(key, value);
+    }
+  }
+
+  const query = params.toString();
+  return `/certification/removals${query ? `?${query}` : ""}`;
+}

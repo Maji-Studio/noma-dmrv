@@ -238,6 +238,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         status: "complete",
         biocharDryMassKg: 1000,
         samples: [],
+        readingsCount: 1,
       } as never,
     ]);
 
@@ -608,7 +609,17 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       {
         id: "pr-1",
         code: "PR-1",
+        status: "complete",
+        feedstockWetMassKg: 100,
+        feedstockMoisturePercent: 10,
+        biocharOutputKg: 40,
+        biocharMoisturePercent: 12,
+        dieselOperationLiters: 0,
+        preprocessingFuelLiters: 0,
+        dieselGensetLiters: 0,
+        electricityKwh: 0,
         samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
+        readingsCount: 1,
       } as never,
     ]);
 
@@ -791,6 +802,7 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
+        readingsCount: 1,
         samples: [
           {
             id: "s-1",
@@ -857,6 +869,7 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
+        readingsCount: 1,
         samples: [
           {
             id: "s-1",
@@ -919,6 +932,7 @@ describe("requiredTransportCategories", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
+        readingsCount: 1,
         samples: [
           {
             id: "s-1",
@@ -952,9 +966,72 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Feedstock FS-1: truck weighing",
-      "Delivery D-1: truck weighing",
+      "Feedstock FS-1: Truck weighing",
+      "Delivery D-1: Truck weighing",
     ]);
+  });
+
+  it("does not require truck weighing when the template has no transport inputs", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      applicationIds: ["app-1"],
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "tpl_none" }),
+    );
+    mockedListTemplates.mockResolvedValue([
+      transportTemplate("tpl_none", ["feedstock", "biochar", "sample"]),
+    ]);
+    mockedListBlueprints.mockResolvedValue([]);
+    mockedGetLineage.mockResolvedValue({
+      facility: { id: FACILITY_ID, code: "F", name: "F" },
+      application: { biocharAppliedDryTons: 0.1 } as never,
+      delivery: { id: "del-1", code: "D-1" } as never,
+      order: null,
+      biocharProduct: { id: "bp-1" } as never,
+      productionRun: { id: "pr-1" } as never,
+      reactor: null,
+      feedstocks: [{ id: "fs-1" } as never],
+      warnings: [],
+    } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
+    mockedGetRuns.mockResolvedValue([
+      {
+        id: "pr-1",
+        code: "PR-1",
+        status: "complete",
+        feedstockWetMassKg: 100,
+        feedstockMoisturePercent: 10,
+        biocharOutputKg: 40,
+        biocharDryMassKg: 35,
+        biocharMoisturePercent: 12,
+        dieselOperationLiters: 0,
+        preprocessingFuelLiters: 0,
+        dieselGensetLiters: 0,
+        electricityKwh: 0,
+        readingsCount: 1,
+        samples: [
+          {
+            id: "s-1",
+            sampleCode: "S-1",
+            organicCarbonPercent: 70,
+            hToCOrgRatio: 0.4,
+          },
+        ],
+      } as never,
+    ]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      USER_ID,
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.requiredTransportCategories).toEqual([]);
+    expect(result.entityReadinessGaps).toEqual([]);
+    expect(mockedGetFeedstocksByIds).not.toHaveBeenCalled();
+    expect(mockedGetDeliveriesByIds).not.toHaveBeenCalled();
   });
 
   it("returns an empty list when the template has no transport inputs", async () => {

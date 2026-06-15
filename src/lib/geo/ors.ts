@@ -10,9 +10,11 @@
 import { env } from "@/config/env";
 import {
   GEOCODE_MAX_RESULTS,
-  ORS_BASE_URL,
+  ORS_GEOCODE_BASE_URL,
   ORS_REQUEST_TIMEOUT_MS,
+  ORS_ROUTING_BASE_URL,
   ORS_ROUTING_PROFILE,
+  ORS_SNAP_RADIUS_METERS,
 } from "@/config/geo";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -109,7 +111,7 @@ export const orsProvider: GeoProvider = {
     });
     const body = (await orsFetch(
       "geocode",
-      `${ORS_BASE_URL}/geocode/search?${params}`,
+      `${ORS_GEOCODE_BASE_URL}/search?${params}`,
       { method: "GET", headers: { Authorization: key } }
     )) as PeliasResponse;
 
@@ -134,7 +136,7 @@ export const orsProvider: GeoProvider = {
     });
     const body = (await orsFetch(
       "reverse-geocode",
-      `${ORS_BASE_URL}/geocode/reverse?${params}`,
+      `${ORS_GEOCODE_BASE_URL}/reverse?${params}`,
       { method: "GET", headers: { Authorization: key } }
     )) as PeliasResponse;
 
@@ -145,7 +147,7 @@ export const orsProvider: GeoProvider = {
     const key = requireKey();
     const body = (await orsFetch(
       "route",
-      `${ORS_BASE_URL}/v2/directions/${ORS_ROUTING_PROFILE}`,
+      `${ORS_ROUTING_BASE_URL}/v2/directions/${ORS_ROUTING_PROFILE}`,
       {
         method: "POST",
         headers: {
@@ -157,6 +159,7 @@ export const orsProvider: GeoProvider = {
             [origin.lng, origin.lat],
             [destination.lng, destination.lat],
           ],
+          radiuses: [ORS_SNAP_RADIUS_METERS, ORS_SNAP_RADIUS_METERS],
         }),
       }
     )) as OrsDirectionsResponse;
@@ -175,7 +178,7 @@ export const orsProvider: GeoProvider = {
     const key = requireKey();
     const body = (await orsFetch(
       "route-geometry",
-      `${ORS_BASE_URL}/v2/directions/${ORS_ROUTING_PROFILE}/geojson`,
+      `${ORS_ROUTING_BASE_URL}/v2/directions/${ORS_ROUTING_PROFILE}/geojson`,
       {
         method: "POST",
         headers: {
@@ -187,6 +190,7 @@ export const orsProvider: GeoProvider = {
             [origin.lng, origin.lat],
             [destination.lng, destination.lat],
           ],
+          radiuses: [ORS_SNAP_RADIUS_METERS, ORS_SNAP_RADIUS_METERS],
         }),
       }
     )) as OrsDirectionsGeoJsonResponse;

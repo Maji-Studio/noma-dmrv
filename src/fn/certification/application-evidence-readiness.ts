@@ -8,9 +8,15 @@ const APPLICATION_DOCUMENT_ENTITY_TYPE = "application";
 const APPLICATION_VISUAL_DOCUMENT_TYPE = "photo";
 const APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPE = "pdf";
 
-function documentMetadata(row: DocumentRow): Record<string, unknown> {
-  return row.metadata && typeof row.metadata === "object"
-    ? (row.metadata as Record<string, unknown>)
+interface DocumentMetadata {
+  geotagStatus?: "present" | "missing" | string;
+}
+
+function documentMetadata(row: DocumentRow): DocumentMetadata {
+  return row.metadata !== null &&
+    !Array.isArray(row.metadata) &&
+    typeof row.metadata === "object"
+    ? (row.metadata as DocumentMetadata)
     : {};
 }
 

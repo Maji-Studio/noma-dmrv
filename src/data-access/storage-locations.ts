@@ -13,6 +13,7 @@ import {
   productionRuns,
   productionRunFeedstocks,
   biocharProducts,
+  biocharStorageInventory,
   formulations,
   deliveries,
   orders,
@@ -885,8 +886,54 @@ export async function deleteStorageLocation(
     throw new SafeError("Storage location not found");
   }
 
-  // TODO: Add checks for related records if needed (e.g., feedstock batches)
-  // For now, we allow deletion
+  const [
+    [{ value: feedstockCount }],
+    [{ value: feedstockRunCount }],
+    [{ value: biocharRunCount }],
+    [{ value: productCount }],
+    [{ value: deliveryCount }],
+    [{ value: inventoryCount }],
+  ] = await Promise.all([
+    db
+      .select({ value: count() })
+      .from(feedstocks)
+      .where(eq(feedstocks.storageLocationId, storageLocationId)),
+    db
+      .select({ value: count() })
+      .from(productionRuns)
+      .where(eq(productionRuns.feedstockStorageLocationId, storageLocationId)),
+    db
+      .select({ value: count() })
+      .from(productionRuns)
+      .where(eq(productionRuns.biocharStorageLocationId, storageLocationId)),
+    db
+      .select({ value: count() })
+      .from(biocharProducts)
+      .where(eq(biocharProducts.storageLocationId, storageLocationId)),
+    db
+      .select({ value: count() })
+      .from(deliveries)
+      .where(eq(deliveries.storageLocationId, storageLocationId)),
+    db
+      .select({ value: count() })
+      .from(biocharStorageInventory)
+      .where(eq(biocharStorageInventory.storageLocationId, storageLocationId)),
+  ]);
+
+  const blockers = [
+    Number(feedstockCount) > 0 ? "feedstock batches" : null,
+    Number(feedstockRunCount) > 0 ? "production runs using it as a feedstock bin" : null,
+    Number(biocharRunCount) > 0 ? "production runs using it as a biochar bin" : null,
+    Number(productCount) > 0 ? "biochar products stored in it" : null,
+    Number(deliveryCount) > 0 ? "deliveries drawing from it" : null,
+    Number(inventoryCount) > 0 ? "storage inventory records" : null,
+  ].filter(Boolean);
+
+  if (blockers.length > 0) {
+    throw new SafeError(
+      `Cannot delete this storage location while it has ${blockers.join(", ")}. Move or remove those records first.`
+    );
+  }
 
   await db
     .delete(storageLocations)

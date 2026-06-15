@@ -29,6 +29,18 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function sampleActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "sample action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -266,8 +278,11 @@ export async function createSampleFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create sample",
+      error: sampleActionError(
+        error,
+        "Failed to create sample",
+        "sample:create",
+      ),
     };
   }
 }
@@ -366,8 +381,11 @@ export async function updateSampleFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update sample",
+      error: sampleActionError(
+        error,
+        "Failed to update sample",
+        "sample:update",
+      ),
     };
   }
 }
@@ -401,8 +419,11 @@ export async function deleteSampleFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete sample",
+      error: sampleActionError(
+        error,
+        "Failed to delete sample",
+        "sample:delete",
+      ),
     };
   }
 }

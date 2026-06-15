@@ -160,7 +160,7 @@ function DrawerBody({
       const overlap = overlappingEnd(endOn, existingEnds);
       if (overlap) {
         setError("reportingPeriodEndOn", {
-          message: `Overlaps an existing statement ending ${overlap}. Pick an end after ${overlap}.`,
+          message: `This facility already has a statement ending ${overlap}. Reporting periods can't overlap — pick an end date after ${overlap}.`,
         });
         return;
       }
@@ -176,7 +176,7 @@ function DrawerBody({
   const onCreate = handleSubmit(async (data) => {
     if (isProduction && !data.confirmProduction) {
       setError("confirmProduction", {
-        message: "Confirm production submission to continue",
+        message: "Tick the box to confirm this submits to the live production registry.",
       });
       return;
     }
@@ -208,7 +208,7 @@ function DrawerBody({
         <SlideOverPanel.Description>
           {result
             ? "Created — review what Isometric linked"
-            : "Period-first — Isometric links removals by date range"}
+            : "Pick a reporting period — Isometric links the removals completed inside it"}
         </SlideOverPanel.Description>
       </SlideOverPanel.Header>
 

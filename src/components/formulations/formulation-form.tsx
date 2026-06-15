@@ -162,7 +162,7 @@ export function FormulationForm({
               </span>
               <Button
                 variant="destructive"
-                size="icon"
+                size="small"
                 onClick={() => remove(index)}
                 disabled={isSubmitting}
                 aria-label={`Remove ingredient ${index + 1}`}

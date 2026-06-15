@@ -13,6 +13,7 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 
 vi.mock("@/data-access/documents", () => ({
+  assertCanManageDocumentEntity: vi.fn(),
   insertDocument: vi.fn(),
   getDocumentById: vi.fn(),
   updateDocument: vi.fn(),
@@ -25,6 +26,7 @@ import {
   insertDocument,
   getDocumentById,
   updateDocument,
+  assertCanManageDocumentEntity,
 } from "@/data-access/documents";
 import {
   confirmUpload,
@@ -113,6 +115,15 @@ const photoInput = {
   sizeBytes: 1024,
 };
 
+const productionRunCsvInput = {
+  entityType: "production_run",
+  entityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  documentType: "sensor_data" as const,
+  fileName: "TZ001B 2026-04-02 Data Evaluation.csv",
+  contentType: "text/csv",
+  sizeBytes: 1024,
+};
+
 describe("requestUpload", () => {
   it("returns Unauthorized when user is not signed in", async () => {
     vi.mocked(getUser).mockResolvedValueOnce(null);
@@ -168,6 +179,30 @@ describe("requestUpload", () => {
         visibility: "private",
         storageProvider: "local-fs",
       })
+    );
+  });
+
+  it("allows production-run CSV uploads after checking the target run", async () => {
+    vi.mocked(insertDocument).mockResolvedValueOnce({
+      id: "11111111-2222-4333-8444-555555555555",
+      uploadStatus: "pending",
+    } as never);
+
+    const result = await requestUpload(productionRunCsvInput);
+
+    expect(result.success).toBe(true);
+    expect(assertCanManageDocumentEntity).toHaveBeenCalledWith(
+      mockUser.id,
+      "production_run",
+      productionRunCsvInput.entityId,
+    );
+    expect(insertDocument).toHaveBeenCalledWith(
+      mockUser.id,
+      expect.objectContaining({
+        entityType: "production_run",
+        documentType: "sensor_data",
+        mimeType: "text/csv",
+      }),
     );
   });
 

@@ -5,7 +5,7 @@
  * data — never injected as HTML). Styled by carbon-viewer.css.
  */
 
-import { roundKmDisplay } from "@/lib/format-utils";
+import { formatDistanceKm } from "@/lib/format-utils";
 import { STATUS_COLOR_FALLBACK, STATUS_COLORS } from "../chain-constants";
 import type { LineageDetailRow } from "../use-chain-graph";
 import type { ViewerMarkerKind } from "./viewer-constants";
@@ -55,11 +55,11 @@ export function createSiteMarkerElement(input: SiteMarkerInput): HTMLDivElement 
   return el;
 }
 
-export function createDistanceChipElement(distanceKm: number): HTMLDivElement {
+export function createDistanceChipElement(distanceKm: number | null | undefined): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "cvm-dist";
   el.dataset.testid = "carbon-viewer-distance-chip";
-  el.textContent = `${roundKmDisplay(distanceKm)} KM`;
+  el.textContent = formatDistanceKm(distanceKm);
   return el;
 }
 

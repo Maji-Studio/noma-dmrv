@@ -38,7 +38,7 @@ export function DashboardView() {
   const { data, isLoading, error } = useDashboardOverview(facilityId, range);
 
   return (
-    <div className="container-max flex flex-col gap-32 py-32">
+    <div className="container-max page-shell">
       <header className="flex flex-wrap items-end justify-between gap-24">
         <div className="flex min-w-0 flex-col gap-8">
           <p className="label-micro text-[var(--color-text-tertiary)]">

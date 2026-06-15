@@ -115,11 +115,9 @@ const slideOverContentVariants = cva(
     // menus and dialogs reserve white) + full-ink hairline — no shadow, the
     // scrim + border do the elevation (Maji DS).
     "bg-[var(--paper)] [border-left:var(--hair)]",
-    // Animation
-    "transition-transform duration-300 ease-out",
-    "data-[open]:translate-x-0",
-    "data-[starting-style]:translate-x-full",
-    "data-[ending-style]:translate-x-full",
+    // Stateful translate lives in globals.css so Base UI transition states do
+    // not depend on Tailwind variant ordering.
+    "slide-over-panel-popup transition-transform duration-300 ease-out",
     "outline-none",
   ],
   {
@@ -280,14 +278,29 @@ interface SlideOverPanelBodyProps {
   className?: string;
   /** Remove bottom padding so sticky/flush footers inside have no gap */
   noPaddingBottom?: boolean;
+  /**
+   * Stretch the single child (a form root) to fill the body height so its
+   * `mt-auto` CTA row is pinned to the bottom even when the form is short.
+   * The child still grows past the viewport on long forms — the body scrolls
+   * and the sticky footer keeps the CTA in view. Used by edit/create forms.
+   */
+  fillHeight?: boolean;
 }
 
-function Body({ children, className, noPaddingBottom }: SlideOverPanelBodyProps) {
+function Body({
+  children,
+  className,
+  noPaddingBottom,
+  fillHeight,
+}: SlideOverPanelBodyProps) {
   return (
     <div
       className={cn(
         "flex-1 overflow-y-auto",
         noPaddingBottom ? "p-24 pb-0" : "p-24",
+        // Form-root child fills the body as a flex column so FormActions'
+        // `mt-auto` can pin the CTA row to the bottom on short forms.
+        fillHeight && "flex flex-col [&>*]:flex [&>*]:flex-1 [&>*]:flex-col",
         className
       )}
     >

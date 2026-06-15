@@ -15,7 +15,6 @@ export { BlueprintList } from "./blueprint-list";
 export { SubmissionStatusBadge } from "./submission-status-badge";
 export { SyncEventLog } from "./sync-event-log";
 export { EnvBanner } from "./env-banner";
-export { CertificationOverview } from "./certification-overview";
 export { CertificationRegistryGuard } from "./certification-registry-guard";
 export { CertificationSettings } from "./certification-settings";
 export { CertificationHealthPanel } from "./certification-health-panel";

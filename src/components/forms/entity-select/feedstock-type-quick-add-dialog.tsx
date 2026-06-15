@@ -28,7 +28,7 @@ export function FeedstockTypeQuickAddDialog({
   const hint =
     defaultUsage === "blend"
       ? "Add an internal-only blend material such as compost, mineral, lime, binder, or another amendment. Blend materials are not submitted to the registry."
-      : "Add the agricultural or forestry residue used in Dark Earth Carbon operations. The Isometric tab shows the registry's catalogue for cross-reference (read-only).";
+      : "Choose a certified Isometric feedstock first, then finish the local category and save. Unregistered feedstock will block verification.";
 
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<FeedstockTypeFormData>({
     entityType: "feedstockType",
@@ -58,6 +58,7 @@ export function FeedstockTypeQuickAddDialog({
         isSubmitting={isSubmitting}
         submitLabel="Create Feedstock Type"
         defaultUsage={defaultUsage}
+        lockUsage={Boolean(defaultUsage)}
         hint={hint}
       />
     </QuickAddDialogShell>

@@ -38,7 +38,7 @@ const ADMIN_TILES: AdminTile[] = [
 
 export default function AdminHomePage() {
   return (
-    <div className="container-max py-32 flex flex-col gap-32">
+    <div className="container-max page-shell">
       <header className="flex flex-col gap-8">
         <h1 className="title-heading-2">Admin</h1>
         <p className="body-medium text-[var(--color-text-secondary)] max-w-[560px]">
