@@ -104,7 +104,12 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     ).toBeChecked();
     await expect(page.locator('input[name="gisBoundaryReference"]')).toHaveCount(0);
 
-    await page.getByText("Boundary records", { exact: true }).click();
+    // Scope to the side-sheet form: #264's list evidence-method <select> renders the
+    // same labels, so an unscoped getByText matches two elements (strict-mode violation).
+    await page
+      .locator('[role="dialog"]')
+      .getByText("Boundary records", { exact: true })
+      .click();
     await expect(
       page.locator('input[name="evidenceMethod"][value="boundary"]')
     ).toBeChecked();
@@ -114,7 +119,10 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       "https://maps.example.test/e2e-field-01",
     );
 
-    await page.getByText("Visual proof", { exact: true }).click();
+    await page
+      .locator('[role="dialog"]')
+      .getByText("Visual proof", { exact: true })
+      .click();
     await expect(
       page.locator('input[name="evidenceMethod"][value="visual"]')
     ).toBeChecked();
