@@ -120,3 +120,17 @@ export const HIGHLIGHT_HOLD_MS = 2600;
 
 export const POPUP_WIDTH_PX = 246;
 export const POPUP_OFFSET_PX = 20;
+
+// ---------------------------------------------------------------------------
+// Transport-legs rail (directional bar) + cross-surface focus dimming
+// ---------------------------------------------------------------------------
+
+/** Per-leg card width in the rail wings (px). */
+export const RAIL_CARD_WIDTH_PX = 168;
+/**
+ * Opacity for out-of-focus elements when a focus is active — rail cards, map
+ * markers, distance chips, and leg lines all dim to this so the focused
+ * sub-chain reads as the figure. Mirrored as the `.cvm-dim` literal in
+ * carbon-viewer.css for the imperatively-managed marker/chip DOM.
+ */
+export const FOCUS_DIM_OPACITY = 0.28;
