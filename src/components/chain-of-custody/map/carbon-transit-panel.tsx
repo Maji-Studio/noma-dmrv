@@ -13,6 +13,7 @@
  */
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import { MapTrifold } from "@phosphor-icons/react/dist/ssr";
 import type {
   ChainGeoLeg,
@@ -133,6 +134,10 @@ export function CarbonTransitPanel({
   onNodeSelect,
   onClearSelection,
 }: CarbonTransitPanelProps) {
+  // Transient hover isolation, shared between the map (line hover) and the rail
+  // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
+  const [hoverLegId, setHoverLegId] = useState<string | null>(null);
+
   const applicationGeo = useChainOfCustodyGeo(
     source.kind === "application" ? source.id : null
   );
@@ -220,7 +225,9 @@ export function CarbonTransitPanel({
             railVisible={view === "map"}
             highlight={highlight}
             focus={mapFocus}
+            hoverLegId={hoverLegId}
             onMarkerClick={onNodeSelect}
+            onLegHover={setHoverLegId}
             onClear={onClearSelection}
           />
 
@@ -235,6 +242,7 @@ export function CarbonTransitPanel({
                 focusLegIds={focusLegIds}
                 onFocusLeg={(leg) => onNodeSelect(legAnchorNodeId(geo, leg))}
                 onClearFocus={onClearSelection}
+                onHoverLeg={setHoverLegId}
               />
             </div>
           ) : (
