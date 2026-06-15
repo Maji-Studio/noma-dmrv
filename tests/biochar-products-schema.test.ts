@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { biocharProductFormSchema } from "@/schemas/biochar-products";
-import { formatLocalDate } from "@/lib/date-utils";
 
+// productionDate is intentionally absent: a biochar product's production date is
+// the linked run's date (when the biochar was produced), derived server-side in
+// data-access — not entered on this form. The #46 local-midnight guarantee for
+// that derivation is covered in `date-utils.test.ts` (parseLocalDateString).
 const validBiocharProductInput = {
   facilityId: "11111111-1111-4111-8111-111111111111",
   formulationId: "22222222-2222-4222-8222-222222222222",
   linkedProductionRunId: "33333333-3333-4333-8333-333333333333",
   storageLocationId: "44444444-4444-4444-8444-444444444444",
-  productionDate: "2026-01-18",
   status: "testing",
   massKg: 500,
   moistureContentPercent: 1.5,
@@ -52,52 +54,15 @@ describe("biocharProductFormSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  // #46 — date-only input must parse at LOCAL midnight; `new Date("YYYY-MM-DD")`
-  // parses at UTC midnight, which shifted the stored date back one day per
-  // edit/save round-trip for users west of UTC.
-  describe("productionDate", () => {
-    it("parses date-only input at local midnight", () => {
-      const result = biocharProductFormSchema.safeParse(validBiocharProductInput);
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        const date = result.data.productionDate!;
-        expect(date).toBeInstanceOf(Date);
-        expect(date.getFullYear()).toBe(2026);
-        expect(date.getMonth()).toBe(0);
-        expect(date.getDate()).toBe(18);
-        expect(date.getHours()).toBe(0);
-      }
+  it("ignores a productionDate field — it is derived from the run, not the form", () => {
+    const result = biocharProductFormSchema.safeParse({
+      ...validBiocharProductInput,
+      productionDate: "2026-01-18",
     });
 
-    it("round-trips through the edit form's local date formatting without shifting a day", () => {
-      const result = biocharProductFormSchema.safeParse(validBiocharProductInput);
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(formatLocalDate(result.data.productionDate!)).toBe("2026-01-18");
-      }
-    });
-
-    it("treats empty string as undefined and passes Date values through", () => {
-      const emptyResult = biocharProductFormSchema.safeParse({
-        ...validBiocharProductInput,
-        productionDate: "",
-      });
-      expect(emptyResult.success).toBe(true);
-      if (emptyResult.success) {
-        expect(emptyResult.data.productionDate).toBeUndefined();
-      }
-
-      const existing = new Date(2026, 2, 5);
-      const dateResult = biocharProductFormSchema.safeParse({
-        ...validBiocharProductInput,
-        productionDate: existing,
-      });
-      expect(dateResult.success).toBe(true);
-      if (dateResult.success) {
-        expect(dateResult.data.productionDate).toBe(existing);
-      }
-    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("productionDate");
+    }
   });
 });
