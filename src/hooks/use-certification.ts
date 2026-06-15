@@ -16,6 +16,7 @@ import {
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
   loadFacilityCertifierSummary,
+  loadGhgStatementBreakdown,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
   loadIsometricFeedstockTypes,
@@ -91,6 +92,12 @@ export const certificationKeys = {
     [...certificationKeys.all, "ghg-statements", facilityId] as const,
   ghgStatementState: (ghgStatementId: string) =>
     [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
+  ghgStatementBreakdown: (ghgStatementId: string) =>
+    [
+      ...certificationKeys.all,
+      "ghg-statement-breakdown",
+      ghgStatementId,
+    ] as const,
   openRemovalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "open-removals", facilityId] as const,
   overview: (facilityId: string) =>
@@ -455,6 +462,27 @@ export function useGhgStatementState(ghgStatementId: string, enabled = true) {
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       query.state.data?.isLockedInFlight ? LOCKED_REFETCH_INTERVAL_MS : false,
+  });
+}
+
+// Carbon-accounting roll-up for one GHG statement — the sum across its member
+// removals. Lazy by design: the statement detail sheet only mounts it while
+// open. Like the removal variant it reads the registry's verified GHG entries
+// for submitted members, so it leans on the default stale window and is
+// invalidated alongside the rest of `all`.
+export function useGhgStatementBreakdown(
+  ghgStatementId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementBreakdown(ghgStatementId),
+    queryFn: async () => {
+      const result = await loadGhgStatementBreakdown(ghgStatementId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!ghgStatementId,
+    staleTime: DEFAULT_STALE_MS,
   });
 }
 
