@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Warning } from "@phosphor-icons/react";
 import type { UseFormRegisterReturn } from "react-hook-form";
+import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
 import { SectionLabel } from "./section-label";
@@ -37,6 +38,9 @@ interface TruckWeighingSectionProps {
   departureError?: string;
   arrivalCertifyRequired?: boolean;
   departureCertifyRequired?: boolean;
+  /** Saved-state of each weighbridge mass, colouring its CERT chip. */
+  arrivalCertifyStatus?: CertFieldStatus;
+  departureCertifyStatus?: CertFieldStatus;
   isSubmitting?: boolean;
   /**
    * Render only the fields + mismatch alert, without the section header and
@@ -58,6 +62,8 @@ export function TruckWeighingSection({
   departureError,
   arrivalCertifyRequired,
   departureCertifyRequired,
+  arrivalCertifyStatus,
+  departureCertifyStatus,
   isSubmitting = false,
   bare = false,
 }: TruckWeighingSectionProps) {
@@ -101,6 +107,7 @@ export function TruckWeighingSection({
           label="Truck Mass Before Unloading (kg)"
           error={arrivalError}
           certifyRequired={arrivalCertifyRequired}
+          certifyStatus={arrivalCertifyStatus}
         >
           <FormInput
             id="truckMassOnArrivalKg"
@@ -118,6 +125,7 @@ export function TruckWeighingSection({
           label="Truck Mass After Unloading (kg)"
           error={departureError}
           certifyRequired={departureCertifyRequired}
+          certifyStatus={departureCertifyStatus}
         >
           <FormInput
             id="truckMassOnDepartureKg"

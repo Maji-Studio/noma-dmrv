@@ -14,7 +14,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calendar, Scales, Truck, MapPin } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, TruckWeighingSection } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, TruckWeighingSection, DryMassInput, makeCertFieldStatus } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -81,6 +81,23 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const orders = ordersData ?? [];
   const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
 
+  const defaultValues = {
+    orderId: delivery?.orderId ?? "",
+    deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
+    status: defaultStatus,
+    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
+    massDryKg: delivery?.massDryKg ?? undefined,
+    moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
+    truckMassOnArrivalKg: delivery?.truckMassOnArrivalKg ?? undefined,
+    truckMassOnDepartureKg: delivery?.truckMassOnDepartureKg ?? undefined,
+    biocharProductId: delivery?.biocharProductId ?? undefined,
+    driverId: delivery?.driverId ?? undefined,
+    vehicleId: delivery?.vehicleId ?? undefined,
+    distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
+    distanceSource: delivery?.distanceSource ?? null,
+    distanceNote: delivery?.distanceNote ?? "",
+  };
+
   const {
     register,
     control,
@@ -92,23 +109,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     resolver: zodResolver(deliveryFormSchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
-    defaultValues: {
-      orderId: delivery?.orderId ?? "",
-      deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
-      status: defaultStatus,
-      deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
-      massDryKg: delivery?.massDryKg ?? undefined,
-      moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
-      truckMassOnArrivalKg: delivery?.truckMassOnArrivalKg ?? undefined,
-      truckMassOnDepartureKg: delivery?.truckMassOnDepartureKg ?? undefined,
-      biocharProductId: delivery?.biocharProductId ?? undefined,
-      driverId: delivery?.driverId ?? undefined,
-      vehicleId: delivery?.vehicleId ?? undefined,
-      distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
-      distanceSource: delivery?.distanceSource ?? null,
-      distanceNote: delivery?.distanceNote ?? "",
-    },
+    defaultValues,
   });
+
+  // CERT chips reflect the saved record (frozen), neutral while creating.
+  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const watchWetMass = watch("deliveredWetMassKg");
   const watchMoisture = watch("moistureContentPercent");
@@ -212,7 +217,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         title="Delivery Information"
         icon={<Calendar size={14} weight="bold" />}
         fields={["deliveryDate", "status", "orderId"]}
-        required={["deliveryDate", "orderId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message} required>
@@ -256,24 +260,26 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         title="Mass & Moisture"
         icon={<Scales size={14} weight="bold" />}
         fields={["deliveredWetMassKg", "moistureContentPercent", "massDryKg"]}
-        required={["deliveredWetMassKg", "moistureContentPercent"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="deliveredWetMassKg"
             label="Wet Mass (kg)"
             error={errors.deliveredWetMassKg?.message}
-            helperText="As-received weight. Truck weighing can prefill it."
+            hint="As-received weight. Truck weighing can prefill it."
             required
             certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
+            certifyStatus={certStatus("deliveredWetMassKg")}
           >
-            <FormInput
+            <DryMassInput
               id="deliveredWetMassKg"
               type="number"
               step="0.01"
               placeholder="e.g., 1000"
               disabled={isSubmitting}
               error={!!errors.deliveredWetMassKg}
+              wetMassKg={watchWetMass}
+              moisturePercent={watchMoisture}
               {...register("deliveredWetMassKg", {
                 setValueAs: numericValue,
               })}
@@ -303,18 +309,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         </div>
 
-        {/* Dry mass preview (display only — auto-calculated) */}
-        <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-          <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass (kg)</span>
-          <span className="body-medium font-medium text-[var(--color-text-primary)]">
-            {calculatedDryMass !== null ? `${calculatedDryMass.toFixed(2)} kg` : "—"}
-          </span>
-          {calculatedDryMass !== null && (
-            <span className="body-small text-[var(--color-text-quaternary)]">
-              = {Number(watchWetMass ?? 0).toFixed(0)} × (1 − {Number(watchMoisture ?? 0)}%)
-            </span>
-          )}
-        </div>
+        {/* Dry mass is surfaced inline under the wet-mass field (DryMassInput)
+            and synced into massDryKg below for submission. */}
         {errors.massDryKg?.message && (
           <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
         )}
@@ -326,7 +322,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         icon={<Truck size={14} weight="bold" />}
         hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence."
         fields={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
-        required={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
       >
         <TruckWeighingSection
           bare
@@ -347,6 +342,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           departureError={errors.truckMassOnDepartureKg?.message}
           arrivalCertifyRequired={isDeliveryCertifyField("truckMassOnArrivalKg")}
           departureCertifyRequired={isDeliveryCertifyField("truckMassOnDepartureKg")}
+          arrivalCertifyStatus={certStatus("truckMassOnArrivalKg")}
+          departureCertifyStatus={certStatus("truckMassOnDepartureKg")}
           isSubmitting={isSubmitting}
         />
       </FormSection>

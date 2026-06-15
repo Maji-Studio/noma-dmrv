@@ -10,11 +10,11 @@
  * section owns all intra-section rhythm so sheets can't drift.
  *
  * When wrapped in `<FormSpine>` (see ./form-spine), the section grows a left
- * gutter rail with a numbered, live-validating status marker and a connecting
- * line — turning a stack of sections into a readable process spine. Pass
- * `icon` (a leading glyph), `fields` (the section's RHF field names, for live
- * state) and `required` (which of them must be filled to count as complete).
- * Outside a spine these props are ignored and the section renders unchanged.
+ * gutter rail with a numbered marker and a connecting line — turning a stack of
+ * sections into a readable process spine. Pass `icon` (a leading glyph) and
+ * `fields` (the section's RHF field names) so the marker can flag a validation
+ * error on those fields. Outside a spine these props are ignored and the
+ * section renders unchanged.
  */
 
 import { cn } from "@/lib/utils";
@@ -24,8 +24,6 @@ import {
   SpineSectionLive,
   SpineSectionStatic,
   useSpineContext,
-  type CertReady,
-  type SpineCompletion,
   type SpineMeta,
 } from "./form-spine";
 
@@ -43,19 +41,11 @@ interface FormSectionProps {
   className?: string;
   /** Leading glyph for the label (Phosphor icon). Surfaces in the spine rail's label row. */
   icon?: React.ReactNode;
-  /** RHF field names owned by this section — drives the spine marker's live state. */
-  fields?: string[];
-  /** Subset of `fields` that must be filled for the section to read as complete. */
-  required?: string[];
-  /** How completeness is judged when inside a spine (default `"required"`). */
-  completion?: SpineCompletion;
   /**
-   * Certification gate: given the section's watched values, returns true when
-   * its CERT obligations are met. A section only goes green (complete) when its
-   * required fields are filled AND this passes — so a green check can't appear
-   * while a CERT field is unsatisfied.
+   * RHF field names owned by this section. Inside a spine they let the marker
+   * flag a validation error on those fields; outside a spine they're ignored.
    */
-  certReady?: CertReady;
+  fields?: string[];
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -70,9 +60,6 @@ export function FormSection({
   className,
   icon,
   fields,
-  required,
-  completion = "required",
-  certReady,
   __spine,
 }: FormSectionProps) {
   const spine = useSpineContext();
@@ -92,7 +79,8 @@ export function FormSection({
   );
 
   // Inside a FormSpine: render the gutter rail. Sections with fields subscribe
-  // to RHF for live state; field-less display sections show a calm muted check.
+  // to RHF so the marker can flag errors; field-less display sections are just a
+  // numbered step.
   if (spine && __spine) {
     const sectionFields = fields ?? [];
     if (sectionFields.length === 0) {
@@ -107,9 +95,6 @@ export function FormSection({
         meta={__spine}
         control={spine.control}
         fields={sectionFields}
-        required={required}
-        completion={completion}
-        certReady={certReady}
         label={labelRow}
         className={className}
       >
