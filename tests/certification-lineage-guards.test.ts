@@ -5,7 +5,10 @@ import {
   deleteApplication,
   updateApplication,
 } from "@/data-access/applications";
-import { updateBiocharProduct } from "@/data-access/biochar-products";
+import {
+  createBiocharProduct,
+  updateBiocharProduct,
+} from "@/data-access/biochar-products";
 import {
   deleteCreditBatch,
   updateCreditBatch,
@@ -37,6 +40,7 @@ import {
   productionRuns,
   reactors,
   samples,
+  storageLocations,
 } from "@/db/schema";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -399,6 +403,41 @@ describe("certification lineage guards", () => {
           massKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects creating a biochar product against a submitted production-run lineage", async () => {
+    await withFixture(async (fixture) => {
+      const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+      // An otherwise-valid create: a real product bin in the locked run's
+      // facility. Only the certified-lineage guard should block it.
+      const [bin] = await db
+        .insert(storageLocations)
+        .values({
+          code: `SL-CLG-${tag}`,
+          name: `CLG Product Bin ${tag}`,
+          type: "product_bin",
+          facilityId: fixture.facilityId,
+        })
+        .returning({ id: storageLocations.id });
+
+      try {
+        await expect(
+          createBiocharProduct(TEST_USER_ID, {
+            code: `BP-LOCKED-${tag}`,
+            facilityId: fixture.facilityId,
+            linkedProductionRunId: fixture.productionRunId,
+            storageLocationId: bin.id,
+            massKg: 10,
+            moistureContentPercent: 5,
+            waterAddedKg: 0,
+          }),
+        ).rejects.toThrow(LOCKED_COPY);
+      } finally {
+        await db
+          .delete(storageLocations)
+          .where(eq(storageLocations.id, bin.id));
+      }
     });
   });
 
