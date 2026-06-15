@@ -54,18 +54,21 @@ export const vehicleFormSchema = z.object({
     .string()
     .min(1, "Vehicle name is required")
     .max(255, "Vehicle name must be less than 255 characters"),
+  // Optional: audit/evidence metadata, not used in the certified transport calc.
   identifier: z
     .string()
-    .min(1, "Vehicle identifier/plate is required")
-    .max(50, "Identifier must be less than 50 characters"),
+    .max(50, "Identifier must be less than 50 characters")
+    .optional(),
+  // Required: the only vehicle field that drives the certified emission factor.
   vehicleType: z
     .string()
     .min(1, "Vehicle type is required")
     .max(50, "Vehicle type must be less than 50 characters"),
+  // Optional: operational metadata only.
   fuelType: z
     .string()
-    .min(1, "Fuel type is required")
-    .max(50, "Fuel type must be less than 50 characters"),
+    .max(50, "Fuel type must be less than 50 characters")
+    .optional(),
   /** Stored as L/100km in the form, converted to L/km before server submission */
   fuelConsumptionLPer100Km: z
     .number()
@@ -73,11 +76,14 @@ export const vehicleFormSchema = z.object({
     .max(1000, "Fuel consumption seems too high")
     .optional()
     .nullable(),
+  // Optional: a not-yet-submitted factor-uniformity hedge, not a certified input.
   modelYear: z
     .number()
     .int("Model year must be a whole number")
     .min(1900, "Model year must be 1900 or later")
-    .max(new Date().getFullYear() + 1, "Model year cannot be in the future"),
+    .max(new Date().getFullYear() + 1, "Model year cannot be in the future")
+    .optional()
+    .nullable(),
 });
 
 // ============================================
