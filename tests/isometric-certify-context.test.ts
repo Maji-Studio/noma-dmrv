@@ -381,8 +381,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.transportCoverage.feedstock.count).toBe(0);
     expect(result.productionReadinessGap).toMatchObject({
       kind: "noApplications",
-      detail: "No applications linked to this batch",
-      fixTarget: "batchDetails",
+      detail:
+        "No applications fall in this batch's crediting period — record an application in the period, or adjust the period.",
+      fixTarget: "applications",
     });
     expect(mockedGetLegs).not.toHaveBeenCalled();
     // An ungrouped batch (no removal) has no linked GHG Statement and an empty
