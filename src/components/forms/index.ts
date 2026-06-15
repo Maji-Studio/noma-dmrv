@@ -8,12 +8,14 @@ export { FormError } from "./form-error";
 export { ServerError } from "./server-error";
 export { FormField } from "./form-field";
 export { FormInput } from "./form-input";
+export { DryMassInput } from "./dry-mass-input";
 export { FormTextarea } from "./form-textarea";
 export { FormSelect } from "./form-select";
 export { FormFileUpload } from "./form-file-upload";
 export { SectionLabel } from "./section-label";
 export { FormSection } from "./form-section";
-export { FormSpine, type SpineCompletion, type CertReady } from "./form-spine";
+export { FormSpine } from "./form-spine";
+export { makeCertFieldStatus, type CertFieldStatus } from "./cert-field-status";
 export { DistanceCalcField } from "./distance-calc-field";
 export { TruckWeighingSection } from "./truck-weighing-section";
 

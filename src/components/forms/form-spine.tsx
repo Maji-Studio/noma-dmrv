@@ -2,11 +2,15 @@
  * FormSpine — a passive vertical process spine for multi-section sheet forms.
  *
  * Wraps a form's `FormSection` children and threads a thin gutter rail down the
- * left: a numbered status marker per section joined by a connecting line, so the
- * operator reads the order of the process at a glance. Markers carry *live*
- * validation state (gray → amber → green check / red warning) derived from each
- * section's own fields — but nothing is gated: every section stays rendered and
- * the form submits at any time. The spine is orientation, not a wizard.
+ * left: a numbered marker per section joined by a connecting line, so the
+ * operator reads the order of the process at a glance. The number is the
+ * marker — it stays a number; nothing is gated and the form submits at any
+ * time. The spine is orientation, not a wizard, and it is deliberately *silent*
+ * about completion: certification readiness is a field-level concern carried by
+ * the CERT chips, not by the rail (a green "done" tick on the rail conflated the
+ * two and read as misleading). The only state the rail signals is a genuine
+ * validation error, which tints the number red after the field is left or the
+ * form is submitted.
  *
  * It is opt-in and non-invasive: a `FormSection` only grows the gutter when it
  * sits inside a `<FormSpine>` (which injects `__spine` + provides `control` via
@@ -22,32 +26,10 @@
 "use client";
 
 import * as React from "react";
-import { useWatch, useFormState, type Control } from "react-hook-form";
-import { Check, Warning } from "@phosphor-icons/react/dist/ssr";
+import { useFormState, type Control } from "react-hook-form";
 import { cn } from "@/lib/utils";
 
-// ── Section completion state ───────────────────────────────────────────────
-
-export type SpineState =
-  | "untouched" // nothing entered yet (also: display-only / no-obligation sections)
-  | "active" // being edited / partially filled, or required filled but cert not yet clean
-  | "complete" // every obligation met — required filled AND cert-clean
-  | "error"; // an invalid field (after blur or submit)
-
-/** How a section judges its required set. */
-export type SpineCompletion =
-  /** Required = the explicit `required` list (default). */
-  | "required"
-  /** Required = every field in `fields`. */
-  | "all";
-
-/**
- * A section's certification gate. Given its watched values keyed by field name,
- * returns true when the section's CERT obligations are met. Lets the form keep
- * domain rules local (e.g. "status must be complete") instead of the spine
- * guessing. Omit when a section has no cert obligation.
- */
-export type CertReady = (values: Record<string, unknown>) => boolean;
+// ── Section marker state ───────────────────────────────────────────────────
 
 /** Layout metadata FormSpine injects into each FormSection child. */
 export interface SpineMeta {
@@ -57,88 +39,48 @@ export interface SpineMeta {
   total: number;
 }
 
-const isFilled = (v: unknown): boolean =>
-  v !== undefined &&
-  v !== null &&
-  v !== "" &&
-  !(typeof v === "number" && Number.isNaN(v));
-
 /**
- * Derive a section's live state from its fields. Scoped RHF subscriptions
- * (`name: fields`) keep this from re-rendering on unrelated field changes.
+ * Does a section currently hold a surfaced validation error? Scoped to the
+ * section's own fields so it doesn't re-render on unrelated changes. Errors only
+ * surface once the user has left an invalid field or tried to submit — never
+ * mid-keystroke (the form's `onTouched`/`onSubmit` mode gates them).
  */
-function useSectionState(
+function useSectionHasError(
   control: Control<Record<string, unknown>>,
   fields: string[],
-  required: string[] | undefined,
-  completion: SpineCompletion,
-  certReady: CertReady | undefined,
-): SpineState {
-  const values = useWatch({ control, name: fields });
+): boolean {
   const { errors, touchedFields, isSubmitted } = useFormState({
     control,
     name: fields,
   });
-
-  const valArr = Array.isArray(values) ? values : [values];
-  const filledAt = (i: number) => isFilled(valArr[i]);
-  const valuesByName: Record<string, unknown> = Object.fromEntries(
-    fields.map((f, i) => [f, valArr[i]]),
-  );
-
-  const reqList = completion === "all" ? fields : (required ?? []);
-  const anyFilled = fields.some((_, i) => filledAt(i));
-  const reqFilled = reqList.every((f) => filledAt(fields.indexOf(f)));
-  const certOk = certReady ? certReady(valuesByName) : true;
-  // A section can only claim "complete" if it actually has something to
-  // satisfy — otherwise a check would appear with nothing behind it (the bug:
-  // an empty required list is vacuously "filled").
-  const hasObligation = reqList.length > 0 || Boolean(certReady);
   const anyError = fields.some((f) =>
     Boolean((errors as Record<string, unknown>)?.[f]),
   );
   const anyTouched = fields.some((f) =>
     Boolean((touchedFields as Record<string, unknown>)?.[f]),
   );
-
-  // Red only once the user has left an invalid field or tried to submit —
-  // never mid-keystroke (the form's `onTouched`/`onSubmit` mode gates errors).
-  if (anyError && (isSubmitted || anyTouched)) return "error";
-  // Green ONLY when every obligation is met: required filled AND cert-clean.
-  if (hasObligation && reqFilled && certOk) return "complete";
-  if (anyFilled || anyTouched) return "active";
-  return "untouched";
+  return anyError && (isSubmitted || anyTouched);
 }
 
 // ── Marker ─────────────────────────────────────────────────────────────────
 
 const MARKER = "h-24 w-24"; // mirrors StepFlow's StepIndex geometry
 
-function SpineMarker({ state, n }: { state: SpineState; n: number }) {
+function SpineMarker({ hasError, n }: { hasError: boolean; n: number }) {
   return (
     <span
       aria-hidden
       className={cn(
         MARKER,
         "flex shrink-0 items-center justify-center border body-caption-fit font-medium transition-colors",
-        state === "untouched" &&
-          "border-[var(--color-border-secondary)] text-[var(--color-text-tertiary)]",
-        state === "active" &&
-          "border-[var(--st-wait)] bg-[var(--st-wait-bg)] text-[var(--st-wait)]",
-        state === "complete" &&
-          "border-[var(--st-ok)] bg-[var(--st-ok)] text-white",
-        state === "error" &&
-          "border-[var(--st-bad)] bg-[var(--st-bad)] text-white",
+        hasError
+          ? "border-[var(--st-bad)] bg-[var(--st-bad-bg)] text-[var(--st-bad)]"
+          : "border-[var(--color-border-secondary)] text-[var(--color-text-tertiary)]",
       )}
     >
-      {/* A check appears ONLY when genuinely complete — never as decoration. */}
-      {state === "complete" ? (
-        <Check size={13} weight="bold" />
-      ) : state === "error" ? (
-        <Warning size={13} weight="bold" />
-      ) : (
-        n
-      )}
+      {/* The number is the marker — kept through every state so the rail reads as
+          orientation. Only an error recolours it (red), never a tick. */}
+      {n}
     </span>
   );
 }
@@ -147,7 +89,7 @@ function SpineMarker({ state, n }: { state: SpineState; n: number }) {
 
 export interface SpineSectionFrameProps {
   meta: SpineMeta;
-  state: SpineState;
+  hasError: boolean;
   /** Rendered label row (icon + title + chrome) — built by FormSection. */
   label: React.ReactNode;
   children: React.ReactNode;
@@ -162,7 +104,7 @@ export interface SpineSectionFrameProps {
  */
 export function SpineSectionFrame({
   meta,
-  state,
+  hasError,
   label,
   children,
   className,
@@ -176,7 +118,7 @@ export function SpineSectionFrame({
       )}
     >
       <div className="relative flex flex-col items-center">
-        <SpineMarker state={state} n={meta.index + 1} />
+        <SpineMarker hasError={hasError} n={meta.index + 1} />
         {!meta.last && (
           <span
             aria-hidden
@@ -198,38 +140,31 @@ interface SpineBodyProps {
   meta: SpineMeta;
   control: Control<Record<string, unknown>>;
   fields: string[];
-  required?: string[];
-  completion: SpineCompletion;
-  certReady?: CertReady;
   label: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
 
-/** Section with form fields — subscribes to RHF for live state. */
+/** Section with form fields — subscribes to RHF so the marker can flag errors. */
 export function SpineSectionLive({
   meta,
   control,
   fields,
-  required,
-  completion,
-  certReady,
   label,
   children,
   className,
 }: SpineBodyProps) {
-  const state = useSectionState(control, fields, required, completion, certReady);
+  const hasError = useSectionHasError(control, fields);
   return (
-    <SpineSectionFrame meta={meta} state={state} label={label} className={className}>
+    <SpineSectionFrame meta={meta} hasError={hasError} label={label} className={className}>
       {children}
     </SpineSectionFrame>
   );
 }
 
 /**
- * Display-only / field-less section (e.g. a preview) — just its step number, no
- * status claim. It never shows a check, because the form can't vouch for any
- * completion here.
+ * Display-only / field-less section (e.g. a preview) — just its step number.
+ * Nothing to validate, so the marker stays a plain number.
  */
 export function SpineSectionStatic({
   meta,
@@ -238,7 +173,7 @@ export function SpineSectionStatic({
   className,
 }: Pick<SpineBodyProps, "meta" | "label" | "children" | "className">) {
   return (
-    <SpineSectionFrame meta={meta} state="untouched" label={label} className={className}>
+    <SpineSectionFrame meta={meta} hasError={false} label={label} className={className}>
       {children}
     </SpineSectionFrame>
   );
