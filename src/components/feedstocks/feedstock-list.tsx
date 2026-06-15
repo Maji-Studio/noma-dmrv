@@ -135,7 +135,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certifier",
+      header: "Certification",
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("feedstock", row.original)}
@@ -439,7 +439,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               { label: "Supplier Code", value: sideSheetEntity.supplierCode },
               { label: "Vehicle", value: sideSheetEntity.vehiclePlateNumber },
               {
-                label: "Certifier",
+                label: "Certification",
                 value: (
                   <EntityCertifyReadinessBadge
                     readiness={deriveEntityCertifyReadiness(
