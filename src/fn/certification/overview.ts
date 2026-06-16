@@ -1,7 +1,10 @@
 "use server";
 
 import { z } from "zod";
+import { inArray } from "drizzle-orm";
 import { env } from "@/config/env";
+import { db } from "@/db";
+import { creditBatches } from "@/db/schema";
 import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
@@ -16,6 +19,7 @@ import {
   type RemovalReadiness,
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { SafeError } from "@/lib/errors";
 import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -189,6 +193,23 @@ export async function loadCreditBatchHealthSummaries(
       .parse(batchIds);
     if (ids.length === 0) return {};
 
+    const batchFacilityRows = await db
+      .select({
+        id: creditBatches.id,
+        facilityId: creditBatches.facilityId,
+      })
+      .from(creditBatches)
+      .where(inArray(creditBatches.id, ids));
+    const facilityByBatchId = new Map(
+      batchFacilityRows.map((row) => [row.id, row.facilityId]),
+    );
+    const invalidBatchId = ids.find(
+      (batchId) => facilityByBatchId.get(batchId) !== validFacilityId,
+    );
+    if (invalidBatchId) {
+      throw new SafeError("Batch does not belong to requested facility");
+    }
+
     const facilityFacts = await loadFacilityCertifierFacts(
       userId,
       validFacilityId,
@@ -203,7 +224,7 @@ export async function loadCreditBatchHealthSummaries(
             facilityFacts,
           );
           if (ctx.facilityId !== validFacilityId) {
-            throw new Error("Batch does not belong to requested facility");
+            throw new SafeError("Batch does not belong to requested facility");
           }
           const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
           return [
