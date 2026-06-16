@@ -43,6 +43,19 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { requireAuth } from "./utils";
+import { loadMapTrace } from "./dashboard-map-trace";
+import type {
+  DashboardMapEdge,
+  DashboardMapPoint,
+} from "./dashboard-map-trace";
+
+// Re-exported so dashboard-overview imports every map type from one module.
+export type {
+  DashboardMapDetail,
+  DashboardMapEdge,
+  DashboardMapKind,
+  DashboardMapPoint,
+} from "./dashboard-map-trace";
 
 const ISOMETRIC = "isometric";
 /** Per-section row cap — the dashboard samples, it is not a list page. */
@@ -91,19 +104,6 @@ export interface DashboardEvidenceRow {
   href: string;
 }
 
-export type DashboardMapKind = "facility" | "application" | "feedstock";
-
-export interface DashboardMapPoint {
-  id: string;
-  kind: DashboardMapKind;
-  /** Marker title (entity code / facility name). */
-  label: string;
-  /** Secondary line (status / kind context). */
-  sublabel: string;
-  lat: number;
-  lng: number;
-}
-
 export interface DashboardOperations {
   /** Server time the snapshot was built (ISO). */
   generatedAt: string;
@@ -112,6 +112,8 @@ export interface DashboardOperations {
   evidence: DashboardEvidenceRow[];
   /** Plottable sites: the facility, its application fields, and feedstock sources. */
   mapPoints: DashboardMapPoint[];
+  /** Directional traceability legs connecting the plotted sites. */
+  mapEdges: DashboardMapEdge[];
 }
 
 function toDateOnly(date: Date): string {
@@ -784,108 +786,6 @@ function buildEvidence(args: {
 }
 
 // ============================================
-// Map points — the facility and its plottable sites
-// ============================================
-
-/** Cap per source — the dashboard map is an overview, not the custody viewer. */
-const MAP_POINT_LIMIT = 60;
-
-/** Coerce a (numeric|string) lat/lng pair to finite numbers, dropping 0,0. */
-function coordPair(lat: unknown, lng: unknown): [number, number] | null {
-  const la = Number(lat);
-  const ln = Number(lng);
-  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
-  if (la === 0 && ln === 0) return null;
-  return [la, ln];
-}
-
-async function loadMapPoints(facilityId: string): Promise<DashboardMapPoint[]> {
-  const [facilityRows, applicationRows, feedstockRows] = await Promise.all([
-    db
-      .select({
-        id: facilities.id,
-        code: facilities.code,
-        name: facilities.name,
-        lat: facilities.gpsLatitude,
-        lng: facilities.gpsLongitude,
-      })
-      .from(facilities)
-      .where(eq(facilities.id, facilityId))
-      .limit(1),
-    db
-      .select({
-        id: applications.id,
-        code: applications.code,
-        status: applications.status,
-        lat: applications.gpsLatitude,
-        lng: applications.gpsLongitude,
-      })
-      .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
-      .orderBy(desc(applications.applicationDate))
-      .limit(MAP_POINT_LIMIT),
-    db
-      .select({
-        id: feedstocks.id,
-        code: feedstocks.code,
-        status: feedstocks.status,
-        lat: feedstocks.gpsLatitude,
-        lng: feedstocks.gpsLongitude,
-      })
-      .from(feedstocks)
-      .where(and(eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
-      .orderBy(desc(feedstocks.deliveryDate))
-      .limit(MAP_POINT_LIMIT),
-  ]);
-
-  const points: DashboardMapPoint[] = [];
-
-  const facility = facilityRows[0];
-  if (facility) {
-    const coord = coordPair(facility.lat, facility.lng);
-    if (coord) {
-      points.push({
-        id: `facility-${facility.id}`,
-        kind: "facility",
-        label: facility.name,
-        sublabel: `Facility · ${facility.code}`,
-        lat: coord[0],
-        lng: coord[1],
-      });
-    }
-  }
-
-  for (const row of applicationRows) {
-    const coord = coordPair(row.lat, row.lng);
-    if (!coord) continue;
-    points.push({
-      id: `application-${row.id}`,
-      kind: "application",
-      label: row.code,
-      sublabel: `Application · ${row.status}`,
-      lat: coord[0],
-      lng: coord[1],
-    });
-  }
-
-  for (const row of feedstockRows) {
-    const coord = coordPair(row.lat, row.lng);
-    if (!coord) continue;
-    points.push({
-      id: `feedstock-${row.id}`,
-      kind: "feedstock",
-      label: row.code,
-      sublabel: `Feedstock · ${row.status}`,
-      lat: coord[0],
-      lng: coord[1],
-    });
-  }
-
-  return points;
-}
-
-// ============================================
 // Aggregate
 // ============================================
 
@@ -910,7 +810,7 @@ export async function getDashboardOperations(
     gpsGaps,
     runsWithoutSamples,
     transportGaps,
-    mapPoints,
+    mapTrace,
   ] = await Promise.all([
     loadStatusCounts(facilityId),
     loadRunningRuns(facilityId),
@@ -921,7 +821,7 @@ export async function getDashboardOperations(
     loadGpsGapCounts(facilityId),
     loadRunsWithoutSamplesCount(facilityId),
     loadTransportGapTotals(facilityId),
-    loadMapPoints(facilityId),
+    loadMapTrace(userId, facilityId),
   ]);
 
   return {
@@ -940,6 +840,7 @@ export async function getDashboardOperations(
       runsWithoutSamples,
       transportGaps,
     }),
-    mapPoints,
+    mapPoints: mapTrace.points,
+    mapEdges: mapTrace.edges,
   };
 }

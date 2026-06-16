@@ -39,6 +39,7 @@ import {
   useUpdateCreditBatch,
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
+import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import {
   creditBatchStatuses,
@@ -141,6 +142,13 @@ export function CreditBatchList({
     data: co2eStoredPreviews = {},
     isLoading: previewsLoading,
   } = useCreditBatchCo2eStoredPreviews(previewIds);
+  // Per-batch certification readiness for the visible page, so each card can
+  // surface a cert tag (incl. missing application evidence) that links into the
+  // detail page's submission gate. Same classifier, never disagrees.
+  const { data: batchHealthSummaries = {} } = useCreditBatchHealthSummaries(
+    contextFacilityId ?? undefined,
+    previewIds,
+  );
   const hydratedPaginatedItems = paginatedItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
@@ -497,6 +505,7 @@ export function CreditBatchList({
               <CreditBatchCard
                 key={batch.id}
                 creditBatch={batch}
+                health={batchHealthSummaries[batch.id]}
                 onView={openView}
                 onEdit={openEdit}
                 onDelete={handleDelete}

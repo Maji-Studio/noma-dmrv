@@ -69,8 +69,15 @@ export interface CarbonTransitPanelProps {
   view: "map" | "split";
   /** Cross-link highlight from the DAG (nonce re-triggers repeat clicks). */
   highlight: { nodeId: string; nonce: number } | null;
+  /**
+   * Reachable sub-chain node ids for the active focus (the shared selection's
+   * lineage); null = nothing focused, everything full strength.
+   */
+  focusNodeIds: Set<string> | null;
   /** Marker / rail / chip selection — drives the DAG highlight upstream. */
   onNodeSelect: (nodeId: string) => void;
+  /** Clear the shared focus (hub click / basemap click). */
+  onClearSelection: () => void;
 }
 
 function buildPopupContent(
@@ -123,8 +130,14 @@ export function CarbonTransitPanel({
   lineages,
   view,
   highlight,
+  focusNodeIds,
   onNodeSelect,
+  onClearSelection,
 }: CarbonTransitPanelProps) {
+  // Transient hover isolation, shared between the map (line hover) and the rail
+  // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
+  const [hoverLegId, setHoverLegId] = useState<string | null>(null);
+
   const applicationGeo = useChainOfCustodyGeo(
     source.kind === "application" ? source.id : null
   );
@@ -133,14 +146,6 @@ export function CarbonTransitPanel({
   );
   const { data: geo, isLoading, isError, error } =
     source.kind === "application" ? applicationGeo : batchGeo;
-
-  // Clicking a leg in the bottom strip zooms/flashes that segment on the map.
-  // The nonce lets a repeat click on the same leg re-trigger the ease-to.
-  const [focusedLeg, setFocusedLeg] = useState<{ legId: string; nonce: number } | null>(
-    null
-  );
-  const focusLeg = (legId: string) =>
-    setFocusedLeg((current) => ({ legId, nonce: (current?.nonce ?? 0) + 1 }));
 
   const plottableLegs = geo ? resolveLegEndpoints(geo).plottable : [];
   const { data: routeGeometries } = useRouteGeometries(
@@ -187,6 +192,21 @@ export function CarbonTransitPanel({
     );
   const popupContent = buildPopupContent(lineages);
 
+  // A leg belongs to the focus when its chain-side anchor node sits in the
+  // reachable sub-chain. Single-app view dims the sibling inbound legs (they
+  // share one downstream); a batch roll-up isolates the focused sub-chain.
+  const focusLegIds = focusNodeIds
+    ? new Set(
+        geo.legs
+          .filter((leg) => focusNodeIds.has(legAnchorNodeId(geo, leg)))
+          .map((leg) => leg.id)
+      )
+    : null;
+  const mapFocus =
+    focusNodeIds && focusLegIds
+      ? { nodeIds: focusNodeIds, legIds: focusLegIds }
+      : null;
+
   return (
     <div
       className="relative h-full overflow-hidden border-[1.5px] border-[var(--clr-dark-purple-40)] bg-[var(--paper)]"
@@ -204,8 +224,11 @@ export function CarbonTransitPanel({
             popupContent={popupContent}
             railVisible={view === "map"}
             highlight={highlight}
-            focusedLeg={focusedLeg}
+            focus={mapFocus}
+            hoverLegId={hoverLegId}
             onMarkerClick={onNodeSelect}
+            onLegHover={setHoverLegId}
+            onClear={onClearSelection}
           />
 
           <MapWarningBanner warnings={geo.warnings} />
@@ -215,11 +238,11 @@ export function CarbonTransitPanel({
             <div className="absolute bottom-16 left-16 right-16 z-10">
               <TransportLegsRail
                 legs={geo.legs}
-                selectedLegId={focusedLeg?.legId ?? null}
-                onFocusLeg={(leg) => {
-                  focusLeg(leg.id);
-                  onNodeSelect(legAnchorNodeId(geo, leg));
-                }}
+                facility={{ code: geo.facility.code, name: geo.facility.name }}
+                focusLegIds={focusLegIds}
+                onFocusLeg={(leg) => onNodeSelect(legAnchorNodeId(geo, leg))}
+                onClearFocus={onClearSelection}
+                onHoverLeg={setHoverLegId}
               />
             </div>
           ) : (

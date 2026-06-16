@@ -54,7 +54,11 @@ import { CarbonTransitPanel } from "./map";
 import { RunFilterSelect, type RunFilterOption } from "./run-filter-select";
 import { BatchSankey } from "./sankey";
 import { ApplicationTrail } from "./trail";
-import { useBatchChainGraph, useChainGraph } from "./use-chain-graph";
+import {
+  reachableNodeIds,
+  useBatchChainGraph,
+  useChainGraph,
+} from "./use-chain-graph";
 
 const nodeTypes: NodeTypes = {
   chainNode: ChainNode,
@@ -63,41 +67,6 @@ const nodeTypes: NodeTypes = {
 const edgeTypes = {
   chainEdge: ChainEdge,
 };
-
-/**
- * Hover focus: the hovered card's full lineage (ancestors + descendants
- * through the flow) stays lit; everything else fades back. Returns the
- * related node-id set, or null when nothing is hovered.
- */
-function relatedNodeIds(
-  hoveredNodeId: string | null,
-  edges: Edge[]
-): Set<string> | null {
-  if (!hoveredNodeId) return null;
-  const downstream = new Map<string, string[]>();
-  const upstream = new Map<string, string[]>();
-  for (const edge of edges) {
-    if (!downstream.has(edge.source)) downstream.set(edge.source, []);
-    downstream.get(edge.source)!.push(edge.target);
-    if (!upstream.has(edge.target)) upstream.set(edge.target, []);
-    upstream.get(edge.target)!.push(edge.source);
-  }
-  const related = new Set<string>([hoveredNodeId]);
-  for (const adjacency of [downstream, upstream]) {
-    const queue = [hoveredNodeId];
-    const seen = new Set<string>([hoveredNodeId]);
-    while (queue.length > 0) {
-      const current = queue.pop()!;
-      for (const next of adjacency.get(current) ?? []) {
-        if (seen.has(next)) continue;
-        seen.add(next);
-        related.add(next);
-        queue.push(next);
-      }
-    }
-  }
-  return related;
-}
 
 type ApplicationViewMode = "lineage" | "map" | "split" | "trail";
 type BatchViewMode = "dag" | "map" | "sankey";
@@ -165,6 +134,12 @@ interface ChainFlowGraphProps {
   warnings: string[];
   /** Edge labels show mass (kg) or branch-share (%). */
   labelMode: "kg" | "pct";
+  /**
+   * Persistent cross-surface focus (the shared selection's reachable
+   * sub-chain) — dims everything outside it. Hover focus takes precedence
+   * while the pointer is over a card.
+   */
+  focusNodeIds?: Set<string> | null;
   onNodeClick: (event: React.MouseEvent, node: Node) => void;
 }
 
@@ -174,12 +149,14 @@ function ChainFlowGraph({
   edges,
   warnings,
   labelMode,
+  focusNodeIds,
   onNodeClick,
 }: ChainFlowGraphProps) {
   // Hover focus — hovering a card fades back everything outside its lineage
-  // and emphasizes the path edges.
+  // and emphasizes the path edges. Falls back to the persistent selection
+  // focus when the pointer isn't over a card.
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const related = relatedNodeIds(hoveredNodeId, edges);
+  const related = reachableNodeIds(hoveredNodeId, edges) ?? focusNodeIds ?? null;
   const displayNodes = related
     ? nodes.map((node) =>
         related.has(node.id)
@@ -325,8 +302,15 @@ export function ChainOfCustodyPage() {
   const [selection, setSelection] = useState<{ nodeId: string; nonce: number } | null>(
     null
   );
+  // Toggle: clicking the already-focused node again clears the focus (reset to
+  // all-shown), matching the bar's hub-click and the map's basemap-click.
   const selectNode = (nodeId: string) =>
-    setSelection((current) => ({ nodeId, nonce: (current?.nonce ?? 0) + 1 }));
+    setSelection((current) =>
+      current?.nodeId === nodeId
+        ? null
+        : { nodeId, nonce: (current?.nonce ?? 0) + 1 }
+    );
+  const clearSelection = () => setSelection(null);
 
   // Edge-label unit toggle (kg ⇄ branch-share %) for the graph views.
   const [massUnit, setMassUnit] = useState<"kg" | "pct">("kg");
@@ -435,6 +419,14 @@ export function ChainOfCustodyPage() {
       highlightedNodeId: selection?.nodeId ?? null,
     }
   );
+
+  // The shared focus: the selected node's reachable sub-chain, computed from
+  // the active graph's edges and fed to the DAG (dim), the map, and the bar so
+  // all three surfaces light the same sub-chain.
+  const activeEdges = anchor === "batch" ? batchEdges : edges;
+  const focusNodeIds = selection
+    ? reachableNodeIds(selection.nodeId, activeEdges)
+    : null;
 
   const updateParams = (mutate: (params: URLSearchParams) => void) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -582,6 +574,7 @@ export function ChainOfCustodyPage() {
           edges={edges}
           warnings={chainData?.warnings ?? []}
           labelMode={massUnit}
+          focusNodeIds={focusNodeIds}
           onNodeClick={handleNodeClick}
         />
       );
@@ -593,7 +586,9 @@ export function ChainOfCustodyPage() {
           lineages={chainData ? [chainData] : undefined}
           view="map"
           highlight={selection}
+          focusNodeIds={focusNodeIds}
           onNodeSelect={selectNode}
+          onClearSelection={clearSelection}
         />
       );
     }
@@ -613,6 +608,7 @@ export function ChainOfCustodyPage() {
             edges={edges}
             warnings={chainData?.warnings ?? []}
             labelMode={massUnit}
+            focusNodeIds={focusNodeIds}
             onNodeClick={handleNodeClick}
           />
         </div>
@@ -622,7 +618,9 @@ export function ChainOfCustodyPage() {
             lineages={chainData ? [chainData] : undefined}
             view="split"
             highlight={selection}
+            focusNodeIds={focusNodeIds}
             onNodeSelect={selectNode}
+            onClearSelection={clearSelection}
           />
         </div>
       </div>
@@ -664,6 +662,7 @@ export function ChainOfCustodyPage() {
           edges={batchEdges}
           warnings={batchWarnings}
           labelMode={massUnit}
+          focusNodeIds={focusNodeIds}
           onNodeClick={handleBatchNodeClick}
         />
       );
@@ -675,7 +674,9 @@ export function ChainOfCustodyPage() {
           lineages={batchLineages}
           view="map"
           highlight={selection}
+          focusNodeIds={focusNodeIds}
           onNodeSelect={selectNode}
+          onClearSelection={clearSelection}
         />
       );
     }

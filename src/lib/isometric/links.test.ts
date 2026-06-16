@@ -41,13 +41,40 @@ describe("isometricRegistry.removal — Certify deep link (drift guard)", () => 
   });
 });
 
-describe("isometricRegistry — public registry pages", () => {
-  it("builds a public project page on the production host", () => {
-    expect(isometricRegistry.project("prj_1K9YJ33RKSBX9FFF")).toBe(
-      "https://registry.isometric.com/project/prj_1K9YJ33RKSBX9FFF",
+describe("isometricRegistry.certifyProject — Certify project overview link", () => {
+  it("builds the sandbox Certify overview URL", () => {
+    expect(
+      isometricRegistry.certifyProject({
+        environment: "sandbox",
+        externalProjectId: "prj_1K9YJ33RKSBX9FFF",
+      }),
+    ).toBe(
+      "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/overview",
     );
   });
 
+  it("builds the production Certify overview URL", () => {
+    expect(
+      isometricRegistry.certifyProject({
+        environment: "production",
+        externalProjectId: "prj_1K5F2F6SN1S0ZKDQ",
+      }),
+    ).toBe(
+      "https://registry.isometric.com/account/certify/project/prj_1K5F2F6SN1S0ZKDQ/overview",
+    );
+  });
+
+  it("url-encodes the project id", () => {
+    expect(
+      isometricRegistry.certifyProject({
+        environment: "sandbox",
+        externalProjectId: "prj a/b",
+      }),
+    ).toContain("project/prj%20a%2Fb/overview");
+  });
+});
+
+describe("isometricRegistry — public registry pages", () => {
   it("normalizes versions to minor for protocol/module pages", () => {
     expect(normalizeRegistryMinorVersion("1.2.3")).toBe("1.2");
     expect(isometricRegistry.protocol("biochar", "1.2.0")).toBe(

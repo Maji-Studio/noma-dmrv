@@ -1,19 +1,14 @@
 /**
  * Production Run Readings React Query Hooks
- * Client-side state management for standalone reading CRUD
+ *
+ * Readings are imported from reactor-day CSVs. Client-side mutations are
+ * limited to clearing all readings for a run ("delete all").
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ProductionRunReadingWithRelations } from "@/data-access/production-run-readings";
-import type {
-  CreateProductionRunReadingData,
-  UpdateProductionRunReadingData,
-} from "@/schemas/production-run-readings";
 import {
   getProductionRunReadingsListFn,
-  createProductionRunReadingFn,
-  updateProductionRunReadingFn,
-  deleteProductionRunReadingFn,
+  deleteAllProductionRunReadingsFn,
 } from "@/fn/production-run-readings";
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import type { MutationCallbacks } from "./types";
@@ -57,92 +52,35 @@ export function useProductionRunReadings(
 // Mutation Hooks
 // ============================================
 
-export function useCreateProductionRunReading(
-  callbacks?: MutationCallbacks<
-    ProductionRunReadingWithRelations,
-    CreateProductionRunReadingData
-  >
+/**
+ * Delete every reading for a production run. Resolves to the number of rows
+ * removed.
+ */
+export function useDeleteAllProductionRunReadings(
+  callbacks?: MutationCallbacks<number, string>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateProductionRunReadingData) => {
-      const result = await createProductionRunReadingFn(data);
+    mutationFn: async (productionRunId: string) => {
+      const result = await deleteAllProductionRunReadingsFn({ productionRunId });
       if (!result.success) {
         throw new Error(result.error);
       }
-      return result.data;
+      return result.data.deletedCount;
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (deletedCount, productionRunId) => {
       queryClient.invalidateQueries({
         queryKey: productionRunReadingKeys.lists(),
       });
+      // Also refresh the inline readings cache keyed under production runs.
       queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(data.productionRunId),
+        queryKey: productionRunKeys.readings(productionRunId),
       });
-      await callbacks?.onSuccess?.(data, variables);
+      await callbacks?.onSuccess?.(deletedCount, productionRunId);
     },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
-    },
-  });
-}
-
-export function useUpdateProductionRunReading(
-  callbacks?: MutationCallbacks<
-    ProductionRunReadingWithRelations,
-    UpdateProductionRunReadingData
-  >
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: UpdateProductionRunReadingData) => {
-      const result = await updateProductionRunReadingFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    onSuccess: async (data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: productionRunReadingKeys.lists(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(data.productionRunId),
-      });
-      await callbacks?.onSuccess?.(data, variables);
-    },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
-    },
-  });
-}
-
-export function useDeleteProductionRunReading(
-  callbacks?: MutationCallbacks<void, string>
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (readingId: string) => {
-      const result = await deleteProductionRunReadingFn({ readingId });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-    },
-    onSuccess: async (_, readingId) => {
-      queryClient.invalidateQueries({
-        queryKey: productionRunReadingKeys.lists(),
-      });
-      // Also invalidate the inline readings cache
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.all,
-      });
-      await callbacks?.onSuccess?.(undefined, readingId);
-    },
-    onError: async (error, readingId) => {
-      await callbacks?.onError?.(error, readingId);
+    onError: async (error, productionRunId) => {
+      await callbacks?.onError?.(error, productionRunId);
     },
   });
 }

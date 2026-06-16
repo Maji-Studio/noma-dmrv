@@ -19,8 +19,10 @@ import {
   useUpdateApplicationEvidenceMetadata,
 } from "@/hooks/use-documents";
 import {
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_ROLE_DESCRIPTIONS,
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
   APPLICATION_VISUAL_EVIDENCE_ROLES,
   isApplicationBoundaryLogbookEvidenceType,
@@ -28,6 +30,7 @@ import {
   type ApplicationBoundaryLogbookEvidenceType,
   type ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
+import { InfoHint } from "@/components/ui/tooltip";
 import { formatFileSize } from "@/lib/format-utils";
 import type { DocumentRow } from "@/data-access/documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
@@ -47,6 +50,21 @@ const LOGBOOK_EVIDENCE_TYPE_OPTIONS =
   }));
 
 type EvidenceMode = "visual" | "boundary";
+
+// Mode-specific guidance shown inline (intro) and on the ⓘ tooltip (detail).
+// Sourced from the Isometric "Biochar Storage in Soil Environments" module.
+const EVIDENCE_INTRO: Record<EvidenceMode, string> = {
+  visual:
+    "Isometric requires a geotagged photo (GPS + timestamp) for each of the three application stages below — all three are needed per batch.",
+  boundary:
+    "Provide the GIS boundary reference above, plus at least one logbook document evidencing the quantity of biochar applied.",
+};
+const EVIDENCE_HINT: Record<EvidenceMode, string> = {
+  visual:
+    "Per the Isometric Biochar Storage in Soil module (§8.5.1), visual proof must show all three stages of every storage batch — stockpile (before), spreading (during), and incorporation (after) — each with embedded GPS coordinates and a timestamp. A single photo is not sufficient.",
+  boundary:
+    "Per the Isometric Biochar Storage in Soil module (§8.5.2), the boundary method needs a GIS map of the application area plus dated logbook quantities verified by weighbridge, inventory, or affidavit records.",
+};
 
 interface ApplicationEvidencePanelProps {
   applicationId?: string;
@@ -328,11 +346,18 @@ export function ApplicationEvidencePanel({
             <File size={18} weight="bold" />
           )}
           Evidence
+          <InfoHint side="top" label="What evidence is required">
+            {EVIDENCE_HINT[mode]}
+          </InfoHint>
         </h3>
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {visibleDocs.length} {visibleDocs.length === 1 ? "file" : "files"}
         </span>
       </header>
+
+      <p className="body-small text-[var(--color-text-secondary)]">
+        {EVIDENCE_INTRO[mode]}
+      </p>
 
       {(error || errorMessage) && (
         <ServerError
@@ -358,13 +383,18 @@ export function ApplicationEvidencePanel({
                 key={role}
                 className="flex flex-col gap-10 border border-[var(--color-border-tertiary)] p-12"
               >
-                <div className="flex items-center justify-between gap-8">
-                  <h4 className="body-small-bold">
-                    {APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[role]}
-                  </h4>
-                  <span className="body-caption text-[var(--color-text-tertiary)]">
-                    {roleDocs.length} {roleDocs.length === 1 ? "file" : "files"}
-                  </span>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-8">
+                    <h4 className="body-small-bold">
+                      {APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[role]}
+                    </h4>
+                    <span className="body-caption text-[var(--color-text-tertiary)]">
+                      {roleDocs.length} {roleDocs.length === 1 ? "file" : "files"}
+                    </span>
+                  </div>
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    {APPLICATION_VISUAL_EVIDENCE_ROLE_DESCRIPTIONS[role]}
+                  </p>
                 </div>
                 <EvidenceDocumentList
                   docs={roleDocs}
@@ -413,23 +443,32 @@ export function ApplicationEvidencePanel({
         </div>
       ) : (
         <div className="flex flex-col gap-12">
-          <div className="flex flex-wrap gap-8">
-            {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
-              <label
-                key={type}
-                className="inline-flex min-h-44 items-center gap-8 border border-[var(--color-border-secondary)] px-12 body-small"
-              >
-                <input
-                  type="radio"
-                  name={`application-${applicationId}-logbook-evidence-type`}
-                  value={type}
-                  checked={logbookEvidenceType === type}
-                  onChange={() => setLogbookEvidenceType(type)}
-                  disabled={disabled}
-                />
-                {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
-              </label>
-            ))}
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap gap-8">
+              {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
+                <label
+                  key={type}
+                  className="inline-flex min-h-44 items-center gap-8 border border-[var(--color-border-secondary)] px-12 body-small"
+                >
+                  <input
+                    type="radio"
+                    name={`application-${applicationId}-logbook-evidence-type`}
+                    value={type}
+                    checked={logbookEvidenceType === type}
+                    onChange={() => setLogbookEvidenceType(type)}
+                    disabled={disabled}
+                  />
+                  {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
+                </label>
+              ))}
+            </div>
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              {
+                APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS[
+                  logbookEvidenceType
+                ]
+              }
+            </p>
           </div>
           <EvidenceDocumentList
             docs={boundaryDocs}

@@ -32,6 +32,7 @@ export {
   createDatapoint,
   patchDatapoint,
   createGhgEntry,
+  getGhgEntry,
   createComponent,
   findGhgEntryBySupplierRef,
   findDatapointBySupplierRef,

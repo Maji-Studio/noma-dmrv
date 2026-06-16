@@ -3,8 +3,10 @@
 import { formatSafeDate } from "@/lib/format-utils";
 import {
   Certificate,
+  CheckCircle,
   PencilSimple,
   Trash,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, StatusBadge } from "@/components/ui";
 import {
@@ -13,17 +15,44 @@ import {
   type CreditBatchStatus,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
+import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
+  /** Per-batch certification readiness (undefined while loading). */
+  health?: CreditBatchHealthSummary;
   onView: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
 }
 
+/**
+ * Certification-readiness tag — the card-grain echo of the detail page's
+ * submission gate and the removal readiness hint. Green when the batch's data
+ * is complete enough to certify; amber with the open-issue count (incl. missing
+ * application evidence) when not. Opening the card lands on the gate's detail.
+ */
+function CertReadinessTag({ health }: { health: CreditBatchHealthSummary }) {
+  if (health.state === "ready") {
+    return (
+      <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-green)]">
+        <CheckCircle size={14} weight="fill" aria-hidden />
+        Ready to certify
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange)]">
+      <Warning size={14} weight="fill" aria-hidden />
+      {health.issueCount} cert {health.issueCount === 1 ? "gap" : "gaps"}
+    </span>
+  );
+}
+
 export function CreditBatchCard({
   creditBatch,
+  health,
   onView,
   onEdit,
   onDelete,
@@ -38,18 +67,21 @@ export function CreditBatchCard({
       onClick={() => onView(creditBatch)}
     >
       <div className="flex flex-1 flex-col gap-16 p-20">
-        {/* Header: code badge + status */}
-        <div className="flex items-center justify-between gap-12">
+        {/* Header: code badge + lifecycle status / cert readiness */}
+        <div className="flex items-start justify-between gap-12">
           <span className="inline-flex items-center gap-6 border border-[var(--clr-dark-purple-20)] bg-[var(--clr-dark-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-dark-purple)]">
             <Certificate size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          <StatusBadge
-            status={creditBatch.status as CreditBatchStatus}
-            label={formatCreditBatchStatus(
-              creditBatch.status as CreditBatchStatus
-            )}
-          />
+          <div className="flex flex-col items-end gap-6">
+            <StatusBadge
+              status={creditBatch.status as CreditBatchStatus}
+              label={formatCreditBatchStatus(
+                creditBatch.status as CreditBatchStatus
+              )}
+            />
+            {health && <CertReadinessTag health={health} />}
+          </div>
         </div>
 
         {/* Crediting period + facility */}
