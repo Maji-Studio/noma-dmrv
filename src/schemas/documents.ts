@@ -86,24 +86,54 @@ export function maxBytesFor(documentType: DocumentType): number {
   return UPLOAD_RULES[documentType].maxBytes;
 }
 
-export const requestUploadSchema = z.object({
-  entityType: z.enum(DOCUMENT_ENTITY_TYPES),
-  entityId: z.string().uuid(),
-  documentType: z.enum(DOCUMENT_TYPES),
-  fileName: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(255),
-  sizeBytes: z.number().int().nonnegative(),
-  capturedAt: z.string().datetime().optional(),
-  gpsLatitude: z.number().min(-90).max(90).optional(),
-  gpsLongitude: z.number().min(-180).max(180).optional(),
-  description: z.string().max(2000).optional(),
-  applicationEvidenceRole: z
-    .enum(APPLICATION_VISUAL_EVIDENCE_ROLES)
-    .optional(),
-  applicationLogbookEvidenceType: z
-    .enum(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)
-    .optional(),
-});
+export const requestUploadSchema = z
+  .object({
+    entityType: z.enum(DOCUMENT_ENTITY_TYPES),
+    entityId: z.string().uuid(),
+    documentType: z.enum(DOCUMENT_TYPES),
+    fileName: z.string().min(1).max(255),
+    contentType: z.string().min(1).max(255),
+    sizeBytes: z.number().int().nonnegative(),
+    capturedAt: z.string().datetime().optional(),
+    gpsLatitude: z.number().min(-90).max(90).optional(),
+    gpsLongitude: z.number().min(-180).max(180).optional(),
+    description: z.string().max(2000).optional(),
+    applicationEvidenceRole: z
+      .enum(APPLICATION_VISUAL_EVIDENCE_ROLES)
+      .optional(),
+    applicationLogbookEvidenceType: z
+      .enum(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES)
+      .optional(),
+  })
+  // Reject contradictory evidence classifications at the contract boundary, the
+  // same rule updateApplicationEvidenceMetadata enforces on reclassification: a
+  // visual role belongs only on a photo, a logbook type only on a logbook
+  // document (typed PDF, weighbridge ticket, or affidavit).
+  .superRefine((data, ctx) => {
+    if (
+      data.applicationEvidenceRole !== undefined &&
+      data.documentType !== "photo"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["applicationEvidenceRole"],
+        message: "Visual evidence role can only be set on photo uploads",
+      });
+    }
+    if (
+      data.applicationLogbookEvidenceType !== undefined &&
+      data.documentType !== "pdf" &&
+      data.documentType !== "weighbridge_ticket" &&
+      data.documentType !== "affidavit"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["applicationLogbookEvidenceType"],
+        message:
+          "Boundary logbook evidence type can only be set on logbook documents",
+      });
+    }
+  });
 export type RequestUploadInput = z.infer<typeof requestUploadSchema>;
 
 export const confirmUploadSchema = z.object({

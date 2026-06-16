@@ -434,6 +434,13 @@ describe("certification lineage guards", () => {
           }),
         ).rejects.toThrow(LOCKED_COPY);
       } finally {
+        // If the certified-lineage guard ever regresses and the create
+        // succeeds, the assertion fails AND leaves an orphan product behind.
+        // Remove any product with this run's unique code before the bin so a
+        // regression can't cascade into later specs.
+        await db
+          .delete(biocharProducts)
+          .where(eq(biocharProducts.code, `BP-LOCKED-${tag}`));
         await db
           .delete(storageLocations)
           .where(eq(storageLocations.id, bin.id));

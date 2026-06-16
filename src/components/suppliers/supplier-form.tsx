@@ -130,13 +130,22 @@ export function SupplierForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Supplier" : "Create Supplier";
 
+  // Locations are managed live (edit) only when we actually hold the supplier's
+  // id; otherwise they are collected as a pending list to persist after create.
+  // Render and submit MUST agree on this single condition — a supplier passed
+  // without an id would otherwise show the pending-list builder yet drop it here.
+  const managesLiveLocations = isEditMode && !!supplierId;
+
   const handleFormSubmit = handleSubmit((data) => {
-    if (!isEditMode && pendingLocations.length === 0) {
+    if (!managesLiveLocations && pendingLocations.length === 0) {
       setLocationError("At least one location is required");
       return;
     }
     setLocationError(null);
-    onSubmit(data as SupplierFormData, isEditMode ? undefined : pendingLocations);
+    onSubmit(
+      data as SupplierFormData,
+      managesLiveLocations ? undefined : pendingLocations
+    );
   });
 
   const handleAddPendingLocation = (loc: PendingSupplierLocation) => {
@@ -176,7 +185,7 @@ export function SupplierForm({
       </div>
 
       {/* Locations Section */}
-      {isEditMode && supplierId ? (
+      {managesLiveLocations && supplierId ? (
         <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
           <LocationsSection supplierId={supplierId} />
         </div>
