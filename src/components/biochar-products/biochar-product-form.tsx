@@ -8,13 +8,11 @@ import { useEffect, useId, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
-import { toDateInputValue } from "@/lib/date-utils";
-import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Factory, Package, FlowArrow } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, DryMassInput } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -180,7 +178,6 @@ export function BiocharProductForm({
     defaultValues: {
       facilityId: product?.facility?.id ?? contextFacilityId ?? "",
       formulationId: product?.formulation?.id ?? "",
-      productionDate: toDateInputValue(product?.productionDate),
       linkedProductionRunId: product?.linkedProductionRun?.id ?? product?.linkedProductionRunId ?? "",
       storageLocationId: product?.storageLocation?.id ?? "",
       status: product?.status ?? "testing",
@@ -261,10 +258,12 @@ export function BiocharProductForm({
     }
   }, [selectedFormulationId, setValue]);
 
-  // Prefill mass + production date from the linked production run (create mode
-  // only). Re-applies when a different run is selected — previously the mass
-  // kept the prior run's value, leaving the product inconsistent with its
-  // linked run (#46) — but never overwrites a field the user edited themselves.
+  // Prefill mass from the linked production run (create mode only). Re-applies
+  // when a different run is selected — previously the mass kept the prior run's
+  // value, leaving the product inconsistent with its linked run (#46) — but
+  // never overwrites a field the user edited themselves. The production date is
+  // not prefilled here: it is derived server-side from the linked run (the
+  // biochar's production date), so it has no editable field on the form.
   const lastPrefilledRunIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (product) return;
@@ -278,15 +277,8 @@ export function BiocharProductForm({
         shouldValidate: false,
       });
     }
-    if (!dirtyFields.productionDate && linkedRunPreview.date) {
-      setValue("productionDate", linkedRunPreview.date, {
-        shouldDirty: false,
-        shouldValidate: false,
-      });
-    }
   }, [
     dirtyFields.massKg,
-    dirtyFields.productionDate,
     linkedProductionRunId,
     linkedRunPreview,
     product,
@@ -306,14 +298,6 @@ export function BiocharProductForm({
   const effectiveWetMassKg =
     massKgNum !== null && (waterAddedKgNum === null || waterAddedKgNum >= 0)
       ? massKgNum + (waterAddedKgNum ?? 0)
-      : null;
-  const dryMassKg =
-    massKgNum !== null &&
-    moistureNum !== null &&
-    moistureNum >= 0 &&
-    moistureNum <= 100 &&
-    (waterAddedKgNum === null || waterAddedKgNum >= 0)
-      ? deriveMassDryKgWithAddedWater(massKgNum, moistureNum, waterAddedKgNum)
       : null;
   const hasWaterAdded = waterAddedKgNum != null && waterAddedKgNum > 0;
   const finalMoisturePercent =
@@ -353,7 +337,6 @@ export function BiocharProductForm({
         title="Source"
         icon={<Factory size={14} weight="bold" />}
         fields={["linkedProductionRunId", "massKg", "moistureContentPercent", "waterAddedKg", "densityKgM3"]}
-        required={["linkedProductionRunId", "massKg", "moistureContentPercent", "waterAddedKg"]}
       >
         <FormField
           id="linkedProductionRunId"
@@ -391,7 +374,7 @@ export function BiocharProductForm({
                 : undefined
             }
           >
-            <FormInput
+            <DryMassInput
               id="massKg"
               type="number"
               step="0.01"
@@ -399,6 +382,8 @@ export function BiocharProductForm({
               placeholder="e.g., 500"
               disabled={isSubmitting}
               error={!!errors.massKg}
+              wetMassKg={watchedMassKg}
+              moisturePercent={watchedMoisture}
               {...register("massKg", { setValueAs: nullableNumericValue })}
             />
           </FormField>
@@ -462,23 +447,15 @@ export function BiocharProductForm({
           </FormField>
         </div>
 
-        {/* Dry mass preview */}
-        {dryMassKg !== null && (
+        {/* Dry mass is surfaced inline under Wet Mass (DryMassInput). When water
+            is added, show what it changes — effective wet mass and final moisture. */}
+        {hasWaterAdded && effectiveWetMassKg !== null && (
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Dry Mass</span>
+            <span className="body-small text-[var(--color-text-tertiary)]">Effective wet mass</span>
             <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              {dryMassKg.toFixed(2)} kg
+              {effectiveWetMassKg.toFixed(2)} kg
             </span>
-            {hasWaterAdded && effectiveWetMassKg !== null && (
-              <>
-                <span className="text-[var(--color-text-quaternary)]">&middot;</span>
-                <span className="body-small text-[var(--color-text-tertiary)]">Effective wet mass</span>
-                <span className="body-small font-medium text-[var(--color-text-primary)]">
-                  {effectiveWetMassKg.toFixed(2)} kg
-                </span>
-              </>
-            )}
-            {hasWaterAdded && finalMoisturePercent !== null && (
+            {finalMoisturePercent !== null && (
               <>
                 <span className="text-[var(--color-text-quaternary)]">&middot;</span>
                 <span className="body-small text-[var(--color-text-tertiary)]">Final moisture</span>
@@ -495,8 +472,7 @@ export function BiocharProductForm({
       <FormSection
         title="Destination & Product"
         icon={<Package size={14} weight="bold" />}
-        fields={["formulationId", "storageLocationId", "productionDate"]}
-        required={["storageLocationId"]}
+        fields={["formulationId", "storageLocationId"]}
       >
 
         {/* Formulation drives ingredient-bin rows and the destination bin filter.
@@ -523,60 +499,43 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        {/* Ingredient Bins */}
+        {/* Blend ingredients — each drawn from the feedstock bin holding it */}
         <IngredientBinRows composition={composition} isSubmitting={isSubmitting} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="storageLocationId"
-            label="Product Bin"
-            error={errors.storageLocationId?.message}
-            helperText={
-              selectedFormulationId
-                ? "Bins for this formulation, or unassigned bins (claimed on first use)."
-                : "Pure-biochar or unassigned bins."
-            }
-            required
-          >
-            <Controller
-              name="storageLocationId"
-              control={control}
-              render={({ field, fieldState }) => (
-                <EntitySelect
-                  entityType="storageLocation"
-                  value={field.value || ""}
-                  onChange={field.onChange}
-                  placeholder="Select a product bin..."
-                  disabled={isSubmitting}
-                  error={!!fieldState.error}
-                  filterBy={{
-                    ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
-                    type: "product_bin",
-                    formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
-                  }}
-                  allowCreate
-                  createLabel="Add New Bin"
-                  onCreateNew={() => storageLocationDialog.open()}
-                />
-              )}
-            />
-          </FormField>
-
-          <FormField
-            id="productionDate"
-            label="Production Date"
-            error={errors.productionDate?.message}
-            helperText={isEditMode ? undefined : "Prefilled from the selected production run"}
-          >
-            <FormInput
-              id="productionDate"
-              type="date"
-              disabled={isSubmitting}
-              error={!!errors.productionDate}
-              {...register("productionDate")}
-            />
-          </FormField>
-        </div>
+        <FormField
+          id="storageLocationId"
+          label="Product Bin"
+          error={errors.storageLocationId?.message}
+          helperText={
+            selectedFormulationId
+              ? "Bins for this formulation, or unassigned bins (claimed on first use)."
+              : "Pure-biochar or unassigned bins."
+          }
+          required
+        >
+          <Controller
+            name="storageLocationId"
+            control={control}
+            render={({ field, fieldState }) => (
+              <EntitySelect
+                entityType="storageLocation"
+                value={field.value || ""}
+                onChange={field.onChange}
+                placeholder="Select a product bin..."
+                disabled={isSubmitting}
+                error={!!fieldState.error}
+                filterBy={{
+                  ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
+                  type: "product_bin",
+                  formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
+                }}
+                allowCreate
+                createLabel="Add New Bin"
+                onCreateNew={() => storageLocationDialog.open()}
+              />
+            )}
+          />
+        </FormField>
       </FormSection>
       </FormSpine>
 

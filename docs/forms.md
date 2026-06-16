@@ -278,8 +278,6 @@ const { control } = useForm<MyFormData>({ resolver, defaultValues });
       title="Run Setup"
       icon={<Factory size={14} weight="bold" />}
       fields={["date", "reactorId", "status"]}
-      required={["date", "reactorId"]}
-      certReady={(values) => values.status === "complete"}
     >
       …fields…
     </FormSection>
@@ -298,14 +296,44 @@ const { control } = useForm<MyFormData>({ resolver, defaultValues });
 
 - `control` is the form's React Hook Form control object.
 - `fields` names the section's owned fields and scopes the live subscription.
-- `required` is the subset that must be filled before the section can turn
-  complete. `completion="all"` treats every field in `fields` as required.
-- `certReady` is the local domain gate for CERT obligations. A section turns
-  green only when required fields are filled and `certReady` passes.
-- Field-less sections render as numbered orientation steps with no completion
-  claim. Use them for previews/recaps, not for required input.
+  Its only job now is to let the marker turn **red** when one of those fields
+  has a surfaced validation error (after blur or submit).
+- The marker is the **step number** and stays a number through every state — it
+  is orientation, never a completion claim. The spine deliberately says nothing
+  about whether a section is "done": a green completion tick conflated process
+  progress with certification readiness and read as misleading. Certification
+  readiness is a field-level concern carried by the CERT chips (below).
+- Field-less sections render as plain numbered orientation steps. Use them for
+  previews/recaps, not for required input.
 - Conditional `FormSection` children can mount/unmount inside the spine;
   numbering is derived from rendered order and stays contiguous.
+
+#### CERT chip status
+
+`FormField` / `TruckWeighingSection` accept `certifyStatus` (and the section's
+`certifyRequired` controls whether the chip shows at all). The chip reflects the
+record's **saved** state, frozen — it does not flip while the user types:
+
+- create mode → `neutral` (no claim)
+- edit mode, saved value present → `satisfied` (green)
+- edit mode, saved value missing → `missing` (orange)
+
+so reopening a saved record shows at a glance which certification inputs are
+still outstanding. Derive it with `makeCertFieldStatus(savedValues)` from
+`@/components/forms`, passing the form's `defaultValues` in edit mode (or
+`undefined` while creating) and addressing fields by their form field name:
+
+```typescript
+const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
+// …
+<FormField id="biocharOutputKg" certifyRequired certifyStatus={certStatus("biocharOutputKg")} … />
+```
+
+For a cert input that is **not** a plain form value (a derived leg distance, an
+upload, a status that must equal a specific value) compute the `CertFieldStatus`
+directly instead of reading `defaultValues` — e.g. the feedstock transport
+distance tracks its saved leg, and the production-run status chip is satisfied
+only once the saved run is `complete`.
 
 ### Vertical rhythm (spacing rule)
 

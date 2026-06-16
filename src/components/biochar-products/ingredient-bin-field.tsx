@@ -4,7 +4,10 @@ import { Controller, type Control, type FieldValues } from "react-hook-form";
 import { FormField, EntitySelect } from "@/components/forms";
 import { COMPOSITION_BIN_TYPE, type CompositionRow } from "@/lib/biochar-composition";
 
-const INGREDIENT_BIN_PREFIX = "Ingredient Bin · ";
+// The storage-location option subtitle for a feedstock bin starts with
+// "Feedstock Bin · " (formatStorageLocationType). Strip it from the selected
+// label so the row doesn't repeat the bin kind it already lives under.
+const FEEDSTOCK_BIN_PREFIX = "Feedstock Bin · ";
 
 interface IngredientBinFieldProps {
   row: CompositionRow;
@@ -21,7 +24,7 @@ export function IngredientBinField({
 }: IngredientBinFieldProps) {
   const formatLabel = (entity: { name: string; subtitle?: string }) => {
     const parts = [entity.name];
-    if (entity.subtitle) parts.push(entity.subtitle.replace(INGREDIENT_BIN_PREFIX, ""));
+    if (entity.subtitle) parts.push(entity.subtitle.replace(FEEDSTOCK_BIN_PREFIX, ""));
     if (row.removalKg) parts.push(`(−${row.removalKg.toFixed(0)} kg)`);
     return parts.join(" · ");
   };
@@ -41,7 +44,7 @@ export function IngredientBinField({
             entityType="storageLocation"
             value={field.value || ""}
             onChange={field.onChange}
-            placeholder="Select an ingredient bin..."
+            placeholder="Select a feedstock bin..."
             disabled={isSubmitting}
             filterBy={{
               ...(facilityId ? { facilityId } : {}),

@@ -3,8 +3,8 @@ const DOCS = "https://docs.isometric.com";
 
 // The supplier's PRIVATE Certify workspace is environment-specific: a sandbox
 // submission lives on the sandbox registry host, a production one on the public
-// host. (The public registry pages — project/protocol/module below — always
-// point at the production host, since the public registry is a single site.)
+// host. (The public registry pages — protocol/module below — always point at
+// the production host, since the public registry is a single site.)
 const CERTIFY_HOSTS = {
   sandbox: "https://registry.sandbox.isometric.com",
   production: REGISTRY,
@@ -20,8 +20,6 @@ export function normalizeRegistryMinorVersion(version: string): string | null {
 }
 
 export const isometricRegistry = {
-  project: (externalProjectId: string) =>
-    `${REGISTRY}/project/${encodeURIComponent(externalProjectId)}`,
   protocol: (slug: string, version: string) => {
     const minorVersion = normalizeRegistryMinorVersion(version);
     if (!minorVersion) return null;
@@ -32,6 +30,18 @@ export const isometricRegistry = {
     if (!minorVersion) return null;
     return `${REGISTRY}/module/${encodeURIComponent(slug)}/${encodeURIComponent(minorVersion)}`;
   },
+  // The supplier's view of a project is an environment-specific PRIVATE Certify
+  // workspace page (NOT the public /project/{id} registry page, which only
+  // exists after credit issuance) — it nests under /account/certify on the same
+  // host family as removals/statements:
+  //   {host}/account/certify/project/{projectId}/overview
+  certifyProject: (args: {
+    environment: IsometricEnvironment;
+    externalProjectId: string;
+  }) =>
+    `${CERTIFY_HOSTS[args.environment]}/account/certify/project/${encodeURIComponent(
+      args.externalProjectId,
+    )}/overview`,
   // A submitted removal lives in the supplier's private Certify workspace — it
   // is NOT a public registry page until credit issuance (see
   // docs/isometric — data-visibility). In the Certify UI a removal is a

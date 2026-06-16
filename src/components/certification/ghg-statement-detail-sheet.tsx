@@ -31,6 +31,7 @@ import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { EnvBanner } from "./env-banner";
+import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
@@ -101,6 +102,11 @@ export function GhgStatementDetailSheet({
           </span>
           <StatusBadge status={derived.value} label={derived.label} />
         </div>
+
+        <GhgStatementCarbonBreakdown
+          ghgStatementId={statement.id}
+          enabled={open}
+        />
 
         <Field label="Reporting period">{period}</Field>
 

@@ -33,11 +33,16 @@ export const vehicles = pgTable('vehicles', {
   id: uuid('id').primaryKey().defaultRandom(),
   code: text('code').notNull().unique(),
   name: text('name').notNull().unique(), // e.g., "Truck 1", "Truck 2", "Truck 3"
-  identifier: text('identifier').notNull(),
+  // Operational/audit metadata — not consumed by the certified transport calc
+  // (distance-based, Eq. 3). Optional so a vehicle can be recorded with just a
+  // name + type. See vehicleType note below.
+  identifier: text('identifier'),
+  // Required: selects the Isometric component emission factor (Eq. 3); the only
+  // vehicle field the certified transport calc actually depends on.
   vehicleType: text('vehicle_type').notNull(), // e.g., "truck", "tractor"
-  fuelType: text('fuel_type').notNull(), // e.g., "Diesel"
-  fuelConsumptionLPerKm: real('fuel_consumption_l_per_km').notNull(), // e.g., 0.3 L/km
-  modelYear: integer('model_year').notNull(),
+  fuelType: text('fuel_type'), // e.g., "Diesel" — metadata only
+  fuelConsumptionLPerKm: real('fuel_consumption_l_per_km'), // e.g., 0.3 L/km — metadata only, never submitted
+  modelYear: integer('model_year'), // factor-uniformity hedge, not submitted
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

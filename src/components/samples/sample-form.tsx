@@ -27,7 +27,7 @@ import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Flask, Fire, Atom, Scales, Cube, Calculator, Eye, Thermometer, Leaf } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
@@ -89,19 +89,7 @@ export function SampleForm({
   const isEditMode = !!sample;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(sampleFormSchema) as any,
-    // onTouched so spine markers can flag errors on blur, not only on submit.
-    mode: "onTouched",
-    defaultValues: {
+  const defaultValues = {
       productionRunId: preselectedProductionRunId || sample?.productionRunId || "",
       samplingTime: sample?.samplingTime
         ? formatLocalDateTime(new Date(sample.samplingTime))
@@ -142,8 +130,25 @@ export function SampleForm({
       magnesiumPercent: sample?.magnesiumPercent ?? undefined,
       calciumPercent: sample?.calciumPercent ?? undefined,
       ironPercent: sample?.ironPercent ?? undefined,
-    },
+  };
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(sampleFormSchema) as any,
+    // onTouched so spine markers can flag errors on blur, not only on submit.
+    mode: "onTouched",
+    defaultValues,
   });
+
+  // CERT chips reflect the saved record (frozen), neutral while creating.
+  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   // Watch fields for calculated values and conditional rendering
   const watchedDurabilityOption = watch("durabilityOption");
@@ -203,7 +208,6 @@ export function SampleForm({
           title="Sample Information"
           icon={<Flask size={14} weight="bold" />}
           fields={["productionRunId", "samplingTime", "analysisDate", "labName", "labAccreditation", "weightGrams", "volumeMl"]}
-          required={["productionRunId", "samplingTime"]}
         >
               <FormField
                 id="productionRunId"
@@ -340,7 +344,6 @@ export function SampleForm({
           title="Carbon Analysis"
           icon={<Fire size={14} weight="bold" />}
           fields={["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"]}
-          required={["totalCarbonPercent", "organicCarbonPercent"]}
         >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
@@ -369,6 +372,7 @@ export function SampleForm({
                   helperText="Used to estimate biochar durability."
                   required
                   certifyRequired={isSampleCertifyField("organicCarbonPercent")}
+                  certifyStatus={certStatus("organicCarbonPercent")}
                 >
                   <FormInput
                     id="organicCarbonPercent"
@@ -657,6 +661,7 @@ export function SampleForm({
                   error={errors.hToCOrgRatio?.message}
                   helperText="Auto-calculated from H% and C_org%"
                   certifyRequired={isSampleCertifyField("hToCOrgRatio")}
+                  certifyStatus={certStatus("hToCOrgRatio")}
                 >
                   <FormInput
                     id="hToCOrgRatio"
@@ -697,7 +702,6 @@ export function SampleForm({
               title="1000-Year Durability · R₀ Reflectance"
               icon={<Eye size={14} weight="bold" />}
               fields={["randomReflectanceR0Percent", "r0MeasurementCount", "r0AnalysisDate"]}
-              required={["randomReflectanceR0Percent"]}
             >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
@@ -705,6 +709,7 @@ export function SampleForm({
                     label="Mean Random Reflectance R₀ (%)"
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
+                    certifyStatus={certStatus("randomReflectanceR0Percent")}
                   >
                     <FormInput
                       id="randomReflectanceR0Percent"
@@ -760,11 +765,6 @@ export function SampleForm({
               title="TGA Non-Reactive Carbon"
               icon={<Thermometer size={14} weight="bold" />}
               fields={["reactiveCarbonPercent", "residualCarbonPercent", "tgaAnalysisDate"]}
-              // anyOf: at least one carbon split satisfies the CERT requirement.
-              certReady={(v) =>
-                typeof v.reactiveCarbonPercent === "number" ||
-                typeof v.residualCarbonPercent === "number"
-              }
             >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
@@ -772,6 +772,7 @@ export function SampleForm({
                     label="Reactive Carbon (%)"
                     error={errors.reactiveCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("reactiveCarbonPercent")}
+                    certifyStatus={certStatus("reactiveCarbonPercent")}
                   >
                     <FormInput
                       id="reactiveCarbonPercent"
@@ -791,6 +792,7 @@ export function SampleForm({
                     label="Residual (Non-Reactive) Carbon (%)"
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
+                    certifyStatus={certStatus("residualCarbonPercent")}
                   >
                     <FormInput
                       id="residualCarbonPercent"

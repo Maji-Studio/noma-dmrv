@@ -462,6 +462,11 @@ const READY_TRUCK_DEPARTURE_KG = 12_100;
 const READY_DELIVERY_TRUCK_ARRIVAL_KG = 9_100;
 const READY_DELIVERY_TRUCK_DEPARTURE_KG = 9_000;
 const READY_APPLICATION_EVIDENCE_URL = "https://example.com/e2e-geotagged-application.jpg";
+const READY_APPLICATION_EVIDENCE_ROLES = [
+  "stockpile",
+  "spreading",
+  "incorporation",
+] as const;
 
 export interface SeededReadyBatch {
   creditBatchId: string;
@@ -495,7 +500,9 @@ export async function seedUngroupedReadyBatchWithChain(
     order: crypto.randomUUID(),
     delivery: crypto.randomUUID(),
     application: crypto.randomUUID(),
-    applicationDocument: crypto.randomUUID(),
+    applicationDocuments: READY_APPLICATION_EVIDENCE_ROLES.map(() =>
+      crypto.randomUUID(),
+    ),
     creditBatch: crypto.randomUUID(),
     creditBatchApplication: crypto.randomUUID(),
     feedstockTransportLeg: crypto.randomUUID(),
@@ -640,16 +647,18 @@ export async function seedUngroupedReadyBatchWithChain(
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
       });
-      await tx.insert(schema.documents).values({
-        id: id.applicationDocument,
-        entityType: "application",
-        entityId: id.application,
-        documentType: "photo",
-        fileUrl: READY_APPLICATION_EVIDENCE_URL,
-        fileName: `e2e-geotagged-application-${testRunId}.jpg`,
-        uploadStatus: "uploaded",
-        metadata: { geotagStatus: "present" },
-      });
+      const applicationEvidenceDocuments: (typeof schema.documents.$inferInsert)[] =
+        READY_APPLICATION_EVIDENCE_ROLES.map((role, index) => ({
+          id: id.applicationDocuments[index],
+          entityType: "application",
+          entityId: id.application,
+          documentType: "photo" as const,
+          fileUrl: READY_APPLICATION_EVIDENCE_URL,
+          fileName: `e2e-geotagged-application-${role}-${testRunId}.jpg`,
+          uploadStatus: "uploaded" as const,
+          metadata: { geotagStatus: "present", evidenceRole: role },
+        }));
+      await tx.insert(schema.documents).values(applicationEvidenceDocuments);
       await tx.insert(schema.transportLegs).values([
         leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
         leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
@@ -702,7 +711,7 @@ export async function seedUngroupedReadyBatchWithChain(
             );
           await tx
             .delete(schema.documents)
-            .where(eq(schema.documents.id, id.applicationDocument));
+            .where(inArray(schema.documents.id, id.applicationDocuments));
           await tx
             .delete(schema.applications)
             .where(eq(schema.applications.id, id.application));

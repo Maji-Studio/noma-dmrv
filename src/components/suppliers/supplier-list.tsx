@@ -10,7 +10,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Users, Plus } from "@phosphor-icons/react";
 import type { Supplier } from "@/db/schema";
 import {
-  useCreateSupplier,
+  useCreateSupplierWithLocations,
   useDeleteSupplier,
   useSuppliers,
   useUpdateSupplier,
@@ -23,7 +23,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { SupplierForm } from "./supplier-form";
+import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
@@ -107,7 +107,7 @@ export function SupplierList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: suppliersData, isLoading, error: fetchError } = useSuppliers();
-  const createSupplier = useCreateSupplier();
+  const createSupplier = useCreateSupplierWithLocations();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
   const toast = useToast();
@@ -117,10 +117,16 @@ export function SupplierList() {
   // Computed stats
   const totalSuppliers = suppliers.length;
   // Handlers
-  const handleCreate = async (data: SupplierFormData) => {
+  const handleCreate = async (
+    data: SupplierFormData,
+    pendingLocations?: PendingSupplierLocation[]
+  ) => {
     setCreateError(null);
     try {
-      await createSupplier.mutateAsync(data);
+      await createSupplier.mutateAsync({
+        supplier: data,
+        locations: pendingLocations ?? [],
+      });
       setSideSheet(null);
       toast.success("Supplier created successfully");
     } catch (error) {
@@ -306,6 +312,7 @@ export function SupplierList() {
         <SupplierForm
           key={sideSheetEntity?.id ?? "create"}
           supplier={sideSheet?.entity as Supplier | undefined}
+          supplierId={sideSheetEntity && sideSheetMode === "edit" ? sideSheetEntity.id : undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createSupplier.isPending || updateSupplier.isPending}

@@ -18,7 +18,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { Package, MapPin, Camera, Thermometer } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
 import {
   applicationFormSchema,
   applicationEvidenceMethods,
@@ -66,8 +66,8 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
 );
 
 const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
-  visual: "Geotagged application photos",
-  boundary: "GIS boundary reference and logbook",
+  visual: "Geotagged photos for all three stages — stockpile, spreading, incorporation",
+  boundary: "GIS boundary map + dated logbook quantities (weighbridge, inventory, or affidavit)",
 };
 
 // ============================================
@@ -201,6 +201,25 @@ export function ApplicationForm({
 }: ApplicationFormProps) {
   const isEditMode = !!application;
 
+  const defaultValues = {
+    applicationDate: application?.applicationDate
+      ? formatLocalDate(new Date(application.applicationDate))
+      : formatLocalDate(new Date()),
+    deliveryId: application?.deliveryId ?? "",
+    biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
+    biocharAppliedDryTons: applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
+    fieldSizeHa: application?.fieldSizeHa ?? undefined,
+    fieldIdentifier: application?.fieldIdentifier ?? "",
+    cropType: application?.cropType ?? "",
+    gpsLatitude: application?.gpsLatitude ?? undefined,
+    gpsLongitude: application?.gpsLongitude ?? undefined,
+    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
+    evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "visual",
+    gisBoundaryReference: application?.gisBoundaryReference ?? "",
+    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
+    soilTemperatureC: application?.soilTemperatureC ?? undefined,
+  };
+
   const {
     register,
     handleSubmit,
@@ -213,25 +232,11 @@ export function ApplicationForm({
     resolver: zodResolver(applicationFormSchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
-    defaultValues: {
-      applicationDate: application?.applicationDate
-        ? formatLocalDate(new Date(application.applicationDate))
-        : formatLocalDate(new Date()),
-      deliveryId: application?.deliveryId ?? "",
-      biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-      biocharAppliedDryTons: applicationTonsToKg(application?.biocharAppliedDryTons) ?? undefined,
-      fieldSizeHa: application?.fieldSizeHa ?? undefined,
-      fieldIdentifier: application?.fieldIdentifier ?? "",
-      cropType: application?.cropType ?? "",
-      gpsLatitude: application?.gpsLatitude ?? undefined,
-      gpsLongitude: application?.gpsLongitude ?? undefined,
-      applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
-      evidenceMethod: (application?.evidenceMethod as ApplicationEvidenceMethod | undefined) ?? "visual",
-      gisBoundaryReference: application?.gisBoundaryReference ?? "",
-      soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
-      soilTemperatureC: application?.soilTemperatureC ?? undefined,
-    },
+    defaultValues,
   });
+
+  // CERT chips reflect the saved record (frozen), neutral while creating.
+  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
@@ -357,14 +362,6 @@ export function ApplicationForm({
         title="Application Details"
         icon={<Package size={14} weight="bold" />}
         fields={["applicationDate", "deliveryId", "biocharAppliedTons", "biocharAppliedDryTons"]}
-        required={["applicationDate", "deliveryId", "biocharAppliedTons"]}
-        // When the delivery has no moisture %, dry mass is entered manually and
-        // is a CERT field — require it before the section reads complete.
-        certReady={(v) =>
-          moisturePercent == null && selectedDelivery
-            ? typeof v.biocharAppliedDryTons === "number"
-            : true
-        }
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
@@ -408,6 +405,7 @@ export function ApplicationForm({
             error={errors.biocharAppliedTons?.message}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
+            certifyStatus={certStatus("biocharAppliedTons")}
             helperText={
               availableKg !== null
                 ? `${formatKg(availableKg)} available from this delivery`
@@ -435,6 +433,7 @@ export function ApplicationForm({
               error={errors.biocharAppliedDryTons?.message}
               helperText="No moisture % on delivery — enter dry mass manually"
               certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
+              certifyStatus={certStatus("biocharAppliedDryTons")}
             >
               <FormInput
                 id="biocharAppliedDryTons"
@@ -544,6 +543,7 @@ export function ApplicationForm({
       <FormSection
         title="Evidence Method"
         icon={<Camera size={14} weight="bold" />}
+        hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
         fields={["evidenceMethod", "gisBoundaryReference"]}
       >
         <div
@@ -613,7 +613,6 @@ export function ApplicationForm({
         icon={<Thermometer size={14} weight="bold" />}
         hint="Used in the Isometric 200-year durability calculation."
         fields={["soilTemperatureSource", "soilTemperatureC"]}
-        required={["soilTemperatureC"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -637,6 +636,7 @@ export function ApplicationForm({
             error={errors.soilTemperatureC?.message}
             helperText="Annual average for this application site"
             certifyRequired={isApplicationCertifyField("soilTemperatureC")}
+            certifyStatus={certStatus("soilTemperatureC")}
           >
             <FormInput
               id="soilTemperatureC"

@@ -30,6 +30,10 @@ function leg(overrides: Partial<ChainGeoLeg>): ChainGeoLeg {
     distanceKm: 10,
     distanceSource: null,
     isDerived: true,
+    loadMassKg: null,
+    materialLabel: null,
+    outerHref: null,
+    outerCode: null,
     ...overrides,
   };
 }

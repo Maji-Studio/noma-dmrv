@@ -47,6 +47,7 @@ export interface ProductionRunReadingsImportResult {
   parsedRows: number;
   inWindowRows: number;
   droppedRows: number;
+  skippedRows: number;
   fileReactorCode: string;
   fileDate: string;
   warnings: string[];
@@ -149,6 +150,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       parsedRows: parsed.parsedRows,
       inWindowRows: parsed.inWindowRows,
       droppedRows: parsed.droppedRows,
+      skippedRows: parsed.skippedRows,
       fileReactorCode: parsed.fileReactorCode,
       fileDate: parsed.fileDate,
       warnings: inspection.warnings,

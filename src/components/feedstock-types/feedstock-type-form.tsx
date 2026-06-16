@@ -88,6 +88,10 @@ export function FeedstockTypeForm({
   const sections = shouldShowIsometricFeedstockSection(lockUsage, defaultUsage)
     ? SECTIONS
     : SECTIONS.filter((section) => section.key === "general");
+  // With only the General source there is no choice to present, so the source
+  // selector and the registry-certification warning (which never applies to
+  // internal-only blend materials) are both redundant.
+  const showSourceSelector = sections.length > 1;
 
   const selectSection = (key: SectionKey) => {
     setActiveSection(key);
@@ -202,6 +206,7 @@ export function FeedstockTypeForm({
 
   return (
     <div className="space-y-20">
+      {showSourceSelector && (
       <div
         className="grid grid-cols-1 md:grid-cols-2 gap-12"
         role="radiogroup"
@@ -250,8 +255,9 @@ export function FeedstockTypeForm({
           );
         })}
       </div>
+      )}
 
-      {activeSection === "general" && !selectedIsometricFeedstock && (
+      {showSourceSelector && activeSection === "general" && !selectedIsometricFeedstock && (
         <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
           <WarningCircle
             aria-hidden

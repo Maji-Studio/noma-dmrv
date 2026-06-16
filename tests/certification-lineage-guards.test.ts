@@ -5,7 +5,10 @@ import {
   deleteApplication,
   updateApplication,
 } from "@/data-access/applications";
-import { updateBiocharProduct } from "@/data-access/biochar-products";
+import {
+  createBiocharProduct,
+  updateBiocharProduct,
+} from "@/data-access/biochar-products";
 import {
   deleteCreditBatch,
   updateCreditBatch,
@@ -37,6 +40,7 @@ import {
   productionRuns,
   reactors,
   samples,
+  storageLocations,
 } from "@/db/schema";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -60,7 +64,7 @@ interface LineageFixture {
 }
 
 async function createLineageFixture(
-  blockingVia: "removal" | "ghgStatement" = "removal",
+  blockingVia: "none" | "removal" | "ghgStatement" = "removal",
 ): Promise<LineageFixture> {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
 
@@ -226,20 +230,22 @@ async function createLineageFixture(
       applicationId: application.id,
     });
 
-    await tx.insert(certificationSubmissions).values({
-      provider: "isometric",
-      submissionType:
-        blockingVia === "ghgStatement" ? "ghg_statement" : "removal",
-      localEntityType:
-        blockingVia === "ghgStatement" ? "ghgStatement" : "removal",
-      localEntityId: ghgStatementId ?? removal.id,
-      externalId: `ext_clg_${tag}`,
-      version: 1,
-      status: "submitted",
-      payloadHash: `hash-${tag}`,
-      payloadSnapshot: { fixture: "certification-lineage-guards" },
-      submittedAt: new Date("2026-06-17T00:00:00Z"),
-    });
+    if (blockingVia !== "none") {
+      await tx.insert(certificationSubmissions).values({
+        provider: "isometric",
+        submissionType:
+          blockingVia === "ghgStatement" ? "ghg_statement" : "removal",
+        localEntityType:
+          blockingVia === "ghgStatement" ? "ghgStatement" : "removal",
+        localEntityId: ghgStatementId ?? removal.id,
+        externalId: `ext_clg_${tag}`,
+        version: 1,
+        status: "submitted",
+        payloadHash: `hash-${tag}`,
+        payloadSnapshot: { fixture: "certification-lineage-guards" },
+        submittedAt: new Date("2026-06-17T00:00:00Z"),
+      });
+    }
 
     return {
       applicationId: application.id,
@@ -309,7 +315,7 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
 
 async function withFixture<T>(
   testFn: (fixture: LineageFixture) => Promise<T>,
-  blockingVia: "removal" | "ghgStatement" = "removal",
+  blockingVia: "none" | "removal" | "ghgStatement" = "removal",
 ): Promise<T> {
   const fixture = await createLineageFixture(blockingVia);
   try {
@@ -320,6 +326,30 @@ async function withFixture<T>(
 }
 
 describe("certification lineage guards", () => {
+  it("allows production run edits while the lineage has no submitted certification artifact", async () => {
+    await withFixture(async (fixture) => {
+      const updated = await updateProductionRun(
+        TEST_USER_ID,
+        fixture.productionRunId,
+        {
+          feedstockWetMassKg: 1_100,
+        },
+      );
+
+      expect(updated.feedstockWetMassKg).toBe(1_100);
+    }, "none");
+  });
+
+  it("allows application edits while the lineage has no submitted certification artifact", async () => {
+    await withFixture(async (fixture) => {
+      const updated = await updateApplication(TEST_USER_ID, fixture.applicationId, {
+        fieldIdentifier: "editable-field",
+      });
+
+      expect(updated.fieldIdentifier).toBe("editable-field");
+    }, "none");
+  });
+
   it("rejects production run dry-mass edits once a linked removal is submitted", async () => {
     await withFixture(async (fixture) => {
       await expect(
@@ -373,6 +403,41 @@ describe("certification lineage guards", () => {
           massKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
+    });
+  });
+
+  it("rejects creating a biochar product against a submitted production-run lineage", async () => {
+    await withFixture(async (fixture) => {
+      const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+      // An otherwise-valid create: a real product bin in the locked run's
+      // facility. Only the certified-lineage guard should block it.
+      const [bin] = await db
+        .insert(storageLocations)
+        .values({
+          code: `SL-CLG-${tag}`,
+          name: `CLG Product Bin ${tag}`,
+          type: "product_bin",
+          facilityId: fixture.facilityId,
+        })
+        .returning({ id: storageLocations.id });
+
+      try {
+        await expect(
+          createBiocharProduct(TEST_USER_ID, {
+            code: `BP-LOCKED-${tag}`,
+            facilityId: fixture.facilityId,
+            linkedProductionRunId: fixture.productionRunId,
+            storageLocationId: bin.id,
+            massKg: 10,
+            moistureContentPercent: 5,
+            waterAddedKg: 0,
+          }),
+        ).rejects.toThrow(LOCKED_COPY);
+      } finally {
+        await db
+          .delete(storageLocations)
+          .where(eq(storageLocations.id, bin.id));
+      }
     });
   });
 

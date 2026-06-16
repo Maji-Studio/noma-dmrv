@@ -53,16 +53,24 @@ export function FeedstockMix({ slices }: FeedstockMixProps) {
         />
       ) : (
         <div className="flex flex-col px-20 py-12" data-testid="feedstock-mix">
+          <p className="pb-8 label-micro text-[var(--color-text-tertiary)]">
+            Dry mass processed by feedstock type
+          </p>
           {slices.map((slice, index) => (
             <div
               key={slice.feedstockTypeId ?? "other"}
-              className="grid grid-cols-[96px_minmax(0,1fr)_52px] items-center gap-14 py-10"
+              className="grid grid-cols-[minmax(96px,120px)_minmax(0,1fr)_48px] items-center gap-14 py-10"
             >
-              <span
-                className="label-micro truncate text-[var(--color-text-secondary)]"
-                title={slice.name}
-              >
-                {slice.name}
+              <span className="flex min-w-0 flex-col gap-1">
+                <span
+                  className="label-micro truncate text-[var(--color-text-secondary)]"
+                  title={slice.name}
+                >
+                  {slice.name}
+                </span>
+                <span className="font-mono text-[10px] tabular-nums text-[var(--color-text-tertiary)]">
+                  {formatTonnes(slice.massDryKg)}
+                </span>
               </span>
               <div className="relative h-14 bg-[var(--clr-dark-purple-10)]">
                 <div

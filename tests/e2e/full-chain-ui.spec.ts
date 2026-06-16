@@ -531,8 +531,13 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
       await waitForSideSheetClose(page);
 
+      // Scope to the table body so the #264 customer-filter <select> options
+      // (same names, hidden while collapsed) don't shadow the order-row cell.
       await expect(
-        page.getByText(seededData.customer.name, { exact: false }).first()
+        page
+          .locator("table tbody")
+          .getByText(seededData.customer.name, { exact: false })
+          .first()
       ).toBeVisible({ timeout: 8000 });
     });
 

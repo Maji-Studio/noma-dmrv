@@ -67,15 +67,16 @@ describe("deriveBatchHealth", () => {
         hasSubmittableRuns: false,
         productionReadinessGap: {
           kind: "noApplications",
-          detail: "No applications linked to this batch",
-          fixTarget: "batchDetails",
+          detail:
+            "No applications fall in this batch's crediting period — record an application in the period, or adjust the period.",
+          fixTarget: "applications",
         },
       }),
     );
     const production = checkFor(result, "production");
     expect(production.status).toBe("unmet");
-    expect(production.detail).toBe("No applications linked to this batch");
-    expect(production.fixTarget).toBe("batchDetails");
+    expect(production.detail).toContain("crediting period");
+    expect(production.fixTarget).toBe("applications");
   });
 
   it("points broken product-to-run lineage at the biochar product workflow", () => {

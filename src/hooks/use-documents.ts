@@ -7,6 +7,7 @@ import {
   getDocumentsForEntity,
   requestUpload,
   setDocumentVisibility,
+  updateApplicationEvidenceMetadata,
   type RequestUploadResult,
 } from "@/fn/documents";
 import type { DocumentVisibility } from "@/schemas/documents";
@@ -75,6 +76,26 @@ export function useSetDocumentVisibility(invalidateKey?: readonly unknown[]) {
     },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
+    },
+  });
+}
+
+export function useUpdateApplicationEvidenceMetadata(
+  invalidateKey?: readonly unknown[],
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Parameters<typeof updateApplicationEvidenceMetadata>[0],
+    ) => {
+      const res = await updateApplicationEvidenceMetadata(input);
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    },
+    onSuccess: (row) => {
+      qc.invalidateQueries({
+        queryKey: invalidateKey ?? documentKeys.forEntity(row.entityType, row.entityId),
+      });
     },
   });
 }

@@ -33,6 +33,16 @@ export function createGhgEntry(body: CreateGhgEntryRequest): Promise<GhgEntry> {
   return isometric.post<GhgEntry>("/ghg_entries", body);
 }
 
+// Reads back a submitted GHG entry (removal) so the UI can show the registry's
+// verified accounting — net removed, the pre-uncertainty figure, the standard
+// deviation behind the uncertainty discount, and the buffer-pool split. The
+// detailed Sequestrations/Activities component split lives behind
+// `/ghg_entries/{id}/component_attributions`; this entry-level read carries the
+// netted figures we surface in the removal breakdown card.
+export function getGhgEntry(id: string): Promise<GhgEntry> {
+  return isometric.get<GhgEntry>(`/ghg_entries/${id}`);
+}
+
 // Defined for completeness; templated GHG entries embed inputs directly via
 // CreateGhgEntryRequest.ghg_entry_template_components, so Phase 3 does not call
 // this. Reserved for Phase 4 standalone-component flows.

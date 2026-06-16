@@ -13,8 +13,8 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Factory, Plant, Lightning, FlowArrow, FileCsv } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormActions, FormSection, FormSpine, SectionLabel } from "@/components/forms";
+import { Factory, Plant, Lightning, Package, FlowArrow, FileCsv } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -238,6 +238,30 @@ export function ProductionRunForm({
   const isEditMode = !!productionRun;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
+  const defaultValues = {
+    facilityId: productionRun?.facilityId || contextFacilityId || "",
+    date: productionRun?.date ?? formatLocalDate(new Date()),
+    reactorId: productionRun?.reactorId ?? "",
+    status: (productionRun?.status as ProductionRunStatus) ?? "draft",
+    startTime: productionRun?.startTime
+      ? formatLocalTime(new Date(productionRun.startTime))
+      : formatLocalTime(new Date()),
+    endTime: productionRun?.endTime ? formatLocalTime(new Date(productionRun.endTime)) : "",
+    operatorId: productionRun?.operatorId ?? "",
+    feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
+    feedstockWetMassKg: productionRun?.feedstockWetMassKg ?? undefined,
+    feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? undefined,
+    feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
+    residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
+    dieselOperationLiters: productionRun?.dieselOperationLiters ?? undefined,
+    dieselGensetLiters: productionRun?.dieselGensetLiters ?? undefined,
+    preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? undefined,
+    electricityKwh: productionRun?.electricityKwh ?? undefined,
+    biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
+    biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
+    biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
+  };
+
   const {
     register,
     handleSubmit,
@@ -248,30 +272,18 @@ export function ProductionRunForm({
     resolver: zodResolver(productionRunFormSchema),
     // onTouched so the spine markers can turn red on blur, not just on submit.
     mode: "onTouched",
-    defaultValues: {
-      facilityId: productionRun?.facilityId || contextFacilityId || "",
-      date: productionRun?.date ?? formatLocalDate(new Date()),
-      reactorId: productionRun?.reactorId ?? "",
-      status: (productionRun?.status as ProductionRunStatus) ?? "draft",
-      startTime: productionRun?.startTime
-        ? formatLocalTime(new Date(productionRun.startTime))
-        : formatLocalTime(new Date()),
-      endTime: productionRun?.endTime ? formatLocalTime(new Date(productionRun.endTime)) : "",
-      operatorId: productionRun?.operatorId ?? "",
-      feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
-      feedstockWetMassKg: productionRun?.feedstockWetMassKg ?? undefined,
-      feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? undefined,
-      feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
-      residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
-      dieselOperationLiters: productionRun?.dieselOperationLiters ?? undefined,
-      dieselGensetLiters: productionRun?.dieselGensetLiters ?? undefined,
-      preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? undefined,
-      electricityKwh: productionRun?.electricityKwh ?? undefined,
-      biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
-      biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
-      biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
-    },
+    defaultValues,
   });
+
+  // CERT chips reflect the saved record (frozen), neutral while creating.
+  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
+  // The run-status chip is satisfied only once the saved run is marked Complete
+  // (a run must be Complete before it's certification-ready), not merely set.
+  const runStatusCertStatus: CertFieldStatus = !isEditMode
+    ? "neutral"
+    : productionRun?.status === "complete"
+      ? "satisfied"
+      : "missing";
 
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
@@ -353,10 +365,6 @@ export function ProductionRunForm({
         title="Run Setup"
         icon={<Factory size={14} weight="bold" />}
         fields={["reactorId", "status", "date", "operatorId", "startTime", "endTime"]}
-        required={["reactorId", "date", "startTime"]}
-        // CERT: a run must be marked Complete before it's certification-ready,
-        // so the section can't go green while Status is still Draft.
-        certReady={(v) => v.status === "complete"}
       >
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
@@ -385,6 +393,7 @@ export function ProductionRunForm({
             error={errors.status?.message}
             helperText="Mark finished runs Complete before certification."
             certifyRequired
+            certifyStatus={runStatusCertStatus}
           >
             <FormSelect
               id="status"
@@ -453,7 +462,6 @@ export function ProductionRunForm({
           "feedingRateKgHr",
           "residenceTimeMinutes",
         ]}
-        required={["feedstockStorageLocationId", "feedstockWetMassKg", "feedstockMoisturePercent"]}
       >
 
         {!watchedFacilityId && (
@@ -489,14 +497,17 @@ export function ProductionRunForm({
             label="Wet Mass (kg)"
             error={errors.feedstockWetMassKg?.message}
             certifyRequired={isProductionRunCertifyField("feedstockWetMassKg")}
+            certifyStatus={certStatus("feedstockWetMassKg")}
           >
-            <FormInput
+            <DryMassInput
               id="feedstockWetMassKg"
               type="number"
               step="0.1"
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.feedstockWetMassKg}
+              wetMassKg={watchWetMass}
+              moisturePercent={watchMoisture}
               {...register("feedstockWetMassKg", {
                 setValueAs: nullableNumericValue,
               })}
@@ -508,6 +519,7 @@ export function ProductionRunForm({
             label="Moisture Content (%)"
             error={errors.feedstockMoisturePercent?.message}
             certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}
+            certifyStatus={certStatus("feedstockMoisturePercent")}
           >
             <FormInput
               id="feedstockMoisturePercent"
@@ -521,21 +533,6 @@ export function ProductionRunForm({
               })}
             />
           </FormField>
-        </div>
-
-        {/* Dry mass preview (display only — computed server-side) */}
-        <div className="flex items-center gap-12 rounded-sm border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-          <span className="body-small text-[var(--color-text-tertiary)]">Est. Dry Mass (kg)</span>
-          <span className="body-medium font-medium text-[var(--color-text-primary)]">
-            {previewDryMass !== null
-              ? `${previewDryMass.toFixed(2)} kg`
-              : "—"}
-          </span>
-          {previewDryMass !== null && (
-            <span className="body-small text-[var(--color-text-quaternary)]">
-              = {Number(watchWetMass ?? 0).toFixed(2)} kg × (100% − {Number(watchMoisture ?? 0).toFixed(2)}% moisture)
-            </span>
-          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
@@ -569,72 +566,56 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Output & Energy ── */}
+      {/* ── Output ── */}
       <FormSection
-        title="Output & Energy"
-        icon={<Lightning size={14} weight="bold" />}
+        title="Output"
+        icon={<Package size={14} weight="bold" />}
         fields={[
           "biocharStorageLocationId",
           "biocharOutputKg",
           "biocharMoisturePercent",
-          "dieselOperationLiters",
-          "dieselGensetLiters",
-          "preprocessingFuelLiters",
-          "electricityKwh",
-        ]}
-        // Cert-clean: every CERT-tagged output/energy value must be entered
-        // (a real 0 counts; blank does not) for this section to read complete.
-        required={[
-          "biocharStorageLocationId",
-          "biocharOutputKg",
-          "biocharMoisturePercent",
-          "dieselOperationLiters",
-          "dieselGensetLiters",
-          "preprocessingFuelLiters",
-          "electricityKwh",
         ]}
       >
 
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          These values feed the certification emissions calculation. Enter 0
-          where nothing was used — a blank field reads as missing, not zero.
-        </p>
+        <FormField
+          id="biocharStorageLocationId"
+          label="Biochar Storage"
+          error={errors.biocharStorageLocationId?.message}
+        >
+          <Controller
+            name="biocharStorageLocationId"
+            control={control}
+            render={({ field }) => (
+              <EntitySelect
+                entityType="storageLocation"
+                value={field.value || undefined}
+                onChange={field.onChange}
+                placeholder="Select storage..."
+                disabled={isSubmitting || !watchedFacilityId}
+                error={!!errors.biocharStorageLocationId}
+                filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
+              />
+            )}
+          />
+        </FormField>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="biocharStorageLocationId"
-            label="Biochar Storage"
-            error={errors.biocharStorageLocationId?.message}
-          >
-            <Controller
-              name="biocharStorageLocationId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  entityType="storageLocation"
-                  value={field.value || undefined}
-                  onChange={field.onChange}
-                  placeholder="Select storage..."
-                  disabled={isSubmitting || !watchedFacilityId}
-                  error={!!errors.biocharStorageLocationId}
-                  filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
-                />
-              )}
-            />
-          </FormField>
           <FormField
             id="biocharOutputKg"
             label="Biochar Wet Mass (kg)"
             error={errors.biocharOutputKg?.message}
             certifyRequired={isProductionRunCertifyField("biocharOutputKg")}
+            certifyStatus={certStatus("biocharOutputKg")}
           >
-            <FormInput
+            <DryMassInput
               id="biocharOutputKg"
               type="number"
               step="0.1"
               placeholder="e.g. 150"
               disabled={isSubmitting}
               error={!!errors.biocharOutputKg}
+              wetMassKg={watchedBiocharKg}
+              moisturePercent={watchedBiocharMoisture}
               {...register("biocharOutputKg", {
                 setValueAs: nullableNumericValue,
               })}
@@ -645,6 +626,7 @@ export function ProductionRunForm({
             label="Biochar Moisture (%)"
             error={errors.biocharMoisturePercent?.message}
             certifyRequired={isProductionRunCertifyField("biocharMoisturePercent")}
+            certifyStatus={certStatus("biocharMoisturePercent")}
           >
             <FormInput
               id="biocharMoisturePercent"
@@ -659,19 +641,33 @@ export function ProductionRunForm({
             />
           </FormField>
         </div>
-        {previewBiocharDryMass != null && (
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Biochar dry mass: {previewBiocharDryMass.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg
-          </p>
-        )}
+      </FormSection>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-16 gap-y-16">
+      {/* ── Energy ── */}
+      <FormSection
+        title="Energy"
+        icon={<Lightning size={14} weight="bold" />}
+        fields={[
+          "dieselOperationLiters",
+          "dieselGensetLiters",
+          "preprocessingFuelLiters",
+          "electricityKwh",
+        ]}
+      >
+
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          These values feed the certification emissions calculation. Enter 0
+          where nothing was used — a blank field reads as missing, not zero.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="dieselOperationLiters"
             label="Startup / Plant Diesel (L)"
             hint="Diesel for reactor startup and running on-site plant equipment during this run — not the generator. Shown as “Startup / Plant Diesel” on the Energy page."
             error={errors.dieselOperationLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
+            certifyStatus={certStatus("dieselOperationLiters")}
           >
             <FormInput
               id="dieselOperationLiters"
@@ -692,6 +688,7 @@ export function ProductionRunForm({
             hint="Diesel burned by the generator that supplied this run's electricity."
             error={errors.dieselGensetLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselGensetLiters")}
+            certifyStatus={certStatus("dieselGensetLiters")}
           >
             <FormInput
               id="dieselGensetLiters"
@@ -712,6 +709,7 @@ export function ProductionRunForm({
             hint="Fuel used to dry, chip, or otherwise prepare the feedstock before pyrolysis."
             error={errors.preprocessingFuelLiters?.message}
             certifyRequired={isProductionRunCertifyField("preprocessingFuelLiters")}
+            certifyStatus={certStatus("preprocessingFuelLiters")}
           >
             <FormInput
               id="preprocessingFuelLiters"
@@ -732,6 +730,7 @@ export function ProductionRunForm({
             hint="Grid (or other non-generator) electricity consumed during this run."
             error={errors.electricityKwh?.message}
             certifyRequired={isProductionRunCertifyField("electricityKwh")}
+            certifyStatus={certStatus("electricityKwh")}
           >
             <FormInput
               id="electricityKwh"

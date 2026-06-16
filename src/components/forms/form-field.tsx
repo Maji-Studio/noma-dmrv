@@ -6,7 +6,10 @@
 import { cloneElement, isValidElement, type ReactNode } from "react";
 import { FormError } from "./form-error";
 import { InfoHint } from "@/components/ui/tooltip";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import {
+  CertificationFieldTag,
+  type CertFieldStatus,
+} from "@/components/ui/certification-field-tag";
 
 const INLINE_HELPER_MAX_CHARS = 64;
 
@@ -23,6 +26,12 @@ interface FormFieldProps {
   hint?: ReactNode;
   required?: boolean;
   certifyRequired?: boolean;
+  /**
+   * Saved-state of the certification field — colours the CERT chip (orange when
+   * the saved record is missing this field, green when present). Defaults to
+   * neutral. Only meaningful when `certifyRequired` is set.
+   */
+  certifyStatus?: CertFieldStatus;
   children: ReactNode;
 }
 
@@ -80,6 +89,7 @@ export function FormField({
   hint,
   required,
   certifyRequired,
+  certifyStatus,
   children,
 }: FormFieldProps) {
   const errorId = `${id}-error`;
@@ -102,8 +112,11 @@ export function FormField({
   return (
     <div>
       {/* Keep the info icon a sibling of the label, not a child — a button
-          inside a <label> would forward its clicks to the field control. */}
-      <div className="flex items-center gap-6 mb-6">
+          inside a <label> would forward its clicks to the field control.
+          Top-align so a wrapped multi-line label keeps the CERT tag / ⓘ icon
+          beside its first line instead of floating them in the vertical
+          middle of the wrapped text. */}
+      <div className="flex items-start gap-6 mb-6">
         <label
           htmlFor={id}
           className="body-small font-medium text-[var(--color-text-secondary)]"
@@ -116,7 +129,7 @@ export function FormField({
             </>
           )}
         </label>
-        {certifyRequired && <CertificationFieldTag />}
+        {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
         {hintContent != null && (
           <InfoHint side="top" label={`More about ${label}`}>
             {hintContent}
