@@ -821,7 +821,7 @@ export async function getDashboardOperations(
     loadGpsGapCounts(facilityId),
     loadRunsWithoutSamplesCount(facilityId),
     loadTransportGapTotals(facilityId),
-    loadMapTrace(facilityId),
+    loadMapTrace(userId, facilityId),
   ]);
 
   return {

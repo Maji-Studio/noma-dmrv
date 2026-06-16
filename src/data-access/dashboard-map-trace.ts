@@ -9,8 +9,7 @@
  * facility → application field (pink). Each point and leg carries its popup
  * detail rows plus an href so the operator can navigate straight from the map.
  *
- * Facility-scoped and read-only; `getDashboardOperations` calls the auth guard
- * before reaching here.
+ * Facility-scoped and read-only.
  */
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -21,6 +20,7 @@ import {
   feedstocks,
   transportLegs,
 } from "@/db/schema";
+import { requireAuth } from "./utils";
 
 export type DashboardMapKind = "facility" | "application" | "feedstock";
 
@@ -81,6 +81,8 @@ function coordPair(lat: unknown, lng: unknown): [number, number] | null {
   const la = Number(lat);
   const ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
+  if (la < -90 || la > 90) return null;
+  if (ln < -180 || ln > 180) return null;
   if (la === 0 && ln === 0) return null;
   return [la, ln];
 }
@@ -114,8 +116,11 @@ async function loadFeedstockLegDistances(
 }
 
 export async function loadMapTrace(
+  userId: string,
   facilityId: string,
 ): Promise<{ points: DashboardMapPoint[]; edges: DashboardMapEdge[] }> {
+  requireAuth(userId);
+
   const [facilityRows, applicationRows, feedstockRows, feedstockDistances] =
     await Promise.all([
       db

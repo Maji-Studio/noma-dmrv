@@ -28,7 +28,11 @@ import {
   useSupplierLocationsBySupplier,
   useDeleteSupplierLocation,
 } from "@/hooks/use-suppliers";
-import { supplierFormSchema, type SupplierFormData } from "@/schemas/suppliers";
+import {
+  supplierFormSchema,
+  supplierLocationFormSchema,
+  type SupplierFormData,
+} from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { Supplier } from "@/db/schema/parties";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -447,16 +451,7 @@ function InlineLocationForm({
   const handleAdd = () => {
     setFormError(null);
 
-    if (!formData.country.trim()) {
-      setFormError("Country is required");
-      return;
-    }
-    if (formData.gpsLatitude == null || formData.gpsLongitude == null) {
-      setFormError("GPS latitude and longitude are required");
-      return;
-    }
-
-    onAdd({
+    const parsed = supplierLocationFormSchema.safeParse({
       name: formData.name.trim(),
       country: formData.country.trim(),
       stateRegion: formData.stateRegion.trim(),
@@ -467,6 +462,23 @@ function InlineLocationForm({
       distanceFromFacilityKm: formData.distanceFromFacilityKm,
       distanceSource: formData.distanceSource,
       isDefault: formData.isDefault,
+    });
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? "Invalid location");
+      return;
+    }
+
+    onAdd({
+      name: parsed.data.name ?? "",
+      country: parsed.data.country,
+      stateRegion: parsed.data.stateRegion ?? "",
+      city: parsed.data.city ?? "",
+      address: parsed.data.address ?? "",
+      gpsLatitude: parsed.data.gpsLatitude,
+      gpsLongitude: parsed.data.gpsLongitude,
+      distanceFromFacilityKm: parsed.data.distanceFromFacilityKm ?? null,
+      distanceSource: parsed.data.distanceSource ?? null,
+      isDefault: parsed.data.isDefault,
     });
   };
 

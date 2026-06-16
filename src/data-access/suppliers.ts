@@ -7,12 +7,41 @@ import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers, supplierLocations, feedstocks, type Supplier, type SupplierLocation } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 // ============================================
 // Types
 // ============================================
 
 export type SupplierWithRelations = Supplier;
+
+interface SupplierCreateFields {
+  code: string;
+  name: string;
+  location?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+  address?: string | null;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  sourceRegion?: string | null;
+  distanceToFacilityKm?: number | null;
+  distanceSource?: DistanceSourceValue | null;
+}
+
+interface SupplierLocationCreateFields {
+  name?: string | null;
+  country: string;
+  stateRegion?: string | null;
+  city?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+  address?: string | null;
+  distanceFromFacilityKm?: number | null;
+  distanceSource?: DistanceSourceValue | null;
+  isDefault?: boolean;
+}
 
 export interface PaginatedSuppliers {
   items: SupplierWithRelations[];
@@ -207,20 +236,7 @@ export async function getSupplierById(
  */
 export async function createSupplier(
   userId: string,
-  data: {
-    code: string;
-    name: string;
-    location?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    address?: string | null;
-    contactName?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    sourceRegion?: string | null;
-    distanceToFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-  }
+  data: SupplierCreateFields
 ): Promise<Supplier> {
   requireAuth(userId);
 
@@ -255,6 +271,77 @@ export async function createSupplier(
       .returning();
 
     return supplier;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("unique")) {
+      throw new SafeError("A supplier with this code already exists");
+    }
+    throw error;
+  }
+}
+
+export async function createSupplierWithLocations(
+  userId: string,
+  data: SupplierCreateFields & { locations: SupplierLocationCreateFields[] }
+): Promise<Supplier> {
+  requireAuth(userId);
+
+  if (data.locations.length === 0) {
+    throw new SafeError("At least one location is required");
+  }
+
+  try {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(eq(suppliers.code, data.code));
+
+      if (existing) {
+        throw new SafeError("A supplier with this code already exists");
+      }
+
+      const [supplier] = await tx
+        .insert(suppliers)
+        .values({
+          userId,
+          code: data.code,
+          name: data.name,
+          location: data.location ?? null,
+          gpsLatitude: data.gpsLatitude ?? null,
+          gpsLongitude: data.gpsLongitude ?? null,
+          address: data.address ?? null,
+          contactName: data.contactName ?? null,
+          contactEmail: data.contactEmail ?? null,
+          contactPhone: data.contactPhone ?? null,
+          sourceRegion: data.sourceRegion ?? null,
+          distanceToFacilityKm: data.distanceToFacilityKm ?? null,
+          distanceSource: data.distanceSource ?? null,
+        })
+        .returning();
+
+      let defaultIndex = 0;
+      data.locations.forEach((location, index) => {
+        if (location.isDefault === true) defaultIndex = index;
+      });
+
+      await tx.insert(supplierLocations).values(
+        data.locations.map((location, index) => ({
+          supplierId: supplier.id,
+          name: location.name ?? null,
+          country: location.country,
+          stateRegion: location.stateRegion ?? null,
+          city: location.city ?? null,
+          gpsLatitude: location.gpsLatitude ?? null,
+          gpsLongitude: location.gpsLongitude ?? null,
+          address: location.address ?? null,
+          distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
+          distanceSource: location.distanceSource ?? null,
+          isDefault: index === defaultIndex,
+        }))
+      );
+
+      return supplier;
+    });
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
       throw new SafeError("A supplier with this code already exists");
