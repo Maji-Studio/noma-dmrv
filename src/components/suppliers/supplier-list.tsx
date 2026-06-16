@@ -10,8 +10,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Users, Plus } from "@phosphor-icons/react";
 import type { Supplier } from "@/db/schema";
 import {
-  useCreateSupplier,
-  useCreateSupplierLocation,
+  useCreateSupplierWithLocations,
   useDeleteSupplier,
   useSuppliers,
   useUpdateSupplier,
@@ -108,8 +107,7 @@ export function SupplierList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: suppliersData, isLoading, error: fetchError } = useSuppliers();
-  const createSupplier = useCreateSupplier();
-  const createLocation = useCreateSupplierLocation();
+  const createSupplier = useCreateSupplierWithLocations();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
   const toast = useToast();
@@ -125,15 +123,10 @@ export function SupplierList() {
   ) => {
     setCreateError(null);
     try {
-      const supplier = await createSupplier.mutateAsync(data);
-      if (pendingLocations?.length) {
-        for (const loc of pendingLocations) {
-          await createLocation.mutateAsync({
-            supplierId: supplier.id,
-            ...loc,
-          });
-        }
-      }
+      await createSupplier.mutateAsync({
+        supplier: data,
+        locations: pendingLocations ?? [],
+      });
       setSideSheet(null);
       toast.success("Supplier created successfully");
     } catch (error) {
@@ -322,7 +315,7 @@ export function SupplierList() {
           supplierId={sideSheetEntity && sideSheetMode === "edit" ? sideSheetEntity.id : undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
-          isSubmitting={createSupplier.isPending || createLocation.isPending || updateSupplier.isPending}
+          isSubmitting={createSupplier.isPending || updateSupplier.isPending}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Supplier"}
         />
       </EntitySideSheet>

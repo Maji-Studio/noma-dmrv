@@ -59,6 +59,7 @@ const UNCERTAINTY_STYLE: CSSProperties = {
   backgroundImage:
     "repeating-linear-gradient(135deg, var(--color-text-tertiary) 0, var(--color-text-tertiary) 1px, transparent 1px, transparent 5px)",
 };
+const MICRO_ICON_SIZE = 13;
 
 const TONE_CLASS: Record<Tone, string> = {
   stored: "bg-[var(--color-signal-green)]",
@@ -157,7 +158,7 @@ function LedgerRow({
           {label}
         </span>
         {hint && (
-          <InfoHint side="top" size={13}>
+          <InfoHint side="top" size={MICRO_ICON_SIZE}>
             {hint}
           </InfoHint>
         )}
@@ -201,9 +202,9 @@ function Eyebrow({ source }: { source: "registry" | "estimate" }) {
         )}
       >
         {verified ? (
-          <SealCheck size={13} weight="fill" aria-hidden />
+          <SealCheck size={MICRO_ICON_SIZE} weight="fill" aria-hidden />
         ) : (
-          <SlidersHorizontal size={13} weight="bold" aria-hidden />
+          <SlidersHorizontal size={MICRO_ICON_SIZE} weight="bold" aria-hidden />
         )}
         {verified ? "Registry-verified" : "Estimate"}
       </span>
@@ -410,7 +411,7 @@ function CarbonBreakdownBody({
       {sequestrationKg != null && (
         <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
           <Warning
-            size={13}
+            size={MICRO_ICON_SIZE}
             weight="fill"
             aria-hidden
             className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
@@ -437,7 +438,7 @@ function MissingInputs({ inputs }: { inputs: string[] }) {
   return (
     <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
       <ArrowDown
-        size={13}
+        size={MICRO_ICON_SIZE}
         weight="bold"
         aria-hidden
         className="mt-2 shrink-0 rotate-[-45deg] text-[var(--color-text-tertiary)]"
@@ -463,7 +464,7 @@ function Footnotes({
   if (isEstimate) {
     return (
       <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-        <Leaf size={13} weight="fill" aria-hidden className="mt-2 shrink-0" />
+        <Leaf size={MICRO_ICON_SIZE} weight="fill" aria-hidden className="mt-2 shrink-0" />
         <span>{estimateFootnote}</span>
       </p>
     );
@@ -482,7 +483,7 @@ function Footnotes({
   return (
     <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
       <SealCheck
-        size={13}
+        size={MICRO_ICON_SIZE}
         weight="fill"
         aria-hidden
         className="mt-2 shrink-0 text-[var(--color-signal-green)]"

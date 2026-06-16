@@ -8,9 +8,17 @@
  * `ChainOfCustodyData` payload carries no coordinates by design — this is the
  * explicit geo contract the Carbon Viewer map consumes (plan decision 6).
  */
-import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { applications, facilities, feedstocks, transportLegs } from "@/db/schema";
+import {
+  applications,
+  customerLocations,
+  deliveries,
+  facilities,
+  feedstocks,
+  orders,
+  transportLegs,
+} from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { requireAuth } from "./utils";
 import {
@@ -114,14 +122,23 @@ export async function getChainOfCustodyGeoData(
   const chain = await getChainOfCustodyData(userId, applicationId);
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
 
-  const [facilityGps, applicationGps, feedstockGpsById, rawLegs] = await Promise.all([
+  const [facilityGps, applicationGps, feedstockGpsById, feedstockLegs] = await Promise.all([
     getFacilityGps(chain.facility.id),
     getApplicationGps(chain.application.id),
     getFeedstockGps(feedstockIds),
-    getChainLegs(feedstockIds, chain.biocharProduct?.id ?? null),
+    getFeedstockLegs(feedstockIds),
   ]);
+  const outboundLegs = chain.biocharProduct
+    ? await getApplicationBiocharLeg({
+        applicationId: chain.application.id,
+        deliveryId: chain.delivery.id,
+        biocharProductId: chain.biocharProduct.id,
+        facilityName: chain.facility.name,
+        facilityGps,
+      })
+    : [];
 
-  const legs = enrichLegs(chain, rawLegs);
+  const legs = enrichLegs(chain, [...feedstockLegs, ...outboundLegs]);
 
   const warnings: string[] = [];
   const nodes = buildGeoNodes(chain, {
@@ -163,13 +180,10 @@ export async function getChainOfCustodyGeoData(
 /**
  * Attach the rail-card fields (material moving along the leg + a detail link)
  * from the already-resolved lineage. Inbound legs key on the feedstock; the
- * card's mass is the leg's own `loadMassKg` (set in `getChainLegs`).
+ * card's mass is the leg's own `loadMassKg`.
  *
- * Outbound legs key on the biochar product, but the card represents the
- * destination application — so the link/code point at this payload's single
- * application. (One product split across several applications via separate
- * legs is rare pre-prod; the leg's `loadMassKg` + `destinationName` stay exact,
- * only the link target could resolve to a sibling application in that case.)
+ * Outbound legs key on the biochar product, but are resolved per application
+ * below rather than from the aggregate product-level transport leg.
  */
 function enrichLegs(
   chain: ChainOfCustodyData,
@@ -339,9 +353,12 @@ async function getFeedstockGps(feedstockIds: string[]): Promise<Map<string, GpsP
   return new Map(rows.map((row) => [row.id, { lat: row.lat, lng: row.lng }]));
 }
 
-async function getChainLegs(
+function positiveOrNull(value: number | null): number | null {
+  return value != null && value > 0 ? value : null;
+}
+
+async function getFeedstockLegs(
   feedstockIds: string[],
-  biocharProductId: string | null
 ): Promise<ChainGeoLeg[]> {
   const conditions: SQL[] = [];
   if (feedstockIds.length > 0) {
@@ -349,14 +366,6 @@ async function getChainLegs(
       and(
         eq(transportLegs.entityType, "feedstock"),
         inArray(transportLegs.entityId, feedstockIds)
-      )!
-    );
-  }
-  if (biocharProductId) {
-    conditions.push(
-      and(
-        eq(transportLegs.entityType, "biochar"),
-        eq(transportLegs.entityId, biocharProductId)
       )!
     );
   }
@@ -391,4 +400,73 @@ async function getChainLegs(
     outerHref: null,
     outerCode: null,
   }));
+}
+
+async function getApplicationBiocharLeg({
+  applicationId,
+  deliveryId,
+  biocharProductId,
+  facilityName,
+  facilityGps,
+}: {
+  applicationId: string;
+  deliveryId: string;
+  biocharProductId: string;
+  facilityName: string;
+  facilityGps: GpsPair;
+}): Promise<ChainGeoLeg[]> {
+  const [row] = await db
+    .select({
+      loadMassKg: deliveries.deliveredWetMassKg,
+      deliveryDistanceKmOverride: deliveries.distanceKmOverride,
+      deliveryDistanceSource: deliveries.distanceSource,
+      locationDistanceKm: customerLocations.distanceFromFacilityKm,
+      locationDistanceSource: customerLocations.distanceSource,
+      locationName: customerLocations.name,
+      locationGpsLatitude: customerLocations.gpsLatitude,
+      locationGpsLongitude: customerLocations.gpsLongitude,
+    })
+    .from(deliveries)
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(
+      customerLocations,
+      eq(
+        customerLocations.id,
+        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+      ),
+    )
+    .where(eq(deliveries.id, deliveryId))
+    .limit(1);
+
+  if (!row) return [];
+
+  const override = positiveOrNull(row.deliveryDistanceKmOverride);
+  const distanceKm = override ?? positiveOrNull(row.locationDistanceKm);
+  const loadMassKg = positiveOrNull(row.loadMassKg);
+  if (distanceKm == null || loadMassKg == null) return [];
+
+  return [
+    {
+      id: `biochar:${biocharProductId}:application:${applicationId}`,
+      kind: "outbound",
+      entityType: "biochar",
+      entityId: biocharProductId,
+      originName: facilityName,
+      originLat: facilityGps.lat,
+      originLng: facilityGps.lng,
+      destinationName: row.locationName,
+      destinationLat: row.locationGpsLatitude,
+      destinationLng: row.locationGpsLongitude,
+      distanceKm,
+      distanceSource:
+        override != null
+          ? (row.deliveryDistanceSource ?? "manual")
+          : row.locationDistanceSource,
+      isDerived: true,
+      loadMassKg,
+      materialLabel: null,
+      outerHref: null,
+      outerCode: null,
+    },
+  ];
 }

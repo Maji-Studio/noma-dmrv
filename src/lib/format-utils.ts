@@ -6,6 +6,8 @@ import { format, isValid, parseISO } from "date-fns";
 import { parseLocalDateString } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const KG_PER_TONNE = 1000;
+const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
 
 /**
  * Format a mass value in kg, auto-converting to tonnes when >= 1000.
@@ -32,9 +34,11 @@ export function formatCo2e(
   if (kg == null || Number.isNaN(kg)) return "—";
   const { signed = false, unit } = opts ?? {};
   const abs = Math.abs(kg);
-  const inTonnes = abs >= 1000;
+  const inTonnes = abs >= KG_PER_TONNE;
   const magnitude = inTonnes
-    ? (abs / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 })
+    ? (abs / KG_PER_TONNE).toLocaleString(undefined, {
+        maximumFractionDigits: CO2E_TONNES_MAX_FRACTION_DIGITS,
+      })
     : Math.round(abs).toLocaleString();
   const suffix = unit ?? (inTonnes ? "t CO₂e" : "kg CO₂e");
   const sign = signed && kg !== 0 ? (kg > 0 ? "+" : "−") : "";

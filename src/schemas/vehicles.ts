@@ -95,11 +95,11 @@ export const createVehicleSchema = vehicleFormSchema;
 export const updateVehicleSchema = z.object({
   vehicleId: z.string().uuid("Invalid vehicle ID"),
   name: z.string().min(1).max(255).optional(),
-  identifier: z.string().min(1).max(50).optional(),
+  identifier: z.string().max(50).optional().nullable(),
   vehicleType: z.string().min(1).max(50).optional(),
-  fuelType: z.string().min(1).max(50).optional(),
+  fuelType: z.string().max(50).optional().nullable(),
   fuelConsumptionLPer100Km: z.number().positive().max(1000).optional().nullable(),
-  modelYear: z.number().int().min(1900).max(new Date().getFullYear() + 1).optional(),
+  modelYear: z.number().int().min(1900).max(new Date().getFullYear() + 1).optional().nullable(),
 });
 
 export const deleteVehicleSchema = z.object({

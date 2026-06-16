@@ -93,6 +93,18 @@ describe("computeRemovalBreakdown — estimate mode (no registry)", () => {
     );
     expect(result.hasAnyData).toBe(false);
   });
+
+  it("reports data when only counterfactual values are present", () => {
+    const result = computeRemovalBreakdown(
+      input({
+        sequestrationTonnesByBatch: [null, null],
+        emissionsTonnesByBatch: [null, null],
+        counterfactualTonnesByBatch: [0.1, null],
+      }),
+    );
+    expect(result.counterfactualRecorded).toBe(true);
+    expect(result.hasAnyData).toBe(true);
+  });
 });
 
 describe("computeRemovalBreakdown — registry mode", () => {

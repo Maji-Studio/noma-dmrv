@@ -202,6 +202,9 @@ export async function loadCreditBatchHealthSummaries(
             batchId,
             facilityFacts,
           );
+          if (ctx.facilityId !== validFacilityId) {
+            throw new Error("Batch does not belong to requested facility");
+          }
           const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
           return [
             batchId,
