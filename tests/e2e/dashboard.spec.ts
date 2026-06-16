@@ -1,8 +1,9 @@
 /**
  * Dashboard + credit-batch detail (visual design plan, Phase 5).
  *
- * Dashboard: KPI strip with sparkline slots, record-checks queue, feedstock
- * mix, custody-flow ribbon, and the period toggle — all facility-scoped.
+ * Dashboard: KPI strip with sparkline slots, the Action center (record flags +
+ * evidence gaps + live signal merged), feedstock mix, custody-flow ribbon, and
+ * the period toggle — all facility-scoped.
  * Credit batch detail: header KPI row, compact health strip, and read panels
  * with the edit form behind the "Edit details" toggle.
  */
@@ -30,8 +31,8 @@ test.describe("Dashboard (Phase 5)", () => {
     await expect(kpis.getByText("Applied to soil")).toBeVisible();
     await expect(kpis.getByText("CO₂e stored")).toBeVisible();
 
-    // Panels
-    await expect(page.getByText("Record checks")).toBeVisible();
+    // Panels (Action center merges record flags + evidence gaps + live signal)
+    await expect(page.getByText("Action center")).toBeVisible();
     await expect(page.getByText("Feedstock mix")).toBeVisible();
     await expect(page.getByText("Pipeline")).toBeVisible();
 

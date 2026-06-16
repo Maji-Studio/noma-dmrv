@@ -276,7 +276,9 @@ export function FeedstockTypeForm({
       >
         <div
           id={getPanelId("general")}
-          aria-labelledby={getSelectorId("general")}
+          aria-labelledby={
+            showSourceSelector ? getSelectorId("general") : undefined
+          }
           className={cn(activeSection !== "general" && "hidden")}
         >
           {activeSection === "general" && (
@@ -373,7 +375,9 @@ export function FeedstockTypeForm({
 
         <div
           id={getPanelId("isometric")}
-          aria-labelledby={getSelectorId("isometric")}
+          aria-labelledby={
+            showSourceSelector ? getSelectorId("isometric") : undefined
+          }
           className={cn(activeSection !== "isometric" && "hidden")}
         >
           {activeSection === "isometric" && (

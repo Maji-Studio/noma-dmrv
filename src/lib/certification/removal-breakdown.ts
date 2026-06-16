@@ -198,7 +198,7 @@ export function computeRemovalBreakdown(
     missingInputs: input.missingInputs,
     memberBatchCount: input.memberBatchCount,
     hasAnyData:
-      sequestrationKg != null ||
+      sequestration.anyPresent ||
       emissions.anyPresent ||
       counterfactual.anyPresent,
   };
