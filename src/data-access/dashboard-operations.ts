@@ -42,6 +42,10 @@ import {
   samples,
   transportLegs,
 } from "@/db/schema";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_ROLES,
+} from "@/lib/certification/application-evidence";
 import { requireAuth } from "./utils";
 import { loadMapTrace } from "./dashboard-map-trace";
 import type {
@@ -70,6 +74,8 @@ const EVIDENCE_METHOD_BOUNDARY = "boundary";
 const ENTITY_TYPE_APPLICATION = "application";
 const DOC_TYPE_PHOTO = "photo";
 const DOC_TYPE_PDF = "pdf";
+const DOC_TYPE_WEIGHBRIDGE_TICKET = "weighbridge_ticket";
+const DOC_TYPE_AFFIDAVIT = "affidavit";
 const UPLOAD_STATUS_UPLOADED = "uploaded";
 const GEOTAG_STATUS_PRESENT = "present";
 
@@ -571,10 +577,13 @@ function buildProgress(args: {
 // ============================================
 
 async function loadGpsGapCounts(facilityId: string) {
-  const applicationEvidenceGap = or(
-    and(
-      eq(applications.evidenceMethod, EVIDENCE_METHOD_VISUAL),
-      sql`not exists (
+  // Mirror `buildApplicationEvidenceGaps` (the certification submission gate) so
+  // this dashboard count can't drift from what certification actually blocks on.
+  // Visual evidence needs a geotagged photo for EVERY role (stockpile/spreading/
+  // incorporation); boundary evidence needs a GIS reference AND a logbook doc —
+  // a typed PDF, a weighbridge ticket, or an affidavit. Keep aligned with that
+  // builder (`src/fn/certification/application-evidence-readiness.ts`).
+  const visualRoleMissing = (role: string) => sql`not exists (
           select 1
           from ${documents}
           where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
@@ -582,21 +591,40 @@ async function loadGpsGapCounts(facilityId: string) {
             and ${documents.documentType} = ${DOC_TYPE_PHOTO}
             and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
             and ${documents.metadata}->>'geotagStatus' = ${GEOTAG_STATUS_PRESENT}
-        )`,
+            and ${documents.metadata}->>'evidenceRole' = ${role}
+        )`;
+
+  const boundaryLogbookMissing = sql`not exists (
+          select 1
+          from ${documents}
+          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
+            and ${documents.entityId} = ${applications.id}
+            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
+            and (
+              ${documents.documentType} in (${DOC_TYPE_WEIGHBRIDGE_TICKET}, ${DOC_TYPE_AFFIDAVIT})
+              or (
+                ${documents.documentType} = ${DOC_TYPE_PDF}
+                and ${documents.metadata}->>'logbookEvidenceType' in (${sql.join(
+                  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map(
+                    (type) => sql`${type}`,
+                  ),
+                  sql`, `,
+                )})
+              )
+            )
+        )`;
+
+  const applicationEvidenceGap = or(
+    and(
+      eq(applications.evidenceMethod, EVIDENCE_METHOD_VISUAL),
+      or(...APPLICATION_VISUAL_EVIDENCE_ROLES.map(visualRoleMissing))!,
     )!,
     and(
       eq(applications.evidenceMethod, EVIDENCE_METHOD_BOUNDARY),
       or(
         isNull(applications.gisBoundaryReference),
         sql`trim(${applications.gisBoundaryReference}::text) = ''`,
-        sql`not exists (
-          select 1
-          from ${documents}
-          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
-            and ${documents.entityId} = ${applications.id}
-            and ${documents.documentType} = ${DOC_TYPE_PDF}
-            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
-        )`,
+        boundaryLogbookMissing,
       )!,
     )!,
   );
