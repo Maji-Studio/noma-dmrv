@@ -4,7 +4,10 @@ import {
   type DocumentRow,
 } from "@/data-access/documents";
 import {
+  APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
+  APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
   APPLICATION_VISUAL_EVIDENCE_ROLES,
   isApplicationBoundaryLogbookEvidenceType,
@@ -12,12 +15,8 @@ import {
 } from "@/lib/certification/application-evidence";
 
 const APPLICATION_DOCUMENT_ENTITY_TYPE = "application";
-const APPLICATION_VISUAL_DOCUMENT_TYPE = "photo";
-const APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPES = new Set([
-  "pdf",
-  "weighbridge_ticket",
-  "affidavit",
-]);
+const APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPE_SET: ReadonlySet<string> =
+  new Set(APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES);
 
 interface DocumentMetadata {
   geotagStatus?: "present" | "missing" | string;
@@ -43,7 +42,7 @@ function isGeotaggedPhotoForRole(
 ): boolean {
   const metadata = documentMetadata(row);
   return (
-    row.documentType === APPLICATION_VISUAL_DOCUMENT_TYPE &&
+    row.documentType === APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE &&
     isUploadedDocument(row) &&
     metadata.geotagStatus === "present" &&
     metadata.evidenceRole === role
@@ -55,19 +54,17 @@ function hasBoundaryReference(value: string | null | undefined): boolean {
 }
 
 function isBoundaryLogbook(row: DocumentRow): boolean {
-  if (
-    !APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPES.has(row.documentType) ||
-    !isUploadedDocument(row)
-  ) {
-    return false;
-  }
+  if (!isUploadedDocument(row)) return false;
 
-  if (row.documentType === "weighbridge_ticket" || row.documentType === "affidavit") {
+  if (APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPE_SET.has(row.documentType)) {
     return true;
   }
 
-  return isApplicationBoundaryLogbookEvidenceType(
-    documentMetadata(row).logbookEvidenceType,
+  return (
+    row.documentType === APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE &&
+    isApplicationBoundaryLogbookEvidenceType(
+      documentMetadata(row).logbookEvidenceType,
+    )
   );
 }
 
