@@ -6,6 +6,8 @@ import { format, isValid, parseISO } from "date-fns";
 import { parseLocalDateString } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const KG_PER_TONNE = 1000;
+const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
 
 /**
  * Format a mass value in kg, auto-converting to tonnes when >= 1000.
@@ -15,6 +17,32 @@ export function formatMass(kg: number | null | undefined): string {
   if (kg == null) return "—";
   if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
+}
+
+/**
+ * Format a CO₂e mass in kg with accounting-grade precision — tonnes (up to 3
+ * decimals, trailing zeros trimmed) once the magnitude reaches 1 t, otherwise
+ * whole kg. Unlike `formatMass` (1-decimal tonnes) this keeps small deltas
+ * legible, so a 15 kg uncertainty haircut next to a 1.04 t sequestration both
+ * read true. Returns "—" for null/undefined. `signed` prepends +/− (zero stays
+ * unsigned). The unit suffix is dropped when `unit` is the empty string.
+ */
+export function formatCo2e(
+  kg: number | null | undefined,
+  opts?: { signed?: boolean; unit?: string }
+): string {
+  if (kg == null || Number.isNaN(kg)) return "—";
+  const { signed = false, unit } = opts ?? {};
+  const abs = Math.abs(kg);
+  const inTonnes = abs >= KG_PER_TONNE;
+  const magnitude = inTonnes
+    ? (abs / KG_PER_TONNE).toLocaleString(undefined, {
+        maximumFractionDigits: CO2E_TONNES_MAX_FRACTION_DIGITS,
+      })
+    : Math.round(abs).toLocaleString();
+  const suffix = unit ?? (inTonnes ? "t CO₂e" : "kg CO₂e");
+  const sign = signed && kg !== 0 ? (kg > 0 ? "+" : "−") : "";
+  return `${sign}${magnitude}${suffix ? ` ${suffix}` : ""}`;
 }
 
 /**

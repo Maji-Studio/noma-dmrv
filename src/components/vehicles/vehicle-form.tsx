@@ -47,7 +47,7 @@ export function VehicleForm({
       fuelConsumptionLPer100Km: vehicle?.fuelConsumptionLPerKm
         ? lPerKmToLPer100Km(vehicle.fuelConsumptionLPerKm)
         : undefined,
-      modelYear: vehicle?.modelYear ?? new Date().getFullYear(),
+      modelYear: vehicle?.modelYear ?? undefined,
     },
   });
 
@@ -73,7 +73,6 @@ export function VehicleForm({
           id="identifier"
           label="Identifier / Plate"
           error={errors.identifier?.message}
-          required
         >
           <FormInput
             id="identifier"
@@ -107,7 +106,6 @@ export function VehicleForm({
           id="fuelType"
           label="Fuel Type"
           error={errors.fuelType?.message}
-          required
         >
           <FormSelect
             id="fuelType"
@@ -126,7 +124,6 @@ export function VehicleForm({
             id="fuelConsumptionLPer100Km"
             label="Fuel Consumption (L/100 km)"
             error={errors.fuelConsumptionLPer100Km?.message}
-            required
           >
             <FormInput
               id="fuelConsumptionLPer100Km"
@@ -146,7 +143,6 @@ export function VehicleForm({
           id="modelYear"
           label="Model Year"
           error={errors.modelYear?.message}
-          required
         >
           <FormInput
             id="modelYear"

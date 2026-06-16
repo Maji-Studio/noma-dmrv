@@ -105,10 +105,12 @@ function CertifierHeader({
  */
 function CertifierMappingFields({
   mapping,
+  isProduction,
   projectName,
   templateName,
 }: {
   mapping: CertifierProjectRow;
+  isProduction: boolean;
   projectName?: string | null;
   templateName?: string | null;
 }) {
@@ -130,7 +132,10 @@ function CertifierMappingFields({
           {mapping.externalProjectId}
         </span>
         <a
-          href={isometricRegistry.project(mapping.externalProjectId)}
+          href={isometricRegistry.certifyProject({
+            environment: isProduction ? "production" : "sandbox",
+            externalProjectId: mapping.externalProjectId,
+          })}
           target="_blank"
           rel="noopener noreferrer"
           className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
@@ -220,7 +225,7 @@ function FacilityCertifierReadOnly({
     <Shell embedded={embedded}>
       <CertifierHeader isProduction={isProduction} embedded={embedded} />
       {mapping ? (
-        <CertifierMappingFields mapping={mapping} />
+        <CertifierMappingFields mapping={mapping} isProduction={isProduction} />
       ) : (
         <p className="body-small text-[var(--color-text-secondary)] mt-16">
           This facility has no Isometric project link yet. Ask an admin to link
@@ -332,6 +337,7 @@ function FacilityCertifierManage({
         {mapping ? (
           <CertifierMappingFields
             mapping={mapping}
+            isProduction={isProduction}
             projectName={projectName}
             templateName={templateName}
           />

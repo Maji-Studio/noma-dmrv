@@ -66,8 +66,8 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
 );
 
 const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
-  visual: "Geotagged application photos",
-  boundary: "GIS boundary reference and logbook",
+  visual: "Geotagged photos for all three stages — stockpile, spreading, incorporation",
+  boundary: "GIS boundary map + dated logbook quantities (weighbridge, inventory, or affidavit)",
 };
 
 // ============================================
@@ -543,6 +543,7 @@ export function ApplicationForm({
       <FormSection
         title="Evidence Method"
         icon={<Camera size={14} weight="bold" />}
+        hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
         fields={["evidenceMethod", "gisBoundaryReference"]}
       >
         <div

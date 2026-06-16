@@ -31,10 +31,25 @@ export { loadBatchHealth } from "./batch-health";
 // pipeline's context; classifier shared with table hint + wizard submit step).
 export {
   loadCertificationOverview,
+  loadCreditBatchHealthSummaries,
   type CertificationOverviewData,
+  type CreditBatchHealthSummary,
   type RemovalPreflightSummary,
 } from "./overview";
 export { submitRemovalAction } from "./removal-grouping";
+// On-demand carbon-accounting breakdown for the removal detail sheet — local
+// certify-preview figures reconciled with the registry's verified GHG entry.
+export {
+  loadRemovalBreakdown,
+  type RemovalBreakdownData,
+} from "./removal-breakdown";
+// Statement-level roll-up of the same breakdown — the sum across a GHG
+// statement's member removals (local estimate, or the registry GHG entries
+// aggregated once every member is submitted).
+export {
+  loadGhgStatementBreakdown,
+  type GhgStatementBreakdownData,
+} from "./ghg-statement-breakdown";
 // Deferred-create — the New-Removal wizard's "Confirm" step. Server re-derives
 // each selected batch's health before atomically creating the removal.
 export { createRemovalWithBatchesAction } from "./create-removal-with-batches";

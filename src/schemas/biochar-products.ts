@@ -6,7 +6,6 @@
 import { z } from "zod";
 import {
   emptyToNull,
-  optionalDateOnly,
   optionalPositiveNumber,
   requiredNumber,
   toNumberOrNull,
@@ -83,8 +82,8 @@ export const biocharProductFormSchema = z.object({
   // Optional: empty = pure-biochar product (no amendment blend)
   formulationId: emptyToNull.or(z.string().uuid("Please select a valid formulation")).nullable().optional(),
 
-  // Optional date field — parsed at local midnight (see optionalDateOnly)
-  productionDate: optionalDateOnly,
+  // No productionDate here: it is derived server-side from the linked production
+  // run (the biochar's production date), not entered on the product form.
 
   // Status field
   status: z.enum(biocharProductStatusValues).default("testing"),
@@ -132,7 +131,6 @@ export const updateBiocharProductSchema = z.object({
     .optional(),
   facilityId: z.string().uuid().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  productionDate: optionalDateOnly,
   status: z.enum(biocharProductStatusValues).optional(),
   linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
   storageLocationId: z.string().uuid("Invalid storage location").optional(),

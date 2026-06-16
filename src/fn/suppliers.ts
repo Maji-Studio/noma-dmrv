@@ -10,6 +10,7 @@ import { type Supplier, type SupplierLocation, suppliers } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
   createSupplier,
+  createSupplierWithLocations,
   deleteSupplier,
   getSuppliers as getSuppliersData,
   getSupplierById as getSupplierByIdData,
@@ -26,6 +27,7 @@ import {
 import { getUser } from "@/lib/auth/server";
 import {
   createSupplierSchema,
+  createSupplierWithLocationsSchema,
   deleteSupplierSchema,
   updateSupplierSchema,
   supplierFilterSchema,
@@ -211,6 +213,73 @@ export async function createSupplierFn(
             validated.distanceToFacilityKm ?? null,
             validated.distanceSource,
           ),
+        })
+    );
+
+    return { success: true, data: supplier };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to create supplier",
+    };
+  }
+}
+
+export async function createSupplierWithLocationsFn(
+  data: z.infer<typeof createSupplierWithLocationsSchema>
+): Promise<ActionResult<Supplier>> {
+  try {
+    const user = await getUser();
+    if (!user?.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = createSupplierWithLocationsSchema.parse(data);
+
+    const supplier = await withAutoCode(
+      "SUP",
+      suppliers,
+      suppliers.code,
+      undefined,
+      (code) =>
+        createSupplierWithLocations(user.id, {
+          code,
+          name: validated.supplier.name,
+          location: validated.supplier.location || null,
+          gpsLatitude: validated.supplier.gpsLatitude ?? null,
+          gpsLongitude: validated.supplier.gpsLongitude ?? null,
+          address: validated.supplier.address || null,
+          contactName: validated.supplier.contactName || null,
+          contactEmail: validated.supplier.contactEmail || null,
+          contactPhone: validated.supplier.contactPhone || null,
+          sourceRegion: validated.supplier.sourceRegion || null,
+          distanceToFacilityKm: validated.supplier.distanceToFacilityKm ?? null,
+          distanceSource: resolveDistanceSource(
+            validated.supplier.distanceToFacilityKm ?? null,
+            validated.supplier.distanceSource,
+          ),
+          locations: validated.locations.map((location) => ({
+            name: location.name || null,
+            country: location.country,
+            stateRegion: location.stateRegion || null,
+            city: location.city || null,
+            gpsLatitude: location.gpsLatitude,
+            gpsLongitude: location.gpsLongitude,
+            address: location.address || null,
+            distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
+            distanceSource: resolveDistanceSource(
+              location.distanceFromFacilityKm ?? null,
+              location.distanceSource,
+            ),
+            isDefault: location.isDefault,
+          })),
         })
     );
 

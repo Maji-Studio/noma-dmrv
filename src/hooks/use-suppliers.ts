@@ -11,6 +11,7 @@ const SUPPLIERS_STALE_TIME_MS = 60_000;
 import type {
   SupplierFilterData,
   CreateSupplierData,
+  CreateSupplierWithLocationsData,
   UpdateSupplierData,
   CreateSupplierLocationData,
   UpdateSupplierLocationData,
@@ -26,6 +27,7 @@ import {
   getSupplierOptionsFn,
   checkSupplierCodeFn,
   createSupplierFn,
+  createSupplierWithLocationsFn,
   updateSupplierFn,
   deleteSupplierFn,
   getSupplierLocationsBySupplierFn,
@@ -182,6 +184,37 @@ export function useCreateSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
 
       // Pre-populate the detail cache with the new supplier
+      queryClient.setQueryData(supplierKeys.detail(data.id), data);
+
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+export function useCreateSupplierWithLocations(
+  callbacks?: MutationCallbacks<Supplier, CreateSupplierWithLocationsData>
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateSupplierWithLocationsData) => {
+      const result = await createSupplierWithLocationsFn(data);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: async (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
 
       await callbacks?.onSuccess?.(data, variables);

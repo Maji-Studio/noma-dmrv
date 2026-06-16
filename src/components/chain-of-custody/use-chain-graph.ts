@@ -17,6 +17,40 @@ export interface LineageDetailRow {
   value: string;
 }
 
+/**
+ * The node's full connected lineage — every node reachable by walking the flow
+ * edges in either direction from it (ancestors + descendants). Used both by the
+ * DAG's hover focus and by the cross-surface selection focus (bar ⇄ map ⇄ DAG):
+ * focusing a feedstock lights its run → product → reachable deliveries /
+ * applications and dims the rest. Returns null when no node is given (nothing
+ * focused → everything full strength).
+ */
+export function reachableNodeIds(
+  nodeId: string | null,
+  edges: Edge[]
+): Set<string> | null {
+  if (!nodeId) return null;
+  const adjacency = new Map<string, string[]>();
+  for (const graphEdge of edges) {
+    if (!adjacency.has(graphEdge.source)) adjacency.set(graphEdge.source, []);
+    if (!adjacency.has(graphEdge.target)) adjacency.set(graphEdge.target, []);
+    adjacency.get(graphEdge.source)!.push(graphEdge.target);
+    adjacency.get(graphEdge.target)!.push(graphEdge.source);
+  }
+
+  const reachable = new Set<string>([nodeId]);
+  const queue = [nodeId];
+  while (queue.length > 0) {
+    const current = queue.pop()!;
+    for (const next of adjacency.get(current) ?? []) {
+      if (reachable.has(next)) continue;
+      reachable.add(next);
+      queue.push(next);
+    }
+  }
+  return reachable;
+}
+
 export interface LineageGraphNode {
   id: string;
   kind: LineageNodeKind;

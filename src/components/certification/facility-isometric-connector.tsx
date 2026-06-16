@@ -198,7 +198,10 @@ export function FacilityIsometricConnector({
           </span>{" "}
           ·{" "}
           <a
-            href={isometricRegistry.project(currentProjectId)}
+            href={isometricRegistry.certifyProject({
+              environment: isProduction ? "production" : "sandbox",
+              externalProjectId: currentProjectId,
+            })}
             target="_blank"
             rel="noopener noreferrer"
             className="underline underline-offset-2 hover:text-[var(--color-text-primary)]"

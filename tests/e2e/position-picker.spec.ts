@@ -7,6 +7,12 @@
  * route-aborted so the suite stays hermetic whether or not a MapTiler key is
  * configured in the dev server's env.
  *
+ * The supplier create sheet drives the picker through its per-location editor
+ * (suppliers carry many source locations, mirroring customers — there is no
+ * single supplier-level position). Open "New Supplier" → "Add Location" to
+ * reveal the inline PositionPicker (idPrefix `pending-loc-gps`) and the
+ * DistanceCalcField (`pending-loc-distance`).
+ *
  * Seeded endpoints (fixtures/seed-chain-data.ts):
  *   facility — Dodoma fixture coords (-6.163, 35.7516)
  *   supplier — Dar-ish coords (-6.8, 39.28)
@@ -37,6 +43,23 @@ async function blockExternalMapHosts(page: Page) {
   await page.route("**://server.arcgisonline.com/**", (route) => route.abort());
 }
 
+/**
+ * Open the supplier create sheet and reveal the inline location editor that
+ * hosts the PositionPicker + DistanceCalcField.
+ */
+async function openNewSupplierLocationEditor(page: Page, facilityId: string) {
+  await page.goto(`/suppliers?facility=${facilityId}`);
+  await page.getByRole("button", { name: "New Supplier" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+
+  // Only the section toggle exists yet; clicking it mounts the inline editor.
+  await dialog.getByRole("button", { name: "Add Location" }).click();
+
+  return dialog;
+}
+
 test.describe("PositionPicker + CALC (stub geo provider)", () => {
   test.beforeEach(async ({ adminPage }) => {
     await blockExternalMapHosts(adminPage);
@@ -46,21 +69,24 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Supplier" }).click();
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    const search = dialog.locator("#gps-address-search");
+    const search = dialog.locator("#pending-loc-gps-address-search");
     await search.fill("Dodoma");
 
     const option = page.getByRole("option", { name: DODOMA.label });
     await expect(option).toBeVisible();
     await option.click();
 
-    await expect(dialog.locator("#gps-latitude")).toHaveValue(String(DODOMA.lat));
-    await expect(dialog.locator("#gps-longitude")).toHaveValue(String(DODOMA.lng));
+    await expect(dialog.locator("#pending-loc-gps-latitude")).toHaveValue(
+      String(DODOMA.lat)
+    );
+    await expect(dialog.locator("#pending-loc-gps-longitude")).toHaveValue(
+      String(DODOMA.lng)
+    );
 
     // Read-only reverse-geocode confirmation label resolves the same fixture.
     await expect(
@@ -72,15 +98,14 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Supplier" }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
 
     // Within 50 km of the Dar es Salaam fixture → stub reverse resolves it.
-    await dialog.locator("#gps-latitude").fill("-6.79");
-    await dialog.locator("#gps-longitude").fill("39.21");
+    await dialog.locator("#pending-loc-gps-latitude").fill("-6.79");
+    await dialog.locator("#pending-loc-gps-longitude").fill("39.21");
 
     await expect(
       dialog.getByTestId("position-picker-resolved-label")
@@ -91,14 +116,15 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Supplier" }).click();
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    await dialog.locator("#gps-latitude").fill(OUT_OF_RANGE_LATITUDE);
-    await dialog.locator("#gps-longitude").fill(OUT_OF_RANGE_LONGITUDE);
+    await dialog.locator("#pending-loc-gps-latitude").fill(OUT_OF_RANGE_LATITUDE);
+    await dialog
+      .locator("#pending-loc-gps-longitude")
+      .fill(OUT_OF_RANGE_LONGITUDE);
 
     await expect(dialog).toBeVisible();
     await expect(page.getByText("Application error")).toBeHidden();
@@ -108,11 +134,10 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Supplier" }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
 
     // The MapLibre container (key configured; tiles aborted is fine), the
     // explicit no-key fallback, or the WebGL-unavailable fallback (headless
@@ -127,17 +152,19 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
 
-    // Open the seeded supplier (has GPS) in the edit sheet. Clickable
-    // data-table rows carry role="button" (not "row") — match by tag + text.
-    // Row actions live in the ⋮ overflow menu (RowActionsMenu, Phase 2).
-    const row = page.locator("tr", { hasText: seededData.supplier.name });
-    await row.getByRole("button", { name: /^Actions for/ }).click();
-    await page.getByRole("menuitem", { name: "Edit" }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    // Set the source-location position; the facility endpoint is seeded and
+    // active via the ?facility= query, so CALC has both endpoints.
+    await dialog
+      .locator("#pending-loc-gps-latitude")
+      .fill(String(SEED_SUPPLIER_POINT.lat));
+    await dialog
+      .locator("#pending-loc-gps-longitude")
+      .fill(String(SEED_SUPPLIER_POINT.lng));
 
     const calcButton = dialog.getByRole("button", {
       name: /Calculate road distance/i,
@@ -149,16 +176,16 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       SEED_SUPPLIER_POINT,
       SEED_FACILITY_POINT
     );
-    const distanceInput = dialog.locator("#distanceToFacilityKm");
+    const distanceInput = dialog.locator("#pending-loc-distance");
     await expect(distanceInput).toHaveValue(String(expectedKm));
     await expect(
-      dialog.getByTestId("distanceToFacilityKm-distance-source")
+      dialog.getByTestId("pending-loc-distance-distance-source")
     ).toContainText("Map estimate");
 
     // Hand-editing the CALC'd value flips provenance to manual.
     await distanceInput.fill("123");
     await expect(
-      dialog.getByTestId("distanceToFacilityKm-distance-source")
+      dialog.getByTestId("pending-loc-distance-distance-source")
     ).toContainText("Manual");
   });
 
@@ -166,21 +193,20 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/suppliers?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Supplier" }).click();
+    const dialog = await openNewSupplierLocationEditor(
+      page,
+      seededData.facility.id
+    );
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    // New supplier has no coordinates yet → CALC must be disabled.
+    // New location has no coordinates yet → CALC must be disabled.
     const calcButton = dialog.getByRole("button", {
       name: /Calculate road distance/i,
     });
     await expect(calcButton).toBeDisabled();
 
-    // Setting the supplier position enables it (facility endpoint is seeded).
-    await dialog.locator("#gps-latitude").fill(String(DAR.lat));
-    await dialog.locator("#gps-longitude").fill(String(DAR.lng));
+    // Setting the location position enables it (facility endpoint is seeded).
+    await dialog.locator("#pending-loc-gps-latitude").fill(String(DAR.lat));
+    await dialog.locator("#pending-loc-gps-longitude").fill(String(DAR.lng));
     await expect(calcButton).toBeEnabled();
   });
 });

@@ -37,6 +37,8 @@ export type BatchHealthFixTarget =
   | "deliveryDistances"
   | "productionRuns"
   | "biocharProducts"
+  | "labSamples"
+  | "applications"
   | "sourceData";
 
 export type BatchHealthCheckStatus =

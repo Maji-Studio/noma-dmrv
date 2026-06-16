@@ -17,6 +17,8 @@ import type { ChainGeoNodeKind } from "@/data-access/chain-of-custody-geo";
 export const LEGS_SOURCE_ID = `${OWN_LAYER_PREFIX}cv-legs`;
 export const LEGS_BASE_LAYER_ID = `${OWN_LAYER_PREFIX}cv-legs-base`;
 export const LEGS_DASH_LAYER_ID = `${OWN_LAYER_PREFIX}cv-legs-dash`;
+/** Transparent wide line on top of the legs — the hover hit-target. */
+export const LEGS_HIT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-legs-hit`;
 export const SAT_SOURCE_ID = `${OWN_LAYER_PREFIX}cv-sat`;
 export const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}cv-sat-layer`;
 
@@ -70,7 +72,18 @@ export const ARC_MAX_BOW = 0.045;
 export const ARC_BOW_FACTOR = 0.22;
 
 export const LEG_LINE_WIDTH = 1.6;
-export const LEG_LINE_OPACITY = 0.85;
+/**
+ * Resting leg-line opacity — deliberately soft so overlapping arcs read as a
+ * weave rather than a tangle. Hover isolation (below) lifts the active leg out
+ * of the wash and pushes the rest back.
+ */
+export const LEG_LINE_OPACITY = 0.5;
+/** Hovered leg (line + chip) on top of everything. */
+export const LEG_HOVER_OPACITY = 0.95;
+/** Every other leg while one is hovered — present but ghosted. */
+export const LEG_HOVER_DIM_OPACITY = 0.08;
+/** Invisible hover hit-target width (px) — far wider than the visible line. */
+export const LEG_HIT_WIDTH = 14;
 export const DASH_LINE_WIDTH = 1.5;
 
 /**
@@ -120,3 +133,21 @@ export const HIGHLIGHT_HOLD_MS = 2600;
 
 export const POPUP_WIDTH_PX = 246;
 export const POPUP_OFFSET_PX = 20;
+
+// ---------------------------------------------------------------------------
+// Transport-legs rail (directional bar) + cross-surface focus dimming
+// ---------------------------------------------------------------------------
+
+/** Per-leg card width in the rail wings (px). */
+export const RAIL_CARD_WIDTH_PX = 168;
+/** Consolidated area-card width in the directional bar (px). */
+export const RAIL_AREA_CARD_WIDTH_PX = 208;
+/** Dropdown panel width when an area card is expanded (px). */
+export const RAIL_DROPDOWN_WIDTH_PX = 296;
+/**
+ * Opacity for out-of-focus elements when a focus is active — rail cards, map
+ * markers, distance chips, and leg lines all dim to this so the focused
+ * sub-chain reads as the figure. Mirrored as the `.cvm-dim` literal in
+ * carbon-viewer.css for the imperatively-managed marker/chip DOM.
+ */
+export const FOCUS_DIM_OPACITY = 0.28;
