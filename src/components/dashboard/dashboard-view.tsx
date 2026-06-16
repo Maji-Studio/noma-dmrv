@@ -1,10 +1,11 @@
 /**
- * DashboardView — the facility operations dashboard. An operational header
- * (facility name + live "updated" stamp, no marketing hero) over two halves:
- * the measurement half (the 5-KPI strip, feedstock mix, custody-flow ribbon)
- * and the action half restored from the operator dashboard (record checks,
- * the live "Now" signal, the MRV pipeline funnel, evidence health). All
- * facility-scoped via the sidebar selector like every other page.
+ * DashboardView — the facility operations dashboard, consolidated into four
+ * top-to-bottom altitudes: the 5-KPI strip (the numbers), the Action center
+ * (the single "what needs me" surface — record flags, evidence gaps, and the
+ * live signal merged), the Traceability hero (the custody flow over an
+ * interactive directional map), and a supporting strip (the MRV pipeline
+ * funnel and the feedstock breakdown). All facility-scoped via the sidebar
+ * selector like every other page.
  */
 "use client";
 
@@ -15,12 +16,10 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
 import { DashboardKpis } from "./dashboard-kpis";
-import { AttentionQueue } from "./attention-queue";
-import { NowPanel } from "./now-panel";
+import { ActionCenter } from "./action-center";
 import { ProgressPipeline } from "./progress-pipeline";
 import { FeedstockMix } from "./feedstock-mix";
-import { EvidenceHealth } from "./evidence-health";
-import { MapPreview } from "./map-preview";
+import { TraceabilitySection } from "./traceability-section";
 import { RangeToggle } from "./range-toggle";
 
 const DEFAULT_RANGE: DashboardRange = "30d";
@@ -79,19 +78,23 @@ export function DashboardView() {
               loading would read as a (false) signal. */}
           {data && (
             <>
-              <div className="grid grid-cols-1 gap-24 xl:grid-cols-[1.4fr_1fr]">
-                <AttentionQueue items={data.attention} />
-                <NowPanel items={data.now} />
-              </div>
+              <ActionCenter
+                attention={data.attention}
+                evidence={data.evidence}
+                now={data.now}
+                facilityId={facilityId}
+              />
+
+              <TraceabilitySection
+                flow={data.flow}
+                points={data.mapPoints}
+                edges={data.mapEdges}
+                facilityId={facilityId}
+              />
 
               <ProgressPipeline stages={data.progress} />
 
-              <div className="grid grid-cols-1 gap-24 xl:grid-cols-2">
-                <FeedstockMix slices={data.feedstockMix} />
-                <EvidenceHealth rows={data.evidence} facilityId={facilityId} />
-              </div>
-
-              <MapPreview points={data.mapPoints} />
+              <FeedstockMix slices={data.feedstockMix} />
             </>
           )}
         </>

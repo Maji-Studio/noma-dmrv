@@ -46,25 +46,27 @@ export const vehicleQuickAddSchema = z.object({
     .max(255, "Vehicle name must be less than 255 characters"),
   identifier: z
     .string()
-    .min(1, "Vehicle identifier/plate is required")
-    .max(50, "Identifier must be less than 50 characters"),
+    .max(50, "Identifier must be less than 50 characters")
+    .nullish(),
   vehicleType: z
     .string()
     .min(1, "Vehicle type is required")
     .max(50, "Vehicle type must be less than 50 characters"),
   fuelType: z
     .string()
-    .min(1, "Fuel type is required")
-    .max(50, "Fuel type must be less than 50 characters"),
+    .max(50, "Fuel type must be less than 50 characters")
+    .nullish(),
   fuelConsumptionLPerKm: z
     .number()
     .nonnegative("Fuel consumption must be zero or positive")
-    .max(10, "Fuel consumption seems too high"),
+    .max(10, "Fuel consumption seems too high")
+    .nullish(),
   modelYear: z
     .number()
     .int("Model year must be a whole number")
     .min(1900, "Model year must be 1900 or later")
-    .max(new Date().getFullYear() + 1, "Model year cannot be in the future"),
+    .max(new Date().getFullYear() + 1, "Model year cannot be in the future")
+    .nullish(),
 });
 
 export type VehicleQuickAddData = z.infer<typeof vehicleQuickAddSchema>;

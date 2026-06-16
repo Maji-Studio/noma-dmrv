@@ -61,7 +61,7 @@ export function EnergySummary() {
     return (
       <div className="flex flex-col gap-32">
         <PageHeader
-          area="production"
+          area="infrastructure"
           title="Energy"
           subtitle="Facility energy use feeding Isometric submission datapoints"
         />
@@ -79,7 +79,7 @@ export function EnergySummary() {
     return (
       <div className="flex flex-col gap-32">
         <PageHeader
-          area="production"
+          area="infrastructure"
           title="Energy"
           subtitle="Energy totals could not be loaded for this facility."
         />
@@ -97,7 +97,7 @@ export function EnergySummary() {
   return (
     <div className="flex flex-col gap-32">
       <PageHeader
-        area="production"
+        area="infrastructure"
         title="Energy"
         subtitle="Facility energy use feeding Isometric submission datapoints"
       />

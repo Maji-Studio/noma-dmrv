@@ -22,6 +22,7 @@
   width: 0;
   height: 0;
   cursor: pointer;
+  transition: opacity 160ms ease;
 }
 .cvm-mk--supplier { --cvm-acc: var(--acc-prod); }
 .cvm-mk--facility { --cvm-acc: var(--acc-infra); }
@@ -141,6 +142,20 @@
     0 0 8px var(--clr-dark-purple);
 }
 
+/* ── cross-surface focus dimming ───────────────────────────────────────── */
+/* Out-of-focus markers + chips fade back so the focused sub-chain reads as
+   the figure. Opacity mirrors FOCUS_DIM_OPACITY in viewer-constants.ts. */
+.cvm-mk.cvm-dim,
+.cvm-dist.cvm-dim {
+  opacity: 0.28;
+}
+/* Transient hover isolation — deeper than focus dim so the hovered leg's chip
+   reads alone. Opacity mirrors LEG_HOVER_DIM_OPACITY in viewer-constants.ts;
+   wins over .cvm-dim (declared after it). */
+.cvm-dist.cvm-hoverdim {
+  opacity: 0.08;
+}
+
 /* ── distance chips at the line apex ───────────────────────────────────── */
 .cvm-dist {
   font-family: var(--font-mono);
@@ -153,6 +168,7 @@
     0 0 5px var(--color-background-white),
     0 0 8px var(--color-background-white);
   pointer-events: none;
+  transition: opacity 160ms ease;
 }
 .cvm-sat .cvm-dist {
   color: var(--color-background-white);

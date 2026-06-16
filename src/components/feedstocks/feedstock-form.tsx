@@ -9,25 +9,21 @@
 import { useEffect, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Calendar, MapPin, Note, Plant, Plus, Stack, Truck } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Calendar, MapPin, Note, Plant, Plus, Stack, Truck } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, TruckWeighingSection } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, TruckWeighingSection, DryMassInput, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
-import {
-  DISTANCE_SOURCE_LABELS,
-  type DistanceSourceValue,
-} from "@/schemas/distance-source";
+import { type DistanceSourceValue } from "@/schemas/distance-source";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
@@ -75,36 +71,42 @@ export function FeedstockForm({
   const storageLocationDialog = useQuickAddDialog();
   const [storageLocationRowIndex, setStorageLocationRowIndex] = useState<number>(0);
 
+  const defaultValues = {
+    facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
+    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
+    supplierId: feedstock?.supplierId ?? "",
+    vehicleId: feedstock?.vehicleId ?? "",
+    transportDistanceKm: undefined as number | undefined,
+    transportDistanceSource: null as DistanceSourceValue | null,
+    feedstockTypeId: feedstock?.feedstockTypeId ?? "",
+    totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
+    moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+    truckMassOnArrivalKg: feedstock?.truckMassOnArrivalKg ?? undefined,
+    truckMassOnDepartureKg: feedstock?.truckMassOnDepartureKg ?? undefined,
+    allocations: feedstock
+      ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
+      : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
+    overrideJustification: feedstock?.overrideJustification ?? "",
+    notes: feedstock?.notes ?? "",
+  };
+
   const {
     register,
     handleSubmit,
     control,
     setValue,
     getValues,
+    resetField,
     formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(feedstockFormSchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
-    defaultValues: {
-      facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-      deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
-      supplierId: feedstock?.supplierId ?? "",
-      vehicleId: feedstock?.vehicleId ?? "",
-      transportDistanceKm: undefined as number | undefined,
-      transportDistanceSource: null as DistanceSourceValue | null,
-      feedstockTypeId: feedstock?.feedstockTypeId ?? "",
-      totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
-      moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
-      truckMassOnArrivalKg: feedstock?.truckMassOnArrivalKg ?? undefined,
-      truckMassOnDepartureKg: feedstock?.truckMassOnDepartureKg ?? undefined,
-      allocations: feedstock
-        ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
-        : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
-      overrideJustification: feedstock?.overrideJustification ?? "",
-      notes: feedstock?.notes ?? "",
-    },
+    defaultValues,
   });
+
+  // CERT chips reflect the saved record (frozen), neutral while creating.
+  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   // Cast control for FormEntitySelect compatibility (z.preprocess makes input types `unknown`)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,10 +126,10 @@ export function FeedstockForm({
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
-  const transportDistanceSource = useWatch({
+  const transportDistanceKm = useWatch({
     control,
-    name: "transportDistanceSource",
-  }) as DistanceSourceValue | null | undefined;
+    name: "transportDistanceKm",
+  }) as number | null | undefined;
 
   const defaultStorageBinType = "feedstock_bin";
 
@@ -146,6 +148,17 @@ export function FeedstockForm({
     enabled: isEditMode,
   });
   const existingLegDistanceKm = existingLegs?.[0]?.distanceKm ?? null;
+  // The transport distance lives on the derived leg, not in defaultValues (it's
+  // autofilled async), so its CERT chip tracks whether the saved leg carries a
+  // distance rather than the form field. While the leg query is in flight, stay
+  // neutral so we never flash a misleading "missing" before it loads.
+  const transportDistanceCertStatus: CertFieldStatus = !isEditMode
+    ? "neutral"
+    : existingLegs === undefined
+      ? "neutral"
+      : existingLegDistanceKm != null
+        ? "satisfied"
+        : "missing";
   const storedDistanceKm =
     defaultSupplierLocation?.distanceFromFacilityKm ??
     selectedSupplier?.distanceToFacilityKm ??
@@ -161,6 +174,21 @@ export function FeedstockForm({
     isEditMode && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
+
+  // The distance is an "override" once it diverges from the value we'd autofill
+  // from the supplier/existing leg — that's the only state worth flagging (and
+  // the only one we can reset back to).
+  const isDistanceOverride =
+    suggestedDistanceKm != null &&
+    typeof transportDistanceKm === "number" &&
+    transportDistanceKm !== suggestedDistanceKm;
+
+  // Restore the autofilled distance and clear the field's dirty flag so the
+  // prefill effect resumes managing it (e.g. on a later supplier switch).
+  const resetTransportDistance = () => {
+    resetField("transportDistanceKm", { defaultValue: suggestedDistanceKm ?? undefined });
+    setValue("transportDistanceSource", suggestedDistanceSource ?? null, { shouldValidate: true });
+  };
 
   // Auto-set facility from context
   useEffect(() => {
@@ -184,16 +212,6 @@ export function FeedstockForm({
     }
   }, [suggestedDistanceKm, suggestedDistanceSource, dirtyFields.transportDistanceKm, setValue]);
 
-  // Calculated dry mass
-  const deliveredDryMassKg =
-    typeof watchWetMass === "number" &&
-    typeof watchMoisture === "number" &&
-    watchWetMass >= 0 &&
-    watchMoisture >= 0 &&
-    watchMoisture <= 100
-      ? deriveMassDryKg(watchWetMass, watchMoisture)
-      : null;
-
   // Sum of allocated wet mass
   const allocatedTotalWetKg = (watchAllocations ?? []).reduce((sum, a) => {
     const val = typeof a.allocatedWetMassKg === "number" ? a.allocatedWetMassKg : 0;
@@ -205,17 +223,20 @@ export function FeedstockForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
 
+  // A single bin holds the whole delivery, so its allocated wet mass mirrors the
+  // total automatically — the operator never has to retype it. Mirroring stops
+  // once they split across bins (fields.length > 1) or hand-edit the amount.
   useEffect(() => {
     if (isEditMode || fields.length !== 1 || typeof watchWetMass !== "number") {
       return;
     }
-    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
-    if (typeof currentAllocation !== "number") {
+    if (dirtyFields.allocations?.[0]?.allocatedWetMassKg) return;
+    if (getValues("allocations.0.allocatedWetMassKg") !== watchWetMass) {
       setValue("allocations.0.allocatedWetMassKg", watchWetMass, {
         shouldValidate: true,
       });
     }
-  }, [fields.length, getValues, isEditMode, setValue, watchWetMass]);
+  }, [fields.length, getValues, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
   const suggestWetMassFromTruckWeighing = (wetMassKg: number) => {
     const currentWetMass = getValues("totalWetMassKg");
@@ -246,7 +267,6 @@ export function FeedstockForm({
           title="Delivery Information"
           icon={<Calendar size={14} weight="bold" />}
           fields={["facilityId", "deliveryDate", "supplierId"]}
-          required={["deliveryDate", "supplierId"]}
         >
           {!contextFacilityId && !feedstock && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -296,7 +316,6 @@ export function FeedstockForm({
           icon={<MapPin size={14} weight="bold" />}
           hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
           fields={["vehicleId", "transportDistanceKm"]}
-          required={["transportDistanceKm"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
@@ -317,13 +336,14 @@ export function FeedstockForm({
               label="Transport distance (km)"
               error={errors.transportDistanceKm?.message}
               certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
+              certifyStatus={transportDistanceCertStatus}
               helperText={
                 storedDistanceKm != null
                   ? "Autofilled from the supplier's default location or supplier default; override if the route differs."
                   : "Set a distance on the supplier (or its default location) to autofill this."
               }
             >
-              <div>
+              <div className="relative">
                 <FormInput
                   id="transportDistanceKm"
                   type="number"
@@ -332,6 +352,7 @@ export function FeedstockForm({
                   placeholder="e.g., 85"
                   disabled={isSubmitting}
                   error={!!errors.transportDistanceKm}
+                  className={isDistanceOverride ? "pr-[104px]" : undefined}
                   {...register("transportDistanceKm", {
                     setValueAs: numericValue,
                     onChange: (event) =>
@@ -342,13 +363,18 @@ export function FeedstockForm({
                       ),
                   })}
                 />
-                {transportDistanceSource && (
-                  <p
-                    className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
-                    data-testid="transportDistanceKm-distance-source"
+                {isDistanceOverride && (
+                  <button
+                    type="button"
+                    onClick={resetTransportDistance}
+                    disabled={isSubmitting}
+                    aria-label="Reset to suggested distance"
+                    data-testid="transportDistanceKm-reset"
+                    className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
                   >
-                    Source: {DISTANCE_SOURCE_LABELS[transportDistanceSource]}
-                  </p>
+                    <span className="body-caption">override</span>
+                    <ArrowCounterClockwise size={14} weight="bold" />
+                  </button>
                 )}
               </div>
             </FormField>
@@ -360,7 +386,6 @@ export function FeedstockForm({
           title="Material"
           icon={<Plant size={14} weight="bold" />}
           fields={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
-          required={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
@@ -384,11 +409,12 @@ export function FeedstockForm({
               id="totalWetMassKg"
               label="Total Wet Mass (kg)"
               error={errors.totalWetMassKg?.message}
-              helperText="As-received weight of the entire delivery"
+              hint="As-received weight of the entire delivery"
               required
               certifyRequired={isFeedstockCertifyField("totalWetMassKg")}
+              certifyStatus={certStatus("totalWetMassKg")}
             >
-              <FormInput
+              <DryMassInput
                 id="totalWetMassKg"
                 type="number"
                 step="0.01"
@@ -396,6 +422,8 @@ export function FeedstockForm({
                 placeholder="e.g., 1500"
                 disabled={isSubmitting}
                 error={!!errors.totalWetMassKg}
+                wetMassKg={watchWetMass}
+                moisturePercent={watchMoisture}
                 {...register("totalWetMassKg", { setValueAs: numericValue })}
               />
             </FormField>
@@ -420,19 +448,6 @@ export function FeedstockForm({
               />
             </FormField>
           </div>
-
-          {/* Dry mass preview */}
-          <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Delivered Dry Mass (kg)</span>
-            <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              {deliveredDryMassKg !== null ? `${deliveredDryMassKg.toFixed(2)} kg` : "\u2014"}
-            </span>
-            {deliveredDryMassKg !== null && (
-              <span className="body-small text-[var(--color-text-quaternary)]">
-                = {Number(watchWetMass ?? 0).toFixed(2)} &times; (1 &minus; {Number(watchMoisture ?? 0).toFixed(2)}%)
-              </span>
-            )}
-          </div>
         </FormSection>
 
         <FormSection
@@ -440,7 +455,6 @@ export function FeedstockForm({
           icon={<Truck size={14} weight="bold" />}
           hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence."
           fields={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
-          required={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
         >
           <TruckWeighingSection
             bare
@@ -459,6 +473,8 @@ export function FeedstockForm({
             departureError={errors.truckMassOnDepartureKg?.message}
             arrivalCertifyRequired={isFeedstockCertifyField("truckMassOnArrivalKg")}
             departureCertifyRequired={isFeedstockCertifyField("truckMassOnDepartureKg")}
+            arrivalCertifyStatus={certStatus("truckMassOnArrivalKg")}
+            departureCertifyStatus={certStatus("truckMassOnDepartureKg")}
             isSubmitting={isSubmitting}
           />
         </FormSection>
@@ -474,7 +490,7 @@ export function FeedstockForm({
                   type="button"
                   variant="default"
                   size="small"
-                  onClick={() => append({ storageLocationId: "", allocatedWetMassKg: "" as unknown as number })}
+                  onClick={() => append({ storageLocationId: "", allocatedWetMassKg: 0 })}
                   disabled={isSubmitting}
                 >
                   <Plus size={16} weight="bold" />

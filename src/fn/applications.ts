@@ -13,6 +13,7 @@ import {
   updateApplication as updateApplicationData,
   deleteApplication as deleteApplicationData,
   applicationCodeExists,
+  type ApplicationListItem,
 } from "@/data-access/applications";
 import {
   createApplicationSchema,
@@ -31,7 +32,7 @@ const getApplicationsOptionsSchema = z.object({
  */
 export async function getApplicationsFn(
   options?: { page?: number; pageSize?: number; facilityId?: string }
-): Promise<ActionResult<{ items: Application[]; total: number; page: number; pageSize: number; totalPages: number }>> {
+): Promise<ActionResult<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
     const user = await getUser();
     if (!user || !user.id) {

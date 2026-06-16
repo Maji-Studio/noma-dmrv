@@ -19,11 +19,13 @@ interface AdminTile {
 
 const ADMIN_TILES: AdminTile[] = [
   {
-    href: "/admin/emission-estimates",
+    // Emission-estimate config now lives in the certification workspace; link
+    // straight there rather than through the deprecated /admin redirect hop.
+    href: "/certification/settings",
     icon: Gauge,
     title: "Emission estimates",
     description:
-      "Per-facility genset yield and process-stage energy split used when submitting credit batches to Isometric.",
+      "Per-facility genset yield and process-stage energy split used in Isometric submissions — configured under Certification → Settings → Emissions.",
     accent: "var(--clr-orange)",
   },
   {

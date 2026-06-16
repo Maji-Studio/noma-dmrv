@@ -31,6 +31,7 @@ import {
 import {
   confirmUpload,
   requestUpload,
+  updateApplicationEvidenceMetadata,
 } from "@/fn/documents";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
@@ -88,6 +89,7 @@ class FakeProvider implements StorageProvider {
 let provider: FakeProvider;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   provider = new FakeProvider();
   __setStorageProviderForTests(provider);
   vi.mocked(getUser).mockResolvedValue(mockUser);
@@ -342,5 +344,114 @@ describe("confirmUpload", () => {
     vi.mocked(getUser).mockResolvedValueOnce(null);
     const result = await confirmUpload({ documentId: pendingRow.id });
     expect(result).toEqual({ success: false, error: "Unauthorized" });
+  });
+});
+
+describe("updateApplicationEvidenceMetadata", () => {
+  const uploadedApplicationPhoto = {
+    id: "11111111-2222-4333-8444-555555555555",
+    entityType: "application",
+    entityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    documentType: "photo" as const,
+    uploadStatus: "uploaded" as const,
+    metadata: {
+      geotagStatus: "present",
+      missingExif: [],
+      exif: {
+        capturedAt: "2026-06-14T12:00:00.000Z",
+        gps: { latitude: 1, longitude: 2 },
+      },
+    },
+  };
+  const uploadedApplicationPdf = {
+    ...uploadedApplicationPhoto,
+    documentType: "pdf" as const,
+    metadata: {
+      source: "legacy-upload",
+    },
+  };
+
+  it("classifies legacy application photos without replacing EXIF metadata", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce(
+      uploadedApplicationPhoto as never,
+    );
+    vi.mocked(updateDocument).mockResolvedValueOnce({
+      ...uploadedApplicationPhoto,
+      metadata: {
+        ...uploadedApplicationPhoto.metadata,
+        evidenceRole: "stockpile",
+      },
+    } as never);
+
+    const result = await updateApplicationEvidenceMetadata({
+      documentId: uploadedApplicationPhoto.id,
+      applicationEvidenceRole: "stockpile",
+    });
+
+    expect(result.success).toBe(true);
+    expect(assertCanManageDocumentEntity).toHaveBeenCalledWith(
+      mockUser.id,
+      "application",
+      uploadedApplicationPhoto.entityId,
+    );
+    expect(updateDocument).toHaveBeenCalledWith(
+      mockUser.id,
+      uploadedApplicationPhoto.id,
+      {
+        metadata: {
+          ...uploadedApplicationPhoto.metadata,
+          evidenceRole: "stockpile",
+        },
+      },
+    );
+  });
+
+  it("rejects evidence role classification for non-photo documents", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce({
+      ...uploadedApplicationPhoto,
+      documentType: "pdf",
+      metadata: {},
+    } as never);
+
+    const result = await updateApplicationEvidenceMetadata({
+      documentId: uploadedApplicationPhoto.id,
+      applicationEvidenceRole: "stockpile",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/only be set on photos/);
+    }
+    expect(updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("classifies legacy application PDFs as typed boundary logbook evidence", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce(
+      uploadedApplicationPdf as never,
+    );
+    vi.mocked(updateDocument).mockResolvedValueOnce({
+      ...uploadedApplicationPdf,
+      metadata: {
+        source: "legacy-upload",
+        logbookEvidenceType: "inventory",
+      },
+    } as never);
+
+    const result = await updateApplicationEvidenceMetadata({
+      documentId: uploadedApplicationPdf.id,
+      applicationLogbookEvidenceType: "inventory",
+    });
+
+    expect(result.success).toBe(true);
+    expect(updateDocument).toHaveBeenCalledWith(
+      mockUser.id,
+      uploadedApplicationPdf.id,
+      {
+        metadata: {
+          source: "legacy-upload",
+          logbookEvidenceType: "inventory",
+        },
+      },
+    );
   });
 });

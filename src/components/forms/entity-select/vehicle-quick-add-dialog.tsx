@@ -26,18 +26,21 @@ export function VehicleQuickAddDialog({
   const { error, isSubmitting, handleSubmit } = useQuickAddSubmit<VehicleFormData>({
     entityType: "vehicle",
     serverFn: (data) => {
+      // Fuel consumption is optional metadata: null when blank or electric
+      // (no liquid fuel), otherwise converted from the L/100km the form uses.
       const isElectric = data.fuelType === "Electric";
-      const fuelConsumption = isElectric
-        ? 0
-        : lPer100KmToLPerKm(data.fuelConsumptionLPer100Km ?? 0);
+      const fuelConsumption =
+        isElectric || data.fuelConsumptionLPer100Km == null
+          ? null
+          : lPer100KmToLPerKm(data.fuelConsumptionLPer100Km);
 
       return createVehicleFn({
         name: data.name.trim(),
-        identifier: data.identifier.trim(),
+        identifier: data.identifier?.trim() || null,
         vehicleType: data.vehicleType,
-        fuelType: data.fuelType,
+        fuelType: data.fuelType || null,
         fuelConsumptionLPerKm: fuelConsumption,
-        modelYear: data.modelYear,
+        modelYear: data.modelYear ?? null,
       });
     },
     onSuccess,

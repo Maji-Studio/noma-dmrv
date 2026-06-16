@@ -10,6 +10,7 @@ import {
   maxBytesFor,
   requestUploadSchema,
   setVisibilitySchema,
+  updateApplicationEvidenceMetadataSchema,
   type DocumentType,
 } from "@/schemas/documents";
 import {
@@ -36,13 +37,28 @@ export interface RequestUploadResult {
 }
 
 function buildDocumentMetadata(input: {
+  entityType: string;
   documentType: DocumentType;
   capturedAt?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
+  applicationEvidenceRole?: string;
+  applicationLogbookEvidenceType?: string;
 }): Record<string, unknown> {
+  const applicationMetadata =
+    input.entityType === "application"
+      ? {
+          ...(input.applicationEvidenceRole
+            ? { evidenceRole: input.applicationEvidenceRole }
+            : {}),
+          ...(input.applicationLogbookEvidenceType
+            ? { logbookEvidenceType: input.applicationLogbookEvidenceType }
+            : {}),
+        }
+      : {};
+
   if (input.documentType !== "photo" && input.documentType !== "video") {
-    return {};
+    return applicationMetadata;
   }
 
   const missingExif: string[] = [];
@@ -55,6 +71,7 @@ function buildDocumentMetadata(input: {
     // Certification readiness uses this generated metadata to identify
     // application photos that carry both timestamp and GPS EXIF.
     geotagStatus: missingExif.length === 0 ? "present" : "missing",
+    ...applicationMetadata,
     missingExif,
     exif: {
       capturedAt: input.capturedAt ?? null,
@@ -64,6 +81,12 @@ function buildDocumentMetadata(input: {
           : null,
     },
   };
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value !== null && !Array.isArray(value) && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 export async function requestUpload(
@@ -114,10 +137,14 @@ export async function requestUpload(
     });
 
     const metadata = buildDocumentMetadata({
+      entityType: parsed.data.entityType,
       documentType: docType,
       capturedAt: parsed.data.capturedAt,
       gpsLatitude: parsed.data.gpsLatitude,
       gpsLongitude: parsed.data.gpsLongitude,
+      applicationEvidenceRole: parsed.data.applicationEvidenceRole,
+      applicationLogbookEvidenceType:
+        parsed.data.applicationLogbookEvidenceType,
     });
 
     const row = await insertDocument(userId, {
@@ -211,6 +238,50 @@ export async function setDocumentVisibility(
 
     const updated = await updateDocument(userId, data.documentId, {
       visibility: data.visibility,
+    });
+    if (!updated) throw new SafeError("Document not found");
+    return updated;
+  });
+}
+
+export async function updateApplicationEvidenceMetadata(
+  input: unknown
+): Promise<ActionResult<DocumentRow>> {
+  return withAction(async (userId) => {
+    const data = updateApplicationEvidenceMetadataSchema.parse(input);
+
+    const row = await getDocumentById(userId, data.documentId);
+    if (!row) throw new SafeError("Document not found");
+    await assertCanManageDocumentEntity(userId, row.entityType, row.entityId);
+    if (row.entityType !== "application") {
+      throw new SafeError("Evidence classification is only available for applications");
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (data.applicationEvidenceRole !== undefined) {
+      if (row.documentType !== "photo") {
+        throw new SafeError("Visual evidence role can only be set on photos");
+      }
+      patch.evidenceRole = data.applicationEvidenceRole;
+    }
+    if (data.applicationLogbookEvidenceType !== undefined) {
+      if (
+        row.documentType !== "pdf" &&
+        row.documentType !== "weighbridge_ticket" &&
+        row.documentType !== "affidavit"
+      ) {
+        throw new SafeError(
+          "Boundary logbook evidence type can only be set on logbook documents",
+        );
+      }
+      patch.logbookEvidenceType = data.applicationLogbookEvidenceType;
+    }
+
+    const updated = await updateDocument(userId, row.id, {
+      metadata: {
+        ...metadataRecord(row.metadata),
+        ...patch,
+      },
     });
     if (!updated) throw new SafeError("Document not found");
     return updated;

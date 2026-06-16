@@ -88,8 +88,10 @@ export function ProductionReadingsDocuments({
     const result = await importReadings.mutateAsync({ documentId, mapping });
     setPendingPreview(null);
     setUploadError(null);
+    const skippedRowsSuffix =
+      result.skippedRows > 0 ? `, ${result.skippedRows} skipped` : "";
     toast.success(
-      `Imported ${result.insertedRows} readings (${result.droppedRows} outside run window)`,
+      `Imported ${result.insertedRows} readings (${result.droppedRows} outside run window${skippedRowsSuffix})`,
     );
     if (result.warnings.length > 0) {
       toast.warning(result.warnings.join(" "));

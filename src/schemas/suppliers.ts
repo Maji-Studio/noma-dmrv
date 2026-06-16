@@ -23,13 +23,16 @@ export const supplierFormSchema = z.object({
     .max(255, "Supplier name must be less than 255 characters"),
 
   // Location fields
+  // General region text only — precise coordinates/distance live per-location
+  // in supplierLocations (mirrors customers). Supplier-level GPS stays optional
+  // for backward compatibility with suppliers created before multi-location.
   location: z
     .string()
     .max(255, "Location must be less than 255 characters")
     .optional()
     .or(z.literal("")),
-  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
-  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
+  gpsLatitude: latitudeSchema,
+  gpsLongitude: longitudeSchema,
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")
@@ -177,6 +180,13 @@ export const createSupplierLocationSchema = supplierLocationFormSchema.extend({
   supplierId: z.string().uuid("Invalid supplier ID"),
 });
 
+export const createSupplierWithLocationsSchema = z.object({
+  supplier: createSupplierSchema,
+  locations: z
+    .array(supplierLocationFormSchema)
+    .min(1, "At least one location is required"),
+});
+
 /**
  * Schema for updating a supplier location (server action)
  */
@@ -213,5 +223,8 @@ export type SupplierFilterData = z.infer<typeof supplierFilterSchema>;
 export type SupplierSelectData = z.infer<typeof supplierSelectSchema>;
 export type SupplierLocationFormData = z.infer<typeof supplierLocationFormSchema>;
 export type CreateSupplierLocationData = z.infer<typeof createSupplierLocationSchema>;
+export type CreateSupplierWithLocationsData = z.infer<
+  typeof createSupplierWithLocationsSchema
+>;
 export type UpdateSupplierLocationData = z.infer<typeof updateSupplierLocationSchema>;
 export type DeleteSupplierLocationData = z.infer<typeof deleteSupplierLocationSchema>;

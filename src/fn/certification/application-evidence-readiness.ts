@@ -3,13 +3,26 @@ import {
   listDocumentsForEntityIds,
   type DocumentRow,
 } from "@/data-access/documents";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
+  APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
+  APPLICATION_VISUAL_EVIDENCE_ROLES,
+  isApplicationBoundaryLogbookEvidenceType,
+  type ApplicationVisualEvidenceRole,
+} from "@/lib/certification/application-evidence";
 
 const APPLICATION_DOCUMENT_ENTITY_TYPE = "application";
 const APPLICATION_VISUAL_DOCUMENT_TYPE = "photo";
-const APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPE = "pdf";
+const APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPES = new Set([
+  "pdf",
+  "weighbridge_ticket",
+  "affidavit",
+]);
 
 interface DocumentMetadata {
   geotagStatus?: "present" | "missing" | string;
+  evidenceRole?: unknown;
+  logbookEvidenceType?: unknown;
 }
 
 function documentMetadata(row: DocumentRow): DocumentMetadata {
@@ -24,16 +37,38 @@ function isUploadedDocument(row: DocumentRow): boolean {
   return row.uploadStatus === "uploaded" || row.fileUrl != null;
 }
 
-function isGeotaggedPhoto(row: DocumentRow): boolean {
+function isGeotaggedPhotoForRole(
+  row: DocumentRow,
+  role: ApplicationVisualEvidenceRole,
+): boolean {
+  const metadata = documentMetadata(row);
   return (
     row.documentType === APPLICATION_VISUAL_DOCUMENT_TYPE &&
     isUploadedDocument(row) &&
-    documentMetadata(row).geotagStatus === "present"
+    metadata.geotagStatus === "present" &&
+    metadata.evidenceRole === role
   );
 }
 
 function hasBoundaryReference(value: string | null | undefined): boolean {
   return (value?.trim() ?? "").length > 0;
+}
+
+function isBoundaryLogbook(row: DocumentRow): boolean {
+  if (
+    !APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPES.has(row.documentType) ||
+    !isUploadedDocument(row)
+  ) {
+    return false;
+  }
+
+  if (row.documentType === "weighbridge_ticket" || row.documentType === "affidavit") {
+    return true;
+  }
+
+  return isApplicationBoundaryLogbookEvidenceType(
+    documentMetadata(row).logbookEvidenceType,
+  );
 }
 
 export async function buildApplicationEvidenceGaps(
@@ -61,8 +96,17 @@ export async function buildApplicationEvidenceGaps(
       documentsByApplicationId.get(application.id) ?? [];
 
     if (application.evidenceMethod === "visual") {
-      if (!applicationDocuments.some(isGeotaggedPhoto)) {
-        gaps.push(`Application ${application.code}: geotagged visual evidence`);
+      for (const role of APPLICATION_VISUAL_EVIDENCE_ROLES) {
+        if (
+          applicationDocuments.some((document) =>
+            isGeotaggedPhotoForRole(document, role),
+          )
+        ) {
+          continue;
+        }
+        gaps.push(
+          `Application ${application.code}: geotagged ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[role].toLowerCase()} photo`,
+        );
       }
       continue;
     }
@@ -70,13 +114,11 @@ export async function buildApplicationEvidenceGaps(
     if (!hasBoundaryReference(application.gisBoundaryReference)) {
       gaps.push(`Application ${application.code}: GIS boundary reference`);
     }
-    const hasLogbook = applicationDocuments.some(
-      (document) =>
-        document.documentType === APPLICATION_BOUNDARY_LOGBOOK_DOCUMENT_TYPE &&
-        isUploadedDocument(document),
-    );
+    const hasLogbook = applicationDocuments.some(isBoundaryLogbook);
     if (!hasLogbook) {
-      gaps.push(`Application ${application.code}: boundary logbook evidence`);
+      gaps.push(
+        `Application ${application.code}: boundary logbook evidence (${Object.values(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS).join(", ")})`,
+      );
     }
   }
 

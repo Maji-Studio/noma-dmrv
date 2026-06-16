@@ -60,8 +60,8 @@ describe("compactBatchHealthDetail", () => {
 });
 
 describe("fallbackBatchHealthFixTarget", () => {
-  it("routes carbon check failures to batchDetails", () => {
-    expect(fallbackBatchHealthFixTarget("carbon")).toBe("batchDetails");
+  it("routes carbon check failures to labSamples (where lab inputs are entered)", () => {
+    expect(fallbackBatchHealthFixTarget("carbon")).toBe("labSamples");
   });
 
   it("routes production check failures to productionRuns", () => {
@@ -80,18 +80,32 @@ describe("fallbackBatchHealthFixTarget", () => {
 describe("batchHealthFixLinkFor", () => {
   const facilityId = "fac-001";
 
-  it("routes a carbon check with no explicit fixTarget to #batch-details", () => {
+  it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
     const check: BatchHealthCheck = {
       key: "carbon",
       label: "Carbon & durability inputs complete",
       status: "unmet",
     };
     const link = batchHealthFixLinkFor(check, facilityId);
-    expect(link.label).toBe("Edit details");
-    expect(link.href).toBe("#batch-details");
+    expect(link.label).toBe("Add lab sample data");
+    expect(link.href).toBe(`/samples?facility=${facilityId}`);
   });
 
-  it("uses 'Link applications' label when production check falls back to batchDetails", () => {
+  it("routes an explicit applications fixTarget to the applications page", () => {
+    // The noApplications production gap routes here: applications auto-match by
+    // crediting period, so there is no manual "link" action to offer.
+    const check: BatchHealthCheck = {
+      key: "production",
+      label: "Production data linked",
+      status: "unmet",
+      fixTarget: "applications",
+    };
+    const link = batchHealthFixLinkFor(check, facilityId);
+    expect(link.label).toBe("Review applications");
+    expect(link.href).toBe(`/applications?facility=${facilityId}`);
+  });
+
+  it("uses 'Edit details' label for an explicit batchDetails fixTarget", () => {
     const check: BatchHealthCheck = {
       key: "production",
       label: "Production data linked",
@@ -99,7 +113,7 @@ describe("batchHealthFixLinkFor", () => {
       fixTarget: "batchDetails",
     };
     const link = batchHealthFixLinkFor(check, facilityId);
-    expect(link.label).toBe("Link applications");
+    expect(link.label).toBe("Edit details");
     expect(link.href).toBe("#batch-details");
   });
 

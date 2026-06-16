@@ -108,7 +108,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certifier",
+      header: "Certification",
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}
@@ -370,7 +370,7 @@ export function DeliveryList() {
                       ),
                     },
                     {
-                      label: "Certifier",
+                      label: "Certification",
                       value: (
                         <EntityCertifyReadinessBadge
                           readiness={deriveEntityCertifyReadiness(

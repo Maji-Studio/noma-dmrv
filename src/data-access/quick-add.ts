@@ -112,11 +112,13 @@ export async function createOperator(
 export interface CreateVehicleData {
   code: string;
   name: string;
-  identifier: string;
+  // vehicleType is the only required vehicle attribute — it selects the
+  // Isometric component emission factor. The rest is optional metadata.
   vehicleType: string;
-  fuelType: string;
-  fuelConsumptionLPerKm: number;
-  modelYear: number;
+  identifier?: string | null;
+  fuelType?: string | null;
+  fuelConsumptionLPerKm?: number | null;
+  modelYear?: number | null;
 }
 
 /**

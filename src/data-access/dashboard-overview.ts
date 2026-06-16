@@ -32,6 +32,7 @@ import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import {
   getDashboardOperations,
   type DashboardEvidenceRow,
+  type DashboardMapEdge,
   type DashboardMapPoint,
   type DashboardNowItem,
   type DashboardProgressStage,
@@ -41,6 +42,8 @@ import { requireAuth } from "./utils";
 // Re-exported so components import every dashboard type from one module.
 export type {
   DashboardEvidenceRow,
+  DashboardMapDetail,
+  DashboardMapEdge,
   DashboardMapKind,
   DashboardMapPoint,
   DashboardNowItem,
@@ -123,8 +126,10 @@ export interface DashboardOverview {
   progress: DashboardProgressStage[];
   /** Structural certification gaps (GPS, samples, transport provenance). */
   evidence: DashboardEvidenceRow[];
-  /** Plottable sites for the dashboard map preview. */
+  /** Plottable sites for the dashboard traceability map. */
   mapPoints: DashboardMapPoint[];
+  /** Directional traceability legs between the plotted sites. */
+  mapEdges: DashboardMapEdge[];
 }
 
 interface RangeBounds {
@@ -213,8 +218,12 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const [runRows, lotRows, applicationRows, batchRows, feedstockRows] =
-    await Promise.all([
+  const [
+    [runRows, lotRows, applicationRows, batchRows, feedstockRows],
+    attention,
+    operations,
+  ] = await Promise.all([
+    Promise.all([
       db
         .select({
           date: productionRuns.date,
@@ -293,7 +302,10 @@ export async function getDashboardOverview(
             ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
           ),
         ),
-    ]);
+    ]),
+    getAttentionItems(facilityId),
+    getDashboardOperations(userId, facilityId),
+  ]);
 
   // ---- normalize to dated points -----------------------------------------
 
@@ -599,11 +611,6 @@ export async function getDashboardOverview(
     },
   });
 
-  const [attention, operations] = await Promise.all([
-    getAttentionItems(facilityId),
-    getDashboardOperations(userId, facilityId),
-  ]);
-
   return {
     range,
     generatedAt: operations.generatedAt,
@@ -615,6 +622,7 @@ export async function getDashboardOverview(
     progress: operations.progress,
     evidence: operations.evidence,
     mapPoints: operations.mapPoints,
+    mapEdges: operations.mapEdges,
   };
 }
 

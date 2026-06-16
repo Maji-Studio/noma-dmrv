@@ -1365,6 +1365,29 @@ p,
   animation: slide-in-right 0.3s ease-out;
 }
 
+/* Submission-gate open-check rows: a quiet staggered reveal on load. The
+   per-row delay is set inline via animation-delay. */
+@keyframes gate-row-in {
+  from {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-gate-row {
+  animation: gate-row-in 0.32s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-gate-row {
+    animation: none;
+  }
+}
+
 /* Loading skeleton shimmer animation */
 @keyframes skeleton-shimmer {
   0% {

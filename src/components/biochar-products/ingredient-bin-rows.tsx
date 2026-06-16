@@ -13,7 +13,7 @@ export function IngredientBinRows({ composition, isSubmitting }: IngredientBinRo
   if (composition.rows.length === 0) return null;
   return (
     <div className="space-y-16 pt-20 border-t border-[var(--color-border-tertiary)]">
-      <SectionLabel>Ingredient Bins</SectionLabel>
+      <SectionLabel>Blend ingredients</SectionLabel>
       {composition.rows.map((row) => (
         <IngredientBinField
           key={row.key}

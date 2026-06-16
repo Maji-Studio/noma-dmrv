@@ -12,14 +12,17 @@ import {
   loadBatchHealth,
   loadCertificationHealth,
   loadCertificationOverview,
+  loadCreditBatchHealthSummaries,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
   loadFacilityCertifierSummary,
+  loadGhgStatementBreakdown,
   loadGhgStatementsForFacility,
   loadGhgStatementState,
   loadIsometricFeedstockTypes,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRemovalBreakdown,
   loadRemovalCertifyContext,
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,
@@ -65,6 +68,13 @@ export const certificationKeys = {
     ] as const,
   batchHealth: (creditBatchId: string) =>
     [...certificationKeys.all, "batch-health", creditBatchId] as const,
+  batchHealthSummaries: (facilityId: string, batchIds: string[]) =>
+    [
+      ...certificationKeys.all,
+      "batch-health-summaries",
+      facilityId,
+      batchIds,
+    ] as const,
   certifyContextForRemoval: (removalId: string) =>
     [
       ...certificationKeys.all,
@@ -74,12 +84,20 @@ export const certificationKeys = {
     ] as const,
   removalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "removals", facilityId] as const,
+  removalBreakdown: (removalId: string) =>
+    [...certificationKeys.all, "removal-breakdown", removalId] as const,
   selectableBatches: (facilityId: string) =>
     [...certificationKeys.all, "selectable-batches", facilityId] as const,
   ghgStatementsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "ghg-statements", facilityId] as const,
   ghgStatementState: (ghgStatementId: string) =>
     [...certificationKeys.all, "ghg-statement", ghgStatementId] as const,
+  ghgStatementBreakdown: (ghgStatementId: string) =>
+    [
+      ...certificationKeys.all,
+      "ghg-statement-breakdown",
+      ghgStatementId,
+    ] as const,
   openRemovalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "open-removals", facilityId] as const,
   overview: (facilityId: string) =>
@@ -99,6 +117,23 @@ export function useCertificationOverview(facilityId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Carbon-accounting breakdown for one removal — lazy by design: the removal
+// detail sheet only enables it while open. Reads the registry's GHG entry for
+// submitted removals (its figures don't move once verified), so it leans on the
+// default stale window and is invalidated alongside the rest of `all`.
+export function useRemovalBreakdown(removalId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.removalBreakdown(removalId),
+    queryFn: async () => {
+      const result = await loadRemovalBreakdown(removalId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
   });
 }
@@ -258,6 +293,37 @@ export function useBatchHealth(creditBatchId: string, enabled = true) {
   });
 }
 
+// Per-batch certification-readiness verdicts for the Credit Batches overview
+// cards, keyed by batch id. Mirrors `useCreditBatchCo2eStoredPreviews`: the
+// list passes the visible page's ids so only on-screen cards are evaluated.
+// Reuses the same `deriveBatchHealth` classifier as `useBatchHealth`, so a
+// card's cert tag and the detail page's submission gate can never disagree.
+// Mutations to a batch / its lineage invalidate `certificationKeys.all`, which
+// covers this key.
+export function useCreditBatchHealthSummaries(
+  facilityId: string | undefined,
+  batchIds: string[],
+) {
+  const sortedIds = [...batchIds].sort();
+  return useQuery({
+    queryKey: certificationKeys.batchHealthSummaries(
+      facilityId ?? "",
+      sortedIds,
+    ),
+    queryFn: async () => {
+      if (!facilityId) return {};
+      const result = await loadCreditBatchHealthSummaries(
+        facilityId,
+        sortedIds,
+      );
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: !!facilityId && sortedIds.length > 0,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
 // Removal-keyed Certify context for the guided Review flow. Like the
 // credit-batch variant it refetches while a submission is locked in flight so
 // the pre-flight reflects progress without a manual refresh.
@@ -396,6 +462,27 @@ export function useGhgStatementState(ghgStatementId: string, enabled = true) {
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       query.state.data?.isLockedInFlight ? LOCKED_REFETCH_INTERVAL_MS : false,
+  });
+}
+
+// Carbon-accounting roll-up for one GHG statement — the sum across its member
+// removals. Lazy by design: the statement detail sheet only mounts it while
+// open. Like the removal variant it reads the registry's verified GHG entries
+// for submitted members, so it leans on the default stale window and is
+// invalidated alongside the rest of `all`.
+export function useGhgStatementBreakdown(
+  ghgStatementId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.ghgStatementBreakdown(ghgStatementId),
+    queryFn: async () => {
+      const result = await loadGhgStatementBreakdown(ghgStatementId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!ghgStatementId,
+    staleTime: DEFAULT_STALE_MS,
   });
 }
 
