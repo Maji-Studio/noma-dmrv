@@ -250,8 +250,57 @@ export async function createSupplier(
     throw new SafeError("A supplier with this code already exists");
   }
 
-  try {
-    const [supplier] = await db
+  // The pre-check above covers an already-committed duplicate code. An
+  // insert-time unique violation (a concurrent auto-code collision) is left to
+  // propagate raw so withAutoCode can detect and retry it — catching it here as
+  // a SafeError would mask the signal it matches on. Mirrors createFacility.
+  const [supplier] = await db
+    .insert(suppliers)
+    .values({
+      userId,
+      code: data.code,
+      name: data.name,
+      location: data.location ?? null,
+      gpsLatitude: data.gpsLatitude ?? null,
+      gpsLongitude: data.gpsLongitude ?? null,
+      address: data.address ?? null,
+      contactName: data.contactName ?? null,
+      contactEmail: data.contactEmail ?? null,
+      contactPhone: data.contactPhone ?? null,
+      sourceRegion: data.sourceRegion ?? null,
+      distanceToFacilityKm: data.distanceToFacilityKm ?? null,
+      distanceSource: data.distanceSource ?? null,
+    })
+    .returning();
+
+  return supplier;
+}
+
+export async function createSupplierWithLocations(
+  userId: string,
+  data: SupplierCreateFields & { locations: SupplierLocationCreateFields[] }
+): Promise<Supplier> {
+  requireAuth(userId);
+
+  if (data.locations.length === 0) {
+    throw new SafeError("At least one location is required");
+  }
+
+  // Supplier + all initial locations commit (or roll back) together. The
+  // in-transaction pre-check covers an already-committed duplicate code; an
+  // insert-time unique violation (concurrent auto-code collision) propagates
+  // raw so withAutoCode can detect and retry it. Mirrors createFacility.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(eq(suppliers.code, data.code));
+
+    if (existing) {
+      throw new SafeError("A supplier with this code already exists");
+    }
+
+    const [supplier] = await tx
       .insert(suppliers)
       .values({
         userId,
@@ -270,84 +319,29 @@ export async function createSupplier(
       })
       .returning();
 
-    return supplier;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("A supplier with this code already exists");
-    }
-    throw error;
-  }
-}
-
-export async function createSupplierWithLocations(
-  userId: string,
-  data: SupplierCreateFields & { locations: SupplierLocationCreateFields[] }
-): Promise<Supplier> {
-  requireAuth(userId);
-
-  if (data.locations.length === 0) {
-    throw new SafeError("At least one location is required");
-  }
-
-  try {
-    return await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ id: suppliers.id })
-        .from(suppliers)
-        .where(eq(suppliers.code, data.code));
-
-      if (existing) {
-        throw new SafeError("A supplier with this code already exists");
-      }
-
-      const [supplier] = await tx
-        .insert(suppliers)
-        .values({
-          userId,
-          code: data.code,
-          name: data.name,
-          location: data.location ?? null,
-          gpsLatitude: data.gpsLatitude ?? null,
-          gpsLongitude: data.gpsLongitude ?? null,
-          address: data.address ?? null,
-          contactName: data.contactName ?? null,
-          contactEmail: data.contactEmail ?? null,
-          contactPhone: data.contactPhone ?? null,
-          sourceRegion: data.sourceRegion ?? null,
-          distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-          distanceSource: data.distanceSource ?? null,
-        })
-        .returning();
-
-      let defaultIndex = 0;
-      data.locations.forEach((location, index) => {
-        if (location.isDefault === true) defaultIndex = index;
-      });
-
-      await tx.insert(supplierLocations).values(
-        data.locations.map((location, index) => ({
-          supplierId: supplier.id,
-          name: location.name ?? null,
-          country: location.country,
-          stateRegion: location.stateRegion ?? null,
-          city: location.city ?? null,
-          gpsLatitude: location.gpsLatitude ?? null,
-          gpsLongitude: location.gpsLongitude ?? null,
-          address: location.address ?? null,
-          distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
-          distanceSource: location.distanceSource ?? null,
-          isDefault: index === defaultIndex,
-        }))
-      );
-
-      return supplier;
+    let defaultIndex = 0;
+    data.locations.forEach((location, index) => {
+      if (location.isDefault === true) defaultIndex = index;
     });
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("A supplier with this code already exists");
-    }
-    throw error;
-  }
+
+    await tx.insert(supplierLocations).values(
+      data.locations.map((location, index) => ({
+        supplierId: supplier.id,
+        name: location.name ?? null,
+        country: location.country,
+        stateRegion: location.stateRegion ?? null,
+        city: location.city ?? null,
+        gpsLatitude: location.gpsLatitude ?? null,
+        gpsLongitude: location.gpsLongitude ?? null,
+        address: location.address ?? null,
+        distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
+        distanceSource: location.distanceSource ?? null,
+        isDefault: index === defaultIndex,
+      }))
+    );
+
+    return supplier;
+  });
 }
 
 // ============================================
