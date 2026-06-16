@@ -89,3 +89,32 @@ export function isApplicationBoundaryLogbookEvidenceType(
     value as ApplicationBoundaryLogbookEvidenceType,
   );
 }
+
+/**
+ * Document-type taxonomy behind the evidence-gap rule. The rule is implemented
+ * twice — once as the certification submission gate (`buildApplicationEvidenceGaps`,
+ * `src/fn/certification/application-evidence-readiness.ts`) and once as raw SQL for
+ * the dashboard count (`loadGpsGapCounts`, `src/data-access/dashboard-operations.ts`).
+ * Both read these document types from here so the taxonomy cannot silently drift
+ * between the two implementations when the evidence rules change again.
+ */
+
+/** Visual evidence (§8.5.1) is attested by geotagged photos of this document type. */
+export const APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE = "photo" as const;
+
+/**
+ * Document types that, when uploaded, attest application-boundary logbook
+ * quantities (§8.5.2) on their own — a dedicated weighbridge ticket or affidavit.
+ */
+export const APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES = [
+  "weighbridge_ticket",
+  "affidavit",
+] as const;
+
+/**
+ * A generic PDF attests boundary logbook quantities only when its
+ * `logbookEvidenceType` metadata is one of
+ * {@link APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES}.
+ */
+export const APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE =
+  "pdf" as const;

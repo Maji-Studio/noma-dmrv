@@ -43,7 +43,10 @@ import {
   transportLegs,
 } from "@/db/schema";
 import {
+  APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
+  APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   APPLICATION_VISUAL_EVIDENCE_ROLES,
 } from "@/lib/certification/application-evidence";
 import { requireAuth } from "./utils";
@@ -72,10 +75,6 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const EVIDENCE_METHOD_VISUAL = "visual";
 const EVIDENCE_METHOD_BOUNDARY = "boundary";
 const ENTITY_TYPE_APPLICATION = "application";
-const DOC_TYPE_PHOTO = "photo";
-const DOC_TYPE_PDF = "pdf";
-const DOC_TYPE_WEIGHBRIDGE_TICKET = "weighbridge_ticket";
-const DOC_TYPE_AFFIDAVIT = "affidavit";
 const UPLOAD_STATUS_UPLOADED = "uploaded";
 const GEOTAG_STATUS_PRESENT = "present";
 
@@ -581,14 +580,16 @@ async function loadGpsGapCounts(facilityId: string) {
   // this dashboard count can't drift from what certification actually blocks on.
   // Visual evidence needs a geotagged photo for EVERY role (stockpile/spreading/
   // incorporation); boundary evidence needs a GIS reference AND a logbook doc —
-  // a typed PDF, a weighbridge ticket, or an affidavit. Keep aligned with that
-  // builder (`src/fn/certification/application-evidence-readiness.ts`).
+  // a typed PDF, a weighbridge ticket, or an affidavit. The document-type
+  // taxonomy is shared with that builder via
+  // `@/lib/certification/application-evidence` so the two cannot drift; the role
+  // and logbook semantics below are still hand-maintained in both.
   const visualRoleMissing = (role: string) => sql`not exists (
           select 1
           from ${documents}
           where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
             and ${documents.entityId} = ${applications.id}
-            and ${documents.documentType} = ${DOC_TYPE_PHOTO}
+            and ${documents.documentType} = ${APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE}
             and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
             and ${documents.metadata}->>'geotagStatus' = ${GEOTAG_STATUS_PRESENT}
             and ${documents.metadata}->>'evidenceRole' = ${role}
@@ -601,9 +602,14 @@ async function loadGpsGapCounts(facilityId: string) {
             and ${documents.entityId} = ${applications.id}
             and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
             and (
-              ${documents.documentType} in (${DOC_TYPE_WEIGHBRIDGE_TICKET}, ${DOC_TYPE_AFFIDAVIT})
+              ${documents.documentType} in (${sql.join(
+                APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES.map(
+                  (type) => sql`${type}`,
+                ),
+                sql`, `,
+              )})
               or (
-                ${documents.documentType} = ${DOC_TYPE_PDF}
+                ${documents.documentType} = ${APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE}
                 and ${documents.metadata}->>'logbookEvidenceType' in (${sql.join(
                   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map(
                     (type) => sql`${type}`,

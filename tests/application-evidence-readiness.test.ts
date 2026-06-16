@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
+  APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
+  APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
+} from "@/lib/certification/application-evidence";
 
 vi.mock("@/data-access/documents", () => ({
   listDocumentsForEntityIds: vi.fn(),
@@ -169,4 +174,104 @@ describe("buildApplicationEvidenceGaps", () => {
 
     expect(gaps).toEqual(["Application APP-1: GIS boundary reference"]);
   });
+
+  it("does not count a non-uploaded logbook document toward boundary evidence", async () => {
+    mockedListDocuments.mockResolvedValue([
+      {
+        entityId: APPLICATION_ID,
+        documentType: "weighbridge_ticket",
+        uploadStatus: "pending",
+        fileUrl: null,
+        metadata: {},
+      } as never,
+    ]);
+
+    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+      lineage({
+        evidenceMethod: "boundary",
+        gisBoundaryReference: "field-boundary-1",
+      }),
+    ]);
+
+    expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
+  });
+
+  it("does not count a geotagged photo toward boundary logbook evidence", async () => {
+    mockedListDocuments.mockResolvedValue([
+      {
+        entityId: APPLICATION_ID,
+        documentType: "photo",
+        uploadStatus: "uploaded",
+        fileUrl: null,
+        metadata: { geotagStatus: "present", evidenceRole: "stockpile" },
+      } as never,
+    ]);
+
+    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+      lineage({
+        evidenceMethod: "boundary",
+        gisBoundaryReference: "field-boundary-1",
+      }),
+    ]);
+
+    expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
+  });
+
+  it("reports no gaps for applications with no evidence method selected", async () => {
+    mockedListDocuments.mockResolvedValue([]);
+
+    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+      lineage({ evidenceMethod: undefined }),
+    ]);
+
+    expect(gaps).toEqual([]);
+  });
+});
+
+/**
+ * Drift guard for the evidence-gap document-type taxonomy. The same rule is
+ * implemented twice — the gate here (`buildApplicationEvidenceGaps`) and the
+ * dashboard count (`loadGpsGapCounts`, raw SQL in
+ * `src/data-access/dashboard-operations.ts`). Both now read the document types
+ * from `@/lib/certification/application-evidence`, so they cannot drift. These
+ * tests pin the shared taxonomy and exercise the gate for every type in it, so a
+ * taxonomy change is a deliberate, test-visible decision both sides inherit.
+ */
+describe("evidence-gap document-type taxonomy parity", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("pins the shared document-type taxonomy", () => {
+    expect(APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE).toBe("photo");
+    expect(APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES).toEqual([
+      "weighbridge_ticket",
+      "affidavit",
+    ]);
+    expect(APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE).toBe("pdf");
+  });
+
+  it.each(APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES)(
+    "accepts %s as boundary logbook evidence on its own",
+    async (documentType) => {
+      mockedListDocuments.mockResolvedValue([
+        {
+          entityId: APPLICATION_ID,
+          documentType,
+          uploadStatus: "uploaded",
+          fileUrl: null,
+          metadata: {},
+        } as never,
+      ]);
+
+      const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+        lineage({
+          evidenceMethod: "boundary",
+          gisBoundaryReference: "field-boundary-1",
+        }),
+      ]);
+
+      expect(gaps).toEqual([]);
+    },
+  );
 });
