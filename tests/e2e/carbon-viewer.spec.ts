@@ -26,9 +26,17 @@ const FACILITY_POINT = { lat: -6.163, lng: 35.7516 };
 const DAR_POINT = { lat: -6.8, lng: 39.28 };
 const FIELD_POINT = { lat: -6.75, lng: 39.2 };
 
+// Inbound (feedstock) leg distance — seeded directly on its transport_legs row
+// and rendered verbatim on the rail's inbound pill.
 const INBOUND_DISTANCE_KM = 41.5;
+// Outbound (biochar) leg distance carried on the seeded transport_legs row. The
+// rail does NOT read this for biochar — it derives the outbound leg from the
+// delivery (mass = deliveredWetMassKg, distance = the customer-location's
+// distanceFromFacilityKm). Kept for the seeded row's own provenance.
 const OUTBOUND_DISTANCE_KM = 12.3;
-const TOTAL_DISTANCE_KM = 53.8;
+// Distance the rail actually renders on the outbound pill: the shared seed's
+// customerLocation.distanceFromFacilityKm (see fixtures/seed-chain-data.ts).
+const OUTBOUND_RAIL_DISTANCE_KM = 25;
 
 function createDbConnection() {
   const databaseUrl =
@@ -269,12 +277,12 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
 
     const legsRail = page.getByTestId("carbon-viewer-legs-rail");
     await expect(legsRail).toBeVisible({ timeout: 15000 });
-    await expect(legsRail).toContainText("Transport legs");
-    await expect(legsRail).toContainText(`${TOTAL_DISTANCE_KM} km total`);
+    // Redesigned rail (2026-03): consolidated Feedstock → hub → Application
+    // areas, each transport-leg pill carrying its distance (no aggregate total).
+    await expect(legsRail).toContainText("Feedstock");
+    await expect(legsRail).toContainText("Application");
     await expect(legsRail).toContainText(`${INBOUND_DISTANCE_KM} km`);
-    await expect(legsRail).toContainText(`${OUTBOUND_DISTANCE_KM} km`);
-    await expect(legsRail).toContainText("feedstock inbound");
-    await expect(legsRail).toContainText("biochar outbound");
+    await expect(legsRail).toContainText(`${OUTBOUND_RAIL_DISTANCE_KM} km`);
 
     await expect(page.getByTestId("carbon-viewer-legend")).toContainText(
       "Facility · pyrolysis hub"

@@ -284,7 +284,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
           ],
         },
       })
-    ).rejects.toThrow("Ingredient bin must hold blend-usage feedstock");
+    ).rejects.toThrow("Feedstock bin must hold blend-usage feedstock");
   });
 
   it("rejects blend ingredient bins whose held type differs from the formulation line", async () => {
@@ -310,6 +310,6 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
           ],
         },
       })
-    ).rejects.toThrow("Ingredient bin must match the formulation material");
+    ).rejects.toThrow("Feedstock bin must match the formulation material");
   });
 });
