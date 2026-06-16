@@ -38,8 +38,6 @@ export function reachableNodeIds(
     adjacency.get(graphEdge.target)!.push(graphEdge.source);
   }
 
-  if (!adjacency.has(nodeId)) return null;
-
   const reachable = new Set<string>([nodeId]);
   const queue = [nodeId];
   while (queue.length > 0) {
