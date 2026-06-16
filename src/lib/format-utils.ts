@@ -35,13 +35,18 @@ export function formatCo2e(
   const { signed = false, unit } = opts ?? {};
   const abs = Math.abs(kg);
   const inTonnes = abs >= KG_PER_TONNE;
+  // Round first, then take the sign from the *displayed* magnitude: a value that
+  // rounds to 0 (e.g. 0.4 kg) must read "0 kg CO₂e", never a misleading "+0".
+  const roundedMagnitude = inTonnes
+    ? Number((abs / KG_PER_TONNE).toFixed(CO2E_TONNES_MAX_FRACTION_DIGITS))
+    : Math.round(abs);
   const magnitude = inTonnes
-    ? (abs / KG_PER_TONNE).toLocaleString(undefined, {
+    ? roundedMagnitude.toLocaleString(undefined, {
         maximumFractionDigits: CO2E_TONNES_MAX_FRACTION_DIGITS,
       })
-    : Math.round(abs).toLocaleString();
+    : roundedMagnitude.toLocaleString();
   const suffix = unit ?? (inTonnes ? "t CO₂e" : "kg CO₂e");
-  const sign = signed && kg !== 0 ? (kg > 0 ? "+" : "−") : "";
+  const sign = signed && roundedMagnitude !== 0 ? (kg > 0 ? "+" : "−") : "";
   return `${sign}${magnitude}${suffix ? ` ${suffix}` : ""}`;
 }
 

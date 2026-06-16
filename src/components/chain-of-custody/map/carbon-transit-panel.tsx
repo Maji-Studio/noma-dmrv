@@ -137,6 +137,16 @@ export function CarbonTransitPanel({
   // Transient hover isolation, shared between the map (line hover) and the rail
   // (dropdown-row hover): whichever sets it, both surfaces ghost back the rest.
   const [hoverLegId, setHoverLegId] = useState<string | null>(null);
+  // Drop the hovered leg whenever the plotted source changes — a leftover hover
+  // from the previous application/batch points at a leg that no longer exists,
+  // which would pin the whole map in isolation mode. Reset during render (the
+  // React-recommended reset-on-prop-change) rather than via useEffect.
+  const sourceKey = `${source.kind}:${source.id}`;
+  const [hoverSourceKey, setHoverSourceKey] = useState(sourceKey);
+  if (hoverSourceKey !== sourceKey) {
+    setHoverSourceKey(sourceKey);
+    setHoverLegId(null);
+  }
 
   const applicationGeo = useChainOfCustodyGeo(
     source.kind === "application" ? source.id : null
