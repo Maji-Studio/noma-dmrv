@@ -279,7 +279,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // Client-side facet filters (the list loads all rows for the facility)
   const filteredItems = items.filter((a) =>
     (!statusFilter || a.status === statusFilter) &&
-    (!evidenceFilter || a.evidenceMethod === evidenceFilter)
+    // A null evidenceMethod renders as "visual" (the table/side-sheet fallback),
+    // so the facet must match that same default — otherwise filtering by Visual
+    // hides the very rows it visibly labels Visual.
+    (!evidenceFilter || (a.evidenceMethod ?? "visual") === evidenceFilter)
   );
   const hasActiveFilters = !!statusFilter || !!evidenceFilter;
   const clearFilters = () => { setStatusFilter(""); setEvidenceFilter(""); };
