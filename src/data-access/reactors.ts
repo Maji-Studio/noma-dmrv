@@ -4,7 +4,7 @@
  * Includes Method B eligibility calculation
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   reactors,
@@ -232,6 +232,32 @@ export async function getReactorById(
     facilityName: reactor.facilityName ?? "",
     methodBEligibility,
   };
+}
+
+/**
+ * Map each reactor id to its CURRENT sampling method. Used by the durability
+ * submission gates (D6) to decide, per production run, whether a Method A run
+ * must be sampled — derived from the live reactor, never stored, so a method
+ * flip auto-readjusts. Reactor ids absent from the table are simply omitted;
+ * the caller defaults a missing run conservatively to Method A.
+ */
+export async function getSamplingMethodsByReactorIds(
+  userId: string,
+  reactorIds: string[]
+): Promise<Map<string, "method_a" | "method_b">> {
+  requireAuth(userId);
+
+  if (reactorIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      id: reactors.id,
+      samplingMethod: reactors.samplingMethod,
+    })
+    .from(reactors)
+    .where(inArray(reactors.id, reactorIds));
+
+  return new Map(rows.map((r) => [r.id, r.samplingMethod]));
 }
 
 /**

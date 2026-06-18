@@ -189,9 +189,10 @@ export function aggregateProductionRuns(
     if (run.biocharDryMassKg == null) {
       warnings.push(`Run ${run.code}: missing biocharDryMassKg`);
     }
-    if (run.samples.length === 0) {
-      warnings.push(`Run ${run.code}: no samples`);
-    }
+    // NOTE: a method-blind "no samples" warning used to live here, but it would
+    // wrongly block a valid Method B unsampled run. Sampling sufficiency is now
+    // judged method-aware by `evaluateDurabilitySubmissionGates` (D3) in
+    // submit-removal.ts; this aggregation stays method-agnostic.
   }
 
   return {
