@@ -144,7 +144,7 @@ export function aggregateTransportLegs(
 // (no attribution map, or run absent from it) defaults to 1.0 — the run is
 // fully attributed. A non-finite value signals corrupt data and fails safe
 // to 0 (the run is excluded) rather than silently counting the whole run.
-function clampFactor(value: number | null | undefined): number {
+export function clampFactor(value: number | null | undefined): number {
   if (value == null) return 1;
   if (!Number.isFinite(value)) return 0;
   return Math.min(1, Math.max(0, value));
