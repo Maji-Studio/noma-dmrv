@@ -232,6 +232,26 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     );
   });
 
+  it("blocks (verbatim) on durability sampling/eligibility gate blockers", () => {
+    const blocker =
+      "Run PR-1 (Method A) has no samples — every Method A run must be sampled before submission (§8.3).";
+    const r = deriveRemovalReadiness(
+      ready({ durabilityGateBlockers: [blocker] }),
+    );
+    expect(r.state).toBe("blocked");
+    expect(r.reasons).toContain(blocker);
+  });
+
+  it("caps durability blockers with a +N more rollup", () => {
+    const blockers = Array.from({ length: 5 }, (_, i) => `Run PR-${i} blocked.`);
+    const r = deriveRemovalReadiness(ready({ durabilityGateBlockers: blockers }));
+    expect(r.state).toBe("blocked");
+    // First three verbatim, then a rollup for the remaining two.
+    expect(r.reasons).toContain("Run PR-0 blocked.");
+    expect(r.reasons).toContain("+2 more sampling/eligibility issue(s)");
+    expect(r.reasons).not.toContain("Run PR-4 blocked.");
+  });
+
   it("accumulates template + transport + no-data reasons together", () => {
     const r = deriveRemovalReadiness(
       ready({
@@ -250,7 +270,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("buildRemovalPreflightChecklist", () => {
-  it("returns the five checks in a stable order", () => {
+  it("returns the six checks in a stable order", () => {
     const checks = buildRemovalPreflightChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
@@ -258,6 +278,7 @@ describe("buildRemovalPreflightChecklist", () => {
       "transport",
       "production",
       "entityReadiness",
+      "durability",
     ]);
   });
 
@@ -367,6 +388,26 @@ describe("buildRemovalPreflightChecklist", () => {
     );
     expect(checkFor(checks, "entityReadiness").status).toBe("skipped");
   });
+
+  it("flags durability sampling/eligibility blockers", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ durabilityGateBlockers: ["Run PR-1 has 2 replicate(s); ≥ 3 required."] }),
+    );
+    expect(checkFor(checks, "durability").status).toBe("unmet");
+    expect(checkFor(checks, "durability").detail).toContain("≥ 3 required");
+  });
+
+  it("skips durability when there is nothing to submit", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ hasSubmittableRuns: false }),
+    );
+    expect(checkFor(checks, "durability").status).toBe("skipped");
+  });
+
+  it("marks durability met for a fully-sampled, eligible removal", () => {
+    const checks = buildRemovalPreflightChecklist(ready());
+    expect(checkFor(checks, "durability").status).toBe("met");
+  });
 });
 
 describe("buildRemovalRequirementsChecklist — wizard facility-level subset", () => {
@@ -379,13 +420,14 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     return found;
   }
 
-  it("surfaces wizard-level keys (never batch-level production/presence)", () => {
+  it("surfaces wizard-level keys (incl. run-level durability not in batch health)", () => {
     const checks = buildRemovalRequirementsChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
       "template",
       "transportUniformity",
       "entityReadiness",
+      "durability",
     ]);
   });
 

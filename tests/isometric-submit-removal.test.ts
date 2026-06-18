@@ -33,6 +33,7 @@ import type {
   ProductionRun,
   Sample,
 } from "@/db/schema";
+import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the system under test so the mocks
@@ -266,10 +267,31 @@ function makeRun(
   } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
 }
 
+// Mirror what `buildRemovalContext` precomputes onto the context — the same
+// pure gate engine, fixture reactor defaulted to Method A — so submitRemoval's
+// fail-closed enforcement reads a faithfully-computed `durabilityGateBlockers`
+// (the field it now blocks on, rather than recomputing inline).
+function durabilityBlockersFor(
+  runs: Array<ProductionRun & { samples: Sample[] }>,
+): string[] {
+  return evaluateDurabilitySubmissionGates(
+    runs.map((run) => ({
+      runId: run.id,
+      runCode: run.code,
+      samplingMethod: "method_a",
+      replicates: run.samples.map((s) => ({
+        hToCOrgRatio: s.hToCOrgRatio,
+        oToCOrgRatio: s.oToCOrgRatio,
+      })),
+    })),
+  ).blockers;
+}
+
 function makeContext(
   biocharMassKg = ORIGINAL_BIOCHAR_MASS_KG,
 ): certifyContext.RemovalSubmissionContext {
   const latest = storedLatest();
+  const runs = [makeRun(biocharMassKg)];
   return {
     facilityId: FACILITY_ID,
     removalId: REMOVAL_ID,
@@ -306,6 +328,7 @@ function makeContext(
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
     productionReadinessGap: null,
+    durabilityGateBlockers: durabilityBlockersFor(runs),
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
@@ -331,7 +354,7 @@ function makeContext(
         warnings: [],
       } as never,
     ],
-    runs: [makeRun(biocharMassKg)],
+    runs,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
     transportLegs: { feedstock: [], biochar: [], sample: [] },
   };
@@ -601,7 +624,14 @@ describe("submitRemoval — happy path", () => {
 
 describe("submitRemoval — durability sampling gates (D3)", () => {
   function contextWithRun(run: ReturnType<typeof makeRun>) {
-    return { ...makeContext(), runs: [run] };
+    // submitRemoval blocks on the precomputed `durabilityGateBlockers` (which
+    // `buildRemovalContext` derives via the same engine), so recompute it for
+    // the overridden run to drive the fail-closed path.
+    return {
+      ...makeContext(),
+      runs: [run],
+      durabilityGateBlockers: durabilityBlockersFor([run]),
+    };
   }
 
   it("blocks a Method A run with no samples before any POST", async () => {

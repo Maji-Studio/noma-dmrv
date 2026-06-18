@@ -26,7 +26,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Flask, Fire, Atom, Scales, Cube, Calculator, Eye, Thermometer, Leaf } from "@phosphor-icons/react/dist/ssr";
+import { Flask, Fire, Atom, Scales, Cube, Calculator, Eye, Thermometer, Leaf, Warning } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -35,6 +35,10 @@ import {
   calculateHToCOrgRatio,
   type SampleFormData,
 } from "@/schemas/samples";
+import {
+  H_TO_C_ORG_ELIGIBILITY_MAX,
+  O_TO_C_ORG_ELIGIBILITY_MAX,
+} from "@/lib/calculations/biochar-eligibility";
 import type { SampleWithRelations } from "@/data-access/samples";
 
 // ============================================
@@ -188,6 +192,28 @@ export function SampleForm({
     watchedHydrogenPercent as number | null,
     watchedOrganicCarbonPercent as number | null
   );
+
+  // Biochar eligibility advisory (module §3 Table 2): a replicate that breaches
+  // the H/C_org < 0.5 or O/C_org < 0.2 ceiling. Per D8 eligibility is judged on
+  // the run's replicate MEAN, so this is a non-blocking flag (an outlier worth
+  // reviewing), not a form error — a run failing on its mean is blocked at
+  // submission by the durability gates.
+  const watchedOToCOrgRatio = watch("oToCOrgRatio") as number | null | undefined;
+  const eligibilityBreaches: string[] = [];
+  if (calculatedHToCRatio != null && calculatedHToCRatio >= H_TO_C_ORG_ELIGIBILITY_MAX) {
+    eligibilityBreaches.push(
+      `H/C_org ${calculatedHToCRatio.toFixed(3)} ≥ ${H_TO_C_ORG_ELIGIBILITY_MAX}`,
+    );
+  }
+  if (
+    typeof watchedOToCOrgRatio === "number" &&
+    Number.isFinite(watchedOToCOrgRatio) &&
+    watchedOToCOrgRatio >= O_TO_C_ORG_ELIGIBILITY_MAX
+  ) {
+    eligibilityBreaches.push(
+      `O/C_org ${watchedOToCOrgRatio.toFixed(3)} ≥ ${O_TO_C_ORG_ELIGIBILITY_MAX}`,
+    );
+  }
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
@@ -693,6 +719,29 @@ export function SampleForm({
                   />
                 </FormField>
               </div>
+
+              {eligibilityBreaches.length > 0 && (
+                <div
+                  role="status"
+                  className="flex items-start gap-8 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] p-12"
+                >
+                  <Warning
+                    size={16}
+                    weight="fill"
+                    aria-hidden
+                    className="mt-1 shrink-0 text-[var(--color-signal-orange)]"
+                  />
+                  <p className="body-caption text-[var(--color-text-secondary)]">
+                    This replicate exceeds the biochar eligibility ceiling (
+                    {eligibilityBreaches.join("; ")}). Eligibility is judged on
+                    the production run&apos;s replicate mean (H/C_org &lt;{" "}
+                    {H_TO_C_ORG_ELIGIBILITY_MAX} and O/C_org &lt;{" "}
+                    {O_TO_C_ORG_ELIGIBILITY_MAX}, module §3 Table 2) — review for
+                    an outlier. A run failing on its mean is blocked at
+                    submission.
+                  </p>
+                </div>
+              )}
         </FormSection>
 
         {/* ── 1000-Year Durability (conditional, two flat sibling sections) ── */}

@@ -8,7 +8,7 @@ Feedstock type certification guardrail implementation notes from 2026-06-13 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
 
-## 2026-06-18 (200-year durability submission & sampling-method enforcement — Phases A–E)
+## 2026-06-18 (200-year durability submission & sampling-method enforcement — Phases A–F)
 
 Makes the removal submission carry everything the registry needs to compute the
 200-year durable fraction itself, and turns the biochar sampling-method
@@ -52,6 +52,26 @@ sandbox-gated** — see `docs/open-questions.md`
   coverage-check: the datapoint↔component-input binding and the H/C ×100 unit
   transform. The stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
   entry is left fail-closed until the live wiring replaces it.
+- **UI surfaces — durability made visible (Phase F)** — the Phase A–D
+  engines surfaced on four read-only surfaces, no new domain logic:
+  the reactor list gains a **Sampling Cadence** column + side-sheet section
+  (`src/data-access/reactors.ts` `getRunSamplingByReactorIds` →
+  `deriveSamplingRequirement` evaluated over each reactor's full non-archived
+  run population under its current method; `reactor-list.tsx`); the sample form
+  shows an amber **eligibility advisory** when a replicate's H/C_org ≥ 0.5 or
+  O/C_org ≥ 0.2 (non-blocking — eligibility is judged on the run mean, D8;
+  `sample-form.tsx`); the removal readiness/preflight gains a **durability**
+  check row + blocked-reasons (`readiness{,-facts}.ts`), computed ONCE in
+  `buildDurabilityGateBlockers` (`src/fn/certification/durability-readiness.ts`,
+  extracted to keep `certify-context-core.ts` ≤1000 lines) and carried on
+  `RemovalCertifyContext.durabilityGateBlockers` — `submit-removal.ts` now
+  READS that field instead of recomputing inline, so the hard block and the
+  readiness prediction cannot drift; and the removal carbon breakdown renders a
+  **Durability soil temperature** note (value + "Conservative estimate" badge +
+  method string + subdivide/floor warnings) from
+  `resolveConservativeSoilTemperature` (`removal-breakdown.ts` +
+  `removal-carbon-breakdown.tsx`). Browser-verified against the seeded sandbox
+  project; no console errors.
 
 ## 2026-06-14 (submitted certification artifacts lock upstream source data)
 

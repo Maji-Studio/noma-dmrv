@@ -71,6 +71,13 @@ function fixLinkFor(
         label: "Review transport",
         href: `/deliveries?facility=${facilityId}`,
       };
+    case "durability":
+      // Sampling/eligibility blockers are fixed by adding replicate samples or
+      // correcting chemistry on the offending runs.
+      return {
+        label: "Review samples",
+        href: `/samples?facility=${facilityId}`,
+      };
     case "entityReadiness":
       return null;
   }
