@@ -13,6 +13,13 @@
 export const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
 
 /**
+ * Method B ongoing-sampling cadence: at least 1 sampled production batch per
+ * this many production batches (runs). Biochar Protocol §8.3.1.2 (`G-2W0F-0`) —
+ * `>= 1/10`. Required-sampled-runs is `ceil(totalRuns / cadence)`.
+ */
+export const METHOD_B_SAMPLING_CADENCE_RUNS = 10;
+
+/**
  * Protocol assigned when a facility ↔ registry project mapping is created
  * without an explicit choice. Changeable afterwards in Certification →
  * Settings. One source of truth for the connector UI, the certifier dialog,
