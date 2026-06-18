@@ -53,6 +53,16 @@ vi.mock("@/fn/certification/sources", async () => {
     resolveSourceIdsForRemoval: vi.fn(async () => []),
   };
 });
+// D3 durability gates read each run's reactor sampling method. Default the
+// fixture reactor to Method A; the fixture run carries a fully eligible,
+// ≥3-replicate sample set so the gates pass.
+vi.mock("@/data-access/reactors", () => {
+  return {
+    getSamplingMethodsByReactorIds: vi.fn(
+      async () => new Map([["rct-test-1", "method_a"]]),
+    ),
+  };
+});
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
@@ -221,13 +231,34 @@ function makeRun(
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
     readingsCount: 1,
+    // Three eligible replicates (H/C_org < 0.5, O/C_org < 0.2) so the D3
+    // durability gates pass. organicCarbonPercent stays 80 across replicates so
+    // the weighted carbon datapoint magnitude is unchanged.
     samples: [
       {
         id: "smp-test-1",
         productionRunId: PRODUCTION_RUN_ID,
         organicCarbonPercent: 80,
         hToCOrgRatio: 0.4,
-        oToCOrgRatio: 0.2,
+        oToCOrgRatio: 0.15,
+        ashContentPercent: 5,
+        moistureContentPercent: 10,
+      } as unknown as Sample,
+      {
+        id: "smp-test-2",
+        productionRunId: PRODUCTION_RUN_ID,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.41,
+        oToCOrgRatio: 0.16,
+        ashContentPercent: 5,
+        moistureContentPercent: 10,
+      } as unknown as Sample,
+      {
+        id: "smp-test-3",
+        productionRunId: PRODUCTION_RUN_ID,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.39,
+        oToCOrgRatio: 0.14,
         ashContentPercent: 5,
         moistureContentPercent: 10,
       } as unknown as Sample,

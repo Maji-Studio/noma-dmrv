@@ -10,8 +10,10 @@ import {
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
+import { getSamplingMethodsByReactorIds } from "@/data-access/reactors";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
+import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
 import { logger, type Logger } from "@/lib/log";
 import { z } from "zod";
 import {
@@ -437,6 +439,33 @@ export async function submitRemoval(
   if (baseAgg.warnings.length > 0) {
     throw new SafeError(
       `Removal submission blocked:\n${baseAgg.warnings.join("\n")}`,
+    );
+  }
+
+  // D3 fail-closed durability gates: eligibility (per-run mean H/C_org < 0.5 AND
+  // O/C_org < 0.2), every Method A run sampled, and ≥3 replicates per sampled
+  // run. Method is read live off each run's reactor (D6), so a method flip
+  // auto-readjusts what's required. A missing reactor defaults conservatively to
+  // Method A (requires sampling).
+  const reactorIds = [...new Set(ctx.runs.map((run) => run.reactorId))];
+  const samplingMethodByReactor = await getSamplingMethodsByReactorIds(
+    userId,
+    reactorIds,
+  );
+  const durabilityGates = evaluateDurabilitySubmissionGates(
+    ctx.runs.map((run) => ({
+      runId: run.id,
+      runCode: run.code,
+      samplingMethod: samplingMethodByReactor.get(run.reactorId) ?? "method_a",
+      replicates: run.samples.map((s) => ({
+        hToCOrgRatio: s.hToCOrgRatio,
+        oToCOrgRatio: s.oToCOrgRatio,
+      })),
+    })),
+  );
+  if (!durabilityGates.ok) {
+    throw new SafeError(
+      `Removal submission blocked — sampling & eligibility:\n${durabilityGates.blockers.join("\n")}`,
     );
   }
 
