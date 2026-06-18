@@ -592,3 +592,46 @@ describe("submitRemoval — happy path", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase H — durability gate wiring (D3). Proves the fail-closed gates actually
+// fire through submitRemoval, before any registry POST, not just at the unit
+// layer (durability-submission-gates.test.ts).
+// ---------------------------------------------------------------------------
+
+describe("submitRemoval — durability sampling gates (D3)", () => {
+  function contextWithRun(run: ReturnType<typeof makeRun>) {
+    return { ...makeContext(), runs: [run] };
+  }
+
+  it("blocks a Method A run with no samples before any POST", async () => {
+    const run = { ...makeRun(ORIGINAL_BIOCHAR_MASS_KG), samples: [] };
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      contextWithRun(run),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/sampling & eligibility/i);
+    // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("blocks a sampled run with fewer than 3 replicates", async () => {
+    const full = makeRun(ORIGINAL_BIOCHAR_MASS_KG);
+    const run = { ...full, samples: full.samples.slice(0, 2) };
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      contextWithRun(run),
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/replicate/i);
+    expect(storedRows).toHaveLength(0);
+  });
+});
