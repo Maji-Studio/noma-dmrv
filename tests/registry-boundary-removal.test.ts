@@ -322,6 +322,9 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
+    // buildRemovalContext would precompute; submitRemoval blocks on this field).
+    durabilityGateBlockers: [],
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,
