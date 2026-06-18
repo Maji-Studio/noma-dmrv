@@ -83,6 +83,56 @@ and reason. Bin stock is the consequence of its movements; nothing
 changes stock except a movement.
 _Avoid_: stock change, log entry, audit record.
 
+### Sampling, characterization & durability
+
+**Sample**:
+One lab-analysed **replicate** drawn from a **production run** and
+analysed by an ISO 17025 lab — a record carrying *both* the sampling
+event (code, time, mass) *and* the lab chemistry (organic carbon,
+hydrogen, H/C_org, ash, …). A sampled run carries **≥3 Samples**; their
+mean and standard deviation characterise that run's biochar. The lab's
+certificate of analysis is attached as a `lab_report` **document**, not
+a separate record. "Production sample" and "lab sample" are the same
+thing seen from two ends. _Avoid_: lab sample vs production sample as
+two entities; treating the certificate as its own record; conflating
+with reactor **readings** (telemetry).
+
+**Replicate**:
+The role a **Sample** plays within its **production run**'s set — each
+lab-analysed Sample is one replicate, and a sampled run carries ≥3 so a
+mean, standard deviation and outliers can be derived. "Minimum 3 samples
+per batch" = ≥3 Sample rows on one production run, not 3 sampling events
+and not 3 credit batches. _Avoid_: replicate as anything other than a
+Sample.
+
+**Method A / Method B**:
+The two biochar **sampling-frequency** regimes (Isometric Biochar
+Protocol §8.3.2), declared per **reactor**. The sampling unit is the
+**production run** (a pyrolysis batch) — *not* the **credit batch**,
+which is a monthly roll-up of many runs. *Method A* analyses every
+production run; *Method B* is a reduced cadence (≥1 sample per 10 runs)
+permitted only after a reactor has accumulated a baseline of Method A
+results. These name a *sampling* cadence only — they do **not** name any
+durability or persistence model. _Avoid_: "one sample per credit batch";
+treating Method A/B as durability methods; "representative method".
+
+**Durability tier**:
+The crediting time horizon a biochar batch is certified against.
+Isometric's soil module offers exactly two: *200-year* (modelled from
+the H/C_org ratio and soil temperature) and *1000-year* (from random
+reflectance R₀ and non-reactive carbon). There is **no 100-year option**
+under the Isometric biochar module — 100-year permanence belongs to
+other standards (e.g. Puro / EBC) and to GWP-100, neither of which this
+system credits against. _Avoid_: 100-year durability; permanence period
+as a free-typed value.
+
+**Carbon-rich-substance sequestration**:
+The Isometric removal-template **component** (group `co2-stored`) that
+turns applied biochar into the registry's stored-CO₂e figure. noma feeds
+it from aggregated **Sample** chemistry and applied biochar mass; the
+durable fraction (**durability tier**) scales the result. _Avoid_:
+equating it with noma's local CO₂e estimate; "carbon component".
+
 ### External parties
 
 **Supplier**:
