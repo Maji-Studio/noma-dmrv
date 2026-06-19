@@ -34,10 +34,10 @@ DECLARE
   prior_sample_count integer;
 BEGIN
   IF NEW.sampling_method = 'method_b' THEN
-    SELECT count(s.id)
+    SELECT count(*)
       INTO prior_sample_count
-      FROM production_runs pr
-      LEFT JOIN samples s ON s.production_run_id = pr.id
+      FROM samples s
+      JOIN production_runs pr ON pr.id = s.production_run_id
      WHERE pr.reactor_id = NEW.id
        AND pr.date < CURRENT_DATE;
 

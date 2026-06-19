@@ -32,10 +32,10 @@ export async function getMethodBEligibilityByReactor(
 
   const [priorSampleCountRow] = await db
     .select({
-      sampleCount: count(samples.id).mapWith(Number),
+      sampleCount: count().mapWith(Number),
     })
-    .from(productionRuns)
-    .leftJoin(samples, eq(samples.productionRunId, productionRuns.id))
+    .from(samples)
+    .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(whereClause);
 
   const priorMethodASampleCount = priorSampleCountRow?.sampleCount ?? 0;

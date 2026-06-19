@@ -229,7 +229,7 @@ guard. Pure starter-template residue; the app is facility-scoped.
   `submit-removal.ts` (blueprint selection via `selectSequestrationBlueprintKey`,
   D6), replace the stale `INPUT_MAPPING` entry, then close this entry and record
   the decision in `docs/isometric/changes.md`. Plan:
-  `docs/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`
+  `docs/archive/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`
   (§6 Phase E), ADR 0013.
 
 ### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
@@ -978,7 +978,7 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     year-1/3/5 reviews:** amortization is server-side (ADR 0005 — Isometric owns
     it; noma is the LCA journal, not the publisher), so the cap is enforced
     registry-side. Low code impact; operator-process change; aligns with the
-    in-flight `docs/plans/2026-06-17-remove-project-emissions-journal.md`.
+    in-flight `docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`.
   - **GHGAM 1.1 embodied-emissions LC-stage + staff-travel clarifications:**
     verify the ADR 0005 period-emission category definitions (staff travel is
     one) still match — doc-level.

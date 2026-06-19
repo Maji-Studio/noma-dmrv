@@ -10,7 +10,7 @@
 ## TL;DR
 
 Delete noma's **project-emissions journal** (the LCA-value transcription
-subsystem from [ADR 0005](../adr/0005-period-emissions-as-project-components.md))
+subsystem from [ADR 0005](../../adr/0005-period-emissions-as-project-components.md))
 entirely. **Keep** the one piece that maintains no data and protects
 submission integrity: the scope-conflict guard in the Removal transformer.
 Record the posture flip in a new **ADR 0013** that supersedes 0005.
@@ -156,7 +156,7 @@ Grep for dangling references after deletion:
 ```bash
 grep -rn "projectEmission\|project-emissions\|certifier_project_emissions\|CATEGORY_TO_BLUEPRINT\|PeriodEmissions\|DriftPanel\|isometric-coverage-check" src scripts .github docs
 ```
-Expect zero hits outside ADR 0005 (historical) and ADR 0013 (the new record).
+Expect zero hits outside ADR 0005 (historical) and ADR 0013 (latest record).
 
 ## Suggested skills for the next session
 

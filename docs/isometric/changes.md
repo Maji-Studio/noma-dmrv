@@ -11,7 +11,7 @@ archived in
 ## 2026-06-18 (durability DB-layer guardrails & coverage-check papercut — R2–R4)
 
 Closes the DB-layer defense-in-depth items from
-`docs/plans/2026-06-18-durability-remaining-work-and-followups.md` (R2–R4). The
+`docs/archive/plans/2026-06-18-durability-remaining-work-and-followups.md` (R2–R4). The
 app already enforces these invariants; the migrations make them hold against
 direct SQL too. R1 (live measurement-samples submit) and R5 (project-emissions
 scope) remain operator/sequencing-gated.
@@ -37,17 +37,17 @@ scope) remain operator/sequencing-gated.
 - **R2 — coverage-check `NODE_ENV` papercut** — already shipped in `cedbd29`
   (`scripts/isometric-coverage-check.ts` defaults `NODE_ENV=development`); the
   remaining-work plan was stale on this point. No change needed.
-- **UI — replicate cert tag** — the Production Samples table
-  (`production-sample-table.tsx`) now carries a `CERT n/3` chip against the
-  ≥3-replicate-per-sampled-run minimum (`MINIMUM_REPLICATES_PER_RUN`): green when
-  met, orange below.
+- **UI — replicate cert tag avoided** — the Production Samples table
+  (`production-sample-table.tsx`) explicitly does **not** render a certification
+  replicate chip because those rows are in-process measurements, not the lab
+  `Sample` rows the Certify path reads for the ≥3-replicate gate.
 
 ## 2026-06-18 (200-year durability submission & sampling-method enforcement — Phases A–F)
 
 Makes the removal submission carry everything the registry needs to compute the
 200-year durable fraction itself, and turns the biochar sampling-method
 requirements from captured-but-unenforced policy into real gates. Plan:
-`docs/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`;
+`docs/archive/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`;
 decision record: ADR 0013. **The live measurement-samples submit wiring is
 sandbox-gated** — see `docs/open-questions.md`
 (`isometric/durability-measurement-samples`).
