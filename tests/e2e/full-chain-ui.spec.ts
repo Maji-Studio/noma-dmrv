@@ -611,10 +611,11 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="startDate"]', today);
       await page.fill('input[name="endDate"]', today);
 
-      // Applications auto-match from the date range + facility (no manual
-      // selection), and durability is snapshotted from the facility default
-      // via a hidden input — neither is interactable anymore. The application
-      // created above (dated today) falls inside the range and auto-matches.
+      const firstRunCheckbox = page
+        .locator('[role="dialog"] input[type="checkbox"]')
+        .first();
+      await expect(firstRunCheckbox).toBeEnabled({ timeout: 10000 });
+      await firstRunCheckbox.check();
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);
