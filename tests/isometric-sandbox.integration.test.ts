@@ -20,6 +20,7 @@
  */
 import { config as loadDotenv } from "dotenv";
 import { describe, expect, it } from "vitest";
+import type { TransportLeg } from "@/db/schema";
 
 loadDotenv({ path: ".env.local", override: false });
 
@@ -129,6 +130,175 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
           expect(typeof blueprint.key).toBe("string");
           expect(blueprint.key.length).toBeGreaterThan(0);
         }
+      },
+      TEST_TIMEOUT_MS,
+    );
+  },
+);
+
+// Transport → mass_distance mapping (2026-06-19). Proves the feedstock /
+// biochar / sample transport categories resolve to the
+// `mass_distance_based_ci_emissions` blueprint's `mass_distance` (tonne·km)
+// SCALAR input against the live re-authored template, and that the registry
+// accepts a mass-weighted datapoint built from MULTIPLE legs (the
+// "storage bins pile up" case). There is no LIST-shaped transport blueprint in
+// the catalog, so multi-leg is collapsed to one Σⱼ(distⱼ×massⱼ) scalar.
+function makeTransportLeg(distanceKm: number, loadMassKg: number): TransportLeg {
+  return {
+    id: `tl_${distanceKm}_${loadMassKg}`,
+    entityType: "feedstock",
+    entityId: "ent_integration",
+    originGpsLatitude: null,
+    originGpsLongitude: null,
+    originName: null,
+    destinationGpsLatitude: null,
+    destinationGpsLongitude: null,
+    destinationName: null,
+    distanceKm,
+    distanceSource: null,
+    transportMethodType: "road",
+    vehicleType: null,
+    modelYear: null,
+    loadMassKg,
+    calculationMethodType: "distance_based",
+    isDerived: false,
+    billOfLading: null,
+    weighScaleTicketRef: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as TransportLeg;
+}
+
+describe.skipIf(!SANDBOX_CONFIGURED)(
+  "Isometric sandbox transport mass_distance mapping (2026-06-19)",
+  () => {
+    const PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID as string;
+
+    // The demo project carries several templates; pick the one whose
+    // components actually use `mass_distance_based_ci_emissions` (the
+    // re-authored "Dark Earth Carbon Template"), preferring an explicit
+    // ISOMETRIC_DEMO_TEMPLATE_ID when set. Returns null if none — the
+    // assertions then fail loudly with a clear message.
+    type Template = Awaited<
+      ReturnType<
+        typeof import("@/lib/isometric").listGhgEntryTemplates
+      >
+    >[number];
+    const pickTransportTemplate = (templates: Template[]): Template | null => {
+      const explicit = process.env.ISOMETRIC_DEMO_TEMPLATE_ID;
+      const hasTransport = (t: Template) =>
+        (t.groups ?? []).some((g) =>
+          (g.components ?? []).some(
+            (c) => c.blueprint_key === "mass_distance_based_ci_emissions",
+          ),
+        );
+      if (explicit) {
+        return templates.find((t) => t.id === explicit) ?? null;
+      }
+      return templates.find(hasTransport) ?? null;
+    };
+
+    it(
+      "resolves every transport category to mass_distance (tonne·km) against the live template",
+      async () => {
+        const { listGhgEntryTemplates } = await import("@/lib/isometric");
+        const { lookupInputMapping } = await import(
+          "@/lib/isometric/transformers/datapoint"
+        );
+        const templates = await listGhgEntryTemplates(PROJECT_ID);
+        const template = pickTransportTemplate(templates);
+        expect(
+          template,
+          "a template using mass_distance_based_ci_emissions",
+        ).toBeDefined();
+
+        const transportComponents = (template!.groups ?? []).flatMap((g) =>
+          (g.components ?? [])
+            .filter((c) => c.blueprint_key === "mass_distance_based_ci_emissions")
+            .map((c) => ({ groupKey: g.key, component: c })),
+        );
+        // feedstock + biochar + sample transport all use this blueprint.
+        expect(transportComponents.length).toBeGreaterThanOrEqual(3);
+
+        for (const { groupKey, component } of transportComponents) {
+          const input = component.inputs.find(
+            (i) => i.input_key === "mass_distance",
+          );
+          expect(input, `${groupKey} mass_distance input`).toBeDefined();
+          const mapping = lookupInputMapping(
+            groupKey,
+            "mass_distance_based_ci_emissions",
+            "mass_distance",
+          );
+          expect(mapping, `INPUT_MAPPING for ${groupKey}`).toBeDefined();
+          expect(mapping!.unit).toBe("tonne * km");
+          expect(mapping!.expectedQuantityKind).toBe("mass_distance");
+          expect(mapping!.source).toMatch(/TransportMassDistanceTonneKm$/);
+        }
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "registry accepts a mass-weighted mass_distance datapoint built from multiple legs",
+      async () => {
+        const { listGhgEntryTemplates, listComponentBlueprints, createDatapoint } =
+          await import("@/lib/isometric");
+        const { buildCreateDatapointRequest } = await import(
+          "@/lib/isometric/transformers/datapoint"
+        );
+        const { aggregateTransportMassDistance } = await import(
+          "@/lib/isometric/utils/aggregation"
+        );
+
+        // Two feedstock legs: 60 km × 2 t + 40 km × 3 t = 240 t·km
+        // (mass-weighted, same road factor → exact).
+        const agg = aggregateTransportMassDistance(
+          [makeTransportLeg(60, 2000), makeTransportLeg(40, 3000)],
+          "Feedstock",
+        );
+        expect(agg.warning).toBeNull();
+        expect(agg.massDistanceTonneKm).toBe(240);
+
+        const [templates, blueprints] = await Promise.all([
+          listGhgEntryTemplates(PROJECT_ID),
+          listComponentBlueprints(),
+        ]);
+        const template = pickTransportTemplate(templates);
+        expect(template, "transport template").toBeDefined();
+        const found = (template!.groups ?? [])
+          .flatMap((g) => g.components.map((component) => ({ g, component })))
+          .find(
+            (x) =>
+              x.g.key === "biomass-feedstock-transport" &&
+              x.component.blueprint_key === "mass_distance_based_ci_emissions",
+          );
+        expect(found, "feedstock transport component").toBeDefined();
+        const rtcInput = found!.component.inputs.find(
+          (i) => i.input_key === "mass_distance",
+        )!;
+        const blueprintInput = blueprints
+          .find((b) => b.key === "mass_distance_based_ci_emissions")!
+          .inputs.find((i) => i.input_key === "mass_distance")!;
+
+        const body = buildCreateDatapointRequest({
+          groupKey: "biomass-feedstock-transport",
+          componentBlueprintKey: "mass_distance_based_ci_emissions",
+          rtcInput,
+          blueprintInput,
+          agg: {
+            feedstockTransportMassDistanceTonneKm: agg.massDistanceTonneKm,
+            sourceProductionRunIds: ["integration-run-1", "integration-run-2"],
+          } as never,
+          projectId: PROJECT_ID,
+          supplierRefId: `noma-multileg-it-${Date.now()}`,
+          sourceIds: [],
+        });
+        expect(body.quantity.magnitude).toBe(240);
+        expect(body.quantity.unit).toBe("tonne * km");
+
+        const created = await createDatapoint(body);
+        expect(created.id).toMatch(/^dtp_/);
       },
       TEST_TIMEOUT_MS,
     );
