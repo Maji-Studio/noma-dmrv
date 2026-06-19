@@ -183,24 +183,23 @@ guard. Pure starter-template residue; the app is facility-scoped.
   of `reactors.sampling_method` + its migration-`0052` Method-B trigger
   (migration `0057`). Data model + server-side derivation only.
 - **Deferred (Phases 2–4, plan items 7–15 in
-  `docs/plans/2026-06-19-credit-batch-lab-sampling-compliance.md`):**
+  `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`):**
   re-grain `getMethodBEligibilityByReactor` → `…ByProcess` (counting samples in
   the process since `established_at` — closes the cross-feedstock bug, dormant
   under Method A); move the sampling unit from run to credit batch in
   `sampling-requirements.ts` / `durability-submission-gates.ts`; re-point the
   measurement-sample submission to one `biochar_production_batch` per credit
-  batch; surface the derived feedstock/process in the credit-batch UI; re-grain
-  the reactor-list Method-B/cadence columns.
+  batch; surface the derived feedstock/process in the credit-batch UI; add the
+  process-grain Method-B/cadence operator surface.
 - **Deferred (ADR 0017 — Method-B unlock):** the live baseline counter, the
   μ−σ/√n unsampled estimate, the 6-month borrow pool, 3σ winsorising, the
   super-admin unlock, the Method-B operator UI, and the **process-grain DB
   trigger** that replaces the dropped `0052` reactor trigger. Inert seam
   (`production_processes.method_b_unlocked_at`) is laid.
 - **Why it matters:** DEC runs Method A everywhere today, so none of the above
-  blocks current operation — but the reactor-grain eligibility surface and the
-  isometric compliance docs (`condition-registry.md`, `p0-compliance-checklist.md`
-  P0-03) describe an enforcement model mid-migration. Resolve by removing this
-  entry as each phase lands and recording it in `docs/isometric/changes.md`.
+  blocks current operation — but the legacy reactor-grain submission gates still
+  describe an enforcement model mid-migration. Resolve by removing this entry as
+  each phase lands and recording it in `docs/isometric/changes.md`.
 - **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
   #291 (template-driven remodel) — coordinate so the submission layer isn't
   double-built.

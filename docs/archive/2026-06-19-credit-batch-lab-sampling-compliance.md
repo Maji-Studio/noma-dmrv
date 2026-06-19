@@ -3,7 +3,7 @@
 **Date:** 2026-06-19
 **Decision:** ADR 0016 (refines ADR 0014; this plan is its implementation shape). Submission path per ADR 0013.
 **Branch:** `feat/credit-batch-production-process` (own branch — NOT transport-evidence).
-**Status:** Draft — design locked; not built.
+**Status:** Archived implementation plan. ADR 0016 is the current decision record.
 
 > ⚠️ Isometric rules below are our reading of Biochar Protocol **v1.3 §8.3.1**
 > (https://registry.isometric.com/protocol/biochar/1.3), with the production-process /
@@ -42,7 +42,7 @@ not part of the process boundary). Lab **Samples** attach **per credit batch**. 
   `sampling_method` moved off reactors; `credit_batches.feedstockTypeId` + `productionProcessId`;
   ≤1-month Isometric cap; `samples` → credit batch; ≥3-per-sampled-batch characterisation;
   per-process grouping; per-credit-batch submission datapoint (Method A → every batch sampled).
-- **Deferred to the Method-B-unlock ADR (e.g. 0016):** the 30-sample baseline counter, the
+- **Deferred to the Method-B-unlock ADR (ADR 0017):** the 30-sample baseline counter, the
   μ − σ/√n unsampled estimate, the 6-month borrow-pool, the 3σ winsorising / compliance
   triggers, live per-process eligibility, the super-admin unlock, and the Method-B operator UI
   (surfacing an unsampled batch's estimate provenance + freshness). The conditional-gate seam

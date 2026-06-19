@@ -1,18 +1,16 @@
 /**
  * ReactorList component
  * Main reactor listing with CRUD operations using DataTable
- * Includes stat cards, Method B eligibility, and unified EntitySideSheet
+ * Includes stat cards and unified EntitySideSheet
  */
 "use client";
 
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Lightning, Flask, Plus, CheckCircle, Warning } from "@phosphor-icons/react";
+import { Lightning, Flask, Plus } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { InfoHint } from "@/components/ui/tooltip";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -32,100 +30,7 @@ import {
   type CreateReactorData,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
-import type { SamplingRequirement } from "@/lib/certification/sampling-requirements";
 import type { Reactor } from "@/db/schema";
-
-// ============================================
-// Sampling Cadence Badge (decision D6)
-// ============================================
-
-/**
- * Compact verdict for a reactor's CURRENT-method sampling cadence — how many of
- * its runs are sampled against the method's requirement, plus the ≥3-replicate
- * rule. Green only when the cadence is met AND no sampled run is under-
- * replicated (the same two conditions the submission gate enforces); amber
- * otherwise. A reactor with no runs has nothing to sample yet (neutral).
- */
-function SamplingCadenceBadge({
-  requirement,
-}: {
-  requirement: SamplingRequirement;
-}) {
-  const { totalRuns, sampledRuns, requiredSampledRuns, underReplicatedRunIds } =
-    requirement;
-
-  if (totalRuns === 0) {
-    return (
-      <StatusBadge status="draft" label="No runs" size="small" />
-    );
-  }
-
-  const underReplicated = underReplicatedRunIds.length;
-  const ok = requirement.met && underReplicated === 0;
-  const countLabel = `${sampledRuns}/${requiredSampledRuns}`;
-
-  const detail =
-    requirement.method === "method_a"
-      ? `Method A samples every run: ${sampledRuns} of ${totalRuns} sampled.`
-      : `Method B samples ≥1 per 10 runs: ${sampledRuns} of ${requiredSampledRuns} required (${totalRuns} runs).`;
-  const replicateNote =
-    underReplicated > 0
-      ? ` ${underReplicated} sampled run(s) carry <3 replicates — submission requires ≥3.`
-      : "";
-
-  return (
-    <span className="inline-flex items-center gap-6">
-      <StatusBadge
-        status={ok ? "ready" : "pending"}
-        label={countLabel}
-        size="small"
-        icon={
-          ok ? (
-            <CheckCircle size={14} weight="fill" />
-          ) : (
-            <Warning size={14} weight="fill" />
-          )
-        }
-      />
-      <InfoHint side="top" size={13}>
-        {detail}
-        {replicateNote}
-      </InfoHint>
-    </span>
-  );
-}
-
-// ============================================
-// Method B Eligibility Badge
-// ============================================
-
-function MethodBEligibilityBadge({
-  isEligible,
-  sampleCount,
-  minimumRequired,
-}: {
-  isEligible: boolean;
-  sampleCount: number;
-  minimumRequired: number;
-}) {
-  if (isEligible) {
-    return (
-      <StatusBadge
-        status="ready"
-        label={`Eligible (${sampleCount})`}
-        icon={<CheckCircle size={14} weight="fill" />}
-      />
-    );
-  }
-
-  return (
-    <StatusBadge
-      status="pending"
-      label={`${sampleCount}/${minimumRequired}`}
-      icon={<Warning size={14} weight="fill" />}
-    />
-  );
-}
 
 // ============================================
 // Column Definitions
@@ -166,35 +71,6 @@ function createColumns(
       accessorKey: "reactorType",
       header: "Type",
       cell: ({ row }) => <span>{formatReactorType(row.original.reactorType)}</span>,
-    },
-    {
-      id: "methodBStatus",
-      header: "Method B Status",
-      cell: ({ row }) => (
-        <MethodBEligibilityBadge
-          isEligible={row.original.methodBEligibility?.isEligible ?? false}
-          sampleCount={row.original.methodBEligibility?.priorMethodASampleCount ?? 0}
-          minimumRequired={row.original.methodBEligibility?.minimumMethodASampleCount ?? 30}
-        />
-      ),
-      enableSorting: false,
-    },
-    {
-      id: "samplingCadence",
-      header: () => (
-        <span className="inline-flex items-center gap-4">
-          Sampling Cadence
-          <InfoHint side="top" size={13}>
-            Sampled runs vs. the current method&apos;s requirement (Method A:
-            every run; Method B: ≥1 per 10). Green only when the cadence is met
-            and every sampled run carries ≥3 replicates.
-          </InfoHint>
-        </span>
-      ),
-      cell: ({ row }) => (
-        <SamplingCadenceBadge requirement={row.original.samplingRequirement} />
-      ),
-      enableSorting: false,
     },
     {
       id: "actions",
@@ -318,7 +194,6 @@ export function ReactorList() {
 
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
-  const methodBEligibleCount = reactors.filter((r) => r.methodBEligibility?.isEligible).length;
   const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
 
   if (fetchError) {
@@ -345,7 +220,7 @@ export function ReactorList() {
       <PageHeader
         area="infrastructure"
         title="Reactors"
-        subtitle="Pyrolysis equipment and sampling configuration"
+        subtitle="Pyrolysis equipment and facility capacity"
         actions={
           <Button variant="primary" onClick={openCreate}>
             <Plus size={18} weight="bold" />
@@ -355,19 +230,12 @@ export function ReactorList() {
       />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
           title="Total Reactors"
           value={totalReactors}
           icon={<Lightning size={24} weight="bold" />}
           description="Pyrolysis equipment units"
-          isLoading={isLoading}
-        />
-        <StatCard
-          title="Method B Eligible"
-          value={methodBEligibleCount}
-          icon={<CheckCircle size={24} weight="bold" />}
-          description="Eligible reactors on this page"
           isLoading={isLoading}
         />
         <StatCard
@@ -457,42 +325,6 @@ export function ReactorList() {
             fields: [
               { label: "Facility Name", value: sideSheetEntity.facilityName },
               { label: "Facility Code", value: sideSheetEntity.facilityCode },
-            ],
-          },
-          {
-            title: "Method B Eligibility",
-            fields: [
-              { label: "Status", value: sideSheetEntity.methodBEligibility?.isEligible ? "Eligible" : "Not Eligible" },
-              { label: "Prior Method A Samples", value: (sideSheetEntity.methodBEligibility?.priorMethodASampleCount ?? 0) + " samples" },
-              { label: "Minimum Required", value: (sideSheetEntity.methodBEligibility?.minimumMethodASampleCount ?? 30) + " samples" },
-            ],
-          },
-          {
-            title: "Sampling Cadence",
-            fields: [
-              {
-                label: "Status",
-                value:
-                  sideSheetEntity.samplingRequirement.totalRuns === 0
-                    ? "No production runs yet"
-                    : sideSheetEntity.samplingRequirement.met &&
-                        sideSheetEntity.samplingRequirement.underReplicatedRunIds
-                          .length === 0
-                      ? "Met"
-                      : "Action needed",
-              },
-              {
-                label: "Sampled Runs",
-                value: `${sideSheetEntity.samplingRequirement.sampledRuns} / ${sideSheetEntity.samplingRequirement.requiredSampledRuns} required`,
-              },
-              {
-                label: "Total Runs",
-                value: `${sideSheetEntity.samplingRequirement.totalRuns}`,
-              },
-              {
-                label: "Under-replicated Runs",
-                value: `${sideSheetEntity.samplingRequirement.underReplicatedRunIds.length} (need ≥3 replicates each)`,
-              },
             ],
           },
         ] : undefined}

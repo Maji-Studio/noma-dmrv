@@ -34,10 +34,11 @@ Phase 1 (data model + server-side derivation only; commit `dde0c8e`, PR #294):
   grain. The process-grain trigger ships with the ADR 0017 unlock.
 
 Deferred: Phases 2–4 (live sampling logic, submission mapping, credit-batch UI
-for the derived feedstock, reactor-list re-grain) and all Method-B compute
+for the derived feedstock, process-grain sampling UI) and all Method-B compute
 (ADR 0017). Tracked in `docs/open-questions.md` →
 `certification/credit-batch-sampling-phases`. Decision of record: ADR 0016
-(refines ADR 0014). Plan: `docs/plans/2026-06-19-credit-batch-lab-sampling-compliance.md`.
+(refines ADR 0014). Archived plan:
+`docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`.
 
 ## 2026-06-19 (transport → mass_distance, multi-leg mass-weighting)
 
@@ -161,14 +162,13 @@ sandbox-gated** — see `docs/open-questions.md`
   transform. The stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
   entry is left fail-closed until the live wiring replaces it.
 - **UI surfaces — durability made visible (Phase F)** — the Phase A–D
-  engines surfaced on four read-only surfaces, no new domain logic:
-  the reactor list gains a **Sampling Cadence** column + side-sheet section
-  (`src/data-access/reactors.ts` `getRunSamplingByReactorIds` →
-  `deriveSamplingRequirement` evaluated over each reactor's full non-archived
-  run population under its current method; `reactor-list.tsx`); the sample form
-  shows an amber **eligibility advisory** when a replicate's H/C_org ≥ 0.5 or
-  O/C_org ≥ 0.2 (non-blocking — eligibility is judged on the run mean, D8;
-  `sample-form.tsx`); the removal readiness/preflight gains a **durability**
+  engines surfaced on read-only surfaces, no new domain logic. The reactor-list
+  cadence surface that originally displayed `deriveSamplingRequirement` was
+  removed by ADR 0016 Phase 1 when sampling moved off reactors; process-grain UI
+  returns with ADR 0017. The sample form shows an amber **eligibility advisory**
+  when a replicate's H/C_org ≥ 0.5 or O/C_org ≥ 0.2 (non-blocking —
+  eligibility is judged on the run mean, D8; `sample-form.tsx`); the removal
+  readiness/preflight gains a **durability**
   check row + blocked-reasons (`readiness{,-facts}.ts`), computed ONCE in
   `buildDurabilityGateBlockers` (`src/fn/certification/durability-readiness.ts`,
   extracted to keep `certify-context-core.ts` ≤1000 lines) and carried on

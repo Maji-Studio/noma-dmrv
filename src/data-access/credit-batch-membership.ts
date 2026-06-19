@@ -132,7 +132,9 @@ export async function resolveSingleFeedstockType(
     )
     .where(inArray(productionRunFeedstocks.productionRunId, productionRunIds));
 
-  const typeIds = rows.map((r) => r.feedstockTypeId);
+  const typeIds = rows
+    .map((r) => r.feedstockTypeId)
+    .filter((feedstockTypeId): feedstockTypeId is string => feedstockTypeId != null);
 
   if (typeIds.length === 0) {
     throw new SafeError(
