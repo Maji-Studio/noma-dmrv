@@ -159,6 +159,7 @@ async function seedBatchChain(seededData: SeededChainData) {
     applicationA: crypto.randomUUID(),
     applicationB: crypto.randomUUID(),
     creditBatch: crypto.randomUUID(),
+    productionProcess: crypto.randomUUID(),
     document: crypto.randomUUID(),
     productionSample: crypto.randomUUID(),
   };
@@ -259,11 +260,18 @@ async function seedBatchChain(seededData: SeededChainData) {
         });
       }
 
+      await tx.insert(schema.productionProcesses).values({
+        id: ids.productionProcess,
+        facilityId: seededData.facility.id,
+        feedstockTypeId: seededData.feedstockType.id,
+      });
+
       await tx.insert(schema.creditBatches).values({
         id: ids.creditBatch,
         code: codes.creditBatch,
         facilityId: seededData.facility.id,
         feedstockTypeId: seededData.feedstockType.id,
+        productionProcessId: ids.productionProcess,
         startDate: "2026-03-01",
         endDate: "2026-03-31",
         totalFeedstockMassKg: 1000,

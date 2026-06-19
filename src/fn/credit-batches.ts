@@ -16,7 +16,6 @@ import {
   updateCreditBatch as updateCreditBatchData,
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
-  checkCreditBatchDateOverlap,
   type CreditBatchWithRelations,
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
@@ -173,20 +172,6 @@ export async function createCreditBatchFn(
 
     const validated = createCreditBatchSchema.parse(data);
 
-    // Check for overlapping date ranges within the same facility
-    const overlap = await checkCreditBatchDateOverlap(
-      user.id,
-      validated.facilityId,
-      validated.startDate,
-      validated.endDate,
-    );
-    if (overlap) {
-      return {
-        success: false,
-        error: `Date range overlaps with existing batch ${overlap.code} (${overlap.startDate} – ${overlap.endDate})`,
-      };
-    }
-
     const creditBatch = await withAutoCode(
       "CB",
       creditBatches,
@@ -228,27 +213,6 @@ export async function updateCreditBatchFn(
     const existing = await getCreditBatchById(user.id, creditBatchId);
     if (!existing) {
       return { success: false, error: "Credit batch not found" };
-    }
-
-    // Check for overlapping date ranges if dates are being updated
-    const checkStartDate = updateData.startDate ?? existing.startDate;
-    const checkEndDate = updateData.endDate ?? existing.endDate;
-    const startDateObj = checkStartDate instanceof Date ? checkStartDate : new Date(checkStartDate);
-    const endDateObj = checkEndDate instanceof Date ? checkEndDate : new Date(checkEndDate);
-    const facilityForOverlap = updateData.facilityId ?? existing.facilityId;
-
-    const overlap = await checkCreditBatchDateOverlap(
-      user.id,
-      facilityForOverlap,
-      startDateObj,
-      endDateObj,
-      creditBatchId,
-    );
-    if (overlap) {
-      return {
-        success: false,
-        error: `Date range overlaps with existing batch ${overlap.code} (${overlap.startDate} – ${overlap.endDate})`,
-      };
     }
 
     // Check for duplicate code if code is being updated

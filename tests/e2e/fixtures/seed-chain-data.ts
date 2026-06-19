@@ -234,6 +234,7 @@ export async function seedCreditBatch(
   const { db, pool } = createDbConnection();
   try {
     const id = crypto.randomUUID();
+    const productionProcessId = crypto.randomUUID();
     const code = `${SEEDED_CREDIT_BATCH_CODE_PREFIX}-${testRunId}`;
     const now = new Date();
     const start = now.toISOString().slice(0, 10);
@@ -242,6 +243,12 @@ export async function seedCreditBatch(
     )
       .toISOString()
       .slice(0, 10);
+    await db.insert(schema.productionProcesses).values({
+      id: productionProcessId,
+      facilityId,
+      feedstockTypeId,
+    });
+
     await db.insert(schema.creditBatches).values({
       id,
       code,
@@ -250,6 +257,7 @@ export async function seedCreditBatch(
       // feedstock (NOT NULL). The spec only needs the batch to exist, so any
       // feedstock type on the facility's seeded chain satisfies the column.
       feedstockTypeId,
+      productionProcessId,
       startDate: start,
       endDate: end,
       // Default durabilityOption='200_year' has a CHECK constraint
@@ -310,6 +318,9 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
           .delete(schema.creditBatches)
           .where(eq(schema.creditBatches.facilityId, data.facility.id));
       }
+      await tx
+        .delete(schema.productionProcesses)
+        .where(eq(schema.productionProcesses.facilityId, data.facility.id));
 
       // Find and delete applications linked to facility-scoped deliveries
       const facilityDeliveries = await tx

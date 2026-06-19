@@ -216,6 +216,7 @@ export async function createSampleFn(
         return createSample(user.id, {
           sampleCode,
           productionRunId: validated.productionRunId,
+          creditBatchId: validated.creditBatchId ?? null,
           samplingTime:
             validated.samplingTime instanceof Date
               ? validated.samplingTime
@@ -308,6 +309,7 @@ export async function updateSampleFn(
     const sample = await updateSample(user.id, validated.sampleId, {
       sampleCode: validated.sampleCode,
       productionRunId: validated.productionRunId,
+      creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime
         ? validated.samplingTime instanceof Date
           ? validated.samplingTime
