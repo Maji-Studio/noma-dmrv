@@ -6,7 +6,7 @@ import {
   biocharProducts,
   certifierRemovals,
   certificationSubmissions,
-  creditBatchApplications,
+  creditBatchProductionRuns,
   creditBatches,
   deliveries,
   feedstocks,
@@ -83,25 +83,12 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
     })
     .from(creditBatches)
     .innerJoin(
-      creditBatchApplications,
-      eq(creditBatchApplications.creditBatchId, creditBatches.id),
+      creditBatchProductionRuns,
+      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
     )
     .innerJoin(
-      applications,
-      eq(applications.id, creditBatchApplications.applicationId),
-    )
-    .innerJoin(deliveries, eq(deliveries.id, applications.deliveryId))
-    .leftJoin(orders, eq(orders.id, deliveries.orderId))
-    .leftJoin(
-      biocharProducts,
-      or(
-        eq(biocharProducts.id, deliveries.biocharProductId),
-        eq(biocharProducts.id, orders.biocharProductId),
-      )!,
-    )
-    .leftJoin(
       productionRuns,
-      eq(productionRuns.id, biocharProducts.linkedProductionRunId),
+      eq(productionRuns.id, creditBatchProductionRuns.productionRunId),
     )
     .leftJoin(
       productionRunFeedstocks,
@@ -109,6 +96,19 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
     )
     .leftJoin(feedstocks, eq(feedstocks.id, productionRunFeedstocks.feedstockId))
     .leftJoin(samples, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(
+      biocharProducts,
+      eq(biocharProducts.linkedProductionRunId, productionRuns.id),
+    )
+    .leftJoin(orders, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(
+      deliveries,
+      or(
+        eq(deliveries.biocharProductId, biocharProducts.id),
+        eq(deliveries.orderId, orders.id),
+      )!,
+    )
+    .leftJoin(applications, eq(applications.deliveryId, deliveries.id))
     .innerJoin(
       certifierRemovals,
       eq(certifierRemovals.id, creditBatches.removalId),

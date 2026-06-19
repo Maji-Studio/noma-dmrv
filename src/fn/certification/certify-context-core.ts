@@ -21,6 +21,7 @@ import {
   getCreditBatchById,
   type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
+import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import { getDeliveriesByIds } from "@/data-access/deliveries";
 import { getFeedstocksByIds } from "@/data-access/feedstocks";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
@@ -30,7 +31,6 @@ import {
 } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -40,9 +40,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
-import type { DerivedStatus } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
-import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
   aggregateTransportMassDistance,
   collectTransportEntityIds,
@@ -58,8 +56,6 @@ import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
-  GHG_STATEMENT_ENTITY_TYPE,
-  GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
@@ -69,6 +65,12 @@ import {
 } from "./shared";
 import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
 import { buildDurabilityGateBlockers } from "./durability-readiness";
+import {
+  loadLinkedGhgStatementStatus,
+  type LinkedGhgStatementStatus,
+} from "./linked-ghg-statement-status";
+
+export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 
 // Each removal/batch in a facility-level fan-out rebuilds its own context (a
 // chain of DB queries + registry lookups). Bound how many run at once so a
@@ -111,17 +113,6 @@ export interface MemberCreditBatch {
 }
 
 type DurabilityOption = "200_year" | "1000_year";
-
-// The GHG Statement this removal has been rolled into (if any), with its
-// derived verifier status. Carried separately from the removal's own
-// `latestSubmission` so the bridge can show the statement's status without
-// ever attributing a verifier lifecycle to the removal itself (P1-b). The
-// status is derived server-side (`deriveSubmissionStatus(..., "ghgStatement")`)
-// so the cached UI payload stays a lean value/label, not a submission row.
-export interface LinkedGhgStatementStatus {
-  id: string;
-  status: DerivedStatus;
-}
 
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
@@ -379,10 +370,22 @@ interface RemovalScope {
   memberBatches: {
     id: string;
     code: string;
+    productionRunIds: string[];
     applicationIds: string[];
     durabilityOption: DurabilityOption;
     co2eStoredPreview?: CreditBatchCo2eStoredPreview;
   }[];
+}
+
+async function getApplicationIdsForProductionRuns(
+  userId: string,
+  productionRunIds: string[],
+): Promise<string[]> {
+  const applicationsForRuns = await getApplicationsForRuns(
+    userId,
+    productionRunIds,
+  );
+  return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
 }
 
 // Resolves the removal scope for a credit batch. When the batch is already
@@ -396,6 +399,10 @@ async function resolveScopeForCreditBatch(
   if (!batch) throw new SafeError("Credit batch not found");
 
   if (!batch.removalId) {
+    const applicationIds = await getApplicationIdsForProductionRuns(
+      userId,
+      batch.productionRunIds,
+    );
     return {
       facilityId: batch.facilityId,
       removalId: null,
@@ -404,7 +411,8 @@ async function resolveScopeForCreditBatch(
         {
           id: batch.id,
           code: batch.code,
-          applicationIds: batch.applicationIds,
+          productionRunIds: batch.productionRunIds,
+          applicationIds,
           durabilityOption: batch.durabilityOption,
           co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
         },
@@ -429,18 +437,23 @@ export async function resolveScopeForRemoval(
       const full = options?.skipPreview
         ? await getCreditBatchById(userId, b.id, { skipPreview: true })
         : await getCreditBatchById(userId, b.id);
-      // Fail fast rather than emitting a member batch with empty
-      // applicationIds / missing preview — partial data here silently
-      // understates a removal's scope downstream.
+      // Fail fast rather than emitting a member batch with missing run-derived
+      // applications / preview — partial data here silently understates a
+      // removal's scope downstream.
       if (!full) {
         throw new SafeError(
           `Credit batch ${b.id} in removal ${removalId} could not be loaded`,
         );
       }
+      const applicationIds = await getApplicationIdsForProductionRuns(
+        userId,
+        full.productionRunIds,
+      );
       return {
         id: full.id,
         code: full.code,
-        applicationIds: full.applicationIds,
+        productionRunIds: full.productionRunIds,
+        applicationIds,
         durabilityOption: full.durabilityOption,
         co2eStoredPreview: full.co2eStoredPreview ?? undefined,
       };
@@ -451,35 +464,6 @@ export async function resolveScopeForRemoval(
     removalId,
     removal,
     memberBatches,
-  };
-}
-
-// Resolves the GHG Statement a removal rolls into (via the persisted
-// `ghgStatementId` FK) and derives its verifier status from the statement's
-// own latest submission — the same `metadata.remoteStatus` overlay the GHG
-// Statements list reads. Returns null when the removal isn't grouped or isn't
-// linked to a statement. Kept lean (id + derived status) so it can ride on the
-// cached UI context.
-async function loadLinkedGhgStatementStatus(
-  userId: string,
-  removal: CertifierRemovalRow | null,
-): Promise<LinkedGhgStatementStatus | null> {
-  const ghgStatementId = removal?.ghgStatementId ?? null;
-  if (!ghgStatementId) return null;
-
-  const latest = await getLatestSubmission(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-    localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-    localEntityId: ghgStatementId,
-  });
-  return {
-    id: ghgStatementId,
-    status: deriveSubmissionStatus(
-      latest,
-      latest ? isLockedInFlight(latest) : false,
-      "ghgStatement",
-    ),
   };
 }
 
@@ -675,7 +659,7 @@ export async function buildRemovalContext(
     loadLinkedGhgStatementStatus(userId, scope.removal),
   ]);
 
-  // Walk every member batch's applications into one deduped run union.
+  // Walk every member batch's production-run applications into one deduped run union.
   const applicationIds = Array.from(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );

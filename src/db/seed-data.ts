@@ -1536,22 +1536,19 @@ async function seedDemoData() {
         },
       ]);
 
-      console.log('Creating credit batch application links...');
-      await tx.insert(schema.creditBatchApplications).values([
+      console.log('Creating credit batch production-run membership...');
+      await tx.insert(schema.creditBatchProductionRuns).values([
         {
-          id: ids.creditApp1,
           creditBatchId: ids.creditBatch1,
-          applicationId: ids.application1,
+          productionRunId: ids.productionRun1,
         },
         {
-          id: ids.creditApp2,
           creditBatchId: ids.creditBatch1,
-          applicationId: ids.application2,
+          productionRunId: ids.productionRun2,
         },
         {
-          id: ids.creditApp3,
           creditBatchId: ids.creditBatch1,
-          applicationId: ids.application3,
+          productionRunId: ids.productionRun3,
         },
       ]);
 

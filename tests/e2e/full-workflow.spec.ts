@@ -328,11 +328,10 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       hToCorgRatio: 0.4,
     });
 
-    // 21. Link application to credit batch
-    await tx.insert(schema.creditBatchApplications).values({
-      id: crypto.randomUUID(),
+    // 21. Link production run to credit batch
+    await tx.insert(schema.creditBatchProductionRuns).values({
       creditBatchId: ids.creditBatch,
-      applicationId: ids.application,
+      productionRunId: ids.productionRun,
     });
 
     return {
@@ -373,10 +372,10 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
     await db.transaction(async (tx) => {
       // Delete in reverse order of dependencies
 
-      // Credit batch applications (junction)
+      // Credit batch production-run membership (junction)
       await tx
-        .delete(schema.creditBatchApplications)
-        .where(eq(schema.creditBatchApplications.creditBatchId, data.creditBatch.id));
+        .delete(schema.creditBatchProductionRuns)
+        .where(eq(schema.creditBatchProductionRuns.creditBatchId, data.creditBatch.id));
 
       // Credit batch
       await tx
@@ -677,7 +676,7 @@ test.describe("Full E2E Workflow - Database Operations", () => {
     }
   });
 
-  test("credit batch has linked applications", async () => {
+  test("credit batch has linked production runs", async () => {
     const { db, pool } = createDbConnection();
 
     try {
@@ -690,16 +689,16 @@ test.describe("Full E2E Workflow - Database Operations", () => {
       expect(creditBatch).toBeDefined();
       expect(creditBatch.facilityId).toBe(workflowData.facility.id);
 
-      // Verify application is linked to credit batch
-      const applicationLinks = await db
+      // Verify production run is linked to credit batch
+      const productionRunLinks = await db
         .select()
-        .from(schema.creditBatchApplications)
+        .from(schema.creditBatchProductionRuns)
         .where(
-          eq(schema.creditBatchApplications.creditBatchId, workflowData.creditBatch.id)
+          eq(schema.creditBatchProductionRuns.creditBatchId, workflowData.creditBatch.id)
         );
 
-      expect(applicationLinks.length).toBeGreaterThan(0);
-      expect(applicationLinks[0].applicationId).toBe(workflowData.application.id);
+      expect(productionRunLinks.length).toBeGreaterThan(0);
+      expect(productionRunLinks[0].productionRunId).toBe(workflowData.productionRun.id);
     } finally {
       await pool.end();
     }
