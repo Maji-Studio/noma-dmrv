@@ -8,6 +8,40 @@ Feedstock type certification guardrail implementation notes from 2026-06-13 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
 
+## 2026-06-18 (durability DB-layer guardrails & coverage-check papercut — R2–R4)
+
+Closes the DB-layer defense-in-depth items from
+`docs/plans/2026-06-18-durability-remaining-work-and-followups.md` (R2–R4). The
+app already enforces these invariants; the migrations make them hold against
+direct SQL too. R1 (live measurement-samples submit) and R5 (project-emissions
+scope) remain operator/sequencing-gated.
+
+- **R3 — Method B switch guardrail (P0-03)** — migration `0052` adds a
+  `BEFORE INSERT/UPDATE` trigger on `reactors` rejecting
+  `sampling_method='method_b'` unless the reactor has ≥30 prior Method A samples
+  (counted on its production runs dated before today — mirrors
+  `getMethodBEligibilityByReactor`'s `asOfDate=now()` coercion). The ≥1/10
+  cadence stays at the fail-closed submission gate **by design** (a point-in-time
+  readiness check over in-scope runs, not a single-row invariant a trigger can
+  express without blocking normal run-by-run accumulation). The seed's
+  `R-26-002` reactor was flipped to Method A — seeding Method B without the
+  baseline is the invalid state the trigger (and `createReactor`) forbid.
+- **R4 — 200-year issuance evidence guardrail (P0-06)** — migration `0053` adds
+  a `BEFORE INSERT/UPDATE` trigger on `credit_batches` blocking a `200_year`
+  batch from reaching `verified`/`issued` while any linked application is missing
+  `soil_temperature_c` or `soil_temperature_source`, plus a back-door trigger on
+  `credit_batch_applications` preventing an incomplete application from being
+  linked into an already-`verified/issued` batch. 1000-year batches are excluded
+  (reflectance-based, no soil temperature). Both verified against the seeded DB
+  with rolled-back probe transactions.
+- **R2 — coverage-check `NODE_ENV` papercut** — already shipped in `cedbd29`
+  (`scripts/isometric-coverage-check.ts` defaults `NODE_ENV=development`); the
+  remaining-work plan was stale on this point. No change needed.
+- **UI — replicate cert tag** — the Production Samples table
+  (`production-sample-table.tsx`) now carries a `CERT n/3` chip against the
+  ≥3-replicate-per-sampled-run minimum (`MINIMUM_REPLICATES_PER_RUN`): green when
+  met, orange below.
+
 ## 2026-06-18 (200-year durability submission & sampling-method enforcement — Phases A–F)
 
 Makes the removal submission carry everything the registry needs to compute the

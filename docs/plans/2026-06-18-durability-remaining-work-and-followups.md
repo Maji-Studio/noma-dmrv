@@ -47,24 +47,33 @@ complete until R1 lands.
    computes `F_durable,200` from the submitted datapoints; close the open-questions
    entry; append the decision to `changes.md`.
 
-## R2 — coverage-check script papercut  **[trivial; do alongside R1]**
-`scripts/isometric-coverage-check.ts` doesn't default `NODE_ENV`. Add
-`process.env.NODE_ENV ??= "development"` so the operator's invocation doesn't depend
-on an exported env. (Flagged in the build plan §6 Phase E.)
+## R2 — coverage-check script papercut  ✅ **DONE (already shipped in `cedbd29`)**
+`scripts/isometric-coverage-check.ts` already defaults `NODE_ENV` to
+`development` when unset (an `if (!process.env.NODE_ENV)` block, equivalent to the
+proposed `??=`). No change needed — this plan was stale on the point.
 
-## R3 — P0-03 DB-layer guardrail for Method B  **[defense-in-depth]**
+## R3 — P0-03 DB-layer guardrail for Method B  ✅ **DONE (migration `0052`)**
 App-layer enforcement exists (`validateReactorSamplingMethodFn` 30-sample switch check;
 `deriveSamplingRequirement` cadence engine; `evaluateDurabilitySubmissionGates` fail-
-closed gates). **Missing:** a DB trigger/function so direct SQL that violates the
-30-sample minimum or the ≥1/10 cadence fails at the DB layer. Tracked `in_progress` in
-`p0-compliance-checklist.md`. Coordinate with [[never-edit-applied-migrations]] — new
-migration, never an in-place edit.
+closed gates). **Now added:** migration `0052_method_b_minimum_samples_guard.sql` — a
+`BEFORE INSERT/UPDATE` trigger on `reactors` rejecting `sampling_method='method_b'`
+without ≥30 prior Method A samples (mirrors `getMethodBEligibilityByReactor`). The
+≥1/10 **cadence stays at the fail-closed submission gate by design** — it is a
+point-in-time readiness check over in-scope runs, not a single-row invariant a trigger
+can express without blocking normal run-by-run accumulation; recorded in
+`p0-compliance-checklist.md` (P0-03 → `done`). Seed `R-26-002` flipped to Method A
+(seeding Method B without the baseline is the invalid state the trigger forbids). New
+migration only ([[never-edit-applied-migrations]]).
 
-## R4 — P0-06 DB-layer guardrail for durability completeness  **[defense-in-depth]**
-Removal submission already fail-closes on incomplete durability evidence. **Missing:** a
-`verified`/`issued`-transition DB guardrail ensuring linked applications carry the
-required temperature + source evidence for 200-year batches. Tracked `in_progress` in
-`p0-compliance-checklist.md`.
+## R4 — P0-06 DB-layer guardrail for durability completeness  ✅ **DONE (migration `0053`)**
+Removal submission already fail-closes on incomplete durability evidence. **Now added:**
+migration `0053_durability_evidence_issuance_guard.sql` — a `BEFORE INSERT/UPDATE`
+trigger on `credit_batches` blocking a `200_year` batch from reaching `verified`/`issued`
+while any linked application lacks `soil_temperature_c` or `soil_temperature_source`,
+plus a back-door trigger on `credit_batch_applications` preventing an incomplete
+application from being linked into an already-`verified/issued` batch. 1000-year batches
+are excluded (reflectance-based). Recorded in `p0-compliance-checklist.md`
+(P0-06 → `done`).
 
 ## R5 — ADR-0005 project-emissions scope conflict  **[separate P0; plan exists]**
 The coverage-check surfaced a pre-existing bug: project-establishment emissions declared
