@@ -184,18 +184,11 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="startDate"]', today);
     await page.fill('input[name="endDate"]', today);
 
-    // Select applications (checkbox toggle)
-    // The application checkboxes should be visible - click the first one if available
-    const appCheckboxes = page.locator('input[type="checkbox"]');
-    const checkboxCount = await appCheckboxes.count();
-    if (checkboxCount > 0) {
-      // Click the label/container for the first application to toggle it
-      const firstAppLabel = page
-        .locator("label")
-        .filter({ has: page.locator('input[type="checkbox"]') })
-        .first();
-      await firstAppLabel.click();
-    }
+    const firstRunCheckbox = page
+      .locator('[role="dialog"] input[type="checkbox"]')
+      .first();
+    await expect(firstRunCheckbox).toBeEnabled({ timeout: 10000 });
+    await firstRunCheckbox.check();
 
     // Durability is snapshotted from the facility default and rendered read-only.
 

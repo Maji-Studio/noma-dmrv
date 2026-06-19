@@ -27,6 +27,7 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/data-access/credit-batches");
+vi.mock("@/data-access/credit-batch-production-runs");
 vi.mock("@/data-access/chain-of-custody");
 vi.mock("@/data-access/documents");
 vi.mock("@/data-access/certifier-document-uploads");
@@ -81,6 +82,7 @@ const FACILITY_ID = "33333333-3333-4333-8333-333333333333";
 const APPLICATION_ID = "44444444-4444-4444-8444-444444444444";
 const DELIVERY_ID = "55555555-5555-4555-8555-555555555555";
 const CREDIT_BATCH_ID = "66666666-6666-4666-8666-666666666666";
+const PRODUCTION_RUN_ID = "77777777-7777-4777-8777-777777777777";
 const PROJECT_ID = "prj_TEST";
 const EXISTING_SOURCE_ID = "src_recovered";
 
@@ -99,6 +101,7 @@ const DOCUMENT_FIXTURE = {
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as ledgerDA from "@/data-access/certification";
 import * as creditBatchesDA from "@/data-access/credit-batches";
+import * as creditBatchProductionRunsDA from "@/data-access/credit-batch-production-runs";
 import * as chainDA from "@/data-access/chain-of-custody";
 import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
@@ -125,14 +128,21 @@ beforeEach(() => {
     {
       id: CREDIT_BATCH_ID,
       code: "CB-001",
-      applicationIds: [APPLICATION_ID],
     },
   ] as never);
   vi.mocked(creditBatchesDA.getCreditBatchById).mockResolvedValue({
     id: CREDIT_BATCH_ID,
     code: "CB-001",
-    applicationIds: [APPLICATION_ID],
+    productionRunIds: [PRODUCTION_RUN_ID],
   } as never);
+  vi.mocked(creditBatchProductionRunsDA.getApplicationsForRuns).mockResolvedValue(
+    [
+      {
+        applicationId: APPLICATION_ID,
+        productionRunId: PRODUCTION_RUN_ID,
+      },
+    ],
+  );
   vi.mocked(chainDA.getChainOfCustodyData).mockResolvedValue({
     application: { id: APPLICATION_ID, code: "APP-001" },
     delivery: { id: DELIVERY_ID, code: "DEL-001" },
