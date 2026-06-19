@@ -7,6 +7,10 @@
  * server + DB layers).
  */
 import { describe, expect, it } from "vitest";
+import {
+  getCreditBatchProductionWindowBounds,
+  getCreditBatchProductionWindowIssue,
+} from "@/lib/credit-batch-production-window";
 import { creditBatchFormSchema } from "@/schemas/credit-batches";
 
 const validBase = {
@@ -66,5 +70,15 @@ describe("creditBatchFormSchema — production window", () => {
       );
       expect(issue?.message).toMatch(/at least one production run/i);
     }
+  });
+});
+
+describe("credit batch production window helper", () => {
+  it("normalizes non-padded date strings before comparing and returning bounds", () => {
+    expect(getCreditBatchProductionWindowIssue("2026-6-2", "2026-6-10")).toBeNull();
+    expect(getCreditBatchProductionWindowBounds("2026-6-2", "2026-6-10")).toEqual({
+      startStr: "2026-06-02",
+      endStr: "2026-06-10",
+    });
   });
 });
