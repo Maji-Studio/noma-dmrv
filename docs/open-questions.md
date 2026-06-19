@@ -174,6 +174,33 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
+
+- The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
+  every Removal submit) renders with bundled DM Sans/Mono TTFs read at runtime
+  via a dynamic `process.cwd()` path (`src/lib/certification/evidence-ledger/
+  fonts.ts`). Next's static tracer can't follow a dynamic fs path, so the TTFs
+  are pulled into the serverless bundle by `outputFileTracingIncludes` in
+  `next.config.ts` (broad `"/**"` key, since the submit action bundles under
+  several routes).
+- **Why it matters:** serverless file-tracing can't be exercised locally. If the
+  glob misses, the renderer throws `ENOENT` at submit time — and because ledger
+  generation is best-effort (try/catch in `submitRemoval`), the failure is
+  SILENT: the submit succeeds but no ledger Source is attached. So a wrong trace
+  config looks like "working" until someone notices removals have no ledger.
+- **Local status (2026-06-19):** the dev-runtime render + full
+  generate→store→mirror→`source_ids` flow is **verified in-process** against the
+  seeded sandbox (TTFs load fine via `process.cwd()` under `next dev`; see
+  `docs/isometric/changes.md`). That leaves the remaining risk *narrowed to the
+  serverless file-tracing path specifically* — local dev does not bundle, so the
+  `outputFileTracingIncludes` glob is still unexercised. Entry stays open.
+- **Resolve via:** on the first staging deploy, run a real submit and confirm a
+  `transport_evidence_ledger` document + Source is created (check the removal's
+  sources / the structured log line `generated transport evidence ledger`). If
+  absent, inspect the function bundle for the `.ttf` files and tighten the trace
+  key to the actual submit route(s). Record the outcome in
+  `docs/isometric/changes.md` and remove this entry (S).
+
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
 - **Phase E of the 200-year durability build is built offline but the LIVE
