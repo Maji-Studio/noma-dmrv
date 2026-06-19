@@ -1,9 +1,9 @@
 # A credit batch is a production cohort; member applications are derived
 
 Status: accepted (2026-06-19) — Dark Earth Carbon answered the four domain questions in
-`docs/plans/2026-06-19-credit-batch-production-cohort.md` §5. Resolves the open question in
-#201; supersedes the intent of #113 (closed). Complements ADR 0003 (Removal as submission
-unit) and ADR 0011 (credit-batch-anchored chain of custody).
+`docs/archive/2026-06-19-credit-batch-production-cohort.md` §5. Resolves the open question
+in issue `#201`; supersedes the intent of `#113` (closed). Complements ADR 0003 (Removal as
+submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 
 ## Context
 
