@@ -1096,24 +1096,12 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
 
 ### Certify-removal redesign — TelemetryPanel orphaned, reactor-telemetry submit dark (`certification/telemetry-panel-orphaned`, opened 2026-06-19)
 
-- The 2026-06-04 redesign deleted `components/certification/removal-review/evidence-step.tsx`,
-  which rendered **both** `<SourcesPanel>` and `<TelemetryPanel>`. `SourcesPanel`
-  was re-homed into `removal-detail-sheet.tsx` (transport-leg evidence PR,
-  2026-06-19) so document evidence reaches the registry again. `TelemetryPanel`
-  was intentionally left out to keep that PR scoped to transport-leg evidence.
-  It's still defined (`components/certification/telemetry-panel.tsx`) with intact
-  hooks (`hooks/use-telemetry-submission.ts`), but it's **not barrel-exported and
-  not rendered anywhere** — so the reactor temperature/pressure → Isometric
-  `DataUploadSubmission` path (ADR 0006, Phase 5 Slice A) is unreachable from the
-  UI. Dark, not removed.
-- **Why it matters:** operators can't publish reactor telemetry to the registry
-  from the app. Distinct concern from Sources (numeric sensor stream vs. evidence
-  documents), so it's its own follow-up rather than part of the Sources restore.
-- **Resolve via:** re-home `TelemetryPanel` (the removal-detail sheet alongside
-  `SourcesPanel` is the natural parity choice — its own doc comment already says
-  "Removal detail page"), re-export it from `components/certification/index.ts`,
-  and validate the `POST /file-uploads → PUT → POST /data-upload-submissions`
-  pipeline live on the sandbox before re-surfacing it.
+- `TelemetryPanel` still exists but is not rendered anywhere, so the reactor
+  temperature/pressure -> Isometric `DataUploadSubmission` path remains dark.
+  Archive: [`docs/archive/2026-06-19-telemetry-panel-orphaned.md`](archive/2026-06-19-telemetry-panel-orphaned.md).
+- **Resolve via:** re-home and barrel-export `TelemetryPanel`, then validate the
+  file-upload -> signed PUT -> data-upload-submission pipeline live on the
+  sandbox before re-surfacing it.
 
 ## Audit follow-ups (opened 2026-05-25)
 

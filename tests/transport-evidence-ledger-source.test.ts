@@ -15,7 +15,25 @@ const REMOVAL = "removal-1";
 const BATCH = "batch-1";
 const FACILITY = "facility-1";
 
+const ledgerDbMocks = vi.hoisted(() => {
+  const tx = { execute: vi.fn(async () => ({ rows: [] })) };
+  return {
+    tx,
+    transaction: vi.fn(
+      async (fn: (txArg: typeof tx) => Promise<unknown>) => fn(tx),
+    ),
+  };
+});
+
 // ── Boundary mocks ───────────────────────────────────────────────────────────
+vi.mock("@/db", () => ({
+  db: {
+    transaction: ledgerDbMocks.transaction,
+  },
+}));
+vi.mock("@/lib/certification/submission-lock", () => ({
+  acquireCertificationArtifactLocksSorted: vi.fn(async () => {}),
+}));
 vi.mock("@/fn/certification/certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
@@ -46,9 +64,15 @@ vi.mock("@/fn/certification/sources", () => ({
 }));
 
 const putObject = vi.fn(
-  async (_key: string, _body: Buffer, _contentType: string) => {},
+  async (key: string, body: Buffer, contentType: string) => {
+    void key;
+    void body;
+    void contentType;
+  },
 );
-const deleteObject = vi.fn(async (_key: string) => {});
+const deleteObject = vi.fn(async (key: string) => {
+  void key;
+});
 vi.mock("@/lib/storage", () => ({
   getStorageProvider: vi.fn(() => ({
     name: "local-fs",
@@ -68,6 +92,7 @@ import {
   deleteDocumentUploadByDocument,
 } from "@/data-access/certifier-document-uploads";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
 import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
 
@@ -174,6 +199,17 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
       documentId: "doc-new",
       externalSourceId: "src_new",
     });
+    expect(ledgerDbMocks.transaction).toHaveBeenCalledOnce();
+    expect(acquireCertificationArtifactLocksSorted).toHaveBeenCalledWith(
+      ledgerDbMocks.tx,
+      [
+        {
+          provider: "isometric",
+          localEntityType: "removal",
+          localEntityId: REMOVAL,
+        },
+      ],
+    );
     expect(deleteDocumentRow).not.toHaveBeenCalled();
   });
 
@@ -282,6 +318,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     );
 
     expect(result).toEqual({ status: "skipped", reason: "no-mapping" });
+    expect(ledgerDbMocks.transaction).not.toHaveBeenCalled();
     expect(listDocumentsByKindForRemoval).not.toHaveBeenCalled();
     expect(renderEvidenceLedgerPdf).not.toHaveBeenCalled();
     expect(mirrorDocumentToSourceForUser).not.toHaveBeenCalled();
