@@ -50,7 +50,7 @@ const requiredNumber = z.union([
 export const sampleFormSchema = z
   .object({
     // === Section 1: Sample Info ===
-    // Provenance — which run the replicate was physically drawn from (ADR 0015).
+    // Provenance — which run the replicate was physically drawn from (ADR 0016).
     productionRunId: z.string().min(1, "Please select a production run").uuid("Invalid production run"),
     // The credit batch (protocol production batch) this lab replicate
     // characterises. Optional at create time — a sample may be drawn before its

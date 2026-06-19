@@ -246,7 +246,7 @@ export async function seedCreditBatch(
       id,
       code,
       facilityId,
-      // ADR 0015: a credit batch is the protocol production batch — single
+      // ADR 0016: a credit batch is the protocol production batch — single
       // feedstock (NOT NULL). The spec only needs the batch to exist, so any
       // feedstock type on the facility's seeded chain satisfies the column.
       feedstockTypeId,

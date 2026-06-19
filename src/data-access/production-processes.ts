@@ -2,9 +2,9 @@
  * Production Processes Data Access Layer
  *
  * A production process is the (facility, feedstock) sampling-regime campaign
- * that scopes Method A/B (ADR 0015). It has no dedicated UI in Phase 1 — it is
+ * that scopes Method A/B (ADR 0016). It has no dedicated UI in Phase 1 — it is
  * auto-found-or-created when a credit batch is formed, defaulting to Method A.
- * The Method-B unlock + management surface ship with ADR 0016.
+ * The Method-B unlock + management surface ship with ADR 0017.
  */
 
 import { and, desc, eq } from "drizzle-orm";
@@ -22,7 +22,7 @@ type Executor = DbTransaction | typeof db;
  * create one (Method A). "Current" = the most recently established — a new
  * process (feedstock/condition change, 3σ deviation) is opened by establishing
  * a later one, so the lookup is ordered by `establishedAt` desc. That re-keying
- * and the Method-B compute it feeds are deferred to ADR 0016; today every
+ * and the Method-B compute it feeds are deferred to ADR 0017; today every
  * process is Method A.
  *
  * Accepts an optional executor so it can participate in the credit-batch

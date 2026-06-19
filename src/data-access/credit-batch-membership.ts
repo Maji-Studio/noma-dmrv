@@ -2,7 +2,7 @@
  * Credit Batch Membership Rules
  *
  * The integrity checks a credit batch's production-run membership must satisfy
- * before it is persisted (ADR 0015): the runs exist, belong to the batch's
+ * before it is persisted (ADR 0016): the runs exist, belong to the batch's
  * facility and ≤1-month window, are not already claimed by another batch, and
  * resolve to exactly one feedstock type (a credit batch IS the protocol
  * production batch — one feedstock). Extracted from `credit-batches.ts` to keep
@@ -106,7 +106,7 @@ export async function validateProductionRunIds(
 
 /**
  * Derive the SINGLE feedstock type shared by a set of production runs, resolved
- * through productionRunFeedstocks → feedstocks.feedstockTypeId (ADR 0015: a
+ * through productionRunFeedstocks → feedstocks.feedstockTypeId (ADR 0016: a
  * credit batch is the protocol production batch — one feedstock). Throws loudly
  * if the runs resolve to zero or to more than one feedstock type: a run blending
  * >1 feedstock type, or a cohort mixing feedstocks, is rejected rather than
@@ -141,7 +141,7 @@ export async function resolveSingleFeedstockType(
   }
   if (typeIds.length > 1) {
     throw new SafeError(
-      `A credit batch must be a single feedstock (ADR 0015 — the protocol production batch). ` +
+      `A credit batch must be a single feedstock (ADR 0016 — the protocol production batch). ` +
         `The selected production run(s) span ${typeIds.length} feedstock types; split them into one credit batch per feedstock.`,
     );
   }

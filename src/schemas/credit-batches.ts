@@ -161,7 +161,7 @@ export const creditBatchFormSchema = z
         message: "End date must be after start date",
       });
     }
-    // ADR 0015: a credit batch IS the protocol production batch — at most one
+    // ADR 0016: a credit batch IS the protocol production batch — at most one
     // month of one feedstock under consistent conditions (§8.3.1). This form
     // only creates Isometric credit batches, so the cap always applies here;
     // the certifier-conditional nuance is enforced at the server + DB layers

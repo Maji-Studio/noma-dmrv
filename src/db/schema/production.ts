@@ -153,7 +153,7 @@ export const productionRunReadings = pgTable(
 
 export const samples = pgTable('samples', {
   id: uuid('id').primaryKey().defaultRandom(),
-  // ADR 0015: a lab Sample characterises the CREDIT BATCH (the protocol
+  // ADR 0016: a lab Sample characterises the CREDIT BATCH (the protocol
   // production batch) — its >=3 replicates' mean/std-dev. App-layer FK (no
   // drizzle .references) to avoid a circular schema import with credits.ts,
   // mirroring storageLocations.feedstockTypeId. Nullable until the sample is

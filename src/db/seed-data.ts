@@ -157,7 +157,7 @@ const ids = {
   creditBatch1: demoId(2200),
   creditBatch2: demoId(2201),
 
-  // Production Processes (facility × feedstock sampling-regime campaigns, ADR 0015)
+  // Production Processes (facility × feedstock sampling-regime campaigns, ADR 0016)
   processMoshiWoodchips: demoId(2250),
   processMoshiCoffee: demoId(2251),
 
@@ -1493,10 +1493,10 @@ async function seedDemoData() {
         ])
       );
 
-      // ADR 0015: a production process is the (facility, feedstock) sampling-regime
+      // ADR 0016: a production process is the (facility, feedstock) sampling-regime
       // campaign that scopes Method A/B; each credit batch is a <=1-month protocol
       // production batch slicing exactly one process. Moshi runs two feedstocks, so
-      // two processes — both Method A (the default; Method B is deferred to ADR 0016).
+      // two processes — both Method A (the default; Method B is deferred to ADR 0017).
       console.log('Creating production processes...');
       await tx.insert(schema.productionProcesses).values([
         {
@@ -1513,7 +1513,7 @@ async function seedDemoData() {
         },
       ]);
 
-      // Each batch is single-feedstock (ADR 0015): CB-26-001 is the woodchips
+      // Each batch is single-feedstock (ADR 0016): CB-26-001 is the woodchips
       // production batch (runs PR-26-001 + PR-26-003), CB-26-002 the coffee-husk
       // one (run PR-26-002). Both sit inside the May window of their process.
       console.log('Creating credit batches...');

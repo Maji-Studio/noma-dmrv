@@ -1,7 +1,7 @@
 /**
  * Credit Batch Form Schema Tests (pure — no database)
  *
- * Covers the ADR 0015 ≤1-month production-batch window enforced by the form's
+ * Covers the ADR 0016 ≤1-month production-batch window enforced by the form's
  * superRefine. This form only creates Isometric credit batches, so the cap
  * applies unconditionally here (the certifier-conditional nuance lives at the
  * server + DB layers).
