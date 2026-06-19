@@ -22,6 +22,9 @@ vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/transport-legs");
 vi.mock("@/data-access/documents");
 vi.mock("@/data-access/certifier-document-uploads");
+vi.mock("@/data-access/credit-batch-samples", () => ({
+  getSamplesByCreditBatchIds: vi.fn(),
+}));
 
 // Valid-ish UUIDs (these are passed through, not parsed, but keep them
 // realistic so the fixtures read like production ids).
@@ -43,6 +46,7 @@ const BIOCHAR_DIRECT_DOC_ID = "90000000-0000-4000-8000-000000000003";
 import * as transportLegsDA from "@/data-access/transport-legs";
 import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
+import * as creditBatchSamplesDA from "@/data-access/credit-batch-samples";
 import {
   collectCandidateDocumentIdsForRemoval,
   resolveSourceIdsForRemoval,
@@ -60,12 +64,17 @@ const lineageArgs = {
       feedstocks: [{ id: FEEDSTOCK_ID }],
     },
   ],
-  runs: [{ id: RUN_ID, samples: [{ id: SAMPLE_ID }] }],
   memberBatchIds: [BATCH_ID],
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  // Lab samples now roll up to the credit batch (ADR 0015): the collector
+  // resolves sample ids via `getSamplesByCreditBatchIds`, not `run.samples`.
+  vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue([
+    { id: SAMPLE_ID, creditBatchId: BATCH_ID },
+  ]);
 
   // Legs hang off the biochar product (outbound) and the lab sample. The
   // feedstock leg is auto-derived with no manual upload → return none.

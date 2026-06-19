@@ -21,16 +21,14 @@ import {
   getCreditBatchById,
   type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
-import { getDeliveriesByIds } from "@/data-access/deliveries";
-import { getFeedstocksByIds } from "@/data-access/feedstocks";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   deriveBatchHealth,
   type BatchHealth,
 } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
-import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -64,7 +62,11 @@ import {
   type TransportLegsByCategory,
 } from "./shared";
 import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
-import { buildDurabilityGateBlockers } from "./durability-readiness";
+import {
+  buildEntityReadinessGaps,
+  buildTransportSourceReadinessGaps,
+} from "./certify-readiness-gaps";
+import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import {
   loadLinkedGhgStatementStatus,
@@ -169,6 +171,12 @@ export interface RemovalCertifyContext {
 export interface RemovalSubmissionContext extends RemovalCertifyContext {
   lineages: ChainOfCustodyData[];
   runs: ProductionRunWithSamples[];
+  // The removal's member credit batches with their pooled lab Samples (by
+  // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
+  // (ADR 0015). Drives the durability gates here and the per-batch
+  // measurement-sample submission step (Phase 3). Each batch's `runs` are scoped
+  // to the removal's applied run set so product mass is attribution-correct.
+  batchesWithSamples: CreditBatchWithSamples[];
   // Per-run applied-biochar fraction (linear mass allocation). Passed to
   // `aggregateProductionRuns` so a partially-applied run contributes only
   // its applied share.
@@ -230,118 +238,6 @@ function buildCoverage(
       aggregationWarning: mdWarn(legs.sample, "Sample").warning,
     },
   };
-}
-
-function buildEntityReadinessGaps(
-  runs: ProductionRunWithSamples[],
-  transportLegs: TransportLegsByCategory,
-  requiredTransportCategories: readonly TransportCategory[],
-  runIdsRequiring1000YearDurability: ReadonlySet<string>,
-): string[] {
-  const gaps: string[] = [];
-  const addEntityGaps = (
-    entityLabel: string,
-    readinessGaps: ReturnType<typeof deriveEntityCertifyReadiness>["gaps"],
-  ) => {
-    if (readinessGaps.length === 0) return;
-    gaps.push(
-      `${entityLabel}: ${readinessGaps.map((gap) => gap.label).join(" · ")}`,
-    );
-  };
-
-  for (const run of runs) {
-    addEntityGaps(
-      `Production run ${run.code}`,
-      deriveEntityCertifyReadiness("productionRun", run).gaps,
-    );
-    for (const sample of run.samples) {
-      const durabilityOption: DurabilityOption =
-        runIdsRequiring1000YearDurability.has(run.id)
-          ? "1000_year"
-          : "200_year";
-      addEntityGaps(
-        `Sample ${sample.sampleCode}`,
-        deriveEntityCertifyReadiness("sample", {
-          ...sample,
-          durabilityOption,
-        }).gaps,
-      );
-    }
-  }
-
-  for (const category of requiredTransportCategories) {
-    const legs = transportLegs[category];
-    for (const leg of legs) {
-      addEntityGaps(
-        `${category} transport leg ${leg.id}`,
-        deriveEntityCertifyReadiness("transportLeg", leg).gaps,
-      );
-    }
-  }
-
-  return Array.from(new Set(gaps));
-}
-
-function uniqueIds(ids: (string | null | undefined)[]): string[] {
-  return Array.from(new Set(ids.filter((id): id is string => !!id)));
-}
-
-function formatReadinessGapLabels(
-  entityLabel: string,
-  readinessGaps: ReturnType<typeof deriveEntityCertifyReadiness>["gaps"],
-): string[] {
-  if (readinessGaps.length === 0) return [];
-  return [
-    `${entityLabel}: ${readinessGaps.map((gap) => gap.label).join(" · ")}`,
-  ];
-}
-
-async function buildTransportSourceReadinessGaps(
-  userId: string,
-  lineages: ChainOfCustodyData[],
-  entityIds: ReturnType<typeof collectTransportEntityIds>,
-  requiredTransportCategories: readonly TransportCategory[],
-): Promise<string[]> {
-  const requireFeedstockWeighing =
-    requiredTransportCategories.includes("feedstock");
-  const requireDeliveryWeighing =
-    requiredTransportCategories.includes("biochar");
-  const feedstockIds = requireFeedstockWeighing ? entityIds.feedstockIds : [];
-  const deliveryIds = requireDeliveryWeighing
-    ? uniqueIds(lineages.map((lineage) => lineage.delivery?.id))
-    : [];
-
-  const [feedstockRows, deliveryRows] = await Promise.all([
-    feedstockIds.length > 0
-      ? getFeedstocksByIds(userId, feedstockIds)
-      : Promise.resolve([]),
-    deliveryIds.length > 0
-      ? getDeliveriesByIds(userId, deliveryIds)
-      : Promise.resolve([]),
-  ]);
-
-  const gaps = [
-    ...(feedstockRows ?? []).flatMap((feedstock) =>
-      formatReadinessGapLabels(
-        `Feedstock ${feedstock.code}`,
-        deriveEntityCertifyReadiness("feedstock", {
-          ...feedstock,
-          requiresTruckWeighing: true,
-        }).gaps.filter((gap) => gap.key === "truckWeighing"),
-      ),
-    ),
-    ...(deliveryRows ?? []).flatMap((delivery) =>
-      formatReadinessGapLabels(
-        `Delivery ${delivery.code}`,
-        deriveEntityCertifyReadiness("delivery", {
-          ...delivery,
-          requiresTruckWeighing: true,
-        }).gaps.filter((gap) => gap.key === "truckWeighing"),
-      ),
-    ),
-  ];
-
-  return Array.from(new Set(gaps));
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
@@ -698,6 +594,7 @@ export async function buildRemovalContext(
       isProduction,
       lineages: [],
       runs: [],
+      batchesWithSamples: [],
       attributionByRunId: new Map<string, number>(),
       transportLegs: { feedstock: [], biochar: [], sample: [] },
     };
@@ -749,14 +646,28 @@ export async function buildRemovalContext(
     runs,
   );
 
-  // Durability sampling/eligibility gate (D3) — the same fail-closed result the
-  // submit pipeline blocks on, surfaced for readiness (see the field doc above).
-  const durabilityGateBlockers = await buildDurabilityGateBlockers(userId, runs);
+  // Credit-batch-grained durability data plane (ADR 0015): pool each member
+  // batch's lab Samples, scope runs to the removal's applied set, and run the D3
+  // gates. `durabilityGateBlockers` is the same fail-closed list the submit
+  // pipeline blocks on; the §8.3.1 distribution warning is advisory, so it joins
+  // the non-blocking submission warnings.
+  const {
+    batchesWithSamples,
+    blockers: durabilityGateBlockers,
+    warnings: durabilityWarnings,
+  } = await loadDurabilityBatchData(
+    userId,
+    scope.memberBatches.map((b) => b.id),
+    new Set(runIds),
+  );
 
-  const submissionWarnings = buildSubmissionWarnings({
-    defaultTemplate: facilityFacts.defaultTemplate,
-    runs,
-  });
+  const submissionWarnings = [
+    ...buildSubmissionWarnings({
+      defaultTemplate: facilityFacts.defaultTemplate,
+      runs,
+    }),
+    ...durabilityWarnings,
+  ];
 
   return {
     facilityId: scope.facilityId,
@@ -775,6 +686,7 @@ export async function buildRemovalContext(
     isProduction,
     lineages,
     runs,
+    batchesWithSamples,
     attributionByRunId,
     transportLegs,
   };

@@ -262,22 +262,48 @@ function makeRun(
   } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
 }
 
-// Mirror what `buildRemovalContext` precomputes onto the context — the same
-// pure gate engine, fixture reactor defaulted to Method A — so submitRemoval's
-// fail-closed enforcement reads a faithfully-computed `durabilityGateBlockers`
-// (the field it now blocks on, rather than recomputing inline).
-function durabilityBlockersFor(
+// One credit batch pooling the removal's runs' samples (ADR 0015: the credit
+// batch is the protocol production batch and the sampling unit).
+function makeBatchesWithSamples(
   runs: Array<ProductionRun & { samples: Sample[] }>,
+): certifyContext.RemovalSubmissionContext["batchesWithSamples"] {
+  return [
+    {
+      creditBatchId: CREDIT_BATCH_ID,
+      creditBatchCode: "CB-TEST-001",
+      productionProcessId: null,
+      samplingMethod: "method_a",
+      declaredHToCorgRatio: null,
+      runs: runs.map((r) => ({
+        id: r.id,
+        code: r.code,
+        biocharDryMassKg: r.biocharDryMassKg,
+      })),
+      samples: runs.flatMap((r) => r.samples),
+    },
+  ];
+}
+
+// Mirror what `buildRemovalContext` precomputes onto the context — the same
+// pure gate engine at the credit-batch grain — so submitRemoval's fail-closed
+// enforcement reads a faithfully-computed `durabilityGateBlockers` (the field
+// it now blocks on, rather than recomputing inline).
+function durabilityBlockersFor(
+  batches: certifyContext.RemovalSubmissionContext["batchesWithSamples"],
 ): string[] {
   return evaluateDurabilitySubmissionGates(
-    runs.map((run) => ({
-      runId: run.id,
-      runCode: run.code,
-      reactorId: run.reactorId,
-      samplingMethod: "method_a",
-      replicates: run.samples.map((s) => ({
+    batches.map((batch) => ({
+      creditBatchId: batch.creditBatchId,
+      creditBatchCode: batch.creditBatchCode,
+      productionProcessId: batch.productionProcessId,
+      samplingMethod: batch.samplingMethod,
+      replicates: batch.samples.map((s) => ({
         hToCOrgRatio: s.hToCOrgRatio,
         oToCOrgRatio: s.oToCOrgRatio,
+      })),
+      replicateProvenance: batch.samples.map((s) => ({
+        productionRunId: s.productionRunId ?? null,
+        samplingDay: null,
       })),
     })),
   ).blockers;
@@ -288,6 +314,7 @@ function makeContext(
 ): certifyContext.RemovalSubmissionContext {
   const latest = storedLatest();
   const runs = [makeRun(biocharMassKg)];
+  const batchesWithSamples = makeBatchesWithSamples(runs);
   return {
     facilityId: FACILITY_ID,
     removalId: REMOVAL_ID,
@@ -324,7 +351,7 @@ function makeContext(
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
     productionReadinessGap: null,
-    durabilityGateBlockers: durabilityBlockersFor(runs),
+    durabilityGateBlockers: durabilityBlockersFor(batchesWithSamples),
     submissionWarnings: [],
     runSummary: {
       runCount: 1,
@@ -352,6 +379,7 @@ function makeContext(
       } as never,
     ],
     runs,
+    batchesWithSamples,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
     transportLegs: { feedstock: [], biochar: [], sample: [] },
   };
@@ -624,10 +652,12 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
     // submitRemoval blocks on the precomputed `durabilityGateBlockers` (which
     // `buildRemovalContext` derives via the same engine), so recompute it for
     // the overridden run to drive the fail-closed path.
+    const batchesWithSamples = makeBatchesWithSamples([run]);
     return {
       ...makeContext(),
       runs: [run],
-      durabilityGateBlockers: durabilityBlockersFor([run]),
+      batchesWithSamples,
+      durabilityGateBlockers: durabilityBlockersFor(batchesWithSamples),
     };
   }
 

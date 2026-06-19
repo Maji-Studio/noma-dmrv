@@ -28,6 +28,9 @@ vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/data-access/credit-batches");
 vi.mock("@/data-access/credit-batch-production-runs");
+vi.mock("@/data-access/credit-batch-samples", () => ({
+  getSamplesByCreditBatchIds: vi.fn(),
+}));
 vi.mock("@/data-access/chain-of-custody");
 vi.mock("@/data-access/documents");
 vi.mock("@/data-access/certifier-document-uploads");
@@ -102,6 +105,7 @@ import * as removalsDA from "@/data-access/certifier-removals";
 import * as ledgerDA from "@/data-access/certification";
 import * as creditBatchesDA from "@/data-access/credit-batches";
 import * as creditBatchProductionRunsDA from "@/data-access/credit-batch-production-runs";
+import * as creditBatchSamplesDA from "@/data-access/credit-batch-samples";
 import * as chainDA from "@/data-access/chain-of-custody";
 import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
@@ -135,6 +139,9 @@ beforeEach(() => {
     code: "CB-001",
     productionRunIds: [PRODUCTION_RUN_ID],
   } as never);
+  vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue(
+    [],
+  );
   vi.mocked(creditBatchProductionRunsDA.getApplicationsForRuns).mockResolvedValue(
     [
       {
