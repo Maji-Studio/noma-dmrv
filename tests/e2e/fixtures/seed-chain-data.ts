@@ -270,7 +270,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       // Delete in reverse dependency order
       // First, clean up UI-created entities that reference seeded data
 
-      // Find and delete credit batch applications linked to facility-scoped credit batches
+      // Find and delete credit batch membership linked to facility-scoped credit batches
       const facilityBatches = await tx
         .select({ id: schema.creditBatches.id })
         .from(schema.creditBatches)
@@ -294,10 +294,10 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             )
           );
         await tx
-          .delete(schema.creditBatchApplications)
+          .delete(schema.creditBatchProductionRuns)
           .where(
             inArray(
-              schema.creditBatchApplications.creditBatchId,
+              schema.creditBatchProductionRuns.creditBatchId,
               batchIds
             )
           );

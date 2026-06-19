@@ -28,7 +28,7 @@ import {
   certificationSubmissions,
   certifierGhgStatements,
   certifierRemovals,
-  creditBatchApplications,
+  creditBatchProductionRuns,
   creditBatches,
   customers,
   deliveries,
@@ -225,9 +225,9 @@ async function createLineageFixture(
       })
       .returning({ id: creditBatches.id });
 
-    await tx.insert(creditBatchApplications).values({
+    await tx.insert(creditBatchProductionRuns).values({
       creditBatchId: batch.id,
-      applicationId: application.id,
+      productionRunId: productionRun.id,
     });
 
     if (blockingVia !== "none") {
@@ -275,8 +275,8 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, submissionEntityIds));
     await tx
-      .delete(creditBatchApplications)
-      .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
+      .delete(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.creditBatchId, fixture.batchId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await tx
       .delete(applications)

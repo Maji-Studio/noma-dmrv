@@ -1,8 +1,8 @@
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
-  creditBatchApplications,
+  creditBatchProductionRuns,
   type CreditBatch,
 } from "@/db/schema/credits";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { applications } from "@/db/schema/application";
-import { deliveries } from "@/db/schema/logistics";
+import { productionRuns } from "@/db/schema/production";
 import type {
   CreateCreditBatchData,
   UpdateCreditBatchData,
@@ -21,6 +21,12 @@ import type {
 import { requireAuth } from "./utils";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
 import { getChainOfCustodyData } from "./chain-of-custody";
+import {
+  getApplicationIdsByBatchFromRuns,
+  getApplicationsForRuns,
+  getProductionRunIdsByBatchId,
+} from "./credit-batch-production-runs";
+import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getProductionRunsWithSamples } from "./production-runs";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
 import {
@@ -33,6 +39,9 @@ import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/sub
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 
+export { getApplicationsForRuns } from "./credit-batch-production-runs";
+export type { ApplicationForRun } from "./credit-batch-production-runs";
+
 // ============================================
 // Credit Batch Data Access Layer
 // ============================================
@@ -41,6 +50,8 @@ export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
   applicationCount: number;
   applicationIds: string[];
+  productionRunCount: number;
+  productionRunIds: string[];
   co2eStoredPreview: CreditBatchCo2eStoredPreview | null;
   previewAvailable: boolean;
 }
@@ -74,6 +85,16 @@ export interface CreditBatchCo2eStoredPreview {
   applicationResults: ApplicationCo2eStoredPreview[];
   missingInputs: string[];
   warnings: string[];
+}
+
+export interface CreditBatchProductionRunOption {
+  id: string;
+  code: string;
+  date: string;
+  status: string;
+  biocharDryMassKg: number | null;
+  assignedCreditBatchId: string | null;
+  assignedCreditBatchCode: string | null;
 }
 
 async function getFacilityCertifierWithExecutor(
@@ -312,64 +333,89 @@ async function buildCo2eStoredPreview(
 }
 
 /**
- * Validate that all application IDs exist and belong to the credit batch's facility.
- * Applications link to facility via: application.deliveryId → delivery.facilityId
+ * Validate that all production run IDs exist, belong to the credit batch's
+ * facility and production window, and are not already assigned elsewhere.
  */
-async function validateApplicationIds(
+async function validateProductionRunIds(
   tx: DbTransaction,
-  applicationIds: string[],
+  productionRunIds: string[],
   facilityId: string,
   startDate?: string | Date,
   endDate?: string | Date,
+  excludeCreditBatchId?: string,
 ): Promise<void> {
-  if (applicationIds.length === 0) return;
+  if (productionRunIds.length === 0) return;
 
   // Reject duplicates
-  const unique = new Set(applicationIds);
-  if (unique.size !== applicationIds.length) {
-    throw new SafeError("Duplicate application IDs are not allowed");
+  const uniqueRunIds = new Set(productionRunIds);
+  if (uniqueRunIds.size !== productionRunIds.length) {
+    throw new SafeError("Duplicate production run IDs are not allowed");
   }
 
-  // Fetch applications with their delivery's facilityId and application date
   const rows = await tx
     .select({
-      id: applications.id,
-      deliveryFacilityId: deliveries.facilityId,
-      applicationDate: applications.applicationDate,
+      id: productionRuns.id,
+      code: productionRuns.code,
+      facilityId: productionRuns.facilityId,
+      date: productionRuns.date,
     })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .where(inArray(applications.id, applicationIds));
+    .from(productionRuns)
+    .where(inArray(productionRuns.id, productionRunIds));
 
-  if (rows.length !== applicationIds.length) {
+  if (rows.length !== productionRunIds.length) {
     const found = new Set(rows.map((r) => r.id));
-    const missing = applicationIds.filter((id) => !found.has(id));
-    throw new SafeError(`Application(s) not found: ${missing.join(", ")}`);
+    const missing = productionRunIds.filter((id) => !found.has(id));
+    throw new SafeError(`Production run(s) not found: ${missing.join(", ")}`);
   }
 
-  const crossFacility = rows.filter((r) => r.deliveryFacilityId !== facilityId);
+  const crossFacility = rows.filter((r) => r.facilityId !== facilityId);
   if (crossFacility.length > 0) {
     throw new SafeError(
-      `Application(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
+      `Production run(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
     );
   }
 
-  // Validate application dates fall within the credit batch date window
   if (startDate != null && endDate != null) {
-    const startStr = typeof startDate === "string" ? startDate : formatUtcDate(startDate);
-    const endStr = typeof endDate === "string" ? endDate : formatUtcDate(endDate);
-
+    const { startStr, endStr } = assertCreditBatchProductionWindow(
+      startDate,
+      endDate,
+    );
     const outsideWindow = rows.filter((r) => {
-      if (!r.applicationDate) return true;
-      const appDateStr = formatUtcDate(r.applicationDate);
-      return appDateStr < startStr || appDateStr > endStr;
+      return r.date < startStr || r.date > endStr;
     });
 
     if (outsideWindow.length > 0) {
       throw new SafeError(
-        `Application(s) fall outside the credit batch date window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
+        `Production run(s) fall outside the credit batch production window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
       );
     }
+  }
+
+  const assignmentConditions = [
+    inArray(creditBatchProductionRuns.productionRunId, productionRunIds),
+  ];
+  if (excludeCreditBatchId) {
+    assignmentConditions.push(
+      sql`${creditBatchProductionRuns.creditBatchId} != ${excludeCreditBatchId}`,
+    );
+  }
+
+  const existingAssignments = await tx
+    .select({
+      productionRunId: creditBatchProductionRuns.productionRunId,
+      creditBatchCode: creditBatches.code,
+    })
+    .from(creditBatchProductionRuns)
+    .innerJoin(
+      creditBatches,
+      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+    )
+    .where(and(...assignmentConditions));
+
+  if (existingAssignments.length > 0) {
+    throw new SafeError(
+      `Production run(s) already assigned to credit batches: ${existingAssignments.map((row) => `${row.productionRunId} (${row.creditBatchCode})`).join(", ")}`,
+    );
   }
 }
 
@@ -393,40 +439,28 @@ export async function getCreditBatches(
     .where(and(eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)))
     .orderBy(desc(creditBatches.createdAt));
 
-  // Get application counts and IDs for each batch
   const batchIds = batches.map((b) => b.creditBatch.id);
 
   if (batchIds.length === 0) {
     return [];
   }
 
-  const applicationData = await db
-    .select({
-      creditBatchId: creditBatchApplications.creditBatchId,
-      applicationId: creditBatchApplications.applicationId,
-    })
-    .from(creditBatchApplications)
-    .where(inArray(creditBatchApplications.creditBatchId, batchIds));
-
-  // Group by batch ID
-  const applicationsByBatch = applicationData.reduce(
-    (acc, row) => {
-      if (!acc[row.creditBatchId]) {
-        acc[row.creditBatchId] = [];
-      }
-      acc[row.creditBatchId].push(row.applicationId);
-      return acc;
-    },
-    {} as Record<string, string[]>
+  const productionRunIdsByBatch = await getProductionRunIdsByBatchId(batchIds);
+  const applicationsByBatch = await getApplicationIdsByBatchFromRuns(
+    userId,
+    productionRunIdsByBatch,
   );
 
   return batches.map((b) => {
+    const productionRunIds = productionRunIdsByBatch[b.creditBatch.id] ?? [];
     const applicationIds = applicationsByBatch[b.creditBatch.id] ?? [];
     return {
       ...b.creditBatch,
       facility: b.facilityName ? { name: b.facilityName } : null,
       applicationCount: applicationIds.length,
       applicationIds,
+      productionRunCount: productionRunIds.length,
+      productionRunIds,
       co2eStoredPreview: null,
       previewAvailable: false,
     };
@@ -449,23 +483,10 @@ export async function getCo2eStoredPreviews(
   const allowedIds = batches.map((batch) => batch.id);
   if (allowedIds.length === 0) return {};
 
-  const applicationData = await db
-    .select({
-      creditBatchId: creditBatchApplications.creditBatchId,
-      applicationId: creditBatchApplications.applicationId,
-    })
-    .from(creditBatchApplications)
-    .where(inArray(creditBatchApplications.creditBatchId, allowedIds));
-
-  const applicationsByBatch = applicationData.reduce(
-    (acc, row) => {
-      if (!acc[row.creditBatchId]) {
-        acc[row.creditBatchId] = [];
-      }
-      acc[row.creditBatchId].push(row.applicationId);
-      return acc;
-    },
-    {} as Record<string, string[]>
+  const productionRunIdsByBatch = await getProductionRunIdsByBatchId(allowedIds);
+  const applicationsByBatch = await getApplicationIdsByBatchFromRuns(
+    userId,
+    productionRunIdsByBatch,
   );
 
   const previews = await Promise.all(
@@ -512,18 +533,21 @@ export async function getCreditBatchById(
     return null;
   }
 
-  const applicationData = await db
-    .select({ applicationId: creditBatchApplications.applicationId })
-    .from(creditBatchApplications)
-    .where(eq(creditBatchApplications.creditBatchId, id));
-
-  const applicationIds = applicationData.map((a) => a.applicationId);
+  const productionRunIdsByBatch = await getProductionRunIdsByBatchId([id]);
+  const productionRunIds = productionRunIdsByBatch[id] ?? [];
+  const applicationsByBatch = await getApplicationIdsByBatchFromRuns(
+    userId,
+    productionRunIdsByBatch,
+  );
+  const applicationIds = applicationsByBatch[id] ?? [];
 
   const result = {
     ...batch.creditBatch,
     facility: batch.facilityName ? { name: batch.facilityName } : null,
-    applicationCount: applicationData.length,
+    applicationCount: applicationIds.length,
     applicationIds,
+    productionRunCount: productionRunIds.length,
+    productionRunIds,
     co2eStoredPreview: null,
     previewAvailable: false,
   };
@@ -559,17 +583,18 @@ export async function getCreditBatchByCode(
 }
 
 /**
- * Create a new credit batch with application links
+ * Create a new credit batch with production-run membership.
  */
 export async function createCreditBatch(
   userId: string,
   data: CreateCreditBatchData & { code: string }
 ): Promise<CreditBatchWithRelations> {
   requireAuth(userId);
-  const { applicationIds, ...batchData } = data;
+  const { productionRunIds, ...batchData } = data;
 
   const creditBatch = await db.transaction(async (tx) => {
     const certifier = await resolveCreditBatchCertifier(tx, batchData.facilityId);
+    assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
     // Insert the credit batch
     const [batch] = await tx
@@ -603,13 +628,18 @@ export async function createCreditBatch(
       })
       .returning();
 
-    // Validate and insert application links
-    if (applicationIds && applicationIds.length > 0) {
-      await validateApplicationIds(tx, applicationIds, batchData.facilityId, batchData.startDate, batchData.endDate);
-      await tx.insert(creditBatchApplications).values(
-        applicationIds.map((applicationId) => ({
+    if (productionRunIds && productionRunIds.length > 0) {
+      await validateProductionRunIds(
+        tx,
+        productionRunIds,
+        batchData.facilityId,
+        batchData.startDate,
+        batchData.endDate,
+      );
+      await tx.insert(creditBatchProductionRuns).values(
+        productionRunIds.map((productionRunId) => ({
           creditBatchId: batch.id,
-          applicationId,
+          productionRunId,
         }))
       );
     }
@@ -622,16 +652,27 @@ export async function createCreditBatch(
     .select({ name: facilities.name })
     .from(facilities)
     .where(eq(facilities.id, creditBatch.facilityId));
+  const memberProductionRunIds = productionRunIds ?? [];
+  const applicationIds =
+    memberProductionRunIds.length > 0
+      ? unique(
+          (await getApplicationsForRuns(userId, memberProductionRunIds)).map(
+            (row) => row.applicationId,
+          ),
+        )
+      : [];
 
   return {
     ...creditBatch,
     facility: facility ?? null,
-    applicationCount: applicationIds?.length ?? 0,
-    applicationIds: applicationIds ?? [],
+    applicationCount: applicationIds.length,
+    applicationIds,
+    productionRunCount: memberProductionRunIds.length,
+    productionRunIds: memberProductionRunIds,
     co2eStoredPreview: await buildCo2eStoredPreview(
       userId,
       creditBatch,
-      applicationIds ?? []
+      applicationIds
     ),
     previewAvailable: true,
   };
@@ -646,7 +687,7 @@ export async function updateCreditBatch(
   data: Omit<UpdateCreditBatchData, "creditBatchId">
 ): Promise<CreditBatchWithRelations> {
   requireAuth(userId);
-  const { applicationIds, ...updateFields } = data;
+  const { productionRunIds, ...updateFields } = data;
 
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
@@ -732,9 +773,7 @@ export async function updateCreditBatch(
       ? formatUtcDate(updateFields.endDate)
       : existingBatch.endDate;
 
-    if (effectiveEndDate < effectiveStartDate) {
-      throw new SafeError("End date must be after start date");
-    }
+    assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate);
 
     updateData.certifier = await resolveCreditBatchCertifier(tx, targetFacilityId);
 
@@ -743,33 +782,46 @@ export async function updateCreditBatch(
       .set(updateData)
       .where(eq(creditBatches.id, id));
 
-    if (applicationIds !== undefined) {
-      // Explicit application update: validate new set against target facility
-      if (applicationIds.length > 0) {
-        await validateApplicationIds(tx, applicationIds, targetFacilityId, effectiveStartDate, effectiveEndDate);
+    if (productionRunIds !== undefined) {
+      if (productionRunIds.length > 0) {
+        await validateProductionRunIds(
+          tx,
+          productionRunIds,
+          targetFacilityId,
+          effectiveStartDate,
+          effectiveEndDate,
+          id,
+        );
       }
 
       await tx
-        .delete(creditBatchApplications)
-        .where(eq(creditBatchApplications.creditBatchId, id));
+        .delete(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.creditBatchId, id));
 
-      if (applicationIds.length > 0) {
-        await tx.insert(creditBatchApplications).values(
-          applicationIds.map((applicationId) => ({
+      if (productionRunIds.length > 0) {
+        await tx.insert(creditBatchProductionRuns).values(
+          productionRunIds.map((productionRunId) => ({
             creditBatchId: id,
-            applicationId,
+            productionRunId,
           }))
         );
       }
     } else if (facilityChanged || updateFields.startDate !== undefined || updateFields.endDate !== undefined) {
-      // Facility or dates changed but applicationIds omitted: revalidate existing links
+      // Facility or dates changed but productionRunIds omitted: revalidate existing membership.
       const existingLinks = await tx
-        .select({ applicationId: creditBatchApplications.applicationId })
-        .from(creditBatchApplications)
-        .where(eq(creditBatchApplications.creditBatchId, id));
-      const existingAppIds = existingLinks.map((l) => l.applicationId);
-      if (existingAppIds.length > 0) {
-        await validateApplicationIds(tx, existingAppIds, targetFacilityId, effectiveStartDate, effectiveEndDate);
+        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+        .from(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.creditBatchId, id));
+      const existingRunIds = existingLinks.map((l) => l.productionRunId);
+      if (existingRunIds.length > 0) {
+        await validateProductionRunIds(
+          tx,
+          existingRunIds,
+          targetFacilityId,
+          effectiveStartDate,
+          effectiveEndDate,
+          id,
+        );
       }
     }
   });
@@ -783,7 +835,7 @@ export async function updateCreditBatch(
 }
 
 /**
- * Delete a credit batch and its application links
+ * Delete a credit batch and its production-run membership links.
  */
 export async function deleteCreditBatch(userId: string, id: string): Promise<void> {
   requireAuth(userId);
@@ -802,10 +854,10 @@ export async function deleteCreditBatch(userId: string, id: string): Promise<voi
 
     await assertRemovalAllowsCreditBatchMutation(tx, batch.removalId, "delete");
 
-    // Delete junction table links first, then the credit batch.
+    // Delete membership links first, then the credit batch.
     await tx
-      .delete(creditBatchApplications)
-      .where(eq(creditBatchApplications.creditBatchId, id));
+      .delete(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.creditBatchId, id));
     await tx.delete(creditBatches).where(eq(creditBatches.id, id));
 
     // Drop the removal if this was its last member and it has no history.
@@ -845,6 +897,61 @@ export async function getCreditBatchesByFacilityId(
     .from(creditBatches)
     .where(and(eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)))
     .orderBy(desc(creditBatches.createdAt));
+}
+
+export async function getCreditBatchProductionRunOptions(
+  userId: string,
+  params: {
+    facilityId: string;
+    startDate?: string | Date | null;
+    endDate?: string | Date | null;
+    includeCreditBatchId?: string | null;
+  },
+): Promise<CreditBatchProductionRunOption[]> {
+  requireAuth(userId);
+
+  const conditions = [
+    eq(productionRuns.facilityId, params.facilityId),
+    isNull(productionRuns.archivedAt),
+  ];
+
+  if (params.startDate && params.endDate) {
+    const { startStr, endStr } = assertCreditBatchProductionWindow(
+      params.startDate,
+      params.endDate,
+    );
+    conditions.push(gte(productionRuns.date, startStr), lte(productionRuns.date, endStr));
+  }
+
+  if (params.includeCreditBatchId) {
+    const assignmentScope = or(
+      isNull(creditBatchProductionRuns.creditBatchId),
+      eq(creditBatchProductionRuns.creditBatchId, params.includeCreditBatchId),
+    );
+    if (assignmentScope) conditions.push(assignmentScope);
+  }
+
+  return db
+    .select({
+      id: productionRuns.id,
+      code: productionRuns.code,
+      date: productionRuns.date,
+      status: productionRuns.status,
+      biocharDryMassKg: productionRuns.biocharDryMassKg,
+      assignedCreditBatchId: creditBatchProductionRuns.creditBatchId,
+      assignedCreditBatchCode: creditBatches.code,
+    })
+    .from(productionRuns)
+    .leftJoin(
+      creditBatchProductionRuns,
+      eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
+    )
+    .leftJoin(
+      creditBatches,
+      eq(creditBatches.id, creditBatchProductionRuns.creditBatchId),
+    )
+    .where(and(...conditions))
+    .orderBy(desc(productionRuns.date));
 }
 
 /**

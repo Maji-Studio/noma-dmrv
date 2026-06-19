@@ -48,7 +48,15 @@ export default async function globalTeardown() {
 
       // ─── Junction tables first (no FKs pointing to them) ───
 
-      // credit_batch_applications
+      // credit_batch_production_runs
+      await client.query(`
+        DELETE FROM credit_batch_production_runs
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches WHERE code LIKE 'E2E-%'
+        )
+      `);
+
+      // credit_batch_applications (legacy)
       await client.query(`
         DELETE FROM credit_batch_applications
         WHERE credit_batch_id IN (
@@ -184,6 +192,19 @@ export default async function globalTeardown() {
 
       // ─── Credit batches ───
       // Delete by code prefix AND by facility reference (UI-created batches have auto-generated codes)
+      await client.query(`
+        DELETE FROM credit_batch_production_runs
+        WHERE credit_batch_id IN (
+          SELECT id FROM credit_batches
+          WHERE facility_id IN (
+            SELECT id FROM facilities
+            WHERE code LIKE 'E2E-%'
+               OR name LIKE 'UI %'
+               OR name LIKE 'Chain %'
+               OR name LIKE 'Duplicate Test %'
+          )
+        )
+      `);
       await client.query(`
         DELETE FROM credit_batch_applications
         WHERE credit_batch_id IN (

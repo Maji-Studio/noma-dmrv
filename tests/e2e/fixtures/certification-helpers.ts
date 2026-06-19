@@ -230,7 +230,6 @@ export async function seedGroupedRemovalWithChain(
     delivery: crypto.randomUUID(),
     application: crypto.randomUUID(),
     creditBatch: crypto.randomUUID(),
-    creditBatchApplication: crypto.randomUUID(),
     removal: crypto.randomUUID(),
   };
   const creditBatchCode = `E2E-CB-${testRunId}`;
@@ -325,10 +324,9 @@ export async function seedGroupedRemovalWithChain(
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
         removalId: id.removal,
       });
-      await tx.insert(schema.creditBatchApplications).values({
-        id: id.creditBatchApplication,
+      await tx.insert(schema.creditBatchProductionRuns).values({
         creditBatchId: id.creditBatch,
-        applicationId: id.application,
+        productionRunId: id.productionRun,
       });
     });
   } finally {
@@ -345,9 +343,9 @@ export async function seedGroupedRemovalWithChain(
           // Reverse FK order; certifier_removals must go before the facility
           // teardown (it FKs the facility and cleanupChainData does not sweep it).
           await tx
-            .delete(schema.creditBatchApplications)
+            .delete(schema.creditBatchProductionRuns)
             .where(
-              eq(schema.creditBatchApplications.id, id.creditBatchApplication),
+              eq(schema.creditBatchProductionRuns.creditBatchId, id.creditBatch),
             );
           await tx
             .delete(schema.creditBatches)
@@ -504,7 +502,6 @@ export async function seedUngroupedReadyBatchWithChain(
       crypto.randomUUID(),
     ),
     creditBatch: crypto.randomUUID(),
-    creditBatchApplication: crypto.randomUUID(),
     feedstockTransportLeg: crypto.randomUUID(),
     biocharTransportLeg: crypto.randomUUID(),
     sampleTransportLeg: crypto.randomUUID(),
@@ -675,10 +672,9 @@ export async function seedUngroupedReadyBatchWithChain(
         durabilityOption: "200_year",
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
-      await tx.insert(schema.creditBatchApplications).values({
-        id: id.creditBatchApplication,
+      await tx.insert(schema.creditBatchProductionRuns).values({
         creditBatchId: id.creditBatch,
-        applicationId: id.application,
+        productionRunId: id.productionRun,
       });
     });
   } finally {
@@ -693,9 +689,9 @@ export async function seedUngroupedReadyBatchWithChain(
       try {
         await conn.db.transaction(async (tx) => {
           await tx
-            .delete(schema.creditBatchApplications)
+            .delete(schema.creditBatchProductionRuns)
             .where(
-              eq(schema.creditBatchApplications.id, id.creditBatchApplication),
+              eq(schema.creditBatchProductionRuns.creditBatchId, id.creditBatch),
             );
           await tx
             .delete(schema.creditBatches)

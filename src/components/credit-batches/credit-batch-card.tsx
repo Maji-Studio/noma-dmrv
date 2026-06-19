@@ -154,8 +154,8 @@ export function CreditBatchCard({
               {creditBatch.currency ?? ""}
             </span>
           )}
-          {(creditBatch.applicationCount ?? 0) > 0 && (
-            <span>{creditBatch.applicationCount} applications</span>
+          {(creditBatch.productionRunCount ?? 0) > 0 && (
+            <span>{creditBatch.productionRunCount} production runs</span>
           )}
         </div>
       </div>

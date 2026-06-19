@@ -3,7 +3,7 @@ import {
   getCreditBatchesFn,
   getCreditBatchByIdFn,
   getCo2eStoredPreviewsFn,
-  getCreditBatchApplicationOptionsFn,
+  getCreditBatchProductionRunOptionsFn,
   createCreditBatchFn,
   updateCreditBatchFn,
   deleteCreditBatchFn,
@@ -28,8 +28,20 @@ export const creditBatchKeys = {
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
   previews: (ids: string[]) => [...creditBatchKeys.all, "previews", ids] as const,
-  applicationOptions: (facilityId?: string) =>
-    [...creditBatchKeys.all, "applicationOptions", facilityId] as const,
+  productionRunOptions: (
+    facilityId?: string,
+    startDate?: string,
+    endDate?: string,
+    includeCreditBatchId?: string,
+  ) =>
+    [
+      ...creditBatchKeys.all,
+      "productionRunOptions",
+      facilityId,
+      startDate,
+      endDate,
+      includeCreditBatchId,
+    ] as const,
 };
 
 /**
@@ -88,18 +100,34 @@ export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
   });
 }
 
-export function useCreditBatchApplicationOptions(facilityId?: string) {
+export function useCreditBatchProductionRunOptions(params: {
+  facilityId?: string;
+  startDate?: string;
+  endDate?: string;
+  includeCreditBatchId?: string;
+}) {
+  const { facilityId, startDate, endDate, includeCreditBatchId } = params;
   return useQuery({
-    queryKey: creditBatchKeys.applicationOptions(facilityId),
+    queryKey: creditBatchKeys.productionRunOptions(
+      facilityId,
+      startDate,
+      endDate,
+      includeCreditBatchId,
+    ),
     queryFn: async () => {
-      if (!facilityId) return [];
-      const result = await getCreditBatchApplicationOptionsFn(facilityId);
+      if (!facilityId || !startDate || !endDate) return [];
+      const result = await getCreditBatchProductionRunOptionsFn({
+        facilityId,
+        startDate,
+        endDate,
+        includeCreditBatchId,
+      });
       if (!result.success) {
         throw new Error(result.error);
       }
       return result.data;
     },
-    enabled: !!facilityId,
+    enabled: !!facilityId && !!startDate && !!endDate,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
 }

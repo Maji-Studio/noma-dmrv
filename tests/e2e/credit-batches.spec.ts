@@ -22,7 +22,7 @@ test.describe("Credit Batches Form Schema", () => {
   test("form schema supports all 5 required sections", () => {
     const requiredFormSections = [
       "Overview",
-      "Applications",
+      "Production cohort",
       "Durability",
       "GHG Accounting",
       "Verification",
@@ -53,13 +53,13 @@ test.describe("Credit Batches Form Schema", () => {
     );
   });
 
-  test("credit batches support M:M application relationship", () => {
+  test("credit batches support production-run cohort membership", () => {
     const junctionTable = {
-      name: "credit_batch_applications",
-      columns: ["id", "credit_batch_id", "application_id", "created_at"],
+      name: "credit_batch_production_runs",
+      columns: ["credit_batch_id", "production_run_id", "created_at"],
     };
-    expect(junctionTable.name).toBe("credit_batch_applications");
+    expect(junctionTable.name).toBe("credit_batch_production_runs");
     expect(junctionTable.columns).toContain("credit_batch_id");
-    expect(junctionTable.columns).toContain("application_id");
+    expect(junctionTable.columns).toContain("production_run_id");
   });
 });

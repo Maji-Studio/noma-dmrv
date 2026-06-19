@@ -15,6 +15,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
   selectEntity as selectEntityById,
+  selectFirstCreditBatchProductionRun,
   selectFirstEntity,
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -165,11 +166,11 @@ test.describe("Full Chain UI Smoke Test", () => {
             ...appsByDelivery.map((a) => a.id),
           ]);
 
-          const creditBatchLinks = applicationIds.length
+          const creditBatchLinks = productionRunIds.length
             ? await tx
-                .select({ creditBatchId: schema.creditBatchApplications.creditBatchId })
-                .from(schema.creditBatchApplications)
-                .where(inArray(schema.creditBatchApplications.applicationId, applicationIds))
+                .select({ creditBatchId: schema.creditBatchProductionRuns.creditBatchId })
+                .from(schema.creditBatchProductionRuns)
+                .where(inArray(schema.creditBatchProductionRuns.productionRunId, productionRunIds))
             : [];
           const creditBatchesByFacility = facilityIds.length
             ? await tx
@@ -257,15 +258,18 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.soilTemperatureMeasurements)
               .where(inArray(schema.soilTemperatureMeasurements.applicationId, applicationIds));
+          }
+
+          if (productionRunIds.length) {
             await tx
-              .delete(schema.creditBatchApplications)
-              .where(inArray(schema.creditBatchApplications.applicationId, applicationIds));
+              .delete(schema.creditBatchProductionRuns)
+              .where(inArray(schema.creditBatchProductionRuns.productionRunId, productionRunIds));
           }
 
           if (creditBatchIds.length) {
             await tx
-              .delete(schema.creditBatchApplications)
-              .where(inArray(schema.creditBatchApplications.creditBatchId, creditBatchIds));
+              .delete(schema.creditBatchProductionRuns)
+              .where(inArray(schema.creditBatchProductionRuns.creditBatchId, creditBatchIds));
             await tx
               .delete(schema.creditBatches)
               .where(inArray(schema.creditBatches.id, creditBatchIds));
@@ -608,10 +612,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="startDate"]', today);
       await page.fill('input[name="endDate"]', today);
 
-      // Applications auto-match from the date range + facility (no manual
-      // selection), and durability is snapshotted from the facility default
-      // via a hidden input — neither is interactable anymore. The application
-      // created above (dated today) falls inside the range and auto-matches.
+      await selectFirstCreditBatchProductionRun(page);
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);
