@@ -16,14 +16,14 @@ export function getCreditBatchProductionWindowIssue(
   startDate: string | Date,
   endDate: string | Date,
 ): string | null {
-  const startStr = toDateString(startDate);
-  const endStr = toDateString(endDate);
+  const start = toUtcDateOnly(startDate);
+  const end = toUtcDateOnly(endDate);
 
-  if (endStr < startStr) {
+  if (isAfter(start, end)) {
     return "End date must be after start date";
   }
 
-  if (isAfter(toUtcDateOnly(endDate), addMonths(toUtcDateOnly(startDate), 1))) {
+  if (isAfter(end, addMonths(start, 1))) {
     return `A credit batch may span at most one month (${CREDIT_BATCH_WINDOW_DESCRIPTION}; Isometric production batch, §8.3.1)`;
   }
 
@@ -35,7 +35,7 @@ export function getCreditBatchProductionWindowBounds(
   endDate: string | Date,
 ): { startStr: string; endStr: string } {
   return {
-    startStr: toDateString(startDate),
-    endStr: toDateString(endDate),
+    startStr: formatUtcDate(toUtcDateOnly(startDate)),
+    endStr: formatUtcDate(toUtcDateOnly(endDate)),
   };
 }
