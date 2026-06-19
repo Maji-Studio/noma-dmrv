@@ -174,6 +174,37 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Credit-batch lab-sampling — Phases 2–4 + Method-B unlock deferred (`certification/credit-batch-sampling-phases`, opened 2026-06-19)
+
+- **Phase 1 shipped** (ADR 0015, branch `feat/credit-batch-production-process`,
+  commit `dde0c8e`, PR #294): `production_processes` table, derived
+  `credit_batches.feedstock_type_id` + `production_process_id`, single-feedstock
+  invariant, `samples.credit_batch_id`, the Isometric ≤ 1-month cap, and removal
+  of `reactors.sampling_method` + its migration-`0052` Method-B trigger
+  (migration `0057`). Data model + server-side derivation only.
+- **Deferred (Phases 2–4, plan items 7–15 in
+  `docs/plans/2026-06-19-credit-batch-lab-sampling-compliance.md`):**
+  re-grain `getMethodBEligibilityByReactor` → `…ByProcess` (counting samples in
+  the process since `established_at` — closes the cross-feedstock bug, dormant
+  under Method A); move the sampling unit from run to credit batch in
+  `sampling-requirements.ts` / `durability-submission-gates.ts`; re-point the
+  measurement-sample submission to one `biochar_production_batch` per credit
+  batch; surface the derived feedstock/process in the credit-batch UI; re-grain
+  the reactor-list Method-B/cadence columns.
+- **Deferred (ADR 0016 — Method-B unlock):** the live baseline counter, the
+  μ−σ/√n unsampled estimate, the 6-month borrow pool, 3σ winsorising, the
+  super-admin unlock, the Method-B operator UI, and the **process-grain DB
+  trigger** that replaces the dropped `0052` reactor trigger. Inert seam
+  (`production_processes.method_b_unlocked_at`) is laid.
+- **Why it matters:** DEC runs Method A everywhere today, so none of the above
+  blocks current operation — but the reactor-grain eligibility surface and the
+  isometric compliance docs (`condition-registry.md`, `p0-compliance-checklist.md`
+  P0-03) describe an enforcement model mid-migration. Resolve by removing this
+  entry as each phase lands and recording it in `docs/isometric/changes.md`.
+- **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
+  #291 (template-driven remodel) — coordinate so the submission layer isn't
+  double-built.
+
 ### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
 - The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
