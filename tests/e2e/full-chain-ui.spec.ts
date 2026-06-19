@@ -426,7 +426,6 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="identifier"]', `Chain Reactor ${runId}`);
       await page.selectOption('select[name="reactorType"]', "fixed-bed");
-      await page.selectOption('select[name="samplingMethod"]', "method_a");
       await page.fill('input[name="capacityTph"]', "500");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Reactor")').click();

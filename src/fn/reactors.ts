@@ -16,12 +16,10 @@ import {
   getReactorsByFacility as getReactorsByFacilityData,
   getReactorTypes as getReactorTypesData,
   isReactorCodeAvailable as isReactorCodeAvailableData,
-  getReactorMethodBEligibility as getReactorMethodBEligibilityData,
   updateReactor,
   type PaginatedReactors,
   type ReactorWithRelations,
 } from "@/data-access/reactors";
-import { type MethodBEligibilitySummary } from "@/data-access/isometric";
 import { getUser } from "@/lib/auth/server";
 import {
   createReactorSchema,
@@ -160,31 +158,6 @@ export async function checkReactorCodeFn(
         error instanceof Error
           ? error.message
           : "Failed to check reactor code",
-    };
-  }
-}
-
-/**
- * Get Method B eligibility for a specific reactor
- */
-export async function getReactorMethodBEligibilityFn(
-  reactorId: string
-): Promise<ActionResult<MethodBEligibilitySummary>> {
-  try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-
-    const eligibility = await getReactorMethodBEligibilityData(user.id, reactorId);
-    return { success: true, data: eligibility };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to get Method B eligibility",
     };
   }
 }

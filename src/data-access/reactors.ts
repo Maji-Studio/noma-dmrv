@@ -1,7 +1,6 @@
 /**
  * Reactors Data Access Layer
  * CRUD operations for reactors with auth guards, pagination, and filtering
- * Includes Method B eligibility calculation
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
@@ -9,19 +8,8 @@ import { db } from "@/db";
 import {
   reactors,
   facilities,
-  productionRuns,
-  samples,
   type Reactor,
 } from "@/db/schema";
-import {
-  getMethodBEligibilityByReactor,
-  type MethodBEligibilitySummary,
-} from "@/data-access/isometric";
-import {
-  deriveSamplingRequirement,
-  type RunSampling,
-  type SamplingRequirement,
-} from "@/lib/certification/sampling-requirements";
 import type { ReactorFilterData } from "@/schemas/reactors";
 
 // ============================================
@@ -31,14 +19,6 @@ import type { ReactorFilterData } from "@/schemas/reactors";
 export interface ReactorWithRelations extends Reactor {
   facilityCode: string;
   facilityName: string;
-  methodBEligibility: MethodBEligibilitySummary;
-  /**
-   * The reactor's current-method sampling cadence verdict (decision D6),
-   * derived from `deriveSamplingRequirement` over the reactor's production
-   * runs. Operational readiness — frozen-removal correctness is enforced
-   * separately at submission time (durability gates, Phase C).
-   */
-  samplingRequirement: SamplingRequirement;
 }
 
 export interface PaginatedReactors {
@@ -56,58 +36,10 @@ export interface PaginatedReactors {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 
-// ADR 0016 (Phase 1): the sampling method moved OFF reactors onto production
-// processes, and DEC runs Method A everywhere. The reactor-level readiness
-// surface (methodBEligibility / samplingRequirement) is kept but evaluated at a
-// constant Method-A regime — it stays dormant until Phase 2 re-keys it to the
-// production process (per ADR 0016 / the deferred Method-B unlock, ADR 0017).
-const PHASE1_REACTOR_SAMPLING_METHOD = "method_a" as const;
-
-// ============================================
-// Sampling-requirement helpers (decision D6)
-// ============================================
-
-/**
- * Group each reactor's production runs (with their replicate-sample counts)
- * into the `RunSampling[]` shape the pure `deriveSamplingRequirement` engine
- * consumes. ONE grouped query for the whole reactor set — no per-reactor
- * fan-out. Archived runs are excluded (facility archive cascade). The caller
- * derives the per-method verdict; this only assembles the run population.
- */
-async function getRunSamplingByReactorIds(
-  reactorIds: string[],
-): Promise<Map<string, RunSampling[]>> {
-  const byReactor = new Map<string, RunSampling[]>();
-  if (reactorIds.length === 0) return byReactor;
-
-  const rows = await db
-    .select({
-      reactorId: productionRuns.reactorId,
-      runId: productionRuns.id,
-      runCode: productionRuns.code,
-      sampleCount: count(samples.id).mapWith(Number),
-    })
-    .from(productionRuns)
-    .leftJoin(samples, eq(samples.productionRunId, productionRuns.id))
-    .where(
-      and(
-        inArray(productionRuns.reactorId, reactorIds),
-        isNull(productionRuns.archivedAt),
-      ),
-    )
-    .groupBy(productionRuns.reactorId, productionRuns.id, productionRuns.code);
-
-  for (const row of rows) {
-    const list = byReactor.get(row.reactorId) ?? [];
-    list.push({
-      runId: row.runId,
-      runCode: row.runCode,
-      sampleCount: row.sampleCount,
-    });
-    byReactor.set(row.reactorId, list);
-  }
-  return byReactor;
-}
+// ADR 0016 removed the reactor-level sampling method. This transitional helper
+// exists only for legacy submission gates until ADR 0017 re-keys Method B to
+// production processes.
+const LEGACY_REACTOR_SAMPLING_METHOD = "method_a" as const;
 
 // ============================================
 // Read Operations
@@ -115,7 +47,7 @@ async function getRunSamplingByReactorIds(
 
 /**
  * Get all reactors with pagination and filtering
- * Supports search, facility filter, sampling method filter, sorting, and pagination
+ * Supports search, facility/type filters, sorting, and pagination
  */
 export async function getReactors(
   userId: string,
@@ -201,41 +133,20 @@ export async function getReactors(
     .limit(pageSize)
     .offset(offset);
 
-  // One grouped query for the whole page's sampling-cadence inputs (D6),
-  // alongside the per-reactor Method B eligibility lookups below.
-  const runSamplingByReactor = await getRunSamplingByReactorIds(
-    reactorList.map((r) => r.id),
-  );
-
-  // Get Method B eligibility for each reactor
-  const items: ReactorWithRelations[] = await Promise.all(
-    reactorList.map(async (reactor) => {
-      const methodBEligibility = await getMethodBEligibilityByReactor(userId, {
-        reactorId: reactor.id,
-        asOfDate: new Date().toISOString(),
-      });
-
-      return {
-        id: reactor.id,
-        code: reactor.code,
-        identifier: reactor.identifier,
-        facilityId: reactor.facilityId,
-        reactorType: reactor.reactorType,
-        nominalThroughputTph: reactor.nominalThroughputTph,
-        specifications: reactor.specifications,
-        archivedAt: reactor.archivedAt,
-        createdAt: reactor.createdAt,
-        updatedAt: reactor.updatedAt,
-        facilityCode: reactor.facilityCode ?? "",
-        facilityName: reactor.facilityName ?? "",
-        methodBEligibility,
-        samplingRequirement: deriveSamplingRequirement(
-          PHASE1_REACTOR_SAMPLING_METHOD,
-          runSamplingByReactor.get(reactor.id) ?? [],
-        ),
-      };
-    })
-  );
+  const items: ReactorWithRelations[] = reactorList.map((reactor) => ({
+    id: reactor.id,
+    code: reactor.code,
+    identifier: reactor.identifier,
+    facilityId: reactor.facilityId,
+    reactorType: reactor.reactorType,
+    nominalThroughputTph: reactor.nominalThroughputTph,
+    specifications: reactor.specifications,
+    archivedAt: reactor.archivedAt,
+    createdAt: reactor.createdAt,
+    updatedAt: reactor.updatedAt,
+    facilityCode: reactor.facilityCode ?? "",
+    facilityName: reactor.facilityName ?? "",
+  }));
 
   return {
     items,
@@ -248,7 +159,7 @@ export async function getReactors(
 
 /**
  * Get a single reactor by ID
- * Returns reactor data with facility info and Method B eligibility
+ * Returns reactor data with facility info
  */
 export async function getReactorById(
   userId: string,
@@ -279,13 +190,6 @@ export async function getReactorById(
     throw new SafeError("Reactor not found");
   }
 
-  const methodBEligibility = await getMethodBEligibilityByReactor(userId, {
-    reactorId: reactor.id,
-    asOfDate: new Date().toISOString(),
-  });
-
-  const runSamplingByReactor = await getRunSamplingByReactorIds([reactor.id]);
-
   return {
     id: reactor.id,
     code: reactor.code,
@@ -299,11 +203,6 @@ export async function getReactorById(
     updatedAt: reactor.updatedAt,
     facilityCode: reactor.facilityCode ?? "",
     facilityName: reactor.facilityName ?? "",
-    methodBEligibility,
-    samplingRequirement: deriveSamplingRequirement(
-      PHASE1_REACTOR_SAMPLING_METHOD,
-      runSamplingByReactor.get(reactor.id) ?? [],
-    ),
   };
 }
 
@@ -331,7 +230,7 @@ export async function getSamplingMethodsByReactorIds(
     .from(reactors)
     .where(inArray(reactors.id, reactorIds));
 
-  return new Map(rows.map((r) => [r.id, PHASE1_REACTOR_SAMPLING_METHOD]));
+  return new Map(rows.map((r) => [r.id, LEGACY_REACTOR_SAMPLING_METHOD]));
 }
 
 /**
@@ -562,29 +461,4 @@ export async function getReactorTypes(userId: string): Promise<string[]> {
     .orderBy(asc(reactors.reactorType));
 
   return results.map((r) => r.reactorType);
-}
-
-/**
- * Get Method B eligibility for a specific reactor
- */
-export async function getReactorMethodBEligibility(
-  userId: string,
-  reactorId: string
-): Promise<MethodBEligibilitySummary> {
-  requireAuth(userId);
-
-  // Verify reactor exists
-  const [reactor] = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(eq(reactors.id, reactorId));
-
-  if (!reactor) {
-    throw new SafeError("Reactor not found");
-  }
-
-  return getMethodBEligibilityByReactor(userId, {
-    reactorId,
-    asOfDate: new Date().toISOString(),
-  });
 }

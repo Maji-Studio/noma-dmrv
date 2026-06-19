@@ -160,11 +160,9 @@ Method B requires (enforced once ADR 0017 lands):
 1. At least 30 prior Method-A samples in the process before unlocking `method_b`.
 2. Credit batches in the process must satisfy sampled-batch cadence ≥ 1 per 10.
 
-> **Transitional (Phase 1):** the reactor-grain eligibility *surface*
-> (`getMethodBEligibilityByReactor`, the reactor-list Method-B/cadence columns)
-> is intentionally **kept and still reactor-scoped**; re-graining it to the
-> process/credit-batch grain is Phase 2 (`…ByProcess`). It no longer reads a
-> `reactors.sampling_method` column — it derives from sample counts.
+> **Transitional (Phase 1):** the reactor-list Method-B/cadence surface is
+> removed. The legacy reactor-grain helper remains only behind submission gates
+> until ADR 0017 re-keys Method B to the process/credit-batch grain.
 
 Enforcement is intentionally layered:
 

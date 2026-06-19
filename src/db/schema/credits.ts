@@ -8,6 +8,7 @@ import {
   integer,
   primaryKey,
   check,
+  foreignKey,
   index,
   unique,
 } from 'drizzle-orm/pg-core';
@@ -43,10 +44,9 @@ export const creditBatches = pgTable(
       .references(() => feedstockTypes.id),
     // The (facility, feedstock) sampling-regime campaign this batch is one
     // <=1-month slice of. Auto-found-or-created when the batch is built.
-    // Nullable as a safety valve; app logic always populates it.
-    productionProcessId: uuid('production_process_id').references(
-      () => productionProcesses.id
-    ),
+    productionProcessId: uuid('production_process_id')
+      .notNull()
+      .references(() => productionProcesses.id),
     status: creditBatchStatus('status').default('pending').notNull(),
 
     // --- Overview ---
@@ -139,12 +139,12 @@ export const creditBatches = pgTable(
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
     // ADR 0016: a credit batch is the protocol production batch (< 1 month).
-    // Coarse DB backstop at 31 days, Isometric-conditional; the precise
-    // calendar-month rule lives in the Zod superRefine + server re-validation.
+    // Isometric-conditional DB backstop aligned with the shared calendar-month
+    // predicate used by Zod + server re-validation.
     check(
       'credit_batches_isometric_max_one_month',
       sql`${table.certifier} is distinct from 'isometric'
-        or (${table.endDate} - ${table.startDate}) <= 31`
+        or ${table.endDate} <= (${table.startDate} + interval '1 month')::date`
     ),
     check(
       'credit_batches_total_feedstock_mass_non_negative',
@@ -164,6 +164,19 @@ export const creditBatches = pgTable(
     // removal X" lookups during submission. Postgres does not auto-index
     // foreign keys.
     index('credit_batches_removal_id_idx').on(table.removalId),
+    foreignKey({
+      name: 'credit_batches_process_identity_fk',
+      columns: [
+        table.productionProcessId,
+        table.facilityId,
+        table.feedstockTypeId,
+      ],
+      foreignColumns: [
+        productionProcesses.id,
+        productionProcesses.facilityId,
+        productionProcesses.feedstockTypeId,
+      ],
+    }),
   ]
 );
 
