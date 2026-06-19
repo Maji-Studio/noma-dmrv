@@ -252,6 +252,97 @@ export function resolveConservativeSoilTemperature(
   };
 }
 
+// ── Facility reference soil temperature (ADR 0013 / soil module §5.1.1.3.1) ───
+
+/**
+ * The operator-declared facility-level reference soil temperature submitted to
+ * the registry as the `biochar_soil` measurement for a 200-year removal. Unlike
+ * `resolveConservativeSoilTemperature` (a site-max approximation derived from
+ * per-application values), this is the AUTHORITATIVE annual-average value the
+ * operator sources from an approved global dataset and justifies in the PDD.
+ */
+export interface FacilityReferenceSoilTemperature {
+  /** Declared value, one decimal (pre-floor) — what the operator entered. */
+  declaredSoilTemperatureC: number;
+  /** The value submitted to the registry: declared, 7 °C-floored, one decimal. */
+  effectiveSoilTemperatureC: number;
+  /** Dataset / region citation recorded for the PDD audit trail, or null. */
+  source: string | null;
+  /** True when the declared value was below the 7 °C floor and was raised to it. */
+  temperatureFloored: boolean;
+  /** Short method string recorded alongside the datapoint + shown in the UI. */
+  method: string;
+  /** Floor advisory(s) — non-blocking. */
+  warnings: string[];
+}
+
+/**
+ * Resolve the facility's declared reference soil temperature into the value
+ * submitted to the registry: round to one decimal and apply the 7 °C floor
+ * (§5.1.1.3.1). Returns null when the facility has no declared value — the
+ * caller decides whether that is fail-closed (it is, for a 200-year removal that
+ * has credit batches to submit) or simply "not yet configured".
+ */
+export function resolveFacilityReferenceSoilTemperature(input: {
+  declaredSoilTemperatureC: number | null | undefined;
+  source: string | null | undefined;
+}): FacilityReferenceSoilTemperature | null {
+  if (!isUsableNumber(input.declaredSoilTemperatureC)) return null;
+
+  const declaredSoilTemperatureC = roundSoilTemperatureC(
+    input.declaredSoilTemperatureC,
+  );
+  const temperatureFloored =
+    input.declaredSoilTemperatureC < SOIL_TEMPERATURE_FLOOR_C;
+  const effectiveSoilTemperatureC = temperatureFloored
+    ? SOIL_TEMPERATURE_FLOOR_C
+    : declaredSoilTemperatureC;
+  const source = input.source?.trim() ? input.source.trim() : null;
+
+  const warnings: string[] = [];
+  if (temperatureFloored) {
+    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (§5.1.1.3.1).`);
+  }
+
+  return {
+    declaredSoilTemperatureC,
+    effectiveSoilTemperatureC,
+    source,
+    temperatureFloored,
+    method:
+      `Facility reference soil temperature (annual average; 7 °C floor)` +
+      (source ? ` — ${source}` : ""),
+    warnings,
+  };
+}
+
+/**
+ * Conservative-direction reconciliation between the declared facility reference
+ * and the removal's member-application site temperatures. Higher T_soil → lower
+ * F_durable, so an application site WARMER than the declared reference means the
+ * reference would over-credit that site's durability. That is the only direction
+ * worth warning about (a cooler site is conservative and fine). Advisory — joins
+ * the non-blocking submission warnings; the submitted value is always the
+ * facility reference (the per-application override is a future ADR).
+ */
+export function buildSoilTemperatureReconciliationWarnings(args: {
+  facilityReference: FacilityReferenceSoilTemperature;
+  applicationSoilTemperaturesC: Array<number | null | undefined>;
+}): string[] {
+  const usable = args.applicationSoilTemperaturesC.filter(isUsableNumber);
+  if (usable.length === 0) return [];
+
+  const maxSiteC = Math.max(...usable);
+  if (maxSiteC <= args.facilityReference.effectiveSoilTemperatureC) return [];
+
+  return [
+    `An application site soil temperature (${maxSiteC.toFixed(1)} °C) exceeds the declared ` +
+      `facility reference (${args.facilityReference.effectiveSoilTemperatureC.toFixed(1)} °C) — ` +
+      `the reference may over-credit durability for that site. Reconcile the facility ` +
+      `reference value (admin → Emission estimates) or its PDD justification.`,
+  ];
+}
+
 // ── Declared H/C reconciliation (D5a) ────────────────────────────────────────
 
 /**

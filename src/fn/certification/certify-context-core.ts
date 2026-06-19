@@ -51,6 +51,11 @@ import {
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import {
+  buildSoilTemperatureReconciliationWarnings,
+  resolveFacilityReferenceSoilTemperature,
+  type FacilityReferenceSoilTemperature,
+} from "@/lib/isometric/utils/durability-aggregation";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
@@ -184,6 +189,12 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
   // Transport legs pooled across every member batch's lineage, deduped by
   // entity id. Fed to `enrichWithTransportLegs` by the submit pipeline.
   transportLegs: TransportLegsByCategory;
+  // The facility's resolved reference soil temperature (declared value, 7 °C
+  // floored, one decimal) submitted as the `biochar_soil` measurement for a
+  // 200-year removal (Phase 2). Null when the facility has not configured one —
+  // when there are credit batches to submit, that null is fail-closed via a
+  // durability gate blocker, so the Phase-3 step can assume non-null here.
+  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
 }
 
 function deriveRequiredTransportCategories(
@@ -597,6 +608,10 @@ export async function buildRemovalContext(
       batchesWithSamples: [],
       attributionByRunId: new Map<string, number>(),
       transportLegs: { feedstock: [], biochar: [], sample: [] },
+      facilityReferenceSoilTemperature: resolveFacilityReferenceSoilTemperature({
+        declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+        source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+      }),
     };
   }
 
@@ -653,7 +668,7 @@ export async function buildRemovalContext(
   // the non-blocking submission warnings.
   const {
     batchesWithSamples,
-    blockers: durabilityGateBlockers,
+    blockers: durabilityBatchBlockers,
     warnings: durabilityWarnings,
   } = await loadDurabilityBatchData(
     userId,
@@ -661,12 +676,49 @@ export async function buildRemovalContext(
     new Set(runIds),
   );
 
+  // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative
+  // value submitted as the `biochar_soil` measurement, 7 °C-floored. When there
+  // are credit batches to submit, an unset reference is fail-closed — it joins
+  // the durability gate blockers so readiness predicts the submit-pipeline block.
+  // (1000-year/R0 batches do not use soil temperature; out of Tier-1 scope, so
+  // every submittable batch here is treated as 200-year.)
+  const facilityReferenceSoilTemperature =
+    resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+    });
+  const soilTemperatureBlockers =
+    batchesWithSamples.length > 0 && facilityReferenceSoilTemperature == null
+      ? [
+          "Set this facility's reference soil temperature (admin → Emission " +
+            "estimates) before submitting a 200-year removal.",
+        ]
+      : [];
+  const durabilityGateBlockers = [
+    ...durabilityBatchBlockers,
+    ...soilTemperatureBlockers,
+  ];
+
+  // Conservative-direction reconciliation: warn (non-blocking) when a member
+  // application site is warmer than the declared reference (the reference would
+  // over-credit that site). Only meaningful once a reference is set.
+  const soilTemperatureReconciliationWarnings =
+    facilityReferenceSoilTemperature && batchesWithSamples.length > 0
+      ? buildSoilTemperatureReconciliationWarnings({
+          facilityReference: facilityReferenceSoilTemperature,
+          applicationSoilTemperaturesC: lineages.map(
+            (l) => l.application.soilTemperatureC,
+          ),
+        })
+      : [];
+
   const submissionWarnings = [
     ...buildSubmissionWarnings({
       defaultTemplate: facilityFacts.defaultTemplate,
       runs,
     }),
     ...durabilityWarnings,
+    ...soilTemperatureReconciliationWarnings,
   ];
 
   return {
@@ -689,6 +741,7 @@ export async function buildRemovalContext(
     batchesWithSamples,
     attributionByRunId,
     transportLegs,
+    facilityReferenceSoilTemperature,
   };
 }
 

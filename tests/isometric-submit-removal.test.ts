@@ -205,6 +205,8 @@ function makeMapping(): CertifierProjectRow {
     // Emission-estimate config — the genset yield is required by
     // `resolveFacilityEmissionConfig` (ADR 0015 dropped the per-stage splits).
     gensetEnergyYieldKwhPerLitre: 3.375,
+    defaultSoilTemperatureC: 24.2,
+    defaultSoilTemperatureSource: "Test dataset (annual mean)",
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;
@@ -382,6 +384,15 @@ function makeContext(
     batchesWithSamples,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
     transportLegs: { feedstock: [], biochar: [], sample: [] },
+    facilityReferenceSoilTemperature: {
+      declaredSoilTemperatureC: 24.2,
+      effectiveSoilTemperatureC: 24.2,
+      source: "Test dataset (annual mean)",
+      temperatureFloored: false,
+      method:
+        "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
+      warnings: [],
+    },
   };
 }
 

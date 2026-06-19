@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
 import {
   buildPerBatchDurabilityData,
+  buildSoilTemperatureReconciliationWarnings,
   reconcileDeclaredHToCorg,
   resolveConservativeSoilTemperature,
+  resolveFacilityReferenceSoilTemperature,
   type CreditBatchDurabilityInput,
+  type FacilityReferenceSoilTemperature,
 } from "./durability-aggregation";
 
 function sample(overrides: Partial<Sample>): Sample {
@@ -193,5 +196,94 @@ describe("reconcileDeclaredHToCorg (D5a divergence guard)", () => {
   it("returns no warning when either value is missing", () => {
     expect(reconcileDeclaredHToCorg(null, 0.3)).toBeNull();
     expect(reconcileDeclaredHToCorg(0.3, null)).toBeNull();
+  });
+});
+
+describe("resolveFacilityReferenceSoilTemperature (Phase 2 facility reference)", () => {
+  it("rounds the declared value to one decimal and carries the source", () => {
+    const r = resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: 24.249,
+      source: "Lembrechts 2022",
+    });
+    expect(r).not.toBeNull();
+    expect(r!.declaredSoilTemperatureC).toBe(24.2);
+    expect(r!.effectiveSoilTemperatureC).toBe(24.2);
+    expect(r!.temperatureFloored).toBe(false);
+    expect(r!.source).toBe("Lembrechts 2022");
+    expect(r!.method).toMatch(/Lembrechts 2022/);
+    expect(r!.warnings).toEqual([]);
+  });
+
+  it("applies the 7 °C floor to a cold declared value and warns", () => {
+    const r = resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: 4.3,
+      source: null,
+    });
+    expect(r!.declaredSoilTemperatureC).toBe(4.3);
+    expect(r!.effectiveSoilTemperatureC).toBe(7);
+    expect(r!.temperatureFloored).toBe(true);
+    expect(r!.warnings.some((w) => /floor/i.test(w))).toBe(true);
+  });
+
+  it("normalizes a blank source to null", () => {
+    const r = resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: 12,
+      source: "   ",
+    });
+    expect(r!.source).toBeNull();
+  });
+
+  it("returns null when no value is declared", () => {
+    expect(
+      resolveFacilityReferenceSoilTemperature({
+        declaredSoilTemperatureC: null,
+        source: "anything",
+      }),
+    ).toBeNull();
+    expect(
+      resolveFacilityReferenceSoilTemperature({
+        declaredSoilTemperatureC: undefined,
+        source: null,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("buildSoilTemperatureReconciliationWarnings (conservative-direction check)", () => {
+  const reference: FacilityReferenceSoilTemperature = {
+    declaredSoilTemperatureC: 20,
+    effectiveSoilTemperatureC: 20,
+    source: null,
+    temperatureFloored: false,
+    method: "ref",
+    warnings: [],
+  };
+
+  it("warns when a site is WARMER than the reference (would over-credit)", () => {
+    const w = buildSoilTemperatureReconciliationWarnings({
+      facilityReference: reference,
+      applicationSoilTemperaturesC: [18, 22.5, 19],
+    });
+    expect(w).toHaveLength(1);
+    expect(w[0]).toMatch(/22\.5/);
+    expect(w[0]).toMatch(/over-credit/i);
+  });
+
+  it("does not warn when every site is at or below the reference", () => {
+    expect(
+      buildSoilTemperatureReconciliationWarnings({
+        facilityReference: reference,
+        applicationSoilTemperaturesC: [20, 15, 19.9],
+      }),
+    ).toEqual([]);
+  });
+
+  it("ignores missing site temperatures", () => {
+    expect(
+      buildSoilTemperatureReconciliationWarnings({
+        facilityReference: reference,
+        applicationSoilTemperaturesC: [null, undefined],
+      }),
+    ).toEqual([]);
   });
 });

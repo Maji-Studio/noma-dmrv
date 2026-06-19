@@ -196,6 +196,7 @@ export async function saveFacilityEmissionConfig(
       provider: ISOMETRIC_PROVIDER,
       gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre,
       defaultSoilTemperatureC: parsed.defaultSoilTemperatureC ?? null,
+      defaultSoilTemperatureSource: parsed.defaultSoilTemperatureSource ?? null,
     });
   });
 }
