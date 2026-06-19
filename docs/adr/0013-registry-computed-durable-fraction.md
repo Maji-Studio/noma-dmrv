@@ -21,10 +21,12 @@ source of the credited number.
 
 This is the same boundary ADR 0005 drew for amortization (Isometric owns the crediting
 math; noma is the LCA journal, not the publisher) and complements ADR 0003 (removal as the
-submission unit). The submitted H/C_org is the **sample-derived** `weightedHToCorgRatio`
-(per-production-run aggregation, mass-weighted into the period), not the operator-declared
-`credit_batches.h_to_c_org_ratio`; the declared field is reconciled against it with a
-divergence warning.
+submission unit). noma submits the **sample-derived H/C_org as a list of per-production-batch
+datapoints** (each the batch's ≥3-replicate mean + std-dev) and the registry aggregates them
+(see Consequences); it does **not** pre-collapse to a single mass-weighted scalar. The local
+`weightedHToCorgRatio` is retained only as the **preview/reconciliation input**, not the
+submitted value, and the operator-declared `credit_batches.h_to_c_org_ratio` is reconciled
+against it with a divergence warning.
 
 ## Considered options
 

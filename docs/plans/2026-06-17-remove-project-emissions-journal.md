@@ -1,7 +1,9 @@
 # Remove the project-emissions journal (supersede ADR 0005)
 
 > **Type:** execution plan / handoff · **Created:** 2026-06-17
-> **Decision owner:** @kenji · **Status:** approved in principle, ready to execute
+> **Decision owner:** @kenji · **Status:** approved in principle — one verbal
+> reconfirm of the pyrolyzer CH₄ source-of-record is outstanding and is a blocker
+> for merging the removal PR (see "Open confirmation" below)
 > **Do NOT execute on** `test/evidence-gap-parity-followups` or `staging` — cut a
 > fresh branch (suggest `refactor/remove-project-emissions-journal`).
 
@@ -98,7 +100,15 @@ full removal safe, especially for the one potentially-material category
 - `src/components/admin/period-emission-source-upload.ts`
 - `src/components/certification/project-emissions-drift-panel.tsx`
 - `src/lib/isometric/utils/project-emission-match.ts` (`CATEGORY_TO_BLUEPRINT` + matcher)
-- `scripts/isometric-coverage-check.ts`
+- `scripts/isometric-coverage-check.ts` — verified project-emissions-specific
+  (reads `certifier_project_emissions`, the `projectEmissionCategory` enum, and
+  `INPUT_MAPPING`/`PERIOD_INPUT_TUPLES`; no durability/measurement-sample logic).
+  **But** the 200-year durability open-question instructs the operator to run
+  `pnpm isometric:coverage-check -- --source=db` as a sandbox probe during live
+  durability wiring (`docs/open-questions.md`, the `isometric/durability-measurement-samples`
+  thread, ~lines 184/216/228). Before deleting, either (a) scrub/redirect those
+  durability references to a standalone template-coverage probe, or (b) keep a
+  minimal project-emissions-free coverage command for the durability path.
 
 **Edit (remove the project-emissions parts only):**
 - `src/db/schema/certification.ts` — drop the `certifier_project_emissions` table
