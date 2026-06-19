@@ -11,8 +11,10 @@ result, and submits it to the Isometric carbon registry for verification.
 **Process stage**:
 One of the three phases of the biochar workflow — *pre-processing*
 (biomass preparation), *pyrolysis*, and *post-processing* (biochar
-processing). Operators do not meter energy separately per stage; the
-per-stage split is an estimate.
+processing). The stages are physically real, but operators meter energy
+once for the whole run, not per stage — so energy is **not apportioned
+across stages**; a run's electricity and genset energy enter as single
+combined figures.
 _Avoid_: phase, step.
 
 **Production run**:
@@ -43,9 +45,9 @@ it; an import never proceeds on a guessed mapping.
 _Avoid_: column config, CSV schema.
 
 **Emission estimate**:
-A per-facility configured value (genset yield, stage-split percentages,
-default soil temperature) used to derive submission data noma does not
-measure directly. Distinct from a measured value.
+A per-facility configured value (genset yield, default soil
+temperature) used to derive submission data noma does not measure
+directly. Distinct from a measured value.
 
 ### Materials & formulation
 
@@ -86,35 +88,54 @@ _Avoid_: stock change, log entry, audit record.
 ### Sampling, characterization & durability
 
 **Sample**:
-One lab-analysed **replicate** drawn from a **production run** and
-analysed by an ISO 17025 lab — a record carrying *both* the sampling
-event (code, time, mass) *and* the lab chemistry (organic carbon,
-hydrogen, H/C_org, ash, …). A sampled run carries **≥3 Samples**; their
-mean and standard deviation characterise that run's biochar. The lab's
-certificate of analysis is attached as a `lab_report` **document**, not
-a separate record. "Production sample" and "lab sample" are the same
-thing seen from two ends. _Avoid_: lab sample vs production sample as
-two entities; treating the certificate as its own record; conflating
-with reactor **readings** (telemetry).
+One lab-analysed **replicate** of a **credit batch**'s biochar, analysed
+by an ISO 17025 lab — a record carrying *both* the sampling event (code,
+time, mass) *and* the lab chemistry (organic carbon, hydrogen, H/C_org,
+ash, …). Samples are drawn distributed across the batch period; a sampled
+credit batch carries **≥3 Samples**, whose mean and standard deviation
+characterise that batch's biochar. The lab's certificate of analysis is
+attached as a `lab_report` **document**, not a separate record.
+"Production sample" and "lab sample" are the same thing seen from two
+ends — both distinct from in-process biochar spot-checks (operational,
+internal-only, never submitted) and from reactor **readings**
+(telemetry). _Avoid_: lab sample vs production sample as two entities;
+treating the certificate as its own record; conflating with telemetry or
+with internal in-process samples.
 
 **Replicate**:
-The role a **Sample** plays within its **production run**'s set — each
-lab-analysed Sample is one replicate, and a sampled run carries ≥3 so a
-mean, standard deviation and outliers can be derived. "Minimum 3 samples
-per batch" = ≥3 Sample rows on one production run, not 3 sampling events
-and not 3 credit batches. _Avoid_: replicate as anything other than a
-Sample.
+The role a **Sample** plays within its **credit batch**'s set — each
+lab-analysed Sample is one replicate, and a sampled credit batch carries
+≥3 so a mean, standard deviation and outliers can be derived. "Minimum 3
+samples per batch" = ≥3 Sample rows for **one credit batch** (the
+protocol's production batch), distributed across its period — not 3
+sampling events on a single run. _Avoid_: replicate as anything other
+than a Sample.
+
+**Production process**:
+A specific **feedstock type** converted under **consistent pyrolysis
+conditions** (temperature, residence time) — the boundary the sampling
+regime is scoped to (Isometric Biochar Protocol §8.3.1). A sequence of
+**credit batches** of the same feedstock and conditions belongs to one
+production process; its **Method A / Method B** state and ≥30-Sample
+baseline accrue here. Changing the feedstock or the pyrolysis conditions
+— or a flagged carbon-content deviation — starts a **new** production
+process, resetting the baseline to zero with no history carried forward.
+_Avoid_: equating it with a **reactor** (one reactor runs many
+production processes over time) or a single **production run**.
 
 **Method A / Method B**:
 The two biochar **sampling-frequency** regimes (Isometric Biochar
-Protocol §8.3.2), declared per **reactor**. The sampling unit is the
-**production run** (a pyrolysis batch) — *not* the **credit batch**,
-which is a monthly roll-up of many runs. *Method A* analyses every
-production run; *Method B* is a reduced cadence (≥1 sample per 10 runs)
-permitted only after a reactor has accumulated a baseline of Method A
-results. These name a *sampling* cadence only — they do **not** name any
-durability or persistence model. _Avoid_: "one sample per credit batch";
-treating Method A/B as durability methods; "representative method".
+Protocol §8.3.1), scoped to a **production process** — *not* a reactor.
+The sampling/batch unit is the **credit batch** (one feedstock's
+≤1-month production batch). *Method A* analyses every credit batch (≥3
+**Samples** each); *Method B* is a reduced cadence (≥1 sampled credit
+batch per 10), permitted only after that production process has
+accumulated a ≥30-Sample Method A baseline. A new feedstock or changed
+pyrolysis conditions starts a **new production process** whose baseline
+**restarts from zero** — Method B never transfers across feedstocks.
+These name a *sampling* cadence only — not a durability or persistence
+model. _Avoid_: "declared per reactor"; "Method B transfers across
+feedstocks"; treating Method A/B as durability methods.
 
 **Durability tier**:
 The crediting time horizon a biochar batch is certified against.
@@ -152,11 +173,17 @@ _Avoid_: client (collides with client components / API clients), buyer.
 ### Submission & registry
 
 **Credit batch**:
-noma's unit of monthly carbon accounting — one month's aggregated
-biochar production and application. On submission, one or more credit
-batches are grouped into a single Isometric **Removal** (default 1:1
-per month). `creditBatches` carries a nullable `removalId` FK.
-_Avoid_: batch, issuance.
+noma's unit of biochar carbon accounting — the aggregated production and
+application of biochar from **one feedstock under one production
+process**, over a window of **at most one month** (enforced when the
+certifier is Isometric). It *is* the Isometric protocol's **production
+batch** — the lab-characterisation/sampling unit — so a sampled credit
+batch carries **≥3 Samples**. Several credit batches run **concurrently**
+(one per feedstock / production process); a calendar month is therefore
+*not* a single batch. On submission, one or more credit batches group
+into a single Isometric **Removal**. `creditBatches` carries a nullable
+`removalId` FK. _Avoid_: "one month's production" as a single batch;
+batch, issuance.
 
 **Removal**:
 The Isometric **submission unit** — a facility-scoped registry record
@@ -328,8 +355,13 @@ _Avoid_: teammate, seat.
   with one org role; a **Platform Admin** needs no Membership to act
   inside an Organization
 - The LCA window contains many monthly **Credit batches**
-- **N Credit batches** group into one **Removal** (default 1:1 per month)
-- A **Credit batch** aggregates many **Production runs**
+- **N Credit batches** group into one **Removal**
+- A **Credit batch** is one **feedstock**'s ≤1-month production batch and
+  aggregates many **Production runs** of that feedstock
+- A **Production process** (a feedstock under consistent pyrolysis
+  conditions) spans a sequence of **Credit batches**; **Method A /
+  Method B** and the ≥30-Sample baseline are scoped to it, restarting
+  from zero when the feedstock or conditions change
 - A **Removal** is the Isometric submission unit — it aggregates the
   deduped union of **Production runs** reached through its member credit
   batches' application lineage, applied-biochar scoped
@@ -345,8 +377,8 @@ _Avoid_: teammate, seat.
 > **Dev:** "The template wants pyrolysis-stage electricity separately
 > from biomass-stage electricity — do operators record that?"
 > **Domain expert:** "No. On-site we read one electricity meter for the
-> whole operation. Splitting it across **process stages** is an
-> **emission estimate**, not a measurement."
+> whole operation and can't separate the stages — so energy is recorded
+> once, at the run, not split across **process stages**."
 > **Dev:** "And staff travel — is that per **production run**?"
 > **Domain expert:** "No, that's a **reporting period** figure. It
 > doesn't belong on a run."

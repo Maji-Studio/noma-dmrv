@@ -1,8 +1,14 @@
 # Energy submission data uses per-facility admin-configured estimates
 
-> **Status: Accepted, delivered.** Shipped as integration-plan Phase 3.7
-> (2026-05-21). The `/admin/emission-estimates` page is live and seeded
-> for the Moshi facility.
+> **Status: Accepted, delivered — superseded in part by [ADR 0014](0014-energy-single-combined-measurement-point.md) (2026-06-19).**
+> Shipped as integration-plan Phase 3.7 (2026-05-21); the
+> `/admin/emission-estimates` page is live and seeded for the Moshi
+> facility. **The per-stage split half is retired** — the operator's
+> removal template collapsed energy to a single measurement point, so
+> noma no longer apportions energy across stages and the three
+> `stageSplit*Pct` fields are removed (ADR 0014). The
+> **genset-yield-as-config** decision below **still stands**: the yield
+> is emissions-affecting, the stage split was not.
 
 ## Context
 
