@@ -279,7 +279,12 @@ async function seedDemoData() {
           identifier: 'Kiln-Beta',
           facilityId: ids.facilityMoshi,
           reactorType: 'fixed-bed',
-          samplingMethod: 'method_b',
+          // Method A: a reactor cannot run on Method B until it has the 30-sample
+          // Method A baseline (Biochar Protocol 1.2 §8.3.1.2). The app rejects an
+          // ineligible Method B switch (createReactor/updateReactor) and migration
+          // 0052 enforces the same at the DB layer, so seeding Method B here (with
+          // only a handful of samples) would fail the trigger.
+          samplingMethod: 'method_a',
           nominalThroughputTph: 0.5,
           specifications: {
             manufacturer: 'NOMA Engineering',
