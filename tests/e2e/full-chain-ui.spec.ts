@@ -15,6 +15,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
   selectEntity as selectEntityById,
+  selectFirstCreditBatchProductionRun,
   selectFirstEntity,
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -611,11 +612,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="startDate"]', today);
       await page.fill('input[name="endDate"]', today);
 
-      const firstRunCheckbox = page
-        .locator('[role="dialog"] input[type="checkbox"]')
-        .first();
-      await expect(firstRunCheckbox).toBeEnabled({ timeout: 10000 });
-      await firstRunCheckbox.check();
+      await selectFirstCreditBatchProductionRun(page);
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);

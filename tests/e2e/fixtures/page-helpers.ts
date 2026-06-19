@@ -130,3 +130,15 @@ export async function selectFirstEntity(page: Page, fieldLabel: string) {
   });
   await page.locator('[role="option"]').first().click();
 }
+
+export async function selectFirstCreditBatchProductionRun(page: Page) {
+  const dialog = page.locator('[role="dialog"]');
+  await dialog
+    .getByRole("button", { name: /production runs in production window/i })
+    .click();
+  const firstRunCheckbox = dialog
+    .locator('input[name="productionRunIds"]')
+    .first();
+  await firstRunCheckbox.waitFor({ state: "visible", timeout: 10000 });
+  await firstRunCheckbox.check();
+}
