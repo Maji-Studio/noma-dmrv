@@ -2012,7 +2012,7 @@
           "name": "production_process_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "status": {
           "name": "status",
@@ -2319,6 +2319,23 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "credit_batches_process_identity_fk": {
+          "name": "credit_batches_process_identity_fk",
+          "tableFrom": "credit_batches",
+          "tableTo": "production_processes",
+          "columnsFrom": [
+            "production_process_id",
+            "facility_id",
+            "feedstock_type_id"
+          ],
+          "columnsTo": [
+            "id",
+            "facility_id",
+            "feedstock_type_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2339,7 +2356,7 @@
         },
         "credit_batches_isometric_max_one_month": {
           "name": "credit_batches_isometric_max_one_month",
-          "value": "\"credit_batches\".\"certifier\" is distinct from 'isometric'\n        or (\"credit_batches\".\"end_date\" - \"credit_batches\".\"start_date\") <= 31"
+          "value": "\"credit_batches\".\"certifier\" is distinct from 'isometric'\n        or \"credit_batches\".\"end_date\" <= (\"credit_batches\".\"start_date\" + interval '1 month')::date"
         },
         "credit_batches_total_feedstock_mass_non_negative": {
           "name": "credit_batches_total_feedstock_mass_non_negative",
@@ -5524,7 +5541,17 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "production_processes_id_facility_feedstock_unique": {
+          "name": "production_processes_id_facility_feedstock_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "facility_id",
+            "feedstock_type_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

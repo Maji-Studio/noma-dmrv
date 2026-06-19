@@ -4,9 +4,11 @@
  * Linked to production runs per Isometric Protocol Section 8.3
  */
 
-import { and, asc, desc, eq, gte, ilike, lte, sql, SQL, count, avg } from "drizzle-orm";
+import { and, asc, avg, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
+  creditBatches,
   samples,
   productionRuns,
   facilities,
@@ -112,6 +114,9 @@ import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
+const runFacilities = alias(facilities, "sample_run_facilities");
+const batchFacilities = alias(facilities, "sample_batch_facilities");
+
 // ============================================
 // Sample Read Operations
 // ============================================
@@ -152,7 +157,12 @@ export async function getSamples(
   }
 
   if (facilityId) {
-    conditions.push(eq(productionRuns.facilityId, facilityId));
+    conditions.push(
+      or(
+        eq(productionRuns.facilityId, facilityId),
+        eq(creditBatches.facilityId, facilityId),
+      )!,
+    );
   }
 
   // Note: durabilityOption is not in the DB schema, we'd need to add it or infer
@@ -184,6 +194,7 @@ export async function getSamples(
     .select({ totalCount: count() })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -233,12 +244,14 @@ export async function getSamples(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       productionRunCode: productionRuns.code,
-      facilityCode: facilities.code,
-      facilityName: facilities.name,
+      facilityCode: sql<string | null>`coalesce(${runFacilities.code}, ${batchFacilities.code})`,
+      facilityName: sql<string | null>`coalesce(${runFacilities.name}, ${batchFacilities.name})`,
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(runFacilities, eq(productionRuns.facilityId, runFacilities.id))
+    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -320,12 +333,14 @@ export async function getSampleById(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       productionRunCode: productionRuns.code,
-      facilityCode: facilities.code,
-      facilityName: facilities.name,
+      facilityCode: sql<string | null>`coalesce(${runFacilities.code}, ${batchFacilities.code})`,
+      facilityName: sql<string | null>`coalesce(${runFacilities.name}, ${batchFacilities.name})`,
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(runFacilities, eq(productionRuns.facilityId, runFacilities.id))
+    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
     .where(eq(samples.id, sampleId));
 
   if (!sample) {
@@ -363,7 +378,12 @@ export async function getSampleStats(
     conditions.push(eq(samples.productionRunId, productionRunId));
   }
   if (facilityId) {
-    conditions.push(eq(productionRuns.facilityId, facilityId));
+    conditions.push(
+      or(
+        eq(productionRuns.facilityId, facilityId),
+        eq(creditBatches.facilityId, facilityId),
+      )!,
+    );
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -376,6 +396,7 @@ export async function getSampleStats(
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(whereClause);
 
   // Count 1000-year samples (those with R₀ reflectance data)
@@ -383,6 +404,7 @@ export async function getSampleStats(
     .select({ count: count() })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(
       whereClause
         ? and(whereClause, sql`${samples.randomReflectanceR0Percent} IS NOT NULL`)

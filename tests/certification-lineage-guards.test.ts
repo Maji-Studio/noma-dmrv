@@ -38,6 +38,7 @@ import {
   orders,
   productionRunFeedstocks,
   productionRuns,
+  productionProcesses,
   reactors,
   samples,
   storageLocations,
@@ -54,6 +55,7 @@ interface LineageFixture {
   facilityId: string;
   feedstockId: string;
   feedstockTypeId: string;
+  productionProcessId: string;
   ghgStatementId: string | null;
   orderId: string;
   productId: string;
@@ -105,6 +107,14 @@ async function createLineageFixture(
         moistureContentPercent: 10,
       })
       .returning({ id: feedstocks.id });
+
+    const [productionProcess] = await tx
+      .insert(productionProcesses)
+      .values({
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+      })
+      .returning({ id: productionProcesses.id });
 
     const [productionRun] = await tx
       .insert(productionRuns)
@@ -218,6 +228,7 @@ async function createLineageFixture(
         code: `CB-CLG-${tag}`,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
+        productionProcessId: productionProcess.id,
         status: "pending",
         startDate: "2026-06-01",
         endDate: "2026-06-30",
@@ -256,6 +267,7 @@ async function createLineageFixture(
       facilityId: facility.id,
       feedstockId: feedstock.id,
       feedstockTypeId: feedstockType.id,
+      productionProcessId: productionProcess.id,
       ghgStatementId,
       orderId: order.id,
       productId: product.id,
@@ -294,6 +306,9 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
     await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
+    await tx
+      .delete(productionProcesses)
+      .where(eq(productionProcesses.id, fixture.productionProcessId));
     await tx
       .delete(feedstockTypes)
       .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
