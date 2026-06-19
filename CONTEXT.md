@@ -87,35 +87,59 @@ _Avoid_: stock change, log entry, audit record.
 ### Sampling, characterization & durability
 
 **Sample**:
-One lab-analysed **replicate** drawn from a **production run** and
-analysed by an ISO 17025 lab — a record carrying *both* the sampling
-event (code, time, mass) *and* the lab chemistry (organic carbon,
-hydrogen, H/C_org, ash, …). A sampled run carries **≥3 Samples**; their
-mean and standard deviation characterise that run's biochar. The lab's
+One lab-analysed **replicate** characterising a **credit batch** (the
+protocol production batch), analysed by an ISO 17025 lab — a record
+carrying *both* the sampling event (code, time, mass) *and* the lab
+chemistry (organic carbon, hydrogen, H/C_org, ash, …). A sampled credit
+batch carries **≥3 Samples**; their mean and standard deviation
+characterise that batch's biochar. Each Sample is **drawn from one
+production run** (its provenance and natural point of entry); its credit
+batch is **derived** from that run's membership, and the ≥3 must be
+**independent samples distributed across the batch's runs/days**
+(protocol §8.3.1) — never aliquots of a single grab. The lab's
 certificate of analysis is attached as a `lab_report` **document**, not
-a separate record. "Production sample" and "lab sample" are the same
-thing seen from two ends. _Avoid_: lab sample vs production sample as
-two entities; treating the certificate as its own record; conflating
-with reactor **readings** (telemetry).
+a separate record. Distinct from the in-process spot-checks logged
+against a **production run** (the ~2-hourly field measurements) — those
+are internal-only and never submitted. _Avoid_: characterising at the
+production-run grain (the run is provenance only — characterisation and
+the ≥3 count are per credit batch); treating the certificate as its own
+record; conflating with reactor **readings** (telemetry).
 
 **Replicate**:
-The role a **Sample** plays within its **production run**'s set — each
-lab-analysed Sample is one replicate, and a sampled run carries ≥3 so a
-mean, standard deviation and outliers can be derived. "Minimum 3 samples
-per batch" = ≥3 Sample rows on one production run, not 3 sampling events
-and not 3 credit batches. _Avoid_: replicate as anything other than a
-Sample.
+The role a **Sample** plays within its **credit batch**'s set — each
+lab-analysed Sample is one replicate, and a sampled credit batch carries
+≥3 so a mean, standard deviation and outliers can be derived. Per
+protocol §8.3.1 the ≥3 are **independent samples taken from distinct
+points (production runs / days) across the batch** and analysed
+individually — *not* three aliquots of one grab — and the count is
+judged **per credit batch**, never per production run. _Avoid_: replicate
+as a lab aliquot; counting the ≥3 at the production-run grain.
+
+**Production process**:
+A campaign of biochar production sharing **one feedstock under
+consistent pyrolysis conditions** — the population a sampling regime
+characterises over time, scoped to a facility. Many monthly **credit
+batches** belong to one production process; it **spans reactors**
+(physical reactor identity is *not* part of its boundary). A feedstock
+change, a pyrolysis-condition change, or a flagged carbon-content
+deviation starts a **new** production process. It owns the
+**Method A / Method B** regime and, under Isometric, the ≥30-sample
+baseline that unlocks Method B. _Avoid_: keying it to a reactor or to a
+single credit batch; "campaign", "production line" as separate terms.
 
 **Method A / Method B**:
 The two biochar **sampling-frequency** regimes (Isometric Biochar
-Protocol §8.3.2), declared per **reactor**. The sampling unit is the
-**production run** (a pyrolysis batch) — *not* the **credit batch**,
-which is a monthly roll-up of many runs. *Method A* analyses every
-production run; *Method B* is a reduced cadence (≥1 sample per 10 runs)
-permitted only after a reactor has accumulated a baseline of Method A
-results. These name a *sampling* cadence only — they do **not** name any
-durability or persistence model. _Avoid_: "one sample per credit batch";
-treating Method A/B as durability methods; "representative method".
+Protocol §8.3.1), declared per **production process**. The sampling unit
+is the **credit batch** (the protocol production batch) — *not* the
+production run. *Method A* characterises **every** credit batch; *Method
+B* is a reduced cadence (≥1 sampled batch per 10) permitted only after a
+production process has accumulated a ≥30-sample Method-A baseline, after
+which the registry estimates each unsampled batch conservatively from
+that process's samples in the prior 6 months. These name a *sampling*
+cadence only — they do **not** name any durability or persistence model.
+_Avoid_: declaring the method per reactor; the production run as the
+sampling unit; treating Method A/B as durability methods;
+"representative method".
 
 **Durability tier**:
 The crediting time horizon a biochar batch is certified against.
@@ -154,13 +178,19 @@ _Avoid_: client (collides with client components / API clients), buyer.
 
 **Credit batch**:
 noma's production-cohort unit of carbon accounting — the production
-runs of one facility within a ≤1-month production window. The
-`startDate`/`endDate` window means production period, not application
-period. Batch membership is production runs; member applications are
-derived from lineage. On submission, one or more credit batches are
-grouped into a single Isometric **Removal** (default 1:1 per cohort).
-`creditBatches` carries a nullable `removalId` FK.
-_Avoid_: batch, issuance.
+runs of **one feedstock** at one facility within a ≤1-month window.
+This makes a credit batch the Isometric protocol's **production
+batch**: the lab-characterisation and sampling unit (one feedstock,
+consistent pyrolysis conditions, < 1 month). A facility running
+several feedstocks in a month therefore has several **concurrent**
+credit batches, one per feedstock. The `startDate`/`endDate` window
+means production period, not application period. Batch membership is
+production runs — each run one feedstock, matching the batch; member
+applications are derived from lineage. On submission, one or more
+credit batches group into a single Isometric **Removal** (default 1:1
+per cohort).
+_Avoid_: batch, issuance; "production batch" as a separate entity —
+the credit batch *is* noma's production batch.
 
 **Removal**:
 The Isometric **submission unit** — a facility-scoped registry record
@@ -206,6 +236,17 @@ The decision of what a submission attempt may do against the **submission
 ledger**: create a new version, resume a stale draft, return the existing
 result idempotently, or block.
 _Avoid_: lock (the claim is a decision; the lock is one of its inputs).
+
+**Measurement-sample submission**:
+The Isometric API object noma POSTs to carry a credit batch's durability
+chemistry — **one per credit batch**, bearing the batch's **mean +
+standard deviation** (its ≥3 **Samples** reduced to a summary; the raw
+replicate values are evidenced by the attached COA and the durability
+evidence ledger). The registry aggregates the per-batch list server-side.
+Deliberately distinct from a noma **Sample**: ≥3 Samples in, **one**
+measurement-sample submission out. _Avoid_: calling it a "sample"
+unqualified (collides with the lab Sample); submitting raw replicates in
+place of the mean + std-dev.
 
 **Monitored input**:
 An Isometric removal-template input whose value comes from the

@@ -55,6 +55,7 @@ test.describe("Credit batch detail (Phase 5)", () => {
     const batch = await seedCreditBatch(
       seededData.facility.id,
       crypto.randomUUID().slice(0, 8),
+      seededData.feedstockType.id,
     );
     const page = adminPage;
     await page.goto(`/credit-batches/${batch.id}`);

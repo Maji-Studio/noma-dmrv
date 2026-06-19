@@ -19,7 +19,9 @@ import { applications } from "@/db/schema/application";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { customers } from "@/db/schema/parties";
-import { productionRuns } from "@/db/schema/production";
+import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
+import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
+import { productionProcesses } from "@/db/schema/production-processes";
 import {
   createCreditBatch,
   updateCreditBatch,
@@ -40,6 +42,8 @@ const createdIds = {
   deliveries: [] as string[],
   applications: [] as string[],
   creditBatches: [] as string[],
+  feedstockTypes: [] as string[],
+  feedstocks: [] as string[],
 };
 
 // Two facilities for cross-facility testing
@@ -52,6 +56,10 @@ let thirdRunInFacilityA: { id: string };
 let assignedGuardRunInFacilityA: { id: string };
 let outOfWindowRunInFacilityA: { id: string };
 let runInFacilityB: { id: string };
+// ADR 0016 feedstock-derivation fixtures.
+let primaryFeedstockTypeId: string;
+let multiFeedstockRunInFacilityA: { id: string };
+let noFeedstockRunInFacilityA: { id: string };
 
 beforeAll(async () => {
   // Per-run suffix to avoid uniqueness collisions across parallel runs
@@ -160,6 +168,27 @@ beforeAll(async () => {
         endTime: new Date("2025-06-15T12:00:00Z"),
         biocharDryMassKg: 4300,
       },
+      {
+        // ADR 0016: a run blending two feedstock types — a credit batch built
+        // from it must be rejected (one feedstock per protocol production batch).
+        code: `PR-VAL-A6-${runId}`,
+        facilityId: facilityA.id,
+        reactorId: reactorA.id,
+        date: "2025-06-20",
+        startTime: new Date("2025-06-20T08:00:00Z"),
+        endTime: new Date("2025-06-20T12:00:00Z"),
+        biocharDryMassKg: 3800,
+      },
+      {
+        // A run with no linked feedstock — derivation must throw loudly.
+        code: `PR-VAL-A7-${runId}`,
+        facilityId: facilityA.id,
+        reactorId: reactorA.id,
+        date: "2025-06-19",
+        startTime: new Date("2025-06-19T08:00:00Z"),
+        endTime: new Date("2025-06-19T12:00:00Z"),
+        biocharDryMassKg: 3700,
+      },
     ])
     .returning({ id: productionRuns.id });
   [
@@ -169,8 +198,80 @@ beforeAll(async () => {
     assignedGuardRunInFacilityA,
     outOfWindowRunInFacilityA,
     runInFacilityB,
+    multiFeedstockRunInFacilityA,
+    noFeedstockRunInFacilityA,
   ] = productionRunRows;
   createdIds.productionRuns.push(...productionRunRows.map((run) => run.id));
+
+  // ADR 0016: every credit batch derives its single feedstock from its member
+  // runs (productionRunFeedstocks → feedstocks.feedstockTypeId), so each run
+  // used in a positive test needs a feedstock link. Two types let us prove the
+  // single-feedstock assertion fires when a run blends more than one.
+  const [primaryType] = await db
+    .insert(feedstockTypes)
+    .values({
+      name: `Validation Woodchips ${runId}`,
+      code: `FT-VAL-W-${runId}`,
+      category: "forestry",
+    })
+    .returning({ id: feedstockTypes.id });
+  const [secondaryType] = await db
+    .insert(feedstockTypes)
+    .values({
+      name: `Validation Coffee Husk ${runId}`,
+      code: `FT-VAL-C-${runId}`,
+      category: "agricultural",
+    })
+    .returning({ id: feedstockTypes.id });
+  primaryFeedstockTypeId = primaryType.id;
+  createdIds.feedstockTypes.push(primaryType.id, secondaryType.id);
+
+  const [feedstockAPrimary] = await db
+    .insert(feedstocks)
+    .values({
+      code: `FS-VAL-A-W-${runId}`,
+      facilityId: facilityA.id,
+      feedstockTypeId: primaryType.id,
+      massDryKg: 3000,
+    })
+    .returning({ id: feedstocks.id });
+  const [feedstockASecondary] = await db
+    .insert(feedstocks)
+    .values({
+      code: `FS-VAL-A-C-${runId}`,
+      facilityId: facilityA.id,
+      feedstockTypeId: secondaryType.id,
+      massDryKg: 1500,
+    })
+    .returning({ id: feedstocks.id });
+  const [feedstockBPrimary] = await db
+    .insert(feedstocks)
+    .values({
+      code: `FS-VAL-B-W-${runId}`,
+      facilityId: facilityB.id,
+      feedstockTypeId: primaryType.id,
+      massDryKg: 2800,
+    })
+    .returning({ id: feedstocks.id });
+  createdIds.feedstocks.push(
+    feedstockAPrimary.id,
+    feedstockASecondary.id,
+    feedstockBPrimary.id,
+  );
+
+  // Link each facility-A run (except the deliberately unlinked A7) to the
+  // primary feedstock; the facility-B run to its own primary feedstock; and the
+  // A6 run to BOTH types so it resolves to two feedstocks.
+  await db.insert(productionRunFeedstocks).values([
+    { productionRunId: runInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { productionRunId: secondRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { productionRunId: thirdRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { productionRunId: assignedGuardRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { productionRunId: outOfWindowRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { productionRunId: runInFacilityB.id, feedstockId: feedstockBPrimary.id, massUsedKg: 400 },
+    { productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 250 },
+    { productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 150 },
+  ]);
 
   // Create biochar products (needs formulation)
   const [productA] = await db
@@ -302,8 +403,21 @@ afterAll(async () => {
     }
     if (createdIds.productionRuns.length > 0) {
       await tx
+        .delete(productionRunFeedstocks)
+        .where(
+          inArray(
+            productionRunFeedstocks.productionRunId,
+            createdIds.productionRuns,
+          ),
+        );
+      await tx
         .delete(productionRuns)
         .where(inArray(productionRuns.id, createdIds.productionRuns));
+    }
+    if (createdIds.feedstocks.length > 0) {
+      await tx
+        .delete(feedstocks)
+        .where(inArray(feedstocks.id, createdIds.feedstocks));
     }
     if (createdIds.reactors.length > 0) {
       await tx
@@ -321,9 +435,20 @@ afterAll(async () => {
         .where(inArray(customers.id, createdIds.customers));
     }
     if (createdIds.facilities.length > 0) {
+      // createCreditBatch find-or-creates a production_processes row per
+      // (facility, feedstockType); it isn't tracked in createdIds, so clear it
+      // by facility before deleting facilities/feedstockTypes it references.
+      await tx
+        .delete(productionProcesses)
+        .where(inArray(productionProcesses.facilityId, createdIds.facilities));
       await tx
         .delete(facilities)
         .where(inArray(facilities.id, createdIds.facilities));
+    }
+    if (createdIds.feedstockTypes.length > 0) {
+      await tx
+        .delete(feedstockTypes)
+        .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
 });
@@ -383,7 +508,7 @@ describe("Credit Batch Production-Run Validation", () => {
     ).rejects.toThrow("fall outside the credit batch production window");
   });
 
-  it("accepts valid same-facility production run IDs", async () => {
+  it("accepts valid same-facility production run IDs and derives the single feedstock", async () => {
     const result = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
       code: "CB-VAL-OK",
@@ -395,6 +520,32 @@ describe("Credit Batch Production-Run Validation", () => {
     expect(result.productionRunIds).toEqual([runInFacilityA.id]);
     expect(result.applicationIds).toEqual([appInFacilityA.id]);
     expect(result.applicationCount).toBe(1);
+    // ADR 0016: the batch's feedstock + production process are derived from the
+    // member run, never supplied by the caller.
+    expect(result.feedstockTypeId).toBe(primaryFeedstockTypeId);
+    expect(result.productionProcessId).toBeTruthy();
+  });
+
+  it("rejects a batch whose runs blend more than one feedstock type", async () => {
+    await expect(
+      createCreditBatch(TEST_USER_ID, {
+        ...baseBatchData,
+        code: "CB-VAL-MULTI",
+        facilityId: facilityA.id,
+        productionRunIds: [multiFeedstockRunInFacilityA.id],
+      }),
+    ).rejects.toThrow(/single feedstock/i);
+  });
+
+  it("rejects a batch whose run has no linked feedstock", async () => {
+    await expect(
+      createCreditBatch(TEST_USER_ID, {
+        ...baseBatchData,
+        code: "CB-VAL-NOFEED",
+        facilityId: facilityA.id,
+        productionRunIds: [noFeedstockRunInFacilityA.id],
+      }),
+    ).rejects.toThrow(/no linked feedstock/i);
   });
 
   it("rejects facility change when existing linked production runs belong to old facility", async () => {

@@ -122,7 +122,6 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await page.waitForSelector('[role="dialog"]', { state: "visible" });
     await page.fill('input[name="identifier"]', reactorIdentifier);
     await page.selectOption('select[name="reactorType"]', "fixed-bed");
-    await page.selectOption('select[name="samplingMethod"]', "method_a");
     await page.fill('input[name="capacityTph"]', "500");
     await page.getByRole("button", { name: /Create Reactor/i }).click();
     await page.waitForSelector('[role="dialog"]', {
@@ -171,8 +170,6 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Select reactor type via native select
     await page.selectOption('select[name="reactorType"]', "fixed-bed");
 
-    // Select sampling method (default is method_a, keep it)
-    await page.selectOption('select[name="samplingMethod"]', "method_a");
     await page.fill('input[name="capacityTph"]', "500");
 
     // Submit the form

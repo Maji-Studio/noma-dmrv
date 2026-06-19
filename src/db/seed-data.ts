@@ -18,6 +18,7 @@ import {
   buildProductionRunReadings,
   buildSoilTemperatureMeasurements,
 } from './seed-certification-evidence';
+import { seedProductionProcessesAndCreditBatches } from './seed-credit-batches';
 
 config({ path: '.env.local' });
 
@@ -157,6 +158,10 @@ const ids = {
   creditBatch1: demoId(2200),
   creditBatch2: demoId(2201),
 
+  // Production Processes (facility × feedstock sampling-regime campaigns, ADR 0016)
+  processMoshiWoodchips: demoId(2250),
+  processMoshiCoffee: demoId(2251),
+
   // Junction table IDs
   prodFeedLink1: demoId(2300),
   prodFeedLink2: demoId(2301),
@@ -265,7 +270,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Alpha',
           facilityId: ids.facilityMoshi,
           reactorType: 'auger',
-          samplingMethod: 'method_a',
           nominalThroughputTph: 0.75,
           specifications: {
             manufacturer: 'NOMA Engineering',
@@ -279,12 +283,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Beta',
           facilityId: ids.facilityMoshi,
           reactorType: 'fixed-bed',
-          // Method A: a reactor cannot run on Method B until it has the 30-sample
-          // Method A baseline (Biochar Protocol 1.2 §8.3.1.2). The app rejects an
-          // ineligible Method B switch (createReactor/updateReactor) and migration
-          // 0052 enforces the same at the DB layer, so seeding Method B here (with
-          // only a handful of samples) would fail the trigger.
-          samplingMethod: 'method_a',
           nominalThroughputTph: 0.5,
           specifications: {
             manufacturer: 'NOMA Engineering',
@@ -915,6 +913,7 @@ async function seedDemoData() {
         {
           id: ids.sample1,
           productionRunId: ids.productionRun1,
+          creditBatchId: ids.creditBatch1,
           samplingTime: new Date('2026-05-13T09:30:00.000Z'),
           sampleCode: 'SAM-26-001',
           weightGrams: 520,
@@ -933,6 +932,7 @@ async function seedDemoData() {
         {
           id: ids.sample2,
           productionRunId: ids.productionRun2,
+          creditBatchId: ids.creditBatch2,
           samplingTime: new Date('2026-05-15T09:00:00.000Z'),
           sampleCode: 'SAM-26-002',
           weightGrams: 485,
@@ -951,6 +951,7 @@ async function seedDemoData() {
         {
           id: ids.sample3,
           productionRunId: ids.productionRun3,
+          creditBatchId: ids.creditBatch1,
           samplingTime: new Date('2026-05-17T10:00:00.000Z'),
           sampleCode: 'SAM-26-003',
           weightGrams: 510,
@@ -1493,64 +1494,7 @@ async function seedDemoData() {
         ])
       );
 
-      console.log('Creating credit batches...');
-      await tx.insert(schema.creditBatches).values([
-        {
-          id: ids.creditBatch1,
-          code: 'CB-26-001',
-          facilityId: ids.facilityMoshi,
-          status: 'pending',
-          startDate: '2026-05-13',
-          endDate: '2026-05-31',
-          certifier: 'isometric',
-          registry: 'Isometric Registry',
-          weightTons: 5.01,
-          bufferPoolPercent: 10,
-          durabilityOption: '200_year',
-          hToCorgRatio: 0.269,
-          fDurableCalculated: 0.851,
-          totalCo2eStoredTons: 11.61,
-          totalCo2eEmissionsTons: 0.64,
-          totalCo2eCounterfactualTons: 0.31,
-          totalFeedstockMassKg: 9000,
-          ineligibleFeedstockMassKg: 0,
-          siteManagementNotes:
-            'Biochar incorporated into planting rows within 48 hours; no synthetic nitrogen applied during the application window.',
-          affidavitReference: 'AFF-MOSHI-2026-001',
-          intendedUseConfirmation: 'Customer purchase orders specify soil application on named coffee and tea plots.',
-          companyVerificationRef: 'BRELA-agri-customer-records-2026',
-          mixingTimelineDays: 2,
-        },
-        {
-          id: ids.creditBatch2,
-          code: 'CB-26-002',
-          facilityId: ids.facilityMoshi,
-          status: 'draft',
-          startDate: '2026-06-01',
-          endDate: '2026-06-28',
-          certifier: 'isometric',
-          registry: 'Isometric Registry',
-          durabilityOption: '1000_year',
-          meanRandomReflectancePercent: 2.8,
-          meanNonReactiveCarbonPercent: 68,
-        },
-      ]);
-
-      console.log('Creating credit batch production-run membership...');
-      await tx.insert(schema.creditBatchProductionRuns).values([
-        {
-          creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun1,
-        },
-        {
-          creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun2,
-        },
-        {
-          creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun3,
-        },
-      ]);
+      await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
 
       // Links the Moshi facility to the Isometric sandbox project +
       // Dark Earth Carbon Template, with the Phase 3.7 emission-estimate

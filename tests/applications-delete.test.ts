@@ -9,9 +9,11 @@ import {
   creditBatchProductionRuns,
 } from "@/db/schema/credits";
 import { facilities, reactors } from "@/db/schema/facilities";
+import { feedstockTypes } from "@/db/schema/feedstock";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
+import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns } from "@/db/schema/production";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -20,6 +22,8 @@ interface DeleteFixture {
   facilityId: string;
   customerId: string;
   formulationId: string;
+  feedstockTypeId: string;
+  productionProcessId: string;
   reactorId: string;
   productionRunId: string;
   productId: string;
@@ -41,10 +45,30 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
     .values({ name: `Delete Test Formulation ${runId}`, code: `FM-DEL-${runId}` })
     .returning({ id: formulations.id });
 
+  // ADR 0016: a credit batch is single-feedstock (NOT NULL feedstockTypeId), so
+  // the fixture needs a feedstock type even though this delete test ignores
+  // feedstock semantics.
+  const [feedstockType] = await db
+    .insert(feedstockTypes)
+    .values({
+      name: `Delete Test Feedstock ${runId}`,
+      code: `FT-DEL-${runId}`,
+      category: "forestry",
+    })
+    .returning({ id: feedstockTypes.id });
+
   const [facility] = await db
     .insert(facilities)
     .values({ name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
     .returning({ id: facilities.id });
+
+  const [productionProcess] = await db
+    .insert(productionProcesses)
+    .values({
+      facilityId: facility.id,
+      feedstockTypeId: feedstockType.id,
+    })
+    .returning({ id: productionProcesses.id });
 
   const [reactor] = await db
     .insert(reactors)
@@ -107,6 +131,8 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
     facilityId: facility.id,
     customerId: customer.id,
     formulationId: formulation.id,
+    feedstockTypeId: feedstockType.id,
+    productionProcessId: productionProcess.id,
     reactorId: reactor.id,
     productionRunId: productionRun.id,
     productId: product.id,
@@ -153,7 +179,13 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
+    await tx
+      .delete(productionProcesses)
+      .where(eq(productionProcesses.id, fixture.productionProcessId));
     await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await tx
+      .delete(feedstockTypes)
+      .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
   });
 }
 
@@ -216,6 +248,8 @@ async function createCreditBatchRecord(
     .values({
       code: `CB-DEL-${runId}-${status.toUpperCase()}`,
       facilityId: fixture.facilityId,
+      feedstockTypeId: fixture.feedstockTypeId,
+      productionProcessId: fixture.productionProcessId,
       status,
       startDate: "2025-06-01",
       endDate: "2025-06-30",

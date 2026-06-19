@@ -11,7 +11,11 @@ test.describe("credit batch facility scope", () => {
     seededData,
   }) => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const batch = await seedCreditBatch(seededData.facility.id, `SCOPE-${tag}`);
+    const batch = await seedCreditBatch(
+      seededData.facility.id,
+      `SCOPE-${tag}`,
+      seededData.feedstockType.id,
+    );
     const { db, pool } = createDbConnection();
     let otherFacilityId: string | undefined;
 

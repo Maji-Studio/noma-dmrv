@@ -174,6 +174,36 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Credit-batch lab-sampling — Phases 2–4 + Method-B unlock deferred (`certification/credit-batch-sampling-phases`, opened 2026-06-19)
+
+- **Phase 1 shipped** (ADR 0016, branch `feat/credit-batch-production-process`,
+  commit `dde0c8e`, PR #294): `production_processes` table, derived
+  `credit_batches.feedstock_type_id` + `production_process_id`, single-feedstock
+  invariant, `samples.credit_batch_id`, the Isometric ≤ 1-month cap, and removal
+  of `reactors.sampling_method` + its migration-`0052` Method-B trigger
+  (migration `0057`). Data model + server-side derivation only.
+- **Deferred (Phases 2–4, plan items 7–15 in
+  `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`):**
+  re-grain `getMethodBEligibilityByReactor` → `…ByProcess` (counting samples in
+  the process since `established_at` — closes the cross-feedstock bug, dormant
+  under Method A); move the sampling unit from run to credit batch in
+  `sampling-requirements.ts` / `durability-submission-gates.ts`; re-point the
+  measurement-sample submission to one `biochar_production_batch` per credit
+  batch; surface the derived feedstock/process in the credit-batch UI; add the
+  process-grain Method-B/cadence operator surface.
+- **Deferred (ADR 0017 — Method-B unlock):** the live baseline counter, the
+  μ−σ/√n unsampled estimate, the 6-month borrow pool, 3σ winsorising, the
+  super-admin unlock, the Method-B operator UI, and the **process-grain DB
+  trigger** that replaces the dropped `0052` reactor trigger. Inert seam
+  (`production_processes.method_b_unlocked_at`) is laid.
+- **Why it matters:** DEC runs Method A everywhere today, so none of the above
+  blocks current operation — but the legacy reactor-grain submission gates still
+  describe an enforcement model mid-migration. Resolve by removing this entry as
+  each phase lands and recording it in `docs/isometric/changes.md`.
+- **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
+  #291 (template-driven remodel) — coordinate so the submission layer isn't
+  double-built.
+
 ### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
 - The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
@@ -202,6 +232,40 @@ guard. Pure starter-template residue; the app is facility-scoped.
   `docs/isometric/changes.md` and remove this entry (S).
 
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
+
+- **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
+  against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module
+  1.2 §5.1.1.3.1 — both re-verified via the isometric MCP). Decisions locked; full phased plan
+  + sandbox-parameterised wiring checklist in
+  `docs/plans/2026-06-19-tier1-durability-live-wiring.md`:
+  1. **Re-grain run → credit batch (root issue).** The durability gates, aggregation, Phase-E
+     measurement-sample builders, and the COA candidate-document walk all read `run.samples`,
+     but ADR 0016 re-pointed lab samples to `creditBatchId` (run link now nullable, and
+     `getProductionRunsWithSamples` skips null-run samples). Lab chemistry is therefore invisible
+     to the durability surfaces — they must be re-grained to the **credit batch** before the live
+     POST.
+  2. **Sample model:** enter a Sample against **one production run** (provenance); **account at
+     the credit batch** (pool ≥3 → mean + std-dev). The ≥3 are **independent samples distributed
+     across runs/days** (§8.3.1), not aliquots; hard-gate the count, **warn** if not distributed.
+  3. **Submitted shape:** one **measurement-sample submission** per credit batch carrying the
+     batch's **mean + std-dev** (raw ≥3 evidenced by the COA + durability ledger); registry means
+     the per-batch list.
+  4. **Soil temperature:** an operator-declared **facility-level reference value** (global DB, e.g.
+     Lembrechts 2022; 7 °C floor), justified in the PDD; per-application temps become a future
+     override. New facility certification field.
+  5. **COA:** the `lab_report` on each Sample, via the **existing** document→Source mirror
+     (re-grain the walk to gather by credit batch); D4 gate at batch grain.
+  6. **INPUT_MAPPING:** the stale `carbon_rich_substance_sequestration` entry is **deleted**; the
+     two `biochar_sequestration_200_year_*` components are carved out of the legacy datapoint loop
+     into the new measurement-samples step. `_unsampled` (Method B) is an **inert** seam — no
+     estimate math (future ADR ~0017).
+  7. **Scope grew (accepted):** a **durability evidence-ledger PDF** (reuse
+     `fn/certification/evidence-ledger.ts`; `frontend-design` skill for layout) reconciling raw
+     replicates → submitted mean+std-dev + soil-temp reference; plus **two UX surfaces** (lab-sample
+     create form with single-run ref + live credit-batch sample count; credit-batch sample
+     list/aggregation view).
+  **Still blocking the live POST:** only the two sandbox-empirical confirms below — every decision
+  above is buildable/stageable now.
 
 - **Phase E of the 200-year durability build is built offline but the LIVE
   submit path is gated on two sandbox-empirical confirms.** The measurement-

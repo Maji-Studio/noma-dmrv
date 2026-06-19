@@ -98,6 +98,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       delivery: crypto.randomUUID(),
       application: crypto.randomUUID(),
       creditBatch: crypto.randomUUID(),
+      productionProcess: crypto.randomUUID(),
       vehicle: crypto.randomUUID(),
     };
 
@@ -118,7 +119,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       identifier: `Reactor-${testRunId}`,
       facilityId: ids.facility,
       reactorType: "fixed-bed",
-      samplingMethod: "method_a",
       nominalThroughputTph: 1.0,
     });
 
@@ -316,11 +316,19 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       soilTemperatureC: 25,
     });
 
-    // 20. Create Credit Batch (links facility)
+    await tx.insert(schema.productionProcesses).values({
+      id: ids.productionProcess,
+      facilityId: ids.facility,
+      feedstockTypeId: ids.feedstockType,
+    });
+
+    // 20. Create Credit Batch (links facility, single feedstock per ADR 0016)
     await tx.insert(schema.creditBatches).values({
       id: ids.creditBatch,
       code: codes.creditBatch,
       facilityId: ids.facility,
+      feedstockTypeId: ids.feedstockType,
+      productionProcessId: ids.productionProcess,
       startDate: today,
       endDate: today,
       status: "draft",
@@ -434,6 +442,10 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
       await tx
         .delete(schema.feedstocks)
         .where(eq(schema.feedstocks.feedstockDeliveryId, data.feedstockDelivery.id));
+
+      await tx
+        .delete(schema.productionProcesses)
+        .where(eq(schema.productionProcesses.facilityId, data.facility.id));
 
       // Feedstock delivery
       await tx
