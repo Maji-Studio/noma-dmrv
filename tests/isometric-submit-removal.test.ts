@@ -202,14 +202,9 @@ function makeMapping(): CertifierProjectRow {
     defaultRemovalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
-    // Phase 3.7 emission-estimate config — required by
-    // `resolveFacilityEmissionConfig`. Per-stage energy is not consumed by
-    // this template (no electricity / genset inputs) but the values must be
-    // valid so the validator doesn't bail.
+    // Emission-estimate config — the genset yield is required by
+    // `resolveFacilityEmissionConfig` (ADR 0014 dropped the per-stage splits).
     gensetEnergyYieldKwhPerLitre: 3.375,
-    stageSplitBiomassPct: 32.2,
-    stageSplitPyrolysisPct: 58.5,
-    stageSplitBiocharPct: 9.3,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;
@@ -330,6 +325,7 @@ function makeContext(
     hasSubmittableRuns: true,
     productionReadinessGap: null,
     durabilityGateBlockers: durabilityBlockersFor(runs),
+    submissionWarnings: [],
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,

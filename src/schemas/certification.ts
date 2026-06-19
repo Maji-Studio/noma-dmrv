@@ -64,50 +64,19 @@ export const saveMappingSchema = z.object({
 
 export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 
-// --- Phase 3.7 per-facility emission-estimate config ---
+// --- Per-facility emission-estimate config ---
 
-// The three process-stage energy percentages must total this, within a
-// small tolerance for floating-point drift / UI rounding (the columns
-// are `real`/float4).
-export const STAGE_SPLIT_TOTAL_PCT = 100;
-export const STAGE_SPLIT_SUM_TOLERANCE = 0.1;
-
-export const facilityEmissionConfigSchema = z
-  .object({
-    facilityId: z.string().uuid("Select a facility"),
-    gensetEnergyYieldKwhPerLitre: requiredNumber("Genset energy yield is required").pipe(
-      z.number().positive("Genset energy yield must be greater than 0"),
-    ),
-    stageSplitBiomassPct: requiredNumber("Biomass processing split is required").pipe(
-      z.number().min(0).max(100, "Split must be between 0 and 100"),
-    ),
-    stageSplitPyrolysisPct: requiredNumber("Pyrolysis split is required").pipe(
-      z.number().min(0).max(100, "Split must be between 0 and 100"),
-    ),
-    stageSplitBiocharPct: requiredNumber("Biochar processing split is required").pipe(
-      z.number().min(0).max(100, "Split must be between 0 and 100"),
-    ),
-    defaultSoilTemperatureC: defaultSoilTemperatureSchema,
-  })
-  .superRefine((value, ctx) => {
-    const sum =
-      value.stageSplitBiomassPct +
-      value.stageSplitPyrolysisPct +
-      value.stageSplitBiocharPct;
-    if (Math.abs(sum - STAGE_SPLIT_TOTAL_PCT) > STAGE_SPLIT_SUM_TOLERANCE) {
-      for (const path of [
-        "stageSplitBiomassPct",
-        "stageSplitPyrolysisPct",
-        "stageSplitBiocharPct",
-      ] as const) {
-        ctx.addIssue({
-          code: "custom",
-          path: [path],
-          message: `Stage splits must sum to ${STAGE_SPLIT_TOTAL_PCT}% (currently ${sum.toFixed(1)}%)`,
-        });
-      }
-    }
-  });
+// ADR 0014 collapsed energy to a single combined measurement point, dropping
+// the three process-stage split percentages (and their sum constraint). Only
+// the genset yield — emissions-affecting (litres → kWh) — and the soil-temp
+// fallback remain.
+export const facilityEmissionConfigSchema = z.object({
+  facilityId: z.string().uuid("Select a facility"),
+  gensetEnergyYieldKwhPerLitre: requiredNumber(
+    "Genset energy yield is required",
+  ).pipe(z.number().positive("Genset energy yield must be greater than 0")),
+  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+});
 
 export type FacilityEmissionConfigFormData = z.infer<
   typeof facilityEmissionConfigSchema

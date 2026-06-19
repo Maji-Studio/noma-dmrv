@@ -22,9 +22,15 @@ const CO2_STORED = {
   groupKey: "co2-stored",
   blueprintKey: "carbon_rich_substance_sequestration",
 } as const;
-const BIOCHAR_PROCESSING = {
-  groupKey: "biochar-processing",
+// Energy enters at a single pyrolysis measurement point (ADR 0014): one grid
+// electricity datapoint and one diesel-genset datapoint.
+const PYROLYSIS_ELECTRICITY = {
+  groupKey: "pyrolysis",
   blueprintKey: "grid_electricity_use",
+} as const;
+const PYROLYSIS_GENSET = {
+  groupKey: "pyrolysis",
+  blueprintKey: "energy_based_ci_emissions",
 } as const;
 const baseAgg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
@@ -40,12 +46,8 @@ const baseAgg: AggregatedProductionData = {
   feedstockTransportMassDistanceTonneKm: 50,
   biocharTransportMassDistanceTonneKm: 100,
   sampleTransportMassDistanceTonneKm: 12,
-  biomassElectricityKwh: 40,
-  pyrolysisElectricityKwh: 130,
-  biocharElectricityKwh: 30,
-  biomassGensetKwh: 13.5,
-  pyrolysisGensetKwh: 43.875,
-  biocharGensetKwh: 6.975,
+  // 20 L × 3.375 kWh/L (enriched genset figure — ADR 0014 single point).
+  totalGensetKwh: 67.5,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1", "pr_2"],
@@ -127,8 +129,8 @@ describe("buildCreateDatapointRequest", () => {
 
   it("matches units case-insensitively (kWh ↔ kwh)", () => {
     const result = buildCreateDatapointRequest({
-      groupKey: BIOCHAR_PROCESSING.groupKey,
-      componentBlueprintKey: BIOCHAR_PROCESSING.blueprintKey,
+      groupKey: PYROLYSIS_ELECTRICITY.groupKey,
+      componentBlueprintKey: PYROLYSIS_ELECTRICITY.blueprintKey,
       rtcInput: rtcInput({
         input_key: "electricity_use",
         quantity_kind: "energy",
@@ -143,8 +145,27 @@ describe("buildCreateDatapointRequest", () => {
       supplierRefId: SUPPLIER_REF,
     });
 
+    // Combined grid electricity (totalElectricityKwh), no per-stage split.
     expect(result.quantity.unit).toBe("kWh");
-    expect(result.quantity.magnitude).toBe(30);
+    expect(result.quantity.magnitude).toBe(200);
+  });
+
+  it("maps pyrolysis genset energy to the combined totalGensetKwh", () => {
+    const result = buildCreateDatapointRequest({
+      groupKey: PYROLYSIS_GENSET.groupKey,
+      componentBlueprintKey: PYROLYSIS_GENSET.blueprintKey,
+      rtcInput: rtcInput({ input_key: "energy", quantity_kind: "energy" }),
+      blueprintInput: blueprintInput({
+        input_key: "energy",
+        compatible_unit: "kWh",
+        quantity_kind: "energy",
+      }),
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    expect(result.quantity).toEqual({ magnitude: 67.5, unit: "kWh" });
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
@@ -316,23 +337,25 @@ describe("buildCreateDatapointRequest", () => {
         "mass_distance",
       ],
       ["biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"],
-      [
-        "biomass-feedstock-processing",
-        "metered_energy_based_ci_emissions",
-        "initial_readout",
-      ],
-      [
-        "biomass-feedstock-processing",
-        "metered_energy_based_ci_emissions",
-        "final_readout",
-      ],
-      [
-        "biomass-feedstock-processing",
-        "energy_based_ci_emissions",
-        "energy",
-      ],
+      // Energy — single combined measurement point under pyrolysis (ADR 0014):
+      // grid electricity → totalElectricityKwh, diesel genset → totalGensetKwh.
+      // The per-stage `metered_energy_based_ci_emissions` electricity entry and
+      // the biochar-processing / biomass-feedstock-processing energy entries are
+      // gone.
+      ["pyrolysis", "grid_electricity_use", "electricity_use"],
       ["pyrolysis", "energy_based_ci_emissions", "energy"],
-      ["biochar-processing", "energy_based_ci_emissions", "energy"],
+      // Volume-based fuel mapping retained for templates that re-declare the
+      // component (the live template declares none → non-blocking warning).
+      [
+        "biomass-feedstock-sourcing",
+        "fuel_usage_by_volume",
+        "volume_of_fuel",
+      ],
+      [
+        "biomass-feedstock-processing",
+        "fuel_usage_by_volume",
+        "volume_of_fuel",
+      ],
       [
         "sampling-required-for-mrv",
         "mass_distance_based_ci_emissions",

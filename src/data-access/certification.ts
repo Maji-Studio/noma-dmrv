@@ -295,17 +295,14 @@ export interface FacilityEmissionConfigInput {
   facilityId: string;
   provider?: CertifierProvider;
   gensetEnergyYieldKwhPerLitre: number;
-  stageSplitBiomassPct: number;
-  stageSplitPyrolysisPct: number;
-  stageSplitBiocharPct: number;
   defaultSoilTemperatureC?: number | null;
 }
 
 // Updates only the emission-config columns on an existing
-// certifier_projects row: the four Phase 3.7 emission-estimate fields
-// (gensetEnergyYieldKwhPerLitre + the three stageSplit*Pct columns) plus
-// defaultSoilTemperatureC. The facility must already be linked to an
-// Isometric project — the config has no meaning otherwise.
+// certifier_projects row: the genset energy yield plus the soil-temperature
+// fallback. ADR 0014 dropped the three stage-split columns. The facility must
+// already be linked to an Isometric project — the config has no meaning
+// otherwise.
 export async function updateFacilityEmissionConfig(
   userId: string,
   input: FacilityEmissionConfigInput,
@@ -316,9 +313,6 @@ export async function updateFacilityEmissionConfig(
     .update(certifierProjects)
     .set({
       gensetEnergyYieldKwhPerLitre: input.gensetEnergyYieldKwhPerLitre,
-      stageSplitBiomassPct: input.stageSplitBiomassPct,
-      stageSplitPyrolysisPct: input.stageSplitPyrolysisPct,
-      stageSplitBiocharPct: input.stageSplitBiocharPct,
       defaultSoilTemperatureC: input.defaultSoilTemperatureC ?? null,
       updatedAt: sql`now()`,
     })
