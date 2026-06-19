@@ -21,7 +21,7 @@ import { deleteTransportLegsForEntity } from "./transport-legs";
 export interface SampleWithRelations {
   id: string;
   sampleCode: string;
-  // Provenance — which run the replicate was drawn from (nullable since ADR 0015).
+  // Provenance — which run the replicate was drawn from (nullable since ADR 0016).
   productionRunId: string | null;
   // The credit batch (protocol production batch) this replicate characterises.
   creditBatchId: string | null;
@@ -416,7 +416,7 @@ export async function createSample(
     sampleCode: string;
     productionRunId: string;
     // The credit batch (protocol production batch) this replicate characterises
-    // (ADR 0015). Optional — may be associated after the batch is formed.
+    // (ADR 0016). Optional — may be associated after the batch is formed.
     creditBatchId?: string | null;
     samplingTime: Date;
     labName?: string | null;

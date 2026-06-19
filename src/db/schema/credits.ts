@@ -33,7 +33,7 @@ export const creditBatches = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
-    // --- Production-batch identity (ADR 0015) ---
+    // --- Production-batch identity (ADR 0016) ---
     // The credit batch IS the Isometric protocol production batch: ONE
     // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
     // derived from — and asserted single across — the member runs at create /
@@ -138,7 +138,7 @@ export const creditBatches = pgTable(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
-    // ADR 0015: a credit batch is the protocol production batch (< 1 month).
+    // ADR 0016: a credit batch is the protocol production batch (< 1 month).
     // Coarse DB backstop at 31 days, Isometric-conditional; the precise
     // calendar-month rule lives in the Zod superRefine + server re-validation.
     check(

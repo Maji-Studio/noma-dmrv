@@ -304,7 +304,7 @@ export async function seedGroupedRemovalWithChain(
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
       });
-      // ADR 0015: the credit batch is single-feedstock (NOT NULL). Mirror the
+      // ADR 0016: the credit batch is single-feedstock (NOT NULL). Mirror the
       // run's own feedstock so the batch stays consistent with its membership.
       const [feedstockRow] = await tx
         .select({ feedstockTypeId: schema.feedstocks.feedstockTypeId })
@@ -665,7 +665,7 @@ export async function seedUngroupedReadyBatchWithChain(
         leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
         leg(id.sampleTransportLeg, "sample", id.sample),
       ]);
-      // ADR 0015: the credit batch is single-feedstock (NOT NULL). Mirror the
+      // ADR 0016: the credit batch is single-feedstock (NOT NULL). Mirror the
       // run's own feedstock so the batch stays consistent with its membership.
       const [feedstockRow] = await tx
         .select({ feedstockTypeId: schema.feedstocks.feedstockTypeId })

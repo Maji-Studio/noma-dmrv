@@ -43,7 +43,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
     .values({ name: `Delete Test Formulation ${runId}`, code: `FM-DEL-${runId}` })
     .returning({ id: formulations.id });
 
-  // ADR 0015: a credit batch is single-feedstock (NOT NULL feedstockTypeId), so
+  // ADR 0016: a credit batch is single-feedstock (NOT NULL feedstockTypeId), so
   // the fixture needs a feedstock type even though this delete test ignores
   // feedstock semantics.
   const [feedstockType] = await db

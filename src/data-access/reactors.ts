@@ -56,11 +56,11 @@ export interface PaginatedReactors {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 
-// ADR 0015 (Phase 1): the sampling method moved OFF reactors onto production
+// ADR 0016 (Phase 1): the sampling method moved OFF reactors onto production
 // processes, and DEC runs Method A everywhere. The reactor-level readiness
 // surface (methodBEligibility / samplingRequirement) is kept but evaluated at a
 // constant Method-A regime — it stays dormant until Phase 2 re-keys it to the
-// production process (per ADR 0015 / the deferred Method-B unlock, ADR 0016).
+// production process (per ADR 0016 / the deferred Method-B unlock, ADR 0017).
 const PHASE1_REACTOR_SAMPLING_METHOD = "method_a" as const;
 
 // ============================================
@@ -313,7 +313,7 @@ export async function getReactorById(
  * must be sampled. Reactor ids absent from the table are simply omitted; the
  * caller defaults a missing run conservatively to Method A.
  *
- * ADR 0015 (Phase 1): the sampling method is no longer a reactor column — it
+ * ADR 0016 (Phase 1): the sampling method is no longer a reactor column — it
  * lives on the production process — and DEC runs Method A everywhere. This
  * therefore returns Method A for every existing reactor. Phase 2 re-keys the
  * gates to source the method from the production process directly.
@@ -401,7 +401,7 @@ export async function createReactor(
     throw new SafeError("Facility not found or archived");
   }
 
-  // ADR 0015: a reactor no longer declares a sampling method (it lives on the
+  // ADR 0016: a reactor no longer declares a sampling method (it lives on the
   // production process). Nothing Method-B to validate at reactor creation.
 
   const [reactor] = await db
@@ -474,7 +474,7 @@ export async function updateReactor(
     }
   }
 
-  // ADR 0015: a reactor no longer declares a sampling method (it lives on the
+  // ADR 0016: a reactor no longer declares a sampling method (it lives on the
   // production process), so there is no Method-B eligibility to re-validate on
   // a reactor update.
 

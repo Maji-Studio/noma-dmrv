@@ -510,7 +510,7 @@ export async function getProductionRunsWithSamples(
 
   const samplesByRun = new Map<string, Sample[]>();
   for (const s of sampleRows) {
-    // productionRunId is nullable since ADR 0015 (provenance, not the primary
+    // productionRunId is nullable since ADR 0016 (provenance, not the primary
     // link). The query filters on it being in `runs`, so it is non-null here;
     // the guard satisfies the type and skips any commingled-batch sample.
     if (s.productionRunId == null) continue;

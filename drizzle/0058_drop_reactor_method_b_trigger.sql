@@ -2,7 +2,7 @@
 -- (function enforce_reactor_method_b_minimum_samples + trigger
 -- reactor_method_b_minimum_samples).
 --
--- ADR 0015 moved `sampling_method` OFF `reactors` onto `production_processes`:
+-- ADR 0016 moved `sampling_method` OFF `reactors` onto `production_processes`:
 -- the Biochar Protocol (§8.3.1) scopes the Method A/B regime to
 -- (feedstock × conditions), which SPANS reactors — reactor identity is not part
 -- of that boundary. Migration 0057 dropped `reactors.sampling_method`, so
@@ -11,7 +11,7 @@
 -- INSERT/UPDATE (including the reseed).
 --
 -- DEC runs Method A everywhere and Phase 1 ships no path that sets a process to
--- method_b (the super-admin unlock is deferred to ADR 0016), so this baseline
+-- method_b (the super-admin unlock is deferred to ADR 0017), so this baseline
 -- backstop has nothing left to guard. We DROP it here. The process-grain
 -- equivalent — count a production process's samples since `established_at` via
 -- credit_batches → samples — ships with the deferred Method-B unlock.

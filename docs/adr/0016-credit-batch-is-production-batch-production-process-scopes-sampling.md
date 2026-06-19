@@ -87,7 +87,7 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
   `sampling_method` moved onto it; `credit_batches.feedstockTypeId` + `productionProcessId`;
   the ≤1-month Isometric cap; `samples` re-pointed to the credit batch; ≥3-per-sampled-batch
   characterisation; per-process grouping of eligibility.
-- **Deferred to a future ADR tied to the super-admin Method-B unlock (e.g. ADR 0016):** the
+- **Deferred to a future ADR tied to the super-admin Method-B unlock (e.g. ADR 0017):** the
   live Method-B compute — the 30-sample baseline counter, the μ − σ/√n unsampled estimate, the
   6-month borrow-pool, the 3σ winsorising/compliance triggers, the per-process eligibility
   wiring, and the Method-B operator UI (which must surface *why* and *how fresh* an unsampled
@@ -118,7 +118,11 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
 - New `production_processes` table (`facilityId`, `feedstockTypeId`, `establishedAt`,
   `samplingMethod`, baseline state). `reactors.sampling_method` is removed. `credit_batches`
   gains `feedstockTypeId` + `productionProcessId`. `samples.production_run_id` → `creditBatchId`
-  (run becomes optional provenance or is dropped); `production_samples` is untouched.
+  — the run link is **kept** as provenance + the data-entry anchor: a Sample is entered against
+  **one** production run and its credit batch is **derived** from that run's membership (the
+  accounting grain). Both links stay populated; the run is never the characterisation / ≥3-count
+  grain, and the ≥3 are independent samples distributed across the batch's runs/days (protocol
+  §8.3.1, re-verified 2026-06-19). `production_samples` is untouched.
 - `getMethodBEligibilityByReactor` → per-process (dormant under Method A; closes the
   cross-feedstock over-credit bug when Method B unlocks). Cadence / replicate / eligibility
   gates move from run-grain to credit-batch-grain, grouped by process.

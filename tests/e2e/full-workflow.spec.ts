@@ -315,7 +315,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       soilTemperatureC: 25,
     });
 
-    // 20. Create Credit Batch (links facility, single feedstock per ADR 0015)
+    // 20. Create Credit Batch (links facility, single feedstock per ADR 0016)
     await tx.insert(schema.creditBatches).values({
       id: ids.creditBatch,
       code: codes.creditBatch,

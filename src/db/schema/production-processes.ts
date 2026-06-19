@@ -24,7 +24,7 @@ import { feedstockTypes } from './feedstock';
 // feedstock change, pyrolysis-condition change, or 3σ carbon deviation opens a
 // NEW process and resets the baseline (`establishedAt`). The current process is
 // the most recent one for the pair; the lookup index is therefore non-unique.
-// See ADR 0015. The live Method-B compute is deferred to ADR 0016.
+// See ADR 0016. The live Method-B compute is deferred to ADR 0017.
 // ============================================
 
 export const productionProcesses = pgTable(
@@ -47,7 +47,7 @@ export const productionProcesses = pgTable(
     // everywhere; method_b is reachable only via the deferred super-admin unlock.
     samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
 
-    // Conditional-gate seam for the deferred Method-B unlock (ADR 0016).
+    // Conditional-gate seam for the deferred Method-B unlock (ADR 0017).
     // NULL = Method A enforced. When the super-admin unlocks Method B for a
     // process that has met its ≥30-sample baseline, this is stamped; the
     // Method-B compute (baseline counter, unsampled estimate, borrow pool) reads

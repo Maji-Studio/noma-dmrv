@@ -5,10 +5,10 @@ Status: accepted (2026-06-19) — Dark Earth Carbon answered the four domain que
 in issue `#201`; supersedes the intent of `#113` (closed). Complements ADR 0003 (Removal as
 submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 
-> **Amended by ADR 0015 (2026-06-19).** This ADR left the cohort *feedstock-agnostic*,
+> **Amended by ADR 0016 (2026-06-19).** This ADR left the cohort *feedstock-agnostic*,
 > even though its own justification leaned on Isometric's **production batch** (which is
 > *one feedstock under consistent conditions*). The §5 domain questions never covered
-> feedstock-per-batch, so it fell through. ADR 0015 closes that gap: a credit batch is the
+> feedstock-per-batch, so it fell through. ADR 0016 closes that gap: a credit batch is the
 > production runs of **one feedstock** at one facility within ≤ 1 month — making it a genuine
 > protocol production batch (the lab-sampling unit). A facility running several feedstocks in
 > a month therefore has several **concurrent** credit batches, one per feedstock. Everything
@@ -36,7 +36,7 @@ Protocol v1.3 §8.3.1), while crediting is **ex-post and applied-mass-scoped** (
 ## Decision
 
 A **credit batch is a production cohort**: the production runs of one **feedstock**
-(feedstock scoping added by ADR 0015) at one facility within a ≤ 1-month window.
+(feedstock scoping added by ADR 0016) at one facility within a ≤ 1-month window.
 **Production runs are the membership primitive** (strict — one run belongs to at most one
 batch, which is where #93's no-double-counting attaches). The
 batch's date window means **production period**. **Member applications are derived** from

@@ -514,7 +514,7 @@ export async function createCreditBatch(
     const certifier = await resolveCreditBatchCertifier(tx, batchData.facilityId);
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
-    // ADR 0015: the credit batch is the protocol production batch (one
+    // ADR 0016: the credit batch is the protocol production batch (one
     // feedstock). Validate the member runs FIRST (existence, facility, window,
     // prior assignment) so a bad run ID surfaces a precise error rather than a
     // confusing "no linked feedstock" from the derivation step. Then derive the
@@ -711,7 +711,7 @@ export async function updateCreditBatch(
 
     updateData.certifier = await resolveCreditBatchCertifier(tx, targetFacilityId);
 
-    // ADR 0015: re-derive the single feedstock type + production process when
+    // ADR 0016: re-derive the single feedstock type + production process when
     // the membership or facility changes — either can shift which (facility,
     // feedstock) process this batch belongs to. When runs are unchanged but the
     // facility moved, derive from the existing membership.

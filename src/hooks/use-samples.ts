@@ -185,7 +185,7 @@ export function useCreateSample(
       // Invalidate next code
       queryClient.invalidateQueries({ queryKey: sampleKeys.nextCode() });
       // Invalidate production run detail (sample count may have changed).
-      // productionRunId is nullable since ADR 0015 (provenance, not primary).
+      // productionRunId is nullable since ADR 0016 (provenance, not primary).
       if (data.productionRunId) {
         queryClient.invalidateQueries({
           queryKey: productionRunKeys.detail(data.productionRunId),

@@ -1,7 +1,7 @@
 # Plan: credit batch = production batch; a production process scopes sampling
 
 **Date:** 2026-06-19
-**Decision:** ADR 0015 (refines ADR 0014; this plan is its implementation shape). Submission path per ADR 0013.
+**Decision:** ADR 0016 (refines ADR 0014; this plan is its implementation shape). Submission path per ADR 0013.
 **Branch:** `feat/credit-batch-production-process` (own branch — NOT transport-evidence).
 **Status:** Draft — design locked; not built.
 
@@ -19,9 +19,9 @@ the 30-sample baseline live on a new **`production_processes`** campaign entity 
 not part of the process boundary). Lab **Samples** attach **per credit batch**. DEC runs
 **Method A everywhere** today; Method B is a future super-admin unlock, so this plan ships the
 *structure* + *Method-A behaviour* and **defers the live Method-B compute** (see Scope). ADR
-0015 has the rationale and the verified protocol citations.
+0016 has the rationale and the verified protocol citations.
 
-## Design invariants (from ADR 0015 / 0014 / 0013)
+## Design invariants (from ADR 0016 / 0014 / 0013)
 
 - Credit batch = **one feedstock**, facility-scoped, ≤ 1 month under Isometric = the protocol
   production batch. Membership stays **production runs** (ADR 0014), each run matching the

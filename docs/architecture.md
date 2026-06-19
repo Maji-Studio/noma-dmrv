@@ -141,7 +141,7 @@ export async function GET() {
 
 ## Sampling Method Enforcement (Isometric)
 
-**ADR 0015 (Phase 1, 2026-06-19):** the sampling regime moved **off `reactors`**
+**ADR 0016 (Phase 1, 2026-06-19):** the sampling regime moved **off `reactors`**
 onto the new `production_processes` entity, keyed `(facility, feedstock)` and
 spanning reactors per Biochar Protocol §8.3.1. `reactors.sampling_method` and its
 Method-B baseline DB trigger (migration `0052`) were **dropped** (migration
@@ -151,11 +151,11 @@ Method-B baseline DB trigger (migration `0052`) were **dropped** (migration
 - Sampling regime stored on `production_processes.sampling_method` (default
   `method_a`); a process is find-or-created per `(facility, feedstock)` when a
   credit batch is created.
-- DEC runs Method A everywhere. **All Method-B compute is deferred to ADR 0016**
+- DEC runs Method A everywhere. **All Method-B compute is deferred to ADR 0017**
   (live per-process eligibility, the ≥30-sample baseline, the super-admin unlock);
   only the inert `production_processes.method_b_unlocked_at` seam is laid.
 
-Method B requires (enforced once ADR 0016 lands):
+Method B requires (enforced once ADR 0017 lands):
 
 1. At least 30 prior Method-A samples in the process before unlocking `method_b`.
 2. Credit batches in the process must satisfy sampled-batch cadence ≥ 1 per 10.
@@ -171,7 +171,7 @@ Enforcement is intentionally layered:
 1. UI gating (disable/hide Method B when ineligible).
 2. Server validation in action/data-access layer.
 3. DB trigger guardrails for any direct/bypass writes (process-grain trigger
-   ships with the ADR 0016 unlock; the reactor-grain `0052` trigger was dropped).
+   ships with the ADR 0017 unlock; the reactor-grain `0052` trigger was dropped).
 
 ## Certify Integration (Isometric)
 

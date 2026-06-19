@@ -22,7 +22,7 @@ export type ReactorType = (typeof reactorTypes)[number];
  * Method A: sample every production batch.
  * Method B: sample at least 1 in 10 production batches (requires 30 prior Method A samples).
  *
- * NOTE (ADR 0015): the sampling method is declared per PRODUCTION PROCESS
+ * NOTE (ADR 0016): the sampling method is declared per PRODUCTION PROCESS
  * (feedstock × conditions), NOT per reactor — these are kept here only as the
  * shared protocol vocabulary consumed by the process + submission layers.
  */

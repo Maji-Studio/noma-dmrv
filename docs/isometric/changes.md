@@ -13,7 +13,7 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
-## 2026-06-19 (ADR 0015 Phase 1 — credit batch = production batch, process scopes sampling)
+## 2026-06-19 (ADR 0016 Phase 1 — credit batch = production batch, process scopes sampling)
 
 Credit batch becomes the Isometric **production batch**: one feedstock,
 facility-scoped, ≤ 1 month under Isometric. A new `production_processes` entity
@@ -23,7 +23,7 @@ owns the sampling regime (`sampling_method`), moved **off** `reactors`.
 Phase 1 (data model + server-side derivation only; commit `dde0c8e`, PR #294):
 
 - `production_processes` table; find-or-created per `(facility, feedstock)` on
-  credit-batch create. Inert `method_b_unlocked_at` seam for ADR 0016.
+  credit-batch create. Inert `method_b_unlocked_at` seam for ADR 0017.
 - `credit_batches`: derived `feedstock_type_id` (NOT NULL) + `production_process_id`
   from member runs; a batch whose runs span > 1 feedstock type is rejected.
 - `samples` attach per credit batch (`credit_batch_id`); `production_run_id`
@@ -31,12 +31,12 @@ Phase 1 (data model + server-side derivation only; commit `dde0c8e`, PR #294):
 - Isometric ≤ 1-month cap: Zod `superRefine` + DB `check`.
 - Dropped `reactors.sampling_method` and the migration-`0052` Method-B baseline
   trigger (migration `0057`) — DEC is Method A, nothing left to guard at reactor
-  grain. The process-grain trigger ships with the ADR 0016 unlock.
+  grain. The process-grain trigger ships with the ADR 0017 unlock.
 
 Deferred: Phases 2–4 (live sampling logic, submission mapping, credit-batch UI
 for the derived feedstock, reactor-list re-grain) and all Method-B compute
-(ADR 0016). Tracked in `docs/open-questions.md` →
-`certification/credit-batch-sampling-phases`. Decision of record: ADR 0015
+(ADR 0017). Tracked in `docs/open-questions.md` →
+`certification/credit-batch-sampling-phases`. Decision of record: ADR 0016
 (refines ADR 0014). Plan: `docs/plans/2026-06-19-credit-batch-lab-sampling-compliance.md`.
 
 ## 2026-06-19 (transport → mass_distance, multi-leg mass-weighting)

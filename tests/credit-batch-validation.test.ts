@@ -56,7 +56,7 @@ let thirdRunInFacilityA: { id: string };
 let assignedGuardRunInFacilityA: { id: string };
 let outOfWindowRunInFacilityA: { id: string };
 let runInFacilityB: { id: string };
-// ADR 0015 feedstock-derivation fixtures.
+// ADR 0016 feedstock-derivation fixtures.
 let primaryFeedstockTypeId: string;
 let multiFeedstockRunInFacilityA: { id: string };
 let noFeedstockRunInFacilityA: { id: string };
@@ -169,7 +169,7 @@ beforeAll(async () => {
         biocharDryMassKg: 4300,
       },
       {
-        // ADR 0015: a run blending two feedstock types — a credit batch built
+        // ADR 0016: a run blending two feedstock types — a credit batch built
         // from it must be rejected (one feedstock per protocol production batch).
         code: `PR-VAL-A6-${runId}`,
         facilityId: facilityA.id,
@@ -203,7 +203,7 @@ beforeAll(async () => {
   ] = productionRunRows;
   createdIds.productionRuns.push(...productionRunRows.map((run) => run.id));
 
-  // ADR 0015: every credit batch derives its single feedstock from its member
+  // ADR 0016: every credit batch derives its single feedstock from its member
   // runs (productionRunFeedstocks → feedstocks.feedstockTypeId), so each run
   // used in a positive test needs a feedstock link. Two types let us prove the
   // single-feedstock assertion fires when a run blends more than one.
@@ -520,7 +520,7 @@ describe("Credit Batch Production-Run Validation", () => {
     expect(result.productionRunIds).toEqual([runInFacilityA.id]);
     expect(result.applicationIds).toEqual([appInFacilityA.id]);
     expect(result.applicationCount).toBe(1);
-    // ADR 0015: the batch's feedstock + production process are derived from the
+    // ADR 0016: the batch's feedstock + production process are derived from the
     // member run, never supplied by the caller.
     expect(result.feedstockTypeId).toBe(primaryFeedstockTypeId);
     expect(result.productionProcessId).toBeTruthy();

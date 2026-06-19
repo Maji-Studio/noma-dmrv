@@ -193,7 +193,7 @@ membership cannot bypass it.
 
 ## Sampling Method Enforcement
 
-**ADR 0015 (Phase 1):** sampling method moved off `reactors` onto
+**ADR 0016 (Phase 1):** sampling method moved off `reactors` onto
 `production_processes.sampling_method` (keyed `(facility, feedstock)`, spans
 reactors). `reactors.sampling_method` and its migration-`0052` Method-B trigger
 were dropped (migration `0057`). Lab `samples` now attach per credit batch
@@ -202,13 +202,13 @@ provenance). The credit batch carries `feedstock_type_id` (NOT NULL, derived
 from its member runs) + `production_process_id`, and an Isometric ≤ 1-month
 window (`certifier IS DISTINCT FROM 'isometric' OR (end_date - start_date) <= 31`).
 
-Method B guardrails (process grain; **deferred to ADR 0016** — DEC is Method A):
+Method B guardrails (process grain; **deferred to ADR 0017** — DEC is Method A):
 
 1. A process needs at least 30 prior Method-A samples before unlocking `method_b`.
 2. Credit batches in a Method-B process need sampled-batch cadence ≥ 1 per 10.
 
 Enforcement is layered through UI checks, server/data-access validation, and DB
-trigger guardrails (the process-grain trigger ships with the ADR 0016 unlock).
+trigger guardrails (the process-grain trigger ships with the ADR 0017 unlock).
 
 ## Verification Checklist
 
