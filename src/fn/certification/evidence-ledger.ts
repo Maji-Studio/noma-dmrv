@@ -76,7 +76,11 @@ function docContentHash(doc: DocumentRow): string | null {
   return typeof meta?.contentHash === "string" ? meta.contentHash : null;
 }
 
-async function withRemovalLedgerLock<T>(
+// Serializes ledger generation per removal. The transaction only scopes the
+// advisory lock; storage, mirror HTTP, and supersede deletes still use the
+// normal data-access functions. The flow is idempotent/self-healing rather than
+// atomic across those external effects.
+async function withRemovalLedgerSerialization<T>(
   removalId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
@@ -131,18 +135,18 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
   }
 
   const facility = await getFacilityById(userId, ctx.facilityId);
-  const removalCode =
+  const memberBatchCodes =
     ctx.memberBatches.map((b) => b.code).join(" · ") || null;
 
   const model = buildLedgerModel({
     legsByCategory: ctx.transportLegs,
-    removalCode,
+    memberBatchCodes,
     facilityName: facility?.name ?? null,
     externalProjectId: ctx.mapping.externalProjectId,
     generatedAtIso: new Date().toISOString(),
   });
 
-  return withRemovalLedgerLock(removalId, () =>
+  return withRemovalLedgerSerialization(removalId, () =>
     ensureTransportEvidenceLedgerSourceForModel(userId, removalId, ctx, model, log),
   );
 }
@@ -207,7 +211,7 @@ async function ensureTransportEvidenceLedgerSourceForModel(
     storageProvider: provider.name,
     storageBucket: provider.bucket,
     storageKey,
-    fileName: `transport-evidence-ledger-${model.removalCode ?? removalId}.pdf`,
+    fileName: `transport-evidence-ledger-${model.memberBatchCodes ?? removalId}.pdf`,
     fileSizeBytes: pdf.byteLength,
     mimeType: PDF_MIME,
     checksumSha256: createHash("sha256").update(pdf).digest("hex"),

@@ -300,7 +300,7 @@ function masthead(model: LedgerModel): ReactElement {
   const pair = (label: string, val: string) =>
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
-    pair("Removal", model.removalCode ?? "—"),
+    pair("Member batches", model.memberBatchCodes ?? "—"),
     pair("Facility", model.facilityName ?? "—"),
     pair("Registry project", model.externalProjectId ?? "—"),
     pair("Legs reconciled", `${model.totalLegs} across 3 categories`),
@@ -316,7 +316,7 @@ function claimCell(cat: LedgerCategory): ReactElement {
     ),
     t(styles.claimVal, nf2(cat.subtotalTkm)),
     t(styles.claimUnit, `tonne·km · ${cat.legs.length} legs`),
-    t(styles.claimCheck, "•  matches ledger"),
+    t(styles.claimCheck, "•  matches submitted scalar"),
   );
 }
 
@@ -325,7 +325,7 @@ function claimBand(model: LedgerModel): ReactElement {
     t([styles.claimCat, { color: "rgba(255,255,255,0.75)" }], "Total mass·distance"),
     t([styles.claimVal, { color: C.paper }], nf2(model.totalTkm)),
     t([styles.claimUnit, { color: "rgba(255,255,255,0.55)" }], "tonne·kilometres"),
-    t([styles.claimCheck, { color: C.greenLite }], `•  all ${model.totalLegs} legs reconciled`),
+    t([styles.claimCheck, { color: C.greenLite }], `•  ${model.totalLegs} legs reconcile to submitted scalars`),
   );
   return v(styles.claim, {},
     v(styles.claimHead, {},
@@ -441,7 +441,7 @@ function buildDocument(model: LedgerModel): ReactElement {
     .filter((c) => c.legs.length > 0)
     .map(ledgerSection);
   return h(Document, {
-    title: `Transport Emissions Evidence Ledger${model.removalCode ? ` — ${model.removalCode}` : ""}`,
+    title: `Transport Emissions Evidence Ledger${model.memberBatchCodes ? ` — ${model.memberBatchCodes}` : ""}`,
     author: "noma dMRV",
     subject: "Per-leg transport mass·distance ledger backing the submitted scalars",
   },

@@ -459,7 +459,6 @@ export async function mirrorDocumentToSourceForUser(
   userId: string,
   parsed: MirrorDocumentToSourceInput,
 ): Promise<MirrorResult> {
-  {
     const { removalId, documentId, isPublic } = parsed;
 
     // Ownership + lineage scoping ───────────────────────────────────────
@@ -705,7 +704,6 @@ export async function mirrorDocumentToSourceForUser(
         recovered: recoveredFlag,
       };
     });
-  }
 }
 
 // ───────────────────────────────────────────────────────────────────────────

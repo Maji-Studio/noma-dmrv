@@ -5,7 +5,7 @@
  * backs a Removal's submitted transport scalars. Built by `build-model.ts` from
  * the removal's real transport legs; consumed by `pdf.tsx` (react-pdf). Keeping
  * the model free of any react-pdf type means the math is unit-testable without a
- * renderer, and "Σ legs = subtotal = claim" is decided here, not in the layout.
+ * renderer, and "submitted scalar = claim" is decided here, not in the layout.
  */
 
 export type LedgerCategoryKey = "feedstock" | "biochar" | "sample";
@@ -64,7 +64,7 @@ export interface LedgerCategory {
 }
 
 export interface LedgerModel {
-  removalCode: string | null;
+  memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
   /** ISO date string, injected by the caller (no clock reads in the builder). */
