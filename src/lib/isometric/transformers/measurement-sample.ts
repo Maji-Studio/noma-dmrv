@@ -103,7 +103,9 @@ export function selectSequestrationBlueprintKey(args: {
   // it to the unsampled blueprint and mask an upstream gate regression.
   if (args.samplingMethod !== "method_b") {
     throw new Error(
-      "selectSequestrationBlueprintKey: an unsampled batch is only valid under Method B",
+      `selectSequestrationBlueprintKey: an unsampled batch is only valid under Method B ` +
+        `(sampled=${args.sampled}, samplingMethod=${args.samplingMethod}). ` +
+        `Verify upstream durability gate evaluation before submission.`,
     );
   }
   return SEQUESTRATION_BLUEPRINT_UNSAMPLED;

@@ -15,10 +15,10 @@
  *   §5.1.1.2  C_biochar = Total Carbon − Inorganic Carbon (Eq.2).
  *   §5        Soil-temperature conservatism: if the within-boundary spread
  *             exceeds 1 °C, subdivide the project OR use the most conservative
- *             (highest) value. noma has only per-application soil temperatures
- *             and no project-area baseline, so it submits a CONSERVATIVE
- *             ESTIMATE — the max site temperature (7 °C floor) — surfaced as
- *             such (D2 soil-temp resolution).
+ *             (highest) value. This implementation has only per-application
+ *             soil temperatures and no project-area baseline, so it submits a
+ *             CONSERVATIVE ESTIMATE — the max site temperature (7 °C floor) —
+ *             surfaced as such (D2 soil-temp resolution).
  *
  * Non-authoritative summary — verify against the URL before relying on it.
  */

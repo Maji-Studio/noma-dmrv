@@ -186,7 +186,7 @@ emissions would be attributed per-removal instead of amortized at project level.
 this durability build**; the two concerns are independent (durability can ship without it).
 Operator has candidate approaches to discuss. Tracked in §7; resolution = remove these from
 the removal template and model them as Project Components (ADR 0005); relates to
-`docs/plans/2026-06-17-remove-project-emissions-journal.md`.
+`docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`.
 
 ### Decisions revised by the A0 findings (confirmed 2026-06-18 in the reconciliation pass)
 
@@ -329,7 +329,7 @@ pass, not the only testing. Branch: `feat/200yr-durability-submission` (created 
   by the 2026-06-18 coverage-check (§4). They must be removed from the removal template and
   modeled as Project Components (ADR 0005). **Deferred to a dedicated P0 round** — operator
   has candidate approaches to discuss; relates to
-  `docs/plans/2026-06-17-remove-project-emissions-journal.md`. **Independent of the durability
+  `docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`. **Independent of the durability
   build** — does not block it.
 
 ## 8. To verify verbatim before coding
