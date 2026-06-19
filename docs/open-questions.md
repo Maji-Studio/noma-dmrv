@@ -174,6 +174,33 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
+
+- The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
+  every Removal submit) renders with bundled DM Sans/Mono TTFs read at runtime
+  via a dynamic `process.cwd()` path (`src/lib/certification/evidence-ledger/
+  fonts.ts`). Next's static tracer can't follow a dynamic fs path, so the TTFs
+  are pulled into the serverless bundle by `outputFileTracingIncludes` in
+  `next.config.ts` (broad `"/**"` key, since the submit action bundles under
+  several routes).
+- **Why it matters:** serverless file-tracing can't be exercised locally. If the
+  glob misses, the renderer throws `ENOENT` at submit time — and because ledger
+  generation is best-effort (try/catch in `submitRemoval`), the failure is
+  SILENT: the submit succeeds but no ledger Source is attached. So a wrong trace
+  config looks like "working" until someone notices removals have no ledger.
+- **Local status (2026-06-19):** the dev-runtime render + full
+  generate→store→mirror→`source_ids` flow is **verified in-process** against the
+  seeded sandbox (TTFs load fine via `process.cwd()` under `next dev`; see
+  `docs/isometric/changes.md`). That leaves the remaining risk *narrowed to the
+  serverless file-tracing path specifically* — local dev does not bundle, so the
+  `outputFileTracingIncludes` glob is still unexercised. Entry stays open.
+- **Resolve via:** on the first staging deploy, run a real submit and confirm a
+  `transport_evidence_ledger` document + Source is created (check the removal's
+  sources / the structured log line `generated transport evidence ledger`). If
+  absent, inspect the function bundle for the `.ttf` files and tighten the trace
+  key to the actual submit route(s). Record the outcome in
+  `docs/isometric/changes.md` and remove this entry (S).
+
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
 - **Phase E of the 200-year durability build is built offline but the LIVE
@@ -1067,19 +1094,14 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
   (Missing structured logs on the removal writes belong with the deferred
   observability work — see `Correctness / observability` below — not here.)
 
-### Certify-removal redesign — removal-detail-sheet deep link drops `step=evidence` (`certification/removal-detail-deep-link`, opened 2026-06-05)
+### Certify-removal redesign — TelemetryPanel orphaned, reactor-telemetry submit dark (`certification/telemetry-panel-orphaned`, opened 2026-06-19)
 
-- The redesign turned `removals/[removalId]/review` into a redirect that strips
-  `?step=`. `components/certification/removal-detail-sheet.tsx` (not in the
-  redesign's changed set, so untouched) still builds
-  `evidenceHref = ${reviewHref}&step=evidence` plus a "Review & submit" link, so
-  that deep link silently loses its evidence-step intent and lands on the wizard
-  entry instead. Flagged by both the simplify and loading-states audit passes.
-- **Why it matters:** minor UX regression on an existing entry point; not a
-  crash, but the operator no longer arrives where the link promises.
-- **Resolve via:** point `removal-detail-sheet.tsx` at the wizard's resume entry
-  directly (drop the now-dead `&step=` param), or have the redirect
-  preserve/translate `step=` into the new `resume=` param.
+- `TelemetryPanel` still exists but is not rendered anywhere, so the reactor
+  temperature/pressure -> Isometric `DataUploadSubmission` path remains dark.
+  Archive: [`docs/archive/2026-06-19-telemetry-panel-orphaned.md`](archive/2026-06-19-telemetry-panel-orphaned.md).
+- **Resolve via:** re-home and barrel-export `TelemetryPanel`, then validate the
+  file-upload -> signed PUT -> data-upload-submission pipeline live on the
+  sandbox before re-surfacing it.
 
 ## Audit follow-ups (opened 2026-05-25)
 

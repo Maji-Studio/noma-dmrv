@@ -8,6 +8,11 @@ Feedstock type certification guardrail implementation notes from 2026-06-13 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
 
+Transport-leg evidence now reaches Isometric as mirrored Sources, and submit can
+auto-generate a transport evidence ledger Source from live legs. Dated
+implementation and sandbox-verification notes from 2026-06-19 are archived in
+[`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
+
 ## 2026-06-19 (transport → mass_distance, multi-leg mass-weighting)
 
 Re-binds feedstock and biochar transport to the registry's
