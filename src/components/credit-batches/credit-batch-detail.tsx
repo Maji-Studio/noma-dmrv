@@ -41,7 +41,6 @@ import {
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import {
   useCreditBatch,
-  useCreditBatches,
   useUpdateCreditBatch,
 } from "@/hooks/use-credit-batches";
 import { CreditBatchForm } from "./credit-batch-form";
@@ -101,7 +100,6 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
   const { data: creditBatch, isLoading, error } = useCreditBatch(creditBatchId);
   // Scope to this batch's facility — overlap validation is per-facility, and
   // credit batches must never be read across the facility boundary.
-  const { data: allBatches } = useCreditBatches(creditBatch?.facilityId);
   const updateCreditBatch = useUpdateCreditBatch();
   const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -167,14 +165,6 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
       </Shell>
     );
   }
-
-  const existingBatches = (allBatches ?? []).map((b) => ({
-    id: b.id,
-    code: b.code,
-    facilityId: b.facilityId,
-    startDate: b.startDate,
-    endDate: b.endDate,
-  }));
 
   const stored = co2eStoredKpi(creditBatch);
   const period = `${formatSafeDate(creditBatch.startDate)} — ${formatSafeDate(creditBatch.endDate)}`;
@@ -261,7 +251,6 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
         {isEditing ? (
           <CreditBatchForm
             creditBatch={creditBatch}
-            existingBatches={existingBatches}
             onSubmit={handleUpdate}
             onCancel={() => {
               setUpdateError(null);

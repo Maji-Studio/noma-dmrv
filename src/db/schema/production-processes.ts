@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { samplingMethod } from './common';
 import { facilities } from './facilities';
@@ -60,6 +60,13 @@ export const productionProcesses = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    // Lets credit_batches enforce that its productionProcessId belongs to the
+    // same facility/feedstock pair as the batch itself.
+    unique('production_processes_id_facility_feedstock_unique').on(
+      table.id,
+      table.facilityId,
+      table.feedstockTypeId
+    ),
     // Drives find-or-create + "current process for this (facility, feedstock)"
     // lookups. Non-unique by design (sequential processes per pair over time).
     index('production_processes_facility_feedstock_idx').on(

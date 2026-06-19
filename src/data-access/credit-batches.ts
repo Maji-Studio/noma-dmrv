@@ -12,7 +12,7 @@ import {
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { applications } from "@/db/schema/application";
-import { productionRuns } from "@/db/schema/production";
+import { productionRuns, samples } from "@/db/schema/production";
 import type {
   CreateCreditBatchData,
   UpdateCreditBatchData,
@@ -711,19 +711,55 @@ export async function updateCreditBatch(
 
     updateData.certifier = await resolveCreditBatchCertifier(tx, targetFacilityId);
 
-    // ADR 0016: re-derive the single feedstock type + production process when
-    // the membership or facility changes — either can shift which (facility,
-    // feedstock) process this batch belongs to. When runs are unchanged but the
-    // facility moved, derive from the existing membership.
-    let feedstockRunIds: string[] | undefined = productionRunIds;
-    if (feedstockRunIds === undefined && facilityChanged) {
-      const links = await tx
+    if (productionRunIds !== undefined) {
+      if (productionRunIds.length === 0) {
+        throw new SafeError("A credit batch must include at least one production run.");
+      }
+      await validateProductionRunIds(
+        tx,
+        productionRunIds,
+        targetFacilityId,
+        effectiveStartDate,
+        effectiveEndDate,
+        id,
+      );
+    }
+
+    let existingRunIdsForRevalidation: string[] | undefined;
+    if (
+      productionRunIds === undefined &&
+      (facilityChanged ||
+        updateFields.startDate !== undefined ||
+        updateFields.endDate !== undefined)
+    ) {
+      const existingLinks = await tx
         .select({ productionRunId: creditBatchProductionRuns.productionRunId })
         .from(creditBatchProductionRuns)
         .where(eq(creditBatchProductionRuns.creditBatchId, id));
-      feedstockRunIds = links.map((l) => l.productionRunId);
+      existingRunIdsForRevalidation = existingLinks.map((l) => l.productionRunId);
+      if (existingRunIdsForRevalidation.length === 0) {
+        throw new SafeError("A credit batch must include at least one production run.");
+      }
+      await validateProductionRunIds(
+        tx,
+        existingRunIdsForRevalidation,
+        targetFacilityId,
+        effectiveStartDate,
+        effectiveEndDate,
+        id,
+      );
     }
-    if (feedstockRunIds !== undefined && feedstockRunIds.length > 0) {
+
+    // ADR 0016: re-derive the single feedstock type + production process when
+    // the membership or facility changes — either can shift which (facility,
+    // feedstock) process this batch belongs to. When runs are unchanged but the
+    // facility moved, derive from the existing membership after validation so
+    // bad run IDs/facility mismatches surface precise errors first.
+    let feedstockRunIds: string[] | undefined = productionRunIds;
+    if (feedstockRunIds === undefined && facilityChanged) {
+      feedstockRunIds = existingRunIdsForRevalidation;
+    }
+    if (feedstockRunIds !== undefined) {
       const feedstockTypeId = await resolveSingleFeedstockType(tx, feedstockRunIds);
       const process = await findOrCreateProductionProcess(
         userId,
@@ -740,46 +776,16 @@ export async function updateCreditBatch(
       .where(eq(creditBatches.id, id));
 
     if (productionRunIds !== undefined) {
-      if (productionRunIds.length > 0) {
-        await validateProductionRunIds(
-          tx,
-          productionRunIds,
-          targetFacilityId,
-          effectiveStartDate,
-          effectiveEndDate,
-          id,
-        );
-      }
-
       await tx
         .delete(creditBatchProductionRuns)
         .where(eq(creditBatchProductionRuns.creditBatchId, id));
 
-      if (productionRunIds.length > 0) {
-        await tx.insert(creditBatchProductionRuns).values(
-          productionRunIds.map((productionRunId) => ({
-            creditBatchId: id,
-            productionRunId,
-          }))
-        );
-      }
-    } else if (facilityChanged || updateFields.startDate !== undefined || updateFields.endDate !== undefined) {
-      // Facility or dates changed but productionRunIds omitted: revalidate existing membership.
-      const existingLinks = await tx
-        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-        .from(creditBatchProductionRuns)
-        .where(eq(creditBatchProductionRuns.creditBatchId, id));
-      const existingRunIds = existingLinks.map((l) => l.productionRunId);
-      if (existingRunIds.length > 0) {
-        await validateProductionRunIds(
-          tx,
-          existingRunIds,
-          targetFacilityId,
-          effectiveStartDate,
-          effectiveEndDate,
-          id,
-        );
-      }
+      await tx.insert(creditBatchProductionRuns).values(
+        productionRunIds.map((productionRunId) => ({
+          creditBatchId: id,
+          productionRunId,
+        }))
+      );
     }
   });
 
@@ -811,7 +817,11 @@ export async function deleteCreditBatch(userId: string, id: string): Promise<voi
 
     await assertRemovalAllowsCreditBatchMutation(tx, batch.removalId, "delete");
 
-    // Delete membership links first, then the credit batch.
+    // Clear app-layer sample links, then delete membership links and the batch.
+    await tx
+      .update(samples)
+      .set({ creditBatchId: null, updatedAt: new Date() })
+      .where(eq(samples.creditBatchId, id));
     await tx
       .delete(creditBatchProductionRuns)
       .where(eq(creditBatchProductionRuns.creditBatchId, id));

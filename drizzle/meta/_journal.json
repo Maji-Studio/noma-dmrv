@@ -407,13 +407,6 @@
       "when": 1781898272146,
       "tag": "0057_wild_the_professor",
       "breakpoints": true
-    },
-    {
-      "idx": 58,
-      "version": "7",
-      "when": 1781898273000,
-      "tag": "0058_drop_reactor_method_b_trigger",
-      "breakpoints": true
     }
   ]
 }
