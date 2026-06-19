@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   applications,
   biocharProducts,
+  certifierRemovals,
   creditBatches,
   deliveries,
   documents,
@@ -229,6 +230,22 @@ export async function assertCanManageDocumentEntity(
   }
 }
 
+async function assertCanAccessRemovalDocuments(
+  userId: string,
+  removalId: string
+): Promise<void> {
+  requireAuth(userId);
+  const [row] = await db
+    .select({ id: certifierRemovals.id })
+    .from(certifierRemovals)
+    .where(eq(certifierRemovals.id, removalId))
+    .limit(1);
+
+  if (!row) {
+    throw new SafeError("Removal not found");
+  }
+}
+
 export async function listDocumentsForEntity(
   userId: string,
   entityType: string,
@@ -310,9 +327,9 @@ export async function listDocumentsForEntityIds(
  * Documents tagged with a given `metadata.kind` + `metadata.removalId`. Used by
  * the transport evidence-ledger flow to locate a removal's prior auto-generated
  * ledgers (which it supersedes), regardless of which member credit batch each
- * was attached to. Newest first. Auth is `requireAuth` only — the removalId
- * scope is resolved from the caller's own removal context upstream, matching
- * `getDocumentById`'s posture for cross-entity lookups.
+ * was attached to. Newest first. Current authz is single-org/shared-data; the
+ * requested removal scope is still validated here instead of relying on an
+ * upstream submission context.
  */
 export async function listDocumentsByKindForRemoval(
   userId: string,
@@ -320,6 +337,7 @@ export async function listDocumentsByKindForRemoval(
   removalId: string
 ): Promise<DocumentRow[]> {
   requireAuth(userId);
+  await assertCanAccessRemovalDocuments(userId, removalId);
   return db
     .select()
     .from(documents)

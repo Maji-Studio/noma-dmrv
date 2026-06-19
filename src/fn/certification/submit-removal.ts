@@ -470,11 +470,12 @@ export async function submitRemoval(
   // Regenerate the transport evidence ledger from the live legs and mirror it
   // as a Source BEFORE candidate documents are collected, so the current ledger
   // rides into source_ids on this submit (and supersedes any prior one). Done
-  // here — outside the locked claim transaction below — because it makes HTTP
-  // calls to Isometric and inserts a document; holding the advisory lock across
-  // those would serialize unrelated submits. Best-effort: a render/mirror hiccup
-  // must never block an otherwise-valid submission; the next submit regenerates
-  // it. Idempotent on ledger content, so an unchanged-legs resubmit is a no-op.
+  // here — before the locked claim transaction below — because it makes HTTP
+  // calls to Isometric and inserts a document. The ledger flow owns a
+  // per-removal artifact lock for its list/create/retire sequence. Best-effort:
+  // a render/mirror hiccup must never block an otherwise-valid submission; the
+  // next submit regenerates it. Idempotent on ledger content, so an unchanged-
+  // legs resubmit is a no-op.
   try {
     const ledger = await ensureTransportEvidenceLedgerSourceFromContext(
       userId,
@@ -484,7 +485,7 @@ export async function submitRemoval(
     log.info({ ledgerStatus: ledger.status }, "transport evidence ledger ensured");
   } catch (err) {
     log.warn(
-      { err: err instanceof Error ? err.message : String(err) },
+      { errorName: err instanceof Error ? err.name : typeof err },
       "transport evidence ledger generation failed; submitting without it",
     );
   }

@@ -31,6 +31,8 @@ import {
   type DocumentRow,
 } from "@/data-access/documents";
 import { getFacilityById } from "@/data-access/facilities";
+import { db } from "@/db";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
 import {
@@ -72,6 +74,23 @@ function ledgerContentHash(model: LedgerModel): string {
 function docContentHash(doc: DocumentRow): string | null {
   const meta = doc.metadata as Record<string, unknown> | null;
   return typeof meta?.contentHash === "string" ? meta.contentHash : null;
+}
+
+async function withRemovalLedgerLock<T>(
+  removalId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await acquireCertificationArtifactLocksSorted(tx, [
+      {
+        provider: ISOMETRIC_PROVIDER,
+        localEntityType: "removal",
+        localEntityId: removalId,
+      },
+    ]);
+
+    return fn();
+  });
 }
 
 /**
@@ -123,6 +142,18 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
     generatedAtIso: new Date().toISOString(),
   });
 
+  return withRemovalLedgerLock(removalId, () =>
+    ensureTransportEvidenceLedgerSourceForModel(userId, removalId, ctx, model, log),
+  );
+}
+
+async function ensureTransportEvidenceLedgerSourceForModel(
+  userId: string,
+  removalId: string,
+  ctx: RemovalSubmissionContext,
+  model: LedgerModel,
+  log: ReturnType<typeof logger.child>,
+): Promise<EnsureLedgerResult> {
   const priors = await listDocumentsByKindForRemoval(
     userId,
     TRANSPORT_EVIDENCE_LEDGER_KIND,
@@ -176,7 +207,7 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
     storageProvider: provider.name,
     storageBucket: provider.bucket,
     storageKey,
-    fileName: `transport-evidence-ledger-${removalCode ?? removalId}.pdf`,
+    fileName: `transport-evidence-ledger-${model.removalCode ?? removalId}.pdf`,
     fileSizeBytes: pdf.byteLength,
     mimeType: PDF_MIME,
     checksumSha256: createHash("sha256").update(pdf).digest("hex"),
@@ -236,7 +267,10 @@ async function retireSupersededLedgers(
         // never re-enter source_ids); a delete failure must not fail the submit.
         await provider.deleteObject(doc.storageKey).catch((err) => {
           log.warn(
-            { documentId: doc.id, err: String(err) },
+            {
+              documentId: doc.id,
+              errorName: err instanceof Error ? err.name : typeof err,
+            },
             "failed to delete retired ledger object",
           );
         });
