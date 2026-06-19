@@ -80,6 +80,9 @@ class FakeProvider implements StorageProvider {
     this.store.delete(key);
     this.deleted.push(key);
   }
+  async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+    this.store.set(key, { size: body.byteLength, contentType });
+  }
   // Test helper
   simulatePut(key: string, size: number, contentType: string) {
     this.store.set(key, { size, contentType });

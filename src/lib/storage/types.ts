@@ -32,6 +32,13 @@ export interface StorageProvider {
   createDownloadUrl(args: CreateDownloadUrlArgs): Promise<string>;
   headObject(key: string): Promise<ObjectHead | null>;
   deleteObject(key: string): Promise<void>;
+  /**
+   * Server-side write of bytes already in hand — no presigned round-trip. Used
+   * for objects the server generates itself (e.g. the transport evidence ledger
+   * PDF) rather than receiving from a browser upload. Overwrites any existing
+   * object at `key`.
+   */
+  putObject(key: string, body: Buffer, contentType: string): Promise<void>;
 }
 
 export class StorageError extends Error {

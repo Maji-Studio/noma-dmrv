@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
-import { readFile, rm, stat } from "fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import { isSafeStorageKey } from "./keys";
 import type {
@@ -152,6 +152,31 @@ export class LocalFsProvider implements StorageProvider {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw err;
     }
+  }
+
+  async putObject(
+    key: string,
+    body: Buffer,
+    contentType: string
+  ): Promise<void> {
+    const abs = resolveLocalFsPath(this.root, key);
+    if (!abs) {
+      throw new StorageError(`Unsafe storage key: ${key}`, "unsafe_key");
+    }
+    await mkdir(path.dirname(abs), { recursive: true });
+    // Write to a temp sibling then rename, so a concurrent headObject/read of
+    // `abs` never observes a torn file (mirrors the local-fs PUT route).
+    const tempPath = `${abs}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+    try {
+      await writeFile(tempPath, body);
+      await rename(tempPath, abs);
+    } catch (err) {
+      await rm(tempPath, { force: true }).catch(() => {});
+      throw err;
+    }
+    // Sidecar so headObject() reports the real content type (matches the route's
+    // `{ contentType }` shape consumed by readMeta()).
+    await writeFile(`${abs}.meta.json`, JSON.stringify({ contentType }), "utf8");
   }
 
   async deleteObject(key: string): Promise<void> {
