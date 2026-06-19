@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
@@ -921,6 +921,14 @@ export async function getCreditBatchProductionRunOptions(
       params.endDate,
     );
     conditions.push(gte(productionRuns.date, startStr), lte(productionRuns.date, endStr));
+  }
+
+  if (params.includeCreditBatchId) {
+    const assignmentScope = or(
+      isNull(creditBatchProductionRuns.creditBatchId),
+      eq(creditBatchProductionRuns.creditBatchId, params.includeCreditBatchId),
+    );
+    if (assignmentScope) conditions.push(assignmentScope);
   }
 
   return db
