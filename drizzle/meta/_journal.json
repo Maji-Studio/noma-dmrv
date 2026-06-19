@@ -365,6 +365,27 @@
       "when": 1781527471317,
       "tag": "0051_slimy_captain_midlands",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1781797269930,
+      "tag": "0052_method_b_minimum_samples_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1781797270993,
+      "tag": "0053_durability_evidence_issuance_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1781849868696,
+      "tag": "0054_bizarre_bloodscream",
+      "breakpoints": true
     }
   ]
 }

@@ -68,6 +68,7 @@ import {
   type TransportLegsByCategory,
 } from "./shared";
 import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
+import { buildDurabilityGateBlockers } from "./durability-readiness";
 
 // Each removal/batch in a facility-level fan-out rebuilds its own context (a
 // chain of DB queries + registry lookups). Bound how many run at once so a
@@ -152,6 +153,9 @@ export interface RemovalCertifyContext {
   // Compact labels from the per-entity certifier-readiness layer. The raw
   // entity rows stay server-side; Review/pre-flight only needs gap labels.
   entityReadinessGaps?: string[];
+  // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
+  // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
+  durabilityGateBlockers: string[];
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -697,6 +701,7 @@ export async function buildRemovalContext(
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
+      durabilityGateBlockers: [],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
@@ -754,6 +759,10 @@ export async function buildRemovalContext(
     runs,
   );
 
+  // Durability sampling/eligibility gate (D3) — the same fail-closed result the
+  // submit pipeline blocks on, surfaced for readiness (see the field doc above).
+  const durabilityGateBlockers = await buildDurabilityGateBlockers(userId, runs);
+
   return {
     facilityId: scope.facilityId,
     removalId: scope.removalId,
@@ -763,6 +772,7 @@ export async function buildRemovalContext(
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,
     entityReadinessGaps,
+    durabilityGateBlockers,
     runSummary,
     latestSubmission,
     linkedGhgStatement,
@@ -808,6 +818,7 @@ function projectUiContext(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
+    durabilityGateBlockers: ctx.durabilityGateBlockers,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,

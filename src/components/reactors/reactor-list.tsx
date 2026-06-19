@@ -12,6 +12,7 @@ import { Lightning, Flask, Plus, CheckCircle, Warning } from "@phosphor-icons/re
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { InfoHint } from "@/components/ui/tooltip";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
@@ -33,7 +34,68 @@ import {
   type SamplingMethod,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
+import type { SamplingRequirement } from "@/lib/certification/sampling-requirements";
 import type { Reactor } from "@/db/schema";
+
+// ============================================
+// Sampling Cadence Badge (decision D6)
+// ============================================
+
+/**
+ * Compact verdict for a reactor's CURRENT-method sampling cadence — how many of
+ * its runs are sampled against the method's requirement, plus the ≥3-replicate
+ * rule. Green only when the cadence is met AND no sampled run is under-
+ * replicated (the same two conditions the submission gate enforces); amber
+ * otherwise. A reactor with no runs has nothing to sample yet (neutral).
+ */
+function SamplingCadenceBadge({
+  requirement,
+}: {
+  requirement: SamplingRequirement;
+}) {
+  const { totalRuns, sampledRuns, requiredSampledRuns, underReplicatedRunIds } =
+    requirement;
+
+  if (totalRuns === 0) {
+    return (
+      <StatusBadge status="draft" label="No runs" size="small" />
+    );
+  }
+
+  const underReplicated = underReplicatedRunIds.length;
+  const ok = requirement.met && underReplicated === 0;
+  const countLabel = `${sampledRuns}/${requiredSampledRuns}`;
+
+  const detail =
+    requirement.method === "method_a"
+      ? `Method A samples every run: ${sampledRuns} of ${totalRuns} sampled.`
+      : `Method B samples ≥1 per 10 runs: ${sampledRuns} of ${requiredSampledRuns} required (${totalRuns} runs).`;
+  const replicateNote =
+    underReplicated > 0
+      ? ` ${underReplicated} sampled run(s) carry <3 replicates — submission requires ≥3.`
+      : "";
+
+  return (
+    <span className="inline-flex items-center gap-6">
+      <StatusBadge
+        status={ok ? "ready" : "pending"}
+        label={countLabel}
+        size="small"
+        icon={
+          ok ? (
+            <CheckCircle size={14} weight="fill" />
+          ) : (
+            <Warning size={14} weight="fill" />
+          )
+        }
+      />
+      <InfoHint side="top" size={13}>
+        {detail}
+        {replicateNote}
+      </InfoHint>
+    </span>
+  );
+}
 
 // ============================================
 // Method B Eligibility Badge
@@ -125,6 +187,23 @@ function createColumns(
           sampleCount={row.original.methodBEligibility?.priorMethodASampleCount ?? 0}
           minimumRequired={row.original.methodBEligibility?.minimumMethodASampleCount ?? 30}
         />
+      ),
+      enableSorting: false,
+    },
+    {
+      id: "samplingCadence",
+      header: () => (
+        <span className="inline-flex items-center gap-4">
+          Sampling Cadence
+          <InfoHint side="top" size={13}>
+            Sampled runs vs. the current method&apos;s requirement (Method A:
+            every run; Method B: ≥1 per 10). Green only when the cadence is met
+            and every sampled run carries ≥3 replicates.
+          </InfoHint>
+        </span>
+      ),
+      cell: ({ row }) => (
+        <SamplingCadenceBadge requirement={row.original.samplingRequirement} />
       ),
       enableSorting: false,
     },
@@ -398,6 +477,34 @@ export function ReactorList() {
               { label: "Status", value: sideSheetEntity.methodBEligibility?.isEligible ? "Eligible" : "Not Eligible" },
               { label: "Prior Method A Samples", value: (sideSheetEntity.methodBEligibility?.priorMethodASampleCount ?? 0) + " samples" },
               { label: "Minimum Required", value: (sideSheetEntity.methodBEligibility?.minimumMethodASampleCount ?? 30) + " samples" },
+            ],
+          },
+          {
+            title: "Sampling Cadence",
+            fields: [
+              {
+                label: "Status",
+                value:
+                  sideSheetEntity.samplingRequirement.totalRuns === 0
+                    ? "No production runs yet"
+                    : sideSheetEntity.samplingRequirement.met &&
+                        sideSheetEntity.samplingRequirement.underReplicatedRunIds
+                          .length === 0
+                      ? "Met"
+                      : "Action needed",
+              },
+              {
+                label: "Sampled Runs",
+                value: `${sideSheetEntity.samplingRequirement.sampledRuns} / ${sideSheetEntity.samplingRequirement.requiredSampledRuns} required`,
+              },
+              {
+                label: "Total Runs",
+                value: `${sideSheetEntity.samplingRequirement.totalRuns}`,
+              },
+              {
+                label: "Under-replicated Runs",
+                value: `${sideSheetEntity.samplingRequirement.underReplicatedRunIds.length} (need ≥3 replicates each)`,
+              },
             ],
           },
         ] : undefined}
