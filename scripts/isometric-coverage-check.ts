@@ -31,6 +31,15 @@ import { projectEmissionCategoryValues } from "../src/schemas/project-emissions"
 
 config({ path: ".env.local" });
 
+// Default NODE_ENV so the env validator (loaded lazily via the dynamic `@/db`
+// import on the --source=db path) doesn't reject the local config. Run from the
+// CLI without NODE_ENV set, this would otherwise validate as production and
+// reject local-fs storage. Set before any env-validating import resolves. Cast
+// past the read-only `NODE_ENV` literal type (Next.js augments it).
+if (!process.env.NODE_ENV) {
+  (process.env as Record<string, string>).NODE_ENV = "development";
+}
+
 const FIXTURE_PATH = "tests/fixtures/isometric-coverage.json";
 
 type Source = "fixture" | "db";

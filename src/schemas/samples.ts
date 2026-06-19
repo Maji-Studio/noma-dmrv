@@ -5,7 +5,6 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
 
 // ============================================
 // Constants
@@ -79,6 +78,12 @@ export const sampleFormSchema = z
     // === Section 2: Carbon Analysis ===
     totalCarbonPercent: requiredNumber,
     organicCarbonPercent: requiredNumber,
+    // The 200-year durability blueprint consumes `total_carbon_contents` AND
+    // `inorganic_carbon_contents` as separate inputs and derives organic via
+    // Eq.2 (Total − Inorganic) itself. Kept optional here (not every COA reports
+    // it, and hard-requiring would trap in-flight samples) — the per-batch
+    // carbon list derives it as max(0, total − organic) when absent (Phase D),
+    // so the registry always receives a value without over-crediting.
     inorganicCarbonPercent: optionalNumber,
 
     // === Section 3: Elemental ===

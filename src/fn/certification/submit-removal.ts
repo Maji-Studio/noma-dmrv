@@ -440,6 +440,17 @@ export async function submitRemoval(
     );
   }
 
+  // D3 fail-closed durability gates: eligibility (per-run mean H/C_org < 0.5 AND
+  // O/C_org < 0.2), every Method A run sampled, and ≥3 replicates per sampled
+  // run. Computed once in `buildRemovalContext` (method read live off each run's
+  // reactor, D6) so the readiness surfaces predict the exact same block; this is
+  // the authoritative fail-closed enforcement of that shared result.
+  if (ctx.durabilityGateBlockers.length > 0) {
+    throw new SafeError(
+      `Removal submission blocked — sampling & eligibility:\n${ctx.durabilityGateBlockers.join("\n")}`,
+    );
+  }
+
   const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
   // Pooling legs across member batches raises the chance of a mixed
   // method/factor — Isometric Transportation v1.1 §5 requires per-leg
