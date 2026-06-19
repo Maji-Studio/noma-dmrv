@@ -13,8 +13,6 @@ import {
   useDeleteProductionSample,
 } from "@/hooks/use-production-samples";
 import { Button } from "@/components/ui";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
-import { MINIMUM_REPLICATES_PER_RUN } from "@/lib/calculations/biochar-eligibility";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
@@ -111,29 +109,19 @@ export function ProductionSampleTable({
 
   const isSubmitting = createSample.isPending || updateSample.isPending;
 
-  // Replicate-coverage cert signal: a sampled production run must carry at least
-  // MINIMUM_REPLICATES_PER_RUN replicates for certification (Biochar module §4),
-  // and the durability submission gates fail-close below it. Surfaced as a
-  // `CERT n/3` chip so the requirement is visible at the point of sampling.
-  const sampleCount = samples?.length ?? 0;
-  const replicatesMet = sampleCount >= MINIMUM_REPLICATES_PER_RUN;
+  // NOTE: no certification replicate chip here. These are in-process production
+  // samples; the ≥3-replicate / eligibility certification signal is judged on the
+  // lab `Sample` records the Certify path actually reads
+  // (`getProductionRunsWithSamples`), not this table — surfacing a `CERT n/3`
+  // chip off this count would misreport certification coverage.
 
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-            Production Samples
-          </h3>
-          {!isLoading && (
-            <CertificationFieldTag
-              label={`CERT ${sampleCount}/${MINIMUM_REPLICATES_PER_RUN}`}
-              status={replicatesMet ? "satisfied" : "missing"}
-              description={`${sampleCount} of ${MINIMUM_REPLICATES_PER_RUN} replicate samples recorded — a sampled production run requires at least ${MINIMUM_REPLICATES_PER_RUN} replicates for certification (Biochar module §4).`}
-            />
-          )}
-        </div>
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Production Samples
+        </h3>
         {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <Plus size={16} weight="bold" />
