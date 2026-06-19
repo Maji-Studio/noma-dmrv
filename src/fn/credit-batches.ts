@@ -8,13 +8,10 @@ import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
-  getCreditBatchApplicationOptions,
-  type CreditBatchApplicationOption,
-} from "@/data-access/applications";
-import {
   getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
+  getCreditBatchProductionRunOptions,
   createCreditBatch as createCreditBatchData,
   updateCreditBatch as updateCreditBatchData,
   deleteCreditBatch as deleteCreditBatchData,
@@ -22,6 +19,7 @@ import {
   checkCreditBatchDateOverlap,
   type CreditBatchWithRelations,
   type CreditBatchCo2eStoredPreview,
+  type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
@@ -122,28 +120,40 @@ export async function getCo2eStoredPreviewsFn(
   }
 }
 
-export async function getCreditBatchApplicationOptionsFn(
-  facilityId: string,
-): Promise<ActionResult<CreditBatchApplicationOption[]>> {
+const creditBatchProductionRunOptionsSchema = z.object({
+  facilityId: z.string().uuid(),
+  startDate: z.coerce.date().optional().nullable(),
+  endDate: z.coerce.date().optional().nullable(),
+  includeCreditBatchId: z.string().uuid().optional().nullable(),
+});
+
+export async function getCreditBatchProductionRunOptionsFn(
+  input: {
+    facilityId: string;
+    startDate?: string | Date | null;
+    endDate?: string | Date | null;
+    includeCreditBatchId?: string | null;
+  },
+): Promise<ActionResult<CreditBatchProductionRunOption[]>> {
   try {
     const user = await getUser();
     if (!user || !user.id) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const validatedFacilityId = z.string().uuid().parse(facilityId);
-    const options = await getCreditBatchApplicationOptions(
+    const validated = creditBatchProductionRunOptionsSchema.parse(input);
+    const options = await getCreditBatchProductionRunOptions(
       user.id,
-      validatedFacilityId,
+      validated,
     );
     return { success: true, data: options };
   } catch (error) {
-    logCreditBatchError("Failed to get credit batch application options", error);
+    logCreditBatchError("Failed to get credit batch production run options", error);
     return {
       success: false,
       error: toActionError(
         error,
-        "Failed to get credit batch application options",
+        "Failed to get credit batch production run options",
       ),
     };
   }

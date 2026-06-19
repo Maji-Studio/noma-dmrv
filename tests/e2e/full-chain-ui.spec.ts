@@ -165,11 +165,11 @@ test.describe("Full Chain UI Smoke Test", () => {
             ...appsByDelivery.map((a) => a.id),
           ]);
 
-          const creditBatchLinks = applicationIds.length
+          const creditBatchLinks = productionRunIds.length
             ? await tx
-                .select({ creditBatchId: schema.creditBatchApplications.creditBatchId })
-                .from(schema.creditBatchApplications)
-                .where(inArray(schema.creditBatchApplications.applicationId, applicationIds))
+                .select({ creditBatchId: schema.creditBatchProductionRuns.creditBatchId })
+                .from(schema.creditBatchProductionRuns)
+                .where(inArray(schema.creditBatchProductionRuns.productionRunId, productionRunIds))
             : [];
           const creditBatchesByFacility = facilityIds.length
             ? await tx
@@ -257,15 +257,18 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.soilTemperatureMeasurements)
               .where(inArray(schema.soilTemperatureMeasurements.applicationId, applicationIds));
+          }
+
+          if (productionRunIds.length) {
             await tx
-              .delete(schema.creditBatchApplications)
-              .where(inArray(schema.creditBatchApplications.applicationId, applicationIds));
+              .delete(schema.creditBatchProductionRuns)
+              .where(inArray(schema.creditBatchProductionRuns.productionRunId, productionRunIds));
           }
 
           if (creditBatchIds.length) {
             await tx
-              .delete(schema.creditBatchApplications)
-              .where(inArray(schema.creditBatchApplications.creditBatchId, creditBatchIds));
+              .delete(schema.creditBatchProductionRuns)
+              .where(inArray(schema.creditBatchProductionRuns.creditBatchId, creditBatchIds));
             await tx
               .delete(schema.creditBatches)
               .where(inArray(schema.creditBatches.id, creditBatchIds));

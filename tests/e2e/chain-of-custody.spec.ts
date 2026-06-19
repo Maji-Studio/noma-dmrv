@@ -271,12 +271,10 @@ async function seedBatchChain(seededData: SeededChainData) {
         // requires this field; the spec doesn't read the durability math.
         hToCorgRatio: 0.4,
       });
-      await tx.insert(schema.creditBatchApplications).values(
-        [ids.applicationA, ids.applicationB].map((applicationId) => ({
-          creditBatchId: ids.creditBatch,
-          applicationId,
-        }))
-      );
+      await tx.insert(schema.creditBatchProductionRuns).values({
+        creditBatchId: ids.creditBatch,
+        productionRunId: ids.productionRun,
+      });
 
       // Trail evidence: a document on delivery A and a production-run sample.
       await tx.insert(schema.documents).values({
