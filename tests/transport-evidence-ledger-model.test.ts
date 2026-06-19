@@ -1,16 +1,16 @@
 /**
  * Pure unit tests for `buildLedgerModel` — the render-agnostic core of the
- * transport evidence ledger. Asserts the reconciliation invariant the PDF
- * leans on (Σ rounded legs = subtotal = total), distance-basis normalisation,
- * missing-mass handling, ref numbering, and the always-three-categories shape.
- * No renderer, no I/O.
+ * transport evidence ledger. Asserts that displayed rows can be rounded while
+ * subtotals still match the canonical registry scalar, plus distance-basis
+ * normalisation, missing-mass handling, ref numbering, and the always-three-
+ * categories shape. No renderer, no I/O.
  */
 import { describe, expect, it } from "vitest";
 import {
   buildLedgerModel,
-  type TransportLegsByCategory,
 } from "@/lib/certification/evidence-ledger/build-model";
 import type { TransportLeg } from "@/db/schema";
+import type { TransportLegsByCategory } from "@/lib/isometric/utils/aggregation";
 
 function leg(overrides: Partial<TransportLeg>): TransportLeg {
   return {
@@ -40,7 +40,7 @@ function emptyCategories(): TransportLegsByCategory {
 }
 
 const META = {
-  removalCode: "CB-26-001",
+  memberBatchCodes: "CB-26-001",
   facilityName: "Dark Earth Hub",
   externalProjectId: "prj_TEST",
   generatedAtIso: "2026-06-19T00:00:00.000Z",
@@ -61,25 +61,26 @@ describe("buildLedgerModel", () => {
     );
   });
 
-  it("reconciles exactly: subtotal = Σ rounded legs, total = Σ subtotals", () => {
+  it("sets subtotal from the canonical raw-sum scalar, not Σ rounded rows", () => {
     const model = buildLedgerModel({
       ...META,
       legsByCategory: {
         feedstock: [
-          leg({ distanceKm: 10, loadMassKg: 1000 }), // 10
-          leg({ distanceKm: 5, loadMassKg: 2000 }), // 10
+          leg({ id: "leg-1", distanceKm: 1, loadMassKg: 5 }), // row display 0.01
+          leg({ id: "leg-2", distanceKm: 1, loadMassKg: 5 }), // row display 0.01
         ],
-        biochar: [leg({ distanceKm: 32, loadMassKg: 2000 })], // 64
-        sample: [leg({ distanceKm: 82, loadMassKg: 5 })], // 0.41
+        biochar: [leg({ distanceKm: 32, loadMassKg: 2000 })],
+        sample: [leg({ distanceKm: 82, loadMassKg: 5 })],
       },
     });
     const feed = model.categories.find((c) => c.key === "feedstock")!;
     const bio = model.categories.find((c) => c.key === "biochar")!;
     const samp = model.categories.find((c) => c.key === "sample")!;
-    expect(feed.subtotalTkm).toBe(20);
+    expect(feed.legs.map((l) => l.tkm)).toEqual([0.01, 0.01]);
+    expect(feed.subtotalTkm).toBe(0.01);
     expect(bio.subtotalTkm).toBe(64);
     expect(samp.subtotalTkm).toBe(0.41);
-    expect(model.totalTkm).toBe(20 + 64 + 0.41);
+    expect(model.totalTkm).toBe(0.01 + 64 + 0.41);
     expect(model.totalLegs).toBe(4);
   });
 
@@ -159,7 +160,7 @@ describe("buildLedgerModel", () => {
 
   it("passes through caller metadata verbatim", () => {
     const model = buildLedgerModel({ ...META, legsByCategory: emptyCategories() });
-    expect(model.removalCode).toBe("CB-26-001");
+    expect(model.memberBatchCodes).toBe("CB-26-001");
     expect(model.facilityName).toBe("Dark Earth Hub");
     expect(model.externalProjectId).toBe("prj_TEST");
     expect(model.generatedAtIso).toBe("2026-06-19T00:00:00.000Z");

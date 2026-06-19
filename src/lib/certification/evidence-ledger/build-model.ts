@@ -2,10 +2,14 @@
  * Pure builder: removal transport legs → Evidence Ledger view model.
  *
  * No I/O, no clock reads (generatedAtIso is injected). Per-leg t·km is rounded
- * to 2 dp and subtotals are the sum of those rounded legs, so the displayed
- * "Σ legs = subtotal = total" reconciliation is exact, not just approximate.
+ * for display only; category subtotals use the canonical raw-sum transport
+ * aggregator that feeds the registry scalar, rounded only at the subtotal.
  */
 import type { TransportLeg } from "@/db/schema";
+import {
+  aggregateTransportMassDistance,
+  type TransportLegsByCategory,
+} from "@/lib/isometric/utils/aggregation";
 import type {
   LedgerCategory,
   LedgerCategoryKey,
@@ -14,15 +18,9 @@ import type {
   LedgerModel,
 } from "./types";
 
-export interface TransportLegsByCategory {
-  feedstock: TransportLeg[];
-  biochar: TransportLeg[];
-  sample: TransportLeg[];
-}
-
 export interface BuildLedgerModelArgs {
   legsByCategory: TransportLegsByCategory;
-  removalCode: string | null;
+  memberBatchCodes: string | null;
   facilityName: string | null;
   externalProjectId: string | null;
   generatedAtIso: string;
@@ -103,7 +101,8 @@ function buildCategory(
   const builtLegs = legs.map((leg, i) =>
     buildLeg(leg, `${meta.refPrefix}-${String(i + 1).padStart(2, "0")}`),
   );
-  const subtotalTkm = round2(builtLegs.reduce((sum, l) => sum + l.tkm, 0));
+  const canonical = aggregateTransportMassDistance(legs, meta.name);
+  const subtotalTkm = round2(canonical.massDistanceTonneKm ?? 0);
   return { key, name: meta.name, tag: meta.tag, legs: builtLegs, subtotalTkm };
 }
 
@@ -119,7 +118,7 @@ export function buildLedgerModel(args: BuildLedgerModelArgs): LedgerModel {
   );
   const totalLegs = categories.reduce((sum, c) => sum + c.legs.length, 0);
   return {
-    removalCode: args.removalCode,
+    memberBatchCodes: args.memberBatchCodes,
     facilityName: args.facilityName,
     externalProjectId: args.externalProjectId,
     generatedAtIso: args.generatedAtIso,

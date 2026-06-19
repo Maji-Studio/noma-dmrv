@@ -230,11 +230,9 @@ export async function assertCanManageDocumentEntity(
   }
 }
 
-async function assertCanAccessRemovalDocuments(
-  userId: string,
+async function assertRemovalExistsForDocumentLookup(
   removalId: string
 ): Promise<void> {
-  requireAuth(userId);
   const [row] = await db
     .select({ id: certifierRemovals.id })
     .from(certifierRemovals)
@@ -327,9 +325,9 @@ export async function listDocumentsForEntityIds(
  * Documents tagged with a given `metadata.kind` + `metadata.removalId`. Used by
  * the transport evidence-ledger flow to locate a removal's prior auto-generated
  * ledgers (which it supersedes), regardless of which member credit batch each
- * was attached to. Newest first. Current authz is single-org/shared-data; the
- * requested removal scope is still validated here instead of relying on an
- * upstream submission context.
+ * was attached to. Newest first. Current authz is single-org/shared-data; this
+ * validates that the requested removal exists instead of relying on an upstream
+ * submission context.
  */
 export async function listDocumentsByKindForRemoval(
   userId: string,
@@ -337,7 +335,7 @@ export async function listDocumentsByKindForRemoval(
   removalId: string
 ): Promise<DocumentRow[]> {
   requireAuth(userId);
-  await assertCanAccessRemovalDocuments(userId, removalId);
+  await assertRemovalExistsForDocumentLookup(removalId);
   return db
     .select()
     .from(documents)
