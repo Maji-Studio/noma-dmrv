@@ -64,7 +64,13 @@ against it with a divergence warning.
 - **Blueprint selection is the Method A/B distinction** at submission (D6): sampled →
   `_c_org`, Method B unsampled → `_unsampled`.
 - **Soil temperature** is a project-area annual average (7 °C floor; subdivide if intra-area
-  variation > 1 °C), reconciled from noma's per-application `soil_temperature_c`.
+  variation > 1 °C). noma submits a **facility-level reference value** sourced from a global
+  soil-temperature database (Lembrechts et al. 2022 or equivalent — the protocol's sanctioned
+  path when no on-site baselining exists; air temperature is explicitly prohibited as a proxy),
+  justified in the **PDD** (registry-side, not an API field — which is why the conservative-
+  estimate method string needs no home on `CreateMeasurementSampleRequest`). The per-application
+  `soil_temperature_c` becomes a future per-removal override / reconciliation, not the submitted
+  value. Re-verified against module `biochar-storage-soil-environments` 1.2 §5.1.1.3.1 (2026-06-19).
 - A protocol coefficient bump (Eq.3 `a/b/c`) becomes a registry-side concern for the credited
   number; noma's local `computeFDurable200` updates only to keep the preview in parity.
 - Scope is **200-year**. 1000-year durability (Eq.4–6, random reflectance R₀ + non-reactive

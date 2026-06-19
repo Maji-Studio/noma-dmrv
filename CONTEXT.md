@@ -92,21 +92,28 @@ protocol production batch), analysed by an ISO 17025 lab — a record
 carrying *both* the sampling event (code, time, mass) *and* the lab
 chemistry (organic carbon, hydrogen, H/C_org, ash, …). A sampled credit
 batch carries **≥3 Samples**; their mean and standard deviation
-characterise that batch's biochar. The lab's certificate of analysis is
-attached as a `lab_report` **document**, not a separate record. Distinct
-from the in-process spot-checks logged against a **production run** (the
-~2-hourly field measurements) — those are internal-only and never
-submitted. _Avoid_: attaching lab characterisation to a single
-production run; treating the certificate as its own record; conflating
-with reactor **readings** (telemetry).
+characterise that batch's biochar. Each Sample is **drawn from one
+production run** (its provenance and natural point of entry); its credit
+batch is **derived** from that run's membership, and the ≥3 must be
+**independent samples distributed across the batch's runs/days**
+(protocol §8.3.1) — never aliquots of a single grab. The lab's
+certificate of analysis is attached as a `lab_report` **document**, not
+a separate record. Distinct from the in-process spot-checks logged
+against a **production run** (the ~2-hourly field measurements) — those
+are internal-only and never submitted. _Avoid_: characterising at the
+production-run grain (the run is provenance only — characterisation and
+the ≥3 count are per credit batch); treating the certificate as its own
+record; conflating with reactor **readings** (telemetry).
 
 **Replicate**:
 The role a **Sample** plays within its **credit batch**'s set — each
 lab-analysed Sample is one replicate, and a sampled credit batch carries
-≥3 so a mean, standard deviation and outliers can be derived. "Minimum 3
-samples per batch" = ≥3 Sample rows on one credit batch (the protocol
-production batch), not 3 sampling events and not per production run.
-_Avoid_: replicate as anything other than a Sample.
+≥3 so a mean, standard deviation and outliers can be derived. Per
+protocol §8.3.1 the ≥3 are **independent samples taken from distinct
+points (production runs / days) across the batch** and analysed
+individually — *not* three aliquots of one grab — and the count is
+judged **per credit batch**, never per production run. _Avoid_: replicate
+as a lab aliquot; counting the ≥3 at the production-run grain.
 
 **Production process**:
 A campaign of biochar production sharing **one feedstock under
@@ -229,6 +236,17 @@ The decision of what a submission attempt may do against the **submission
 ledger**: create a new version, resume a stale draft, return the existing
 result idempotently, or block.
 _Avoid_: lock (the claim is a decision; the lock is one of its inputs).
+
+**Measurement-sample submission**:
+The Isometric API object noma POSTs to carry a credit batch's durability
+chemistry — **one per credit batch**, bearing the batch's **mean +
+standard deviation** (its ≥3 **Samples** reduced to a summary; the raw
+replicate values are evidenced by the attached COA and the durability
+evidence ledger). The registry aggregates the per-batch list server-side.
+Deliberately distinct from a noma **Sample**: ≥3 Samples in, **one**
+measurement-sample submission out. _Avoid_: calling it a "sample"
+unqualified (collides with the lab Sample); submitting raw replicates in
+place of the mean + std-dev.
 
 **Monitored input**:
 An Isometric removal-template input whose value comes from the
