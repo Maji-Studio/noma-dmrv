@@ -217,6 +217,7 @@ async function createLineageFixture(
       .values({
         code: `CB-CLG-${tag}`,
         facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
         status: "pending",
         startDate: "2026-06-01",
         endDate: "2026-06-30",

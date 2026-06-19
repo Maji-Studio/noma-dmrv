@@ -29,9 +29,7 @@ import {
 } from "@/hooks/use-reactors";
 import {
   formatReactorType,
-  formatSamplingMethod,
   type CreateReactorData,
-  type SamplingMethod,
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { SamplingRequirement } from "@/lib/certification/sampling-requirements";
@@ -168,15 +166,6 @@ function createColumns(
       accessorKey: "reactorType",
       header: "Type",
       cell: ({ row }) => <span>{formatReactorType(row.original.reactorType)}</span>,
-    },
-    {
-      accessorKey: "samplingMethod",
-      header: "Sampling Method",
-      cell: ({ row }) => (
-        <span className={row.original.samplingMethod === "method_b" ? "text-[var(--color-signal-green)]" : ""}>
-          {formatSamplingMethod(row.original.samplingMethod as SamplingMethod)}
-        </span>
-      ),
     },
     {
       id: "methodBStatus",
@@ -461,7 +450,6 @@ export function ReactorList() {
               { label: "Code", value: sideSheetEntity.code },
               { label: "Identifier", value: sideSheetEntity.identifier },
               { label: "Reactor Type", value: formatReactorType(sideSheetEntity.reactorType) },
-              { label: "Sampling Method", value: formatSamplingMethod(sideSheetEntity.samplingMethod as SamplingMethod) },
             ],
           },
           {

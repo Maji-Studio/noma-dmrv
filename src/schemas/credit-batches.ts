@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { addMonths, isAfter } from "date-fns";
 
 // ============================================
 // Constants and Enums
@@ -158,6 +159,19 @@ export const creditBatchFormSchema = z
         code: z.ZodIssueCode.custom,
         path: ["endDate"],
         message: "End date must be after start date",
+      });
+    }
+    // ADR 0015: a credit batch IS the protocol production batch — at most one
+    // month of one feedstock under consistent conditions (§8.3.1). This form
+    // only creates Isometric credit batches, so the cap always applies here;
+    // the certifier-conditional nuance is enforced at the server + DB layers
+    // (where the resolved certifier is explicit).
+    if (isAfter(data.endDate, addMonths(data.startDate, 1))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endDate"],
+        message:
+          "A credit batch may span at most one month (Isometric production batch, §8.3.1)",
       });
     }
     // Durability inputs come from sample aggregation at preview/submission time.

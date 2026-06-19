@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, doublePrecision, pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { storageLocationType, durabilityOption, samplingMethod } from './common';
+import { storageLocationType, durabilityOption } from './common';
 
 // ============================================
 // Facilities - Production sites
@@ -57,7 +57,9 @@ export const reactors = pgTable('reactors', {
     .references(() => facilities.id),
   // Isometric Protocol: Reactor design requirements (Section 9.2)
   reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
-  samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
+  // NOTE: sampling_method moved OFF reactors onto production_processes (ADR
+  // 0015) — the protocol scopes the Method A/B regime to (feedstock × conditions),
+  // which spans reactors; reactor identity is not part of that boundary.
   nominalThroughputTph: real('nominal_throughput_tph'),
   specifications: jsonb('specifications'), // { description, manufacturer, ... }
   // Stamped by the facility archive cascade; NULL = active

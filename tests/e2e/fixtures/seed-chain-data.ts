@@ -228,7 +228,8 @@ export async function seedChainData(
  */
 export async function seedCreditBatch(
   facilityId: string,
-  testRunId: string
+  testRunId: string,
+  feedstockTypeId: string
 ): Promise<{ id: string; code: string }> {
   const { db, pool } = createDbConnection();
   try {
@@ -245,6 +246,10 @@ export async function seedCreditBatch(
       id,
       code,
       facilityId,
+      // ADR 0015: a credit batch is the protocol production batch — single
+      // feedstock (NOT NULL). The spec only needs the batch to exist, so any
+      // feedstock type on the facility's seeded chain satisfies the column.
+      feedstockTypeId,
       startDate: start,
       endDate: end,
       // Default durabilityOption='200_year' has a CHECK constraint

@@ -118,7 +118,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       identifier: `Reactor-${testRunId}`,
       facilityId: ids.facility,
       reactorType: "fixed-bed",
-      samplingMethod: "method_a",
       nominalThroughputTph: 1.0,
     });
 
@@ -316,11 +315,12 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       soilTemperatureC: 25,
     });
 
-    // 20. Create Credit Batch (links facility)
+    // 20. Create Credit Batch (links facility, single feedstock per ADR 0015)
     await tx.insert(schema.creditBatches).values({
       id: ids.creditBatch,
       code: codes.creditBatch,
       facilityId: ids.facility,
+      feedstockTypeId: ids.feedstockType,
       startDate: today,
       endDate: today,
       status: "draft",

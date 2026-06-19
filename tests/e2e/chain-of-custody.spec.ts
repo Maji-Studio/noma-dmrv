@@ -263,6 +263,7 @@ async function seedBatchChain(seededData: SeededChainData) {
         id: ids.creditBatch,
         code: codes.creditBatch,
         facilityId: seededData.facility.id,
+        feedstockTypeId: seededData.feedstockType.id,
         startDate: "2026-03-01",
         endDate: "2026-03-31",
         totalFeedstockMassKg: 1000,

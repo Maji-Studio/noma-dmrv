@@ -21,7 +21,10 @@ import { deleteTransportLegsForEntity } from "./transport-legs";
 export interface SampleWithRelations {
   id: string;
   sampleCode: string;
-  productionRunId: string;
+  // Provenance — which run the replicate was drawn from (nullable since ADR 0015).
+  productionRunId: string | null;
+  // The credit batch (protocol production batch) this replicate characterises.
+  creditBatchId: string | null;
   samplingTime: Date;
   weightGrams: number | null;
   volumeMl: number | null;
@@ -193,6 +196,7 @@ export async function getSamples(
       id: samples.id,
       sampleCode: samples.sampleCode,
       productionRunId: samples.productionRunId,
+      creditBatchId: samples.creditBatchId,
       samplingTime: samples.samplingTime,
       weightGrams: samples.weightGrams,
       volumeMl: samples.volumeMl,
@@ -279,6 +283,7 @@ export async function getSampleById(
       id: samples.id,
       sampleCode: samples.sampleCode,
       productionRunId: samples.productionRunId,
+      creditBatchId: samples.creditBatchId,
       samplingTime: samples.samplingTime,
       weightGrams: samples.weightGrams,
       volumeMl: samples.volumeMl,
@@ -410,6 +415,9 @@ export async function createSample(
   data: {
     sampleCode: string;
     productionRunId: string;
+    // The credit batch (protocol production batch) this replicate characterises
+    // (ADR 0015). Optional — may be associated after the batch is formed.
+    creditBatchId?: string | null;
     samplingTime: Date;
     labName?: string | null;
     labAccreditation?: string | null;
@@ -480,6 +488,7 @@ export async function createSample(
       .values({
         sampleCode: data.sampleCode,
         productionRunId: data.productionRunId,
+        creditBatchId: data.creditBatchId ?? null,
         samplingTime: data.samplingTime,
         labName: data.labName ?? null,
         labAccreditation: data.labAccreditation ?? null,
@@ -540,6 +549,7 @@ export async function updateSample(
   data: {
     sampleCode?: string;
     productionRunId?: string;
+    creditBatchId?: string | null;
     samplingTime?: Date;
     labName?: string | null;
     labAccreditation?: string | null;
@@ -606,6 +616,7 @@ export async function updateSample(
 
   if (data.sampleCode !== undefined) updateData.sampleCode = data.sampleCode;
   if (data.productionRunId !== undefined) updateData.productionRunId = data.productionRunId;
+  if (data.creditBatchId !== undefined) updateData.creditBatchId = data.creditBatchId;
   if (data.samplingTime !== undefined) updateData.samplingTime = data.samplingTime;
   if (data.labName !== undefined) updateData.labName = data.labName;
   if (data.labAccreditation !== undefined) updateData.labAccreditation = data.labAccreditation;
