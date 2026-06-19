@@ -95,9 +95,18 @@ export function selectSequestrationBlueprintKey(args: {
   sampled: boolean;
   samplingMethod: SamplingMethod;
 }): string {
-  return args.sampled
-    ? SEQUESTRATION_BLUEPRINT_SAMPLED
-    : SEQUESTRATION_BLUEPRINT_UNSAMPLED;
+  if (args.sampled) return SEQUESTRATION_BLUEPRINT_SAMPLED;
+  // An unsampled batch is only valid under Method B (the registry derives its
+  // carbon + durable fraction from sampled history). `{ sampled: false,
+  // samplingMethod: "method_a" }` is an impossible state — the durability gates
+  // require every Method A run to be sampled — so fail closed rather than route
+  // it to the unsampled blueprint and mask an upstream gate regression.
+  if (args.samplingMethod !== "method_b") {
+    throw new Error(
+      "selectSequestrationBlueprintKey: an unsampled batch is only valid under Method B",
+    );
+  }
+  return SEQUESTRATION_BLUEPRINT_UNSAMPLED;
 }
 
 // ── Measurement-sample body builders ─────────────────────────────────────────

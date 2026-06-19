@@ -97,6 +97,31 @@ describe("evaluateRunEligibility (per-run mean, D8)", () => {
     ]);
     expect(r.meanHToCOrgRatio).toBeCloseTo(0.35, 5);
     expect(r.meanOToCOrgRatio).toBeCloseTo(0.11, 5);
+    expect(r.usableReplicateCount).toBe(2);
+    expect(r.eligible).toBe(true);
+  });
+
+  it("never reads eligible from a DISJOINT mix — H/C and O/C from different replicates", () => {
+    // No single replicate carries both ratios, so eligibility is indeterminate
+    // even though each independent mean is on its own below the ceiling.
+    const r = evaluateRunEligibility([
+      { hToCOrgRatio: 0.3, oToCOrgRatio: null },
+      { hToCOrgRatio: null, oToCOrgRatio: 0.1 },
+    ]);
+    expect(r.meanHToCOrgRatio).toBeCloseTo(0.3, 5);
+    expect(r.meanOToCOrgRatio).toBeCloseTo(0.1, 5);
+    expect(r.usableReplicateCount).toBe(0);
+    expect(r.eligible).toBeNull();
+    expect(r.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("counts only complete-chemistry replicates as usable", () => {
+    const r = evaluateRunEligibility([
+      { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+      { hToCOrgRatio: 0.31, oToCOrgRatio: null },
+      { hToCOrgRatio: 0.29, oToCOrgRatio: 0.12 },
+    ]);
+    expect(r.usableReplicateCount).toBe(2);
     expect(r.eligible).toBe(true);
   });
 });

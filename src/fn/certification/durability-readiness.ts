@@ -26,6 +26,7 @@ export async function buildDurabilityGateBlockers(
     runs.map((run) => ({
       runId: run.id,
       runCode: run.code,
+      reactorId: run.reactorId,
       samplingMethod: samplingMethodByReactor.get(run.reactorId) ?? "method_a",
       replicates: run.samples.map((s) => ({
         hToCOrgRatio: s.hToCOrgRatio,
