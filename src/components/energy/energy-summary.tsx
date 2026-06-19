@@ -2,9 +2,9 @@
  * EnergySummary
  * Read-only facility rollup of electricity + diesel across production runs,
  * plus a preview of the combined energy datapoints submitted to Isometric
- * (ADR 0014 — one grid-electricity + one genset measurement point, no per-stage
- * split). Startup/plant diesel is shown but not submitted under the active
- * template, which declares no fuel-usage component to carry it.
+ * (ADR 0015 — one grid-electricity + one genset measurement point, no per-stage
+ * split). Startup/plant diesel is shown separately because submission depends
+ * on the active template's fuel-usage capability.
  */
 "use client";
 
@@ -192,7 +192,7 @@ export function EnergySummary() {
                   <td className="body-medium py-8 px-12">
                     Startup / plant diesel
                     <span className="block label-micro text-[var(--color-signal-orange)]">
-                      Not submitted under the active template
+                      Submitted only when the active template includes a fuel-usage component
                     </span>
                   </td>
                   <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums text-[var(--color-text-tertiary)]">

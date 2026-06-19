@@ -1,8 +1,7 @@
 /**
  * EmissionEstimatesForm
  * Admin form for a facility's Phase 3.7 emission-estimate config —
- * genset energy yield + the process-stage energy split. Persisted onto
- * the facility's certifier_projects row.
+ * genset energy yield persisted onto the facility's certifier_projects row.
  */
 "use client";
 

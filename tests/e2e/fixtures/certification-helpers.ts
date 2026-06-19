@@ -48,7 +48,7 @@ export interface SeededMapping {
 
 /**
  * The `certifier_projects` emission-estimate config a live submit needs. ADR
- * 0014 dropped the three stage-split columns; only the genset yield remains.
+ * 0015 dropped the three stage-split columns; only the genset yield remains.
  */
 export interface FacilityEmissionConfigSeed {
   gensetEnergyYieldKwhPerLitre: number;
@@ -70,7 +70,7 @@ export async function seedCertifierMapping(
     defaultRemovalTemplateId?: string | null;
     /**
      * Per-facility emission-estimate config a LIVE removal submit reads via
-     * `resolveFacilityEmissionConfig` (the genset yield; ADR 0014 dropped the
+     * `resolveFacilityEmissionConfig` (the genset yield; ADR 0015 dropped the
      * stage splits). Omit for link-only scenarios that never submit — the
      * column stays null and the wizard still mounts. Provide it for the full
      * create→submit happy path or the submit throws "Set this facility's genset

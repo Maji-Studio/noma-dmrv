@@ -66,7 +66,7 @@ export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 
 // --- Per-facility emission-estimate config ---
 
-// ADR 0014 collapsed energy to a single combined measurement point, dropping
+// ADR 0015 collapsed energy to a single combined measurement point, dropping
 // the three process-stage split percentages (and their sum constraint). Only
 // the genset yield — emissions-affecting (litres → kWh) — and the soil-temp
 // fallback remain.

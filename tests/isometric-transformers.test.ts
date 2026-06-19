@@ -22,7 +22,7 @@ const CO2_STORED = {
   groupKey: "co2-stored",
   blueprintKey: "carbon_rich_substance_sequestration",
 } as const;
-// Energy enters at a single pyrolysis measurement point (ADR 0014): one grid
+// Energy enters at a single pyrolysis measurement point (ADR 0015): one grid
 // electricity datapoint and one diesel-genset datapoint.
 const PYROLYSIS_ELECTRICITY = {
   groupKey: "pyrolysis",
@@ -46,7 +46,7 @@ const baseAgg: AggregatedProductionData = {
   feedstockTransportMassDistanceTonneKm: 50,
   biocharTransportMassDistanceTonneKm: 100,
   sampleTransportMassDistanceTonneKm: 12,
-  // 20 L × 3.375 kWh/L (enriched genset figure — ADR 0014 single point).
+  // 20 L × 3.375 kWh/L (enriched genset figure — ADR 0015 single point).
   totalGensetKwh: 67.5,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
@@ -337,7 +337,7 @@ describe("buildCreateDatapointRequest", () => {
         "mass_distance",
       ],
       ["biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"],
-      // Energy — single combined measurement point under pyrolysis (ADR 0014):
+      // Energy — single combined measurement point under pyrolysis (ADR 0015):
       // grid electricity → totalElectricityKwh, diesel genset → totalGensetKwh.
       // The per-stage `metered_energy_based_ci_emissions` electricity entry and
       // the biochar-processing / biomass-feedstock-processing energy entries are

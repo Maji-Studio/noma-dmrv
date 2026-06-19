@@ -80,7 +80,7 @@ const mapping = (
   inputTuples?: readonly CertifyInputTuple[],
 ): CertifySourceMapping => ({ source, inputTuples });
 
-// Combined energy submits at a single pyrolysis measurement point (ADR 0014):
+// Combined energy submits at a single pyrolysis measurement point (ADR 0015):
 // one grid-electricity datapoint and one genset datapoint. The per-stage split
 // is gone, so each maps to one combined source + one input tuple.
 const electricityMapping = mapping("totalElectricityKwh", [
@@ -161,7 +161,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("totalBiocharDryMassKg")],
     },
     {
-      // ADR 0014: the live template declares no `fuel_usage_by_volume`
+      // ADR 0015: the live template declares no `fuel_usage_by_volume`
       // component, so startup/plant diesel + preprocessing fuel are NOT
       // certify-required. A `derived` descriptor with no `formFields` badges no
       // input and never gates readiness, while still covering
@@ -304,7 +304,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   facilityEmissionConfig: [
     {
-      // ADR 0014 dropped the three stage-split fields; only the genset yield
+      // ADR 0015 dropped the three stage-split fields; only the genset yield
       // (litres → kWh) remains as facility emission config.
       key: "gensetEnergyYieldKwhPerLitre",
       label: "Genset energy yield",

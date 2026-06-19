@@ -124,7 +124,7 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Pyrolysis energy — single combined measurement point (ADR 0014). The
+  // Pyrolysis energy — single combined measurement point (ADR 0015). The
   // operator re-authored the template so all energy enters here as two
   // scalars: grid electricity (`grid_electricity_use`) and diesel genset
   // (`energy_based_ci_emissions`). noma submits the run-combined totals with
@@ -178,7 +178,7 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
   // Startup/plant diesel also maps here when a template carries the volume
-  // component. The live operator template (ADR 0014) declares no
+  // component. The live operator template (ADR 0015) declares no
   // `fuel_usage_by_volume` component in this group, so the value is not
   // submitted; a non-blocking warning fires instead (see
   // `buildSubmissionWarnings` in certify-context-core.ts). The mapping stays

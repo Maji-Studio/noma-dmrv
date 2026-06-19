@@ -203,7 +203,7 @@ function makeMapping(): CertifierProjectRow {
     webhookSecret: null,
     metadata: null,
     // Emission-estimate config — the genset yield is required by
-    // `resolveFacilityEmissionConfig` (ADR 0014 dropped the per-stage splits).
+    // `resolveFacilityEmissionConfig` (ADR 0015 dropped the per-stage splits).
     gensetEnergyYieldKwhPerLitre: 3.375,
     createdAt: new Date(),
     updatedAt: new Date(),
