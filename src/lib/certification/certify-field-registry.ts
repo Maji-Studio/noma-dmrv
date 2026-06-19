@@ -59,9 +59,8 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "totalStartupDieselLitres",
   "totalGensetDieselLitres",
   "totalElectricityKwh",
-  "feedstockTransportAvgDistanceKm",
-  "biocharTransportAvgDistanceKm",
-  "sampleTransportAvgDistanceKm",
+  "feedstockTransportMassDistanceTonneKm",
+  "biocharTransportMassDistanceTonneKm",
   "sampleTransportMassDistanceTonneKm",
   "biomassElectricityKwh",
   "pyrolysisElectricityKwh",
@@ -120,26 +119,20 @@ const gensetStageMappings = [
   ]),
 ] as const;
 
-const transportDistanceMappings = [
-  mapping("feedstockTransportAvgDistanceKm", [
-    tuple("biomass-feedstock-transport", "transport", "distance"),
-  ]),
-  mapping("biocharTransportAvgDistanceKm", [
-    tuple("biochar-transport", "transport", "distance"),
-  ]),
-  mapping("sampleTransportAvgDistanceKm", [
-    tuple("sampling-required-for-mrv", "distance_based_ci_emissions", "distance"),
-  ]),
-  mapping("sampleTransportMassDistanceTonneKm", [
+// Each transport category submits a single `mass_distance` (tonne·km) datapoint
+// = Σⱼ(distⱼ × massⱼ). Both a leg's distance AND its load mass feed that figure,
+// so the transportLeg.distanceKm and .loadMassKg fields share these mappings.
+const transportMassDistanceMappings = [
+  mapping("feedstockTransportMassDistanceTonneKm", [
     tuple(
-      "sampling-required-for-mrv",
+      "biomass-feedstock-transport",
       "mass_distance_based_ci_emissions",
       "mass_distance",
     ),
   ]),
-] as const;
-
-const transportMassMappings = [
+  mapping("biocharTransportMassDistanceTonneKm", [
+    tuple("biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"),
+  ]),
   mapping("sampleTransportMassDistanceTonneKm", [
     tuple(
       "sampling-required-for-mrv",
@@ -160,7 +153,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
       mappings: [
         mapping("totalFeedstockDryMassKg", [
-          tuple("biomass-feedstock-transport", "transport", "mass"),
           tuple(
             "biomass-feedstock-transport",
             "specific_volume_based_emissions",
@@ -182,7 +174,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [
         mapping("totalBiocharDryMassKg", [
           tuple("co2-stored", "carbon_rich_substance_sequestration", "product_mass"),
-          tuple("biochar-transport", "transport", "mass"),
           tuple(
             "biochar-transport",
             "specific_volume_based_emissions",
@@ -300,7 +291,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
         fields: ["massWetKg"],
         label: "Feedstock wet mass",
       },
-      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
     {
       key: "transportLeg",
@@ -309,7 +300,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       // The derived leg's distance resolves form override → supplier default
       // location → supplier-level distance; badge the form-side override.
       formFields: ["transportDistanceKm"],
-      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
     {
       key: "truckWeighing",
@@ -326,7 +317,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
         fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
         label: "Arrival and departure truck masses",
       },
-      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
   ],
   transportLeg: [
@@ -334,18 +325,13 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "distanceKm",
       label: "Transport distance",
       kind: "entered",
-      mappings: transportDistanceMappings,
+      mappings: transportMassDistanceMappings,
     },
     {
       key: "loadMassKg",
       label: "Load mass",
       kind: "entered",
-      mappings: [
-        mapping("feedstockTransportAvgDistanceKm"),
-        mapping("biocharTransportAvgDistanceKm"),
-        mapping("sampleTransportAvgDistanceKm"),
-        ...transportMassMappings,
-      ],
+      mappings: transportMassDistanceMappings,
     },
   ],
   facilityEmissionConfig: [
@@ -395,7 +381,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "deliveredWetMassKg",
       label: "Delivered wet mass",
       kind: "entered",
-      mappings: [mapping("biocharTransportAvgDistanceKm")],
+      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
     {
       key: "truckWeighing",
@@ -412,7 +398,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
         fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
         label: "Arrival and departure truck masses",
       },
-      mappings: [mapping("biocharTransportAvgDistanceKm")],
+      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
   application: [
@@ -443,7 +429,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "distanceFromFacilityKm",
       label: "Distance from facility",
       kind: "entered",
-      mappings: [mapping("biocharTransportAvgDistanceKm")],
+      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
   supplier: [
@@ -452,7 +438,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "distanceToFacilityKm",
       label: "Distance to facility",
       kind: "entered",
-      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
   ],
   supplierLocation: [
@@ -462,7 +448,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "distanceFromFacilityKm",
       label: "Distance from facility",
       kind: "entered",
-      mappings: [mapping("feedstockTransportAvgDistanceKm")],
+      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
   ],
 } as const;
