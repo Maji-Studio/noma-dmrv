@@ -436,17 +436,28 @@ capability, not a blocker — tracked here so they are not lost:
     `quantity_kind = "distance"`; the strict guard in
     `src/lib/isometric/transformers/datapoint.ts:201-211` rejects unit
     mismatches.
-  - Interim: keep mass-weighted distance, but enforce per-category
-    uniformity (same method, same emission factor, all legs have load
-    mass) so Certify's server-side
-    `distance × Σmass × factor = Σⱼ(distⱼ × massⱼ × factor)` holds —
-    compliant with §5 within the current template shape. See
-    `aggregateTransportLegs` in
-    `src/lib/isometric/utils/aggregation.ts`.
-  - True per-leg submission (each leg as its own Certify datapoint)
-    is blocked on Isometric exposing a transport template input that
-    accepts N>1 datapoints per leg category. Re-raise with Isometric
-    support before any future work here.
+  - **2026-06-19 update — resolved within the SCALAR constraint.** The
+    operator re-authored the template onto the
+    `mass_distance_based_ci_emissions` blueprint, so each category now submits
+    one `mass_distance` (tonne·km) scalar = `Σⱼ(distⱼ × massⱼ)` directly (no
+    avg-distance hack), still enforcing per-category factor uniformity. See
+    `aggregateTransportMassDistance` in
+    `src/lib/isometric/utils/aggregation.ts` and the 2026-06-19 entry in
+    `docs/isometric/changes.md`.
+  - **True per-leg submission is categorically impossible, not merely
+    un-exposed.** A live catalog sweep (2026-06-19) confirmed *every*
+    `mass_distance` input across all Certify blueprints is `data_shape: SCALAR`;
+    no transport blueprint accepts a `datapoint_ids` LIST. Per-leg visibility
+    would require one component *instance* per leg (dynamic
+    `AddComponentToRemoval`, outside the template-driven pipeline) and yields no
+    numerical gain for same-mode legs — rejected.
+  - **Deferred — mixed-mode transport** (`isometric/transport-mixed-mode`): one
+    `mass_distance` component carries one emission factor, so rail/ship legs
+    (different EF) cannot be summed into a road tonne·km scalar — today they trip
+    the mixed-factor warning and block submission. Supporting them needs
+    per-mode component instances. Out of scope while the transport UI is
+    road-only (`transport-legs-ui-pattern`); re-raise when a non-road mode is
+    enterable.
 
 - **No facility-membership model in codebase**
   (`auth/facility-scoping`) — opened 2026-05-13, parked.

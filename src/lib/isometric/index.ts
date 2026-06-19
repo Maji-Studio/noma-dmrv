@@ -96,7 +96,7 @@ export {
 } from "./utils/submission-claim";
 export {
   aggregateProductionRuns,
-  aggregateTransportLegs,
+  aggregateTransportMassDistance,
   enrichWithTransportLegs,
   enrichWithFacilityConfig,
   validateForTemplate,

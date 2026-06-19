@@ -465,9 +465,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 // ============================================================
 
 // Builds a template whose first group bundles three components, each with a
-// single monitored `distance` input — matching the three transport rows in
-// INPUT_MAPPING. The optional `omit` list lets a test simulate a template
-// that doesn't request a particular category.
+// single monitored `mass_distance` input on the `mass_distance_based_ci_emissions`
+// blueprint — matching the three transport rows in INPUT_MAPPING. The optional
+// `omit` list lets a test simulate a template that doesn't request a category.
 function transportTemplate(
   id: string,
   omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
@@ -475,20 +475,20 @@ function transportTemplate(
   const categories = [
     {
       key: "biomass-feedstock-transport",
-      blueprint_key: "transport",
-      input_key: "distance",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
       category: "feedstock" as const,
     },
     {
       key: "biochar-transport",
-      blueprint_key: "transport",
-      input_key: "distance",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
       category: "biochar" as const,
     },
     {
       key: "sampling-required-for-mrv",
-      blueprint_key: "distance_based_ci_emissions",
-      input_key: "distance",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
       category: "sample" as const,
     },
   ].filter((c) => !omit.includes(c.category));
@@ -587,7 +587,9 @@ describe("requiredTransportCategories", () => {
     mockedListTemplates.mockResolvedValue([
       transportTemplate("tpl_no_sample", ["sample"]),
     ]);
-    mockedListBlueprints.mockResolvedValue([blueprint("transport")]);
+    mockedListBlueprints.mockResolvedValue([
+      blueprint("mass_distance_based_ci_emissions"),
+    ]);
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
       application: { biocharAppliedDryTons: 0.1 } as never,

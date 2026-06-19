@@ -44,7 +44,7 @@ import type { DerivedStatus } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
-  aggregateTransportLegs,
+  aggregateTransportMassDistance,
   collectTransportEntityIds,
   listComponentBlueprints,
   listProjects,
@@ -82,7 +82,7 @@ export interface TransportCoverageBucket {
   legIds: string[];
   firstLegEntityId: string | null;
   // Non-null when at least one leg fails the per-leg uniformity /
-  // completeness checks `aggregateTransportLegs` enforces. Pooling legs from
+  // completeness checks `aggregateTransportMassDistance` enforces. Pooling legs from
   // several credit batches into one removal raises the chance of a mixed
   // method/factor — the panel surfaces it before the user clicks submit.
   aggregationWarning: string | null;
@@ -99,9 +99,9 @@ export type TransportCategory = keyof TransportCoverage;
 // Maps an INPUT_MAPPING.source field name to a transport category. Keep in
 // sync with the three transport rows in transformers/datapoint.ts.
 const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
-  feedstockTransportAvgDistanceKm: "feedstock",
-  biocharTransportAvgDistanceKm: "biochar",
-  sampleTransportAvgDistanceKm: "sample",
+  feedstockTransportMassDistanceTonneKm: "feedstock",
+  biocharTransportMassDistanceTonneKm: "biochar",
+  sampleTransportMassDistanceTonneKm: "sample",
 };
 
 export interface MemberCreditBatch {
@@ -209,29 +209,28 @@ function buildCoverage(
   legs: TransportLegsByCategory,
   entityIds: ReturnType<typeof collectTransportEntityIds>,
 ): TransportCoverage {
+  const mdWarn = aggregateTransportMassDistance;
   return {
     feedstock: {
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
       legIds: legs.feedstock.map((leg) => leg.id),
       firstLegEntityId: legs.feedstock[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportLegs(legs.feedstock, "Feedstock")
-        .warning,
+      aggregationWarning: mdWarn(legs.feedstock, "Feedstock").warning,
     },
     biochar: {
       count: legs.biochar.length,
       entityIds: entityIds.biocharProductIds,
       legIds: legs.biochar.map((leg) => leg.id),
       firstLegEntityId: legs.biochar[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportLegs(legs.biochar, "Biochar")
-        .warning,
+      aggregationWarning: mdWarn(legs.biochar, "Biochar").warning,
     },
     sample: {
       count: legs.sample.length,
       entityIds: entityIds.sampleIds,
       legIds: legs.sample.map((leg) => leg.id),
       firstLegEntityId: legs.sample[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportLegs(legs.sample, "Sample").warning,
+      aggregationWarning: mdWarn(legs.sample, "Sample").warning,
     },
   };
 }
