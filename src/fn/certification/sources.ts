@@ -46,6 +46,7 @@ import {
 import {
   loadCandidateDocumentsForRemovalSchema,
   mirrorDocumentToSourceSchema,
+  type MirrorDocumentToSourceInput,
   setDocumentSourceVisibilitySchema,
   SOURCES_MAX_BYTES,
   unlinkDocumentSourceSchema,
@@ -442,11 +443,23 @@ async function withSyncEventOnFailure<T>(
   }
 }
 
+// Thin server-action wrapper: validates input and resolves the caller from the
+// session. The body lives in `mirrorDocumentToSourceForUser` so server-side
+// callers that already hold a userId (the submit pipeline, the transport
+// evidence-ledger generator) can mirror without re-deriving the session.
 export async function mirrorDocumentToSource(
   input: unknown,
 ): Promise<ActionResult<MirrorResult>> {
-  return withAction(async (userId) => {
-    const parsed = mirrorDocumentToSourceSchema.parse(input);
+  return withAction((userId) =>
+    mirrorDocumentToSourceForUser(userId, mirrorDocumentToSourceSchema.parse(input)),
+  );
+}
+
+export async function mirrorDocumentToSourceForUser(
+  userId: string,
+  parsed: MirrorDocumentToSourceInput,
+): Promise<MirrorResult> {
+  {
     const { removalId, documentId, isPublic } = parsed;
 
     // Ownership + lineage scoping ───────────────────────────────────────
@@ -692,7 +705,7 @@ export async function mirrorDocumentToSource(
         recovered: recoveredFlag,
       };
     });
-  });
+  }
 }
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -306,6 +306,33 @@ export async function listDocumentsForEntityIds(
     .orderBy(desc(rankedDocuments.createdAt));
 }
 
+/**
+ * Documents tagged with a given `metadata.kind` + `metadata.removalId`. Used by
+ * the transport evidence-ledger flow to locate a removal's prior auto-generated
+ * ledgers (which it supersedes), regardless of which member credit batch each
+ * was attached to. Newest first. Auth is `requireAuth` only — the removalId
+ * scope is resolved from the caller's own removal context upstream, matching
+ * `getDocumentById`'s posture for cross-entity lookups.
+ */
+export async function listDocumentsByKindForRemoval(
+  userId: string,
+  kind: string,
+  removalId: string
+): Promise<DocumentRow[]> {
+  requireAuth(userId);
+  return db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        sql`${documents.metadata} ->> 'kind' = ${kind}`,
+        sql`${documents.metadata} ->> 'removalId' = ${removalId}`
+      )
+    )
+    .orderBy(desc(documents.createdAt))
+    .limit(MAX_DOCUMENTS_PER_ENTITY);
+}
+
 export async function getDocumentById(
   userId: string,
   id: string
