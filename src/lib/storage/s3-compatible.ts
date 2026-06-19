@@ -98,4 +98,19 @@ export class S3CompatibleProvider implements StorageProvider {
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
     );
   }
+
+  async putObject(
+    key: string,
+    body: Buffer,
+    contentType: string
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      })
+    );
+  }
 }

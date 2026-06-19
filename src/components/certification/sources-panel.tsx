@@ -7,9 +7,12 @@
  * at submit time and are hash-covered (a sources change supersedes the
  * Removal version).
  *
- * Mounted in two places:
- *  - The credit-batch side-sheet's `CertifyPanel`
- *  - The standalone `/certification/removals/[removalId]` detail page
+ * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
+ * `?removal=<id>`), the single place the candidate set is consumed. The
+ * earlier mounts — the credit-batch `CertifyPanel` and the standalone
+ * `/certification/removals/[removalId]` detail page — were removed when the
+ * 2026-06-04 certify redesign deleted `evidence-step.tsx`; the panel was
+ * re-homed here so per-leg evidence can reach Isometric again.
  */
 "use client";
 

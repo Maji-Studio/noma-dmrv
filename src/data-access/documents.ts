@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   applications,
   biocharProducts,
+  certifierRemovals,
   creditBatches,
   deliveries,
   documents,
@@ -229,6 +230,20 @@ export async function assertCanManageDocumentEntity(
   }
 }
 
+async function assertRemovalExistsForDocumentLookup(
+  removalId: string
+): Promise<void> {
+  const [row] = await db
+    .select({ id: certifierRemovals.id })
+    .from(certifierRemovals)
+    .where(eq(certifierRemovals.id, removalId))
+    .limit(1);
+
+  if (!row) {
+    throw new SafeError("Removal not found");
+  }
+}
+
 export async function listDocumentsForEntity(
   userId: string,
   entityType: string,
@@ -304,6 +319,34 @@ export async function listDocumentsForEntityIds(
     .from(rankedDocuments)
     .where(sql`${rankedDocuments.documentRank} <= ${MAX_DOCUMENTS_PER_ENTITY}`)
     .orderBy(desc(rankedDocuments.createdAt));
+}
+
+/**
+ * Documents tagged with a given `metadata.kind` + `metadata.removalId`. Used by
+ * the transport evidence-ledger flow to locate a removal's prior auto-generated
+ * ledgers (which it supersedes), regardless of which member credit batch each
+ * was attached to. Newest first. Current authz is single-org/shared-data; this
+ * validates that the requested removal exists instead of relying on an upstream
+ * submission context.
+ */
+export async function listDocumentsByKindForRemoval(
+  userId: string,
+  kind: string,
+  removalId: string
+): Promise<DocumentRow[]> {
+  requireAuth(userId);
+  await assertRemovalExistsForDocumentLookup(removalId);
+  return db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        sql`${documents.metadata} ->> 'kind' = ${kind}`,
+        sql`${documents.metadata} ->> 'removalId' = ${removalId}`
+      )
+    )
+    .orderBy(desc(documents.createdAt))
+    .limit(MAX_DOCUMENTS_PER_ENTITY);
 }
 
 export async function getDocumentById(
