@@ -14,6 +14,8 @@ import {
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchStatus, durabilityOption } from './common';
 import { facilities } from './facilities';
+import { feedstockTypes } from './feedstock';
+import { productionProcesses } from './production-processes';
 import { applications } from './application';
 import { productionRuns } from './production';
 import { certifierRemovals } from './certification';
@@ -31,6 +33,20 @@ export const creditBatches = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
+    // --- Production-batch identity (ADR 0015) ---
+    // The credit batch IS the Isometric protocol production batch: ONE
+    // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
+    // derived from — and asserted single across — the member runs at create /
+    // update time (a run blending >1 feedstock type is rejected loudly).
+    feedstockTypeId: uuid('feedstock_type_id')
+      .notNull()
+      .references(() => feedstockTypes.id),
+    // The (facility, feedstock) sampling-regime campaign this batch is one
+    // <=1-month slice of. Auto-found-or-created when the batch is built.
+    // Nullable as a safety valve; app logic always populates it.
+    productionProcessId: uuid('production_process_id').references(
+      () => productionProcesses.id
+    ),
     status: creditBatchStatus('status').default('pending').notNull(),
 
     // --- Overview ---
@@ -122,6 +138,14 @@ export const creditBatches = pgTable(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
+    // ADR 0015: a credit batch is the protocol production batch (< 1 month).
+    // Coarse DB backstop at 31 days, Isometric-conditional; the precise
+    // calendar-month rule lives in the Zod superRefine + server re-validation.
+    check(
+      'credit_batches_isometric_max_one_month',
+      sql`${table.certifier} is distinct from 'isometric'
+        or (${table.endDate} - ${table.startDate}) <= 31`
+    ),
     check(
       'credit_batches_total_feedstock_mass_non_negative',
       sql`${table.totalFeedstockMassKg} is null or ${table.totalFeedstockMassKg} >= 0`
@@ -196,6 +220,14 @@ export const creditBatchesRelations = relations(
     facility: one(facilities, {
       fields: [creditBatches.facilityId],
       references: [facilities.id],
+    }),
+    feedstockType: one(feedstockTypes, {
+      fields: [creditBatches.feedstockTypeId],
+      references: [feedstockTypes.id],
+    }),
+    productionProcess: one(productionProcesses, {
+      fields: [creditBatches.productionProcessId],
+      references: [productionProcesses.id],
     }),
     removal: one(certifierRemovals, {
       fields: [creditBatches.removalId],

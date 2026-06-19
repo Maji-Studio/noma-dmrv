@@ -15,7 +15,6 @@ import {
 } from "@/db/schema";
 import {
   getMethodBEligibilityByReactor,
-  METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   type MethodBEligibilitySummary,
 } from "@/data-access/isometric";
 import {
@@ -56,6 +55,13 @@ export interface PaginatedReactors {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+
+// ADR 0015 (Phase 1): the sampling method moved OFF reactors onto production
+// processes, and DEC runs Method A everywhere. The reactor-level readiness
+// surface (methodBEligibility / samplingRequirement) is kept but evaluated at a
+// constant Method-A regime — it stays dormant until Phase 2 re-keys it to the
+// production process (per ADR 0015 / the deferred Method-B unlock, ADR 0016).
+const PHASE1_REACTOR_SAMPLING_METHOD = "method_a" as const;
 
 // ============================================
 // Sampling-requirement helpers (decision D6)
@@ -120,7 +126,6 @@ export async function getReactors(
   const {
     search,
     facilityId,
-    samplingMethod,
     reactorType,
     page = 1,
     pageSize = 20,
@@ -144,10 +149,6 @@ export async function getReactors(
 
   if (facilityId) {
     conditions.push(eq(reactors.facilityId, facilityId));
-  }
-
-  if (samplingMethod) {
-    conditions.push(eq(reactors.samplingMethod, samplingMethod));
   }
 
   if (reactorType) {
@@ -185,7 +186,6 @@ export async function getReactors(
       identifier: reactors.identifier,
       facilityId: reactors.facilityId,
       reactorType: reactors.reactorType,
-      samplingMethod: reactors.samplingMethod,
       nominalThroughputTph: reactors.nominalThroughputTph,
       specifications: reactors.specifications,
       archivedAt: reactors.archivedAt,
@@ -221,7 +221,6 @@ export async function getReactors(
         identifier: reactor.identifier,
         facilityId: reactor.facilityId,
         reactorType: reactor.reactorType,
-        samplingMethod: reactor.samplingMethod,
         nominalThroughputTph: reactor.nominalThroughputTph,
         specifications: reactor.specifications,
         archivedAt: reactor.archivedAt,
@@ -231,7 +230,7 @@ export async function getReactors(
         facilityName: reactor.facilityName ?? "",
         methodBEligibility,
         samplingRequirement: deriveSamplingRequirement(
-          reactor.samplingMethod,
+          PHASE1_REACTOR_SAMPLING_METHOD,
           runSamplingByReactor.get(reactor.id) ?? [],
         ),
       };
@@ -264,7 +263,6 @@ export async function getReactorById(
       identifier: reactors.identifier,
       facilityId: reactors.facilityId,
       reactorType: reactors.reactorType,
-      samplingMethod: reactors.samplingMethod,
       nominalThroughputTph: reactors.nominalThroughputTph,
       specifications: reactors.specifications,
       archivedAt: reactors.archivedAt,
@@ -294,7 +292,6 @@ export async function getReactorById(
     identifier: reactor.identifier,
     facilityId: reactor.facilityId,
     reactorType: reactor.reactorType,
-    samplingMethod: reactor.samplingMethod,
     nominalThroughputTph: reactor.nominalThroughputTph,
     specifications: reactor.specifications,
     archivedAt: reactor.archivedAt,
@@ -304,7 +301,7 @@ export async function getReactorById(
     facilityName: reactor.facilityName ?? "",
     methodBEligibility,
     samplingRequirement: deriveSamplingRequirement(
-      reactor.samplingMethod,
+      PHASE1_REACTOR_SAMPLING_METHOD,
       runSamplingByReactor.get(reactor.id) ?? [],
     ),
   };
@@ -313,9 +310,13 @@ export async function getReactorById(
 /**
  * Map each reactor id to its CURRENT sampling method. Used by the durability
  * submission gates (D6) to decide, per production run, whether a Method A run
- * must be sampled — derived from the live reactor, never stored, so a method
- * flip auto-readjusts. Reactor ids absent from the table are simply omitted;
- * the caller defaults a missing run conservatively to Method A.
+ * must be sampled. Reactor ids absent from the table are simply omitted; the
+ * caller defaults a missing run conservatively to Method A.
+ *
+ * ADR 0015 (Phase 1): the sampling method is no longer a reactor column — it
+ * lives on the production process — and DEC runs Method A everywhere. This
+ * therefore returns Method A for every existing reactor. Phase 2 re-keys the
+ * gates to source the method from the production process directly.
  */
 export async function getSamplingMethodsByReactorIds(
   userId: string,
@@ -326,14 +327,11 @@ export async function getSamplingMethodsByReactorIds(
   if (reactorIds.length === 0) return new Map();
 
   const rows = await db
-    .select({
-      id: reactors.id,
-      samplingMethod: reactors.samplingMethod,
-    })
+    .select({ id: reactors.id })
     .from(reactors)
     .where(inArray(reactors.id, reactorIds));
 
-  return new Map(rows.map((r) => [r.id, r.samplingMethod]));
+  return new Map(rows.map((r) => [r.id, PHASE1_REACTOR_SAMPLING_METHOD]));
 }
 
 /**
@@ -377,7 +375,6 @@ export async function createReactor(
     identifier: string;
     facilityId: string;
     reactorType: string;
-    samplingMethod?: "method_a" | "method_b";
     nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
@@ -404,14 +401,8 @@ export async function createReactor(
     throw new SafeError("Facility not found or archived");
   }
 
-  // A brand-new reactor has zero prior samples, so it can never satisfy the
-  // Method B prerequisite — reject it up front rather than persisting an
-  // ineligible configuration.
-  if (data.samplingMethod === "method_b") {
-    throw new SafeError(
-      `Method B requires at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} prior Method A samples. A new reactor has none — start with Method A.`
-    );
-  }
+  // ADR 0015: a reactor no longer declares a sampling method (it lives on the
+  // production process). Nothing Method-B to validate at reactor creation.
 
   const [reactor] = await db
     .insert(reactors)
@@ -420,7 +411,6 @@ export async function createReactor(
       identifier: data.identifier,
       facilityId: data.facilityId,
       reactorType: data.reactorType,
-      samplingMethod: data.samplingMethod ?? "method_a",
       nominalThroughputTph: data.nominalThroughputTph ?? null,
       specifications: data.specifications ?? null,
     })
@@ -444,7 +434,6 @@ export async function updateReactor(
     identifier?: string;
     facilityId?: string;
     reactorType?: string;
-    samplingMethod?: "method_a" | "method_b";
     nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
@@ -485,23 +474,9 @@ export async function updateReactor(
     }
   }
 
-  // Method B requires the reactor to have enough prior Method A samples. Check
-  // whenever the resulting method is Method B — not only on the transition —
-  // because samples can be deleted, so an already-Method-B reactor's eligibility
-  // can regress and must be re-validated on every save.
-  const resultingSamplingMethod =
-    data.samplingMethod ?? existing.samplingMethod;
-  if (resultingSamplingMethod === "method_b") {
-    const eligibility = await getMethodBEligibilityByReactor(userId, {
-      reactorId,
-      asOfDate: new Date().toISOString(),
-    });
-    if (!eligibility.meetsMinimumMethodASamples) {
-      throw new SafeError(
-        `Method B requires at least ${eligibility.minimumMethodASampleCount} prior Method A samples; this reactor has ${eligibility.priorMethodASampleCount}.`
-      );
-    }
-  }
+  // ADR 0015: a reactor no longer declares a sampling method (it lives on the
+  // production process), so there is no Method-B eligibility to re-validate on
+  // a reactor update.
 
   const [updated] = await db
     .update(reactors)

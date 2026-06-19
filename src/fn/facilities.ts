@@ -145,7 +145,6 @@ export async function getFacilityReactorsFn(
       identifier: string;
       reactorType: string;
       nominalThroughputTph: number | null;
-      samplingMethod: string;
       createdAt: Date;
       updatedAt: Date;
     }>

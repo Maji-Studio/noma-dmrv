@@ -1,0 +1,150 @@
+/**
+ * Credit Batch Membership Rules
+ *
+ * The integrity checks a credit batch's production-run membership must satisfy
+ * before it is persisted (ADR 0015): the runs exist, belong to the batch's
+ * facility and ≤1-month window, are not already claimed by another batch, and
+ * resolve to exactly one feedstock type (a credit batch IS the protocol
+ * production batch — one feedstock). Extracted from `credit-batches.ts` to keep
+ * that module under the 1000-line cap; both helpers are transaction-scoped so
+ * the caller runs them atomically with the batch insert.
+ */
+import { and, eq, inArray, sql } from "drizzle-orm";
+import type { DbTransaction } from "@/db";
+import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
+import { feedstocks } from "@/db/schema/feedstock";
+import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
+import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
+import { SafeError } from "@/lib/errors";
+
+/**
+ * Validate that all production run IDs exist, belong to the credit batch's
+ * facility and production window, and are not already assigned elsewhere.
+ */
+export async function validateProductionRunIds(
+  tx: DbTransaction,
+  productionRunIds: string[],
+  facilityId: string,
+  startDate?: string | Date,
+  endDate?: string | Date,
+  excludeCreditBatchId?: string,
+): Promise<void> {
+  if (productionRunIds.length === 0) return;
+
+  // Reject duplicates
+  const uniqueRunIds = new Set(productionRunIds);
+  if (uniqueRunIds.size !== productionRunIds.length) {
+    throw new SafeError("Duplicate production run IDs are not allowed");
+  }
+
+  const rows = await tx
+    .select({
+      id: productionRuns.id,
+      code: productionRuns.code,
+      facilityId: productionRuns.facilityId,
+      date: productionRuns.date,
+    })
+    .from(productionRuns)
+    .where(inArray(productionRuns.id, productionRunIds));
+
+  if (rows.length !== productionRunIds.length) {
+    const found = new Set(rows.map((r) => r.id));
+    const missing = productionRunIds.filter((id) => !found.has(id));
+    throw new SafeError(`Production run(s) not found: ${missing.join(", ")}`);
+  }
+
+  const crossFacility = rows.filter((r) => r.facilityId !== facilityId);
+  if (crossFacility.length > 0) {
+    throw new SafeError(
+      `Production run(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
+    );
+  }
+
+  if (startDate != null && endDate != null) {
+    const { startStr, endStr } = assertCreditBatchProductionWindow(
+      startDate,
+      endDate,
+    );
+    const outsideWindow = rows.filter((r) => {
+      return r.date < startStr || r.date > endStr;
+    });
+
+    if (outsideWindow.length > 0) {
+      throw new SafeError(
+        `Production run(s) fall outside the credit batch production window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
+      );
+    }
+  }
+
+  const assignmentConditions = [
+    inArray(creditBatchProductionRuns.productionRunId, productionRunIds),
+  ];
+  if (excludeCreditBatchId) {
+    assignmentConditions.push(
+      sql`${creditBatchProductionRuns.creditBatchId} != ${excludeCreditBatchId}`,
+    );
+  }
+
+  const existingAssignments = await tx
+    .select({
+      productionRunId: creditBatchProductionRuns.productionRunId,
+      creditBatchCode: creditBatches.code,
+    })
+    .from(creditBatchProductionRuns)
+    .innerJoin(
+      creditBatches,
+      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+    )
+    .where(and(...assignmentConditions));
+
+  if (existingAssignments.length > 0) {
+    throw new SafeError(
+      `Production run(s) already assigned to credit batches: ${existingAssignments.map((row) => `${row.productionRunId} (${row.creditBatchCode})`).join(", ")}`,
+    );
+  }
+}
+
+/**
+ * Derive the SINGLE feedstock type shared by a set of production runs, resolved
+ * through productionRunFeedstocks → feedstocks.feedstockTypeId (ADR 0015: a
+ * credit batch is the protocol production batch — one feedstock). Throws loudly
+ * if the runs resolve to zero or to more than one feedstock type: a run blending
+ * >1 feedstock type, or a cohort mixing feedstocks, is rejected rather than
+ * silently coerced (consistent-blend modelling is deferred). The returned type
+ * populates `credit_batches.feedstockTypeId` and keys the production process.
+ */
+export async function resolveSingleFeedstockType(
+  tx: DbTransaction,
+  productionRunIds: string[],
+): Promise<string> {
+  if (productionRunIds.length === 0) {
+    throw new SafeError(
+      "A credit batch must include at least one production run so its feedstock can be derived.",
+    );
+  }
+
+  const rows = await tx
+    .selectDistinct({ feedstockTypeId: feedstocks.feedstockTypeId })
+    .from(productionRunFeedstocks)
+    .innerJoin(
+      feedstocks,
+      eq(productionRunFeedstocks.feedstockId, feedstocks.id),
+    )
+    .where(inArray(productionRunFeedstocks.productionRunId, productionRunIds));
+
+  const typeIds = rows.map((r) => r.feedstockTypeId);
+
+  if (typeIds.length === 0) {
+    throw new SafeError(
+      "Cannot derive the credit batch feedstock: the selected production run(s) have no linked feedstock.",
+    );
+  }
+  if (typeIds.length > 1) {
+    throw new SafeError(
+      `A credit batch must be a single feedstock (ADR 0015 — the protocol production batch). ` +
+        `The selected production run(s) span ${typeIds.length} feedstock types; split them into one credit batch per feedstock.`,
+    );
+  }
+
+  return typeIds[0];
+}

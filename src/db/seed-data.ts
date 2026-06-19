@@ -157,6 +157,10 @@ const ids = {
   creditBatch1: demoId(2200),
   creditBatch2: demoId(2201),
 
+  // Production Processes (facility × feedstock sampling-regime campaigns, ADR 0015)
+  processMoshiWoodchips: demoId(2250),
+  processMoshiCoffee: demoId(2251),
+
   // Junction table IDs
   prodFeedLink1: demoId(2300),
   prodFeedLink2: demoId(2301),
@@ -265,7 +269,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Alpha',
           facilityId: ids.facilityMoshi,
           reactorType: 'auger',
-          samplingMethod: 'method_a',
           nominalThroughputTph: 0.75,
           specifications: {
             manufacturer: 'NOMA Engineering',
@@ -279,12 +282,6 @@ async function seedDemoData() {
           identifier: 'Kiln-Beta',
           facilityId: ids.facilityMoshi,
           reactorType: 'fixed-bed',
-          // Method A: a reactor cannot run on Method B until it has the 30-sample
-          // Method A baseline (Biochar Protocol 1.2 §8.3.1.2). The app rejects an
-          // ineligible Method B switch (createReactor/updateReactor) and migration
-          // 0052 enforces the same at the DB layer, so seeding Method B here (with
-          // only a handful of samples) would fail the trigger.
-          samplingMethod: 'method_a',
           nominalThroughputTph: 0.5,
           specifications: {
             manufacturer: 'NOMA Engineering',
@@ -915,6 +912,7 @@ async function seedDemoData() {
         {
           id: ids.sample1,
           productionRunId: ids.productionRun1,
+          creditBatchId: ids.creditBatch1,
           samplingTime: new Date('2026-05-13T09:30:00.000Z'),
           sampleCode: 'SAM-26-001',
           weightGrams: 520,
@@ -933,6 +931,7 @@ async function seedDemoData() {
         {
           id: ids.sample2,
           productionRunId: ids.productionRun2,
+          creditBatchId: ids.creditBatch2,
           samplingTime: new Date('2026-05-15T09:00:00.000Z'),
           sampleCode: 'SAM-26-002',
           weightGrams: 485,
@@ -951,6 +950,7 @@ async function seedDemoData() {
         {
           id: ids.sample3,
           productionRunId: ids.productionRun3,
+          creditBatchId: ids.creditBatch1,
           samplingTime: new Date('2026-05-17T10:00:00.000Z'),
           sampleCode: 'SAM-26-003',
           weightGrams: 510,
@@ -1493,12 +1493,37 @@ async function seedDemoData() {
         ])
       );
 
+      // ADR 0015: a production process is the (facility, feedstock) sampling-regime
+      // campaign that scopes Method A/B; each credit batch is a <=1-month protocol
+      // production batch slicing exactly one process. Moshi runs two feedstocks, so
+      // two processes — both Method A (the default; Method B is deferred to ADR 0016).
+      console.log('Creating production processes...');
+      await tx.insert(schema.productionProcesses).values([
+        {
+          id: ids.processMoshiWoodchips,
+          facilityId: ids.facilityMoshi,
+          feedstockTypeId: ids.feedstockWoodchips,
+          establishedAt: demoTimestamps.facilitySetup,
+        },
+        {
+          id: ids.processMoshiCoffee,
+          facilityId: ids.facilityMoshi,
+          feedstockTypeId: ids.feedstockCoffeeHusk,
+          establishedAt: demoTimestamps.facilitySetup,
+        },
+      ]);
+
+      // Each batch is single-feedstock (ADR 0015): CB-26-001 is the woodchips
+      // production batch (runs PR-26-001 + PR-26-003), CB-26-002 the coffee-husk
+      // one (run PR-26-002). Both sit inside the May window of their process.
       console.log('Creating credit batches...');
       await tx.insert(schema.creditBatches).values([
         {
           id: ids.creditBatch1,
           code: 'CB-26-001',
           facilityId: ids.facilityMoshi,
+          feedstockTypeId: ids.feedstockWoodchips,
+          productionProcessId: ids.processMoshiWoodchips,
           status: 'pending',
           startDate: '2026-05-13',
           endDate: '2026-05-31',
@@ -1512,7 +1537,7 @@ async function seedDemoData() {
           totalCo2eStoredTons: 11.61,
           totalCo2eEmissionsTons: 0.64,
           totalCo2eCounterfactualTons: 0.31,
-          totalFeedstockMassKg: 9000,
+          totalFeedstockMassKg: 6500,
           ineligibleFeedstockMassKg: 0,
           siteManagementNotes:
             'Biochar incorporated into planting rows within 48 hours; no synthetic nitrogen applied during the application window.',
@@ -1525,9 +1550,11 @@ async function seedDemoData() {
           id: ids.creditBatch2,
           code: 'CB-26-002',
           facilityId: ids.facilityMoshi,
+          feedstockTypeId: ids.feedstockCoffeeHusk,
+          productionProcessId: ids.processMoshiCoffee,
           status: 'draft',
-          startDate: '2026-06-01',
-          endDate: '2026-06-28',
+          startDate: '2026-05-15',
+          endDate: '2026-05-31',
           certifier: 'isometric',
           registry: 'Isometric Registry',
           durabilityOption: '1000_year',
@@ -1544,11 +1571,11 @@ async function seedDemoData() {
         },
         {
           creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun2,
+          productionRunId: ids.productionRun3,
         },
         {
-          creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun3,
+          creditBatchId: ids.creditBatch2,
+          productionRunId: ids.productionRun2,
         },
       ]);
 

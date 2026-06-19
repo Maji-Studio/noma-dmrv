@@ -184,10 +184,13 @@ export function useCreateSample(
       });
       // Invalidate next code
       queryClient.invalidateQueries({ queryKey: sampleKeys.nextCode() });
-      // Invalidate production run detail (sample count may have changed)
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.detail(data.productionRunId),
-      });
+      // Invalidate production run detail (sample count may have changed).
+      // productionRunId is nullable since ADR 0015 (provenance, not primary).
+      if (data.productionRunId) {
+        queryClient.invalidateQueries({
+          queryKey: productionRunKeys.detail(data.productionRunId),
+        });
+      }
 
       // Pre-populate the detail cache with the new sample
       queryClient.setQueryData(sampleKeys.detail(data.id), data);

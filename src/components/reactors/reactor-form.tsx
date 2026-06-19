@@ -2,13 +2,15 @@
  * ReactorForm component
  * Reusable reactor form with React Hook Form integration
  * Used in both create and edit slide-overs for reactors
+ *
+ * NOTE (ADR 0015): the sampling method is no longer declared on the reactor — it
+ * lives on the production process (feedstock × conditions), which spans reactors.
+ * The picker + Method-B eligibility were removed here accordingly.
  */
 "use client";
 
 import { numericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useReactorMethodBEligibility } from "@/hooks/use-reactors";
-import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -18,13 +20,10 @@ import { FormSelect } from "@/components/forms/form-select";
 import {
   reactorFormSchema,
   reactorTypes,
-  samplingMethods,
   formatReactorType,
-  formatSamplingMethod,
   type ReactorFormData,
   type CreateReactorData,
   type ReactorType,
-  type SamplingMethod,
 } from "@/schemas/reactors";
 import type { Reactor } from "@/db/schema/facilities";
 
@@ -38,18 +37,8 @@ const reactorTypeOptions: readonly { value: string; label: string }[] =
     label: formatReactorType(type),
   }));
 
-const samplingMethodOptions: readonly { value: string; label: string }[] =
-  samplingMethods.map((method) => ({
-    value: method,
-    label: formatSamplingMethod(method),
-  }));
-
 function isReactorType(value: string | null | undefined): value is ReactorType {
   return !!value && reactorTypes.includes(value as ReactorType);
-}
-
-function isSamplingMethod(value: string | null | undefined): value is SamplingMethod {
-  return !!value && samplingMethods.includes(value as SamplingMethod);
 }
 
 // ============================================
@@ -81,9 +70,6 @@ export function ReactorForm({
   const defaultReactorType = isReactorType(reactor?.reactorType)
     ? reactor.reactorType
     : undefined;
-  const defaultSamplingMethod = isSamplingMethod(reactor?.samplingMethod)
-    ? reactor.samplingMethod
-    : "method_a";
 
   const {
     register,
@@ -97,7 +83,6 @@ export function ReactorForm({
       identifier: reactor?.identifier ?? "",
       facilityId: reactor?.facilityId || contextFacilityId || "",
       reactorType: defaultReactorType,
-      samplingMethod: defaultSamplingMethod,
       capacityTph: reactor?.nominalThroughputTph ?? undefined,
       specifications: undefined,
     },
@@ -113,47 +98,6 @@ export function ReactorForm({
   }, [contextFacilityId, reactor?.facilityId, setValue, getValues]);
 
   const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
-
-  // Method B requires a minimum number of prior Method A samples. A new reactor
-  // has none, so eligibility is only fetched (and ever true) in edit mode.
-  const {
-    data: methodBEligibility,
-    isLoading: isEligibilityLoading,
-    isError: isEligibilityError,
-  } = useReactorMethodBEligibility(reactor?.id ?? "", isEditMode);
-  const minimumMethodASamples =
-    methodBEligibility?.minimumMethodASampleCount ??
-    METHOD_B_MINIMUM_METHOD_A_SAMPLES;
-  // A reactor already on Method B always keeps it available so editing never
-  // silently downgrades. A brand-new reactor (create mode) has no prior samples,
-  // so Method B is unavailable by definition. In edit mode the option stays
-  // enabled while eligibility is still loading or couldn't be verified (a
-  // non-destructive "checking" state) and is only disabled once the hook
-  // explicitly reports the reactor as ineligible.
-  const alreadyMethodB = defaultSamplingMethod === "method_b";
-  const explicitlyIneligible =
-    methodBEligibility !== undefined &&
-    !methodBEligibility.meetsMinimumMethodASamples;
-  const methodBDisabled =
-    !alreadyMethodB && (!isEditMode || explicitlyIneligible);
-
-  const samplingMethodSelectOptions = samplingMethodOptions.map((option) =>
-    option.value === "method_b"
-      ? { ...option, disabled: methodBDisabled }
-      : option
-  );
-
-  const samplingMethodHelperText = alreadyMethodB
-    ? "Method B samples every 10th batch"
-    : !isEditMode
-      ? `Method B requires ${minimumMethodASamples} prior Method A samples — start with Method A`
-      : isEligibilityLoading
-        ? "Checking Method B eligibility…"
-        : isEligibilityError
-          ? "Couldn't verify Method B eligibility — try again"
-          : explicitlyIneligible
-            ? `Method B requires ${minimumMethodASamples} prior Method A samples (currently ${methodBEligibility?.priorMethodASampleCount ?? 0})`
-            : "Method B samples every 10th batch";
 
   const handleFormSubmit = handleSubmit((data) => {
     const { capacityTph, ...rest } = data as ReactorFormData;
@@ -211,24 +155,6 @@ export function ReactorForm({
               error={!!errors.reactorType}
               options={reactorTypeOptions}
               {...register("reactorType")}
-            />
-          </FormField>
-
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="samplingMethod"
-            label="Sampling Method"
-            error={errors.samplingMethod?.message}
-            helperText={samplingMethodHelperText}
-          >
-            <FormSelect
-              id="samplingMethod"
-              disabled={isSubmitting}
-              error={!!errors.samplingMethod}
-              options={samplingMethodSelectOptions}
-              {...register("samplingMethod")}
             />
           </FormField>
 

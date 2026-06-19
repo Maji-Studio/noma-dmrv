@@ -9,6 +9,7 @@ export * from "./facilities";
 export * from "./parties";
 export * from "./feedstock";
 export * from "./production";
+export * from "./production-processes";
 export * from "./products";
 export * from "./logistics";
 export * from "./application";

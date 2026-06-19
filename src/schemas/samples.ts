@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { emptyToNull } from "@/schemas/helpers";
 
 // ============================================
 // Constants
@@ -49,7 +50,12 @@ const requiredNumber = z.union([
 export const sampleFormSchema = z
   .object({
     // === Section 1: Sample Info ===
+    // Provenance — which run the replicate was physically drawn from (ADR 0015).
     productionRunId: z.string().min(1, "Please select a production run").uuid("Invalid production run"),
+    // The credit batch (protocol production batch) this lab replicate
+    // characterises. Optional at create time — a sample may be drawn before its
+    // batch is formed and associated to it later.
+    creditBatchId: z.string().uuid("Invalid credit batch").nullable().or(emptyToNull).optional(),
     samplingTime: z.union([
       z.date(),
       z.string().transform((val, ctx) => {
@@ -207,6 +213,7 @@ export const updateSampleSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   productionRunId: z.string().uuid().optional(),
+  creditBatchId: z.string().uuid("Invalid credit batch").nullable().or(emptyToNull).optional(),
   samplingTime: z.union([
     z.date(),
     z.string().transform((val, ctx) => {

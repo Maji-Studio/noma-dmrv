@@ -393,6 +393,20 @@
       "when": 1781872826430,
       "tag": "0055_old_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1781888829321,
+      "tag": "0056_illegal_blackheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1781888957706,
+      "tag": "0057_drop_reactor_method_b_trigger",
+      "breakpoints": true
     }
   ]
 }
