@@ -267,6 +267,24 @@ guard. Pure starter-template residue; the app is facility-scoped.
   **Still blocking the live POST:** only the two sandbox-empirical confirms below — every decision
   above is buildable/stageable now.
 
+- **Phase 3 staged (2026-06-19, branch `feat/tier1-durability-live-wiring`).** The
+  measurement-samples submission step is built + wired into `runRemovalSubmission`, gated behind
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (default **false**) in
+  `src/fn/certification/durability-measurement-samples.ts`. When the flag is off, `submitRemoval`
+  hard-blocks any template that declares a `biochar_sequestration_200_year_*` component with a
+  "staged, not yet live" `SafeError` (so the new template can't be submitted until the two confirms
+  land); `resolveTemplateInputs` + `buildCreateGhgEntryRequest` skip those components.
+  - **DEFERRED — delete at the end of the last phase (live-flip cutover):** decision #6 above said
+    to delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry *now*. It is
+    **load-bearing on the still-live old-template carbon path** — referenced by 5 tests
+    (`isometric-submit-removal`, `registry-boundary-removal`, `period-input-tuples`,
+    `isometric-transformers`, `isometric-sources`) and `certify-field-registry.ts` (two `tuple(…)`
+    descriptors). Deleting it while the new path is gated off breaks working tests for zero
+    functional gain (the new template literally can't be submitted yet). **Decision (2026-06-19, with
+    the user): keep it until the live flip**, then delete the `INPUT_MAPPING` entry + the two
+    field-registry tuples (`biocharOutputKg`→`product_mass`, `organicCarbonPercent`→`carbon_content`)
+    + retarget the 5 tests to the new sequestration shape, as the final cleanup of this entry.
+
 - **Phase E of the 200-year durability build is built offline but the LIVE
   submit path is gated on two sandbox-empirical confirms.** The measurement-
   sample bodies (`src/lib/isometric/transformers/measurement-sample.ts`), the

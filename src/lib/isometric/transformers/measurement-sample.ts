@@ -4,10 +4,11 @@
  * `CreateMeasurementSampleRequest` bodies the registry's
  * `biochar_sequestration_200_year_{c_org,unsampled}` blueprints consume:
  *
- *   - H/C_org  → a `biochar_production_batch` sample, property
- *     `{dimensionless_ratio, hydrogen_to_organic_carbon_ratio}`, per batch.
- *   - soil temp → a `biochar_soil` sample, property `{temperature}`, per project
- *     area (the conservative estimate from D2).
+ *   - H/C_org + total/inorganic carbon + product mass → a
+ *     `biochar_production_batch` sample (one value per blueprint list input),
+ *     per credit batch.
+ *   - soil temp → a `biochar_soil` sample, property `{temperature}`, the
+ *     facility's operator-declared reference value (Phase 2 / ADR 0013).
  *
  * The measurement properties, blueprint keys, and units below were confirmed by
  * the live coverage-check (plan §4, sandbox template rvt_1KS4S43VPSBXA26X).
@@ -31,8 +32,9 @@
 import type { components } from "../generated/certify";
 import type { IsometricMeasurementProperty } from "../utils/measurement-property";
 import type {
-  ConservativeSoilTemperature,
+  FacilityReferenceSoilTemperature,
   PerBatchDurabilityDatapoint,
+  ValueWithStdDev,
 } from "../utils/durability-aggregation";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 
@@ -64,11 +66,75 @@ export const SEQUESTRATION_BLUEPRINT_SAMPLED =
 export const SEQUESTRATION_BLUEPRINT_UNSAMPLED =
   "biochar_sequestration_200_year_unsampled";
 
+/**
+ * The two sequestration blueprint keys (sampled + unsampled). These components
+ * are NOT fed by the legacy aggregation→datapoint loop — `resolveTemplateInputs`
+ * and `buildCreateGhgEntryRequest` skip them, and the measurement-samples step
+ * carries their inputs instead. `submitRemoval` uses this set to detect a
+ * durability template and gate it behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`.
+ */
+export const SEQUESTRATION_BLUEPRINT_KEYS: ReadonlySet<string> = new Set([
+  SEQUESTRATION_BLUEPRINT_SAMPLED,
+  SEQUESTRATION_BLUEPRINT_UNSAMPLED,
+]);
+
+export function isSequestrationBlueprintKey(blueprintKey: string): boolean {
+  return SEQUESTRATION_BLUEPRINT_KEYS.has(blueprintKey);
+}
+
 /** Blueprint unit for `h_c_molar_ratios`. */
 export const H_C_MOLAR_RATIO_UNIT = "%";
 
 /** Blueprint unit for `soil_temp`. */
 export const SOIL_TEMPERATURE_UNIT = "degC";
+
+// ── Carbon + product-mass measurement properties (⚠️ sandbox-gated) ───────────
+//
+// The `biochar_production_batch` measurement also carries the batch's total /
+// inorganic carbon content and product mass — the registry's
+// `biochar_sequestration_200_year_c_org` blueprint lists `total_carbon_contents`,
+// `inorganic_carbon_contents` and `product_mass` alongside `h_c_molar_ratios`.
+// The measurement properties, units, and the carbon %→fraction scale below are
+// the most likely shapes but are UNCONFIRMED — the same coverage-check that
+// pins the H/C unit (`pnpm isometric:coverage-check -- --source=db`) reports
+// these. They are inert until `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flips, so a
+// wrong guess can never reach a live credit. One-constant edits per the plan.
+
+/** Total carbon content, grouped under `biochar_production_batch`. */
+export const TOTAL_CARBON_MEASUREMENT_PROPERTY: IsometricMeasurementProperty = {
+  quantity_kind: "mass_fraction",
+  qualifier: "total_carbon",
+};
+
+/** Inorganic carbon content, grouped under `biochar_production_batch`. */
+export const INORGANIC_CARBON_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =
+  {
+    quantity_kind: "mass_fraction",
+    qualifier: "total_inorganic_carbon",
+  };
+
+/** Batch product mass (kg), grouped under `biochar_production_batch`. */
+export const PRODUCT_MASS_MEASUREMENT_PROPERTY: IsometricMeasurementProperty = {
+  quantity_kind: "mass",
+  qualifier: null,
+};
+
+/** Blueprint unit for `total_carbon_contents` / `inorganic_carbon_contents`. */
+export const CARBON_CONTENT_UNIT = "dimensionless";
+
+/** Blueprint unit for `product_mass`. */
+export const PRODUCT_MASS_UNIT = "kg";
+
+/**
+ * Carbon content arrives as a percent (0–100) on the aggregation; the blueprint
+ * input is a 0–1 mass fraction (mirrors the legacy `carbon_content /100`
+ * transform). ⚠️ Sandbox-gated — confirm the declared unit before the live flip.
+ */
+export const CARBON_CONTENT_FRACTION_SCALE = 1 / 100;
+
+export function toCarbonContentFraction(percent: number): number {
+  return percent * CARBON_CONTENT_FRACTION_SCALE;
+}
 
 // ── ⚠️ Sandbox-gated H/C unit transform (confirm #2) ─────────────────────────
 
@@ -113,6 +179,22 @@ export function selectSequestrationBlueprintKey(args: {
 
 // ── Measurement-sample body builders ─────────────────────────────────────────
 
+// A %→fraction carbon-content value: magnitude + std-dev both scaled, same unit.
+function carbonContentValue(
+  property: IsometricMeasurementProperty,
+  content: ValueWithStdDev,
+): CreateMeasurementSampleValueRequest {
+  return {
+    measurement_property: property,
+    value: {
+      magnitude: toCarbonContentFraction(content.mean),
+      standard_deviation:
+        content.stdDev != null ? toCarbonContentFraction(content.stdDev) : null,
+      unit: CARBON_CONTENT_UNIT,
+    },
+  };
+}
+
 export interface BuildBiocharProductionBatchSampleArgs {
   batch: PerBatchDurabilityDatapoint;
   projectId: string;
@@ -125,9 +207,14 @@ export interface BuildBiocharProductionBatchSampleArgs {
 
 /**
  * Build the `biochar_production_batch` measurement sample carrying the batch's
- * H/C_org value (mean + std-dev, ×100 to the blueprint's `%` unit). Returns null
- * for an unsampled batch — it has no chemistry to group (it submits via the
- * unsampled blueprint instead).
+ * chemistry + product mass: H/C_org (mean + std-dev, ×100 to the blueprint's `%`
+ * unit), total / inorganic carbon content (mean + std-dev, %→fraction), and the
+ * attribution-scaled product mass (kg). Each value yields one datapoint the
+ * registry binds to the matching `biochar_sequestration_200_year_c_org` list
+ * input. Returns null for an unsampled batch — it has no chemistry to group (it
+ * submits via the unsampled blueprint instead). Carbon values are omitted when
+ * the batch pooled no usable replicate for them (the H/C value always anchors a
+ * sampled batch).
  */
 export function buildBiocharProductionBatchSample(
   args: BuildBiocharProductionBatchSampleArgs,
@@ -151,6 +238,34 @@ export function buildBiocharProductionBatchSample(
     },
   ];
 
+  // Total / inorganic carbon content — %→fraction (⚠️ sandbox-gated scale).
+  if (batch.totalCarbonPercent) {
+    values.push(
+      carbonContentValue(
+        TOTAL_CARBON_MEASUREMENT_PROPERTY,
+        batch.totalCarbonPercent,
+      ),
+    );
+  }
+  if (batch.inorganicCarbonPercent) {
+    values.push(
+      carbonContentValue(
+        INORGANIC_CARBON_MEASUREMENT_PROPERTY,
+        batch.inorganicCarbonPercent,
+      ),
+    );
+  }
+
+  // Product mass (kg) — a single per-batch magnitude, no std-dev.
+  values.push({
+    measurement_property: PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    value: {
+      magnitude: batch.productMassKg,
+      standard_deviation: null,
+      unit: PRODUCT_MASS_UNIT,
+    },
+  });
+
   return {
     feedstock_batch_id: null,
     measured_at: measuredAt,
@@ -165,25 +280,30 @@ export function buildBiocharProductionBatchSample(
 }
 
 export interface BuildBiocharSoilSampleArgs {
-  soilTemp: ConservativeSoilTemperature;
+  /**
+   * The facility's operator-declared reference soil temperature (Phase 2):
+   * `effectiveSoilTemperatureC` is already 7 °C-floored + one-decimal, so this
+   * builder submits it verbatim. The PDD-bound `method`/`source` strings carry
+   * the justification for the UI + evidence ledger (the API body has no
+   * description field), not the wire payload.
+   */
+  soilTemp: FacilityReferenceSoilTemperature;
   projectId: string;
   supplierRefId: string;
   measuredAt: string;
 }
 
 /**
- * Build the `biochar_soil` measurement sample carrying the conservative
- * soil-temperature estimate (D2). Returns null when the estimate is
- * indeterminate (no site had a soil temperature). The conservative-estimate
- * method string (`soilTemp.method`) is surfaced in the UI (Phase F) and recorded
- * on the underlying datapoint during the gated live wiring (the
- * `CreateMeasurementSampleRequest` body has no description field).
+ * Build the `biochar_soil` measurement sample carrying the facility reference
+ * soil temperature (Phase 2 / ADR 0013). The caller has already resolved the
+ * reference (and a 200-year removal fails closed via a durability gate blocker
+ * when it is unset), so this takes a non-null `FacilityReferenceSoilTemperature`
+ * and always returns a sample.
  */
 export function buildBiocharSoilSample(
   args: BuildBiocharSoilSampleArgs,
-): CreateMeasurementSampleRequest | null {
+): CreateMeasurementSampleRequest {
   const { soilTemp, projectId, supplierRefId, measuredAt } = args;
-  if (soilTemp.effectiveSoilTemperatureC == null) return null;
 
   return {
     feedstock_batch_id: null,
