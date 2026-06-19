@@ -191,19 +191,9 @@ function parseWatchedDate(value: unknown): Date | null {
 }
 
 // ============================================
-export interface ExistingBatchPeriod {
-  id: string;
-  code: string;
-  facilityId: string;
-  startDate: string;
-  endDate: string;
-}
-
 interface CreditBatchFormProps {
   /** Existing credit batch data for editing (undefined for create mode) */
   creditBatch?: CreditBatch & { productionRunIds?: string[] };
-  /** Existing credit batch periods for overlap detection */
-  existingBatches?: ExistingBatchPeriod[];
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
   /** Called when the user edits the date range — used to clear a stale submit-time server error (e.g. an overlap message that no longer applies) */
@@ -220,7 +210,6 @@ interface CreditBatchFormProps {
 
 export function CreditBatchForm({
   creditBatch,
-  existingBatches = [],
   onSubmit,
   onClearServerError,
   onCancel,
@@ -318,15 +307,6 @@ export function CreditBatchForm({
     setValue,
   ]);
 
-  // Overlap detection (client-side warning) — uses watched facilityId
-  const overlappingBatch = hasBothDates
-    ? existingBatches.find((batch) => {
-        if (creditBatch && batch.id === creditBatch.id) return false;
-        if (batch.facilityId !== effectiveFacilityId) return false;
-        return batch.startDate <= endDateStr && batch.endDate >= startDateStr;
-      })
-    : null;
-
   const defaultSubmitLabel = isEditMode
     ? "Update Credit Batch"
     : "Create Credit Batch";
@@ -373,15 +353,6 @@ export function CreditBatchForm({
             />
           </FormField>
         </div>
-
-        {/* Overlap warning */}
-        {overlappingBatch && (
-          <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-signal-orange-strong)] bg-[var(--color-signal-orange-light)]">
-            <span className="body-small text-[var(--color-text-primary)]">
-              Date range overlaps with <strong>{overlappingBatch.code}</strong> ({overlappingBatch.startDate} – {overlappingBatch.endDate}). Credit batch timeframes cannot overlap for the same facility.
-            </span>
-          </div>
-        )}
 
       </FormSection>
 
@@ -542,7 +513,6 @@ export function CreditBatchForm({
         sticky={stickyActions}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        submitDisabled={!!overlappingBatch}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

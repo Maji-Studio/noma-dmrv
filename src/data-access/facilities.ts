@@ -445,7 +445,6 @@ export async function getFacilityReactors(
     identifier: string;
     reactorType: string;
     nominalThroughputTph: number | null;
-    samplingMethod: string;
     createdAt: Date;
     updatedAt: Date;
   }>
@@ -469,7 +468,6 @@ export async function getFacilityReactors(
       identifier: reactors.identifier,
       reactorType: reactors.reactorType,
       nominalThroughputTph: reactors.nominalThroughputTph,
-      samplingMethod: reactors.samplingMethod,
       createdAt: reactors.createdAt,
       updatedAt: reactors.updatedAt,
     })

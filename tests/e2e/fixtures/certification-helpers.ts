@@ -227,6 +227,7 @@ export async function seedGroupedRemovalWithChain(
     delivery: crypto.randomUUID(),
     application: crypto.randomUUID(),
     creditBatch: crypto.randomUUID(),
+    productionProcess: crypto.randomUUID(),
     removal: crypto.randomUUID(),
   };
   const creditBatchCode = `E2E-CB-${testRunId}`;
@@ -304,6 +305,17 @@ export async function seedGroupedRemovalWithChain(
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
       });
+      // ADR 0016: the credit batch is single-feedstock (NOT NULL). Mirror the
+      // run's own feedstock so the batch stays consistent with its membership.
+      const [feedstockRow] = await tx
+        .select({ feedstockTypeId: schema.feedstocks.feedstockTypeId })
+        .from(schema.feedstocks)
+        .where(eq(schema.feedstocks.id, refs.feedstockId));
+      await tx.insert(schema.productionProcesses).values({
+        id: id.productionProcess,
+        facilityId: refs.facilityId,
+        feedstockTypeId: feedstockRow.feedstockTypeId,
+      });
       // Group: a Removal ledger row + the credit batch pointing at it.
       await tx.insert(schema.certifierRemovals).values({
         id: id.removal,
@@ -314,6 +326,8 @@ export async function seedGroupedRemovalWithChain(
         id: id.creditBatch,
         code: creditBatchCode,
         facilityId: refs.facilityId,
+        feedstockTypeId: feedstockRow.feedstockTypeId,
+        productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
         status: "draft",
@@ -347,6 +361,9 @@ export async function seedGroupedRemovalWithChain(
           await tx
             .delete(schema.creditBatches)
             .where(eq(schema.creditBatches.id, id.creditBatch));
+          await tx
+            .delete(schema.productionProcesses)
+            .where(eq(schema.productionProcesses.id, id.productionProcess));
           await tx
             .delete(schema.certifierRemovals)
             .where(eq(schema.certifierRemovals.id, id.removal));
@@ -499,6 +516,7 @@ export async function seedUngroupedReadyBatchWithChain(
       crypto.randomUUID(),
     ),
     creditBatch: crypto.randomUUID(),
+    productionProcess: crypto.randomUUID(),
     feedstockTransportLeg: crypto.randomUUID(),
     biocharTransportLeg: crypto.randomUUID(),
     sampleTransportLeg: crypto.randomUUID(),
@@ -658,11 +676,24 @@ export async function seedUngroupedReadyBatchWithChain(
         leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
         leg(id.sampleTransportLeg, "sample", id.sample),
       ]);
+      // ADR 0016: the credit batch is single-feedstock (NOT NULL). Mirror the
+      // run's own feedstock so the batch stays consistent with its membership.
+      const [feedstockRow] = await tx
+        .select({ feedstockTypeId: schema.feedstocks.feedstockTypeId })
+        .from(schema.feedstocks)
+        .where(eq(schema.feedstocks.id, refs.feedstockId));
+      await tx.insert(schema.productionProcesses).values({
+        id: id.productionProcess,
+        facilityId: refs.facilityId,
+        feedstockTypeId: feedstockRow.feedstockTypeId,
+      });
       // Ungrouped: no certifier_removals row, no removalId on the batch.
       await tx.insert(schema.creditBatches).values({
         id: id.creditBatch,
         code: creditBatchCode,
         facilityId: refs.facilityId,
+        feedstockTypeId: feedstockRow.feedstockTypeId,
+        productionProcessId: id.productionProcess,
         startDate: today,
         endDate: today,
         status: "draft",
@@ -693,6 +724,9 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.creditBatches)
             .where(eq(schema.creditBatches.id, id.creditBatch));
+          await tx
+            .delete(schema.productionProcesses)
+            .where(eq(schema.productionProcesses.id, id.productionProcess));
           await tx
             .delete(schema.transportLegs)
             .where(

@@ -566,13 +566,6 @@ export function CreditBatchList() {
         <CreditBatchForm
           key={sideSheetEntity?.id ?? "create"}
           creditBatch={sideSheetEntity ?? undefined}
-          existingBatches={allItems.map((b) => ({
-            id: b.id,
-            code: b.code,
-            facilityId: b.facilityId,
-            startDate: typeof b.startDate === "string" ? b.startDate : b.startDate,
-            endDate: typeof b.endDate === "string" ? b.endDate : b.endDate,
-          }))}
           onSubmit={
             sideSheetEntity && sideSheetMode === "edit"
               ? handleUpdate

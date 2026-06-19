@@ -12,13 +12,18 @@ import {
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { applications } from "@/db/schema/application";
-import { productionRuns } from "@/db/schema/production";
+import { productionRuns, samples } from "@/db/schema/production";
 import type {
   CreateCreditBatchData,
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
+import { findOrCreateProductionProcess } from "./production-processes";
+import {
+  resolveSingleFeedstockType,
+  validateProductionRunIds,
+} from "./credit-batch-membership";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import {
@@ -333,93 +338,6 @@ async function buildCo2eStoredPreview(
 }
 
 /**
- * Validate that all production run IDs exist, belong to the credit batch's
- * facility and production window, and are not already assigned elsewhere.
- */
-async function validateProductionRunIds(
-  tx: DbTransaction,
-  productionRunIds: string[],
-  facilityId: string,
-  startDate?: string | Date,
-  endDate?: string | Date,
-  excludeCreditBatchId?: string,
-): Promise<void> {
-  if (productionRunIds.length === 0) return;
-
-  // Reject duplicates
-  const uniqueRunIds = new Set(productionRunIds);
-  if (uniqueRunIds.size !== productionRunIds.length) {
-    throw new SafeError("Duplicate production run IDs are not allowed");
-  }
-
-  const rows = await tx
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
-    })
-    .from(productionRuns)
-    .where(inArray(productionRuns.id, productionRunIds));
-
-  if (rows.length !== productionRunIds.length) {
-    const found = new Set(rows.map((r) => r.id));
-    const missing = productionRunIds.filter((id) => !found.has(id));
-    throw new SafeError(`Production run(s) not found: ${missing.join(", ")}`);
-  }
-
-  const crossFacility = rows.filter((r) => r.facilityId !== facilityId);
-  if (crossFacility.length > 0) {
-    throw new SafeError(
-      `Production run(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
-    );
-  }
-
-  if (startDate != null && endDate != null) {
-    const { startStr, endStr } = assertCreditBatchProductionWindow(
-      startDate,
-      endDate,
-    );
-    const outsideWindow = rows.filter((r) => {
-      return r.date < startStr || r.date > endStr;
-    });
-
-    if (outsideWindow.length > 0) {
-      throw new SafeError(
-        `Production run(s) fall outside the credit batch production window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
-      );
-    }
-  }
-
-  const assignmentConditions = [
-    inArray(creditBatchProductionRuns.productionRunId, productionRunIds),
-  ];
-  if (excludeCreditBatchId) {
-    assignmentConditions.push(
-      sql`${creditBatchProductionRuns.creditBatchId} != ${excludeCreditBatchId}`,
-    );
-  }
-
-  const existingAssignments = await tx
-    .select({
-      productionRunId: creditBatchProductionRuns.productionRunId,
-      creditBatchCode: creditBatches.code,
-    })
-    .from(creditBatchProductionRuns)
-    .innerJoin(
-      creditBatches,
-      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
-    )
-    .where(and(...assignmentConditions));
-
-  if (existingAssignments.length > 0) {
-    throw new SafeError(
-      `Production run(s) already assigned to credit batches: ${existingAssignments.map((row) => `${row.productionRunId} (${row.creditBatchCode})`).join(", ")}`,
-    );
-  }
-}
-
-/**
  * Get credit batches for a single facility, with facility info and application
  * count. Facility-scoped: credit batches belong to exactly one facility and
  * must never leak across the facility boundary.
@@ -596,12 +514,35 @@ export async function createCreditBatch(
     const certifier = await resolveCreditBatchCertifier(tx, batchData.facilityId);
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
+    // ADR 0016: the credit batch is the protocol production batch (one
+    // feedstock). Validate the member runs FIRST (existence, facility, window,
+    // prior assignment) so a bad run ID surfaces a precise error rather than a
+    // confusing "no linked feedstock" from the derivation step. Then derive the
+    // single feedstock type (loud assertion on >1 type) and find-or-create the
+    // (facility, feedstock) production process this batch is a <=1-month slice of.
+    const runIds = productionRunIds ?? [];
+    await validateProductionRunIds(
+      tx,
+      runIds,
+      batchData.facilityId,
+      batchData.startDate,
+      batchData.endDate,
+    );
+    const feedstockTypeId = await resolveSingleFeedstockType(tx, runIds);
+    const process = await findOrCreateProductionProcess(
+      userId,
+      { facilityId: batchData.facilityId, feedstockTypeId },
+      tx,
+    );
+
     // Insert the credit batch
     const [batch] = await tx
       .insert(creditBatches)
       .values({
         code: batchData.code,
         facilityId: batchData.facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
         startDate: formatUtcDate(batchData.startDate),
         endDate: formatUtcDate(batchData.endDate),
         certifier,
@@ -628,16 +569,9 @@ export async function createCreditBatch(
       })
       .returning();
 
-    if (productionRunIds && productionRunIds.length > 0) {
-      await validateProductionRunIds(
-        tx,
-        productionRunIds,
-        batchData.facilityId,
-        batchData.startDate,
-        batchData.endDate,
-      );
+    if (runIds.length > 0) {
       await tx.insert(creditBatchProductionRuns).values(
-        productionRunIds.map((productionRunId) => ({
+        runIds.map((productionRunId) => ({
           creditBatchId: batch.id,
           productionRunId,
         }))
@@ -777,52 +711,81 @@ export async function updateCreditBatch(
 
     updateData.certifier = await resolveCreditBatchCertifier(tx, targetFacilityId);
 
+    if (productionRunIds !== undefined) {
+      if (productionRunIds.length === 0) {
+        throw new SafeError("A credit batch must include at least one production run.");
+      }
+      await validateProductionRunIds(
+        tx,
+        productionRunIds,
+        targetFacilityId,
+        effectiveStartDate,
+        effectiveEndDate,
+        id,
+      );
+    }
+
+    let existingRunIdsForRevalidation: string[] | undefined;
+    if (
+      productionRunIds === undefined &&
+      (facilityChanged ||
+        updateFields.startDate !== undefined ||
+        updateFields.endDate !== undefined)
+    ) {
+      const existingLinks = await tx
+        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+        .from(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.creditBatchId, id));
+      existingRunIdsForRevalidation = existingLinks.map((l) => l.productionRunId);
+      if (existingRunIdsForRevalidation.length === 0) {
+        throw new SafeError("A credit batch must include at least one production run.");
+      }
+      await validateProductionRunIds(
+        tx,
+        existingRunIdsForRevalidation,
+        targetFacilityId,
+        effectiveStartDate,
+        effectiveEndDate,
+        id,
+      );
+    }
+
+    // ADR 0016: re-derive the single feedstock type + production process when
+    // the membership or facility changes — either can shift which (facility,
+    // feedstock) process this batch belongs to. When runs are unchanged but the
+    // facility moved, derive from the existing membership after validation so
+    // bad run IDs/facility mismatches surface precise errors first.
+    let feedstockRunIds: string[] | undefined = productionRunIds;
+    if (feedstockRunIds === undefined && facilityChanged) {
+      feedstockRunIds = existingRunIdsForRevalidation;
+    }
+    if (feedstockRunIds !== undefined) {
+      const feedstockTypeId = await resolveSingleFeedstockType(tx, feedstockRunIds);
+      const process = await findOrCreateProductionProcess(
+        userId,
+        { facilityId: targetFacilityId, feedstockTypeId },
+        tx,
+      );
+      updateData.feedstockTypeId = feedstockTypeId;
+      updateData.productionProcessId = process.id;
+    }
+
     await tx
       .update(creditBatches)
       .set(updateData)
       .where(eq(creditBatches.id, id));
 
     if (productionRunIds !== undefined) {
-      if (productionRunIds.length > 0) {
-        await validateProductionRunIds(
-          tx,
-          productionRunIds,
-          targetFacilityId,
-          effectiveStartDate,
-          effectiveEndDate,
-          id,
-        );
-      }
-
       await tx
         .delete(creditBatchProductionRuns)
         .where(eq(creditBatchProductionRuns.creditBatchId, id));
 
-      if (productionRunIds.length > 0) {
-        await tx.insert(creditBatchProductionRuns).values(
-          productionRunIds.map((productionRunId) => ({
-            creditBatchId: id,
-            productionRunId,
-          }))
-        );
-      }
-    } else if (facilityChanged || updateFields.startDate !== undefined || updateFields.endDate !== undefined) {
-      // Facility or dates changed but productionRunIds omitted: revalidate existing membership.
-      const existingLinks = await tx
-        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-        .from(creditBatchProductionRuns)
-        .where(eq(creditBatchProductionRuns.creditBatchId, id));
-      const existingRunIds = existingLinks.map((l) => l.productionRunId);
-      if (existingRunIds.length > 0) {
-        await validateProductionRunIds(
-          tx,
-          existingRunIds,
-          targetFacilityId,
-          effectiveStartDate,
-          effectiveEndDate,
-          id,
-        );
-      }
+      await tx.insert(creditBatchProductionRuns).values(
+        productionRunIds.map((productionRunId) => ({
+          creditBatchId: id,
+          productionRunId,
+        }))
+      );
     }
   });
 
@@ -854,7 +817,11 @@ export async function deleteCreditBatch(userId: string, id: string): Promise<voi
 
     await assertRemovalAllowsCreditBatchMutation(tx, batch.removalId, "delete");
 
-    // Delete membership links first, then the credit batch.
+    // Clear app-layer sample links, then delete membership links and the batch.
+    await tx
+      .update(samples)
+      .set({ creditBatchId: null, updatedAt: new Date() })
+      .where(eq(samples.creditBatchId, id));
     await tx
       .delete(creditBatchProductionRuns)
       .where(eq(creditBatchProductionRuns.creditBatchId, id));

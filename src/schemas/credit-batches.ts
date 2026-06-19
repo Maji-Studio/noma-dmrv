@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getCreditBatchProductionWindowIssue } from "@/lib/credit-batch-production-window";
 
 // ============================================
 // Constants and Enums
@@ -152,12 +153,15 @@ export const creditBatchFormSchema = z
       .or(z.literal("")),
   })
   .superRefine((data, ctx) => {
-    // Date validation: endDate must be after startDate
-    if (data.endDate < data.startDate) {
+    const windowIssue = getCreditBatchProductionWindowIssue(
+      data.startDate,
+      data.endDate,
+    );
+    if (windowIssue) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["endDate"],
-        message: "End date must be after start date",
+        message: windowIssue,
       });
     }
     // Durability inputs come from sample aggregation at preview/submission time.
@@ -188,7 +192,10 @@ export const updateCreditBatchSchema = z.object({
   facilityId: z.string().uuid().optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
-  productionRunIds: z.array(z.string().uuid()).optional(),
+  productionRunIds: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one production run")
+    .optional(),
   durabilityOption: z.enum(durabilityOptions).optional(),
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
   meanRandomReflectancePercent: z.number().min(0).max(100).optional().nullable(),
