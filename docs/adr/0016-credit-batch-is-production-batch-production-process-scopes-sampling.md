@@ -9,7 +9,8 @@ Status: accepted (2026-06-19)
 > **`production_processes`** entity owns the Method A/B sampling regime. Stays consistent with
 > **ADR 0013** (the registry computes the durable fraction; noma submits per-production-batch
 > H/C_org datapoints — the "production batch" ADR 0013 submits per *is* the credit batch
-> defined here). Implementation shape: `docs/plans/2026-06-19-credit-batch-lab-sampling-compliance.md`.
+> defined here). Archived implementation shape:
+> `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`.
 
 ## Context
 

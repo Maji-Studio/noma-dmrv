@@ -18,6 +18,7 @@ import {
   buildProductionRunReadings,
   buildSoilTemperatureMeasurements,
 } from './seed-certification-evidence';
+import { seedProductionProcessesAndCreditBatches } from './seed-credit-batches';
 
 config({ path: '.env.local' });
 
@@ -1493,91 +1494,7 @@ async function seedDemoData() {
         ])
       );
 
-      // ADR 0016: a production process is the (facility, feedstock) sampling-regime
-      // campaign that scopes Method A/B; each credit batch is a <=1-month protocol
-      // production batch slicing exactly one process. Moshi runs two feedstocks, so
-      // two processes — both Method A (the default; Method B is deferred to ADR 0017).
-      console.log('Creating production processes...');
-      await tx.insert(schema.productionProcesses).values([
-        {
-          id: ids.processMoshiWoodchips,
-          facilityId: ids.facilityMoshi,
-          feedstockTypeId: ids.feedstockWoodchips,
-          establishedAt: demoTimestamps.facilitySetup,
-        },
-        {
-          id: ids.processMoshiCoffee,
-          facilityId: ids.facilityMoshi,
-          feedstockTypeId: ids.feedstockCoffeeHusk,
-          establishedAt: demoTimestamps.facilitySetup,
-        },
-      ]);
-
-      // Each batch is single-feedstock (ADR 0016): CB-26-001 is the woodchips
-      // production batch (runs PR-26-001 + PR-26-003), CB-26-002 the coffee-husk
-      // one (run PR-26-002). Both sit inside the May window of their process.
-      console.log('Creating credit batches...');
-      await tx.insert(schema.creditBatches).values([
-        {
-          id: ids.creditBatch1,
-          code: 'CB-26-001',
-          facilityId: ids.facilityMoshi,
-          feedstockTypeId: ids.feedstockWoodchips,
-          productionProcessId: ids.processMoshiWoodchips,
-          status: 'pending',
-          startDate: '2026-05-13',
-          endDate: '2026-05-31',
-          certifier: 'isometric',
-          registry: 'Isometric Registry',
-          weightTons: 5.01,
-          bufferPoolPercent: 10,
-          durabilityOption: '200_year',
-          hToCorgRatio: 0.269,
-          fDurableCalculated: 0.851,
-          totalCo2eStoredTons: 11.61,
-          totalCo2eEmissionsTons: 0.64,
-          totalCo2eCounterfactualTons: 0.31,
-          totalFeedstockMassKg: 6500,
-          ineligibleFeedstockMassKg: 0,
-          siteManagementNotes:
-            'Biochar incorporated into planting rows within 48 hours; no synthetic nitrogen applied during the application window.',
-          affidavitReference: 'AFF-MOSHI-2026-001',
-          intendedUseConfirmation: 'Customer purchase orders specify soil application on named coffee and tea plots.',
-          companyVerificationRef: 'BRELA-agri-customer-records-2026',
-          mixingTimelineDays: 2,
-        },
-        {
-          id: ids.creditBatch2,
-          code: 'CB-26-002',
-          facilityId: ids.facilityMoshi,
-          feedstockTypeId: ids.feedstockCoffeeHusk,
-          productionProcessId: ids.processMoshiCoffee,
-          status: 'draft',
-          startDate: '2026-05-15',
-          endDate: '2026-05-31',
-          certifier: 'isometric',
-          registry: 'Isometric Registry',
-          durabilityOption: '1000_year',
-          meanRandomReflectancePercent: 2.8,
-          meanNonReactiveCarbonPercent: 68,
-        },
-      ]);
-
-      console.log('Creating credit batch production-run membership...');
-      await tx.insert(schema.creditBatchProductionRuns).values([
-        {
-          creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun1,
-        },
-        {
-          creditBatchId: ids.creditBatch1,
-          productionRunId: ids.productionRun3,
-        },
-        {
-          creditBatchId: ids.creditBatch2,
-          productionRunId: ids.productionRun2,
-        },
-      ]);
+      await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
 
       // Links the Moshi facility to the Isometric sandbox project +
       // Dark Earth Carbon Template, with the Phase 3.7 emission-estimate
