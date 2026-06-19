@@ -1,5 +1,5 @@
 {
-  "id": "78de0e48-281a-41ef-82a5-fa3534c78a30",
+  "id": "53f444f6-eb73-4297-8faa-ba423690ddc9",
   "prevId": "da0f60bb-6311-4c33-a6f8-9b874439a56f",
   "version": "7",
   "dialect": "postgresql",
@@ -1149,24 +1149,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "stage_split_biomass_pct": {
-          "name": "stage_split_biomass_pct",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stage_split_pyrolysis_pct": {
-          "name": "stage_split_pyrolysis_pct",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stage_split_biochar_pct": {
-          "name": "stage_split_biochar_pct",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "default_soil_temperature_c": {
           "name": "default_soil_temperature_c",
           "type": "real",
@@ -2020,18 +2002,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "feedstock_type_id": {
-          "name": "feedstock_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "production_process_id": {
-          "name": "production_process_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "credit_batch_status",
@@ -2299,32 +2269,6 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "credit_batches_feedstock_type_id_feedstock_types_id_fk": {
-          "name": "credit_batches_feedstock_type_id_feedstock_types_id_fk",
-          "tableFrom": "credit_batches",
-          "tableTo": "feedstock_types",
-          "columnsFrom": [
-            "feedstock_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "credit_batches_production_process_id_production_processes_id_fk": {
-          "name": "credit_batches_production_process_id_production_processes_id_fk",
-          "tableFrom": "credit_batches",
-          "tableTo": "production_processes",
-          "columnsFrom": [
-            "production_process_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "credit_batches_removal_id_certifier_removals_id_fk": {
           "name": "credit_batches_removal_id_certifier_removals_id_fk",
           "tableFrom": "credit_batches",
@@ -2354,10 +2298,6 @@
         "credit_batches_certifier_is_isometric": {
           "name": "credit_batches_certifier_is_isometric",
           "value": "\"credit_batches\".\"certifier\" is null or \"credit_batches\".\"certifier\" = 'isometric'"
-        },
-        "credit_batches_isometric_max_one_month": {
-          "name": "credit_batches_isometric_max_one_month",
-          "value": "\"credit_batches\".\"certifier\" is distinct from 'isometric'\n        or (\"credit_batches\".\"end_date\" - \"credit_batches\".\"start_date\") <= 31"
         },
         "credit_batches_total_feedstock_mass_non_negative": {
           "name": "credit_batches_total_feedstock_mass_non_negative",
@@ -2753,6 +2693,14 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "sampling_method": {
+          "name": "sampling_method",
+          "type": "sampling_method",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'method_a'"
         },
         "nominal_throughput_tph": {
           "name": "nominal_throughput_tph",
@@ -5100,17 +5048,11 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "credit_batch_id": {
-          "name": "credit_batch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "production_run_id": {
           "name": "production_run_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "sample_code": {
           "name": "sample_code",
@@ -5411,128 +5353,6 @@
           "tableTo": "production_runs",
           "columnsFrom": [
             "production_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.production_processes": {
-      "name": "production_processes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "facility_id": {
-          "name": "facility_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "feedstock_type_id": {
-          "name": "feedstock_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "established_at": {
-          "name": "established_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "sampling_method": {
-          "name": "sampling_method",
-          "type": "sampling_method",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'method_a'"
-        },
-        "method_b_unlocked_at": {
-          "name": "method_b_unlocked_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "production_processes_facility_feedstock_idx": {
-          "name": "production_processes_facility_feedstock_idx",
-          "columns": [
-            {
-              "expression": "facility_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "feedstock_type_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "production_processes_facility_id_facilities_id_fk": {
-          "name": "production_processes_facility_id_facilities_id_fk",
-          "tableFrom": "production_processes",
-          "tableTo": "facilities",
-          "columnsFrom": [
-            "facility_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "production_processes_feedstock_type_id_feedstock_types_id_fk": {
-          "name": "production_processes_feedstock_type_id_feedstock_types_id_fk",
-          "tableFrom": "production_processes",
-          "tableTo": "feedstock_types",
-          "columnsFrom": [
-            "feedstock_type_id"
           ],
           "columnsTo": [
             "id"

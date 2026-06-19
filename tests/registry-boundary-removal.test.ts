@@ -234,9 +234,6 @@ function makeMapping(fixture: Fixture): CertifierProjectRow {
     webhookSecret: null,
     metadata: null,
     gensetEnergyYieldKwhPerLitre: 3.375,
-    stageSplitBiomassPct: 32.2,
-    stageSplitPyrolysisPct: 58.5,
-    stageSplitBiocharPct: 9.3,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;
@@ -325,6 +322,7 @@ function makeContext(
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
     durabilityGateBlockers: [],
+    submissionWarnings: [],
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,

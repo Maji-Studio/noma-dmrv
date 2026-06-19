@@ -5,7 +5,7 @@
 -- ADR 0015 moved `sampling_method` OFF `reactors` onto `production_processes`:
 -- the Biochar Protocol (§8.3.1) scopes the Method A/B regime to
 -- (feedstock × conditions), which SPANS reactors — reactor identity is not part
--- of that boundary. Migration 0056 dropped `reactors.sampling_method`, so
+-- of that boundary. Migration 0057 dropped `reactors.sampling_method`, so
 -- 0052's trigger function — which reads `NEW.sampling_method` on `reactors` —
 -- now references a column that no longer exists and would raise on EVERY reactor
 -- INSERT/UPDATE (including the reseed).

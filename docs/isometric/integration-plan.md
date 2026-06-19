@@ -4,8 +4,7 @@ This doc is the **forward-looking** plan and status surface. It owns
 roadmap, current architecture contracts, pre-deploy gates, and what
 still has to be built. It does **not** narrate per-PR history — that
 lives in `docs/isometric/changes.md`. Design decisions live in
-`docs/adr/0001`–`0007`; open questions live in
-`docs/open-questions.md`.
+`docs/adr/`; open questions live in `docs/open-questions.md`.
 
 ## Scope
 
@@ -26,8 +25,11 @@ requirements can be pulled programmatically.
 ## Current model (read the ADRs)
 
 - **[ADR 0001 — Emission-estimate config](../adr/0001-emission-estimate-config.md)**
-  (Phase 3.7). Per-facility genset yield + stage splits are admin
-  config, not operational columns.
+  (Phase 3.7, partly superseded). Per-facility genset yield is admin
+  config, not an operational column.
+- **[ADR 0015 — Energy single combined measurement point](../adr/0015-energy-single-combined-measurement-point.md)**.
+  The active removal template takes one grid-electricity datapoint and one
+  diesel-genset datapoint; stage splits are removed.
 - **[ADR 0002 — Credit batch = GHG Statement](../adr/0002-credit-batch-as-ghg-statement.md)**
   (Superseded). Recorded for cross-reference only.
 - **[ADR 0003 — Removal as submission unit](../adr/0003-removal-as-submission-unit.md)**.
@@ -65,7 +67,7 @@ requirements can be pulled programmatically.
 | **3** — Removal submission | ✅ | `submitRemoval` with full idempotency ledger; supplier-ref reconciliation; pre-flight transport coverage check. Lineage via `getApplicationLineage()`. |
 | **3.5** — Sources upload | ✅ | Mirrors noma documents to Isometric Sources via server-side proxy (POST `/sources` → fetch from noma storage → PUT to signed URL → INSERT `certifier_document_uploads`). Source IDs ride into every monitored Datapoint's `source_ids` and are part of the semantic hash (mirror/unmirror supersedes the Removal version). Reconciliation covers the orphan paths: `GET /sources?supplier_reference_id=…` → either `POST /sources/{id}/signed_upload_url` 200 (re-PUT) or 409 (already uploaded, insert local row only). SSRF host allowlist, advisory locks around POST+INSERT, transaction + double-check around unlink, sync-event coverage on every outbound failure. **Known compromise (v1):** removal-wide source attribution — every Datapoint receives the same `source_ids`. Per-input refinement deferred to Phase 5 (tracked `isometric/sources-per-input-attribution`). 50 MB cap per source; streaming larger files tracked `isometric/sources-stream-large-files`. |
 | **3.6** — Tailored sandbox template | ✅ | `noma-mvp` Removal Template walkthrough + bootstrap script for fixed constants. Polymorphic transport-leg CRUD on delivery/sample/feedstock. |
-| **3.7** — Real energy data | ✅ | Per-facility emission-estimate config replaces energy zero stubs. `/admin/emission-estimates` + `/energy` summary route. |
+| **3.7** — Real energy data | ✅ | Per-facility genset yield replaces energy zero stubs; ADR 0015 collapses energy to the active template's combined measurement point. `/admin/emission-estimates` + `/energy` summary route. |
 | **3.7-period** — Period emissions | ✅ | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005). noma extends `/admin/emission-estimates` with an LCA-journal section + read-only drift panel on `/certification/`; **noma does not POST** Project Components. The seven `zeroStub: true` families are deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Coverage check + OpenAPI regen gate land in `isometric-health.yml`. |
 | **4** — GHG statement lifecycle | ❎ Superseded | Original two-phase `submitCreditBatch` removed by ADR 0003; lifecycle utilities retained and re-used by Phase 4.5. |
 | **4.5** — Multi-removal GHG Statements | ✅ | Provider-neutral `/certification/` route group (hub + Removals + GHG Statements). Period-first stepper. Membership reconciliation never steals. Unlink/repoint guard widened. |

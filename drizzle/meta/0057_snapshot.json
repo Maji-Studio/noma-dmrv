@@ -1,6 +1,6 @@
 {
-  "id": "b50432bf-daa4-476e-bbc0-f4f4331a401b",
-  "prevId": "78de0e48-281a-41ef-82a5-fa3534c78a30",
+  "id": "11f9be41-f590-4148-97e0-a66648d992ae",
+  "prevId": "53f444f6-eb73-4297-8faa-ba423690ddc9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1145,24 +1145,6 @@
         },
         "genset_energy_yield_kwh_per_litre": {
           "name": "genset_energy_yield_kwh_per_litre",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stage_split_biomass_pct": {
-          "name": "stage_split_biomass_pct",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stage_split_pyrolysis_pct": {
-          "name": "stage_split_pyrolysis_pct",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "stage_split_biochar_pct": {
-          "name": "stage_split_biochar_pct",
           "type": "real",
           "primaryKey": false,
           "notNull": false

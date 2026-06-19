@@ -136,9 +136,6 @@ function makeMapping(): CertifierProjectRow {
     webhookSecret: null,
     metadata: null,
     gensetEnergyYieldKwhPerLitre: 3.375,
-    stageSplitBiomassPct: 32.2,
-    stageSplitPyrolysisPct: 58.5,
-    stageSplitBiocharPct: 9.3,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;
