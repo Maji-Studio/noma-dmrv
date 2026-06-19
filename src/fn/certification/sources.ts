@@ -22,6 +22,7 @@ import {
 } from "@/data-access/certifier-removals";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   getDocumentById,
@@ -130,8 +131,15 @@ async function collectLineageEntities(
       entityLabel: `Credit batch ${batch.code}`,
     });
 
+    const applicationsForRuns = await getApplicationsForRuns(
+      userId,
+      batch.productionRunIds,
+    );
+    const applicationIds = Array.from(
+      new Set(applicationsForRuns.map((row) => row.applicationId)),
+    );
     const lineages = await Promise.all(
-      batch.applicationIds.map((aid) => getChainOfCustodyData(userId, aid)),
+      applicationIds.map((aid) => getChainOfCustodyData(userId, aid)),
     );
     const runIds = Array.from(
       new Set(

@@ -42,7 +42,7 @@ export type CurrencyCode = (typeof currencyCodes)[number];
  * Schema for credit batch form (client-side validation)
  * Form sections:
  * 1. Overview — code, facilityId, startDate, endDate, status
- * 2. Applications — applicationIds (M:M via credit_batch_applications)
+ * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Durability — durabilityOption toggle (200-year vs 1000-year) with conditional fields
  * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool %
  * 5. Verification — registry, weight, value, currency
@@ -54,10 +54,10 @@ export const creditBatchFormSchema = z
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
 
-    // === Section 2: Applications (M:M) ===
-    applicationIds: z
+    // === Section 2: Production cohort (membership) ===
+    productionRunIds: z
       .array(z.string().uuid())
-      .min(0, "Select at least one application")
+      .min(1, "Select at least one production run")
       .default([]),
 
     // === Section 3: Durability ===
@@ -188,7 +188,7 @@ export const updateCreditBatchSchema = z.object({
   facilityId: z.string().uuid().optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
-  applicationIds: z.array(z.string().uuid()).optional(),
+  productionRunIds: z.array(z.string().uuid()).optional(),
   durabilityOption: z.enum(durabilityOptions).optional(),
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
   meanRandomReflectancePercent: z.number().min(0).max(100).optional().nullable(),

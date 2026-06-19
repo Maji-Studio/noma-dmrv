@@ -249,14 +249,21 @@ const TABLE_META: Record<string, TableMeta> = {
   credit_batches: {
     area: "Credits",
     modulePath: "src/db/schema/credits.ts",
-    summary: "Credit issuance/reporting aggregation batches.",
-    useCases: ["Net-removal aggregation", "Registry submission preparation"],
+    summary: "Production-cohort credit batches for registry accounting.",
+    useCases: ["Production cohort grouping", "Registry submission preparation"],
+  },
+  credit_batch_production_runs: {
+    area: "Credits",
+    modulePath: "src/db/schema/credits.ts",
+    summary: "Join table linking production runs to credit batches.",
+    useCases: ["Cohort membership", "No-double-counting guard"],
   },
   credit_batch_applications: {
     area: "Credits",
     modulePath: "src/db/schema/credits.ts",
-    summary: "Join table linking applications to credit batches.",
-    useCases: ["Issuance traceability", "Inclusion/exclusion reviews"],
+    summary: "Legacy application membership cache; applications are now derived from member production runs.",
+    useCases: ["Migration compatibility"],
+    isLegacy: true,
   },
   documents: {
     area: "Documentation",

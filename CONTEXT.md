@@ -17,9 +17,10 @@ _Avoid_: phase, step.
 
 **Production run**:
 One pyrolysis batch at a reactor, the unit operators log energy and
-diesel against. Production runs roll up (applied-biochar scoped) into
-an Isometric **Removal**, reached from a credit batch through
-application lineage — a run is *not* 1:1 with a Removal.
+diesel against. Production runs are the membership primitive for a
+**credit batch** and roll up (applied-biochar scoped) into an Isometric
+**Removal** through their derived application lineage — a run is *not*
+1:1 with a Removal.
 
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
@@ -152,10 +153,13 @@ _Avoid_: client (collides with client components / API clients), buyer.
 ### Submission & registry
 
 **Credit batch**:
-noma's unit of monthly carbon accounting — one month's aggregated
-biochar production and application. On submission, one or more credit
-batches are grouped into a single Isometric **Removal** (default 1:1
-per month). `creditBatches` carries a nullable `removalId` FK.
+noma's production-cohort unit of carbon accounting — the production
+runs of one facility within a ≤1-month production window. The
+`startDate`/`endDate` window means production period, not application
+period. Batch membership is production runs; member applications are
+derived from lineage. On submission, one or more credit batches are
+grouped into a single Isometric **Removal** (default 1:1 per cohort).
+`creditBatches` carries a nullable `removalId` FK.
 _Avoid_: batch, issuance.
 
 **Removal**:
@@ -227,10 +231,11 @@ batches, through the custody path Feedstock (+ Reactor) → Production Run
 _Avoid_: trace-back, upstream graph.
 
 **Roll-up**:
-The merged lineage of one **credit batch** — every member application's
-**rollback** combined, production runs deduped, applied-biochar scoped.
-Mirrors how a **Removal** aggregates runs. The chain-of-custody page is
-anchored on this; a single application's rollback is its drill-down.
+The merged lineage of one **credit batch** — every derived member
+application's **rollback** combined, production runs deduped,
+applied-biochar scoped. Mirrors how a **Removal** aggregates runs. The
+chain-of-custody page is anchored on this; a single application's
+rollback is its drill-down.
 _Avoid_: aggregate view, batch graph.
 
 **Trail**:

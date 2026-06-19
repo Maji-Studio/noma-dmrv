@@ -9,11 +9,13 @@ import {
   primaryKey,
   check,
   index,
+  unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchStatus, durabilityOption } from './common';
 import { facilities } from './facilities';
 import { applications } from './application';
+import { productionRuns } from './production';
 import { certifierRemovals } from './certification';
 
 // ============================================
@@ -162,6 +164,29 @@ export const creditBatchApplications = pgTable(
 );
 
 // ============================================
+// Credit Batch Production Runs - Membership table
+// Links credit batches to production-run cohorts.
+// Strict: a production run belongs to at most one credit batch.
+// ============================================
+
+export const creditBatchProductionRuns = pgTable(
+  'credit_batch_production_runs',
+  {
+    creditBatchId: uuid('credit_batch_id')
+      .notNull()
+      .references(() => creditBatches.id),
+    productionRunId: uuid('production_run_id')
+      .notNull()
+      .references(() => productionRuns.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.creditBatchId, table.productionRunId] }),
+    unique('credit_batch_production_runs_run_unique').on(table.productionRunId),
+  ]
+);
+
+// ============================================
 // Relations
 // ============================================
 
@@ -177,6 +202,7 @@ export const creditBatchesRelations = relations(
       references: [certifierRemovals.id],
     }),
     creditBatchApplications: many(creditBatchApplications),
+    creditBatchProductionRuns: many(creditBatchProductionRuns),
   })
 );
 
@@ -194,6 +220,20 @@ export const creditBatchApplicationsRelations = relations(
   })
 );
 
+export const creditBatchProductionRunsRelations = relations(
+  creditBatchProductionRuns,
+  ({ one }) => ({
+    creditBatch: one(creditBatches, {
+      fields: [creditBatchProductionRuns.creditBatchId],
+      references: [creditBatches.id],
+    }),
+    productionRun: one(productionRuns, {
+      fields: [creditBatchProductionRuns.productionRunId],
+      references: [productionRuns.id],
+    }),
+  })
+);
+
 // ============================================
 // Type Exports
 // ============================================
@@ -202,3 +242,5 @@ export type CreditBatch = typeof creditBatches.$inferSelect;
 export type NewCreditBatch = typeof creditBatches.$inferInsert;
 export type CreditBatchApplication = typeof creditBatchApplications.$inferSelect;
 export type NewCreditBatchApplication = typeof creditBatchApplications.$inferInsert;
+export type CreditBatchProductionRun = typeof creditBatchProductionRuns.$inferSelect;
+export type NewCreditBatchProductionRun = typeof creditBatchProductionRuns.$inferInsert;

@@ -4,7 +4,7 @@
  *
  * Form sections:
  * 1. Overview — startDate, endDate
- * 2. Applications — Auto-matched by date range + facility (M:M via credit_batch_applications)
+ * 2. Production cohort — selected production runs in the production window
  * 3. Durability — read-only; inherited from the facility's default option (PDD-level decision)
  * 4. GHG Accounting — emissions/counterfactual, buffer pool % (read-only)
  * 5. Verification — registry, weight, value, currency (read-only)
@@ -14,6 +14,7 @@
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -26,6 +27,8 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
+import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
+import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 
 // ============================================
 // Section helpers
@@ -97,15 +100,14 @@ function ReadOnlyField({
 }
 
 // ============================================
-// Auto-matched accordion section
+// Cohort picker accordion section
 // ============================================
 
-function AutoMatchedSection({
+function CohortPickerSection({
   title,
   count,
   totalCount,
   hasDates,
-  emptyMessage,
   noMatchMessage,
   children,
 }: {
@@ -113,33 +115,21 @@ function AutoMatchedSection({
   count: number;
   totalCount: number;
   hasDates: boolean;
-  emptyMessage: string;
   noMatchMessage: string;
   children: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const panelId = `auto-matched-${title.toLowerCase().replace(/\s+/g, "-")}-panel`;
-
-  if (totalCount === 0) {
-    return (
-      <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
-        <SectionLabel>{title}</SectionLabel>
-        <div className="p-16 bg-[var(--color-background-medium)] body-small text-[var(--color-text-secondary)]">
-          {emptyMessage}
-        </div>
-      </div>
-    );
-  }
+  const panelId = `cohort-picker-${title.toLowerCase().replace(/\s+/g, "-")}-panel`;
 
   return (
     <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <SectionLabel hint="Automatically matched based on the crediting period above.">
+        <SectionLabel hint="Select member production runs from the production window above.">
           {title}
         </SectionLabel>
         {hasDates && count > 0 && (
           <span className="inline-flex items-center px-8 py-2 body-caption font-medium bg-[var(--clr-purple-10)] text-[var(--clr-purple)]">
-            {count} matched
+            {count} selected
           </span>
         )}
       </div>
@@ -147,10 +137,10 @@ function AutoMatchedSection({
       {!hasDates ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
-            Set start and end dates to auto-match {title.toLowerCase()}.
+            Set start and end dates to load {title.toLowerCase()}.
           </span>
         </div>
-      ) : count === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {noMatchMessage}
@@ -166,7 +156,7 @@ function AutoMatchedSection({
             className="w-full flex items-center justify-between px-16 py-10 bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] transition-colors"
           >
             <span className="body-small font-medium text-[var(--color-text-secondary)]">
-              {count} {title.toLowerCase()} in date range
+              {totalCount} {title.toLowerCase()} in production window
             </span>
             <span className="body-caption text-[var(--color-text-tertiary)]">
               {isOpen ? "Collapse" : "Expand"}
@@ -201,18 +191,6 @@ function parseWatchedDate(value: unknown): Date | null {
 }
 
 // ============================================
-// Rich data types for selectors
-// ============================================
-
-export interface ApplicationOption {
-  id: string;
-  code: string;
-  applicationDate: Date | null;
-  biocharAppliedDryTons: number | null;
-  fieldIdentifier: string | null;
-  facilityId: string;
-}
-
 export interface ExistingBatchPeriod {
   id: string;
   code: string;
@@ -223,9 +201,7 @@ export interface ExistingBatchPeriod {
 
 interface CreditBatchFormProps {
   /** Existing credit batch data for editing (undefined for create mode) */
-  creditBatch?: CreditBatch & { applicationIds?: string[] };
-  /** Available applications for multi-select */
-  applications?: ApplicationOption[];
+  creditBatch?: CreditBatch & { productionRunIds?: string[] };
   /** Existing credit batch periods for overlap detection */
   existingBatches?: ExistingBatchPeriod[];
   /** Form submission handler */
@@ -244,7 +220,6 @@ interface CreditBatchFormProps {
 
 export function CreditBatchForm({
   creditBatch,
-  applications = [],
   existingBatches = [],
   onSubmit,
   onClearServerError,
@@ -268,7 +243,7 @@ export function CreditBatchForm({
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
-      applicationIds: creditBatch?.applicationIds ?? [],
+      productionRunIds: creditBatch?.productionRunIds ?? [],
       durabilityOption:
         (creditBatch?.durabilityOption as DurabilityOption) ??
         (selectedFacility?.defaultDurabilityOption as DurabilityOption) ??
@@ -291,10 +266,11 @@ export function CreditBatchForm({
     }
   }, [creditBatch, selectedFacility?.defaultDurabilityOption, setValue]);
 
-  // Watch dates and facilityId for auto-matching
+  // Watch dates and facilityId for cohort selection
   const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const durabilityOption = useWatch({ control, name: "durabilityOption" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
 
@@ -302,30 +278,45 @@ export function CreditBatchForm({
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 
-  // Derive matched items from date range + facility (no manual selection)
   const startDateStr = startDate ? formatUtcDate(startDate) : "";
   const endDateStr = endDate ? formatUtcDate(endDate) : "";
-
-  // Filter applications by effective facility before date matching
-  const facilityApps = applications.filter(
-    (app) => app.facilityId === effectiveFacilityId
-  );
-
-  const matchedApps = hasBothDates
-    ? facilityApps.filter((app) => {
-        if (!app.applicationDate) return false;
-        const d = formatUtcDate(new Date(app.applicationDate));
-        return d >= startDateStr && d <= endDateStr;
-      })
+  const selectedProductionRunIds = Array.isArray(watchedProductionRunIds)
+    ? watchedProductionRunIds
     : [];
-  const matchedAppIds = matchedApps.map((a) => a.id).join(",");
+  const { data: productionRunOptions = [] } = useCreditBatchProductionRunOptions({
+    facilityId: effectiveFacilityId || undefined,
+    startDate: hasBothDates ? startDateStr : undefined,
+    endDate: hasBothDates ? endDateStr : undefined,
+    includeCreditBatchId: creditBatch?.id,
+  });
+  const selectableProductionRunIds = productionRunOptions
+    .filter(
+      (run) =>
+        !run.assignedCreditBatchId ||
+        run.assignedCreditBatchId === creditBatch?.id,
+    )
+    .map((run) => run.id);
+  const selectedProductionRunIdsKey = selectedProductionRunIds.join(",");
+  const selectableProductionRunIdsKey = selectableProductionRunIds.join(",");
 
-  // Sync matched IDs into form state for submission
   useEffect(() => {
-    setValue("applicationIds", matchedAppIds ? matchedAppIds.split(",") : [], {
-      shouldValidate: true,
-    });
-  }, [matchedAppIds, setValue]);
+    const selectedIds = selectedProductionRunIdsKey
+      ? selectedProductionRunIdsKey.split(",")
+      : [];
+    const selectableProductionRunIdSet = new Set(
+      selectableProductionRunIdsKey ? selectableProductionRunIdsKey.split(",") : [],
+    );
+    const nextSelected = selectedIds.filter((id) =>
+      selectableProductionRunIdSet.has(id),
+    );
+    if (nextSelected.join(",") !== selectedProductionRunIdsKey) {
+      setValue("productionRunIds", nextSelected, { shouldValidate: true });
+    }
+  }, [
+    selectableProductionRunIdsKey,
+    selectedProductionRunIdsKey,
+    setValue,
+  ]);
 
   // Overlap detection (client-side warning) — uses watched facilityId
   const overlappingBatch = hasBothDates
@@ -394,33 +385,61 @@ export function CreditBatchForm({
 
       </FormSection>
 
-      {/* ── Matched Applications ── */}
-      <AutoMatchedSection
-        title="Applications"
-        count={matchedApps.length}
-        totalCount={facilityApps.length}
+      {/* ── Production cohort ── */}
+      <CohortPickerSection
+        title="Production runs"
+        count={selectedProductionRunIds.length}
+        totalCount={productionRunOptions.length}
         hasDates={hasBothDates}
-        emptyMessage="No applications available for this facility."
-        noMatchMessage="No applications fall within this date range."
+        noMatchMessage="No production runs fall within this production window."
       >
-        {matchedApps.map((app) => (
-          <div
-            key={app.id}
-            className="flex items-center gap-12 px-12 py-8 bg-[var(--color-background-white)] border border-[var(--color-border-tertiary)]"
-          >
-            <span className="body-small font-medium shrink-0">{app.code}</span>
-            <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">{formatSafeDate(app.applicationDate)}</span>
-            {app.fieldIdentifier && (
-              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate max-w-[120px]">
-                {app.fieldIdentifier}
+        {productionRunOptions.map((run: CreditBatchProductionRunOption) => {
+          const assignedElsewhere =
+            !!run.assignedCreditBatchId &&
+            run.assignedCreditBatchId !== creditBatch?.id;
+          return (
+            <label
+              key={run.id}
+              className={`flex min-h-44 items-center gap-12 px-12 py-8 border ${
+                assignedElsewhere
+                  ? "bg-[var(--color-background-sunken)] border-[var(--color-border-tertiary)] text-[var(--color-text-quaternary)]"
+                  : "bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
+              }`}
+            >
+              <input
+                type="checkbox"
+                value={run.id}
+                disabled={isSubmitting || assignedElsewhere}
+                className="h-16 w-16 shrink-0"
+                {...register("productionRunIds")}
+              />
+              <span className="body-small font-medium shrink-0">{run.code}</span>
+              <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
+                {formatSafeDate(run.date)}
               </span>
-            )}
-            <div className="flex items-center gap-12 ml-auto shrink-0">
-              <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)]">Applied {formatTons(app.biocharAppliedDryTons)}</span>
-            </div>
-          </div>
-        ))}
-      </AutoMatchedSection>
+              {assignedElsewhere && run.assignedCreditBatchCode && (
+                <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate">
+                  Assigned to {run.assignedCreditBatchCode}
+                </span>
+              )}
+              <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] shrink-0">
+                Dry output{" "}
+                {formatTons(
+                  run.biocharDryMassKg == null
+                    ? null
+                    : kgToTonnes(run.biocharDryMassKg),
+                )}
+              </span>
+            </label>
+          );
+        })}
+      </CohortPickerSection>
+
+      {errors.productionRunIds?.message && (
+        <p className="body-caption text-[var(--color-signal-red)]">
+          {errors.productionRunIds.message}
+        </p>
+      )}
 
       {/* ── Durability ── */}
       <FormSection
