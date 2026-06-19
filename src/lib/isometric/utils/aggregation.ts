@@ -40,7 +40,7 @@ export interface AggregatedProductionData {
   sampleTransportMassDistanceTonneKm: number;
   // Combined genset energy in kWh — genset litres × the facility's genset
   // yield, applied by `enrichWithFacilityConfig`. Null until enriched (the raw
-  // litres live in `totalGensetDieselLitres`). ADR 0014 removed the per-stage
+  // litres live in `totalGensetDieselLitres`). ADR 0015 removed the per-stage
   // energy split: all energy now submits as a single combined measurement
   // point, so there is one genset-kWh figure instead of three stage shares.
   totalGensetKwh: number | null;
@@ -276,7 +276,7 @@ export function enrichWithTransportLegs(
   };
 }
 
-// Per-facility emission-estimate config on `certifier_projects`. ADR 0014
+// Per-facility emission-estimate config on `certifier_projects`. ADR 0015
 // dropped the three `stageSplit*Pct` columns (the per-stage split is gone);
 // the genset yield remains because it is emissions-affecting (litres → kWh).
 // The submission path validates non-null before calling
@@ -285,7 +285,7 @@ export interface FacilityEmissionConfig {
   gensetEnergyYieldKwhPerLitre: number;
 }
 
-// Layers combined genset energy (kWh) onto an aggregation result (ADR 0014).
+// Layers combined genset energy (kWh) onto an aggregation result (ADR 0015).
 // Pure; returns a new object. Converts the run-combined genset litres to kWh
 // via the facility's genset yield — the only facility-config-derived energy
 // figure left after the per-stage split was removed. `totalElectricityKwh` is

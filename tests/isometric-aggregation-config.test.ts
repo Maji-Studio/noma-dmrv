@@ -31,7 +31,7 @@ const config: FacilityEmissionConfig = {
 };
 
 describe("enrichWithFacilityConfig", () => {
-  it("converts the combined genset litres to kWh via the yield (single point, ADR 0014)", () => {
+  it("converts the combined genset litres to kWh via the yield (single point, ADR 0015)", () => {
     const r = enrichWithFacilityConfig(baseAgg, config);
     // 200 L × 3 kWh/L = 600 kWh genset — one combined figure, no per-stage split.
     expect(r.totalGensetKwh).toBe(600);

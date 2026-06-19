@@ -42,7 +42,7 @@ export const certifierProjects = pgTable(
     // `energy_based_ci_emissions` components expect. Seed 3.375 (LCA
     // diesel CI 2.7 kgCO2e/L ÷ genset CI 0.8 kgCO2e/kWh).
     gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
-    // ADR 0014 removed the three `stage_split_*_pct` columns: energy now
+    // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
     // submits as one combined measurement point, so there is no per-stage
     // breakdown to apportion. The genset yield above is retained because it is
     // emissions-affecting (litres → kWh).

@@ -113,12 +113,12 @@ exploration.
   supersede semantics) is wildly out of proportion to that cadence.
   Posture B costs an admin form section, a sentinel set, a `SafeError`
   branch, and a read-only drift panel.
-- **The ADR 0001 precedent is "LCA-transcribed values = admin config,
-  not a published artifact."** Genset yield and stage splits live as
-  config columns; they're consumed at submit time. This decision applies
-  the same posture to period emissions. Originated artifacts (Removals,
-  GHG Statements — ADR 0003 / 0004) get the full publish pipeline;
-  transcribed values do not.
+- **The ADR 0001/0015 precedent is "LCA-transcribed values = admin config,
+  not a published artifact."** Genset yield lives as config and is consumed at
+  submit time; ADR 0015 later removed stage splits when the active template no
+  longer needed them. This decision applies the same posture to period
+  emissions. Originated artifacts (Removals, GHG Statements — ADR 0003 / 0004)
+  get the full publish pipeline; transcribed values do not.
 - **The drift panel is the "consistent mapping" guarantee operators
   asked for.** Anything Isometric carries that noma doesn't know about
   (or vice versa) is surfaced; the audit trail lives in noma's row;
@@ -140,9 +140,9 @@ exploration.
   facility-scoped, LCA-window-keyed, FK to `documents` for the source
   PDF, FK to `users` for `recordedBy`. Additive migration.
 - **`/admin/emission-estimates` page** grows a "Period emissions"
-  section sharing the existing form patterns. The genset/stage-split
-  config and the period-emission rows live on the same page because
-  they share the "LCA-transcribed admin config" mental model.
+  section sharing the existing form patterns. The genset-yield config and the
+  period-emission rows live on the same page because they share the
+  "LCA-transcribed admin config" mental model.
 - **`INPUT_MAPPING` loses the five `zeroStub: true` families.** They
   move to a new `PERIOD_INPUT_TUPLES` constant set used by the
   scope-conflict `SafeError`.

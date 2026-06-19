@@ -300,7 +300,7 @@ export interface FacilityEmissionConfigInput {
 
 // Updates only the emission-config columns on an existing
 // certifier_projects row: the genset energy yield plus the soil-temperature
-// fallback. ADR 0014 dropped the three stage-split columns. The facility must
+// fallback. ADR 0015 dropped the three stage-split columns. The facility must
 // already be linked to an Isometric project — the config has no meaning
 // otherwise.
 export async function updateFacilityEmissionConfig(

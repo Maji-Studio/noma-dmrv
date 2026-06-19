@@ -64,7 +64,7 @@ const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
 
 // Reads the genset energy yield off the facility's certifier_projects row.
 // Throws if unset — it must be configured in the admin area (Emission
-// estimates) before a submission can convert genset litres to kWh (ADR 0014
+// estimates) before a submission can convert genset litres to kWh (ADR 0015
 // dropped the per-stage split, so the yield is the only required config).
 // Facility-level config, shared across the removal.
 export function resolveFacilityEmissionConfig(
@@ -430,7 +430,7 @@ export async function submitRemoval(
 
   // Non-blocking: surface (don't block on) submission advisories — e.g.
   // recorded startup/plant diesel the active template has no `fuel_usage_by_volume`
-  // component to carry (ADR 0014). The value is simply not submitted; the
+  // component to carry (ADR 0015). The value is simply not submitted; the
   // operator already sees the same warning at readiness.
   if (ctx.submissionWarnings.length > 0) {
     log.warn(

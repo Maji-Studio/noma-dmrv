@@ -149,7 +149,7 @@ export interface RemovalCertifyContext {
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
   // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
-  // active template has no component to carry (ADR 0014). Unlike
+  // active template has no component to carry (ADR 0015). Unlike
   // durabilityGateBlockers / entityReadinessGaps these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];

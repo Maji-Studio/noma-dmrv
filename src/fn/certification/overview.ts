@@ -64,7 +64,7 @@ export interface RemovalPreflightSummary {
   local: LocalSubmissionStatus | null;
   lockInFlight: boolean;
   readiness: RemovalReadiness;
-  // Non-blocking advisories (ADR 0014) — e.g. recorded startup/plant diesel the
+  // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant diesel the
   // active template cannot carry. Shown alongside readiness; never gates submit.
   submissionWarnings: string[];
 }

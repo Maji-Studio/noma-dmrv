@@ -238,7 +238,7 @@ export function CertificationSettings() {
           {/* Emission / LCA config — admin only (ADR 0005, import-only).
               EmissionEstimatesForm seeds its RHF defaultValues from `mapping`
               at mount, so it must not mount until the summary has loaded —
-              otherwise saved genset/stage-split values render blank. */}
+              otherwise saved genset-yield values render blank. */}
           {activeTab === "emissions" && isAdmin && (
             <div
               id={getPanelId("emissions")}
@@ -248,7 +248,7 @@ export function CertificationSettings() {
               <SettingsSection
                 icon={Gauge}
                 title="Emission estimates"
-                caption="Genset yield + process-stage energy split, and the per-period LCA journal. Feed the per-stage energy datapoints on submission."
+                caption="Genset yield and the per-period LCA journal. Feeds combined energy datapoints on submission."
               >
                 {summaryLoading ? (
                   <p className="body-medium text-[var(--color-text-tertiary)]">

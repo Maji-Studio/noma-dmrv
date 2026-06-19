@@ -1,12 +1,13 @@
 # Energy submission data uses per-facility admin-configured estimates
 
-> **Status: Accepted, delivered.** Shipped as integration-plan Phase 3.7
-> (2026-05-21). The `/admin/emission-estimates` page is live and seeded
-> for the Moshi facility.
+> **Status: Accepted, partly superseded.** Shipped as integration-plan Phase
+> 3.7 (2026-05-21). ADR 0015 supersedes the per-stage split portion after the
+> active removal template moved to a single combined energy measurement point.
+> The genset-yield decision remains active.
 
 ## Context
 
-The Isometric removal template splits energy into three process stages
+The original Isometric removal template split energy into three process stages
 (biomass / pyrolysis / biochar) with separate grid-electricity and
 diesel-genset components. noma's operators record only one combined
 electricity figure and diesel litres per production run — they cannot
@@ -23,6 +24,10 @@ submission time the transformer routes the combined per-run electricity
 and genset energy across the per-stage template components using that
 config.
 
+ADR 0015 later removed the stage-split fields when the active template
+collapsed energy to one combined grid-electricity datapoint and one combined
+diesel-genset datapoint.
+
 ## Why
 
 Splitting energy across stages is **emissions-neutral**: all three
@@ -37,7 +42,7 @@ honest about what it is.
 
 - A submission's energy datapoints are only as accurate as the
   configured genset yield. The yield **is** emissions-affecting (unlike
-  the stage split) and must stay consistent with the LCA's diesel and
+  the now-superseded stage split) and must stay consistent with the LCA's diesel and
   genset carbon intensities (≈3.375 kWh/L).
 - Per-reporting-period inputs (staff travel, pyrolyzer gas, lab
   electricity) are **not** covered by this decision — they remain zero

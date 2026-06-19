@@ -202,7 +202,7 @@ export function RemovalDetailSheet({
           <ReadinessBlock summary={summary} />
 
           {summary.submissionWarnings.length > 0 && (
-            // Non-blocking advisories (ADR 0014) — e.g. recorded startup/plant
+            // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
             // diesel the active template cannot carry. Distinct from the
             // readiness blockers above: the removal still submits.
             <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
