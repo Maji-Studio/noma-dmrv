@@ -15,10 +15,6 @@ import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import { z } from "zod";
 import {
-  STAGE_SPLIT_SUM_TOLERANCE,
-  STAGE_SPLIT_TOTAL_PCT,
-} from "@/schemas/certification";
-import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
   createDatapoint,
@@ -66,34 +62,25 @@ const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
     "Submission state changed while preparing the removal. Reload and retry.",
 };
 
-// Reads the four Phase 3.7 emission-estimate columns off the facility's
-// certifier_projects row. Throws if any is unset — they must be configured
-// in the admin area (Emission estimates) before a submission can carry real
-// per-stage energy data. Facility-level config, shared across the removal.
+// Reads the genset energy yield off the facility's certifier_projects row.
+// Throws if unset — it must be configured in the admin area (Emission
+// estimates) before a submission can convert genset litres to kWh (ADR 0015
+// dropped the per-stage split, so the yield is the only required config).
+// Facility-level config, shared across the removal.
 export function resolveFacilityEmissionConfig(
   mapping: CertifierProjectRow,
 ): FacilityEmissionConfig {
-  const {
-    gensetEnergyYieldKwhPerLitre,
-    stageSplitBiomassPct,
-    stageSplitPyrolysisPct,
-    stageSplitBiocharPct,
-  } = mapping;
-  if (
-    gensetEnergyYieldKwhPerLitre == null ||
-    stageSplitBiomassPct == null ||
-    stageSplitPyrolysisPct == null ||
-    stageSplitBiocharPct == null
-  ) {
+  const { gensetEnergyYieldKwhPerLitre } = mapping;
+  if (gensetEnergyYieldKwhPerLitre == null) {
     throw new SafeError(
-      "Set this facility's genset yield and stage splits in the admin area (Emission estimates) before submitting.",
+      "Set this facility's genset yield in the admin area (Emission estimates) before submitting.",
     );
   }
 
-  // Defence-in-depth: the admin form validates these through
+  // Defence-in-depth: the admin form validates this through
   // facilityEmissionConfigSchema, but a direct DB edit or seed insert could
-  // bypass it. A bad value here would silently corrupt a registry
-  // submission, so re-check the bounds before building the payload.
+  // bypass it. A bad value here would silently corrupt a registry submission,
+  // so re-check the bound before building the payload.
   if (
     !Number.isFinite(gensetEnergyYieldKwhPerLitre) ||
     gensetEnergyYieldKwhPerLitre <= 0
@@ -102,34 +89,8 @@ export function resolveFacilityEmissionConfig(
       "This facility's genset energy yield must be a positive number. Correct it in the admin area (Emission estimates).",
     );
   }
-  const stageSplits = [
-    stageSplitBiomassPct,
-    stageSplitPyrolysisPct,
-    stageSplitBiocharPct,
-  ];
-  if (
-    stageSplits.some(
-      (pct) => !Number.isFinite(pct) || pct < 0 || pct > STAGE_SPLIT_TOTAL_PCT,
-    )
-  ) {
-    throw new SafeError(
-      "This facility's stage splits must each be between 0 and 100. Correct them in the admin area (Emission estimates).",
-    );
-  }
-  const splitSum =
-    stageSplitBiomassPct + stageSplitPyrolysisPct + stageSplitBiocharPct;
-  if (Math.abs(splitSum - STAGE_SPLIT_TOTAL_PCT) > STAGE_SPLIT_SUM_TOLERANCE) {
-    throw new SafeError(
-      "This facility's stage splits must sum to 100%. Correct them in the admin area (Emission estimates).",
-    );
-  }
 
-  return {
-    gensetEnergyYieldKwhPerLitre,
-    stageSplitBiomassPct,
-    stageSplitPyrolysisPct,
-    stageSplitBiocharPct,
-  };
+  return { gensetEnergyYieldKwhPerLitre };
 }
 
 interface ResolvedMonitoredInput {
@@ -466,6 +427,17 @@ export async function submitRemoval(
   }
 
   const agg = enrichWithFacilityConfig(transportAgg, emissionConfig);
+
+  // Non-blocking: surface (don't block on) submission advisories — e.g.
+  // recorded startup/plant diesel the active template has no `fuel_usage_by_volume`
+  // component to carry (ADR 0015). The value is simply not submitted; the
+  // operator already sees the same warning at readiness.
+  if (ctx.submissionWarnings.length > 0) {
+    log.warn(
+      { submissionWarnings: ctx.submissionWarnings },
+      "removal has non-blocking submission warnings",
+    );
+  }
 
   // Regenerate the transport evidence ledger from the live legs and mirror it
   // as a Source BEFORE candidate documents are collected, so the current ledger
