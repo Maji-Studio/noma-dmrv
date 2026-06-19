@@ -64,6 +64,9 @@ export interface RemovalPreflightSummary {
   local: LocalSubmissionStatus | null;
   lockInFlight: boolean;
   readiness: RemovalReadiness;
+  // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant diesel the
+  // active template cannot carry. Shown alongside readiness; never gates submit.
+  submissionWarnings: string[];
 }
 
 export interface CertificationOverviewData {
@@ -129,6 +132,7 @@ export async function loadCertificationOverview(
               local: facts.local,
               lockInFlight: facts.lockInFlight,
               readiness,
+              submissionWarnings: ctx.submissionWarnings,
             };
           }),
       );

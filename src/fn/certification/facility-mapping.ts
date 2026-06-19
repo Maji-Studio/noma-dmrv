@@ -182,8 +182,8 @@ export async function loadIsometricProjectTemplates(
   });
 }
 
-// Admin-only: this per-facility emission-estimate config feeds the
-// per-stage energy datapoints of every Isometric submission, so the
+// Admin-only: this per-facility emission-estimate config feeds the genset
+// energy datapoint of every Isometric submission (litres → kWh), so the
 // admin-area UI guard alone is not sufficient.
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
@@ -195,9 +195,6 @@ export async function saveFacilityEmissionConfig(
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre,
-      stageSplitBiomassPct: parsed.stageSplitBiomassPct,
-      stageSplitPyrolysisPct: parsed.stageSplitPyrolysisPct,
-      stageSplitBiocharPct: parsed.stageSplitBiocharPct,
       defaultSoilTemperatureC: parsed.defaultSoilTemperatureC ?? null,
     });
   });

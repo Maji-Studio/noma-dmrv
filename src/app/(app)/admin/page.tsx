@@ -25,7 +25,7 @@ const ADMIN_TILES: AdminTile[] = [
     icon: Gauge,
     title: "Emission estimates",
     description:
-      "Per-facility genset yield and process-stage energy split used in Isometric submissions — configured under Certification → Settings → Emissions.",
+      "Per-facility genset yield and period LCA values used in Isometric submissions — configured under Certification → Settings → Emissions.",
     accent: "var(--clr-orange)",
   },
   {

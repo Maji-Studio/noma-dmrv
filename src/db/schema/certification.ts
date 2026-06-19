@@ -42,13 +42,10 @@ export const certifierProjects = pgTable(
     // `energy_based_ci_emissions` components expect. Seed 3.375 (LCA
     // diesel CI 2.7 kgCO2e/L ÷ genset CI 0.8 kgCO2e/kWh).
     gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
-    // Estimated split of combined per-run energy across the three process
-    // stages. Emissions-neutral (all stages share one CI) — affects only
-    // the per-stage breakdown shown in the registry. The three must sum
-    // to 100.
-    stageSplitBiomassPct: real('stage_split_biomass_pct'),
-    stageSplitPyrolysisPct: real('stage_split_pyrolysis_pct'),
-    stageSplitBiocharPct: real('stage_split_biochar_pct'),
+    // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
+    // submits as one combined measurement point, so there is no per-stage
+    // breakdown to apportion. The genset yield above is retained because it is
+    // emissions-affecting (litres → kWh).
     // Region-wide conservative fallback used when an application's customer
     // location has no site-specific default soil temperature.
     defaultSoilTemperatureC: real('default_soil_temperature_c'),
