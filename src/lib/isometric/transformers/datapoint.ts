@@ -62,20 +62,20 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Biomass → processing transport (feedstock leg category)
+  // Biomass → processing transport (feedstock leg category). The template
+  // binds this to `mass_distance_based_ci_emissions`: a single `mass_distance`
+  // (tonne·km) SCALAR = Σⱼ(distⱼ × massⱼ) across the run's feedstock legs
+  // (multiple deliveries / storage bins, mass-weighted), with the emission
+  // factor held as a fixed input on the blueprint. There is no LIST-shaped
+  // transport blueprint in the Certify catalog, so per-leg datapoints are not
+  // possible — the mass-weighted sum is exact for same-factor legs.
   "biomass-feedstock-transport": {
-    transport: {
-      distance: {
-        source: "feedstockTransportAvgDistanceKm",
-        unit: "km",
+    mass_distance_based_ci_emissions: {
+      mass_distance: {
+        source: "feedstockTransportMassDistanceTonneKm",
+        unit: "tonne * km",
         datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-      },
-      mass: {
-        source: "totalFeedstockDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
+        expectedQuantityKind: "mass_distance",
       },
     },
     specific_volume_based_emissions: {
@@ -88,20 +88,15 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Biochar → storage transport (biochar product leg category)
+  // Biochar → storage transport (biochar product leg category). Same
+  // mass_distance (tonne·km) model as feedstock transport above.
   "biochar-transport": {
-    transport: {
-      distance: {
-        source: "biocharTransportAvgDistanceKm",
-        unit: "km",
+    mass_distance_based_ci_emissions: {
+      mass_distance: {
+        source: "biocharTransportMassDistanceTonneKm",
+        unit: "tonne * km",
         datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-      },
-      mass: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
+        expectedQuantityKind: "mass_distance",
       },
     },
     specific_volume_based_emissions: {
@@ -114,16 +109,11 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Sample shipping to lab.
+  // Sample shipping to lab — mass_distance (tonne·km), like the feedstock and
+  // biochar transport categories. (The legacy `distance_based_ci_emissions`
+  // binding was dropped: the re-authored template uses
+  // `mass_distance_based_ci_emissions` for every transport category.)
   "sampling-required-for-mrv": {
-    distance_based_ci_emissions: {
-      distance: {
-        source: "sampleTransportAvgDistanceKm",
-        unit: "km",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-      },
-    },
     // Sampling consumables (`mass_based_ci_emissions`) and lab electricity
     // (`grid_electricity_use`) used to live here as zero stubs. Both moved
     // to PROJECT scope as Project Components per ADR 0005. If a template

@@ -37,9 +37,8 @@ const baseAgg: AggregatedProductionData = {
   totalStartupDieselLitres: 50,
   totalGensetDieselLitres: 20,
   totalElectricityKwh: 200,
-  feedstockTransportAvgDistanceKm: 50,
-  biocharTransportAvgDistanceKm: 100,
-  sampleTransportAvgDistanceKm: 25,
+  feedstockTransportMassDistanceTonneKm: 50,
+  biocharTransportMassDistanceTonneKm: 100,
   sampleTransportMassDistanceTonneKm: 12,
   biomassElectricityKwh: 40,
   pyrolysisElectricityKwh: 130,
@@ -166,17 +165,21 @@ describe("buildCreateDatapointRequest", () => {
   });
 
   it("rejects when only the group_key differs (same blueprint+input, wrong group)", () => {
-    // `distance` exists under multiple groups in INPUT_MAPPING but only with
-    // the `transport` blueprint. Calling with a bogus group_key must miss.
+    // `mass_distance` exists under each transport group in INPUT_MAPPING but
+    // only with the `mass_distance_based_ci_emissions` blueprint. A bogus
+    // group_key must miss.
     expect(() =>
       buildCreateDatapointRequest({
         groupKey: "nonexistent-group",
-        componentBlueprintKey: "transport",
-        rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+        componentBlueprintKey: "mass_distance_based_ci_emissions",
+        rtcInput: rtcInput({
+          input_key: "mass_distance",
+          quantity_kind: "mass_distance",
+        }),
         blueprintInput: blueprintInput({
-          input_key: "distance",
-          compatible_unit: "km",
-          quantity_kind: "distance",
+          input_key: "mass_distance",
+          compatible_unit: "tonne * km",
+          quantity_kind: "mass_distance",
         }),
         agg: baseAgg,
         projectId: PROJECT_ID,
@@ -185,38 +188,46 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/No INPUT_MAPPING entry for group="nonexistent-group"/);
   });
 
-  it("disambiguates `distance` between feedstock and biochar transport groups", () => {
-    // Same blueprint (`transport`), same input_key (`distance`), different
-    // groups should resolve to different aggregated sources.
-    const feedstockDistance = buildCreateDatapointRequest({
+  it("disambiguates `mass_distance` between feedstock and biochar transport groups", () => {
+    // Same blueprint (`mass_distance_based_ci_emissions`), same input_key
+    // (`mass_distance`), different groups resolve to different aggregated
+    // sources (the per-category mass-weighted tonne·km).
+    const feedstockMassDistance = buildCreateDatapointRequest({
       groupKey: "biomass-feedstock-transport",
-      componentBlueprintKey: "transport",
-      rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+      componentBlueprintKey: "mass_distance_based_ci_emissions",
+      rtcInput: rtcInput({
+        input_key: "mass_distance",
+        quantity_kind: "mass_distance",
+      }),
       blueprintInput: blueprintInput({
-        input_key: "distance",
-        compatible_unit: "km",
-        quantity_kind: "distance",
+        input_key: "mass_distance",
+        compatible_unit: "tonne * km",
+        quantity_kind: "mass_distance",
       }),
       agg: baseAgg,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
-    const biocharDistance = buildCreateDatapointRequest({
+    const biocharMassDistance = buildCreateDatapointRequest({
       groupKey: "biochar-transport",
-      componentBlueprintKey: "transport",
-      rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+      componentBlueprintKey: "mass_distance_based_ci_emissions",
+      rtcInput: rtcInput({
+        input_key: "mass_distance",
+        quantity_kind: "mass_distance",
+      }),
       blueprintInput: blueprintInput({
-        input_key: "distance",
-        compatible_unit: "km",
-        quantity_kind: "distance",
+        input_key: "mass_distance",
+        compatible_unit: "tonne * km",
+        quantity_kind: "mass_distance",
       }),
       agg: baseAgg,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
-    // baseAgg has feedstockTransport=50, biocharTransport=100
-    expect(feedstockDistance.quantity.magnitude).toBe(50);
-    expect(biocharDistance.quantity.magnitude).toBe(100);
+    // baseAgg has feedstockTransportMassDistanceTonneKm=50,
+    // biocharTransportMassDistanceTonneKm=100.
+    expect(feedstockMassDistance.quantity.magnitude).toBe(50);
+    expect(biocharMassDistance.quantity.magnitude).toBe(100);
   });
 
   it("rejects a quantity_kind drift between mapping and live blueprint", () => {
@@ -296,11 +307,15 @@ describe("buildCreateDatapointRequest", () => {
     const expected: Array<[string, string, string]> = [
       ["co2-stored", "carbon_rich_substance_sequestration", "carbon_content"],
       ["co2-stored", "carbon_rich_substance_sequestration", "product_mass"],
-      ["biomass-feedstock-transport", "transport", "distance"],
-      ["biomass-feedstock-transport", "transport", "mass"],
-      ["biochar-transport", "transport", "distance"],
-      ["biochar-transport", "transport", "mass"],
-      ["sampling-required-for-mrv", "distance_based_ci_emissions", "distance"],
+      // All three transport categories bind the `mass_distance_based_ci_emissions`
+      // blueprint: a single mass-weighted `mass_distance` (tonne·km) per category
+      // (there is no LIST-shaped transport blueprint in the Certify catalog).
+      [
+        "biomass-feedstock-transport",
+        "mass_distance_based_ci_emissions",
+        "mass_distance",
+      ],
+      ["biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"],
       [
         "biomass-feedstock-processing",
         "metered_energy_based_ci_emissions",
