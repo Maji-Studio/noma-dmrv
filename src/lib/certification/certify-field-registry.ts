@@ -62,12 +62,7 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "feedstockTransportMassDistanceTonneKm",
   "biocharTransportMassDistanceTonneKm",
   "sampleTransportMassDistanceTonneKm",
-  "biomassElectricityKwh",
-  "pyrolysisElectricityKwh",
-  "biocharElectricityKwh",
-  "biomassGensetKwh",
-  "pyrolysisGensetKwh",
-  "biocharGensetKwh",
+  "totalGensetKwh",
   "earliestStartTime",
   "latestEndTime",
   "sourceProductionRunIds",
@@ -85,39 +80,16 @@ const mapping = (
   inputTuples?: readonly CertifyInputTuple[],
 ): CertifySourceMapping => ({ source, inputTuples });
 
-const electricityStageMappings = [
-  mapping("biomassElectricityKwh", [
-    tuple(
-      "biomass-feedstock-processing",
-      "metered_energy_based_ci_emissions",
-      "initial_readout",
-    ),
-    tuple(
-      "biomass-feedstock-processing",
-      "metered_energy_based_ci_emissions",
-      "final_readout",
-    ),
-  ]),
-  mapping("pyrolysisElectricityKwh", [
-    tuple("pyrolysis", "metered_energy_based_ci_emissions", "initial_readout"),
-    tuple("pyrolysis", "metered_energy_based_ci_emissions", "final_readout"),
-  ]),
-  mapping("biocharElectricityKwh", [
-    tuple("biochar-processing", "grid_electricity_use", "electricity_use"),
-  ]),
-] as const;
+// Combined energy submits at a single pyrolysis measurement point (ADR 0014):
+// one grid-electricity datapoint and one genset datapoint. The per-stage split
+// is gone, so each maps to one combined source + one input tuple.
+const electricityMapping = mapping("totalElectricityKwh", [
+  tuple("pyrolysis", "grid_electricity_use", "electricity_use"),
+]);
 
-const gensetStageMappings = [
-  mapping("biomassGensetKwh", [
-    tuple("biomass-feedstock-processing", "energy_based_ci_emissions", "energy"),
-  ]),
-  mapping("pyrolysisGensetKwh", [
-    tuple("pyrolysis", "energy_based_ci_emissions", "energy"),
-  ]),
-  mapping("biocharGensetKwh", [
-    tuple("biochar-processing", "energy_based_ci_emissions", "energy"),
-  ]),
-] as const;
+const gensetKwhMapping = mapping("totalGensetKwh", [
+  tuple("pyrolysis", "energy_based_ci_emissions", "energy"),
+]);
 
 // Each transport category submits a single `mass_distance` (tonne·km) datapoint
 // = Σⱼ(distⱼ × massⱼ). Both a leg's distance AND its load mass feed that figure,
@@ -189,9 +161,17 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("totalBiocharDryMassKg")],
     },
     {
-      key: "dieselOperationLiters",
-      label: "Operation diesel",
-      kind: "entered",
+      // ADR 0014: the live template declares no `fuel_usage_by_volume`
+      // component, so startup/plant diesel + preprocessing fuel are NOT
+      // certify-required. A `derived` descriptor with no `formFields` badges no
+      // input and never gates readiness, while still covering
+      // `totalStartupDieselLitres` for the INPUT_MAPPING drift guard (the
+      // mapping is retained for a template that re-declares the component). A
+      // recorded value with no carrying component surfaces a non-blocking
+      // warning at submit/readiness instead of a required-field badge.
+      key: "startupDieselFuelUsage",
+      label: "Startup / plant diesel",
+      kind: "derived",
       mappings: [
         mapping("totalStartupDieselLitres", [
           tuple(
@@ -208,28 +188,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       ],
     },
     {
-      key: "preprocessingFuelLiters",
-      label: "Preprocessing fuel",
-      kind: "entered",
-      mappings: [mapping("totalStartupDieselLitres")],
-    },
-    {
       key: "dieselGensetLiters",
       label: "Genset diesel",
       kind: "entered",
-      mappings: [
-        mapping("totalGensetDieselLitres"),
-        ...gensetStageMappings,
-      ],
+      mappings: [mapping("totalGensetDieselLitres"), gensetKwhMapping],
     },
     {
       key: "electricityKwh",
       label: "Electricity",
       kind: "entered",
-      mappings: [
-        mapping("totalElectricityKwh"),
-        ...electricityStageMappings,
-      ],
+      mappings: [electricityMapping],
     },
   ],
   sample: [
@@ -336,37 +304,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   facilityEmissionConfig: [
     {
+      // ADR 0014 dropped the three stage-split fields; only the genset yield
+      // (litres → kWh) remains as facility emission config.
       key: "gensetEnergyYieldKwhPerLitre",
       label: "Genset energy yield",
       kind: "entered",
-      mappings: gensetStageMappings,
-    },
-    {
-      key: "stageSplitBiomassPct",
-      label: "Biomass stage split",
-      kind: "entered",
-      mappings: [
-        mapping("biomassElectricityKwh"),
-        mapping("biomassGensetKwh"),
-      ],
-    },
-    {
-      key: "stageSplitPyrolysisPct",
-      label: "Pyrolysis stage split",
-      kind: "entered",
-      mappings: [
-        mapping("pyrolysisElectricityKwh"),
-        mapping("pyrolysisGensetKwh"),
-      ],
-    },
-    {
-      key: "stageSplitBiocharPct",
-      label: "Biochar stage split",
-      kind: "entered",
-      mappings: [
-        mapping("biocharElectricityKwh"),
-        mapping("biocharGensetKwh"),
-      ],
+      mappings: [gensetKwhMapping],
     },
   ],
   // The kinds below are badge/mapping documentation only — they are never fed

@@ -65,6 +65,7 @@ import {
 } from "./shared";
 import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
 import { buildDurabilityGateBlockers } from "./durability-readiness";
+import { buildSubmissionWarnings } from "./submission-warnings";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -147,6 +148,11 @@ export interface RemovalCertifyContext {
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
+  // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
+  // active template has no component to carry (ADR 0014). Unlike
+  // durabilityGateBlockers / entityReadinessGaps these do NOT gate submission;
+  // they tell the operator a recorded value will not be submitted.
+  submissionWarnings: string[];
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -685,6 +691,7 @@ export async function buildRemovalContext(
       productionReadinessGap,
       entityReadinessGaps: [],
       durabilityGateBlockers: [],
+      submissionWarnings: [],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
@@ -746,6 +753,11 @@ export async function buildRemovalContext(
   // submit pipeline blocks on, surfaced for readiness (see the field doc above).
   const durabilityGateBlockers = await buildDurabilityGateBlockers(userId, runs);
 
+  const submissionWarnings = buildSubmissionWarnings({
+    defaultTemplate: facilityFacts.defaultTemplate,
+    runs,
+  });
+
   return {
     facilityId: scope.facilityId,
     removalId: scope.removalId,
@@ -756,6 +768,7 @@ export async function buildRemovalContext(
     productionReadinessGap,
     entityReadinessGaps,
     durabilityGateBlockers,
+    submissionWarnings,
     runSummary,
     latestSubmission,
     linkedGhgStatement,
@@ -802,6 +815,7 @@ function projectUiContext(
     productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
     durabilityGateBlockers: ctx.durabilityGateBlockers,
+    submissionWarnings: ctx.submissionWarnings,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,

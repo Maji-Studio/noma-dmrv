@@ -19,12 +19,7 @@ const baseAgg: AggregatedProductionData = {
   feedstockTransportMassDistanceTonneKm: null,
   biocharTransportMassDistanceTonneKm: null,
   sampleTransportMassDistanceTonneKm: 0,
-  biomassElectricityKwh: null,
-  pyrolysisElectricityKwh: null,
-  biocharElectricityKwh: null,
-  biomassGensetKwh: null,
-  pyrolysisGensetKwh: null,
-  biocharGensetKwh: null,
+  totalGensetKwh: null,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1"],
@@ -33,51 +28,22 @@ const baseAgg: AggregatedProductionData = {
 
 const config: FacilityEmissionConfig = {
   gensetEnergyYieldKwhPerLitre: 3,
-  stageSplitBiomassPct: 20,
-  stageSplitPyrolysisPct: 70,
-  stageSplitBiocharPct: 10,
 };
 
 describe("enrichWithFacilityConfig", () => {
-  it("splits combined electricity across the three stages by the configured ratios", () => {
+  it("converts the combined genset litres to kWh via the yield (single point, ADR 0014)", () => {
     const r = enrichWithFacilityConfig(baseAgg, config);
-    expect(r.biomassElectricityKwh).toBe(200); // 1000 × 0.20
-    expect(r.pyrolysisElectricityKwh).toBe(700); // 1000 × 0.70
-    expect(r.biocharElectricityKwh).toBe(100); // 1000 × 0.10
+    // 200 L × 3 kWh/L = 600 kWh genset — one combined figure, no per-stage split.
+    expect(r.totalGensetKwh).toBe(600);
   });
 
-  it("is emissions-neutral — per-stage electricity sums to the combined total", () => {
+  it("leaves the combined electricity figure unchanged (already the submitted total)", () => {
     const r = enrichWithFacilityConfig(baseAgg, config);
-    const sum =
-      (r.biomassElectricityKwh ?? 0) +
-      (r.pyrolysisElectricityKwh ?? 0) +
-      (r.biocharElectricityKwh ?? 0);
-    expect(sum).toBeCloseTo(baseAgg.totalElectricityKwh, 6);
-  });
-
-  it("converts genset litres to kWh via the yield, then splits by stage", () => {
-    const r = enrichWithFacilityConfig(baseAgg, config);
-    // 200 L × 3 kWh/L = 600 kWh genset
-    expect(r.biomassGensetKwh).toBe(120); // 600 × 0.20
-    expect(r.pyrolysisGensetKwh).toBe(420); // 600 × 0.70
-    expect(r.biocharGensetKwh).toBe(60); // 600 × 0.10
-  });
-
-  it("genset per-stage kWh sums to litres × yield", () => {
-    const r = enrichWithFacilityConfig(baseAgg, config);
-    const sum =
-      (r.biomassGensetKwh ?? 0) +
-      (r.pyrolysisGensetKwh ?? 0) +
-      (r.biocharGensetKwh ?? 0);
-    expect(sum).toBeCloseTo(
-      baseAgg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre,
-      6,
-    );
+    expect(r.totalElectricityKwh).toBe(baseAgg.totalElectricityKwh);
   });
 
   it("does not mutate the input aggregation", () => {
     enrichWithFacilityConfig(baseAgg, config);
-    expect(baseAgg.biomassElectricityKwh).toBeNull();
-    expect(baseAgg.pyrolysisGensetKwh).toBeNull();
+    expect(baseAgg.totalGensetKwh).toBeNull();
   });
 });
