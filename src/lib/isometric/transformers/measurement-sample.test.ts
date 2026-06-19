@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type {
-  ConservativeSoilTemperature,
+  FacilityReferenceSoilTemperature,
   PerBatchDurabilityDatapoint,
 } from "../utils/durability-aggregation";
 import {
   buildBiocharProductionBatchSample,
   buildBiocharSoilSample,
+  CARBON_CONTENT_UNIT,
   H_C_MOLAR_RATIO_PERCENT_SCALE,
   H_TO_C_ORG_MEASUREMENT_PROPERTY,
+  INORGANIC_CARBON_MEASUREMENT_PROPERTY,
+  isSequestrationBlueprintKey,
+  PRODUCT_MASS_MEASUREMENT_PROPERTY,
+  PRODUCT_MASS_UNIT,
   SEQUESTRATION_BLUEPRINT_SAMPLED,
   SEQUESTRATION_BLUEPRINT_UNSAMPLED,
   SOIL_TEMPERATURE_MEASUREMENT_PROPERTY,
   selectSequestrationBlueprintKey,
+  toCarbonContentFraction,
+  TOTAL_CARBON_MEASUREMENT_PROPERTY,
   toHcMolarRatioPercent,
 } from "./measurement-sample";
 
@@ -84,7 +91,7 @@ describe("toHcMolarRatioPercent (⚠️ sandbox-gated ×100 transform)", () => {
 });
 
 describe("buildBiocharProductionBatchSample", () => {
-  it("builds a biochar_production_batch sample with the H/C value (magnitude + std-dev scaled, unit %)", () => {
+  it("builds a biochar_production_batch sample with H/C + carbon + product mass values", () => {
     const sample = buildBiocharProductionBatchSample({
       batch: batch({}),
       projectId: "prj_1",
@@ -95,12 +102,51 @@ describe("buildBiocharProductionBatchSample", () => {
     expect(sample!.measurement_type).toBe("biochar_production_batch");
     expect(sample!.project_id).toBe("prj_1");
     expect(sample!.supplier_reference_id).toBe("nm-mts-abc-pb-def-v1");
-    expect(sample!.values).toHaveLength(1);
-    const value = sample!.values[0];
-    expect(value.measurement_property).toEqual(H_TO_C_ORG_MEASUREMENT_PROPERTY);
-    expect(value.value.magnitude).toBeCloseTo(30, 5); // 0.3 × 100
-    expect(value.value.standard_deviation).toBeCloseTo(2, 5); // 0.02 × 100
-    expect(value.value.unit).toBe("%");
+    // H/C, total carbon, inorganic carbon, product mass.
+    expect(sample!.values).toHaveLength(4);
+
+    const hc = sample!.values[0];
+    expect(hc.measurement_property).toEqual(H_TO_C_ORG_MEASUREMENT_PROPERTY);
+    expect(hc.value.magnitude).toBeCloseTo(30, 5); // 0.3 × 100
+    expect(hc.value.standard_deviation).toBeCloseTo(2, 5); // 0.02 × 100
+    expect(hc.value.unit).toBe("%");
+
+    const totalC = sample!.values[1];
+    expect(totalC.measurement_property).toEqual(
+      TOTAL_CARBON_MEASUREMENT_PROPERTY,
+    );
+    expect(totalC.value.magnitude).toBeCloseTo(0.82, 5); // 82 / 100
+    expect(totalC.value.standard_deviation).toBeCloseTo(0.01, 5); // 1 / 100
+    expect(totalC.value.unit).toBe(CARBON_CONTENT_UNIT);
+
+    const inorganicC = sample!.values[2];
+    expect(inorganicC.measurement_property).toEqual(
+      INORGANIC_CARBON_MEASUREMENT_PROPERTY,
+    );
+    expect(inorganicC.value.magnitude).toBeCloseTo(0.01, 5); // 1 / 100
+
+    const mass = sample!.values[3];
+    expect(mass.measurement_property).toEqual(PRODUCT_MASS_MEASUREMENT_PROPERTY);
+    expect(mass.value.magnitude).toBe(1000);
+    expect(mass.value.standard_deviation).toBeNull();
+    expect(mass.value.unit).toBe(PRODUCT_MASS_UNIT);
+  });
+
+  it("omits carbon values the batch has no replicate for (product mass still emitted)", () => {
+    const sample = buildBiocharProductionBatchSample({
+      batch: batch({ totalCarbonPercent: null, inorganicCarbonPercent: null }),
+      projectId: "prj_1",
+      supplierRefId: "ref",
+      measuredAt: "2026-01-31T00:00:00Z",
+    });
+    // H/C + product mass only.
+    expect(sample!.values).toHaveLength(2);
+    expect(sample!.values[0].measurement_property).toEqual(
+      H_TO_C_ORG_MEASUREMENT_PROPERTY,
+    );
+    expect(sample!.values[1].measurement_property).toEqual(
+      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    );
   });
 
   it("passes through the production batch id when supplied", () => {
@@ -135,41 +181,64 @@ describe("buildBiocharProductionBatchSample", () => {
   });
 });
 
-describe("buildBiocharSoilSample", () => {
-  const soilTemp: ConservativeSoilTemperature = {
+describe("buildBiocharSoilSample (facility reference, Phase 2 / ADR 0013)", () => {
+  const soilTemp: FacilityReferenceSoilTemperature = {
+    declaredSoilTemperatureC: 18.4,
     effectiveSoilTemperatureC: 18.4,
-    maxSoilTemperatureC: 18.4,
+    source: "Lembrechts 2022 (region X)",
     temperatureFloored: false,
-    spreadC: 2,
-    subdivideWarning: true,
-    conservativeEstimate: true,
-    method: "Conservative estimate: maximum soil temperature across 2 sites.",
+    method: "Facility reference soil temperature (annual average; 7 °C floor)",
     warnings: [],
   };
 
-  it("builds a biochar_soil sample with the conservative temperature (degC)", () => {
+  it("builds a biochar_soil sample with the facility reference temperature (degC)", () => {
     const sample = buildBiocharSoilSample({
       soilTemp,
       projectId: "prj_1",
       supplierRefId: "nm-mts-abc-soil-v1",
       measuredAt: "2026-01-31T00:00:00Z",
     });
-    expect(sample).not.toBeNull();
-    expect(sample!.measurement_type).toBe("biochar_soil");
-    expect(sample!.values[0].measurement_property).toEqual(
+    expect(sample.measurement_type).toBe("biochar_soil");
+    expect(sample.supplier_reference_id).toBe("nm-mts-abc-soil-v1");
+    expect(sample.values).toHaveLength(1);
+    expect(sample.values[0].measurement_property).toEqual(
       SOIL_TEMPERATURE_MEASUREMENT_PROPERTY,
     );
-    expect(sample!.values[0].value.magnitude).toBe(18.4);
-    expect(sample!.values[0].value.unit).toBe("degC");
+    expect(sample.values[0].value.magnitude).toBe(18.4);
+    expect(sample.values[0].value.standard_deviation).toBeNull();
+    expect(sample.values[0].value.unit).toBe("degC");
   });
 
-  it("returns null when the conservative estimate is indeterminate", () => {
+  it("submits the 7 °C-floored effective value, not the declared one", () => {
     const sample = buildBiocharSoilSample({
-      soilTemp: { ...soilTemp, effectiveSoilTemperatureC: null },
+      soilTemp: {
+        ...soilTemp,
+        declaredSoilTemperatureC: 4.2,
+        effectiveSoilTemperatureC: 7,
+        temperatureFloored: true,
+      },
       projectId: "prj_1",
       supplierRefId: "ref",
       measuredAt: "2026-01-31T00:00:00Z",
     });
-    expect(sample).toBeNull();
+    expect(sample.values[0].value.magnitude).toBe(7);
+  });
+});
+
+describe("isSequestrationBlueprintKey + carbon scale", () => {
+  it("identifies the two sequestration blueprint keys", () => {
+    expect(isSequestrationBlueprintKey(SEQUESTRATION_BLUEPRINT_SAMPLED)).toBe(
+      true,
+    );
+    expect(isSequestrationBlueprintKey(SEQUESTRATION_BLUEPRINT_UNSAMPLED)).toBe(
+      true,
+    );
+    expect(isSequestrationBlueprintKey("carbon_rich_substance_sequestration")).toBe(
+      false,
+    );
+  });
+
+  it("scales carbon percent to a 0–1 fraction (legacy /100)", () => {
+    expect(toCarbonContentFraction(82)).toBeCloseTo(0.82, 5);
   });
 });

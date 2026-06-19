@@ -172,6 +172,41 @@ function makeTemplate(): IsometricGhgEntryTemplate {
   } as unknown as IsometricGhgEntryTemplate;
 }
 
+// A template that routes durability through the new measurement-samples path —
+// declares a `biochar_sequestration_200_year_*` component. submitRemoval blocks
+// it while DURABILITY_MEASUREMENT_SAMPLES_LIVE is off (Phase 3 staged gate).
+function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
+  return {
+    id: TEMPLATE_ID,
+    name: "Durability template",
+    display_name: "Durability template",
+    credit_type: "REMOVAL",
+    groups: [
+      {
+        id: "grp-seq",
+        key: "co2-stored",
+        name: "Durable storage",
+        components: [
+          {
+            id: "rtc-seq",
+            blueprint_key: "biochar_sequestration_200_year_c_org",
+            display_name: "200-year sequestration",
+            inputs: [
+              {
+                type: "monitored",
+                input_key: "h_c_molar_ratios",
+                datapoint_id: null,
+                display_name: "H/C molar ratios",
+                quantity_kind: "dimensionless_ratio",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  } as unknown as IsometricGhgEntryTemplate;
+}
+
 function makeBlueprints(): IsometricComponentBlueprint[] {
   return [
     {
@@ -705,6 +740,26 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
       submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
     ).rejects.toThrow(/replicate/i);
     // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+});
+
+describe("submitRemoval — durability measurement-samples gate (Phase 3, staged)", () => {
+  it("blocks a template that declares a biochar_sequestration_200_year_* component while the flag is off", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      defaultTemplate: makeSequestrationTemplate(),
+    });
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/staged but not yet live/i);
+    // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
