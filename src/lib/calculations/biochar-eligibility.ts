@@ -71,6 +71,13 @@ export interface RunEligibilityResult {
    * still be eligible on its mean.
    */
   outlierReplicateIndexes: number[];
+  /**
+   * Replicates carrying BOTH a usable H/C_org and O/C_org — the set the
+   * eligibility verdict is judged on (D8). The §4 replicate-sufficiency gate
+   * counts these (complete-chemistry replicates), not raw rows, so a sampled run
+   * with incomplete chemistry can never read eligible on a single paired sample.
+   */
+  usableReplicateCount: number;
   warnings: string[];
 }
 
@@ -110,6 +117,28 @@ export function evaluateRunEligibility(
     warnings.push("No usable O/C_org replicate — eligibility indeterminate.");
   }
 
+  // The eligibility VERDICT is judged only on replicates carrying BOTH ratios, so
+  // a run can never read "eligible" from a disjoint mix — H/C from one replicate,
+  // O/C from another — that never co-occurred in one characterized replicate. The
+  // per-ratio means above stay independent (for surfacing); the verdict below
+  // uses the paired set.
+  const pairedReplicates = replicates.filter(
+    (r): r is { hToCOrgRatio: number; oToCOrgRatio: number } =>
+      isUsableNumber(r.hToCOrgRatio) && isUsableNumber(r.oToCOrgRatio),
+  );
+  const usableReplicateCount = pairedReplicates.length;
+  const pairedMeanHToCOrgRatio = meanOf(
+    pairedReplicates.map((r) => r.hToCOrgRatio),
+  );
+  const pairedMeanOToCOrgRatio = meanOf(
+    pairedReplicates.map((r) => r.oToCOrgRatio),
+  );
+  if (replicates.length > 0 && usableReplicateCount < replicates.length) {
+    warnings.push(
+      "Some replicates are missing H/C_org or O/C_org; eligibility is judged only on replicates with complete paired chemistry.",
+    );
+  }
+
   // An outlier is a replicate that would be ineligible on its own (same
   // ceilings, strict). Flag it even when the run mean passes (D8).
   const outlierReplicateIndexes: number[] = [];
@@ -128,12 +157,14 @@ export function evaluateRunEligibility(
     );
   }
 
-  // Eligibility needs BOTH thresholds. Indeterminate when either mean is
-  // missing — never silently "eligible" on incomplete chemistry.
+  // Eligibility needs BOTH ceilings met on the PAIRED mean. Indeterminate (null)
+  // when no replicate carries complete chemistry — never silently "eligible" on
+  // incomplete or disjoint chemistry.
   const eligible =
-    hToCWithinThreshold == null || oToCWithinThreshold == null
+    pairedMeanHToCOrgRatio == null || pairedMeanOToCOrgRatio == null
       ? null
-      : hToCWithinThreshold && oToCWithinThreshold;
+      : pairedMeanHToCOrgRatio < H_TO_C_ORG_ELIGIBILITY_MAX &&
+        pairedMeanOToCOrgRatio < O_TO_C_ORG_ELIGIBILITY_MAX;
 
   return {
     eligible,
@@ -142,6 +173,7 @@ export function evaluateRunEligibility(
     hToCWithinThreshold,
     oToCWithinThreshold,
     outlierReplicateIndexes,
+    usableReplicateCount,
     warnings,
   };
 }

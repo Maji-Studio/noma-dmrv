@@ -68,6 +68,12 @@ describe("selectSequestrationBlueprintKey (D6 — blueprint IS the A/B distincti
       selectSequestrationBlueprintKey({ sampled: false, samplingMethod: "method_b" }),
     ).toBe(SEQUESTRATION_BLUEPRINT_UNSAMPLED);
   });
+
+  it("fails closed on the impossible unsampled + Method A combination", () => {
+    expect(() =>
+      selectSequestrationBlueprintKey({ sampled: false, samplingMethod: "method_a" }),
+    ).toThrow(/method b/i);
+  });
 });
 
 describe("toHcMolarRatioPercent (⚠️ sandbox-gated ×100 transform)", () => {

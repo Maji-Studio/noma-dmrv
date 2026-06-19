@@ -8,6 +8,7 @@ function gateRun(overrides: Partial<RunGateFacts>): RunGateFacts {
   return {
     runId: "run-1",
     runCode: "PR-1",
+    reactorId: "rct-1",
     samplingMethod: "method_a",
     replicates: [],
     ...overrides,
@@ -37,12 +38,40 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks)", () => {
     expect(r.blockers.some((b) => /PR-1/.test(b) && /method a/i.test(b))).toBe(true);
   });
 
-  it("allows a Method B run with no samples (covered by the unsampled blueprint)", () => {
-    const r = evaluateDurabilitySubmissionGates([
-      gateRun({ samplingMethod: "method_b", replicates: [] }),
-    ]);
+  it("allows unsampled Method B runs when the 1-in-10 cadence is met across the set", () => {
+    // 1 sampled batch (≥3 eligible replicates) + 9 unsampled = ceil(10/10)=1 met.
+    const runs: RunGateFacts[] = [
+      gateRun({
+        runId: "r0",
+        runCode: "PR-B0",
+        samplingMethod: "method_b",
+        replicates: eligibleTriplet,
+      }),
+    ];
+    for (let i = 1; i < 10; i++) {
+      runs.push(
+        gateRun({
+          runId: `r${i}`,
+          runCode: `PR-B${i}`,
+          samplingMethod: "method_b",
+          replicates: [],
+        }),
+      );
+    }
+    const r = evaluateDurabilitySubmissionGates(runs);
     expect(r.ok).toBe(true);
     expect(r.blockers).toEqual([]);
+  });
+
+  it("blocks an all-unsampled Method B run set (cadence shortfall, gate d)", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateRun({ runId: "r1", runCode: "PR-B1", samplingMethod: "method_b", replicates: [] }),
+      gateRun({ runId: "r2", runCode: "PR-B2", samplingMethod: "method_b", replicates: [] }),
+    ]);
+    expect(r.ok).toBe(false);
+    expect(
+      r.blockers.some((b) => /method b/i.test(b) && /8\.3\.1\.2/.test(b)),
+    ).toBe(true);
   });
 
   it("blocks a sampled run with fewer than 3 replicates (gate c)", () => {

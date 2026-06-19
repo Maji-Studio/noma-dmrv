@@ -19,6 +19,7 @@
  * chemistry datapoints (Phase E), not here.
  */
 
+import { METHOD_B_SAMPLING_CADENCE_RUNS } from "@/config/certification";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   MINIMUM_REPLICATES_PER_RUN,
@@ -27,11 +28,16 @@ import {
   evaluateRunEligibility,
   type ReplicateRatios,
 } from "@/lib/calculations/biochar-eligibility";
-import type { SamplingMethod } from "./sampling-requirements";
+import {
+  deriveSamplingRequirement,
+  type SamplingMethod,
+} from "./sampling-requirements";
 
 export interface RunGateFacts {
   runId: string;
   runCode: string;
+  /** The reactor this run belongs to — runs are grouped by it for cadence (d). */
+  reactorId: string;
   /** The run's reactor's CURRENT sampling method (D6 — derived, never stored). */
   samplingMethod: SamplingMethod;
   /** Per-replicate stability ratios (one entry per `Sample` row on the run). */
@@ -54,29 +60,35 @@ export function evaluateDurabilitySubmissionGates(
   const blockers: string[] = [];
 
   for (const run of runs) {
-    const replicateCount = run.replicates.length;
+    const sampleRowCount = run.replicates.length;
 
     // (b) Method A presence — every Method A run must be sampled.
-    if (replicateCount === 0) {
+    if (sampleRowCount === 0) {
       if (run.samplingMethod === "method_a") {
         blockers.push(
           `Run ${run.runCode} (Method A) has no samples — every Method A run must be sampled before submission (§8.3).`,
         );
       }
-      // Method B unsampled run is valid (submits via the unsampled blueprint).
+      // Method B unsampled run is valid (submits via the unsampled blueprint);
+      // its cadence is enforced across the reactor's run set in (d) below.
       continue;
     }
 
-    // (c) Replicate sufficiency — a sampled run needs ≥ 3 replicates.
-    const replicateCheck = evaluateReplicateCount(replicateCount);
+    const eligibility = evaluateRunEligibility(run.replicates);
+
+    // (c) Replicate sufficiency — a sampled run needs ≥ 3 COMPLETE-chemistry
+    // replicates. A row without a usable H/C_org + O/C_org pair doesn't
+    // characterise the batch, so count usable replicates, not raw rows (§4).
+    const replicateCheck = evaluateReplicateCount(
+      eligibility.usableReplicateCount,
+    );
     if (!replicateCheck.meetsMinimum) {
       blockers.push(
-        `Run ${run.runCode} has ${replicateCount} replicate(s); ≥ ${MINIMUM_REPLICATES_PER_RUN} required per sampled run (§4).`,
+        `Run ${run.runCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_RUN} required per sampled run (§4).`,
       );
     }
 
     // (a) Eligibility — judged on the replicate mean (D8); indeterminate fails closed.
-    const eligibility = evaluateRunEligibility(run.replicates);
     if (eligibility.eligible === false) {
       const parts: string[] = [];
       if (eligibility.hToCWithinThreshold === false) {
@@ -95,6 +107,35 @@ export function evaluateDurabilitySubmissionGates(
     } else if (eligibility.eligible === null) {
       blockers.push(
         `Run ${run.runCode} eligibility is indeterminate — missing H/C_org or O/C_org chemistry; cannot confirm it meets module §3 Table 2.`,
+      );
+    }
+  }
+
+  // (d) Method B cadence — across a reactor's run set, ≥ ceil(N / cadence)
+  // batches must be sampled (§8.3.1.2). Method A's per-run obligation is covered
+  // by (b); Method B's 1-in-10 cadence is a cross-run property, so group by
+  // reactor (every run of a reactor shares its single derived method) and block
+  // when the sampled count falls short — otherwise an all-unsampled Method B
+  // removal would read as ready.
+  const runsByReactor = new Map<string, RunGateFacts[]>();
+  for (const run of runs) {
+    const existing = runsByReactor.get(run.reactorId);
+    if (existing) existing.push(run);
+    else runsByReactor.set(run.reactorId, [run]);
+  }
+  for (const reactorRuns of runsByReactor.values()) {
+    if (reactorRuns[0].samplingMethod !== "method_b") continue;
+    const requirement = deriveSamplingRequirement(
+      "method_b",
+      reactorRuns.map((run) => ({
+        runId: run.runId,
+        runCode: run.runCode,
+        sampleCount: run.replicates.length,
+      })),
+    );
+    if (requirement.cadenceShortfall > 0) {
+      blockers.push(
+        `Method B run set samples ${requirement.sampledRuns}/${requirement.requiredSampledRuns} required batch(es) (≥ 1 per ${METHOD_B_SAMPLING_CADENCE_RUNS}); sample ${requirement.cadenceShortfall} more before submission (§8.3.1.2).`,
       );
     }
   }

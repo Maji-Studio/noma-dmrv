@@ -278,6 +278,7 @@ function durabilityBlockersFor(
     runs.map((run) => ({
       runId: run.id,
       runCode: run.code,
+      reactorId: run.reactorId,
       samplingMethod: "method_a",
       replicates: run.samples.map((s) => ({
         hToCOrgRatio: s.hToCOrgRatio,
@@ -658,10 +659,16 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       contextWithRun(run),
     );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
 
     await expect(
       submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
     ).rejects.toThrow(/replicate/i);
+    // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 });
