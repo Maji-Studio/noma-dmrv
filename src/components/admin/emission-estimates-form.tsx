@@ -1,8 +1,7 @@
 /**
  * EmissionEstimatesForm
  * Admin form for a facility's Phase 3.7 emission-estimate config —
- * genset energy yield + the process-stage energy split. Persisted onto
- * the facility's certifier_projects row.
+ * genset energy yield persisted onto the facility's certifier_projects row.
  */
 "use client";
 
@@ -50,9 +49,6 @@ export function EmissionEstimatesForm({
       facilityId,
       gensetEnergyYieldKwhPerLitre:
         mapping?.gensetEnergyYieldKwhPerLitre ?? undefined,
-      stageSplitBiomassPct: mapping?.stageSplitBiomassPct ?? undefined,
-      stageSplitPyrolysisPct: mapping?.stageSplitPyrolysisPct ?? undefined,
-      stageSplitBiocharPct: mapping?.stageSplitBiocharPct ?? undefined,
       defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
     },
   });
@@ -124,67 +120,6 @@ export function EmissionEstimatesForm({
             step="any"
             error={!!errors.defaultSoilTemperatureC}
             {...register("defaultSoilTemperatureC")}
-          />
-        </FormField>
-      </div>
-
-      <div className="flex flex-col gap-16">
-        <SectionLabel>Process-stage energy split (%)</SectionLabel>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Estimated share of each run&apos;s combined electricity and genset
-          energy across the three stages. Must sum to 100. The split is
-          emissions-neutral — it only shapes the per-stage breakdown shown in
-          the Isometric registry.
-        </p>
-        <FormField
-          id="stageSplitBiomassPct"
-          label="Biomass processing (%)"
-          required
-          certifyRequired={isEmissionConfigCertifyField("stageSplitBiomassPct")}
-          error={errors.stageSplitBiomassPct?.message}
-        >
-          <FormInput
-            id="stageSplitBiomassPct"
-            type="number"
-            step="0.1"
-            min={0}
-            max={100}
-            error={!!errors.stageSplitBiomassPct}
-            {...register("stageSplitBiomassPct")}
-          />
-        </FormField>
-        <FormField
-          id="stageSplitPyrolysisPct"
-          label="Pyrolysis (%)"
-          required
-          certifyRequired={isEmissionConfigCertifyField("stageSplitPyrolysisPct")}
-          error={errors.stageSplitPyrolysisPct?.message}
-        >
-          <FormInput
-            id="stageSplitPyrolysisPct"
-            type="number"
-            step="0.1"
-            min={0}
-            max={100}
-            error={!!errors.stageSplitPyrolysisPct}
-            {...register("stageSplitPyrolysisPct")}
-          />
-        </FormField>
-        <FormField
-          id="stageSplitBiocharPct"
-          label="Biochar processing (%)"
-          required
-          certifyRequired={isEmissionConfigCertifyField("stageSplitBiocharPct")}
-          error={errors.stageSplitBiocharPct?.message}
-        >
-          <FormInput
-            id="stageSplitBiocharPct"
-            type="number"
-            step="0.1"
-            min={0}
-            max={100}
-            error={!!errors.stageSplitBiocharPct}
-            {...register("stageSplitBiocharPct")}
           />
         </FormField>
       </div>

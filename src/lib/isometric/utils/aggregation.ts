@@ -38,15 +38,12 @@ export interface AggregatedProductionData {
   // Sample shipment is optional: 0 (a true value — "no sample transport")
   // rather than null when no sample legs exist.
   sampleTransportMassDistanceTonneKm: number;
-  // Per-process-stage energy, populated by `enrichWithFacilityConfig`
-  // from the combined per-run totals + the facility's stage-split
-  // estimate. Null until enriched.
-  biomassElectricityKwh: number | null;
-  pyrolysisElectricityKwh: number | null;
-  biocharElectricityKwh: number | null;
-  biomassGensetKwh: number | null;
-  pyrolysisGensetKwh: number | null;
-  biocharGensetKwh: number | null;
+  // Combined genset energy in kWh — genset litres × the facility's genset
+  // yield, applied by `enrichWithFacilityConfig`. Null until enriched (the raw
+  // litres live in `totalGensetDieselLitres`). ADR 0015 removed the per-stage
+  // energy split: all energy now submits as a single combined measurement
+  // point, so there is one genset-kWh figure instead of three stage shares.
+  totalGensetKwh: number | null;
   earliestStartTime: Date;
   latestEndTime: Date;
   sourceProductionRunIds: string[];
@@ -69,9 +66,6 @@ export interface TransportAggregationResult {
   massDistanceTonneKm: number | null;
   warning: string | null;
 }
-
-// Percent-to-fraction denominator.
-const PERCENT_DENOMINATOR = 100;
 
 const TRANSPORT_FACTOR_FIELDS = [
   "calculationMethodType",
@@ -232,17 +226,12 @@ export function aggregateProductionRuns(
     totalStartupDieselLitres,
     totalGensetDieselLitres,
     totalElectricityKwh,
-    // Transport + per-stage fields default to null/0. Caller enriches via
+    // Transport + genset-kWh fields default to null/0. Caller enriches via
     // `enrichWithTransportLegs` and `enrichWithFacilityConfig`.
     feedstockTransportMassDistanceTonneKm: null,
     biocharTransportMassDistanceTonneKm: null,
     sampleTransportMassDistanceTonneKm: 0,
-    biomassElectricityKwh: null,
-    pyrolysisElectricityKwh: null,
-    biocharElectricityKwh: null,
-    biomassGensetKwh: null,
-    pyrolysisGensetKwh: null,
-    biocharGensetKwh: null,
+    totalGensetKwh: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
@@ -287,42 +276,28 @@ export function enrichWithTransportLegs(
   };
 }
 
-// Per-facility emission-estimate config — the four columns added to
-// `certifier_projects` in Phase 3.7. All required (the submission path
-// validates non-null before calling `enrichWithFacilityConfig`).
+// Per-facility emission-estimate config on `certifier_projects`. ADR 0015
+// dropped the three `stageSplit*Pct` columns (the per-stage split is gone);
+// the genset yield remains because it is emissions-affecting (litres → kWh).
+// The submission path validates non-null before calling
+// `enrichWithFacilityConfig`.
 export interface FacilityEmissionConfig {
   gensetEnergyYieldKwhPerLitre: number;
-  stageSplitBiomassPct: number;
-  stageSplitPyrolysisPct: number;
-  stageSplitBiocharPct: number;
 }
 
-// Layers per-process-stage energy onto an aggregation result. Pure;
-// returns a new object. Splits the combined per-run electricity and
-// genset energy across biomass / pyrolysis / biochar by the facility's
-// estimated stage ratios. The split is emissions-neutral (all three
-// stages share one carbon intensity in the template) — it only shapes
-// the per-stage breakdown shown in the registry. Genset litres are
-// converted to kWh via the facility's genset yield.
+// Layers combined genset energy (kWh) onto an aggregation result (ADR 0015).
+// Pure; returns a new object. Converts the run-combined genset litres to kWh
+// via the facility's genset yield — the only facility-config-derived energy
+// figure left after the per-stage split was removed. `totalElectricityKwh` is
+// already the combined grid figure, so it needs no enrichment.
 export function enrichWithFacilityConfig(
   agg: AggregatedProductionData,
   config: FacilityEmissionConfig,
 ): AggregatedProductionData {
-  const electricity = agg.totalElectricityKwh;
-  const gensetKwh =
-    agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre;
-  const biomass = config.stageSplitBiomassPct / PERCENT_DENOMINATOR;
-  const pyrolysis = config.stageSplitPyrolysisPct / PERCENT_DENOMINATOR;
-  const biochar = config.stageSplitBiocharPct / PERCENT_DENOMINATOR;
-
   return {
     ...agg,
-    biomassElectricityKwh: electricity * biomass,
-    pyrolysisElectricityKwh: electricity * pyrolysis,
-    biocharElectricityKwh: electricity * biochar,
-    biomassGensetKwh: gensetKwh * biomass,
-    pyrolysisGensetKwh: gensetKwh * pyrolysis,
-    biocharGensetKwh: gensetKwh * biochar,
+    totalGensetKwh:
+      agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre,
   };
 }
 

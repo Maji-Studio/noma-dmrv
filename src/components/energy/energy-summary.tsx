@@ -1,8 +1,10 @@
 /**
  * EnergySummary
- * Read-only facility rollup of electricity + diesel across production
- * runs, plus the per-stage breakdown that will be submitted to Isometric
- * (applying the facility's emission-estimate config).
+ * Read-only facility rollup of electricity + diesel across production runs,
+ * plus a preview of the combined energy datapoints submitted to Isometric
+ * (ADR 0015 — one grid-electricity + one genset measurement point, no per-stage
+ * split). Startup/plant diesel is shown separately because submission depends
+ * on the active template's fuel-usage capability.
  */
 "use client";
 
@@ -13,12 +15,6 @@ import { StatCard } from "@/components/ui/stat-card";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityEnergyTotals } from "@/hooks/use-production-runs";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
-
-const STAGES = [
-  { key: "biomass", label: "Biomass processing" },
-  { key: "pyrolysis", label: "Pyrolysis" },
-  { key: "biochar", label: "Biochar processing" },
-] as const;
 
 function fmt(value: number): string {
   return Math.round(value).toLocaleString();
@@ -44,18 +40,6 @@ export function EnergySummary() {
   const config = certifierSummary?.mapping ?? null;
   const yieldKwhPerL = config?.gensetEnergyYieldKwhPerLitre ?? null;
   const gensetKwh = yieldKwhPerL != null ? gensetLitres * yieldKwhPerL : null;
-
-  const splits =
-    config &&
-    config.stageSplitBiomassPct != null &&
-    config.stageSplitPyrolysisPct != null &&
-    config.stageSplitBiocharPct != null
-      ? {
-          biomass: config.stageSplitBiomassPct,
-          pyrolysis: config.stageSplitPyrolysisPct,
-          biochar: config.stageSplitBiocharPct,
-        }
-      : null;
 
   if (!facilityId) {
     return (
@@ -144,7 +128,12 @@ export function EnergySummary() {
       </div>
 
       <div className="flex flex-col gap-12">
-        <h2 className="title-heading-3">Per-stage submission preview</h2>
+        <h2 className="title-heading-3">Submission preview</h2>
+        <p className="body-small text-[var(--color-text-secondary)]">
+          Energy submits as a single combined measurement point — one grid
+          electricity datapoint and one diesel-genset datapoint (genset litres ×
+          the facility&apos;s yield). There is no per-stage split.
+        </p>
         {mappingLoading && (
           <p className="body-medium text-[var(--color-text-secondary)]">
             Loading registry link…
@@ -162,46 +151,54 @@ export function EnergySummary() {
         {!mappingLoading && !mappingError && !config && (
           <p className="body-medium text-[var(--color-text-secondary)]">
             Link this facility to an Isometric project in Certification
-            Settings to preview per-stage submission data.
+            Settings to preview submission data.
           </p>
         )}
-        {config && (!splits || yieldKwhPerL == null) && (
+        {config && yieldKwhPerL == null && (
           <p className="body-medium text-[var(--color-text-secondary)]">
-            Set the genset yield and stage splits in Admin → Emission estimates
-            to see the per-stage breakdown.
+            Set the genset yield in Admin → Emission estimates to convert genset
+            diesel to the submitted kWh figure.
           </p>
         )}
-        {config && splits && yieldKwhPerL != null && gensetKwh != null && totals && (
+        {config && yieldKwhPerL != null && gensetKwh != null && totals && (
           // Panel recipe (Phase 2.5): tables never sit flush on the warm field.
           <div className="overflow-x-auto bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)]">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]">
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Stage</th>
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right whitespace-nowrap">Split</th>
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Grid electricity (kWh)</th>
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Genset energy (kWh)</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Source</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Submitted value</th>
                 </tr>
               </thead>
               <tbody>
-                {STAGES.map((stage) => {
-                  const pct = splits[stage.key];
-                  return (
-                    <tr
-                      key={stage.key}
-                      className="[border-bottom:var(--row-divider)] last:[border-bottom:none]"
-                    >
-                      <td className="body-medium py-8 px-12">{stage.label}</td>
-                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap">{pct}%</td>
-                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
-                        {fmt((electricityKwh * pct) / 100)}
-                      </td>
-                      <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
-                        {fmt((gensetKwh * pct) / 100)}
-                      </td>
-                    </tr>
-                  );
-                })}
+                <tr className="[border-bottom:var(--row-divider)]">
+                  <td className="body-medium py-8 px-12">Grid electricity</td>
+                  <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
+                    {fmt(electricityKwh)} kWh
+                  </td>
+                </tr>
+                <tr className="[border-bottom:var(--row-divider)]">
+                  <td className="body-medium py-8 px-12">
+                    Diesel genset
+                    <span className="block label-micro text-[var(--color-text-tertiary)]">
+                      {fmt(gensetLitres)} L × {yieldKwhPerL} kWh/L
+                    </span>
+                  </td>
+                  <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
+                    {fmt(gensetKwh)} kWh
+                  </td>
+                </tr>
+                <tr className="last:[border-bottom:none]">
+                  <td className="body-medium py-8 px-12">
+                    Startup / plant diesel
+                    <span className="block label-micro text-[var(--color-signal-orange)]">
+                      Submitted only when the active template includes a fuel-usage component
+                    </span>
+                  </td>
+                  <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums text-[var(--color-text-tertiary)]">
+                    {fmt(startupLitres)} L
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

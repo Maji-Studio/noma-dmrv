@@ -1591,9 +1591,6 @@ async function seedDemoData() {
           protocolVersion: '1.2',
           defaultRemovalTemplateId: 'rvt_1KS4S43VPSBXA26X',
           gensetEnergyYieldKwhPerLitre: 3.375,
-          stageSplitBiomassPct: 32.2,
-          stageSplitPyrolysisPct: 58.5,
-          stageSplitBiocharPct: 9.3,
           defaultSoilTemperatureC: 24.2,
         },
       ]);
