@@ -1067,19 +1067,26 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
   (Missing structured logs on the removal writes belong with the deferred
   observability work — see `Correctness / observability` below — not here.)
 
-### Certify-removal redesign — removal-detail-sheet deep link drops `step=evidence` (`certification/removal-detail-deep-link`, opened 2026-06-05)
+### Certify-removal redesign — TelemetryPanel orphaned, reactor-telemetry submit dark (`certification/telemetry-panel-orphaned`, opened 2026-06-19)
 
-- The redesign turned `removals/[removalId]/review` into a redirect that strips
-  `?step=`. `components/certification/removal-detail-sheet.tsx` (not in the
-  redesign's changed set, so untouched) still builds
-  `evidenceHref = ${reviewHref}&step=evidence` plus a "Review & submit" link, so
-  that deep link silently loses its evidence-step intent and lands on the wizard
-  entry instead. Flagged by both the simplify and loading-states audit passes.
-- **Why it matters:** minor UX regression on an existing entry point; not a
-  crash, but the operator no longer arrives where the link promises.
-- **Resolve via:** point `removal-detail-sheet.tsx` at the wizard's resume entry
-  directly (drop the now-dead `&step=` param), or have the redirect
-  preserve/translate `step=` into the new `resume=` param.
+- The 2026-06-04 redesign deleted `components/certification/removal-review/evidence-step.tsx`,
+  which rendered **both** `<SourcesPanel>` and `<TelemetryPanel>`. `SourcesPanel`
+  was re-homed into `removal-detail-sheet.tsx` (transport-leg evidence PR,
+  2026-06-19) so document evidence reaches the registry again. `TelemetryPanel`
+  was intentionally left out to keep that PR scoped to transport-leg evidence.
+  It's still defined (`components/certification/telemetry-panel.tsx`) with intact
+  hooks (`hooks/use-telemetry-submission.ts`), but it's **not barrel-exported and
+  not rendered anywhere** — so the reactor temperature/pressure → Isometric
+  `DataUploadSubmission` path (ADR 0006, Phase 5 Slice A) is unreachable from the
+  UI. Dark, not removed.
+- **Why it matters:** operators can't publish reactor telemetry to the registry
+  from the app. Distinct concern from Sources (numeric sensor stream vs. evidence
+  documents), so it's its own follow-up rather than part of the Sources restore.
+- **Resolve via:** re-home `TelemetryPanel` (the removal-detail sheet alongside
+  `SourcesPanel` is the natural parity choice — its own doc comment already says
+  "Removal detail page"), re-export it from `components/certification/index.ts`,
+  and validate the `POST /file-uploads → PUT → POST /data-upload-submissions`
+  pipeline live on the sandbox before re-surfacing it.
 
 ## Audit follow-ups (opened 2026-05-25)
 
