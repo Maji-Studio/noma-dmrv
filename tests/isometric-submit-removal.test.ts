@@ -33,6 +33,7 @@ import type {
   ProductionRun,
   Sample,
 } from "@/db/schema";
+import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the system under test so the mocks
@@ -51,6 +52,16 @@ vi.mock("@/fn/certification/sources", async () => {
   return {
     collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
     resolveSourceIdsForRemoval: vi.fn(async () => []),
+  };
+});
+// D3 durability gates read each run's reactor sampling method. Default the
+// fixture reactor to Method A; the fixture run carries a fully eligible,
+// ≥3-replicate sample set so the gates pass.
+vi.mock("@/data-access/reactors", () => {
+  return {
+    getSamplingMethodsByReactorIds: vi.fn(
+      async () => new Map([["rct-test-1", "method_a"]]),
+    ),
   };
 });
 vi.mock("@/lib/isometric", async (importOriginal) => {
@@ -221,13 +232,34 @@ function makeRun(
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
     readingsCount: 1,
+    // Three eligible replicates (H/C_org < 0.5, O/C_org < 0.2) so the D3
+    // durability gates pass. organicCarbonPercent stays 80 across replicates so
+    // the weighted carbon datapoint magnitude is unchanged.
     samples: [
       {
         id: "smp-test-1",
         productionRunId: PRODUCTION_RUN_ID,
         organicCarbonPercent: 80,
         hToCOrgRatio: 0.4,
-        oToCOrgRatio: 0.2,
+        oToCOrgRatio: 0.15,
+        ashContentPercent: 5,
+        moistureContentPercent: 10,
+      } as unknown as Sample,
+      {
+        id: "smp-test-2",
+        productionRunId: PRODUCTION_RUN_ID,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.41,
+        oToCOrgRatio: 0.16,
+        ashContentPercent: 5,
+        moistureContentPercent: 10,
+      } as unknown as Sample,
+      {
+        id: "smp-test-3",
+        productionRunId: PRODUCTION_RUN_ID,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.39,
+        oToCOrgRatio: 0.14,
         ashContentPercent: 5,
         moistureContentPercent: 10,
       } as unknown as Sample,
@@ -235,10 +267,32 @@ function makeRun(
   } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
 }
 
+// Mirror what `buildRemovalContext` precomputes onto the context — the same
+// pure gate engine, fixture reactor defaulted to Method A — so submitRemoval's
+// fail-closed enforcement reads a faithfully-computed `durabilityGateBlockers`
+// (the field it now blocks on, rather than recomputing inline).
+function durabilityBlockersFor(
+  runs: Array<ProductionRun & { samples: Sample[] }>,
+): string[] {
+  return evaluateDurabilitySubmissionGates(
+    runs.map((run) => ({
+      runId: run.id,
+      runCode: run.code,
+      reactorId: run.reactorId,
+      samplingMethod: "method_a",
+      replicates: run.samples.map((s) => ({
+        hToCOrgRatio: s.hToCOrgRatio,
+        oToCOrgRatio: s.oToCOrgRatio,
+      })),
+    })),
+  ).blockers;
+}
+
 function makeContext(
   biocharMassKg = ORIGINAL_BIOCHAR_MASS_KG,
 ): certifyContext.RemovalSubmissionContext {
   const latest = storedLatest();
+  const runs = [makeRun(biocharMassKg)];
   return {
     facilityId: FACILITY_ID,
     removalId: REMOVAL_ID,
@@ -275,6 +329,7 @@ function makeContext(
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
     productionReadinessGap: null,
+    durabilityGateBlockers: durabilityBlockersFor(runs),
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
@@ -300,7 +355,7 @@ function makeContext(
         warnings: [],
       } as never,
     ],
-    runs: [makeRun(biocharMassKg)],
+    runs,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
     transportLegs: { feedstock: [], biochar: [], sample: [] },
   };
@@ -559,5 +614,61 @@ describe("submitRemoval — happy path", () => {
       magnitude: CHANGED_BIOCHAR_MASS_KG,
       unit: "kg",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase H — durability gate wiring (D3). Proves the fail-closed gates actually
+// fire through submitRemoval, before any registry POST, not just at the unit
+// layer (durability-submission-gates.test.ts).
+// ---------------------------------------------------------------------------
+
+describe("submitRemoval — durability sampling gates (D3)", () => {
+  function contextWithRun(run: ReturnType<typeof makeRun>) {
+    // submitRemoval blocks on the precomputed `durabilityGateBlockers` (which
+    // `buildRemovalContext` derives via the same engine), so recompute it for
+    // the overridden run to drive the fail-closed path.
+    return {
+      ...makeContext(),
+      runs: [run],
+      durabilityGateBlockers: durabilityBlockersFor([run]),
+    };
+  }
+
+  it("blocks a Method A run with no samples before any POST", async () => {
+    const run = { ...makeRun(ORIGINAL_BIOCHAR_MASS_KG), samples: [] };
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      contextWithRun(run),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/sampling & eligibility/i);
+    // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("blocks a sampled run with fewer than 3 replicates", async () => {
+    const full = makeRun(ORIGINAL_BIOCHAR_MASS_KG);
+    const run = { ...full, samples: full.samples.slice(0, 2) };
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      contextWithRun(run),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/replicate/i);
+    // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
   });
 });

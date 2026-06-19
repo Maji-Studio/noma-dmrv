@@ -144,7 +144,7 @@ export function aggregateTransportLegs(
 // (no attribution map, or run absent from it) defaults to 1.0 — the run is
 // fully attributed. A non-finite value signals corrupt data and fails safe
 // to 0 (the run is excluded) rather than silently counting the whole run.
-function clampFactor(value: number | null | undefined): number {
+export function clampFactor(value: number | null | undefined): number {
   if (value == null) return 1;
   if (!Number.isFinite(value)) return 0;
   return Math.min(1, Math.max(0, value));
@@ -189,9 +189,10 @@ export function aggregateProductionRuns(
     if (run.biocharDryMassKg == null) {
       warnings.push(`Run ${run.code}: missing biocharDryMassKg`);
     }
-    if (run.samples.length === 0) {
-      warnings.push(`Run ${run.code}: no samples`);
-    }
+    // NOTE: a method-blind "no samples" warning used to live here, but it would
+    // wrongly block a valid Method B unsampled run. Sampling sufficiency is now
+    // judged method-aware by `evaluateDurabilitySubmissionGates` (D3) in
+    // submit-removal.ts; this aggregation stays method-agnostic.
   }
 
   return {

@@ -8,6 +8,105 @@ Feedstock type certification guardrail implementation notes from 2026-06-13 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
 
+## 2026-06-18 (durability DB-layer guardrails & coverage-check papercut — R2–R4)
+
+Closes the DB-layer defense-in-depth items from
+`docs/archive/plans/2026-06-18-durability-remaining-work-and-followups.md` (R2–R4). The
+app already enforces these invariants; the migrations make them hold against
+direct SQL too. R1 (live measurement-samples submit) and R5 (project-emissions
+scope) remain operator/sequencing-gated.
+
+- **R3 — Method B switch guardrail (P0-03)** — migration `0052` adds a
+  `BEFORE INSERT/UPDATE` trigger on `reactors` rejecting
+  `sampling_method='method_b'` unless the reactor has ≥30 prior Method A samples
+  (counted on its production runs dated before today — mirrors
+  `getMethodBEligibilityByReactor`'s `asOfDate=now()` coercion). The ≥1/10
+  cadence stays at the fail-closed submission gate **by design** (a point-in-time
+  readiness check over in-scope runs, not a single-row invariant a trigger can
+  express without blocking normal run-by-run accumulation). The seed's
+  `R-26-002` reactor was flipped to Method A — seeding Method B without the
+  baseline is the invalid state the trigger (and `createReactor`) forbid.
+- **R4 — 200-year issuance evidence guardrail (P0-06)** — migration `0053` adds
+  a `BEFORE INSERT/UPDATE` trigger on `credit_batches` blocking a `200_year`
+  batch from reaching `verified`/`issued` while any linked application is missing
+  `soil_temperature_c` or `soil_temperature_source`, plus a back-door trigger on
+  `credit_batch_applications` preventing an incomplete application from being
+  linked into an already-`verified/issued` batch. 1000-year batches are excluded
+  (reflectance-based, no soil temperature). Both verified against the seeded DB
+  with rolled-back probe transactions.
+- **R2 — coverage-check `NODE_ENV` papercut** — already shipped in `cedbd29`
+  (`scripts/isometric-coverage-check.ts` defaults `NODE_ENV=development`); the
+  remaining-work plan was stale on this point. No change needed.
+- **UI — replicate cert tag avoided** — the Production Samples table
+  (`production-sample-table.tsx`) explicitly does **not** render a certification
+  replicate chip because those rows are in-process measurements, not the lab
+  `Sample` rows the Certify path reads for the ≥3-replicate gate.
+
+## 2026-06-18 (200-year durability submission & sampling-method enforcement — Phases A–F)
+
+Makes the removal submission carry everything the registry needs to compute the
+200-year durable fraction itself, and turns the biochar sampling-method
+requirements from captured-but-unenforced policy into real gates. Plan:
+`docs/archive/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`;
+decision record: ADR 0013. **The live measurement-samples submit wiring is
+sandbox-gated** — see `docs/open-questions.md`
+(`isometric/durability-measurement-samples`).
+
+- **Eligibility + replicate engine (Phase A)** —
+  `src/lib/calculations/biochar-eligibility.ts`: `evaluateRunEligibility` judges
+  the protocol's H/C_org < 0.5 AND O/C_org < 0.2 ceilings (module §3 Table 2) on
+  the run's replicate MEAN (D8), flagging individually out-of-spec replicates as
+  outliers; `evaluateReplicateCount` checks the ≥3-replicate minimum (§4). The
+  sample schema documents that inorganic carbon is derived via Eq.2 when absent.
+- **Method-driven sampling-requirement engine (Phase B)** —
+  `src/lib/certification/sampling-requirements.ts`: derives the required sample
+  set from the reactor's CURRENT method (D6, never stored). Method A = every run;
+  Method B = the ≥1-per-10-runs cadence (`METHOD_B_SAMPLING_CADENCE_RUNS`),
+  previously "Planned" in `condition-registry.md`.
+- **Fail-closed submission gates (Phase C)** —
+  `src/lib/certification/durability-submission-gates.ts`, wired into
+  `submit-removal.ts`: eligibility, every Method A run sampled, ≥3 replicates per
+  sampled run — promoted from method-blind logged warnings to hard `SafeError`
+  blocks. The method-blind "no samples" warning was removed from
+  `aggregateProductionRuns` (it would wrongly block a valid Method B unsampled
+  run). Reactor method read live via `getSamplingMethodsByReactorIds`.
+- **Per-batch aggregation + conservative soil-temp (Phase D)** —
+  `src/lib/isometric/utils/durability-aggregation.ts`: emits one datapoint per
+  production batch (replicate mean + sample std-dev) instead of a collapsed
+  scalar (D2 revision), inorganic carbon derived as max(0, total − organic); the
+  conservative soil-temp estimate = max site temperature (7 °C floor, > 1 °C
+  subdivide advisory), carrying a `conservativeEstimate` flag + method string;
+  the D5a declared-vs-aggregated H/C reconciliation guard.
+- **Measurement-samples path — offline (Phase E)** —
+  `src/lib/isometric/measurement-samples.ts` (HTTP wrappers) +
+  `src/lib/isometric/transformers/measurement-sample.ts` (pure payload builders
+  for the confirmed H/C → `biochar_production_batch` and soil-temp →
+  `biochar_soil` measurement samples; `selectSequestrationBlueprintKey` for D6
+  blueprint selection). Two confirms remain gated behind the operator's sandbox
+  coverage-check: the datapoint↔component-input binding and the H/C ×100 unit
+  transform. The stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
+  entry is left fail-closed until the live wiring replaces it.
+- **UI surfaces — durability made visible (Phase F)** — the Phase A–D
+  engines surfaced on four read-only surfaces, no new domain logic:
+  the reactor list gains a **Sampling Cadence** column + side-sheet section
+  (`src/data-access/reactors.ts` `getRunSamplingByReactorIds` →
+  `deriveSamplingRequirement` evaluated over each reactor's full non-archived
+  run population under its current method; `reactor-list.tsx`); the sample form
+  shows an amber **eligibility advisory** when a replicate's H/C_org ≥ 0.5 or
+  O/C_org ≥ 0.2 (non-blocking — eligibility is judged on the run mean, D8;
+  `sample-form.tsx`); the removal readiness/preflight gains a **durability**
+  check row + blocked-reasons (`readiness{,-facts}.ts`), computed ONCE in
+  `buildDurabilityGateBlockers` (`src/fn/certification/durability-readiness.ts`,
+  extracted to keep `certify-context-core.ts` ≤1000 lines) and carried on
+  `RemovalCertifyContext.durabilityGateBlockers` — `submit-removal.ts` now
+  READS that field instead of recomputing inline, so the hard block and the
+  readiness prediction cannot drift; and the removal carbon breakdown renders a
+  **Durability soil temperature** note (value + "Conservative estimate" badge +
+  method string + subdivide/floor warnings) from
+  `resolveConservativeSoilTemperature` (`removal-breakdown.ts` +
+  `removal-carbon-breakdown.tsx`). Browser-verified against the seeded sandbox
+  project; no console errors.
+
 ## 2026-06-14 (submitted certification artifacts lock upstream source data)
 
 Submitted certification artifacts now freeze the source data they represent,

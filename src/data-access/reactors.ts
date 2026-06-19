@@ -4,11 +4,13 @@
  * Includes Method B eligibility calculation
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import {
   reactors,
   facilities,
+  productionRuns,
+  samples,
   type Reactor,
 } from "@/db/schema";
 import {
@@ -16,6 +18,11 @@ import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   type MethodBEligibilitySummary,
 } from "@/data-access/isometric";
+import {
+  deriveSamplingRequirement,
+  type RunSampling,
+  type SamplingRequirement,
+} from "@/lib/certification/sampling-requirements";
 import type { ReactorFilterData } from "@/schemas/reactors";
 
 // ============================================
@@ -26,6 +33,13 @@ export interface ReactorWithRelations extends Reactor {
   facilityCode: string;
   facilityName: string;
   methodBEligibility: MethodBEligibilitySummary;
+  /**
+   * The reactor's current-method sampling cadence verdict (decision D6),
+   * derived from `deriveSamplingRequirement` over the reactor's production
+   * runs. Operational readiness — frozen-removal correctness is enforced
+   * separately at submission time (durability gates, Phase C).
+   */
+  samplingRequirement: SamplingRequirement;
 }
 
 export interface PaginatedReactors {
@@ -42,6 +56,52 @@ export interface PaginatedReactors {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+
+// ============================================
+// Sampling-requirement helpers (decision D6)
+// ============================================
+
+/**
+ * Group each reactor's production runs (with their replicate-sample counts)
+ * into the `RunSampling[]` shape the pure `deriveSamplingRequirement` engine
+ * consumes. ONE grouped query for the whole reactor set — no per-reactor
+ * fan-out. Archived runs are excluded (facility archive cascade). The caller
+ * derives the per-method verdict; this only assembles the run population.
+ */
+async function getRunSamplingByReactorIds(
+  reactorIds: string[],
+): Promise<Map<string, RunSampling[]>> {
+  const byReactor = new Map<string, RunSampling[]>();
+  if (reactorIds.length === 0) return byReactor;
+
+  const rows = await db
+    .select({
+      reactorId: productionRuns.reactorId,
+      runId: productionRuns.id,
+      runCode: productionRuns.code,
+      sampleCount: count(samples.id).mapWith(Number),
+    })
+    .from(productionRuns)
+    .leftJoin(samples, eq(samples.productionRunId, productionRuns.id))
+    .where(
+      and(
+        inArray(productionRuns.reactorId, reactorIds),
+        isNull(productionRuns.archivedAt),
+      ),
+    )
+    .groupBy(productionRuns.reactorId, productionRuns.id, productionRuns.code);
+
+  for (const row of rows) {
+    const list = byReactor.get(row.reactorId) ?? [];
+    list.push({
+      runId: row.runId,
+      runCode: row.runCode,
+      sampleCount: row.sampleCount,
+    });
+    byReactor.set(row.reactorId, list);
+  }
+  return byReactor;
+}
 
 // ============================================
 // Read Operations
@@ -141,6 +201,12 @@ export async function getReactors(
     .limit(pageSize)
     .offset(offset);
 
+  // One grouped query for the whole page's sampling-cadence inputs (D6),
+  // alongside the per-reactor Method B eligibility lookups below.
+  const runSamplingByReactor = await getRunSamplingByReactorIds(
+    reactorList.map((r) => r.id),
+  );
+
   // Get Method B eligibility for each reactor
   const items: ReactorWithRelations[] = await Promise.all(
     reactorList.map(async (reactor) => {
@@ -164,6 +230,10 @@ export async function getReactors(
         facilityCode: reactor.facilityCode ?? "",
         facilityName: reactor.facilityName ?? "",
         methodBEligibility,
+        samplingRequirement: deriveSamplingRequirement(
+          reactor.samplingMethod,
+          runSamplingByReactor.get(reactor.id) ?? [],
+        ),
       };
     })
   );
@@ -216,6 +286,8 @@ export async function getReactorById(
     asOfDate: new Date().toISOString(),
   });
 
+  const runSamplingByReactor = await getRunSamplingByReactorIds([reactor.id]);
+
   return {
     id: reactor.id,
     code: reactor.code,
@@ -231,7 +303,37 @@ export async function getReactorById(
     facilityCode: reactor.facilityCode ?? "",
     facilityName: reactor.facilityName ?? "",
     methodBEligibility,
+    samplingRequirement: deriveSamplingRequirement(
+      reactor.samplingMethod,
+      runSamplingByReactor.get(reactor.id) ?? [],
+    ),
   };
+}
+
+/**
+ * Map each reactor id to its CURRENT sampling method. Used by the durability
+ * submission gates (D6) to decide, per production run, whether a Method A run
+ * must be sampled — derived from the live reactor, never stored, so a method
+ * flip auto-readjusts. Reactor ids absent from the table are simply omitted;
+ * the caller defaults a missing run conservatively to Method A.
+ */
+export async function getSamplingMethodsByReactorIds(
+  userId: string,
+  reactorIds: string[]
+): Promise<Map<string, "method_a" | "method_b">> {
+  requireAuth(userId);
+
+  if (reactorIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      id: reactors.id,
+      samplingMethod: reactors.samplingMethod,
+    })
+    .from(reactors)
+    .where(inArray(reactors.id, reactorIds));
+
+  return new Map(rows.map((r) => [r.id, r.samplingMethod]));
 }
 
 /**

@@ -30,6 +30,7 @@ export function toRemovalReadinessFacts(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
+    durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
     requiredTransport: ctx.requiredTransportCategories.map((category) => {
       const bucket = ctx.transportCoverage[category];
       return {

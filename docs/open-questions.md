@@ -174,6 +174,64 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
+
+- **Phase E of the 200-year durability build is built offline but the LIVE
+  submit path is gated on two sandbox-empirical confirms.** The measurement-
+  sample bodies (`src/lib/isometric/transformers/measurement-sample.ts`), the
+  HTTP wrappers (`src/lib/isometric/measurement-samples.ts`), and the per-batch
+  durability aggregation (Phase D) are done and unit-tested; what remains needs
+  the operator's `pnpm isometric:coverage-check -- --source=db` against the
+  sandbox (interactive 1Password — an agent can't run it).
+  1. **Datapoint↔component-input binding.** How a `biochar_sequestration_200_year_*`
+     blueprint input references the measurement-sample datapoints — auto-link by
+     measurement type/property vs. an explicit `datapoint_id` reference. Not
+     modelled yet; resolves the shape of the live submit wiring.
+  2. **H/C ×100 unit transform.** The blueprint declares `h_c_molar_ratios` in
+     `%`, but samples store a dimensionless molar ratio (~0.5).
+     `toHcMolarRatioPercent` applies ×100 as the most likely transform — confirm
+     direction/scale against the sandbox before crediting.
+- **Doc evidence gathered 2026-06-18 (isometric MCP — non-authoritative, does
+  NOT close the gate):**
+  - *Confirm #2 (H/C unit) now leans dimensionless, NOT %.* Two authoritative
+    docs point the same way: the Certify measurement-samples reference lists the
+    Biochar→Production batch **H:C** property as quantity kind
+    `DIMENSIONLESS_RATIO` / qualifier `HYDROGEN_TO_ORGANIC_CARBON_RATIO`; and the
+    `biochar-storage-soil-environments` 1.2 module §3 Table 2 evaluates the molar
+    H/C_org ratio as a dimensionless *Ratio* (threshold < 0.5). This suggests the
+    current ×100 `toHcMolarRatioPercent` transform is likely **wrong** and the raw
+    ~0.5 ratio should be sent. STILL verify against the live template's blueprint
+    *input* unit declaration (rvt_1KS4S43VPSBXA26X) before flipping — the module
+    doc covers the science, not the platform input declaration.
+  - *Confirm #1 (binding) leans explicit reference, not auto-link.* The protocol
+    docs don't define the platform binding; `user-guides/certify/datapoint-sharing`
+    says a datapoint is created and then "used as an input to multiple components"
+    (an explicit sharing act), so a component input most likely carries an explicit
+    datapoint reference rather than auto-linking by measurement type/property. The
+    type+property (quantity kind + qualifier) identify *what* a datapoint measures
+    but don't by themselves bind it to a blueprint input. Confirm the exact field
+    against the `post-datapoint` / component API schema (`certify.d.ts`) or the
+    live sandbox.
+  - Neither finding closes the gate — the binding field and the blueprint input
+    unit are still sandbox-empirical. Run the coverage-check before live wiring.
+- Also gated to the live wiring: the `total_carbon_contents` /
+  `inorganic_carbon_contents` / `product_mass` datapoint construction + binding,
+  the COA/lab-report Source behind the chemistry datapoints (D4), and recording
+  the conservative soil-temp method string on the `biochar_soil` datapoint
+  (the `CreateMeasurementSampleRequest` body has no description field).
+- **Why it matters / blocking what:** the legacy
+  `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry references a
+  blueprint the operator deleted when re-authoring the template, so live submit
+  is already fail-closed (expected mid-migration; not-live, no prod data). The
+  durability submission can't complete until the binding + transform are
+  confirmed and the live wiring lands.
+- Resolve via: run the coverage-check, confirm (1) + (2), wire the live path in
+  `submit-removal.ts` (blueprint selection via `selectSequestrationBlueprintKey`,
+  D6), replace the stale `INPUT_MAPPING` entry, then close this entry and record
+  the decision in `docs/isometric/changes.md`. Plan:
+  `docs/archive/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`
+  (§6 Phase E), ADR 0013.
+
 ### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
 
 - **When a registry create's reconcile lookup finds MULTIPLE candidates**
@@ -231,6 +289,48 @@ capability, not a blocker — tracked here so they are not lost:
 - **Source `description`.** Optional human-readable label now accepted on
   `POST /sources` / `PATCH /sources/{id}` (we pass the `Undefined` sentinel
   today). Wire it to a real label when the Sources panel grows one.
+
+### Certification submit surface is authenticated but not facility-scoped — IDOR (`security/certification-submit-authz`, opened 2026-06-18)
+
+- **Blocker before a second facility/org operator shares the deployment.**
+  Formalizes pre-deploy gate #3 in
+  [`integration-plan.md`](./isometric/integration-plan.md) and depends on the
+  ADR 0010 Organizations model.
+- **Finding (authz audit, 2026-06-18):** every GHG-entry / GHG-statement server
+  action passes `withAction → getUser` (so there is **no anonymous surface** — 0
+  critical) but then resolves its target by **client-supplied id with only
+  `requireAuth`** underneath (a non-empty-string check in `data-access/utils.ts`,
+  not an access check). Any authenticated user can drive irreversible Isometric
+  writes against **any** facility's resources:
+  - `submitRemovalAction` / `submitTelemetryAction` — any `removalId` (facility
+    is server-derived from the row, but the row is fetched by id only).
+  - `createGhgStatementDraft` — trusts the client `facilityId` end-to-end.
+  - `submitGhgStatementToVerifier` / `refreshGhgStatementStatus` — any
+    `ghgStatementId` / `submissionId` (highest-consequence: verifier submission).
+  - `createRemovalWithBatchesAction` — blocks cross-facility *mixing* only.
+  - the three admin mapping/emission actions call `requireAdminAction()`, but
+    "admin" is **global**, so a per-org admin could reach another org.
+- **Root cause:** there is **no membership model**. `src/lib/auth/server.ts`
+  exposes only `getUser` / `requireAuth` / `requireAdminAction`; the
+  `requireFacilityMember` / `requireProjectMember` helpers named in CLAUDE.md
+  **do not exist in code**, and no `organizationId`/owner column exists on
+  `facilities`, `certifierRemovals`, `certifierGhgStatements`, or `creditBatches`
+  — there is nothing to scope to.
+- **Exploitable today?** No — single operator, single tenant. **Live the instant
+  a second facility/org operator exists** (cross-tenant data + registry-write
+  breach, not a hardening nice-to-have).
+- **Pattern to copy:** `mirrorDocumentToSource` / `unlinkDocumentSource` enforce
+  a forgery-proof document→removal lineage anchor
+  (`assertDocumentIsCandidateForRemoval`); `reconcileRemovalMembership` is
+  facility-predicated + `FOR UPDATE` internally.
+- **Resolve via:** land ADR 0010 (Organizations + `organizationId` on facilities
+  + membership), build a real `requireFacilityMember(userId, facilityId)`
+  (building it is itself the first task — do not wire a call to a missing
+  helper), then gate **every** removal/statement/telemetry/mapping/emission
+  accessor on the *resolved* facility (resolve the facility from the row, never a
+  separate client field), and scope the three admin actions to that facility.
+  Same authz class as `security/document-authz`; relates to `tenancy/rls` and the
+  multi-tenancy plan. Full audit: `.tmp_pdf/isometric-ghg-integration-audit.html`.
 
 ### GHG-statement period-overlap: app-layer guard vs. DB constraint (`isometric/ghg-period-overlap-db-constraint`, opened 2026-06-04)
 
@@ -859,6 +959,47 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
   `requirements-shortlist.md` + `schema-mapping.md`, append to `changes.md`).
   Out of scope for the redesign build itself — but the redesign must not bake in
   1.2-specific numbers it doesn't already depend on.
+- **Update (GHG-entry/statement audit, 2026-06-18 — held for findings only):**
+  delta confirmed against the live registry and the certified changelogs.
+  `versions.json` (generated 2026-02-09) pins biochar `1.2.0`, storage-soil
+  `1.2.0`, energy-use `1.2.0`, ghg-accounting `1.0.1`. Latest CERTIFIED: biochar
+  **1.3** (2026-05-22), which bundles **GHG Accounting 1.1**, **Energy Use
+  Accounting 1.3**, and **Storage-in-Soil 1.3** (biomass-feedstock `1.3` +
+  transportation `1.1` are unchanged — already current). **noma-specific impact
+  is mostly low:**
+  - **GHGAM 1.1 carbon-mass-balance (Procedure 4 — EC5/EC6, 12-month crediting
+    window, batch tracking, corrective mechanism): largely N/A.** Procedure 4
+    governs *co-product* allocation (biochar **+** a second creditable CDR
+    product of different durability); noma is biochar-only and
+    `buildMassAccounting` (`src/lib/certification/mass-accounting.ts`) does
+    per-run *applied-mass* attribution, not a co-product split — only bites if a
+    creditable co-product is ever added.
+  - **GHGAM 1.1 20-year amortization cap + residual-debt reporting + mandatory
+    year-1/3/5 reviews:** amortization is server-side (ADR 0005 — Isometric owns
+    it; noma is the LCA journal, not the publisher), so the cap is enforced
+    registry-side. Low code impact; operator-process change; aligns with the
+    in-flight `docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`.
+  - **GHGAM 1.1 embodied-emissions LC-stage + staff-travel clarifications:**
+    verify the ADR 0005 period-emission category definitions (staff travel is
+    one) still match — doc-level.
+  - **EUA 1.3** (hourly-matching removed for pre-2030 FID; added
+    technical/feasibility tests) and **storage-soil 1.3 / protocol Appendix-4
+    risk-of-reversal** (questionnaire/registry-determined): low noma code impact;
+    buffer-split *numbers* may shift.
+  - **The real work is registry-side, not in `versions.json`.** The protocol
+    version is bound to the project's GHG-entry template in the Certify UI —
+    editing `versions.json` migrates nothing. Sequence once the project moves:
+    (1) re-author/re-bind the GHG-entry template to biochar 1.3 in Certify;
+    (2) `pnpm isometric:coverage-check` → update `INPUT_MAPPING` (`datapoint.ts`)
+    only if blueprint keys/inputs/units changed; (3) doc refresh per
+    `update-playbook` (versions.json → shortlist → schema-mapping → changes.md);
+    (4) `pnpm regenerate-certify-types` is separate (the OpenAPI surface is
+    version-independent — likely no diff from the protocol bump alone).
+  - **Decision dependency (why this stays open):** whether the project migrates
+    to biochar 1.3 needs Isometric coordination + template re-authoring (existing
+    1.2 removals may stay; new crediting periods may require 1.3). Authoritative:
+    https://registry.isometric.com/protocol/biochar/1.3 . Full audit:
+    `.tmp_pdf/isometric-ghg-integration-audit.html`.
 
 ### Certify-removal redesign — submit-context builder N+1 on selection/submit hot paths (`certification/submit-context-n+1`, opened 2026-06-05)
 

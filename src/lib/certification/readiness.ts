@@ -59,6 +59,12 @@ export interface RemovalReadinessFacts {
   requiredTransport: TransportCoverageFact[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
+  /**
+   * Fail-closed durability sampling/eligibility blockers (decision D3) — the
+   * exact list the submit pipeline hard-blocks on. Empty ⇒ sampling &
+   * eligibility are submission-ready. Surfaced so readiness predicts the gate.
+   */
+  durabilityGateBlockers?: string[];
 }
 
 export interface RemovalReadiness {
@@ -72,6 +78,23 @@ const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
 const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
+const DURABILITY_LABEL = "Sampling & durability eligibility met";
+// Keep the blocker list readable: show the first few full blocker lines as
+// reasons, then a "+N more" rollup rather than flooding the verdict.
+const DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT = 3;
+const DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT = 3;
+
+// Durability sampling/eligibility gaps, phrased as the classifier's blocker
+// reasons. Each blocker is already a full protocol-cited sentence (see
+// `durability-submission-gates.ts`), so they are pushed verbatim, capped.
+function durabilityBlockerReasons(blockers: string[]): string[] {
+  if (blockers.length === 0) return [];
+  const shown = blockers.slice(0, DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT);
+  const overflow = blockers.length - shown.length;
+  return overflow > 0
+    ? [...shown, `+${overflow} more sampling/eligibility issue(s)`]
+    : shown;
+}
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -173,6 +196,11 @@ export function deriveRemovalReadiness(
     );
   }
 
+  // Durability sampling/eligibility — the same fail-closed gate the submit
+  // pipeline throws on (D3). Surfacing it here means a removal can't read
+  // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
+  reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
+
   return reasons.length > 0
     ? { state: "blocked", reasons }
     : { state: "ready", reasons: [] };
@@ -188,7 +216,13 @@ export type PreflightCheckStatus =
   | "skipped"; // not yet evaluable (an upstream check is unmet)
 
 export interface PreflightCheck {
-  key: "mapping" | "template" | "transport" | "production" | "entityReadiness";
+  key:
+    | "mapping"
+    | "template"
+    | "transport"
+    | "production"
+    | "entityReadiness"
+    | "durability";
   /** Affirmative label — what's true when the check is met. */
   label: string;
   status: PreflightCheckStatus;
@@ -282,7 +316,28 @@ export function buildRemovalPreflightChecklist(
         : productionGapDetail(facts),
     },
     entityReadiness,
+    durabilityPreflightCheck(facts),
   ];
+}
+
+// Sampling/eligibility pre-flight row (D3). Derived from the production runs, so
+// it skips (rather than reads "met") when there is nothing to submit, mirroring
+// the entity-readiness row.
+function durabilityPreflightCheck(facts: RemovalReadinessFacts): PreflightCheck {
+  if (!facts.hasSubmittableRuns) {
+    return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
+  }
+  const blockers = facts.durabilityGateBlockers ?? [];
+  return blockers.length === 0
+    ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
+    : {
+        key: "durability",
+        label: DURABILITY_LABEL,
+        status: "unmet",
+        detail: blockers
+          .slice(0, DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT)
+          .join(" · "),
+      };
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +350,8 @@ export type RemovalRequirementKey =
   | "mapping"
   | "template"
   | "transportUniformity"
-  | "entityReadiness";
+  | "entityReadiness"
+  | "durability";
 
 export interface RemovalRequirementCheck {
   key: RemovalRequirementKey;
@@ -368,6 +424,26 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
+  const durability = ((): RemovalRequirementCheck => {
+    // Sampling/eligibility is a run-level concern batch health does not cover,
+    // so a "ready" batch can still carry an unsampled run — surface it here.
+    // Derived from runs, so skip when there is nothing to submit.
+    if (!facts.hasSubmittableRuns) {
+      return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
+    }
+    const blockers = facts.durabilityGateBlockers ?? [];
+    return blockers.length === 0
+      ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
+      : {
+          key: "durability",
+          label: DURABILITY_LABEL,
+          status: "unmet",
+          detail: blockers
+            .slice(0, DURABILITY_BLOCKER_PREFLIGHT_DISPLAY_LIMIT)
+            .join(" · "),
+        };
+  })();
+
   return [
     {
       key: "mapping",
@@ -383,6 +459,7 @@ export function buildRemovalRequirementsChecklist(
     },
     uniformity,
     entityReadiness,
+    durability,
   ];
 }
 

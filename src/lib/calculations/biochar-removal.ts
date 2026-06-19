@@ -50,6 +50,13 @@ export const F_DURABLE_MAX = 0.95;
 export const SOIL_TEMPERATURE_FLOOR_C = 7;
 
 /**
+ * Soil-temperature spread (°C) above which a project boundary must be
+ * subdivided OR the most conservative (highest) value used (module §5). noma
+ * takes the conservative-max path and raises a subdivide advisory past this.
+ */
+export const SOIL_TEMPERATURE_SUBDIVIDE_SPREAD_C = 1;
+
+/**
  * Tolerance (in percentage points) when cross-checking a reported organic-carbon
  * value against (Total C − Inorganic C). A larger gap means the lab columns
  * disagree and the inputs should be reconciled before crediting.

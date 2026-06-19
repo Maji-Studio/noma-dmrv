@@ -51,6 +51,14 @@ vi.mock("@/fn/certification/sources", () => ({
   collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
   resolveSourceIdsForRemoval: vi.fn(async () => []),
 }));
+// D3 durability gates read each run's reactor sampling method. Default the
+// fixture reactor to Method A; the fixture run carries an eligible ≥3-replicate
+// sample set so the gates pass and the registry-boundary behaviour is reached.
+vi.mock("@/data-access/reactors", () => ({
+  getSamplingMethodsByReactorIds: vi.fn(
+    async () => new Map([["rct-irrelevant", "method_a"]]),
+  ),
+}));
 
 import { db } from "@/db";
 import {
@@ -251,13 +259,34 @@ function makeRun(
     startTime: new Date("2026-01-01T00:00:00Z"),
     endTime: new Date("2026-01-31T23:59:59Z"),
     readingsCount: 1,
+    // Three eligible replicates (H/C_org < 0.5, O/C_org < 0.2) so the D3
+    // durability gates pass; organicCarbonPercent stays 80 so the carbon
+    // datapoint magnitude is unchanged.
     samples: [
       {
         id: "smp-bd-1",
         productionRunId: PRODUCTION_RUN_ID,
         organicCarbonPercent: 80,
         hToCOrgRatio: 0.4,
-        oToCOrgRatio: 0.2,
+        oToCOrgRatio: 0.15,
+        ashContentPercent: 5,
+        moistureContentPercent: 10,
+      } as unknown as Sample,
+      {
+        id: "smp-bd-2",
+        productionRunId: PRODUCTION_RUN_ID,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.41,
+        oToCOrgRatio: 0.16,
+        ashContentPercent: 5,
+        moistureContentPercent: 10,
+      } as unknown as Sample,
+      {
+        id: "smp-bd-3",
+        productionRunId: PRODUCTION_RUN_ID,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.39,
+        oToCOrgRatio: 0.14,
         ashContentPercent: 5,
         moistureContentPercent: 10,
       } as unknown as Sample,
@@ -293,6 +322,9 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
+    // buildRemovalContext would precompute; submitRemoval blocks on this field).
+    durabilityGateBlockers: [],
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,
