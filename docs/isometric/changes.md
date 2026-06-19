@@ -8,6 +8,38 @@ Feedstock type certification guardrail implementation notes from 2026-06-13 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
 
+## 2026-06-19 (transport-leg evidence → Sources + restore the Sources mirror UI)
+
+Two-part fix so per-transport-leg evidence (bills of lading / weigh-scale
+tickets) can actually reach the registry. Transport legs are aggregated into one
+`mass_distance` scalar per category (no LIST transport blueprint — see
+[[transport-legs-distance-based]]), so a leg's data can't ride to the verifier as
+data; its uploaded evidence must arrive as a **Source** on the datapoint.
+
+- **Candidate-document walk now includes transport legs** —
+  `fn/certification/sources.ts` adds `transport_leg` to the `LineageEntityType`
+  union and a shared `collectTransportLegEntities` helper wired into **both** the
+  panel walk (`collectLineageEntities`) and the submit walk
+  (`collectCandidateDocumentIdsForRemoval`). Legs hang off chain entities
+  polymorphically; the helper resolves them via `getTransportLegsForEntities` off
+  the feedstock / biochar-product / sample entities already in the set. **Gotcha
+  pinned by tests:** `transport_legs.entityType` is its own enum
+  (`feedstock | biochar | sample`) — `"biochar"` ≠ the document/lineage
+  `"biochar_product"`. New pure-logic tests in
+  `tests/isometric-transport-leg-sources.test.ts`.
+- **Restored the Sources mirror UI** — the 2026-06-04 certify redesign deleted
+  `components/certification/removal-review/evidence-step.tsx`, orphaning
+  `SourcesPanel`: nothing rendered it, so the candidate set was never consumed and
+  `source_ids` was always empty (submit is **resolve-only** — it never
+  auto-mirrors). `SourcesPanel` is re-homed into `removal-detail-sheet.tsx` (the
+  Removals-tab quick view, which always has a valid `removalId`), replacing a
+  misleading "Evidence & sources →" link that dead-ended in the wizard. This
+  resolves the `certification/removal-detail-deep-link` open question.
+- **Telemetry deferred** — `TelemetryPanel` (reactor temp/pressure →
+  `DataUploadSubmission`, ADR 0006) was deleted in the same commit and stays
+  orphaned; a distinct concern, tracked as
+  `certification/telemetry-panel-orphaned` in `docs/open-questions.md`.
+
 ## 2026-06-19 (transport → mass_distance, multi-leg mass-weighting)
 
 Re-binds feedstock and biochar transport to the registry's
