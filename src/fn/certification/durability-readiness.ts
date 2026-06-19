@@ -1,37 +1,82 @@
-import { getSamplingMethodsByReactorIds } from "@/data-access/reactors";
-import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import {
+  getCreditBatchesWithSamples,
+  type CreditBatchWithSamples,
+} from "@/data-access/credit-batch-samples";
+import {
+  evaluateDurabilitySubmissionGates,
+  type BatchGateFacts,
+} from "@/lib/certification/durability-submission-gates";
+import { formatUtcDate } from "@/lib/date-utils";
+
+export interface DurabilityGateResult {
+  /** Fail-closed blockers — the exact list the submit pipeline blocks on. */
+  blockers: string[];
+  /** Non-blocking §8.3.1 distribution (cluster) advisories. */
+  warnings: string[];
+}
+
+export interface DurabilityBatchData extends DurabilityGateResult {
+  /** Member credit batches with pooled Samples, runs scoped to the applied set. */
+  batchesWithSamples: CreditBatchWithSamples[];
+}
+
+/**
+ * Load the credit-batch-grained durability data plane (ADR 0015) for a removal:
+ * pool each member batch's lab Samples (by `samples.creditBatchId`), scope each
+ * batch's member runs to the removal's applied run set so product mass stays
+ * attribution-correct, then run the D3 gates. One call returns the batches (for
+ * the per-batch measurement-sample submission, Phase 3) plus the gate blockers
+ * and the §8.3.1 distribution warnings. Keeps `certify-context-core` lean.
+ */
+export async function loadDurabilityBatchData(
+  userId: string,
+  memberBatchIds: string[],
+  appliedRunIds: ReadonlySet<string>,
+): Promise<DurabilityBatchData> {
+  const loaded = await getCreditBatchesWithSamples(userId, memberBatchIds);
+  const batchesWithSamples = loaded.map((batch) => ({
+    ...batch,
+    runs: batch.runs.filter((run) => appliedRunIds.has(run.id)),
+  }));
+  const gates = buildDurabilityGates(batchesWithSamples);
+  return { batchesWithSamples, ...gates };
+}
+
+function isoSamplingDay(samplingTime: Date | null | undefined): string | null {
+  if (!samplingTime) return null;
+  const day = formatUtcDate(samplingTime);
+  return day || null;
+}
 
 /**
  * Evaluate the D3 durability gates (eligibility + Method-A-sampled + ≥3
- * replicates) over a removal's runs, reading each run's reactor's CURRENT
- * sampling method (D6; a missing reactor defaults to Method A). The single
- * computation behind BOTH the readiness surfaces and the submit pipeline's hard
- * block — `submitRemoval` throws on this same `durabilityGateBlockers` list, so
- * the pre-flight can never disagree with the gate. Returns [] when there are no
- * runs (nothing to sample yet). Lives outside `certify-context-core` to keep
- * that file under the line cap.
+ * replicates + the distribution warning) over a removal's CREDIT BATCHES
+ * (ADR 0015: the credit batch is the protocol production batch and the sampling
+ * unit). The sampling method comes off each batch's production process (D6) —
+ * no per-reactor lookup. The single computation behind BOTH the readiness
+ * surfaces and the submit pipeline's hard block — `submitRemoval` throws on this
+ * same `blockers` list, so the pre-flight can never disagree with the gate.
+ * Returns empty lists when there are no batches (nothing to sample yet). Lives
+ * outside `certify-context-core` to keep that file under the line cap.
  */
-export async function buildDurabilityGateBlockers(
-  userId: string,
-  runs: ProductionRunWithSamples[],
-): Promise<string[]> {
-  if (runs.length === 0) return [];
-  const reactorIds = [...new Set(runs.map((run) => run.reactorId))];
-  const samplingMethodByReactor = await getSamplingMethodsByReactorIds(
-    userId,
-    reactorIds,
-  );
-  return evaluateDurabilitySubmissionGates(
-    runs.map((run) => ({
-      runId: run.id,
-      runCode: run.code,
-      reactorId: run.reactorId,
-      samplingMethod: samplingMethodByReactor.get(run.reactorId) ?? "method_a",
-      replicates: run.samples.map((s) => ({
-        hToCOrgRatio: s.hToCOrgRatio,
-        oToCOrgRatio: s.oToCOrgRatio,
-      })),
+export function buildDurabilityGates(
+  batches: CreditBatchWithSamples[],
+): DurabilityGateResult {
+  if (batches.length === 0) return { blockers: [], warnings: [] };
+  const facts: BatchGateFacts[] = batches.map((batch) => ({
+    creditBatchId: batch.creditBatchId,
+    creditBatchCode: batch.creditBatchCode,
+    productionProcessId: batch.productionProcessId,
+    samplingMethod: batch.samplingMethod,
+    replicates: batch.samples.map((s) => ({
+      hToCOrgRatio: s.hToCOrgRatio,
+      oToCOrgRatio: s.oToCOrgRatio,
     })),
-  ).blockers;
+    replicateProvenance: batch.samples.map((s) => ({
+      productionRunId: s.productionRunId,
+      samplingDay: isoSamplingDay(s.samplingTime),
+    })),
+  }));
+  const result = evaluateDurabilitySubmissionGates(facts);
+  return { blockers: result.blockers, warnings: result.warnings };
 }

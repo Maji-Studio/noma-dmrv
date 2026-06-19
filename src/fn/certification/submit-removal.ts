@@ -479,7 +479,6 @@ export async function submitRemoval(
     userId,
     {
       lineages: ctx.lineages,
-      runs: ctx.runs,
       memberBatchIds: ctx.memberBatches.map((b) => b.id),
     },
   );

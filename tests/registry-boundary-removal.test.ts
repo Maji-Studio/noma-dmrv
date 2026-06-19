@@ -350,6 +350,17 @@ function makeContext(
       } as never,
     ],
     runs: [makeRun(biocharMassKg)],
+    batchesWithSamples: [
+      {
+        creditBatchId: "cb-bd-1",
+        creditBatchCode: "CB-BD-001",
+        productionProcessId: null,
+        samplingMethod: "method_a",
+        declaredHToCorgRatio: null,
+        runs: [{ id: PRODUCTION_RUN_ID, code: "PR-BD-1", biocharDryMassKg: biocharMassKg }],
+        samples: makeRun(biocharMassKg).samples,
+      },
+    ],
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
     transportLegs: { feedstock: [], biochar: [], sample: [] },
   };
