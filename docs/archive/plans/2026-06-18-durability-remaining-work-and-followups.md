@@ -5,12 +5,12 @@
 Tracks what's left **after** Phases A–H of the durability build landed. This is a
 work list, not a design doc — the design lives in:
 - Build plan: [`2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`](./2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md)
-- Decision record: [`../adr/0013-registry-computed-durable-fraction.md`](../adr/0013-registry-computed-durable-fraction.md)
-- Changelog: [`../isometric/changes.md`](../isometric/changes.md) (2026-06-18 entry, Phases A–F)
-- Live gates / confirms: [`../open-questions.md`](../open-questions.md)
+- Decision record: [`../../adr/0013-registry-computed-durable-fraction.md`](../../adr/0013-registry-computed-durable-fraction.md)
+- Changelog: [`../../isometric/changes.md`](../../isometric/changes.md) (2026-06-18 entry, Phases A–F)
+- Live gates / confirms: [`../../open-questions.md`](../../open-questions.md)
   (`isometric/durability-measurement-samples`)
-- Compliance status: [`../isometric/p0-compliance-checklist.md`](../isometric/p0-compliance-checklist.md)
-  (P0-03, P0-06), [`../isometric/condition-registry.md`](../isometric/condition-registry.md)
+- Compliance status: [`../../isometric/p0-compliance-checklist.md`](../../isometric/p0-compliance-checklist.md)
+  (P0-03, P0-06), [`../../isometric/condition-registry.md`](../../isometric/condition-registry.md)
 
 ## Status of the build (for orientation)
 Phases A–D (engines), G (docs), H (integration tests) and the Phase E **offline**
