@@ -39,6 +39,7 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
+import { ensureTransportEvidenceLedgerSourceFromContext } from "./evidence-ledger";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import {
   collectCandidateDocumentIdsForRemoval,
@@ -465,6 +466,28 @@ export async function submitRemoval(
   }
 
   const agg = enrichWithFacilityConfig(transportAgg, emissionConfig);
+
+  // Regenerate the transport evidence ledger from the live legs and mirror it
+  // as a Source BEFORE candidate documents are collected, so the current ledger
+  // rides into source_ids on this submit (and supersedes any prior one). Done
+  // here — outside the locked claim transaction below — because it makes HTTP
+  // calls to Isometric and inserts a document; holding the advisory lock across
+  // those would serialize unrelated submits. Best-effort: a render/mirror hiccup
+  // must never block an otherwise-valid submission; the next submit regenerates
+  // it. Idempotent on ledger content, so an unchanged-legs resubmit is a no-op.
+  try {
+    const ledger = await ensureTransportEvidenceLedgerSourceFromContext(
+      userId,
+      removalId,
+      ctx,
+    );
+    log.info({ ledgerStatus: ledger.status }, "transport evidence ledger ensured");
+  } catch (err) {
+    log.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "transport evidence ledger generation failed; submitting without it",
+    );
+  }
 
   // Phase 3.5: mirrored Isometric Source IDs ride into every monitored
   // Datapoint (removal-wide attribution). They are part of the semantic
