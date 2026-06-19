@@ -35,6 +35,7 @@ import {
   calculateHToCOrgRatio,
   type SampleFormData,
 } from "@/schemas/samples";
+import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import type { SampleWithRelations } from "@/data-access/samples";
 
 // ============================================
@@ -693,6 +694,11 @@ export function SampleForm({
                   />
                 </FormField>
               </div>
+
+              <SampleEligibilityAdvisory
+                hToCOrgRatio={calculatedHToCRatio}
+                oToCOrgRatio={watch("oToCOrgRatio") as number | null | undefined}
+              />
         </FormSection>
 
         {/* ── 1000-Year Durability (conditional, two flat sibling sections) ── */}

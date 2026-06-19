@@ -74,6 +74,13 @@ export const applications = pgTable(
       "applications_gps_longitude_range",
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`,
     ),
+    // Mirror the Zod range (-50..60 °C) and the certifier_projects /
+    // customer_locations default-soil-temperature constraints so a direct SQL
+    // write can't verify a 200-year batch off a nonsensical temperature.
+    check(
+      "applications_soil_temperature_c_range",
+      sql`${table.soilTemperatureC} is null or (${table.soilTemperatureC} >= -50 and ${table.soilTemperatureC} <= 60)`,
+    ),
   ],
 );
 

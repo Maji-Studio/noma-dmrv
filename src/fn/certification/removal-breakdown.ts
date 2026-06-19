@@ -11,6 +11,10 @@ import {
   computeRemovalBreakdown,
   type RemovalCarbonBreakdown,
 } from "@/lib/certification/removal-breakdown";
+import {
+  resolveConservativeSoilTemperature,
+  type ConservativeSoilTemperature,
+} from "@/lib/isometric/utils/durability-aggregation";
 import { SafeError } from "@/lib/errors";
 import { getGhgEntry } from "@/lib/isometric";
 import {
@@ -30,6 +34,15 @@ export interface RemovalBreakdownData extends RemovalCarbonBreakdown {
   startedOn: string | null;
   completedOn: string | null;
   isProduction: boolean;
+  /**
+   * Conservative soil-temperature estimate for the 200-year durability input —
+   * the MAX across the removal's application sites (7 °C floor), surfaced as an
+   * explicit conservative approximation (NOT a measured project-area annual
+   * average; decision D2 soil-temp resolution). Null when no site carries a
+   * soil temperature. The submitted value (Phase E) uses the same estimate;
+   * the card shows it so the operator knows what drives the durable fraction.
+   */
+  soilTemperature: ConservativeSoilTemperature | null;
 }
 
 function unique(values: string[]): string[] {
@@ -73,6 +86,21 @@ export async function loadRemovalBreakdown(
       ? await getGhgEntry(externalId).catch(() => null)
       : null;
 
+    // Conservative soil-temperature estimate across the removal's application
+    // sites (each preview's per-site value is already 7 °C-floored). Only build
+    // it when at least one site carries a temperature, so removals without
+    // durability soil-temp data don't show a spurious "indeterminate" note.
+    const siteSoilTemperaturesC = batches.flatMap((batch) =>
+      (previews[batch.id]?.applicationResults ?? []).map(
+        (app) => app.effectiveSoilTemperatureC,
+      ),
+    );
+    const soilTemperature = siteSoilTemperaturesC.some(
+      (t) => t != null && Number.isFinite(t),
+    )
+      ? resolveConservativeSoilTemperature(siteSoilTemperaturesC)
+      : null;
+
     const breakdown = computeRemovalBreakdown({
       sequestrationTonnesByBatch: batches.map(
         (batch) => previews[batch.id]?.co2eStoredTonnes ?? null,
@@ -108,6 +136,7 @@ export async function loadRemovalBreakdown(
       startedOn: removal.startedOn,
       completedOn: removal.completedOn,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+      soilTemperature,
     };
   });
 }
