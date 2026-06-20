@@ -3,9 +3,9 @@
 **Date:** 2026-06-19
 **Decisions:** ADR 0013 (registry computes `F_durable`; durability inputs feed the dedicated
 `biochar_sequestration_200_year_*` blueprints via measurement samples, **not** `INPUT_MAPPING`)
-· ADR 0015 (credit batch = protocol production batch; production process scopes Method A/B; the
+· ADR 0016 (credit batch = protocol production batch; production process scopes Method A/B; the
 sampling unit is the credit batch). Sharpened in a `grill-with-docs` session, 2026-06-19.
-**Branch:** `feat/credit-batch-production-process` (builds **on** the ADR 0015 re-grain landing here).
+**Branch:** `feat/credit-batch-production-process` (builds **on** the ADR 0016 re-grain landing here).
 **Status:** Design locked. Buildable/stageable now; the **live POST** stays gated on two
 sandbox-empirical confirms the operator runs.
 
@@ -23,7 +23,7 @@ The handoff framed Tier 1 as "flip the live POST." The grill surfaced a **root i
 entire durability data plane — the gates (`buildDurabilityGateBlockers`), the aggregation
 (`ProductionRunWithSamples`, `buildPerBatchDurabilityData`), the Phase-E measurement-sample
 builders, and the COA candidate-document walk (`collectCandidateDocumentIdsForRemoval`) — is
-written at the **production-run** grain. ADR 0015 re-pointed lab samples to `samples.creditBatchId`
+written at the **production-run** grain. ADR 0016 re-pointed lab samples to `samples.creditBatchId`
 (`production_run_id` now nullable provenance), and `getProductionRunsWithSamples` **skips any
 sample with a null run link**. So post-0015 lab chemistry is **invisible** to every durability
 surface. The live POST cannot be wired honestly until the data plane is re-grained to the credit
@@ -52,7 +52,7 @@ batch. That re-grain is the spine of this plan.
 - **Blueprint selection = Method A/B.** Sampled → `biochar_sequestration_200_year_c_org`. DEC runs
   **Method A everywhere**, so every batch is sampled and only `_c_org` ever receives data.
   `_unsampled` is an **inert** seam (blueprint authored, picker routes to it, hard assertion
-  guards an impossible Method-A-unsampled state). **No Method-B estimate math** (future ADR ~0016).
+  guards an impossible Method-A-unsampled state). **No Method-B estimate math** (future ADR ~0017).
 - **No prod data** → reseed, not migrate. Never edit applied migrations.
 
 ## Scope — ships in this plan vs deferred
@@ -154,7 +154,7 @@ sandbox template `rvt_1KS4S43VPSBXA26X`. Build + stage everything; keep the live
 - Reuse existing form/table primitives; follow the canonical page shell + form conventions.
 
 ### Phase 6 — Docs & tests
-- ADR 0013 (soil-temp reference value — **done**), ADR 0015 (sample run-provenance/credit-batch
+- ADR 0013 (soil-temp reference value — **done**), ADR 0016 (sample run-provenance/credit-batch
   accounting — **done**), CONTEXT.md (Sample / Replicate / Measurement-sample submission — **done**).
   On landing: update `docs/isometric/{schema-mapping,condition-registry,changes}.md`; close P0-03 /
   P0-06; remove this open-questions entry.
@@ -164,7 +164,7 @@ sandbox template `rvt_1KS4S43VPSBXA26X`. Build + stage everything; keep the live
   multi-run single-feedstock credit batch with ≥3 distributed samples → submit.
 
 ## Open / watch
-- **Sequencing vs the in-flight re-grain** on this branch — let the ADR 0015 schema work settle/commit
+- **Sequencing vs the in-flight re-grain** on this branch — let the ADR 0016 schema work settle/commit
   first; Phase 1 layers on top of it.
 - **Issue #291** (template-driven remodel) shares the measurement-sample path — coordinate so the
   submission layer isn't double-built.

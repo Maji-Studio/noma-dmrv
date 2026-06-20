@@ -7,7 +7,7 @@
  * The Method-B unlock + management surface ship with ADR 0017.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   productionProcesses,
@@ -16,6 +16,16 @@ import {
 import { requireAuth } from "./utils";
 
 type Executor = DbTransaction | typeof db;
+const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
+
+async function lockCurrentProductionProcess(
+  executor: Executor,
+  params: { facilityId: string; feedstockTypeId: string },
+): Promise<void> {
+  await executor.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`${PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE}:${params.facilityId}:${params.feedstockTypeId}`}, 0))`,
+  );
+}
 
 /**
  * Find the CURRENT production process for a (facility, feedstock) pair, or
@@ -35,6 +45,14 @@ export async function findOrCreateProductionProcess(
   executor: Executor = db,
 ): Promise<ProductionProcess> {
   requireAuth(userId);
+
+  if (executor === db) {
+    return db.transaction((tx) =>
+      findOrCreateProductionProcess(userId, params, tx),
+    );
+  }
+
+  await lockCurrentProductionProcess(executor, params);
 
   const [existing] = await executor
     .select()

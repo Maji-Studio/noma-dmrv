@@ -8,16 +8,35 @@ function toDateString(value: string | Date): string {
 }
 
 function toUtcDateOnly(value: string | Date): Date {
-  const [year, month, day] = toDateString(value).split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(toDateString(value));
+  if (!match) throw new Error("Invalid date");
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error("Invalid date");
+  }
+  return parsed;
 }
 
 export function getCreditBatchProductionWindowIssue(
   startDate: string | Date,
   endDate: string | Date,
 ): string | null {
-  const start = toUtcDateOnly(startDate);
-  const end = toUtcDateOnly(endDate);
+  let start: Date;
+  let end: Date;
+  try {
+    start = toUtcDateOnly(startDate);
+    end = toUtcDateOnly(endDate);
+  } catch {
+    return "Invalid date";
+  }
 
   if (isAfter(start, end)) {
     return "End date must be after start date";
@@ -34,8 +53,10 @@ export function getCreditBatchProductionWindowBounds(
   startDate: string | Date,
   endDate: string | Date,
 ): { startStr: string; endStr: string } {
+  const start = toUtcDateOnly(startDate);
+  const end = toUtcDateOnly(endDate);
   return {
-    startStr: formatUtcDate(toUtcDateOnly(startDate)),
-    endStr: formatUtcDate(toUtcDateOnly(endDate)),
+    startStr: formatUtcDate(start),
+    endStr: formatUtcDate(end),
   };
 }

@@ -71,11 +71,16 @@ export interface DurabilitySubmissionGateResult {
   warnings: string[];
 }
 
+type ReplicateClusterReason = "single-run-day" | "unknown-provenance";
+
 // A batch's pooled replicates "cluster" when they span only ONE distinct
 // (run, day) provenance — the "aliquots of one grab" smell §8.3.1 warns against.
 // Replicates with fully-null provenance can't be judged, so they don't count
-// toward distinctness (a single null-provenance set reads as clustered).
-function replicatesCluster(provenance: ReplicateProvenance[]): boolean {
+// toward distinctness; if every replicate is fully null, warn on unknown
+// provenance instead of saying they share one known run/day.
+function getReplicateClusterReason(
+  provenance: ReplicateProvenance[],
+): ReplicateClusterReason | null {
   const keys = new Set(
     provenance
       .map((p) =>
@@ -85,7 +90,8 @@ function replicatesCluster(provenance: ReplicateProvenance[]): boolean {
       )
       .filter((k): k is string => k != null),
   );
-  return keys.size <= 1;
+  if (keys.size > 1) return null;
+  return keys.size === 0 ? "unknown-provenance" : "single-run-day";
 }
 
 /**
@@ -127,11 +133,18 @@ export function evaluateDurabilitySubmissionGates(
       blockers.push(
         `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_RUN} required per sampled batch (§8.3.1).`,
       );
-    } else if (replicatesCluster(batch.replicateProvenance)) {
-      // ≥3 met but they cluster on one run/day — warn, don't block.
-      warnings.push(
-        `Credit batch ${batch.creditBatchCode}: all ${eligibility.usableReplicateCount} replicates cluster on a single run/day — §8.3.1 expects ≥3 independent samples distributed across distinct runs/days. Confirm this is a registry-agreed sampling alternative.`,
-      );
+    } else {
+      const clusterReason = getReplicateClusterReason(batch.replicateProvenance);
+      // ≥3 met but distribution is unproven or clustered — warn, don't block.
+      if (clusterReason === "single-run-day") {
+        warnings.push(
+          `Credit batch ${batch.creditBatchCode}: all ${eligibility.usableReplicateCount} replicates cluster on a single run/day — §8.3.1 expects ≥3 independent samples distributed across distinct runs/days. Confirm this is a registry-agreed sampling alternative.`,
+        );
+      } else if (clusterReason === "unknown-provenance") {
+        warnings.push(
+          `Credit batch ${batch.creditBatchCode}: all ${eligibility.usableReplicateCount} replicates have unknown run/day provenance — §8.3.1 expects ≥3 independent samples distributed across distinct runs/days. Confirm this is a registry-agreed sampling alternative.`,
+        );
+      }
     }
 
     // (a) Eligibility — judged on the pooled replicate mean (D8); indeterminate fails closed.

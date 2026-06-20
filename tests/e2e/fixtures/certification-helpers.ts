@@ -311,6 +311,11 @@ export async function seedGroupedRemovalWithChain(
         .select({ feedstockTypeId: schema.feedstocks.feedstockTypeId })
         .from(schema.feedstocks)
         .where(eq(schema.feedstocks.id, refs.feedstockId));
+      if (!feedstockRow?.feedstockTypeId) {
+        throw new Error(
+          `Fixture seed failed: feedstock ${refs.feedstockId} missing or has no feedstockTypeId`,
+        );
+      }
       await tx.insert(schema.productionProcesses).values({
         id: id.productionProcess,
         facilityId: refs.facilityId,
@@ -682,6 +687,11 @@ export async function seedUngroupedReadyBatchWithChain(
         .select({ feedstockTypeId: schema.feedstocks.feedstockTypeId })
         .from(schema.feedstocks)
         .where(eq(schema.feedstocks.id, refs.feedstockId));
+      if (!feedstockRow?.feedstockTypeId) {
+        throw new Error(
+          `Fixture seed failed: feedstock ${refs.feedstockId} missing or has no feedstockTypeId`,
+        );
+      }
       await tx.insert(schema.productionProcesses).values({
         id: id.productionProcess,
         facilityId: refs.facilityId,
