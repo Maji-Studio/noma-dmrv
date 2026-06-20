@@ -6,6 +6,7 @@
  * aggregator that feeds the registry scalar, rounded only at the subtotal.
  */
 import type { TransportLeg } from "@/db/schema";
+import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   aggregateTransportMassDistance,
   type TransportLegsByCategory,
@@ -70,9 +71,10 @@ function capitalize(s: string): string {
 }
 
 function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
-  const massMissing = leg.loadMassKg == null;
-  const loadMassKg = leg.loadMassKg ?? 0;
-  const tkm = round2((leg.distanceKm * loadMassKg) / 1000);
+  const loadMassKg =
+    leg.loadMassKg != null && leg.loadMassKg > 0 ? leg.loadMassKg : 0;
+  const massMissing = loadMassKg === 0;
+  const tkm = round2(leg.distanceKm * kgToTonnes(loadMassKg));
   const vehicle =
     leg.vehicleType && leg.modelYear
       ? `${leg.vehicleType} · ${leg.modelYear}`
