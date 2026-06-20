@@ -45,6 +45,7 @@ import {
 } from "@/hooks/use-credit-batches";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
+import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
 
 interface CreditBatchDetailProps {
   creditBatchId: string;
@@ -224,6 +225,9 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
         creditBatchId={creditBatchId}
         facilityId={creditBatch.facilityId}
       />
+
+      {/* Durability sample roll-up + readiness (ADR 0015) */}
+      <CreditBatchDurabilityPanel creditBatchId={creditBatchId} />
 
       {/* Batch details — read panels; the edit form mounts behind the toggle.
           Anchor target for the health strip's carbon fix link. */}
