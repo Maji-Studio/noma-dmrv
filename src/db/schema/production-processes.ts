@@ -24,7 +24,8 @@ import { feedstockTypes } from './feedstock';
 // feedstock change, pyrolysis-condition change, or 3σ carbon deviation opens a
 // NEW process and resets the baseline (`establishedAt`). The current process is
 // the most recent one for the pair; the lookup index is therefore non-unique.
-// See ADR 0016. The live Method-B compute is deferred to ADR 0017.
+	// See ADR 0016. ADR 0017 Track 1 adds read-only Method-B baseline/cadence
+	// compute; Track 2 adds the explicit unlock.
 // ============================================
 
 export const productionProcesses = pgTable(
@@ -38,20 +39,18 @@ export const productionProcesses = pgTable(
       .notNull()
       .references(() => feedstockTypes.id),
 
-    // Baseline epoch: when this process (and its sample-counting toward the
-    // Method-B baseline) began. A new process resets it. The deferred Method-B
-    // compute counts a process's samples since `establishedAt`.
+		// Baseline epoch: when this process (and its sample-counting toward the
+		// Method-B baseline) began. A new process resets it.
     establishedAt: timestamp('established_at').defaultNow().notNull(),
 
-    // The active sampling regime, MOVED OFF `reactors`. DEC runs method_a
-    // everywhere; method_b is reachable only via the deferred super-admin unlock.
+		// The active sampling regime, MOVED OFF `reactors`. DEC runs method_a
+		// everywhere; method_b is reachable only via the Track 2 unlock.
     samplingMethod: samplingMethod('sampling_method').notNull().default('method_a'),
 
-    // Conditional-gate seam for the deferred Method-B unlock (ADR 0017).
-    // NULL = Method A enforced. When the super-admin unlocks Method B for a
-    // process that has met its ≥30-sample baseline, this is stamped; the
-    // Method-B compute (baseline counter, unsampled estimate, borrow pool) reads
-    // it then. Inert today — no compute hangs off it yet.
+		// Conditional-gate seam for the Track 2 Method-B unlock (ADR 0017).
+		// NULL = Method A enforced. When Method B is unlocked for a process that has
+		// met its ≥30-sample baseline, this is stamped; the Method-B submission route
+		// reads it then.
     methodBUnlockedAt: timestamp('method_b_unlocked_at'),
 
     notes: text('notes'),

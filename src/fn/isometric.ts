@@ -67,17 +67,6 @@ export async function validateProcessSamplingMethodFn(
   });
 }
 
-/**
- * @deprecated Reactor/credit-batch-grained naming — the sampling method lives on
- * the production process (ADR 0017). Kept one release for import compatibility;
- * call `validateProcessSamplingMethodFn`.
- */
-export async function validateCreditBatchSamplingMethodFn(
-  data: z.infer<typeof processSamplingMethodSchema>
-): Promise<ActionResult<ProcessSamplingEligibilityResult>> {
-  return validateProcessSamplingMethodFn(data);
-}
-
 export async function validateSampleConditionsFn(
   data: z.infer<typeof sampleConditionSchema>
 ): Promise<ActionResult<z.infer<typeof sampleConditionSchema>>> {

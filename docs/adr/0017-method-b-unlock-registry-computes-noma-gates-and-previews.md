@@ -1,13 +1,13 @@
 # Method B unlock: the registry computes the unsampled estimate; noma gates, routes, and previews
 
-Status: proposed (2026-06-20)
+Status: accepted (2026-06-20)
 
 > **Refines ADR 0016** (credit batch = production batch; a production process scopes Method A/B).
 > It does **not** supersede it. ADR 0016 laid the inert seam
 > (`production_processes.{samplingMethod, established_at, method_b_unlocked_at}`) and shipped the
 > Method-A behaviour; this ADR activates **Method B**. Stays inside **ADR 0013**'s boundary (noma
-> submits raw inputs; the registry derives the credited number). Implementation shape:
-> `docs/plans/2026-06-20-method-b-unlock.md`.
+> submits raw inputs; the registry derives the credited number). Implementation record:
+> [`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md).
 
 ## Context
 
@@ -79,19 +79,16 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
 
 ## Consequences
 
-- New nullable columns on `production_processes`: `agreed_baseline_size`, `random_sampling_plan_ref`,
-  `moisture_pathway`. No prod data → reseed, not migrate.
-- The dropped reactor trigger `0052` is replaced by a **process-grain** backstop (app-layer guard
-  primary + a lightweight DB check/trigger). Hand-write the trigger migration; never edit applied
-  migrations.
-- The `_unsampled` submission route becomes reachable (`selectSequestrationBlueprintKey`); its exact
-  wire-format is a **sandbox confirm** folded into the existing `DURABILITY_MEASUREMENT_SAMPLES_LIVE`
-  gate + `isometric:coverage-check`.
-- A new **preview** engine `previewUnsampledCarbon` (Eq 4/5 over eligible samples) — non-authoritative,
-  drift-checked against the registry, like `computeFDurable200`.
+- ADR 0017 Track 1 ships the process-grained Method-B baseline counter and the read-only
+  `/production-processes` surface; Method B itself remains inert until Track 2.
+- Track 2 adds the explicit unlock action, prerequisite capture, and process-grain defense-in-depth
+  backstop before any Method-B submission route becomes reachable.
+- Any `_unsampled` submission route stays sandbox-gated until its wire format is verified against the
+  current Isometric registry contract.
+- noma may show a non-authoritative Method-B preview, but credited Eq 4/5 and winsorisation remain
+  registry-derived per ADR 0013.
 - **Glossary:** `CONTEXT.md` gains **Eligible sample** (the trailing-6-mo process pool, distinct from
   the lifetime ≥ 30 baseline).
-- Coordinates with **issue #291** (template-driven remodel) on the shared measurement-sample path.
 
 All Isometric protocol references are non-authoritative summaries of text verified 2026-06-20;
 re-verify against <https://registry.isometric.com/protocol/biochar/1.3> before encoding credit logic.

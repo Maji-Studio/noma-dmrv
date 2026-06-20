@@ -43,16 +43,16 @@ test.describe("production processes", () => {
 
     // The process row counts exactly its own three replicate samples toward the
     // ≥30 baseline — process-scoped, not pooled, not zero.
-    const baselineCell = adminPage.getByText("3 / 30 eligible samples").first();
-    await expect(baselineCell).toBeVisible();
+    const processRow = adminPage.getByRole("row", {
+      name: /3 \/ 30 eligible samples/i,
+    });
+    await expect(processRow).toBeVisible();
 
     // Method A every-batch cadence is satisfied (its 1 batch is sampled).
-    await expect(adminPage.getByText("On cadence").first()).toBeVisible();
+    await expect(processRow.getByText("On cadence")).toBeVisible();
 
     // Under Method A, the 3-sample process is below the 30 baseline → not yet
     // Method-B-eligible.
-    await expect(
-      adminPage.getByText("27 more to qualify").first(),
-    ).toBeVisible();
+    await expect(processRow.getByText("27 more to qualify")).toBeVisible();
   });
 });

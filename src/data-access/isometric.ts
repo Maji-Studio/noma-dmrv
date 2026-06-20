@@ -1,11 +1,13 @@
 import { and, count, eq, lt } from "drizzle-orm";
-import { db } from "@/db";
-import { creditBatches, samples } from "@/db/schema";
+import { db, type DbTransaction } from "@/db";
+import { creditBatches, productionProcesses, samples } from "@/db/schema";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { requireAuth } from "./utils";
 
 // Re-exported for existing consumers that import the threshold from this module.
 export { METHOD_B_MINIMUM_METHOD_A_SAMPLES };
+
+type Executor = DbTransaction | typeof db;
 
 export type MethodBEligibilitySummary = {
   priorMethodASampleCount: number;
@@ -13,6 +15,35 @@ export type MethodBEligibilitySummary = {
   meetsMinimumMethodASamples: boolean;
   isEligible: boolean;
 };
+
+/**
+ * Canonical eligible-replicate counter for Method-B baseline progress. It is
+ * keyed by production process so operator surfaces, unlock validation, and the
+ * eventual Track-2 transactional backstop consume the same SQL definition.
+ */
+export async function countEligibleSamplesByProcess(
+  executor: Executor,
+  params: { facilityId: string; asOfDate?: Date },
+): Promise<Map<string, number>> {
+  const conditions = [eq(creditBatches.facilityId, params.facilityId)];
+  if (params.asOfDate) {
+    conditions.push(lt(samples.samplingTime, params.asOfDate));
+  }
+
+  const rows = await executor
+    .select({
+      productionProcessId: creditBatches.productionProcessId,
+      sampleCount: count(samples.id).mapWith(Number),
+    })
+    .from(samples)
+    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .where(and(...conditions))
+    .groupBy(creditBatches.productionProcessId);
+
+  return new Map(
+    rows.map((row) => [row.productionProcessId, row.sampleCount] as const),
+  );
+}
 
 /**
  * Count the eligible replicate samples a PRODUCTION PROCESS (the
@@ -41,27 +72,26 @@ export async function getMethodBEligibilityByProcess(
   userId: string,
   params: {
     productionProcessId: string;
-    asOfDate?: string;
+    asOfDate?: Date;
   }
 ): Promise<MethodBEligibilitySummary> {
   requireAuth(userId);
 
-  const conditions = [
-    eq(creditBatches.productionProcessId, params.productionProcessId),
-  ];
-  if (params.asOfDate) {
-    conditions.push(lt(samples.samplingTime, new Date(params.asOfDate)));
-  }
+  const [process] = await db
+    .select({ facilityId: productionProcesses.facilityId })
+    .from(productionProcesses)
+    .where(eq(productionProcesses.id, params.productionProcessId))
+    .limit(1);
 
-  const [priorSampleCountRow] = await db
-    .select({
-      sampleCount: count().mapWith(Number),
-    })
-    .from(samples)
-    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .where(and(...conditions));
+  const countsByProcess = process
+    ? await countEligibleSamplesByProcess(db, {
+        facilityId: process.facilityId,
+        asOfDate: params.asOfDate,
+      })
+    : new Map<string, number>();
 
-  const priorMethodASampleCount = priorSampleCountRow?.sampleCount ?? 0;
+  const priorMethodASampleCount =
+    countsByProcess.get(params.productionProcessId) ?? 0;
 
   const meetsMinimumMethodASamples =
     priorMethodASampleCount >= METHOD_B_MINIMUM_METHOD_A_SAMPLES;
