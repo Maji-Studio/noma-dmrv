@@ -500,6 +500,35 @@ describe("buildCreateGhgEntryRequest", () => {
     }
   });
 
+  it("skips biochar_sequestration_200_year_* components (fed by the measurement-samples step)", () => {
+    // The sequestration component carries no resolved datapoint and no catalog
+    // blueprint here — both would throw if it weren't skipped. The normal
+    // component must still be emitted.
+    const tmpl = template([
+      {
+        id: "rtc_SEQ",
+        blueprint_key: "biochar_sequestration_200_year_c_org",
+        inputs: [{ input_key: "h_c_molar_ratios" }],
+      },
+      { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
+    ]);
+    const blueprints = new Map([["mass_blueprint", blueprintMass]]);
+    const datapointIds = new Map([["rtc_A::mass", "dtp_1"]]);
+
+    const result = buildCreateGhgEntryRequest({
+      template: tmpl,
+      blueprintsByKey: blueprints,
+      datapointIdsByRtcInput: datapointIds,
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    const components = result.ghg_entry_template_components ?? [];
+    expect(components).toHaveLength(1);
+    expect(components[0]!.ghg_entry_template_component_id).toBe("rtc_A");
+  });
+
   it("throws when a component references a blueprint missing from the catalog (drift detection)", () => {
     const tmpl = template([
       { id: "rtc_X", blueprint_key: "missing_bp", inputs: [{ input_key: "mass" }] },

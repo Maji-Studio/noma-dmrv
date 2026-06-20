@@ -1,94 +1,103 @@
 import { describe, expect, it } from "vitest";
-import { deriveSamplingRequirement, type RunSampling } from "./sampling-requirements";
+import {
+  deriveSamplingRequirement,
+  type BatchSampling,
+} from "./sampling-requirements";
 
-function runs(...sampleCounts: number[]): RunSampling[] {
+function batches(...sampleCounts: number[]): BatchSampling[] {
   return sampleCounts.map((sampleCount, i) => ({
-    runId: `run-${i + 1}`,
-    runCode: `PR-${i + 1}`,
+    batchId: `batch-${i + 1}`,
+    batchCode: `CB-${i + 1}`,
     sampleCount,
   }));
 }
 
-describe("deriveSamplingRequirement — Method A (every run, §8.3)", () => {
-  it("requires every run sampled and reports the unsampled ones", () => {
-    const r = deriveSamplingRequirement("method_a", runs(3, 0, 3, 0));
-    expect(r.totalRuns).toBe(4);
-    expect(r.sampledRuns).toBe(2);
-    expect(r.requiredSampledRuns).toBe(4);
+describe("deriveSamplingRequirement — Method A (every batch, §8.3)", () => {
+  it("requires every batch sampled and reports the unsampled ones", () => {
+    const r = deriveSamplingRequirement("method_a", batches(3, 0, 3, 0));
+    expect(r.totalBatches).toBe(4);
+    expect(r.sampledBatches).toBe(2);
+    expect(r.requiredSampledBatches).toBe(4);
     expect(r.cadenceShortfall).toBe(2);
-    expect(r.unsampledRequiredRunIds).toEqual(["run-2", "run-4"]);
+    expect(r.unsampledRequiredBatchIds).toEqual(["batch-2", "batch-4"]);
     expect(r.met).toBe(false);
   });
 
-  it("is met when every run carries at least one sample", () => {
-    const r = deriveSamplingRequirement("method_a", runs(3, 4, 3));
-    expect(r.requiredSampledRuns).toBe(3);
+  it("is met when every batch carries at least one sample", () => {
+    const r = deriveSamplingRequirement("method_a", batches(3, 4, 3));
+    expect(r.requiredSampledBatches).toBe(3);
     expect(r.cadenceShortfall).toBe(0);
-    expect(r.unsampledRequiredRunIds).toEqual([]);
+    expect(r.unsampledRequiredBatchIds).toEqual([]);
     expect(r.met).toBe(true);
   });
 
-  it("flags sampled runs that fall short of the ≥3-replicate minimum (§4)", () => {
-    const r = deriveSamplingRequirement("method_a", runs(3, 2, 1));
-    expect(r.underReplicatedRunIds).toEqual(["run-2", "run-3"]);
-    // cadence is still met — every run has ≥1 sample
+  it("flags sampled batches whose POOLED replicates fall short of ≥3 (§4)", () => {
+    // The pooled count is per BATCH, not per run: a batch pooling 2 replicates
+    // is under-replicated; one pooling 3 across 3 runs would not be (regression
+    // against the old per-run over-requirement).
+    const r = deriveSamplingRequirement("method_a", batches(3, 2, 1));
+    expect(r.underReplicatedBatchIds).toEqual(["batch-2", "batch-3"]);
+    // cadence is still met — every batch has ≥1 sample
     expect(r.cadenceShortfall).toBe(0);
   });
 });
 
-describe("deriveSamplingRequirement — Method B (≥1 per 10 runs, §8.3.1.2)", () => {
-  it("requires ceil(totalRuns / 10) sampled runs", () => {
-    // 25 runs → ceil(25/10) = 3 required
+describe("deriveSamplingRequirement — Method B (≥1 per 10 batches, §8.3.1.2)", () => {
+  it("requires ceil(totalBatches / 10) sampled batches", () => {
+    // 25 batches → ceil(25/10) = 3 required
     const r = deriveSamplingRequirement(
       "method_b",
-      runs(...Array(25).fill(0)),
+      batches(...Array(25).fill(0)),
     );
-    expect(r.requiredSampledRuns).toBe(3);
-    expect(r.sampledRuns).toBe(0);
+    expect(r.requiredSampledBatches).toBe(3);
+    expect(r.sampledBatches).toBe(0);
     expect(r.cadenceShortfall).toBe(3);
     expect(r.met).toBe(false);
-    // No per-run obligation under Method B — any 1-in-10 satisfies the cadence.
-    expect(r.unsampledRequiredRunIds).toEqual([]);
+    // No per-batch obligation under Method B — any 1-in-10 satisfies the cadence.
+    expect(r.unsampledRequiredBatchIds).toEqual([]);
   });
 
-  it("is met when the sampled-run count meets the 1/10 cadence", () => {
-    // 12 runs → ceil(12/10) = 2 required; two runs sampled.
+  it("is met when the sampled-batch count meets the 1/10 cadence", () => {
+    // 12 batches → ceil(12/10) = 2 required; two batches sampled.
     const counts = [3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0];
-    const r = deriveSamplingRequirement("method_b", runs(...counts));
-    expect(r.totalRuns).toBe(12);
-    expect(r.requiredSampledRuns).toBe(2);
-    expect(r.sampledRuns).toBe(2);
+    const r = deriveSamplingRequirement("method_b", batches(...counts));
+    expect(r.totalBatches).toBe(12);
+    expect(r.requiredSampledBatches).toBe(2);
+    expect(r.sampledBatches).toBe(2);
     expect(r.cadenceShortfall).toBe(0);
     expect(r.met).toBe(true);
   });
 
-  it("requires at least one sample once any run exists (≤10 runs → 1 required)", () => {
-    const r = deriveSamplingRequirement("method_b", runs(0, 0, 0));
-    expect(r.requiredSampledRuns).toBe(1);
+  it("requires at least one sample once any batch exists (≤10 → 1 required)", () => {
+    const r = deriveSamplingRequirement("method_b", batches(0, 0, 0));
+    expect(r.requiredSampledBatches).toBe(1);
     expect(r.cadenceShortfall).toBe(1);
     expect(r.met).toBe(false);
   });
 
-  it("still flags under-replicated sampled runs under Method B", () => {
-    const r = deriveSamplingRequirement("method_b", runs(2, 0, 0, 0, 0, 0, 0, 0, 0, 0));
-    expect(r.sampledRuns).toBe(1);
-    expect(r.requiredSampledRuns).toBe(1);
+  it("still flags under-replicated sampled batches under Method B", () => {
+    const r = deriveSamplingRequirement(
+      "method_b",
+      batches(2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    );
+    expect(r.sampledBatches).toBe(1);
+    expect(r.requiredSampledBatches).toBe(1);
     expect(r.cadenceShortfall).toBe(0);
     expect(r.met).toBe(true);
-    expect(r.underReplicatedRunIds).toEqual(["run-1"]);
+    expect(r.underReplicatedBatchIds).toEqual(["batch-1"]);
   });
 });
 
-describe("deriveSamplingRequirement — empty run set", () => {
-  it("requires nothing and is met when there are no runs", () => {
+describe("deriveSamplingRequirement — empty batch set", () => {
+  it("requires nothing and is met when there are no batches", () => {
     for (const method of ["method_a", "method_b"] as const) {
       const r = deriveSamplingRequirement(method, []);
-      expect(r.totalRuns).toBe(0);
-      expect(r.requiredSampledRuns).toBe(0);
+      expect(r.totalBatches).toBe(0);
+      expect(r.requiredSampledBatches).toBe(0);
       expect(r.cadenceShortfall).toBe(0);
       expect(r.met).toBe(true);
-      expect(r.unsampledRequiredRunIds).toEqual([]);
-      expect(r.underReplicatedRunIds).toEqual([]);
+      expect(r.unsampledRequiredBatchIds).toEqual([]);
+      expect(r.underReplicatedBatchIds).toEqual([]);
     }
   });
 });

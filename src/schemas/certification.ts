@@ -72,7 +72,7 @@ export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 // fallback remain.
 // Cap on the free-text soil-temperature dataset citation — enough for a
 // dataset + region note for the PDD without letting an oversized blob land.
-const SOIL_TEMPERATURE_SOURCE_MAX_LENGTH = 500;
+export const SOIL_TEMPERATURE_SOURCE_MAX_LENGTH = 500;
 
 export const facilityEmissionConfigSchema = z.object({
   facilityId: z.string().uuid("Select a facility"),

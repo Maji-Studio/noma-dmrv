@@ -6,3 +6,4 @@
 export { SampleForm } from "./sample-form";
 export { SampleList } from "./sample-list";
 export { SampleDocumentsPanel } from "./sample-documents-panel";
+export { SampleEvidenceSection } from "./sample-evidence-section";

@@ -1,6 +1,7 @@
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
 import type { AggregatedProductionData } from "../utils/aggregation";
+import { isSequestrationBlueprintKey } from "./measurement-sample";
 
 type CreateGhgEntryRequest = components["schemas"]["CreateGhgEntryRequest"];
 type GhgEntryTemplate = components["schemas"]["GhgEntryTemplate"];
@@ -39,6 +40,13 @@ export function buildCreateGhgEntryRequest(
 
   for (const group of template.groups) {
     for (const component of group.components) {
+      // The `biochar_sequestration_200_year_*` components are fed by the
+      // measurement-samples step (Phase 3), not the datapoint loop, so they carry
+      // no resolved datapoint here — skip them in the removal body. The registry
+      // binds their inputs to the measurement-sample datapoints (binding mode is
+      // sandbox-gated; see docs/open-questions.md). resolveTemplateInputs skips
+      // them to match.
+      if (isSequestrationBlueprintKey(component.blueprint_key)) continue;
       const blueprint = blueprintsByKey.get(component.blueprint_key);
       if (!blueprint) {
         throw new SafeError(

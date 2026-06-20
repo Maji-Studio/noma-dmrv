@@ -174,45 +174,61 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
-### Credit-batch lab-sampling — Phases 2–4 + Method-B unlock deferred (`certification/credit-batch-sampling-phases`, opened 2026-06-19)
+### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
-- **Phase 1 shipped** (ADR 0016, branch `feat/credit-batch-production-process`,
-  commit `dde0c8e`, PR #294): `production_processes` table, derived
-  `credit_batches.feedstock_type_id` + `production_process_id`, single-feedstock
-  invariant, `samples.credit_batch_id`, the Isometric ≤ 1-month cap, and removal
-  of `reactors.sampling_method` + its migration-`0052` Method-B trigger
-  (migration `0057`). Data model + server-side derivation only.
-- **Deferred (Phases 2–4, plan items 7–15 in
-  `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`):**
-  re-grain `getMethodBEligibilityByReactor` → `…ByProcess` (counting samples in
-  the process since `established_at` — closes the cross-feedstock bug, dormant
-  under Method A); move the sampling unit from run to credit batch in
-  `sampling-requirements.ts` / `durability-submission-gates.ts`; re-point the
-  measurement-sample submission to one `biochar_production_batch` per credit
-  batch; surface the derived feedstock/process in the credit-batch UI; add the
-  process-grain Method-B/cadence operator surface.
-- **Deferred (ADR 0017 — Method-B unlock):** the live baseline counter, the
-  μ−σ/√n unsampled estimate, the 6-month borrow pool, 3σ winsorising, the
-  super-admin unlock, the Method-B operator UI, and the **process-grain DB
-  trigger** that replaces the dropped `0052` reactor trigger. Inert seam
-  (`production_processes.method_b_unlocked_at`) is laid.
-- **Why it matters:** DEC runs Method A everywhere today, so none of the above
-  blocks current operation — but the legacy reactor-grain submission gates still
-  describe an enforcement model mid-migration. Resolve by removing this entry as
-  each phase lands and recording it in `docs/isometric/changes.md`.
+- **ADR 0017 Track 2 shipped** (PR #301): explicit Method-B unlock
+  (`unlockMethodBForProcess`) with prerequisite capture, the μ−σ/√n unsampled
+  estimate preview (`previewUnsampledCarbon`, 6-month eligible pool), the
+  compliance-drift counters, `_unsampled` submission routing, the process-grain
+  **DB trigger backstop** (migration `0060`) that replaces the dropped `0052`
+  reactor trigger and counts only the pre-unlock baseline, and the operator surface
+  moved under the registry-gated `/certification/production-processes`.
+- **Still gated:** the live `_unsampled` submission POST stays behind
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE = false` (wire format unconfirmed); the
+  preview does NOT winsorise (the registry's 3σ winsorisation over the eligible
+  pool remains the registry's authority, ADR 0013 / D1).
+- **Gate shape to settle before activation:** Method-B cadence is a
+  production-process history rule, not just the removal member-batch subset. The
+  live submission gate should either load the full process batch window or accept
+  an explicit process-level cadence fact.
+- **Why it matters:** DEC runs Method A everywhere today, so Track 2 does not
+  block current operation; do not enable Method B until the activation path and
+  submission gate are process-grain end to end.
 - **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
   #291 (template-driven remodel) — coordinate so the submission layer isn't
   double-built.
+- **ADR-number hygiene (2026-06-20):** ADR 0017 (Method-B unlock) refines ADR
+  0016; keep sampling/credit-batch references on ADR 0016 unless they specifically
+  describe the Method-B unlock decision.
 
-### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
+### Method-B compute — tracked cleanups on the process-grain surface (`certification/method-b-compute-cleanups`, opened 2026-06-20)
 
-- The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
-  every Removal submit) renders with bundled DM Sans/Mono TTFs read at runtime
+Low-priority consolidations on the Track 2 surface (PR #301 review), deferred so
+they don't churn a freshly-introduced surface mid-review:
+
+- **`sampleMeanStdDev` ⇄ `meanAndStdDev` convergence.** `lib/calculations/stats.ts`
+  (`sampleMeanStdDev`) is a knowing near-duplicate of the private `meanAndStdDev`
+  in `lib/isometric/utils/durability-aggregation.ts`. The aggregation copy can
+  collapse onto the client-safe `stats.ts` helper once its server-coupled
+  neighbour (`./aggregation`) is untangled from the client-safe path. Tracked here
+  rather than only in the `stats.ts` file header.
+- **O(n²) leave-one-out in `countSubThreeSigmaMeasurements`.** It recomputes
+  `sampleMeanStdDev` over a fresh `filter` array per element. Fine for a 6-month
+  window pool; if pools grow, the leave-one-out mean/variance can be computed
+  analytically in O(n) from running sums. Low priority.
+
+### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
+
+- The evidence-ledger PDFs (the transport mass·distance ledger and, since Phase 4,
+  the 200-year durability ledger — both auto-generated + mirrored as Sources on
+  every Removal submit) render with bundled DM Sans/Mono TTFs read at runtime
   via a dynamic `process.cwd()` path (`src/lib/certification/evidence-ledger/
-  fonts.ts`). Next's static tracer can't follow a dynamic fs path, so the TTFs
-  are pulled into the serverless bundle by `outputFileTracingIncludes` in
-  `next.config.ts` (broad `"/**"` key, since the submit action bundles under
-  several routes).
+  fonts.ts`, shared by both renderers via `registerEvidenceLedgerFonts`). Next's
+  static tracer can't follow a dynamic fs path, so the TTFs are pulled into the
+  serverless bundle by `outputFileTracingIncludes` in `next.config.ts` (broad
+  `"/**"` key, since the submit action bundles under several routes). The glob is
+  directory-wide (`evidence-ledger/fonts/*.ttf`), so it already covers the
+  durability renderer — no config change for Phase 4.
 - **Why it matters:** serverless file-tracing can't be exercised locally. If the
   glob misses, the renderer throws `ENOENT` at submit time — and because ledger
   generation is best-effort (try/catch in `submitRemoval`), the failure is
@@ -226,12 +242,25 @@ guard. Pure starter-template residue; the app is facility-scoped.
   `outputFileTracingIncludes` glob is still unexercised. Entry stays open.
 - **Resolve via:** on the first staging deploy, run a real submit and confirm a
   `transport_evidence_ledger` document + Source is created (check the removal's
-  sources / the structured log line `generated transport evidence ledger`). If
-  absent, inspect the function bundle for the `.ttf` files and tighten the trace
-  key to the actual submit route(s). Record the outcome in
-  `docs/isometric/changes.md` and remove this entry (S).
+  sources / the structured log line `generated evidence ledger`). The durability
+  ledger (`durability_evidence_ledger`) shares the same fonts + render path, so a
+  passing transport render confirms both; for a durability removal also confirm
+  its document exists. If absent, inspect the function bundle for the `.ttf`
+  files and tighten the trace key to the actual submit route(s). Record the
+  outcome in `docs/isometric/changes.md` and remove this entry (S).
 
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
+
+- **Status (2026-06-20): Tier-1 Phases 1–5 built + committed** on
+  `feat/tier1-durability-live-wiring` — the run → credit-batch re-grain, the facility
+  reference soil-temp field, the staged measurement-samples submission step, the
+  durability evidence-ledger PDF, and the two UX surfaces (lab-sample batch progress +
+  credit-batch durability panel). See `docs/isometric/changes.md` → 2026-06-20. **The
+  only thing still gating the live POST is the two sandbox-empirical confirms below**
+  (datapoint↔input binding + the H/C unit scale); every decision is built and staged.
+  **Do not remove this entry until `DURABILITY_MEASUREMENT_SAMPLES_LIVE` is flipped on
+  after the operator runs the confirms** — at the same cutover, delete the stale
+  `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry (see the Phase 3 note).
 
 - **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
   against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module
@@ -266,6 +295,24 @@ guard. Pure starter-template residue; the app is facility-scoped.
      list/aggregation view).
   **Still blocking the live POST:** only the two sandbox-empirical confirms below — every decision
   above is buildable/stageable now.
+
+- **Phase 3 staged (2026-06-19, branch `feat/tier1-durability-live-wiring`).** The
+  measurement-samples submission step is built + wired into `runRemovalSubmission`, gated behind
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (default **false**) in
+  `src/fn/certification/durability-measurement-samples.ts`. When the flag is off, `submitRemoval`
+  hard-blocks any template that declares a `biochar_sequestration_200_year_*` component with a
+  "staged, not yet live" `SafeError` (so the new template can't be submitted until the two confirms
+  land); `resolveTemplateInputs` + `buildCreateGhgEntryRequest` skip those components.
+  - **DEFERRED — delete at the end of the last phase (live-flip cutover):** decision #6 above said
+    to delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry *now*. It is
+    **load-bearing on the still-live old-template carbon path** — referenced by 5 tests
+    (`isometric-submit-removal`, `registry-boundary-removal`, `period-input-tuples`,
+    `isometric-transformers`, `isometric-sources`) and `certify-field-registry.ts` (two `tuple(…)`
+    descriptors). Deleting it while the new path is gated off breaks working tests for zero
+    functional gain (the new template literally can't be submitted yet). **Decision (2026-06-19, with
+    the user): keep it until the live flip**, then delete the `INPUT_MAPPING` entry + the two
+    field-registry tuples (`biocharOutputKg`→`product_mass`, `organicCarbonPercent`→`carbon_content`)
+    + retarget the 5 tests to the new sequestration shape, as the final cleanup of this entry.
 
 - **Phase E of the 200-year durability build is built offline but the LIVE
   submit path is gated on two sandbox-empirical confirms.** The measurement-
@@ -310,6 +357,16 @@ guard. Pure starter-template residue; the app is facility-scoped.
   the COA/lab-report Source behind the chemistry datapoints (D4), and recording
   the conservative soil-temp method string on the `biochar_soil` datapoint
   (the `CreateMeasurementSampleRequest` body has no description field).
+- **Snapshot-back the measurement-sample bodies before the flip (resume
+  coherence).** Today the gated step in `runRemovalSubmission` rebuilds the
+  measurement-sample submissions from live `durability.batches` every attempt,
+  whereas `transport.datapointBodies` and the fixed bindings come off the claimed
+  row snapshot on resume. While the flag is off this is inert, but once live a
+  resumed claim could reconcile a stale body (partial prior create) or POST
+  changed live chemistry under the prior version (failed before create). Persist
+  the built measurement-sample submissions into the payload snapshot and read
+  them back on resume — same pattern as `transport.datapointBodies` — so the
+  whole registry attempt stays version-coherent. (Surfaced in PR #297 review.)
 - **Why it matters / blocking what:** the legacy
   `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry references a
   blueprint the operator deleted when re-authoring the template, so live submit

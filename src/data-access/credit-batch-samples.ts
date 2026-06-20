@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns, samples } from "@/db/schema/production";
@@ -10,7 +10,7 @@ import { requireAuth } from "./utils";
 
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
- * pooled on `samples.creditBatchId` (across member runs/days — ADR 0015 made the
+ * pooled on `samples.creditBatchId` (across member runs/days — ADR 0016 made the
  * credit batch the sampling unit and the run link nullable provenance), its
  * member production runs, and the sampling method + declared H/C_org carried for
  * the gate and reconciliation. Structurally a superset of
@@ -33,7 +33,7 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
  * skips any commingled-batch sample with a null run link), the member runs via
  * `credit_batch_production_runs`, and the sampling method off the batch's
  * production process. The spine of the re-grained durability data plane
- * (ADR 0015 Phase 1 of this plan). Batches absent from the DB are omitted.
+ * (ADR 0016 Phase 1 of this plan). Batches absent from the DB are omitted.
  */
 export async function getCreditBatchesWithSamples(
   userId: string,
@@ -132,6 +132,64 @@ export async function getCreditBatchesWithSamples(
   }));
 }
 
+/** The credit batch a production run is committed to. */
+export interface RunCreditBatchRef {
+  creditBatchId: string;
+  creditBatchCode: string;
+}
+
+/**
+ * Resolve the credit batch a production run belongs to (via
+ * `credit_batch_production_runs`). The join's per-run unique constraint means a
+ * run is committed to AT MOST ONE batch, so this returns a single ref or null
+ * (an uncommitted run). Powers the lab-sample form's derived-batch preview —
+ * from the run the operator anchors a sample to, surface the credit batch the
+ * sample characterises and its sampling progress (ADR 0016).
+ */
+export async function getCreditBatchIdForRun(
+  userId: string,
+  productionRunId: string,
+): Promise<RunCreditBatchRef | null> {
+  requireAuth(userId);
+  if (!productionRunId) return null;
+
+  const [row] = await db
+    .select({
+      creditBatchId: creditBatches.id,
+      creditBatchCode: creditBatches.code,
+    })
+    .from(creditBatchProductionRuns)
+    .innerJoin(
+      creditBatches,
+      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+    )
+    .where(eq(creditBatchProductionRuns.productionRunId, productionRunId))
+    .limit(1);
+
+  return row ?? null;
+}
+
+/**
+ * Resolve the credit batch id a production run is committed to, within a given
+ * executor (an open transaction or the base db). Reads only the membership join
+ * — the per-run unique constraint guarantees ≤1. Used by the sample write path to
+ * DERIVE `samples.creditBatchId` from the run so ADR 0016's "both links stay
+ * populated" invariant holds for form-created samples (the form never sets the
+ * batch directly). Returns null for an uncommitted run.
+ */
+export async function resolveRunCreditBatchId(
+  executor: DbTransaction | typeof db,
+  productionRunId: string | null | undefined,
+): Promise<string | null> {
+  if (!productionRunId) return null;
+  const [row] = await executor
+    .select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
+    .from(creditBatchProductionRuns)
+    .where(eq(creditBatchProductionRuns.productionRunId, productionRunId))
+    .limit(1);
+  return row?.creditBatchId ?? null;
+}
+
 /** A lab Sample id paired with the credit batch it characterises. */
 export interface CreditBatchSampleRef {
   id: string;
@@ -140,7 +198,7 @@ export interface CreditBatchSampleRef {
 
 /**
  * Resolve the lab Sample ids that roll up to each credit batch, keyed on
- * `samples.creditBatchId` (the COA-evidence walk, ADR 0015). Used by the Source
+ * `samples.creditBatchId` (the COA-evidence walk, ADR 0016). Used by the Source
  * candidate collection in place of the run→samples read, which skips any
  * commingled-batch sample with a null run link. Returns one entry per sample.
  */

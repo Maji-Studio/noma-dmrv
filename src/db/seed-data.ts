@@ -908,6 +908,12 @@ async function seedDemoData() {
       console.log(`Creating ${productionRunReadingRows.length} production run readings...`);
       await tx.insert(schema.productionRunReadings).values(productionRunReadingRows);
 
+      // Production processes + their credit batches must exist before samples
+      // (the samples.credit_batch_id FK, added in migration 0057). The shared
+      // `seedProductionProcessesAndCreditBatches` builds them; it is invoked here
+      // — before samples — rather than after applications.
+      await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
+
       console.log('Creating samples...');
       await tx.insert(schema.samples).values([
         {
@@ -1493,8 +1499,6 @@ async function seedDemoData() {
           },
         ])
       );
-
-      await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
 
       // Links the Moshi facility to the Isometric sandbox project +
       // Dark Earth Carbon Template, with the Phase 3.7 emission-estimate

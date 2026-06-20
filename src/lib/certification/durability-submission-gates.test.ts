@@ -138,6 +138,30 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.warnings.some((w) => /cluster/i.test(w) && /8\.3\.1/.test(w))).toBe(true);
   });
 
+  it("still warns when the 3 complete replicates cluster but an incomplete off-day sample spreads the raw provenance (§8.3.1)", () => {
+    // Regression (PR #296 review): the cluster check must judge only the USABLE
+    // (complete-chemistry) replicates, not every raw sample. Three complete
+    // replicates all on run-1/2026-06-01 + one incomplete sample (missing O/C_org)
+    // on run-2/2026-06-02 → usableReplicateCount stays 3 (gate c passes), and the
+    // incomplete off-day sample must NOT mask that the usable set clusters.
+    const replicates = [
+      ...eligibleTriplet,
+      { hToCOrgRatio: 0.31, oToCOrgRatio: null },
+    ];
+    const replicateProvenance: ReplicateProvenance[] = [
+      { productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { productionRunId: "run-2", samplingDay: "2026-06-02" },
+    ];
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({ replicates, replicateProvenance }),
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.blockers).toEqual([]);
+    expect(r.warnings.some((w) => /cluster/i.test(w) && /8\.3\.1/.test(w))).toBe(true);
+  });
+
   it("warns distinctly when ≥3 eligible replicates have unknown run/day provenance", () => {
     const unknown: ReplicateProvenance[] = [
       { productionRunId: null, samplingDay: null },

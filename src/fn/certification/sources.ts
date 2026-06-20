@@ -249,7 +249,7 @@ async function collectLineageEntities(
       }
     }
 
-    // Lab Samples by credit batch (ADR 0015) — the COA evidence walk. Keyed on
+    // Lab Samples by credit batch (ADR 0016) — the COA evidence walk. Keyed on
     // `samples.creditBatchId` so a commingled-batch sample with a null run link
     // still surfaces its COA as a Source candidate.
     const batchSamples = await getSamplesByCreditBatchIds(userId, [batch.id]);
@@ -929,7 +929,7 @@ export async function collectCandidateDocumentIdsForRemoval(
     if (lineage.reactor) add("reactor", lineage.reactor.id);
     for (const fs of lineage.feedstocks) add("feedstock", fs.id);
   }
-  // Lab Samples by credit batch (ADR 0015) — keyed on `samples.creditBatchId`,
+  // Lab Samples by credit batch (ADR 0016) — keyed on `samples.creditBatchId`,
   // NOT via `run.samples`, so a commingled-batch sample's COA still lands in the
   // candidate set. These ids also seed the sample-transport-leg walk below.
   const batchSamples = await getSamplesByCreditBatchIds(
