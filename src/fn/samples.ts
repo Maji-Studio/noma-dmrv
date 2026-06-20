@@ -216,7 +216,7 @@ export async function createSampleFn(
         return createSample(user.id, {
           sampleCode,
           productionRunId: validated.productionRunId,
-          creditBatchId: validated.creditBatchId ?? null,
+          creditBatchId: validated.creditBatchId,
           samplingTime:
             validated.samplingTime instanceof Date
               ? validated.samplingTime
