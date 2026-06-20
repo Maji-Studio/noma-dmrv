@@ -35,14 +35,17 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
-import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
-import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
-  buildDurabilityMeasurementSampleSubmissions,
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
   submitDurabilityMeasurementSamples,
+  type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
+import {
+  buildVersionedMeasurementSampleSubmissions,
+  normalizeMeasurementSamplesForHash,
+  readRemovalDurabilityMeasurementSamples,
+} from "./durability-measurement-sample-snapshot";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import {
@@ -69,7 +72,6 @@ const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
   "state-changed":
     "Submission state changed while preparing the removal. Reload and retry.",
 };
-
 // Reads the genset energy yield off the facility's certifier_projects row.
 // Throws if unset — it must be configured in the admin area (Emission
 // estimates) before a submission can convert genset litres to kWh (ADR 0015
@@ -520,6 +522,25 @@ export async function submitRemoval(
     sourceIds,
     allowPeriodInputStub,
   });
+  const durabilityMeasurementSampleArgs =
+    hasDurabilityComponents && ctx.facilityReferenceSoilTemperature
+      ? {
+          removalId,
+          externalProjectId,
+          batches: ctx.batchesWithSamples,
+          attributionByRunId: ctx.attributionByRunId,
+          facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature,
+          measuredAt: agg.latestEndTime.toISOString(),
+        }
+      : null;
+  const semanticMeasurementSamples = durabilityMeasurementSampleArgs
+    ? normalizeMeasurementSamplesForHash(
+        buildVersionedMeasurementSampleSubmissions({
+          ...durabilityMeasurementSampleArgs,
+          version: 0,
+        }),
+      )
+    : [];
 
   // The hash is a function of what gets sent to Isometric — the run set and
   // the resolved inputs. Member credit-batch ids are recorded in the snapshot
@@ -534,6 +555,9 @@ export async function submitRemoval(
     // Phase 3.5: sorted, deduped Isometric Source IDs. Hash-covered so
     // mirroring or unmirroring a source forces a new version (supersede).
     sourceIds,
+    ...(semanticMeasurementSamples.length > 0
+      ? { durabilityMeasurementSamples: semanticMeasurementSamples }
+      : {}),
     inputs: [
       ...monitored.map((m) => ({
         rtcId: m.removalTemplateComponentId,
@@ -573,7 +597,12 @@ export async function submitRemoval(
     },
     guard: mappingGuard,
     policy: { onSubmittedHashChanged: "supersede" },
-    tentativeInputs: { semanticPayload, monitored, datapointBodyByKey },
+    tentativeInputs: {
+      semanticPayload,
+      monitored,
+      datapointBodyByKey,
+      durabilityMeasurementSampleArgs,
+    },
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,
     resolve: async (tx, tentative) => {
@@ -606,6 +635,8 @@ export async function submitRemoval(
         },
         monitored: finalResolved.monitored,
         datapointBodyByKey: finalResolved.datapointBodyByKey,
+        durabilityMeasurementSampleArgs:
+          tentative.durabilityMeasurementSampleArgs,
       };
     },
     buildSnapshot: ({ inputs, nextVersion }) => {
@@ -639,6 +670,14 @@ export async function submitRemoval(
           body: { ...draft, supplier_reference_id: supplierRefId },
         };
       });
+      const durabilityMeasurementSamples = inputs.durabilityMeasurementSampleArgs
+        ? {
+            submissions: buildVersionedMeasurementSampleSubmissions({
+              ...inputs.durabilityMeasurementSampleArgs,
+              version: nextVersion,
+            }),
+          }
+        : undefined;
 
       return {
         payloadSnapshot: {
@@ -654,6 +693,9 @@ export async function submitRemoval(
             removalSupplierRef,
             datapointBodies: finalDatapointBodies,
           },
+          ...(durabilityMeasurementSamples
+            ? { durabilityMeasurementSamples }
+            : {}),
         },
       };
     },
@@ -687,21 +729,12 @@ export async function submitRemoval(
       const effectiveFixed = claimed.resumed
         ? readRemovalFixedInputs(claimed.row)
         : fixed;
-      // Durability bundle for the measurement-samples step — present only when
-      // the template declares a sequestration component (and thus the flag is on,
-      // per the gate above). `facilityReferenceSoilTemperature` is guaranteed
-      // non-null here when there are batches to submit (the soil-temp durability
-      // gate blocker throws above otherwise); the truthy guard keeps TS honest
-      // and short-circuits the no-batch edge case.
-      const durability =
-        hasDurabilityComponents && ctx.facilityReferenceSoilTemperature
-          ? {
-              batches: ctx.batchesWithSamples,
-              attributionByRunId: ctx.attributionByRunId,
-              facilityReferenceSoilTemperature:
-                ctx.facilityReferenceSoilTemperature,
-            }
-          : null;
+      // Durability measurement-sample POST bodies are snapshot truth. On create
+      // they carry the claimed versioned supplier refs; on resume they prevent a
+      // stale draft from rebuilding bodies from changed live context.
+      const durabilityMeasurementSubmissions = hasDurabilityComponents
+        ? readRemovalDurabilityMeasurementSamples(claimed.row)
+        : null;
       return runRemovalSubmission({
         userId,
         removalId,
@@ -712,7 +745,7 @@ export async function submitRemoval(
         blueprintsByKey,
         agg,
         externalProjectId,
-        durability,
+        durabilityMeasurementSubmissions,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
         log,
@@ -731,14 +764,11 @@ interface RunRemovalSubmissionArgs {
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: Parameters<typeof buildCreateGhgEntryRequest>[0]["agg"];
   externalProjectId: string;
-  // Durability measurement-samples bundle — null unless the template declares a
-  // sequestration component (Phase 3). When present, the step POSTs the per-batch
-  // production-batch + soil samples after the datapoint loop, before the removal.
-  durability: {
-    batches: CreditBatchWithSamples[];
-    attributionByRunId: Map<string, number>;
-    facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature;
-  } | null;
+  // Versioned snapshot bodies for the durability measurement-samples step — null
+  // unless the template declares a sequestration component (Phase 3).
+  durabilityMeasurementSubmissions:
+    | DurabilityMeasurementSampleSubmission[]
+    | null;
   supersedePreviousId: string | null;
   resumed: boolean;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
@@ -755,7 +785,7 @@ async function runRemovalSubmission({
   blueprintsByKey,
   agg,
   externalProjectId,
-  durability,
+  durabilityMeasurementSubmissions,
   supersedePreviousId,
   resumed,
   log,
@@ -799,26 +829,16 @@ async function runRemovalSubmission({
   // Phase 3: POST the durability measurement samples (per-batch chemistry +
   // facility soil reference) after the datapoint loop, before the removal body —
   // each value yields a datapoint the registry binds to the sequestration
-  // component. The flag is already on whenever `durability` is non-null (the
+  // component. The flag is already on whenever submissions are present (the
   // submitRemoval gate blocks otherwise); the explicit guard is defence-in-depth
   // so a future caller can't accidentally fire the staged path.
-  if (durability && DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    const submissions = buildDurabilityMeasurementSampleSubmissions({
-      removalId,
-      version: row.version,
-      externalProjectId,
-      batches: durability.batches,
-      attributionByRunId: durability.attributionByRunId,
-      facilityReferenceSoilTemperature:
-        durability.facilityReferenceSoilTemperature,
-      measuredAt: effectiveAgg.latestEndTime.toISOString(),
-    });
+  if (durabilityMeasurementSubmissions && DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
     const { submitted } = await submitDurabilityMeasurementSamples({
       userId,
       removalId,
       submissionRowId: row.id,
       resumed,
-      submissions,
+      submissions: durabilityMeasurementSubmissions,
       log,
     });
     log.info({ submitted }, "durability measurement samples submitted");
