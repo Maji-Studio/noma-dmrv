@@ -118,7 +118,10 @@ export function DurabilityReadinessSignals({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-8">
+    <div
+      data-testid="durability-readiness-signals"
+      className="flex flex-wrap items-center gap-8"
+    >
       <ReadinessChip
         tone={meetsMinimum ? "ok" : "wait"}
         icon={
