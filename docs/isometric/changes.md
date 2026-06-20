@@ -13,6 +13,46 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
+
+Track 2 activates the Method-B unlock end-to-end (ADR 0017; implementation record
+[`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md)).
+The registry stays the authority for the credited compute (ADR 0013 / D1) —
+everything here **gates, routes, and previews**; it never submits a credited
+number. The live `_unsampled` POST stays gated behind
+`DURABILITY_MEASUREMENT_SAMPLES_LIVE = false` (wire format unconfirmed).
+
+- **Schema/backstop:** new `production_processes` unlock columns
+  (`method_b_unlocked_at`, `agreed_baseline_size`, `random_sampling_plan_ref`,
+  `moisture_pathway`; migration `0059`) and the process-grain **DB trigger
+  backstop** re-asserting the ≥30-sample floor (migration `0060`). The backstop
+  counts only the **pre-unlock baseline** (`sampling_time < method_b_unlocked_at`)
+  so post-unlock Method-B samples can't mask a later regression/deletion of the
+  original baseline; the app guard (`unlockMethodBForProcess`) mirrors the same
+  `as_of = unlock` boundary via `countEligibleSamplesByProcess`.
+- **Pure engines (non-authoritative):** `previewUnsampledCarbon` (Eq 4/5,
+  μ − σ/√n over the trailing-6-month eligible pool) and
+  `evaluateProcessComplianceDrift` (the two 6-month review-trigger counters). The
+  eligible-window boundary lives in one place (`eligibleWindowCutoff` /
+  `isWithinEligibleWindow` / `filterEligibleSamples`), shared by the preview and
+  the compliance carbon window.
+- **Server actions / reads:** `unlockMethodBForProcess` (app guard + trigger,
+  captures the three prerequisites), `getProcessComplianceDrift`,
+  `getUnsampledCarbonPreviewForProcess` (shared `loadProcessSamples` loader), and
+  `startNewProductionProcess` (baseline reset), wired through `fn/` + hooks.
+- **Submission routing:** unsampled Method-B batches route to the `_unsampled`
+  blueprint, dispatched off `selectSequestrationBlueprintKey` (the blueprint IS
+  the Method A/B distinction; fail-closed on the impossible unsampled-Method-A
+  state). Gated — the whole measurement-sample step stays behind the flag.
+- **Operator UI** at **`/certification/production-processes`** — moved under the
+  `certification` segment so `CertificationRegistryGuard` gates direct URL access
+  on a registry link, exactly like Removals/GHG Statements (no Method A/B to
+  manage off the registry). Eligible Method-A rows get a one-click **Unlock**;
+  the detail panel hosts the protocol-cited explainer (Isometric only), the
+  non-authoritative unsampled-carbon preview, the warn-only compliance-drift
+  counters, the **Start new process** reset, and the three captured prerequisites
+  surfaced read-only. All thresholds pull from `@/config/certification`.
+
 ## 2026-06-20 (ADR 0017 Track 1 — re-grain Method-B sampling/eligibility to the production process)
 
 Track 1 of the Method-B unlock (ADR 0017; implementation record

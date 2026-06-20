@@ -279,6 +279,56 @@ export function buildBiocharProductionBatchSample(
   };
 }
 
+/**
+ * Build the `biochar_production_batch` measurement sample for an UNSAMPLED
+ * Method-B batch — the `_unsampled` blueprint route (D8). The batch carries no
+ * chemistry of its own; the registry derives its conservative carbon + durable
+ * fraction (Eq 4/5 + 3σ winsorisation) from the process's historically sampled
+ * batches. So this body carries ONLY the batch's attribution-scaled product mass
+ * (the quantity the registry multiplies its derived figure by).
+ *
+ * ─── ⚠️ SANDBOX-GATED WIRE FORMAT (confirm before the live flip) ──────────────
+ * The exact `_unsampled` body — mass-only (this) vs. the registry deriving mass
+ * from linked production batches — is UNCONFIRMED. It is inert until
+ * `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flips (the whole step is gated), so a
+ * wrong guess can never reach a live credit. Resolve via
+ * `pnpm isometric:coverage-check -- --source=db` with the sequestration template,
+ * then tune here. See `docs/open-questions.md`.
+ *
+ * Pure — no I/O. The caller asserts the batch is genuinely unsampled AND on
+ * Method B (via `selectSequestrationBlueprintKey`) before invoking this.
+ */
+export function buildBiocharUnsampledBatchSample(args: {
+  batch: PerBatchDurabilityDatapoint;
+  projectId: string;
+  supplierRefId: string;
+  measuredAt: string;
+  productionBatchId?: string | null;
+}): CreateMeasurementSampleRequest {
+  const { batch, projectId, supplierRefId, measuredAt, productionBatchId } =
+    args;
+  return {
+    feedstock_batch_id: null,
+    measured_at: measuredAt,
+    measurement_location_id: null,
+    measurement_type: "biochar_production_batch",
+    production_batch_id: productionBatchId ?? null,
+    project_id: projectId,
+    storage_location_id: null,
+    supplier_reference_id: supplierRefId,
+    values: [
+      {
+        measurement_property: PRODUCT_MASS_MEASUREMENT_PROPERTY,
+        value: {
+          magnitude: batch.productMassKg,
+          standard_deviation: null,
+          unit: PRODUCT_MASS_UNIT,
+        },
+      },
+    ],
+  };
+}
+
 export interface BuildBiocharSoilSampleArgs {
   /**
    * The facility's operator-declared reference soil temperature (Phase 2):
