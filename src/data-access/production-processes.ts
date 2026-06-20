@@ -16,11 +16,24 @@ import {
   samples,
   type ProductionProcess,
 } from "@/db/schema";
-import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
+import {
+  METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+  PROCESS_ROLLING_WINDOW_MONTHS,
+} from "@/config/certification";
 import {
   deriveSamplingRequirement,
+  type BatchSampling,
   type SamplingMethod,
 } from "@/lib/certification/sampling-requirements";
+import {
+  evaluateProcessComplianceDrift,
+  type ProcessComplianceDrift,
+} from "@/lib/certification/compliance-drift";
+import {
+  previewUnsampledCarbon,
+  type UnsampledCarbonPreview,
+} from "@/lib/calculations/unsampled-carbon";
+import type { UnlockMethodBInput } from "@/schemas/production-process";
 import { countEligibleSamplesByProcess } from "./isometric";
 import { requireAuth } from "./utils";
 
@@ -208,5 +221,272 @@ export async function getProductionProcessSummariesByFacility(
       cadenceShortfall: requirement.cadenceShortfall,
       cadenceMet: requirement.met,
     };
+  });
+}
+
+/**
+ * Count a process's LIFETIME eligible replicate samples (the ≥30 baseline
+ * counter), inside the caller's transaction. Mirrors
+ * `getMethodBEligibilityByProcess` exactly — credit-batch-linked Samples whose
+ * batch belongs to the process; in-process (null `creditBatchId`) samples are
+ * internal-only and dropped by the inner join. No `asOf` bound: the unlock reads
+ * the whole-life count since `established_at`.
+ */
+async function countProcessEligibleSamples(
+  executor: Executor,
+  productionProcessId: string,
+): Promise<number> {
+  const [row] = await executor
+    .select({ sampleCount: count().mapWith(Number) })
+    .from(samples)
+    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .where(eq(creditBatches.productionProcessId, productionProcessId));
+  return row?.sampleCount ?? 0;
+}
+
+/**
+ * Unlock Method B for a production process (ADR 0017): the deliberate, captured
+ * transition off the Method-A baseline. Flips `samplingMethod → method_b`, stamps
+ * `methodBUnlockedAt`, and persists the three protocol prerequisites the unlock
+ * captures (agreed baseline size, random-sampling-plan reference, moisture
+ * pathway).
+ *
+ * Two guardrails sit under this — the APP-LAYER backstop here (re-counts the
+ * lifetime baseline inside the row-locked transaction and refuses an
+ * under-baseline flip with a friendly message) and the DB trigger
+ * `process_method_b_minimum_samples` (migration 0060), which re-asserts the hard
+ * ≥30 floor even against direct SQL. The app guard checks the *agreed* baseline
+ * (≥30); the trigger checks the protocol floor (30) — never stricter than the
+ * app gate. Idempotent only in the sense that a re-unlock of an
+ * already-Method-B process is rejected, not silently re-stamped.
+ *
+ * Per-facility membership authz (`requireFacilityAccess`) lands with the
+ * multi-tenancy work (ADR 0010); `requireAuth` matches every mutation in this
+ * layer today. Facility managers may unlock (ADR 0017 D4); the guardrail is the
+ * captured prerequisites, not a narrower role gate.
+ */
+export async function unlockMethodBForProcess(
+  userId: string,
+  input: UnlockMethodBInput,
+): Promise<ProductionProcess> {
+  requireAuth(userId);
+
+  return db.transaction(async (tx) => {
+    const [process] = await tx
+      .select()
+      .from(productionProcesses)
+      .where(eq(productionProcesses.id, input.processId))
+      .for("update")
+      .limit(1);
+
+    if (!process) {
+      throw new Error("Production process not found");
+    }
+    if (process.samplingMethod === "method_b") {
+      throw new Error("This production process is already on Method B");
+    }
+
+    const eligibleSampleCount = await countProcessEligibleSamples(
+      tx,
+      input.processId,
+    );
+    // Refuse an under-baseline flip with a friendly message before the DB
+    // trigger would raise its raw check_violation. The agreed baseline is
+    // already ≥ the protocol floor (schema), so this also satisfies the trigger.
+    const requiredSamples = Math.max(
+      input.agreedBaselineSize,
+      METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+    );
+    if (eligibleSampleCount < requiredSamples) {
+      throw new Error(
+        `Cannot unlock Method B: ${eligibleSampleCount}/${requiredSamples} eligible Method-A samples collected for this production process.`,
+      );
+    }
+
+    const now = new Date();
+    const [updated] = await tx
+      .update(productionProcesses)
+      .set({
+        samplingMethod: "method_b",
+        methodBUnlockedAt: now,
+        agreedBaselineSize: input.agreedBaselineSize,
+        randomSamplingPlanRef: input.randomSamplingPlanRef,
+        moisturePathway: input.moisturePathway,
+        updatedAt: now,
+      })
+      .where(eq(productionProcesses.id, input.processId))
+      .returning();
+
+    return updated;
+  });
+}
+
+export interface ProcessCarbonPreview {
+  productionProcessId: string;
+  /** The as-of production date the eligible window was anchored on (ISO). */
+  asOfDate: string;
+  /** Non-authoritative Eq 4/5 preview over the eligible pool. */
+  preview: UnsampledCarbonPreview;
+}
+
+/**
+ * Compute the NON-AUTHORITATIVE unsampled-carbon preview (Eq 4/5) for a process,
+ * as of a given production date (default: now). Loads the process's
+ * credit-batch-linked samples; the pure engine
+ * (`previewUnsampledCarbon`) filters them to the trailing-6-month eligible window
+ * and returns `μ − σ/√n` plus its freshness. The registry computes the credited
+ * number (D1) — this drives the operator preview only.
+ */
+export async function getUnsampledCarbonPreviewForProcess(
+  userId: string,
+  productionProcessId: string,
+  asOfDate?: Date,
+): Promise<ProcessCarbonPreview> {
+  requireAuth(userId);
+
+  const asOf = asOfDate ?? new Date();
+
+  const rows = await db
+    .select({
+      organicCarbonPercent: samples.organicCarbonPercent,
+      samplingTime: samples.samplingTime,
+      creditBatchId: samples.creditBatchId,
+    })
+    .from(samples)
+    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .where(eq(creditBatches.productionProcessId, productionProcessId));
+
+  const preview = previewUnsampledCarbon(rows, { asOfDate: asOf });
+
+  return {
+    productionProcessId,
+    asOfDate: asOf.toISOString(),
+    preview,
+  };
+}
+
+export interface ProcessComplianceDriftResult {
+  productionProcessId: string;
+  samplingMethod: SamplingMethod;
+  /** As-of date the rolling window ends on (ISO). */
+  asOfDate: string;
+  /** Rolling window length (months). */
+  windowMonths: number;
+  drift: ProcessComplianceDrift;
+}
+
+/**
+ * Compute the two trailing-window compliance counters for a process (ADR 0017
+ * item 7): missed required samplings (batches whose production date falls in the
+ * window) and sub-3σ carbon measurements (samples taken in the window). Warn-only
+ * — the registry is the detector of record (D6); noma never auto-acts.
+ */
+export async function getProcessComplianceDrift(
+  userId: string,
+  productionProcessId: string,
+  asOfDate?: Date,
+): Promise<ProcessComplianceDriftResult> {
+  requireAuth(userId);
+
+  const asOf = asOfDate ?? new Date();
+  const cutoff = new Date(asOf);
+  cutoff.setMonth(cutoff.getMonth() - PROCESS_ROLLING_WINDOW_MONTHS);
+
+  const [process] = await db
+    .select({ samplingMethod: productionProcesses.samplingMethod })
+    .from(productionProcesses)
+    .where(eq(productionProcesses.id, productionProcessId))
+    .limit(1);
+  if (!process) {
+    throw new Error("Production process not found");
+  }
+  const samplingMethod = process.samplingMethod as SamplingMethod;
+
+  // Batches of the process + their production (end) date + pooled sample count.
+  const batchRows = await db
+    .select({
+      batchId: creditBatches.id,
+      batchCode: creditBatches.code,
+      endDate: creditBatches.endDate,
+      sampleCount: count(samples.id).mapWith(Number),
+    })
+    .from(creditBatches)
+    .leftJoin(samples, eq(samples.creditBatchId, creditBatches.id))
+    .where(eq(creditBatches.productionProcessId, productionProcessId))
+    .groupBy(creditBatches.id);
+
+  // `endDate` is a date string; a few hours' UTC offset is immaterial for a
+  // 6-month window comparison.
+  const batchesInWindow: BatchSampling[] = batchRows
+    .filter((b) => {
+      const d = new Date(b.endDate);
+      return d >= cutoff && d <= asOf;
+    })
+    .map((b) => ({
+      batchId: b.batchId,
+      batchCode: b.batchCode,
+      sampleCount: b.sampleCount,
+    }));
+
+  // Carbon measurements taken in the window (organic-carbon = the CC in Eq 4).
+  const sampleRows = await db
+    .select({
+      organicCarbonPercent: samples.organicCarbonPercent,
+      samplingTime: samples.samplingTime,
+    })
+    .from(samples)
+    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .where(eq(creditBatches.productionProcessId, productionProcessId));
+
+  const carbonValuesInWindow = sampleRows
+    .filter((s) => s.samplingTime >= cutoff && s.samplingTime < asOf)
+    .map((s) => s.organicCarbonPercent)
+    .filter((v): v is number => v != null && Number.isFinite(v));
+
+  const drift = evaluateProcessComplianceDrift({
+    method: samplingMethod,
+    batchesInWindow,
+    carbonValuesInWindow,
+  });
+
+  return {
+    productionProcessId,
+    samplingMethod,
+    asOfDate: asOf.toISOString(),
+    windowMonths: PROCESS_ROLLING_WINDOW_MONTHS,
+    drift,
+  };
+}
+
+/**
+ * Start a NEW production process for a (facility, feedstock) pair (ADR 0017 item
+ * 7 / D6): the deliberate, human-confirmed reset after a feedstock change,
+ * pyrolysis-condition change, or sustained carbon deviation. A fresh row (Method
+ * A, `establishedAt = now`) becomes the CURRENT process for the pair (the lookup
+ * is ordered by `establishedAt` desc), so its baseline restarts from zero — no
+ * historical data carried forward. The prior process keeps its history but no
+ * longer receives new batches. Never auto-invoked.
+ */
+export async function startNewProductionProcess(
+  userId: string,
+  params: { facilityId: string; feedstockTypeId: string; notes?: string | null },
+): Promise<ProductionProcess> {
+  requireAuth(userId);
+
+  return db.transaction(async (tx) => {
+    // Serialise against find-or-create for the same pair so a batch insert can't
+    // race the reset and attach to a process that's about to be superseded.
+    await lockCurrentProductionProcess(tx, params);
+
+    const [created] = await tx
+      .insert(productionProcesses)
+      .values({
+        facilityId: params.facilityId,
+        feedstockTypeId: params.feedstockTypeId,
+        notes: params.notes ?? null,
+      })
+      .returning();
+
+    return created;
   });
 }
