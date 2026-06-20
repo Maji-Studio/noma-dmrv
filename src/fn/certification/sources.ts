@@ -23,7 +23,7 @@ import {
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
-import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getDocumentById,
   listDocumentsForEntity,
@@ -200,17 +200,6 @@ async function collectLineageEntities(
     const lineages = await Promise.all(
       applicationIds.map((aid) => getChainOfCustodyData(userId, aid)),
     );
-    const runIds = Array.from(
-      new Set(
-        lineages
-          .map((l) => l.productionRun?.id)
-          .filter((id): id is string => !!id),
-      ),
-    );
-    const runsWithSamples =
-      runIds.length > 0
-        ? await getProductionRunsWithSamples(userId, runIds)
-        : [];
 
     for (const lineage of lineages) {
       add({
@@ -260,14 +249,16 @@ async function collectLineageEntities(
       }
     }
 
-    for (const run of runsWithSamples) {
-      for (const sample of run.samples) {
-        add({
-          entityType: "sample",
-          entityId: sample.id,
-          entityLabel: `Lab sample for run ${run.code}`,
-        });
-      }
+    // Lab Samples by credit batch (ADR 0015) — the COA evidence walk. Keyed on
+    // `samples.creditBatchId` so a commingled-batch sample with a null run link
+    // still surfaces its COA as a Source candidate.
+    const batchSamples = await getSamplesByCreditBatchIds(userId, [batch.id]);
+    for (const sample of batchSamples) {
+      add({
+        entityType: "sample",
+        entityId: sample.id,
+        entityLabel: `Lab sample for credit batch ${batch.code}`,
+      });
     }
   }
 
@@ -920,7 +911,6 @@ export async function collectCandidateDocumentIdsForRemoval(
       reactor: { id: string } | null;
       feedstocks: Array<{ id: string }>;
     }>;
-    runs: Array<{ id: string; samples: Array<{ id: string }> }>;
     memberBatchIds: string[];
   },
 ): Promise<string[]> {
@@ -939,9 +929,15 @@ export async function collectCandidateDocumentIdsForRemoval(
     if (lineage.reactor) add("reactor", lineage.reactor.id);
     for (const fs of lineage.feedstocks) add("feedstock", fs.id);
   }
-  for (const run of args.runs) {
-    for (const sample of run.samples) add("sample", sample.id);
-  }
+  // Lab Samples by credit batch (ADR 0015) — keyed on `samples.creditBatchId`,
+  // NOT via `run.samples`, so a commingled-batch sample's COA still lands in the
+  // candidate set. These ids also seed the sample-transport-leg walk below.
+  const batchSamples = await getSamplesByCreditBatchIds(
+    userId,
+    args.memberBatchIds,
+  );
+  const sampleIds = batchSamples.map((s) => s.id);
+  for (const id of sampleIds) add("sample", id);
 
   // Transport legs hanging off those chain entities carry their own uploaded
   // evidence (bills of lading / weigh tickets). Resolve them here so the
@@ -953,7 +949,7 @@ export async function collectCandidateDocumentIdsForRemoval(
     biocharProductIds: args.lineages
       .map((l) => l.biocharProduct?.id)
       .filter((id): id is string => !!id),
-    sampleIds: args.runs.flatMap((r) => r.samples.map((s) => s.id)),
+    sampleIds,
   });
   for (const leg of legEntities) add("transport_leg", leg.entityId);
 

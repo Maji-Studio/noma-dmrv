@@ -46,9 +46,22 @@ export const certifierProjects = pgTable(
     // submits as one combined measurement point, so there is no per-stage
     // breakdown to apportion. The genset yield above is retained because it is
     // emissions-affecting (litres → kWh).
-    // Region-wide conservative fallback used when an application's customer
-    // location has no site-specific default soil temperature.
+    // Operator-declared facility-level REFERENCE soil temperature (°C) — the
+    // authoritative annual-average value submitted to the registry as the
+    // `biochar_soil` measurement for every 200-year removal (ADR 0013, soil
+    // module §5.1.1.3.1). Sourced from an approved global soil-temp dataset
+    // (Lembrechts et al. 2022 SoilTemp or equivalent) when there is no on-site
+    // baseline; air temperature is prohibited. The 7 °C floor + one-decimal
+    // rounding are applied at resolve time (`resolveFacilityReferenceSoilTemperature`).
+    // It also remains the last-resort fallback for an application's per-site
+    // default when neither the application nor its customer location declares one.
     defaultSoilTemperatureC: real('default_soil_temperature_c'),
+    // Dataset / region citation for the reference soil temperature above —
+    // free text recorded for the PDD audit trail (e.g. "Lembrechts et al. 2022
+    // SoilTemp, 0–5 cm, <region>"). The Isometric `CreateMeasurementSampleRequest`
+    // body carries no description field, so the justification lives here + in the
+    // PDD, not on the wire.
+    defaultSoilTemperatureSource: text('default_soil_temperature_source'),
     // HMAC secret for verifying incoming Isometric webhook signatures
     webhookSecret: text('webhook_secret'),
     // Phase 5 Slice A — operator-pasted Isometric facility ID
