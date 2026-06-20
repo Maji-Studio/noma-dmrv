@@ -54,7 +54,7 @@ batch. That re-grain is the spine of this plan.
 - **Blueprint selection = Method A/B.** Sampled → `biochar_sequestration_200_year_c_org`. DEC runs
   **Method A everywhere**, so every batch is sampled and only `_c_org` ever receives data.
   `_unsampled` is an **inert** seam (blueprint authored, picker routes to it, hard assertion
-  guards an impossible Method-A-unsampled state). **No Method-B estimate math** (future ADR ~0016).
+  guards an impossible Method-A-unsampled state). **No Method-B estimate math** (future ADR ~0017).
 - **No prod data** → reseed, not migrate. Never edit applied migrations.
 
 ## Scope — ships in this plan vs deferred

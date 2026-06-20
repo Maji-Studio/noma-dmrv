@@ -162,6 +162,23 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.warnings.some((w) => /cluster/i.test(w) && /8\.3\.1/.test(w))).toBe(true);
   });
 
+  it("warns distinctly when ≥3 eligible replicates have unknown run/day provenance", () => {
+    const unknown: ReplicateProvenance[] = [
+      { productionRunId: null, samplingDay: null },
+      { productionRunId: null, samplingDay: null },
+      { productionRunId: null, samplingDay: null },
+    ];
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({ replicates: eligibleTriplet, replicateProvenance: unknown }),
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.blockers).toEqual([]);
+    expect(r.warnings.some((w) => /unknown run\/day provenance/i.test(w))).toBe(
+      true,
+    );
+    expect(r.warnings.every((w) => !/single run\/day/i.test(w))).toBe(true);
+  });
+
   it("aggregates blockers across multiple batches", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ creditBatchId: "a", creditBatchCode: "CB-A", replicates: eligibleTriplet }),
