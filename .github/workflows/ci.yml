@@ -73,8 +73,8 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Apply schema
-        run: pnpm drizzle-kit push --force
+      - name: Apply migrations
+        run: pnpm db:migrate
 
       - name: Unit tests
         run: pnpm exec vitest run
