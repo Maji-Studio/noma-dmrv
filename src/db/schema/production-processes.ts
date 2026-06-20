@@ -1,5 +1,5 @@
-import { index, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { check, index, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 import { moisturePathway, samplingMethod } from './common';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
@@ -97,6 +97,23 @@ export const productionProcesses = pgTable(
     index('production_processes_facility_feedstock_idx').on(
       table.facilityId,
       table.feedstockTypeId
+    ),
+    // Method-B declaration integrity (ADR 0017, defense-in-depth alongside the
+    // 0060 sample-floor trigger): a row on Method B must carry its unlock stamp
+    // and all three captured prerequisites. The app sets them together at unlock;
+    // this stops a direct SQL flip from persisting a Method-B row with missing
+    // declarations. The ≥30 baseline floor is enforced separately (the 0060
+    // trigger over the sample count + the Zod `agreedBaselineSize` minimum), so
+    // it is intentionally not duplicated here.
+    check(
+      'production_processes_method_b_prereqs_chk',
+      sql`${table.samplingMethod} <> 'method_b' OR (
+        ${table.methodBUnlockedAt} IS NOT NULL
+        AND ${table.agreedBaselineSize} IS NOT NULL
+        AND ${table.randomSamplingPlanRef} IS NOT NULL
+        AND btrim(${table.randomSamplingPlanRef}) <> ''
+        AND ${table.moisturePathway} IS NOT NULL
+      )`
     ),
   ]
 );

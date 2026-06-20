@@ -43,7 +43,9 @@ export function StartNewProcessDialog({
   };
 
   const handleConfirm = async () => {
-    if (!process) return;
+    // The confirm button is already disabled while pending (`busy` →
+    // `disabled`), but guard the handler itself so a create can't be re-entered.
+    if (!process || startNew.isPending) return;
     setError(null);
     try {
       await startNew.mutateAsync({
