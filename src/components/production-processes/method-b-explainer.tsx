@@ -21,6 +21,7 @@ import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   METHOD_B_SAMPLING_CADENCE_BATCHES,
 } from "@/config/certification";
+import { InfoHint } from "@/components/ui/tooltip";
 
 interface PrerequisiteCopy {
   /** Protocol reference code (Isometric condition registry). */
@@ -47,17 +48,61 @@ const PREREQUISITES: PrerequisiteCopy[] = [
   },
 ];
 
+/**
+ * Shared intro — why the three prerequisites exist. Rendered inline in the full
+ * variant; carried by the title's ⓘ tooltip in the compact one.
+ */
+const INTRO =
+  "Method B credits unsampled batches from a conservative, registry-computed estimate (μ − σ/√n). These prerequisites are agreed with Isometric — a sample count alone can't infer them.";
+
 interface MethodBExplainerProps {
   /**
    * Heading rendered above the prerequisites. Defaults to a panel-style title;
    * pass a tighter one inside the unlock dialog.
    */
   title?: string;
+  /**
+   * Compact mode (process detail panel): collapse the intro + each prerequisite
+   * body into ⓘ hover tooltips so only the agreement names occupy layout. The
+   * full variant (unlock dialog) keeps the prose visible — that's the deliberate
+   * decision moment. Defaults to the full variant.
+   */
+  compact?: boolean;
 }
 
 export function MethodBExplainer({
   title = "Why Method B needs these three agreements",
+  compact = false,
 }: MethodBExplainerProps) {
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-12">
+        <p className="flex items-center gap-6 body-small-bold text-[var(--color-text-primary)]">
+          Method B — agreements with Isometric
+          <InfoHint label="Why Method B needs these agreements">{INTRO}</InfoHint>
+        </p>
+        <ul className="flex flex-col gap-6">
+          {PREREQUISITES.map((item) => (
+            <li
+              key={item.ref}
+              className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]"
+            >
+              <span
+                aria-hidden
+                className="size-[5px] shrink-0 bg-[var(--st-run)]"
+              />
+              <span className="truncate">{item.title}</span>
+              <span className="shrink-0 border border-[var(--color-border-tertiary)] px-6 py-1 body-caption font-mono text-[var(--color-text-tertiary)]">
+                {item.ref}
+              </span>
+              <InfoHint label={item.title}>{item.body}</InfoHint>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
       <div className="flex items-start gap-8">
@@ -71,9 +116,7 @@ export function MethodBExplainer({
             {title}
           </p>
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            Method B credits unsampled batches from a conservative,
-            registry-computed estimate. These prerequisites are agreed with
-            Isometric — a sample count alone can&apos;t infer them.
+            {INTRO}
           </p>
         </div>
       </div>

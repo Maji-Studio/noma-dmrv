@@ -18,6 +18,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { InfoHint } from "@/components/ui/tooltip";
 import { ServerError } from "@/components/forms";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
@@ -26,7 +27,6 @@ import {
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useProductionProcessesByFacility } from "@/hooks/use-production-processes";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
-import { formatLocalDate } from "@/lib/date-utils";
 import type { ProductionProcessSummary } from "@/data-access/production-processes";
 import { MethodPill } from "./method-pill";
 import { ProcessDetailPanel } from "./process-detail-panel";
@@ -92,35 +92,26 @@ function createColumns(
     {
       id: "cadence",
       header: "Cadence",
+      // The status badge carries the at-a-glance state; the batch-fraction
+      // detail moves to an ⓘ hover to keep the row to a single line.
       cell: ({ row }) => {
         const p = row.original;
         const detail =
           p.samplingMethod === "method_b"
-            ? `${p.sampledBatches}/${p.requiredSampledBatches} batches (≥1 per ${METHOD_B_SAMPLING_CADENCE_BATCHES})`
+            ? `${p.sampledBatches}/${p.requiredSampledBatches} batches sampled (≥1 per ${METHOD_B_SAMPLING_CADENCE_BATCHES})`
             : `${p.sampledBatches}/${p.totalBatches} batches sampled`;
         return (
-          <div className="flex flex-col gap-2">
+          <span className="inline-flex items-center gap-4">
             <StatusBadge
               status={p.cadenceMet ? "complete" : "pending"}
               label={p.cadenceMet ? "On cadence" : `Sample ${p.cadenceShortfall} more`}
               size="small"
             />
-            <span className="body-caption text-[var(--color-text-tertiary)] tabular-nums">
-              {detail}
-            </span>
-          </div>
+            <InfoHint label="Sampling cadence detail">{detail}</InfoHint>
+          </span>
         );
       },
       enableSorting: false,
-    },
-    {
-      accessorKey: "establishedAt",
-      header: "Established",
-      cell: ({ row }) => (
-        <span className="body-small text-[var(--color-text-secondary)]">
-          {formatLocalDate(row.original.establishedAt)}
-        </span>
-      ),
     },
     {
       id: "actions",
@@ -208,7 +199,7 @@ export function ProductionProcessList() {
   return (
     <div className="container-max page-shell">
       <PageHeader
-        area="verification"
+        area="certification"
         title="Production Processes"
         subtitle="Per-feedstock sampling campaigns — Method A/B regime, baseline progress, and cadence"
       />

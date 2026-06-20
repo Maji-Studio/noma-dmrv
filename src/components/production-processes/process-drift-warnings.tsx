@@ -23,6 +23,7 @@ import type {
   MissedSamplingsResult,
   SubThreeSigmaResult,
 } from "@/lib/certification/compliance-drift";
+import { InfoHint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type Tone = "ok" | "wait" | "bad";
@@ -93,26 +94,24 @@ export function ProcessDriftWarnings({
       : "ok";
 
   return (
-    <div className="flex flex-col gap-12">
-      <div className="flex items-start gap-8">
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center gap-8">
         <ToneIcon
           tone={headlineTone}
-          className={cn("mt-2 shrink-0", TONE_INK[headlineTone])}
+          className={cn("shrink-0", TONE_INK[headlineTone])}
         />
-        <div className="flex flex-col gap-2">
-          <p className="body-small-bold text-[var(--color-text-primary)]">
-            {drift.anyTriggered
-              ? "An Isometric review trigger has been reached"
-              : drift.anyApproaching
-                ? "Approaching an Isometric review trigger"
-                : "No compliance drift detected"}
-          </p>
-          <p className="body-caption text-[var(--color-text-tertiary)]">
+        <p className="flex items-center gap-6 body-small-bold text-[var(--color-text-primary)]">
+          {drift.anyTriggered
+            ? "An Isometric review trigger has been reached"
+            : drift.anyApproaching
+              ? "Approaching an Isometric review trigger"
+              : "No compliance drift detected"}
+          <InfoHint label="About compliance drift">
             Rolling {windowMonths}-month window. noma warns only — the registry
             is the detector of record; the remedy is to start a new production
-            process below.
-          </p>
-        </div>
+            process.
+          </InfoHint>
+        </p>
       </div>
 
       <MissedSamplingsRow result={drift.missedSamplings} />
@@ -132,24 +131,27 @@ function CounterRow({
   metric: string;
   detail: string;
 }) {
+  // OK counters stay quiet — a plain row, no colored box — so only an
+  // approaching/triggered counter draws the eye. The longer explanation moves
+  // to an ⓘ hover rather than always occupying a line.
+  const emphasised = tone !== "ok";
   return (
-    <div className={cn("flex items-start gap-8 border p-12", TONE_BOX[tone])}>
-      <ToneIcon tone={tone} className={cn("mt-2 shrink-0", TONE_INK[tone])} />
-      <div className="flex flex-1 flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-8">
-          <span className="body-small font-medium text-[var(--color-text-primary)]">
-            {title}
-          </span>
-          <span
-            className={cn("body-small tabular-nums font-medium", TONE_INK[tone])}
-          >
-            {metric}
-          </span>
-        </div>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          {detail}
-        </span>
-      </div>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-8",
+        emphasised ? cn("border p-12", TONE_BOX[tone]) : "px-2",
+      )}
+    >
+      <span className="flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
+        <ToneIcon tone={tone} className={cn("shrink-0", TONE_INK[tone])} />
+        {title}
+        <InfoHint label={title}>{detail}</InfoHint>
+      </span>
+      <span
+        className={cn("body-small tabular-nums font-medium", TONE_INK[tone])}
+      >
+        {metric}
+      </span>
     </div>
   );
 }
