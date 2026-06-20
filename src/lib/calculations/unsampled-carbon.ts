@@ -73,6 +73,36 @@ export interface UnsampledCarbonPreview {
 }
 
 /**
+ * The trailing-window start for an as-of date: `asOfDate − windowMonths`. THE
+ * single definition of where the 6-month eligible/compliance window begins —
+ * shared by `filterEligibleSamples` (sample pool) and the process compliance-
+ * drift batch window, so the window boundary lives in exactly one place.
+ */
+export function eligibleWindowCutoff(
+  asOfDate: Date,
+  windowMonths: number = ELIGIBLE_SAMPLE_WINDOW_MONTHS,
+): Date {
+  const cutoff = new Date(asOfDate);
+  cutoff.setMonth(cutoff.getMonth() - windowMonths);
+  return cutoff;
+}
+
+/**
+ * Whether a date falls in the half-open trailing window `[cutoff, asOfDate)`.
+ * THE single definition of the window boundary rule (exclusive upper) — applied
+ * to sample `samplingTime` here and to credit-batch production dates in the
+ * compliance-drift read path, so samples and batches can't drift to different
+ * boundary conventions.
+ */
+export function isWithinEligibleWindow(
+  when: Date,
+  asOfDate: Date,
+  cutoff: Date,
+): boolean {
+  return when >= cutoff && when < asOfDate;
+}
+
+/**
  * The eligible samples for a batch: those in the trailing window before
  * `asOfDate`, same process, minus the excluded (leave-one-out) batch. Pure date
  * filter — does not look at chemistry (the preview drops carbon-less rows).
@@ -82,8 +112,7 @@ export function filterEligibleSamples(
   options: EligibleWindowOptions,
 ): EligibleSampleDatum[] {
   const windowMonths = options.windowMonths ?? ELIGIBLE_SAMPLE_WINDOW_MONTHS;
-  const cutoff = new Date(options.asOfDate);
-  cutoff.setMonth(cutoff.getMonth() - windowMonths);
+  const cutoff = eligibleWindowCutoff(options.asOfDate, windowMonths);
 
   return samples.filter((s) => {
     if (
@@ -93,7 +122,7 @@ export function filterEligibleSamples(
       return false;
     }
     // "Previous 6 months BEFORE the batch": within [cutoff, asOfDate).
-    return s.samplingTime >= cutoff && s.samplingTime < options.asOfDate;
+    return isWithinEligibleWindow(s.samplingTime, options.asOfDate, cutoff);
   });
 }
 

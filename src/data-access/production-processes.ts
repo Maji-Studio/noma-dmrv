@@ -30,10 +30,17 @@ import {
   type ProcessComplianceDrift,
 } from "@/lib/certification/compliance-drift";
 import {
+  eligibleWindowCutoff,
+  filterEligibleSamples,
+  isWithinEligibleWindow,
   previewUnsampledCarbon,
+  type EligibleSampleDatum,
   type UnsampledCarbonPreview,
 } from "@/lib/calculations/unsampled-carbon";
-import type { UnlockMethodBInput } from "@/schemas/production-process";
+import type {
+  MoisturePathway,
+  UnlockMethodBInput,
+} from "@/schemas/production-process";
 import { countEligibleSamplesByProcess } from "./isometric";
 import { requireAuth } from "./utils";
 
@@ -122,6 +129,15 @@ export interface ProductionProcessSummary {
   samplingMethod: SamplingMethod;
   establishedAt: Date;
   methodBUnlockedAt: Date | null;
+  /**
+   * The three protocol prerequisites captured at Method-B unlock (null under
+   * Method A): `G-F74T-0` agreed baseline size, `R-S8K1-1` random-sampling-plan
+   * reference, `R-ADXG-0` moisture-determination pathway. Surfaced read-only on
+   * the detail panel so the unlock declaration is auditable, not write-only.
+   */
+  agreedBaselineSize: number | null;
+  randomSamplingPlanRef: string | null;
+  moisturePathway: MoisturePathway | null;
   /** Lifetime eligible replicate samples (the ≥30 baseline counter). */
   eligibleSampleCount: number;
   /** The agreed baseline target (default 30, `G-F74T-0`). */
@@ -152,6 +168,9 @@ export async function getProductionProcessSummariesByFacility(
       samplingMethod: productionProcesses.samplingMethod,
       establishedAt: productionProcesses.establishedAt,
       methodBUnlockedAt: productionProcesses.methodBUnlockedAt,
+      agreedBaselineSize: productionProcesses.agreedBaselineSize,
+      randomSamplingPlanRef: productionProcesses.randomSamplingPlanRef,
+      moisturePathway: productionProcesses.moisturePathway,
     })
     .from(productionProcesses)
     .innerJoin(
@@ -212,6 +231,9 @@ export async function getProductionProcessSummariesByFacility(
       samplingMethod: process.samplingMethod,
       establishedAt: process.establishedAt,
       methodBUnlockedAt: process.methodBUnlockedAt,
+      agreedBaselineSize: process.agreedBaselineSize,
+      randomSamplingPlanRef: process.randomSamplingPlanRef,
+      moisturePathway: process.moisturePathway,
       eligibleSampleCount,
       baselineTarget: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
       meetsBaseline: eligibleSampleCount >= METHOD_B_MINIMUM_METHOD_A_SAMPLES,
@@ -266,12 +288,17 @@ export async function unlockMethodBForProcess(
       throw new Error("This production process is already on Method B");
     }
 
-    // Re-count the process's lifetime eligible samples inside the row-locked
+    // Re-count the process's pre-unlock baseline inside the row-locked
     // transaction via the shared process-grain counter (the same one the
     // operator surface and submission gates read), so the gate can't disagree
-    // with what the operator saw.
+    // with what the operator saw. Bound to `asOfDate: now` — the timestamp we
+    // stamp as `methodBUnlockedAt` below — so this app count uses the EXACT same
+    // pre-unlock boundary as the DB trigger (migration 0060) and the two can't
+    // disagree at unlock.
+    const now = new Date();
     const eligibleByProcess = await countEligibleSamplesByProcess(tx, {
       facilityId: process.facilityId,
+      asOfDate: now,
     });
     const eligibleSampleCount = eligibleByProcess.get(input.processId) ?? 0;
     // Refuse an under-baseline flip with a friendly message before the DB
@@ -287,7 +314,6 @@ export async function unlockMethodBForProcess(
       );
     }
 
-    const now = new Date();
     const [updated] = await tx
       .update(productionProcesses)
       .set({
@@ -314,6 +340,27 @@ export interface ProcessCarbonPreview {
 }
 
 /**
+ * Load a production process's credit-batch-linked samples (the raw pool both the
+ * unsampled-carbon preview and the compliance-drift carbon counter window). The
+ * inner join drops in-process samples (null `credit_batch_id`, internal-only per
+ * ADR 0016). Returns raw rows — the trailing-window filter
+ * (`filterEligibleSamples`) belongs to the engine/read path, not this loader.
+ */
+async function loadProcessSamples(
+  productionProcessId: string,
+): Promise<EligibleSampleDatum[]> {
+  return db
+    .select({
+      organicCarbonPercent: samples.organicCarbonPercent,
+      samplingTime: samples.samplingTime,
+      creditBatchId: samples.creditBatchId,
+    })
+    .from(samples)
+    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .where(eq(creditBatches.productionProcessId, productionProcessId));
+}
+
+/**
  * Compute the NON-AUTHORITATIVE unsampled-carbon preview (Eq 4/5) for a process,
  * as of a given production date (default: now). Loads the process's
  * credit-batch-linked samples; the pure engine
@@ -329,17 +376,7 @@ export async function getUnsampledCarbonPreviewForProcess(
   requireAuth(userId);
 
   const asOf = asOfDate ?? new Date();
-
-  const rows = await db
-    .select({
-      organicCarbonPercent: samples.organicCarbonPercent,
-      samplingTime: samples.samplingTime,
-      creditBatchId: samples.creditBatchId,
-    })
-    .from(samples)
-    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .where(eq(creditBatches.productionProcessId, productionProcessId));
-
+  const rows = await loadProcessSamples(productionProcessId);
   const preview = previewUnsampledCarbon(rows, { asOfDate: asOf });
 
   return {
@@ -373,8 +410,7 @@ export async function getProcessComplianceDrift(
   requireAuth(userId);
 
   const asOf = asOfDate ?? new Date();
-  const cutoff = new Date(asOf);
-  cutoff.setMonth(cutoff.getMonth() - PROCESS_ROLLING_WINDOW_MONTHS);
+  const cutoff = eligibleWindowCutoff(asOf);
 
   const [process] = await db
     .select({ samplingMethod: productionProcesses.samplingMethod })
@@ -384,28 +420,30 @@ export async function getProcessComplianceDrift(
   if (!process) {
     throw new Error("Production process not found");
   }
-  const samplingMethod = process.samplingMethod as SamplingMethod;
 
-  // Batches of the process + their production (end) date + pooled sample count.
-  const batchRows = await db
-    .select({
-      batchId: creditBatches.id,
-      batchCode: creditBatches.code,
-      endDate: creditBatches.endDate,
-      sampleCount: count(samples.id).mapWith(Number),
-    })
-    .from(creditBatches)
-    .leftJoin(samples, eq(samples.creditBatchId, creditBatches.id))
-    .where(eq(creditBatches.productionProcessId, productionProcessId))
-    .groupBy(creditBatches.id);
+  // Two independent reads — the per-batch production dates + pooled counts, and
+  // the raw sample pool — fetched concurrently.
+  const [batchRows, sampleRows] = await Promise.all([
+    db
+      .select({
+        batchId: creditBatches.id,
+        batchCode: creditBatches.code,
+        endDate: creditBatches.endDate,
+        sampleCount: count(samples.id).mapWith(Number),
+      })
+      .from(creditBatches)
+      .leftJoin(samples, eq(samples.creditBatchId, creditBatches.id))
+      .where(eq(creditBatches.productionProcessId, productionProcessId))
+      .groupBy(creditBatches.id),
+    loadProcessSamples(productionProcessId),
+  ]);
 
-  // `endDate` is a date string; a few hours' UTC offset is immaterial for a
-  // 6-month window comparison.
+  // Both windows use the SAME half-open `[cutoff, asOf)` boundary
+  // (`isWithinEligibleWindow` / `filterEligibleSamples`), so batches and samples
+  // can't drift to different conventions. `endDate` is a date string; a few
+  // hours' UTC offset is immaterial for a 6-month window comparison.
   const batchesInWindow: BatchSampling[] = batchRows
-    .filter((b) => {
-      const d = new Date(b.endDate);
-      return d >= cutoff && d <= asOf;
-    })
+    .filter((b) => isWithinEligibleWindow(new Date(b.endDate), asOf, cutoff))
     .map((b) => ({
       batchId: b.batchId,
       batchCode: b.batchCode,
@@ -413,29 +451,21 @@ export async function getProcessComplianceDrift(
     }));
 
   // Carbon measurements taken in the window (organic-carbon = the CC in Eq 4).
-  const sampleRows = await db
-    .select({
-      organicCarbonPercent: samples.organicCarbonPercent,
-      samplingTime: samples.samplingTime,
-    })
-    .from(samples)
-    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .where(eq(creditBatches.productionProcessId, productionProcessId));
-
-  const carbonValuesInWindow = sampleRows
-    .filter((s) => s.samplingTime >= cutoff && s.samplingTime < asOf)
+  const carbonValuesInWindow = filterEligibleSamples(sampleRows, {
+    asOfDate: asOf,
+  })
     .map((s) => s.organicCarbonPercent)
     .filter((v): v is number => v != null && Number.isFinite(v));
 
   const drift = evaluateProcessComplianceDrift({
-    method: samplingMethod,
+    method: process.samplingMethod,
     batchesInWindow,
     carbonValuesInWindow,
   });
 
   return {
     productionProcessId,
-    samplingMethod,
+    samplingMethod: process.samplingMethod,
     asOfDate: asOf.toISOString(),
     windowMonths: PROCESS_ROLLING_WINDOW_MONTHS,
     drift,
