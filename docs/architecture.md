@@ -152,9 +152,12 @@ Method-B baseline DB trigger (migration `0052`) were **dropped** (migration
   `method_a`); a process is find-or-created per `(facility, feedstock)` when a
   credit batch is created.
 - DEC runs Method A everywhere. **ADR 0017 Track 1 shipped the Method-B
-  read-only compute**: per-process ≥30-sample baseline, credit-batch-grained
-  cadence, and the `/production-processes` operator surface. The explicit unlock
-  and submission routing remain Track 2.
+  read-only compute** (per-process ≥30-sample baseline, credit-batch-grained
+  cadence); **Track 2 shipped the unlock** — the operator surface at
+  `/certification/production-processes` (registry-gated), `unlockMethodBForProcess`
+  with prerequisite capture + a process-grain DB trigger backstop, and the
+  non-authoritative unsampled-carbon/compliance-drift previews. The live
+  `_unsampled` submission POST stays gated behind a flag.
 
 Method B requires:
 

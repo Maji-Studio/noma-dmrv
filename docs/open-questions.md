@@ -185,11 +185,18 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **ADR 0017 Track 1 shipped** (PR #299): process-grained baseline counting via
   `getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess`,
   credit-batch-grained cadence via `deriveSamplingRequirement`, and the read-only
-  `/production-processes` operator surface.
-- **Remaining Track 2 work:** explicit Method-B unlock with prerequisite capture,
-  the μ−σ/√n unsampled estimate preview, the 6-month eligible-sample pool,
-  3σ winsorising, `_unsampled` submission routing, and the **process-grain DB
-  backstop** that replaces the dropped `0052` reactor trigger.
+  operator surface.
+- **ADR 0017 Track 2 shipped** (PR #301): explicit Method-B unlock
+  (`unlockMethodBForProcess`) with prerequisite capture, the μ−σ/√n unsampled
+  estimate preview (`previewUnsampledCarbon`, 6-month eligible pool), the
+  compliance-drift counters, `_unsampled` submission routing, the process-grain
+  **DB trigger backstop** (migration `0060`) that replaces the dropped `0052`
+  reactor trigger and counts only the pre-unlock baseline, and the operator surface
+  moved under the registry-gated `/certification/production-processes`.
+- **Still gated:** the live `_unsampled` submission POST stays behind
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE = false` (wire format unconfirmed); the
+  preview does NOT winsorise (the registry's 3σ winsorisation over the eligible
+  pool remains the registry's authority, ADR 0013 / D1).
 - **Gate shape to settle before activation:** Method-B cadence is a
   production-process history rule, not just the removal member-batch subset. The
   live submission gate should either load the full process batch window or accept
@@ -203,6 +210,22 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **ADR-number hygiene (2026-06-20):** ADR 0017 (Method-B unlock) refines ADR
   0016; keep sampling/credit-batch references on ADR 0016 unless they specifically
   describe the Method-B unlock decision.
+
+### Method-B compute — tracked cleanups on the process-grain surface (`certification/method-b-compute-cleanups`, opened 2026-06-20)
+
+Low-priority consolidations on the Track 2 surface (PR #301 review), deferred so
+they don't churn a freshly-introduced surface mid-review:
+
+- **`sampleMeanStdDev` ⇄ `meanAndStdDev` convergence.** `lib/calculations/stats.ts`
+  (`sampleMeanStdDev`) is a knowing near-duplicate of the private `meanAndStdDev`
+  in `lib/isometric/utils/durability-aggregation.ts`. The aggregation copy can
+  collapse onto the client-safe `stats.ts` helper once its server-coupled
+  neighbour (`./aggregation`) is untangled from the client-safe path. Tracked here
+  rather than only in the `stats.ts` file header.
+- **O(n²) leave-one-out in `countSubThreeSigmaMeasurements`.** It recomputes
+  `sampleMeanStdDev` over a fresh `filter` array per element. Fine for a 6-month
+  window pool; if pools grow, the leave-one-out mean/variance can be computed
+  analytically in O(n) from running sums. Low priority.
 
 ### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
