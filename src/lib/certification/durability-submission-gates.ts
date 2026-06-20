@@ -24,10 +24,10 @@
  * chemistry datapoints (Phase E), not here.
  */
 
-import { METHOD_B_SAMPLING_CADENCE_RUNS } from "@/config/certification";
+import { METHOD_B_SAMPLING_CADENCE_BATCHES } from "@/config/certification";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
-  MINIMUM_REPLICATES_PER_RUN,
+  MINIMUM_REPLICATES_PER_BATCH,
   O_TO_C_ORG_ELIGIBILITY_MAX,
   evaluateReplicateCount,
   evaluateRunEligibility,
@@ -161,7 +161,7 @@ export function evaluateDurabilitySubmissionGates(
     );
     if (!replicateCheck.meetsMinimum) {
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_RUN} required per sampled batch (§8.3.1).`,
+        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_BATCH} required per sampled batch (§8.3.1).`,
       );
     } else {
       // Judge distribution on the USABLE (complete-chemistry) subset so an
@@ -222,14 +222,14 @@ export function evaluateDurabilitySubmissionGates(
     const requirement = deriveSamplingRequirement(
       "method_b",
       processBatches.map((batch) => ({
-        runId: batch.creditBatchId,
-        runCode: batch.creditBatchCode,
+        batchId: batch.creditBatchId,
+        batchCode: batch.creditBatchCode,
         sampleCount: batch.replicates.length,
       })),
     );
     if (requirement.cadenceShortfall > 0) {
       blockers.push(
-        `Method B process batch set samples ${requirement.sampledRuns}/${requirement.requiredSampledRuns} required batch(es) (≥ 1 per ${METHOD_B_SAMPLING_CADENCE_RUNS}); sample ${requirement.cadenceShortfall} more before submission (§8.3.1.2).`,
+        `Method B process batch set samples ${requirement.sampledBatches}/${requirement.requiredSampledBatches} required batch(es) (≥ 1 per ${METHOD_B_SAMPLING_CADENCE_BATCHES}); sample ${requirement.cadenceShortfall} more before submission (§8.3.1.2).`,
       );
     }
   }
