@@ -2,7 +2,7 @@
  * Durability aggregation — the per-batch lists and conservative soil-temperature
  * estimate the 200-year sequestration blueprints consume (decisions D2, D5a).
  *
- * Grain (ADR 0015): the protocol production batch IS the credit batch, so this
+ * Grain (ADR 0016): the protocol production batch IS the credit batch, so this
  * module aggregates at the CREDIT-BATCH grain — one datapoint per credit batch,
  * pooling that batch's lab Samples across its member production runs/days into a
  * single replicate mean + sample std-dev. A Sample is entered against a run for
@@ -79,7 +79,7 @@ function replicateInorganicCarbon(s: Sample): number | null {
   return null;
 }
 
-// ── Per-batch datapoint list (credit-batch grain, ADR 0015) ──────────────────
+// ── Per-batch datapoint list (credit-batch grain, ADR 0016) ──────────────────
 
 /** A member production run of a credit batch — the unit product mass sums over. */
 export interface DurabilityBatchRun {

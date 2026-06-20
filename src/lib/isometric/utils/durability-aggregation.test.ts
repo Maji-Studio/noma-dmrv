@@ -30,7 +30,7 @@ function batch(
   return { creditBatchId, creditBatchCode, runs, samples };
 }
 
-describe("buildPerBatchDurabilityData (credit-batch grain, ADR 0015)", () => {
+describe("buildPerBatchDurabilityData (credit-batch grain, ADR 0016)", () => {
   it("produces one datapoint per credit batch with pooled replicate means and sample std-dev", () => {
     const b = batch(
       "batch-1",

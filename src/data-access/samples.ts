@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import { resolveRunCreditBatchId } from "./credit-batch-samples";
 
 // ============================================
 // Types
@@ -505,12 +506,24 @@ export async function createSample(
       "create",
     );
 
+    // Derive the credit batch from the run's membership when not set explicitly
+    // (the lab-sample form never sets it) — ADR 0016: a Sample characterises the
+    // credit batch its run belongs to, with both links populated. Null when the
+    // run isn't yet in a batch (the form surfaces that; back-filled when it joins).
+    // Honor an explicit creditBatchId (including null) — only derive from the
+    // run's membership when the field is omitted, matching updateSample's
+    // explicit/undefined contract (the lab-sample form omits it; ADR 0016).
+    const creditBatchId =
+      data.creditBatchId !== undefined
+        ? data.creditBatchId
+        : await resolveRunCreditBatchId(tx, data.productionRunId);
+
     const [created] = await tx
       .insert(samples)
       .values({
         sampleCode: data.sampleCode,
         productionRunId: data.productionRunId,
-        creditBatchId: data.creditBatchId ?? null,
+        creditBatchId,
         samplingTime: data.samplingTime,
         labName: data.labName ?? null,
         labAccreditation: data.labAccreditation ?? null,
@@ -700,6 +713,16 @@ export async function updateSample(
         tx,
         { entityType: "productionRun", entityId: data.productionRunId },
         "update",
+      );
+    }
+
+    // When the run changes and the batch wasn't set explicitly, re-derive the
+    // credit batch from the new run so the link tracks its run's membership
+    // (ADR 0016). An explicit creditBatchId in the payload is honoured as-is.
+    if (data.productionRunId !== undefined && data.creditBatchId === undefined) {
+      updateData.creditBatchId = await resolveRunCreditBatchId(
+        tx,
+        data.productionRunId,
       );
     }
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
+  SOIL_TEMPERATURE_SOURCE_MAX_LENGTH,
   facilityEmissionConfigSchema,
   type FacilityEmissionConfigFormData,
 } from "@/schemas/certification";
@@ -133,6 +134,7 @@ export function EmissionEstimatesForm({
           <FormInput
             id="defaultSoilTemperatureSource"
             type="text"
+            maxLength={SOIL_TEMPERATURE_SOURCE_MAX_LENGTH}
             error={!!errors.defaultSoilTemperatureSource}
             {...register("defaultSoilTemperatureSource")}
           />

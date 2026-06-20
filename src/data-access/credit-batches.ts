@@ -1,4 +1,15 @@
-import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
@@ -576,6 +587,13 @@ export async function createCreditBatch(
           productionRunId,
         }))
       );
+      // Back-fill the member runs' existing lab samples onto this batch so they
+      // characterise it (ADR 0016 — both links stay populated). The per-run
+      // unique constraint means these samples can't already belong elsewhere.
+      await tx
+        .update(samples)
+        .set({ creditBatchId: batch.id, updatedAt: new Date() })
+        .where(inArray(samples.productionRunId, runIds));
     }
 
     return batch;
@@ -786,6 +804,30 @@ export async function updateCreditBatch(
           productionRunId,
         }))
       );
+
+      // Re-point this batch's sample links to match the new member-run set
+      // (ADR 0016): unlink samples whose run left the batch, then link the
+      // current member runs' samples. The per-run unique constraint guarantees a
+      // member run's samples can't already belong to another batch.
+      // Scope the unlink to RUN-BACKED samples — a commingled/batch-level sample
+      // linked directly with a null productionRunId has no run to leave, so it
+      // must survive a membership edit (it'd otherwise vanish from durability
+      // readiness, aggregation, and the source candidate walk).
+      await tx
+        .update(samples)
+        .set({ creditBatchId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(samples.creditBatchId, id),
+            isNotNull(samples.productionRunId),
+          ),
+        );
+      if (productionRunIds.length > 0) {
+        await tx
+          .update(samples)
+          .set({ creditBatchId: id, updatedAt: new Date() })
+          .where(inArray(samples.productionRunId, productionRunIds));
+      }
     }
   });
 

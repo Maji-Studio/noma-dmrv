@@ -25,8 +25,30 @@ import {
   deleteSampleFn,
 } from "@/fn/samples";
 import { productionRunKeys } from "@/hooks/use-production-runs";
+import { certificationKeys } from "@/hooks/use-certification";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+
+// A sample's chemistry feeds the credit-batch durability roll-up (ADR 0016), so
+// every create/update/delete must refresh the two readiness surfaces that read
+// it: the credit-batch detail panel (keyed on the batch) and the lab-sample
+// form's derived-batch preview (keyed on the run). Both links can be null.
+function invalidateDurabilitySummaries(
+  queryClient: QueryClient,
+  links: { creditBatchId?: string | null; productionRunId?: string | null },
+) {
+  if (links.creditBatchId) {
+    queryClient.invalidateQueries({
+      queryKey: certificationKeys.batchDurabilitySummary(links.creditBatchId),
+    });
+  }
+  if (links.productionRunId) {
+    queryClient.invalidateQueries({
+      queryKey: certificationKeys.runDurabilitySummary(links.productionRunId),
+    });
+  }
+}
 
 // ============================================
 // Query Keys
@@ -192,6 +214,12 @@ export function useCreateSample(
         });
       }
 
+      // Refresh the durability readiness surfaces this sample rolls up to.
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: data.creditBatchId,
+        productionRunId: data.productionRunId,
+      });
+
       // Pre-populate the detail cache with the new sample
       queryClient.setQueryData(sampleKeys.detail(data.id), data);
 
@@ -291,7 +319,7 @@ export function useUpdateSample(
       // Return context with snapshots for rollback
       return { previousSample, previousLists };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (data, variables, context) => {
       // Update cache with actual server data
       queryClient.setQueryData(sampleKeys.detail(data.id), data);
 
@@ -299,6 +327,21 @@ export function useUpdateSample(
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "samples" && q.queryKey[1] === "stats",
+      });
+
+      // Refresh the durability readiness surfaces this sample rolls up to —
+      // the run/batch it left (from the pre-mutation snapshot) AND the one it now
+      // belongs to, so a moved sample doesn't leave the old side stale.
+      const previousSample = (
+        context as { previousSample?: SampleWithRelations } | undefined
+      )?.previousSample;
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: previousSample?.creditBatchId,
+        productionRunId: previousSample?.productionRunId,
+      });
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: data.creditBatchId,
+        productionRunId: data.productionRunId,
       });
 
       await callbacks?.onSuccess?.(data, variables);
@@ -375,6 +418,18 @@ export function useDeleteSample(
       const previousLists = queryClient.getQueriesData<PaginatedSamples>({
         queryKey: sampleKeys.lists(),
       });
+      // The durability link this sample fed — from the detail cache, else the
+      // list cache, so the readiness surfaces still refresh when the detail
+      // query was never fetched (e.g. deleting straight from a list view).
+      const listMatch = previousLists
+        .flatMap(([, page]) => page?.items ?? [])
+        .find((item) => item.id === sampleId);
+      const previousLinks = {
+        creditBatchId:
+          previousSample?.creditBatchId ?? listMatch?.creditBatchId ?? null,
+        productionRunId:
+          previousSample?.productionRunId ?? listMatch?.productionRunId ?? null,
+      };
 
       // Optimistically remove sample from all list caches
       previousLists.forEach(([queryKey]) => {
@@ -391,14 +446,25 @@ export function useDeleteSample(
       await callbacks?.onMutate?.(sampleId);
 
       // Return context with snapshots for rollback
-      return { previousSample, previousLists };
+      return { previousSample, previousLists, previousLinks };
     },
-    onSuccess: async (_, sampleId) => {
-      // Get the sample's production run ID before removing from cache
+    onSuccess: async (_, sampleId, context) => {
+      // Get the sample's links before removing from cache, falling back to the
+      // pre-mutation snapshot so durability summaries refresh even when the
+      // detail query was never cached.
       const sample = queryClient.getQueryData<SampleWithRelations>(
         sampleKeys.detail(sampleId)
       );
-      const productionRunId = sample?.productionRunId;
+      const previousLinks = (
+        context as {
+          previousLinks?: {
+            creditBatchId?: string | null;
+            productionRunId?: string | null;
+          };
+        } | undefined
+      )?.previousLinks;
+      const productionRunId =
+        sample?.productionRunId ?? previousLinks?.productionRunId;
 
       // Remove specific sample from cache
       queryClient.removeQueries({
@@ -416,6 +482,11 @@ export function useDeleteSample(
           queryKey: productionRunKeys.detail(productionRunId),
         });
       }
+      // Refresh the durability readiness surfaces this sample fed.
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: sample?.creditBatchId ?? previousLinks?.creditBatchId,
+        productionRunId,
+      });
 
       await callbacks?.onSuccess?.(undefined, sampleId);
     },
