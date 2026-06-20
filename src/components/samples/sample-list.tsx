@@ -26,7 +26,6 @@ import {
   TransportLegsEditor,
   TransportLegsSummary,
 } from "@/components/transport-legs";
-import { SampleDocumentsPanel } from "./sample-documents-panel";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -502,13 +501,10 @@ export function SampleList() {
         ] : undefined}
         viewModeChildren={
           displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <div className="flex flex-col gap-24">
-              <TransportLegsSummary
-                entityType="sample"
-                entityId={displaySideSheet.entity.id}
-              />
-              <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} />
-            </div>
+            <TransportLegsSummary
+              entityType="sample"
+              entityId={displaySideSheet.entity.id}
+            />
           ) : null
         }
       >
