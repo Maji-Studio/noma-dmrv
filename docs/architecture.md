@@ -141,21 +141,35 @@ export async function GET() {
 
 ## Sampling Method Enforcement (Isometric)
 
-Sampling method is selected at `reactors` and enforced with reactor-scoped eligibility checks.
+**ADR 0016 (Phase 1, 2026-06-19):** the sampling regime moved **off `reactors`**
+onto the new `production_processes` entity, keyed `(facility, feedstock)` and
+spanning reactors per Biochar Protocol §8.3.1. `reactors.sampling_method` and its
+Method-B baseline DB trigger (migration `0052`) were **dropped** (migration
+`0057`). The credit batch is now the protocol production batch (one feedstock,
+≤ 1 month under Isometric); lab samples attach per credit batch.
 
-- Process key used today: `reactor_id` (not `production_run_id`)
-- Method A/B selection stored on reactor: `reactors.sampling_method` (default `method_a`)
+- Sampling regime stored on `production_processes.sampling_method` (default
+  `method_a`); a process is find-or-created per `(facility, feedstock)` when a
+  credit batch is created.
+- DEC runs Method A everywhere. **All Method-B compute is deferred to ADR 0017**
+  (live per-process eligibility, the ≥30-sample baseline, the super-admin unlock);
+  only the inert `production_processes.method_b_unlocked_at` seam is laid.
 
-Method B requires:
+Method B requires (enforced once ADR 0017 lands):
 
-1. At least 30 prior samples for that reactor before switching reactor method to `method_b`.
-2. Credit-batch reporting periods linked to Method B reactors must satisfy sampled-run cadence >= 1 per 10 runs.
+1. At least 30 prior Method-A samples in the process before unlocking `method_b`.
+2. Credit batches in the process must satisfy sampled-batch cadence ≥ 1 per 10.
+
+> **Transitional (Phase 1):** the reactor-list Method-B/cadence surface is
+> removed. The legacy reactor-grain helper remains only behind submission gates
+> until ADR 0017 re-keys Method B to the process/credit-batch grain.
 
 Enforcement is intentionally layered:
 
-1. UI gating (disable/hide Method B when reactor is ineligible).
+1. UI gating (disable/hide Method B when ineligible).
 2. Server validation in action/data-access layer.
-3. DB trigger guardrails for any direct/bypass writes.
+3. DB trigger guardrails for any direct/bypass writes (process-grain trigger
+   ships with the ADR 0017 unlock; the reactor-grain `0052` trigger was dropped).
 
 ## Certify Integration (Isometric)
 

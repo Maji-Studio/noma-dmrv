@@ -32,14 +32,6 @@ export type InputMappingTable = Record<
   Record<string, Record<string, InputMappingEntry>>
 >;
 
-// Shared zero-magnitude transform for metered `initial_readout` inputs whose
-// consumption delta starts from 0 (Certify's
-// `metered_energy_based_ci_emissions` computes consumption as
-// `final − initial`; noma has only the delta, so initial_readout = 0).
-// Previously also paired with `zeroStub: true` on deferred per-period inputs;
-// those families moved to PROJECT scope under ADR 0005.
-const zeroTransform = () => 0;
-
 export const INPUT_MAPPING: InputMappingTable = {
   // CO₂ stored from biochar application
   "co2-stored": {
@@ -62,20 +54,20 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Biomass → processing transport (feedstock leg category)
+  // Biomass → processing transport (feedstock leg category). The template
+  // binds this to `mass_distance_based_ci_emissions`: a single `mass_distance`
+  // (tonne·km) SCALAR = Σⱼ(distⱼ × massⱼ) across the run's feedstock legs
+  // (multiple deliveries / storage bins, mass-weighted), with the emission
+  // factor held as a fixed input on the blueprint. There is no LIST-shaped
+  // transport blueprint in the Certify catalog, so per-leg datapoints are not
+  // possible — the mass-weighted sum is exact for same-factor legs.
   "biomass-feedstock-transport": {
-    transport: {
-      distance: {
-        source: "feedstockTransportAvgDistanceKm",
-        unit: "km",
+    mass_distance_based_ci_emissions: {
+      mass_distance: {
+        source: "feedstockTransportMassDistanceTonneKm",
+        unit: "tonne * km",
         datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-      },
-      mass: {
-        source: "totalFeedstockDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
+        expectedQuantityKind: "mass_distance",
       },
     },
     specific_volume_based_emissions: {
@@ -88,20 +80,15 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Biochar → storage transport (biochar product leg category)
+  // Biochar → storage transport (biochar product leg category). Same
+  // mass_distance (tonne·km) model as feedstock transport above.
   "biochar-transport": {
-    transport: {
-      distance: {
-        source: "biocharTransportAvgDistanceKm",
-        unit: "km",
+    mass_distance_based_ci_emissions: {
+      mass_distance: {
+        source: "biocharTransportMassDistanceTonneKm",
+        unit: "tonne * km",
         datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-      },
-      mass: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
+        expectedQuantityKind: "mass_distance",
       },
     },
     specific_volume_based_emissions: {
@@ -114,16 +101,11 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Sample shipping to lab.
+  // Sample shipping to lab — mass_distance (tonne·km), like the feedstock and
+  // biochar transport categories. (The legacy `distance_based_ci_emissions`
+  // binding was dropped: the re-authored template uses
+  // `mass_distance_based_ci_emissions` for every transport category.)
   "sampling-required-for-mrv": {
-    distance_based_ci_emissions: {
-      distance: {
-        source: "sampleTransportAvgDistanceKm",
-        unit: "km",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "distance",
-      },
-    },
     // Sampling consumables (`mass_based_ci_emissions`) and lab electricity
     // (`grid_electricity_use`) used to live here as zero stubs. Both moved
     // to PROJECT scope as Project Components per ADR 0005. If a template
@@ -142,14 +124,21 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Biochar processing energy (Phase 3.7). Grid electricity = the
-  // biochar-stage share of the run's combined `electricity_kwh`; genset
-  // = the biochar-stage share of genset diesel converted to kWh. Both
-  // shares come from `enrichWithFacilityConfig`.
-  "biochar-processing": {
+  // Pyrolysis energy — single combined measurement point (ADR 0015). The
+  // operator re-authored the template so all energy enters here as two
+  // scalars: grid electricity (`grid_electricity_use`) and diesel genset
+  // (`energy_based_ci_emissions`). noma submits the run-combined totals with
+  // NO per-stage split — feedstock-processing and biochar-processing cannot be
+  // metered separately, so there is nothing to apportion. `totalElectricityKwh`
+  // is the combined grid figure; `totalGensetKwh` is genset litres × the
+  // facility's genset yield (computed in `enrichWithFacilityConfig`). The
+  // former per-stage `metered_energy_based_ci_emissions` electricity entry and
+  // the `biochar-processing` / `biomass-feedstock-processing` energy entries
+  // are gone (those components no longer exist in the template).
+  pyrolysis: {
     grid_electricity_use: {
       electricity_use: {
-        source: "biocharElectricityKwh",
+        source: "totalElectricityKwh",
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
@@ -157,39 +146,7 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
     energy_based_ci_emissions: {
       energy: {
-        source: "biocharGensetKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-      },
-    },
-  },
-
-  // Pyrolysis energy (Phase 3.7). Certify's
-  // `metered_energy_based_ci_emissions` computes consumption as
-  // `final − initial`; noma has only the consumption delta, so
-  // initial_readout = 0 and final_readout = the pyrolysis-stage share
-  // of the run's combined electricity. Genset = pyrolysis-stage share
-  // of genset diesel as kWh. Shares from `enrichWithFacilityConfig`.
-  pyrolysis: {
-    metered_energy_based_ci_emissions: {
-      initial_readout: {
-        source: "pyrolysisElectricityKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-        transform: zeroTransform,
-      },
-      final_readout: {
-        source: "pyrolysisElectricityKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-      },
-    },
-    energy_based_ci_emissions: {
-      energy: {
-        source: "pyrolysisGensetKwh",
+        source: "totalGensetKwh",
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
@@ -220,6 +177,12 @@ export const INPUT_MAPPING: InputMappingTable = {
       },
     },
   },
+  // Startup/plant diesel also maps here when a template carries the volume
+  // component. The live operator template (ADR 0015) declares no
+  // `fuel_usage_by_volume` component in this group, so the value is not
+  // submitted; a non-blocking warning fires instead (see
+  // `buildSubmissionWarnings` in certify-context-core.ts). The mapping stays
+  // for templates that DO carry the component (e.g. the protocol default).
   "biomass-feedstock-processing": {
     fuel_usage_by_volume: {
       volume_of_fuel: {
@@ -227,35 +190,6 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "l",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
-      },
-    },
-    // Biomass-stage metered electricity (Phase 3.7). Consumption delta
-    // only, so initial_readout = 0 and final_readout = the biomass-stage
-    // share of the run's combined electricity (from
-    // `enrichWithFacilityConfig`).
-    metered_energy_based_ci_emissions: {
-      initial_readout: {
-        source: "biomassElectricityKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-        transform: zeroTransform,
-      },
-      final_readout: {
-        source: "biomassElectricityKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-      },
-    },
-    // Biomass-stage diesel genset (Phase 3.7) — biomass-stage share of
-    // genset diesel converted to kWh.
-    energy_based_ci_emissions: {
-      energy: {
-        source: "biomassGensetKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
       },
     },
   },

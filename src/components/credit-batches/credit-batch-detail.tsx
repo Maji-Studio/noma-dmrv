@@ -41,15 +41,13 @@ import {
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import {
   useCreditBatch,
-  useCreditBatches,
   useUpdateCreditBatch,
 } from "@/hooks/use-credit-batches";
-import { CreditBatchForm, type ApplicationOption } from "./credit-batch-form";
+import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 
 interface CreditBatchDetailProps {
   creditBatchId: string;
-  applications?: ApplicationOption[];
 }
 
 function Breadcrumb({ code }: { code: string | null }) {
@@ -98,14 +96,10 @@ function co2eStoredKpi(batch: CreditBatchWithRelations): {
   return { value: "—", description: undefined };
 }
 
-export function CreditBatchDetail({
-  creditBatchId,
-  applications = [],
-}: CreditBatchDetailProps) {
+export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
   const { data: creditBatch, isLoading, error } = useCreditBatch(creditBatchId);
   // Scope to this batch's facility — overlap validation is per-facility, and
   // credit batches must never be read across the facility boundary.
-  const { data: allBatches } = useCreditBatches(creditBatch?.facilityId);
   const updateCreditBatch = useUpdateCreditBatch();
   const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -172,14 +166,6 @@ export function CreditBatchDetail({
     );
   }
 
-  const existingBatches = (allBatches ?? []).map((b) => ({
-    id: b.id,
-    code: b.code,
-    facilityId: b.facilityId,
-    startDate: b.startDate,
-    endDate: b.endDate,
-  }));
-
   const stored = co2eStoredKpi(creditBatch);
   const period = `${formatSafeDate(creditBatch.startDate)} — ${formatSafeDate(creditBatch.endDate)}`;
 
@@ -226,9 +212,9 @@ export function CreditBatchDetail({
           icon={<ShieldCheck size={24} />}
         />
         <StatCard
-          title="Applications"
-          value={creditBatch.applicationCount}
-          description="Matched by crediting period"
+          title="Production runs"
+          value={creditBatch.productionRunCount}
+          description="Cohort membership"
           icon={<Stack size={24} />}
         />
       </div>
@@ -265,8 +251,6 @@ export function CreditBatchDetail({
         {isEditing ? (
           <CreditBatchForm
             creditBatch={creditBatch}
-            applications={applications}
-            existingBatches={existingBatches}
             onSubmit={handleUpdate}
             onCancel={() => {
               setUpdateError(null);
@@ -298,8 +282,8 @@ export function CreditBatchDetail({
                   value={formatDurabilityOption(creditBatch.durabilityOption)}
                 />
                 <DetailField
-                  label="Applications in period"
-                  value={creditBatch.applicationCount}
+                  label="Member production runs"
+                  value={creditBatch.productionRunCount}
                 />
               </DetailRow>
             </DetailSection>

@@ -18,9 +18,13 @@ export const reactorTypes = [
 export type ReactorType = (typeof reactorTypes)[number];
 
 /**
- * Sampling methods from the Isometric Protocol
- * Method A: Sample every production batch
- * Method B: Sample at least 1 in 10 production batches (requires 30 prior Method A samples)
+ * Sampling methods from the Isometric Protocol (§8.3.1).
+ * Method A: sample every production batch.
+ * Method B: sample at least 1 in 10 production batches (requires 30 prior Method A samples).
+ *
+ * NOTE (ADR 0016): the sampling method is declared per PRODUCTION PROCESS
+ * (feedstock × conditions), NOT per reactor — these are kept here only as the
+ * shared protocol vocabulary consumed by the process + submission layers.
  */
 export const samplingMethods = ["method_a", "method_b"] as const;
 
@@ -44,7 +48,6 @@ export const reactorFormSchema = z.object({
   reactorType: z.enum(reactorTypes, { error: "Reactor type is required" }),
 
   // Optional fields
-  samplingMethod: z.enum(samplingMethods).default("method_a"),
   capacityTph: z
     .number()
     .positive("Throughput must be a positive number")
@@ -65,7 +68,6 @@ export const createReactorSchema = z.object({
   identifier: z.string().min(1).max(255),
   facilityId: z.string().min(1).uuid(),
   reactorType: z.enum(reactorTypes),
-  samplingMethod: z.enum(samplingMethods).default("method_a"),
   nominalThroughputTph: z.number().positive().optional().nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),
 });
@@ -85,7 +87,6 @@ export const updateReactorSchema = z.object({
   identifier: z.string().min(1).max(255).optional(),
   facilityId: z.string().uuid().optional(),
   reactorType: z.enum(reactorTypes).optional(),
-  samplingMethod: z.enum(samplingMethods).optional(),
   nominalThroughputTph: z.number().positive().optional().nullable(),
   specifications: z.record(z.string(), z.unknown()).optional().nullable(),
 });
@@ -114,9 +115,6 @@ export const reactorFilterSchema = z.object({
 
   // Filter by facility
   facilityId: z.string().uuid().optional(),
-
-  // Filter by sampling method
-  samplingMethod: z.enum(samplingMethods).optional(),
 
   // Filter by reactor type
   reactorType: z.string().optional(),

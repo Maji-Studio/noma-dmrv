@@ -161,7 +161,7 @@ One normalized table supports reproducibility, verification, and audit trails wi
 Some rules depend on aggregate history or state transitions and cannot be guaranteed by single-row checks.
 
 ### Required trigger guardrails
-1. Method B minimum samples before allowing `reactors.sampling_method = method_b`.
+1. Method B minimum samples before unlocking `production_processes.sampling_method = method_b` (ADR 0016: regime moved off `reactors`; the reactor-grain `0052` trigger was dropped in `0057`, and the process-grain replacement is deferred to ADR 0017).
 2. Method B cadence check on `credit_batches` transition to `verified`/`issued`.
 3. Durability field immutability once `credit_batches.status` is `verified` or `issued`.
 

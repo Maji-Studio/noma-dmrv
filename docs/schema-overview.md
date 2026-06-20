@@ -2,7 +2,7 @@
 
 Source of truth: `src/db/schema/*.ts` (Drizzle schema files).
 
-Current shape: 46 table exports across 14 table-bearing schema files.
+Current shape: 48 table exports across 15 table-bearing schema files.
 
 **Facility archive (soft delete):** `facilities` and the 11 operational facility-scoped tables (`reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence`) carry a nullable `archived_at` stamped by the facility archive cascade; `NULL` = active. Grandchildren and certifier mirror tables hide transitively. See `docs/database.md` → "Soft Delete — Facility Archive".
 
@@ -13,7 +13,7 @@ Current shape: 46 table exports across 14 table-bearing schema files.
 | `account` | Auth | Stores provider credentials and token material per user. | Password auth, OAuth account linking. | `src/db/schema/auth.ts:60` |
 | `verification` | Auth | Stores one-time verification/reset values and expirations. | Email verification, password reset flows. | `src/db/schema/auth.ts:88` |
 | `facilities` | Facilities | Master record for production sites, including required facility timezone (`UTC` default) and durability defaults. | Facility onboarding, local-time reporting, durability defaults. | `src/db/schema/facilities.ts:9` |
-| `reactors` | Facilities | Defines pyrolysis units installed at facilities. | Run-to-reactor traceability, capacity planning, reactor compliance checks, sampling-method selection. | `src/db/schema/facilities.ts:45` |
+| `reactors` | Facilities | Defines pyrolysis units installed at facilities. (Sampling method moved off this table to `production_processes` — ADR 0016.) | Run-to-reactor traceability, capacity planning, reactor compliance checks. | `src/db/schema/facilities.ts:45` |
 | `storage_locations` | Facilities | Defines physical material storage points at facilities. | Feedstock/biochar inventory location tracking. | `src/db/schema/facilities.ts:66` |
 | `biochar_storage_inventory` | Facilities | Tracks biochar inventory movements and storage state. | Stored-product inventory, dispatch readiness, mass-balance support. | `src/db/schema/storage-inventory.ts` |
 | `suppliers` | Parties | Master list of feedstock suppliers and contacts. | Supply chain tracking, chain-of-custody references. | `src/db/schema/parties.ts:8` |
@@ -28,7 +28,7 @@ Current shape: 46 table exports across 14 table-bearing schema files.
 | `production_runs` | Production | Core pyrolysis batch records with energy inputs and output mass. Tracks biochar wet mass, moisture %, and derived dry mass. Operator selects a feedstock bin (`feedstockStorageLocationId`) and total mass; batch-level M:M rows in `production_run_feedstocks` are auto-allocated proportionally from bin contents. Temperatures via `production_run_readings`; emissions calculated at query time. | Process tracking, run-level energy accounting, operational history. | `src/db/schema/production.ts:24` |
 | `production_run_readings` | Production | Time-series telemetry for temperature/pressure/gas flow, entered manually or imported from reactor-day CSV files. | Monitoring-plan evidence, compliance checks, diagnostics. | `src/db/schema/production.ts:101` |
 | `production_samples` | Production | In-process field measurements taken during pyrolysis runs (weight, temperature, proximate analysis). | Real-time run monitoring, in-process QC, operator accountability. | `src/db/schema/production.ts:220` |
-| `samples` | Production | Lab and field sample measurements for biochar quality/compliance. | Eligibility checks, durability inputs, contaminant screening. | `src/db/schema/production.ts:156` |
+| `samples` | Production | Lab and field sample measurements for biochar quality/compliance. Attach per credit batch (`credit_batch_id`); `production_run_id` retained as optional in-process provenance (ADR 0016). | Eligibility checks, durability inputs, contaminant screening. | `src/db/schema/production.ts:156` |
 | `incident_reports` | Production | Captures production exceptions, severity, and corrective actions. | Adaptive management log, audit evidence, RCA workflows. | `src/db/schema/production.ts:310` |
 | `production_run_feedstocks` | Production | Junction mapping feedstock batches consumed by each run. Auto-populated via proportional allocation from the selected feedstock bin. | Input mass traceability and mass-balance reconciliation. | `src/db/schema/production.ts:328` |
 | `formulations` | Products | Defines recipe templates for finished biochar products. `biocharRatio` is the primary compliance field (§9.4.2 <50% rule). | Product standardization, blend definition. | `src/db/schema/products.ts:37` |
@@ -40,7 +40,8 @@ Current shape: 46 table exports across 14 table-bearing schema files.
 | `transport_legs` | Logistics | Canonical per-leg transport emissions accounting ledger. | Distance/energy method calculations, BCU tracking, transport auditability. | `src/db/schema/logistics.ts:160` |
 | `applications` | Application | Field application events for delivered biochar to soil. | Soil application reporting, per-application CO2e storage outputs. | `src/db/schema/application.ts:21` |
 | `soil_temperature_measurements` | Application | Soil temperature observations tied to applications. | 200-year durability baseline and evidence support. | `src/db/schema/application.ts:88` |
-| `credit_batches` | Credits | Aggregates reporting-period data into credit issuance batches. Includes `total_feedstock_mass_kg` and `ineligible_feedstock_mass_kg` summary columns for the >25% ineligible-biomass cap (P0-01). | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep, Method B cadence guardrails (reactor-driven), ineligible biomass fraction reporting. | `src/db/schema/credits.ts:22` |
+| `production_processes` | Production | Sampling-regime campaign keyed `(facility, feedstock)`, spanning reactors (Biochar Protocol §8.3.1; ADR 0016). Owns `sampling_method` (moved off `reactors`), `established_at` baseline epoch, and the inert `method_b_unlocked_at` seam (ADR 0017). Non-unique lookup index — sequential processes per pair over time; find-or-created on credit-batch create. | Method A/B sampling scope, baseline counting, credit-batch process linkage. | `src/db/schema/production-processes.ts` |
+| `credit_batches` | Credits | The protocol production batch (ADR 0016): one feedstock, facility-scoped, ≤ 1 month under Isometric. Carries derived `feedstock_type_id` (NOT NULL) + `production_process_id`, plus `total_feedstock_mass_kg`/`ineligible_feedstock_mass_kg` for the >25% ineligible-biomass cap (P0-01). DB `check` enforces the ≤ 1-month Isometric window. | Net removal calculation, durability pathway selection (locked after `verified`/`issued`), registry submission prep, per-credit-batch lab sampling, ineligible biomass fraction reporting. | `src/db/schema/credits.ts:22` |
 | `credit_batch_applications` | Credits | M:N join between credit batches and applications. | Tracing which applications contribute to each issuance batch. | `src/db/schema/credits.ts:130` |
 | `documents` | Documentation | Central optional evidence store linked by `entity_type` + `entity_id`. | Compliance evidence attachment, media/provenance retention. | `src/db/schema/documentation.ts:14` |
 | `certifier_projects` | Certification | Maps local facilities to external certifier project identifiers; also holds per-facility emission-estimate config (genset kWh/L yield, three-stage energy split %) and the facility fallback soil temperature. | Provider project registration and linkage, emission-estimate configuration, application soil-temperature fallback. | `src/db/schema/certification.ts:20` |
@@ -59,7 +60,7 @@ Current shape: 46 table exports across 14 table-bearing schema files.
 
 | Enum | Values | Used by |
 |---|---|---|
-| `samplingMethod` | `method_a`, `method_b` | `reactors.sampling_method` — Isometric protocol sampling method selection |
+| `samplingMethod` | `method_a`, `method_b` | `production_processes.sampling_method` — Isometric protocol sampling regime, keyed `(facility, feedstock)` (moved off `reactors`, ADR 0016) |
 | `soilTemperatureSource` | `baseline`, `global_database` | Applications — soil temperature data source for durability calcs |
 | `feedstockTypeUsage` | `pyrolysis`, `blend` | `feedstock_types.usage` — separates registry-validated pyrolysis biomass from internal-only blend materials |
 | `applicationEvidenceMethod` | `visual`, `boundary` | Applications — declared evidence route: geotagged visual proof or GIS boundary + logbook |

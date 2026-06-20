@@ -22,9 +22,15 @@ const CO2_STORED = {
   groupKey: "co2-stored",
   blueprintKey: "carbon_rich_substance_sequestration",
 } as const;
-const BIOCHAR_PROCESSING = {
-  groupKey: "biochar-processing",
+// Energy enters at a single pyrolysis measurement point (ADR 0015): one grid
+// electricity datapoint and one diesel-genset datapoint.
+const PYROLYSIS_ELECTRICITY = {
+  groupKey: "pyrolysis",
   blueprintKey: "grid_electricity_use",
+} as const;
+const PYROLYSIS_GENSET = {
+  groupKey: "pyrolysis",
+  blueprintKey: "energy_based_ci_emissions",
 } as const;
 const baseAgg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
@@ -37,16 +43,11 @@ const baseAgg: AggregatedProductionData = {
   totalStartupDieselLitres: 50,
   totalGensetDieselLitres: 20,
   totalElectricityKwh: 200,
-  feedstockTransportAvgDistanceKm: 50,
-  biocharTransportAvgDistanceKm: 100,
-  sampleTransportAvgDistanceKm: 25,
+  feedstockTransportMassDistanceTonneKm: 50,
+  biocharTransportMassDistanceTonneKm: 100,
   sampleTransportMassDistanceTonneKm: 12,
-  biomassElectricityKwh: 40,
-  pyrolysisElectricityKwh: 130,
-  biocharElectricityKwh: 30,
-  biomassGensetKwh: 13.5,
-  pyrolysisGensetKwh: 43.875,
-  biocharGensetKwh: 6.975,
+  // 20 L × 3.375 kWh/L (enriched genset figure — ADR 0015 single point).
+  totalGensetKwh: 67.5,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1", "pr_2"],
@@ -128,8 +129,8 @@ describe("buildCreateDatapointRequest", () => {
 
   it("matches units case-insensitively (kWh ↔ kwh)", () => {
     const result = buildCreateDatapointRequest({
-      groupKey: BIOCHAR_PROCESSING.groupKey,
-      componentBlueprintKey: BIOCHAR_PROCESSING.blueprintKey,
+      groupKey: PYROLYSIS_ELECTRICITY.groupKey,
+      componentBlueprintKey: PYROLYSIS_ELECTRICITY.blueprintKey,
       rtcInput: rtcInput({
         input_key: "electricity_use",
         quantity_kind: "energy",
@@ -144,8 +145,27 @@ describe("buildCreateDatapointRequest", () => {
       supplierRefId: SUPPLIER_REF,
     });
 
+    // Combined grid electricity (totalElectricityKwh), no per-stage split.
     expect(result.quantity.unit).toBe("kWh");
-    expect(result.quantity.magnitude).toBe(30);
+    expect(result.quantity.magnitude).toBe(200);
+  });
+
+  it("maps pyrolysis genset energy to the combined totalGensetKwh", () => {
+    const result = buildCreateDatapointRequest({
+      groupKey: PYROLYSIS_GENSET.groupKey,
+      componentBlueprintKey: PYROLYSIS_GENSET.blueprintKey,
+      rtcInput: rtcInput({ input_key: "energy", quantity_kind: "energy" }),
+      blueprintInput: blueprintInput({
+        input_key: "energy",
+        compatible_unit: "kWh",
+        quantity_kind: "energy",
+      }),
+      agg: baseAgg,
+      projectId: PROJECT_ID,
+      supplierRefId: SUPPLIER_REF,
+    });
+
+    expect(result.quantity).toEqual({ magnitude: 67.5, unit: "kWh" });
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
@@ -166,17 +186,21 @@ describe("buildCreateDatapointRequest", () => {
   });
 
   it("rejects when only the group_key differs (same blueprint+input, wrong group)", () => {
-    // `distance` exists under multiple groups in INPUT_MAPPING but only with
-    // the `transport` blueprint. Calling with a bogus group_key must miss.
+    // `mass_distance` exists under each transport group in INPUT_MAPPING but
+    // only with the `mass_distance_based_ci_emissions` blueprint. A bogus
+    // group_key must miss.
     expect(() =>
       buildCreateDatapointRequest({
         groupKey: "nonexistent-group",
-        componentBlueprintKey: "transport",
-        rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+        componentBlueprintKey: "mass_distance_based_ci_emissions",
+        rtcInput: rtcInput({
+          input_key: "mass_distance",
+          quantity_kind: "mass_distance",
+        }),
         blueprintInput: blueprintInput({
-          input_key: "distance",
-          compatible_unit: "km",
-          quantity_kind: "distance",
+          input_key: "mass_distance",
+          compatible_unit: "tonne * km",
+          quantity_kind: "mass_distance",
         }),
         agg: baseAgg,
         projectId: PROJECT_ID,
@@ -185,38 +209,46 @@ describe("buildCreateDatapointRequest", () => {
     ).toThrowError(/No INPUT_MAPPING entry for group="nonexistent-group"/);
   });
 
-  it("disambiguates `distance` between feedstock and biochar transport groups", () => {
-    // Same blueprint (`transport`), same input_key (`distance`), different
-    // groups should resolve to different aggregated sources.
-    const feedstockDistance = buildCreateDatapointRequest({
+  it("disambiguates `mass_distance` between feedstock and biochar transport groups", () => {
+    // Same blueprint (`mass_distance_based_ci_emissions`), same input_key
+    // (`mass_distance`), different groups resolve to different aggregated
+    // sources (the per-category mass-weighted tonne·km).
+    const feedstockMassDistance = buildCreateDatapointRequest({
       groupKey: "biomass-feedstock-transport",
-      componentBlueprintKey: "transport",
-      rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+      componentBlueprintKey: "mass_distance_based_ci_emissions",
+      rtcInput: rtcInput({
+        input_key: "mass_distance",
+        quantity_kind: "mass_distance",
+      }),
       blueprintInput: blueprintInput({
-        input_key: "distance",
-        compatible_unit: "km",
-        quantity_kind: "distance",
+        input_key: "mass_distance",
+        compatible_unit: "tonne * km",
+        quantity_kind: "mass_distance",
       }),
       agg: baseAgg,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
-    const biocharDistance = buildCreateDatapointRequest({
+    const biocharMassDistance = buildCreateDatapointRequest({
       groupKey: "biochar-transport",
-      componentBlueprintKey: "transport",
-      rtcInput: rtcInput({ input_key: "distance", quantity_kind: "distance" }),
+      componentBlueprintKey: "mass_distance_based_ci_emissions",
+      rtcInput: rtcInput({
+        input_key: "mass_distance",
+        quantity_kind: "mass_distance",
+      }),
       blueprintInput: blueprintInput({
-        input_key: "distance",
-        compatible_unit: "km",
-        quantity_kind: "distance",
+        input_key: "mass_distance",
+        compatible_unit: "tonne * km",
+        quantity_kind: "mass_distance",
       }),
       agg: baseAgg,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
-    // baseAgg has feedstockTransport=50, biocharTransport=100
-    expect(feedstockDistance.quantity.magnitude).toBe(50);
-    expect(biocharDistance.quantity.magnitude).toBe(100);
+    // baseAgg has feedstockTransportMassDistanceTonneKm=50,
+    // biocharTransportMassDistanceTonneKm=100.
+    expect(feedstockMassDistance.quantity.magnitude).toBe(50);
+    expect(biocharMassDistance.quantity.magnitude).toBe(100);
   });
 
   it("rejects a quantity_kind drift between mapping and live blueprint", () => {
@@ -296,28 +328,34 @@ describe("buildCreateDatapointRequest", () => {
     const expected: Array<[string, string, string]> = [
       ["co2-stored", "carbon_rich_substance_sequestration", "carbon_content"],
       ["co2-stored", "carbon_rich_substance_sequestration", "product_mass"],
-      ["biomass-feedstock-transport", "transport", "distance"],
-      ["biomass-feedstock-transport", "transport", "mass"],
-      ["biochar-transport", "transport", "distance"],
-      ["biochar-transport", "transport", "mass"],
-      ["sampling-required-for-mrv", "distance_based_ci_emissions", "distance"],
+      // All three transport categories bind the `mass_distance_based_ci_emissions`
+      // blueprint: a single mass-weighted `mass_distance` (tonne·km) per category
+      // (there is no LIST-shaped transport blueprint in the Certify catalog).
       [
-        "biomass-feedstock-processing",
-        "metered_energy_based_ci_emissions",
-        "initial_readout",
+        "biomass-feedstock-transport",
+        "mass_distance_based_ci_emissions",
+        "mass_distance",
       ],
-      [
-        "biomass-feedstock-processing",
-        "metered_energy_based_ci_emissions",
-        "final_readout",
-      ],
-      [
-        "biomass-feedstock-processing",
-        "energy_based_ci_emissions",
-        "energy",
-      ],
+      ["biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"],
+      // Energy — single combined measurement point under pyrolysis (ADR 0015):
+      // grid electricity → totalElectricityKwh, diesel genset → totalGensetKwh.
+      // The per-stage `metered_energy_based_ci_emissions` electricity entry and
+      // the biochar-processing / biomass-feedstock-processing energy entries are
+      // gone.
+      ["pyrolysis", "grid_electricity_use", "electricity_use"],
       ["pyrolysis", "energy_based_ci_emissions", "energy"],
-      ["biochar-processing", "energy_based_ci_emissions", "energy"],
+      // Volume-based fuel mapping retained for templates that re-declare the
+      // component (the live template declares none → non-blocking warning).
+      [
+        "biomass-feedstock-sourcing",
+        "fuel_usage_by_volume",
+        "volume_of_fuel",
+      ],
+      [
+        "biomass-feedstock-processing",
+        "fuel_usage_by_volume",
+        "volume_of_fuel",
+      ],
       [
         "sampling-required-for-mrv",
         "mass_distance_based_ci_emissions",

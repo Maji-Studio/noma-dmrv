@@ -25,6 +25,7 @@ import { deriveRemovalStatus } from "@/lib/certification/status";
 import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
+import { SourcesPanel } from "./sources-panel";
 import { SubmitConfirmDialog } from "./submit-confirm-dialog";
 
 interface RemovalDetailSheetProps {
@@ -120,13 +121,12 @@ export function RemovalDetailSheet({
   const isActionable = state === "ready" || state === "blocked";
   const isOneClick = state === "ready" && summary.memberBatchCodes.length === 1;
 
-  // Resume the New-Removal wizard directly on this removal. The legacy
-  // `/removals/[id]/review` route only redirects here (dropping any `?step=`),
-  // so we skip the hop and build the resume URL these links resolve to.
+  // "Review & submit" resumes the New-Removal wizard directly on this removal.
+  // The legacy `/removals/[id]/review` route only redirects here (dropping any
+  // `?step=`), so we skip the hop and build the resume URL it resolves to.
   const reviewHref = `/certification/removals?resume=${encodeURIComponent(
     summary.removalId,
   )}&facility=${encodeURIComponent(facilityId)}`;
-  const evidenceHref = reviewHref;
 
   const window =
     summary.startedOn && summary.completedOn
@@ -201,14 +201,43 @@ export function RemovalDetailSheet({
 
           <ReadinessBlock summary={summary} />
 
-          {isActionable && (
-            <Link
-              href={evidenceHref}
-              className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
-            >
-              Evidence &amp; sources →
-            </Link>
+          {summary.submissionWarnings.length > 0 && (
+            // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
+            // diesel the active template cannot carry. Distinct from the
+            // readiness blockers above: the removal still submits.
+            <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+              <span className="body-small font-medium text-[var(--color-text-primary)]">
+                Advisory — submits, but note:
+              </span>
+              <ul className="flex flex-col gap-4">
+                {summary.submissionWarnings.map((warning) => (
+                  <li key={warning} className="flex items-start gap-6">
+                    <Warning
+                      size={14}
+                      weight="fill"
+                      aria-hidden
+                      className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
+                    />
+                    <span className="body-caption text-[var(--color-text-secondary)]">
+                      {warning}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
+
+          {/*
+            Supporting sources — mirror lineage documents (lab reports, BoLs,
+            weigh-scale tickets, including per-transport-leg evidence) to
+            Isometric so their source_ids ride into the Datapoint payloads at
+            submit. This is the only place the candidate set is consumed: submit
+            is resolve-only and never auto-mirrors, so without this panel
+            `source_ids` is always empty and no evidence reaches the registry.
+            (Restores the mount lost when evidence-step.tsx was deleted in the
+            2026-06-04 certify redesign.)
+          */}
+          <SourcesPanel removalId={summary.removalId} />
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer className="justify-stretch">

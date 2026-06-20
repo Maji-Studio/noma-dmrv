@@ -8,12 +8,17 @@ import {
   integer,
   primaryKey,
   check,
+  foreignKey,
   index,
+  unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchStatus, durabilityOption } from './common';
 import { facilities } from './facilities';
+import { feedstockTypes } from './feedstock';
+import { productionProcesses } from './production-processes';
 import { applications } from './application';
+import { productionRuns } from './production';
 import { certifierRemovals } from './certification';
 
 // ============================================
@@ -29,6 +34,19 @@ export const creditBatches = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
+    // --- Production-batch identity (ADR 0016) ---
+    // The credit batch IS the Isometric protocol production batch: ONE
+    // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
+    // derived from — and asserted single across — the member runs at create /
+    // update time (a run blending >1 feedstock type is rejected loudly).
+    feedstockTypeId: uuid('feedstock_type_id')
+      .notNull()
+      .references(() => feedstockTypes.id),
+    // The (facility, feedstock) sampling-regime campaign this batch is one
+    // <=1-month slice of. Auto-found-or-created when the batch is built.
+    productionProcessId: uuid('production_process_id')
+      .notNull()
+      .references(() => productionProcesses.id),
     status: creditBatchStatus('status').default('pending').notNull(),
 
     // --- Overview ---
@@ -120,6 +138,14 @@ export const creditBatches = pgTable(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
+    // ADR 0016: a credit batch is the protocol production batch (< 1 month).
+    // Isometric-conditional DB backstop aligned with the shared calendar-month
+    // predicate used by Zod + server re-validation.
+    check(
+      'credit_batches_isometric_max_one_month',
+      sql`${table.certifier} is distinct from 'isometric'
+        or ${table.endDate} <= (${table.startDate} + interval '1 month')::date`
+    ),
     check(
       'credit_batches_total_feedstock_mass_non_negative',
       sql`${table.totalFeedstockMassKg} is null or ${table.totalFeedstockMassKg} >= 0`
@@ -138,6 +164,19 @@ export const creditBatches = pgTable(
     // removal X" lookups during submission. Postgres does not auto-index
     // foreign keys.
     index('credit_batches_removal_id_idx').on(table.removalId),
+    foreignKey({
+      name: 'credit_batches_process_identity_fk',
+      columns: [
+        table.productionProcessId,
+        table.facilityId,
+        table.feedstockTypeId,
+      ],
+      foreignColumns: [
+        productionProcesses.id,
+        productionProcesses.facilityId,
+        productionProcesses.feedstockTypeId,
+      ],
+    }),
   ]
 );
 
@@ -162,6 +201,29 @@ export const creditBatchApplications = pgTable(
 );
 
 // ============================================
+// Credit Batch Production Runs - Membership table
+// Links credit batches to production-run cohorts.
+// Strict: a production run belongs to at most one credit batch.
+// ============================================
+
+export const creditBatchProductionRuns = pgTable(
+  'credit_batch_production_runs',
+  {
+    creditBatchId: uuid('credit_batch_id')
+      .notNull()
+      .references(() => creditBatches.id),
+    productionRunId: uuid('production_run_id')
+      .notNull()
+      .references(() => productionRuns.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.creditBatchId, table.productionRunId] }),
+    unique('credit_batch_production_runs_run_unique').on(table.productionRunId),
+  ]
+);
+
+// ============================================
 // Relations
 // ============================================
 
@@ -172,11 +234,20 @@ export const creditBatchesRelations = relations(
       fields: [creditBatches.facilityId],
       references: [facilities.id],
     }),
+    feedstockType: one(feedstockTypes, {
+      fields: [creditBatches.feedstockTypeId],
+      references: [feedstockTypes.id],
+    }),
+    productionProcess: one(productionProcesses, {
+      fields: [creditBatches.productionProcessId],
+      references: [productionProcesses.id],
+    }),
     removal: one(certifierRemovals, {
       fields: [creditBatches.removalId],
       references: [certifierRemovals.id],
     }),
     creditBatchApplications: many(creditBatchApplications),
+    creditBatchProductionRuns: many(creditBatchProductionRuns),
   })
 );
 
@@ -194,6 +265,20 @@ export const creditBatchApplicationsRelations = relations(
   })
 );
 
+export const creditBatchProductionRunsRelations = relations(
+  creditBatchProductionRuns,
+  ({ one }) => ({
+    creditBatch: one(creditBatches, {
+      fields: [creditBatchProductionRuns.creditBatchId],
+      references: [creditBatches.id],
+    }),
+    productionRun: one(productionRuns, {
+      fields: [creditBatchProductionRuns.productionRunId],
+      references: [productionRuns.id],
+    }),
+  })
+);
+
 // ============================================
 // Type Exports
 // ============================================
@@ -202,3 +287,5 @@ export type CreditBatch = typeof creditBatches.$inferSelect;
 export type NewCreditBatch = typeof creditBatches.$inferInsert;
 export type CreditBatchApplication = typeof creditBatchApplications.$inferSelect;
 export type NewCreditBatchApplication = typeof creditBatchApplications.$inferInsert;
+export type CreditBatchProductionRun = typeof creditBatchProductionRuns.$inferSelect;
+export type NewCreditBatchProductionRun = typeof creditBatchProductionRuns.$inferInsert;

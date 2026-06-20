@@ -14,7 +14,6 @@ import {
   getReactorsByFacilityFn,
   getReactorTypesFn,
   checkReactorCodeFn,
-  getReactorMethodBEligibilityFn,
   createReactorFn,
   updateReactorFn,
   deleteReactorFn,
@@ -39,8 +38,6 @@ export const reactorKeys = {
   types: () => [...reactorKeys.all, "types"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...reactorKeys.all, "codeCheck", code, excludeId] as const,
-  methodBEligibility: (id: string) =>
-    [...reactorKeys.all, id, "methodBEligibility"] as const,
 };
 
 // ============================================
@@ -140,24 +137,6 @@ export function useReactorCodeCheck(
     },
     enabled: enabled && code.length > 0,
     staleTime: 5000, // 5 seconds - code availability can change quickly
-  });
-}
-
-/**
- * Hook to fetch Method B eligibility for a specific reactor
- */
-export function useReactorMethodBEligibility(reactorId: string, enabled = true) {
-  return useQuery({
-    queryKey: reactorKeys.methodBEligibility(reactorId),
-    queryFn: async () => {
-      const result = await getReactorMethodBEligibilityFn(reactorId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!reactorId,
-    staleTime: 30000,
   });
 }
 
@@ -302,10 +281,6 @@ export function useUpdateReactor(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
       queryClient.invalidateQueries({ queryKey: reactorKeys.types() });
-      // Invalidate Method B eligibility cache (it may have changed)
-      queryClient.invalidateQueries({
-        queryKey: reactorKeys.methodBEligibility(data.id),
-      });
       // Invalidate facility reactors (in case facility changed)
       queryClient.invalidateQueries({
         queryKey: reactorKeys.byFacility(data.facilityId),
@@ -414,9 +389,6 @@ export function useDeleteReactor(
 
       // Remove specific reactor from cache
       queryClient.removeQueries({ queryKey: reactorKeys.detail(reactorId) });
-      queryClient.removeQueries({
-        queryKey: reactorKeys.methodBEligibility(reactorId),
-      });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
       // Invalidate facility reactors
@@ -550,18 +522,9 @@ export function useReactorCacheInvalidation() {
     invalidateTypes: () =>
       queryClient.invalidateQueries({ queryKey: reactorKeys.types() }),
 
-    /** Invalidate Method B eligibility for a reactor */
-    invalidateMethodBEligibility: (reactorId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: reactorKeys.methodBEligibility(reactorId),
-      }),
-
     /** Remove a specific reactor from cache (use after deletion) */
     removeFromCache: (reactorId: string) => {
       queryClient.removeQueries({ queryKey: reactorKeys.detail(reactorId) });
-      queryClient.removeQueries({
-        queryKey: reactorKeys.methodBEligibility(reactorId),
-      });
     },
 
     /** Set reactor data in cache (useful for optimistic updates) */

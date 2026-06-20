@@ -42,6 +42,7 @@ class StubProvider implements StorageProvider {
     return null;
   }
   async deleteObject(): Promise<void> {}
+  async putObject(): Promise<void> {}
 }
 
 const mockUser = {

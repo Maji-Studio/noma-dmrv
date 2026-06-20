@@ -29,6 +29,7 @@ import {
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
 import { getCreditBatchById } from "./credit-batches";
+import { getApplicationsForRuns } from "./credit-batch-production-runs";
 import { requireAuth } from "./utils";
 
 export interface CreditBatchChainBatch {
@@ -57,7 +58,19 @@ export interface CreditBatchChainData {
 
 interface ResolvedBatchScope {
   batch: NonNullable<Awaited<ReturnType<typeof getCreditBatchById>>>;
+  applicationIds: string[];
   lineages: CreditBatchChainLineage[];
+}
+
+async function getApplicationIdsForBatchRuns(
+  userId: string,
+  productionRunIds: string[],
+): Promise<string[]> {
+  const applicationsForRuns = await getApplicationsForRuns(
+    userId,
+    productionRunIds,
+  );
+  return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
 }
 
 // The roll-up's lineage walk — shared by the chain and geo payloads. The
@@ -74,13 +87,17 @@ async function resolveBatchScope(
     throw new SafeError("Credit batch not found");
   }
 
+  const applicationIds = await getApplicationIdsForBatchRuns(
+    userId,
+    batch.productionRunIds,
+  );
   const lineages = await Promise.all(
-    batch.applicationIds.map(async (applicationId) => ({
+    applicationIds.map(async (applicationId) => ({
       applicationId,
       chain: await getChainOfCustodyData(userId, applicationId),
     })),
   );
-  return { batch, lineages };
+  return { batch, applicationIds, lineages };
 }
 
 // Lineage warnings merged batch-wide, prefixed by the application they belong
@@ -148,10 +165,13 @@ export async function getCreditBatchChainGeoData(
 ): Promise<ChainOfCustodyGeoData> {
   requireAuth(userId);
 
-  const { batch } = await resolveBatchScope(userId, creditBatchId);
+  const { batch, applicationIds } = await resolveBatchScope(
+    userId,
+    creditBatchId,
+  );
 
   const payloads = await Promise.all(
-    batch.applicationIds.map((applicationId) =>
+    applicationIds.map((applicationId) =>
       getChainOfCustodyGeoData(userId, applicationId),
     ),
   );

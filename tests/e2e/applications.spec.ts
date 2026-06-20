@@ -6,13 +6,50 @@
  *
  * Chain: Delivery → Application → Credit Batch
  */
-import { test, expect } from "./fixtures";
+import type { Page } from "@playwright/test";
+import { test, expect, type SeededChainData } from "./fixtures";
 import {
   selectEntity,
+  selectFirstCreditBatchProductionRun,
   selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+
+async function createProductionRunForCreditBatch(
+  page: Page,
+  seededData: SeededChainData,
+  date: string,
+) {
+  await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+  await page.waitForLoadState("networkidle");
+
+  await page.click('button:has-text("New Production Run")');
+  await waitForSideSheet(page);
+
+  await page.selectOption('select[name="status"]', "draft");
+  await selectEntity(
+    page,
+    "Reactor",
+    seededData.reactor.id,
+    seededData.reactor.identifier,
+  );
+  await page.fill('input[name="date"]', date);
+  await selectEntity(
+    page,
+    "Source Bin",
+    seededData.feedstockStorageLocation.id,
+    seededData.feedstockStorageLocation.name,
+  );
+  await page.fill('input[name="feedstockWetMassKg"]', "50");
+  await page.fill('input[name="feedstockMoisturePercent"]', "15");
+
+  await page
+    .locator('[role="dialog"]')
+    .locator('button:has-text("Create Production Run")')
+    .click();
+  await waitForSideSheetClose(page);
+}
 
 test.describe("Application + Credit Batch UI CRUD", () => {
   test("create application via UI form", async ({
@@ -172,30 +209,20 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
+    const today = new Date().toISOString().split("T")[0];
+    await createProductionRunForCreditBatch(page, seededData, today);
+
     await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     await page.click('button:has-text("New Credit Batch")');
     await waitForSideSheet(page);
 
-    const today = new Date().toISOString().split("T")[0];
-
     // Fill Overview section
     await page.fill('input[name="startDate"]', today);
     await page.fill('input[name="endDate"]', today);
 
-    // Select applications (checkbox toggle)
-    // The application checkboxes should be visible - click the first one if available
-    const appCheckboxes = page.locator('input[type="checkbox"]');
-    const checkboxCount = await appCheckboxes.count();
-    if (checkboxCount > 0) {
-      // Click the label/container for the first application to toggle it
-      const firstAppLabel = page
-        .locator("label")
-        .filter({ has: page.locator('input[type="checkbox"]') })
-        .first();
-      await firstAppLabel.click();
-    }
+    await selectFirstCreditBatchProductionRun(page);
 
     // Durability is snapshotted from the facility default and rendered read-only.
 
