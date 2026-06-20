@@ -351,6 +351,16 @@ guard. Pure starter-template residue; the app is facility-scoped.
   the COA/lab-report Source behind the chemistry datapoints (D4), and recording
   the conservative soil-temp method string on the `biochar_soil` datapoint
   (the `CreateMeasurementSampleRequest` body has no description field).
+- **Snapshot-back the measurement-sample bodies before the flip (resume
+  coherence).** Today the gated step in `runRemovalSubmission` rebuilds the
+  measurement-sample submissions from live `durability.batches` every attempt,
+  whereas `transport.datapointBodies` and the fixed bindings come off the claimed
+  row snapshot on resume. While the flag is off this is inert, but once live a
+  resumed claim could reconcile a stale body (partial prior create) or POST
+  changed live chemistry under the prior version (failed before create). Persist
+  the built measurement-sample submissions into the payload snapshot and read
+  them back on resume — same pattern as `transport.datapointBodies` — so the
+  whole registry attempt stays version-coherent. (Surfaced in PR #297 review.)
 - **Why it matters / blocking what:** the legacy
   `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry references a
   blueprint the operator deleted when re-authoring the template, so live submit
