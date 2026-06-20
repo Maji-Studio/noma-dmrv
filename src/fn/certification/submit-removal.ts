@@ -34,8 +34,16 @@ import {
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
+import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
+import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
-import { ensureTransportEvidenceLedgerSourceFromContext } from "./evidence-ledger";
+import {
+  buildDurabilityMeasurementSampleSubmissions,
+  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  submitDurabilityMeasurementSamples,
+} from "./durability-measurement-samples";
+import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import {
   collectCandidateDocumentIdsForRemoval,
@@ -215,6 +223,11 @@ function resolveTemplateInputs(args: {
 
   for (const group of template.groups) {
     for (const component of group.components) {
+      // The `biochar_sequestration_200_year_*` components are fed by the
+      // measurement-samples step (Phase 3), NOT the aggregation→datapoint loop,
+      // so skip them here — their inputs have no INPUT_MAPPING entry, and
+      // buildCreateGhgEntryRequest skips them in the removal body to match.
+      if (isSequestrationBlueprintKey(component.blueprint_key)) continue;
       const blueprint = blueprintsByKey.get(component.blueprint_key);
       if (!blueprint) {
         throw new SafeError(
@@ -350,6 +363,25 @@ export async function submitRemoval(
     );
   }
 
+  // Phase 3 gate: a template carrying a `biochar_sequestration_200_year_*`
+  // component routes its durability inputs through the measurement-samples step,
+  // whose live POST is staged behind two sandbox-empirical confirms (binding +
+  // unit scalings). Block such a submission while the flag is off rather than
+  // POST an under-specified removal (the sequestration components are skipped in
+  // resolveTemplateInputs / the removal body), so the new template can't be
+  // submitted until the confirms land. See docs/open-questions.md
+  // `isometric/durability-measurement-samples`.
+  const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
+    group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
+  );
+  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+    throw new SafeError(
+      "200-year durability submission is staged but not yet live — pending two " +
+        "sandbox confirms (datapoint↔input binding + measurement unit scalings). " +
+        "Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE after confirming both.",
+    );
+  }
+
   assertProductionConfirmed(confirmProduction);
 
   if (ctx.memberBatches.length === 0) {
@@ -439,28 +471,15 @@ export async function submitRemoval(
     );
   }
 
-  // Regenerate the transport evidence ledger from the live legs and mirror it
-  // as a Source BEFORE candidate documents are collected, so the current ledger
-  // rides into source_ids on this submit (and supersedes any prior one). Done
-  // here — before the locked claim transaction below — because it makes HTTP
-  // calls to Isometric and inserts a document. The ledger flow owns a
-  // per-removal artifact lock for its list/create/retire sequence. Best-effort:
-  // a render/mirror hiccup must never block an otherwise-valid submission; the
-  // next submit regenerates it. Idempotent on ledger content, so an unchanged-
-  // legs resubmit is a no-op.
-  try {
-    const ledger = await ensureTransportEvidenceLedgerSourceFromContext(
-      userId,
-      removalId,
-      ctx,
-    );
-    log.info({ ledgerStatus: ledger.status }, "transport evidence ledger ensured");
-  } catch (err) {
-    log.warn(
-      { errorName: err instanceof Error ? err.name : typeof err },
-      "transport evidence ledger generation failed; submitting without it",
-    );
-  }
+  // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
+  // 200-year durability) from the live context and mirror them BEFORE candidate
+  // documents are collected, so the current ledgers ride into source_ids on this
+  // submit (and supersede any prior ones). Done here — before the locked claim
+  // transaction below — because it makes HTTP calls to Isometric and inserts
+  // documents under a per-removal artifact lock. Best-effort and idempotent on
+  // content (an unchanged resubmit is a no-op); each ledger self-skips when it
+  // has nothing to evidence.
+  await ensureEvidenceLedgersFromContext(userId, removalId, ctx, log);
 
   // Phase 3.5: mirrored Isometric Source IDs ride into every monitored
   // Datapoint (removal-wide attribution). They are part of the semantic
@@ -668,6 +687,21 @@ export async function submitRemoval(
       const effectiveFixed = claimed.resumed
         ? readRemovalFixedInputs(claimed.row)
         : fixed;
+      // Durability bundle for the measurement-samples step — present only when
+      // the template declares a sequestration component (and thus the flag is on,
+      // per the gate above). `facilityReferenceSoilTemperature` is guaranteed
+      // non-null here when there are batches to submit (the soil-temp durability
+      // gate blocker throws above otherwise); the truthy guard keeps TS honest
+      // and short-circuits the no-batch edge case.
+      const durability =
+        hasDurabilityComponents && ctx.facilityReferenceSoilTemperature
+          ? {
+              batches: ctx.batchesWithSamples,
+              attributionByRunId: ctx.attributionByRunId,
+              facilityReferenceSoilTemperature:
+                ctx.facilityReferenceSoilTemperature,
+            }
+          : null;
       return runRemovalSubmission({
         userId,
         removalId,
@@ -678,6 +712,7 @@ export async function submitRemoval(
         blueprintsByKey,
         agg,
         externalProjectId,
+        durability,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
         log,
@@ -696,6 +731,14 @@ interface RunRemovalSubmissionArgs {
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: Parameters<typeof buildCreateGhgEntryRequest>[0]["agg"];
   externalProjectId: string;
+  // Durability measurement-samples bundle — null unless the template declares a
+  // sequestration component (Phase 3). When present, the step POSTs the per-batch
+  // production-batch + soil samples after the datapoint loop, before the removal.
+  durability: {
+    batches: CreditBatchWithSamples[];
+    attributionByRunId: Map<string, number>;
+    facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature;
+  } | null;
   supersedePreviousId: string | null;
   resumed: boolean;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
@@ -712,6 +755,7 @@ async function runRemovalSubmission({
   blueprintsByKey,
   agg,
   externalProjectId,
+  durability,
   supersedePreviousId,
   resumed,
   log,
@@ -750,6 +794,34 @@ async function runRemovalSubmission({
       log,
     });
     datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, externalId);
+  }
+
+  // Phase 3: POST the durability measurement samples (per-batch chemistry +
+  // facility soil reference) after the datapoint loop, before the removal body —
+  // each value yields a datapoint the registry binds to the sequestration
+  // component. The flag is already on whenever `durability` is non-null (the
+  // submitRemoval gate blocks otherwise); the explicit guard is defence-in-depth
+  // so a future caller can't accidentally fire the staged path.
+  if (durability && DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+    const submissions = buildDurabilityMeasurementSampleSubmissions({
+      removalId,
+      version: row.version,
+      externalProjectId,
+      batches: durability.batches,
+      attributionByRunId: durability.attributionByRunId,
+      facilityReferenceSoilTemperature:
+        durability.facilityReferenceSoilTemperature,
+      measuredAt: effectiveAgg.latestEndTime.toISOString(),
+    });
+    const { submitted } = await submitDurabilityMeasurementSamples({
+      userId,
+      removalId,
+      submissionRowId: row.id,
+      resumed,
+      submissions,
+      log,
+    });
+    log.info({ submitted }, "durability measurement samples submitted");
   }
 
   const removalBody = buildCreateGhgEntryRequest({

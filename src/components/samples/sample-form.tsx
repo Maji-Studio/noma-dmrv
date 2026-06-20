@@ -36,6 +36,7 @@ import {
   type SampleFormData,
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
+import { SampleBatchProgress } from "./sample-batch-progress";
 import type { SampleWithRelations } from "@/data-access/samples";
 
 // ============================================
@@ -152,6 +153,7 @@ export function SampleForm({
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   // Watch fields for calculated values and conditional rendering
+  const watchedProductionRunId = watch("productionRunId");
   const watchedDurabilityOption = watch("durabilityOption");
   const watchedHydrogenPercent = watch("totalHydrogenPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
@@ -233,6 +235,9 @@ export function SampleForm({
                   )}
                 />
               </FormField>
+
+              {/* Derived credit batch + live ≥3 sampling progress (ADR 0016) */}
+              <SampleBatchProgress productionRunId={watchedProductionRunId} />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField

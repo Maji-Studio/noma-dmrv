@@ -272,6 +272,123 @@ export async function seedCreditBatch(
   }
 }
 
+const SEEDED_DURABILITY_BATCH_CODE_PREFIX = "E2E-DUR";
+
+/**
+ * Seed an eligible, distribution-clean 200-year durability batch for the Phase-5
+ * readiness surfaces: a single-feedstock credit batch spanning TWO production
+ * runs on distinct days, with THREE lab samples carrying complete H/C_org +
+ * O/C_org chemistry well under the eligibility ceilings (§3 Table 2) and
+ * distributed across both runs/days (§8.3.1). The samples set `creditBatchId`
+ * directly (the production form's derive-on-create write-path is exercised by
+ * the unit tests; the E2E only needs the rolled-up state). Drives the
+ * credit-batch durability panel and the lab-sample form's batch-progress
+ * preview. Torn down by `cleanupChainData` (everything is facility-scoped).
+ */
+export async function seedDurabilityBatch(
+  facilityId: string,
+  reactorId: string,
+  feedstockTypeId: string,
+  testRunId: string,
+): Promise<{
+  creditBatchId: string;
+  creditBatchCode: string;
+  runIds: string[];
+  sampleCodes: string[];
+}> {
+  const { db, pool } = createDbConnection();
+  try {
+    const creditBatchId = crypto.randomUUID();
+    const productionProcessId = crypto.randomUUID();
+    const run1Id = crypto.randomUUID();
+    const run2Id = crypto.randomUUID();
+    const code = `${SEEDED_DURABILITY_BATCH_CODE_PREFIX}-${testRunId}`;
+    const now = new Date();
+    const dayOffset = (days: number) =>
+      new Date(now.getTime() - days * MS_PER_DAY);
+    const dateStr = (d: Date) => d.toISOString().slice(0, 10);
+    const day1 = dayOffset(2);
+    const day2 = dayOffset(1);
+    const start = dateStr(dayOffset(3));
+    const end = dateStr(
+      new Date(
+        dayOffset(3).getTime() + SEEDED_CREDIT_BATCH_DURATION_DAYS * MS_PER_DAY,
+      ),
+    );
+
+    // 3 eligible replicates: 2 on run 1 / day 1, 1 on run 2 / day 2 — ≥3 usable
+    // and 2 distinct (run, day) keys, so distribution is clean (no cluster
+    // warning). Pooled means (H/C ~0.38 < 0.5, O/C ~0.12 < 0.2) → Eligible.
+    const sampleRows = [
+      { suffix: "1", runId: run1Id, samplingTime: day1, hToC: 0.38, oToC: 0.12, totalC: 80, orgC: 78 },
+      { suffix: "2", runId: run1Id, samplingTime: day1, hToC: 0.41, oToC: 0.13, totalC: 82, orgC: 80 },
+      { suffix: "3", runId: run2Id, samplingTime: day2, hToC: 0.36, oToC: 0.11, totalC: 79, orgC: 77 },
+    ].map((r) => ({
+      id: crypto.randomUUID(),
+      sampleCode: `${code}-S${r.suffix}`,
+      creditBatchId,
+      productionRunId: r.runId,
+      samplingTime: r.samplingTime,
+      totalCarbonPercent: r.totalC,
+      organicCarbonPercent: r.orgC,
+      hToCOrgRatio: r.hToC,
+      oToCOrgRatio: r.oToC,
+    }));
+
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.productionProcesses).values({
+        id: productionProcessId,
+        facilityId,
+        feedstockTypeId,
+      });
+      await tx.insert(schema.productionRuns).values([
+        {
+          id: run1Id,
+          code: `${code}-PR1`,
+          facilityId,
+          reactorId,
+          date: dateStr(day1),
+          biocharDryMassKg: 1000,
+        },
+        {
+          id: run2Id,
+          code: `${code}-PR2`,
+          facilityId,
+          reactorId,
+          date: dateStr(day2),
+          biocharDryMassKg: 1000,
+        },
+      ]);
+      // Credit batch must exist before the samples — `samples.credit_batch_id`
+      // FKs it (migration 0057). Mirrors `seedCreditBatch`'s 200-year shape.
+      await tx.insert(schema.creditBatches).values({
+        id: creditBatchId,
+        code,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId,
+        startDate: start,
+        endDate: end,
+        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
+      });
+      await tx.insert(schema.creditBatchProductionRuns).values([
+        { creditBatchId, productionRunId: run1Id },
+        { creditBatchId, productionRunId: run2Id },
+      ]);
+      await tx.insert(schema.samples).values(sampleRows);
+    });
+
+    return {
+      creditBatchId,
+      creditBatchCode: code,
+      runIds: [run1Id, run2Id],
+      sampleCodes: sampleRows.map((s) => s.sampleCode),
+    };
+  } finally {
+    await pool.end();
+  }
+}
+
 /**
  * Clean up all seeded chain data in FK-safe order.
  */

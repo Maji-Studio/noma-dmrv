@@ -203,16 +203,26 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
   #291 (template-driven remodel) — coordinate so the submission layer isn't
   double-built.
+- **ADR-number hygiene (2026-06-20):** the credit-batch=production-batch / sampling
+  re-grain is **ADR 0016** (ADR 0015 is the energy single-measurement-point). The
+  Tier-1 plan and ~20 Phase 1–5 comments shipped stale `ADR 0015` refs for the
+  durability/sampling paths; a 2026-06-20 sweep corrected them to ADR 0016 (energy
+  refs left untouched). When ADR 0017 (Method-B unlock) is authored it **refines ADR
+  0016** — verify ADR refs while re-graining `getMethodBEligibilityByReactor` and
+  friends rather than copying the stale number forward.
 
-### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
+### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
-- The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
-  every Removal submit) renders with bundled DM Sans/Mono TTFs read at runtime
+- The evidence-ledger PDFs (the transport mass·distance ledger and, since Phase 4,
+  the 200-year durability ledger — both auto-generated + mirrored as Sources on
+  every Removal submit) render with bundled DM Sans/Mono TTFs read at runtime
   via a dynamic `process.cwd()` path (`src/lib/certification/evidence-ledger/
-  fonts.ts`). Next's static tracer can't follow a dynamic fs path, so the TTFs
-  are pulled into the serverless bundle by `outputFileTracingIncludes` in
-  `next.config.ts` (broad `"/**"` key, since the submit action bundles under
-  several routes).
+  fonts.ts`, shared by both renderers via `registerEvidenceLedgerFonts`). Next's
+  static tracer can't follow a dynamic fs path, so the TTFs are pulled into the
+  serverless bundle by `outputFileTracingIncludes` in `next.config.ts` (broad
+  `"/**"` key, since the submit action bundles under several routes). The glob is
+  directory-wide (`evidence-ledger/fonts/*.ttf`), so it already covers the
+  durability renderer — no config change for Phase 4.
 - **Why it matters:** serverless file-tracing can't be exercised locally. If the
   glob misses, the renderer throws `ENOENT` at submit time — and because ledger
   generation is best-effort (try/catch in `submitRemoval`), the failure is
@@ -226,12 +236,25 @@ guard. Pure starter-template residue; the app is facility-scoped.
   `outputFileTracingIncludes` glob is still unexercised. Entry stays open.
 - **Resolve via:** on the first staging deploy, run a real submit and confirm a
   `transport_evidence_ledger` document + Source is created (check the removal's
-  sources / the structured log line `generated transport evidence ledger`). If
-  absent, inspect the function bundle for the `.ttf` files and tighten the trace
-  key to the actual submit route(s). Record the outcome in
-  `docs/isometric/changes.md` and remove this entry (S).
+  sources / the structured log line `generated evidence ledger`). The durability
+  ledger (`durability_evidence_ledger`) shares the same fonts + render path, so a
+  passing transport render confirms both; for a durability removal also confirm
+  its document exists. If absent, inspect the function bundle for the `.ttf`
+  files and tighten the trace key to the actual submit route(s). Record the
+  outcome in `docs/isometric/changes.md` and remove this entry (S).
 
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
+
+- **Status (2026-06-20): Tier-1 Phases 1–5 built + committed** on
+  `feat/tier1-durability-live-wiring` — the run → credit-batch re-grain, the facility
+  reference soil-temp field, the staged measurement-samples submission step, the
+  durability evidence-ledger PDF, and the two UX surfaces (lab-sample batch progress +
+  credit-batch durability panel). See `docs/isometric/changes.md` → 2026-06-20. **The
+  only thing still gating the live POST is the two sandbox-empirical confirms below**
+  (datapoint↔input binding + the H/C unit scale); every decision is built and staged.
+  **Do not remove this entry until `DURABILITY_MEASUREMENT_SAMPLES_LIVE` is flipped on
+  after the operator runs the confirms** — at the same cutover, delete the stale
+  `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry (see the Phase 3 note).
 
 - **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
   against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module
@@ -266,6 +289,24 @@ guard. Pure starter-template residue; the app is facility-scoped.
      list/aggregation view).
   **Still blocking the live POST:** only the two sandbox-empirical confirms below — every decision
   above is buildable/stageable now.
+
+- **Phase 3 staged (2026-06-19, branch `feat/tier1-durability-live-wiring`).** The
+  measurement-samples submission step is built + wired into `runRemovalSubmission`, gated behind
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (default **false**) in
+  `src/fn/certification/durability-measurement-samples.ts`. When the flag is off, `submitRemoval`
+  hard-blocks any template that declares a `biochar_sequestration_200_year_*` component with a
+  "staged, not yet live" `SafeError` (so the new template can't be submitted until the two confirms
+  land); `resolveTemplateInputs` + `buildCreateGhgEntryRequest` skip those components.
+  - **DEFERRED — delete at the end of the last phase (live-flip cutover):** decision #6 above said
+    to delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry *now*. It is
+    **load-bearing on the still-live old-template carbon path** — referenced by 5 tests
+    (`isometric-submit-removal`, `registry-boundary-removal`, `period-input-tuples`,
+    `isometric-transformers`, `isometric-sources`) and `certify-field-registry.ts` (two `tuple(…)`
+    descriptors). Deleting it while the new path is gated off breaks working tests for zero
+    functional gain (the new template literally can't be submitted yet). **Decision (2026-06-19, with
+    the user): keep it until the live flip**, then delete the `INPUT_MAPPING` entry + the two
+    field-registry tuples (`biocharOutputKg`→`product_mass`, `organicCarbonPercent`→`carbon_content`)
+    + retarget the 5 tests to the new sequestration shape, as the final cleanup of this entry.
 
 - **Phase E of the 200-year durability build is built offline but the LIVE
   submit path is gated on two sandbox-empirical confirms.** The measurement-
@@ -310,6 +351,16 @@ guard. Pure starter-template residue; the app is facility-scoped.
   the COA/lab-report Source behind the chemistry datapoints (D4), and recording
   the conservative soil-temp method string on the `biochar_soil` datapoint
   (the `CreateMeasurementSampleRequest` body has no description field).
+- **Snapshot-back the measurement-sample bodies before the flip (resume
+  coherence).** Today the gated step in `runRemovalSubmission` rebuilds the
+  measurement-sample submissions from live `durability.batches` every attempt,
+  whereas `transport.datapointBodies` and the fixed bindings come off the claimed
+  row snapshot on resume. While the flag is off this is inert, but once live a
+  resumed claim could reconcile a stale body (partial prior create) or POST
+  changed live chemistry under the prior version (failed before create). Persist
+  the built measurement-sample submissions into the payload snapshot and read
+  them back on resume — same pattern as `transport.datapointBodies` — so the
+  whole registry attempt stays version-coherent. (Surfaced in PR #297 review.)
 - **Why it matters / blocking what:** the legacy
   `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry references a
   blueprint the operator deleted when re-authoring the template, so live submit
