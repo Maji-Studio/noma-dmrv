@@ -98,6 +98,20 @@ describe("buildLedgerModel", () => {
     expect(l.loadMassKg).toBe(0);
   });
 
+  it("treats zero load mass as 0 t·km and flags it", () => {
+    const model = buildLedgerModel({
+      ...META,
+      legsByCategory: {
+        ...emptyCategories(),
+        feedstock: [leg({ distanceKm: 100, loadMassKg: 0 })],
+      },
+    });
+    const l = model.categories.find((c) => c.key === "feedstock")!.legs[0];
+    expect(l.tkm).toBe(0);
+    expect(l.massMissing).toBe(true);
+    expect(l.loadMassKg).toBe(0);
+  });
+
   it("normalises the distance basis from isDerived + distanceSource", () => {
     const model = buildLedgerModel({
       ...META,

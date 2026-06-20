@@ -33,6 +33,8 @@ import { requireAuth } from "./utils";
 const MAX_DOCUMENTS_PER_ENTITY = 200;
 const DELIVERY_TABLE_NAME = "deliveries";
 const DELIVERY_ARCHIVED_AT_COLUMN = "archived_at";
+const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
+const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
 
 let deliveryArchivedAtColumnAvailablePromise: Promise<boolean> | null = null;
 
@@ -326,8 +328,8 @@ export async function listDocumentsForEntityIds(
  * the transport evidence-ledger flow to locate a removal's prior auto-generated
  * ledgers (which it supersedes), regardless of which member credit batch each
  * was attached to. Newest first. Current authz is single-org/shared-data; this
- * validates that the requested removal exists instead of relying on an upstream
- * submission context.
+ * validates that the requested removal exists and constrains the scan to the
+ * auto-generated ledger document domain instead of matching metadata alone.
  */
 export async function listDocumentsByKindForRemoval(
   userId: string,
@@ -341,6 +343,8 @@ export async function listDocumentsByKindForRemoval(
     .from(documents)
     .where(
       and(
+        eq(documents.entityType, TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE),
+        eq(documents.documentType, TRANSPORT_LEDGER_DOCUMENT_TYPE),
         sql`${documents.metadata} ->> 'kind' = ${kind}`,
         sql`${documents.metadata} ->> 'removalId' = ${removalId}`
       )
