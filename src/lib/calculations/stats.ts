@@ -7,7 +7,8 @@
  * Mirrors the private `meanAndStdDev` in
  * `src/lib/isometric/utils/durability-aggregation.ts` — that copy can converge
  * onto this helper once its server-coupled neighbours (`./aggregation`) are
- * untangled from the client-safe path. Client-safe — no I/O.
+ * untangled from the client-safe path. Tracked in `docs/open-questions.md`
+ * (`certification/method-b-compute-cleanups`). Client-safe — no I/O.
  */
 
 export interface SampleStats {

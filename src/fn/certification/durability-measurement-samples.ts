@@ -36,6 +36,7 @@ import {
   buildBiocharSoilSample,
   buildBiocharUnsampledBatchSample,
   selectSequestrationBlueprintKey,
+  SEQUESTRATION_BLUEPRINT_SAMPLED,
 } from "@/lib/isometric/transformers/measurement-sample";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 import {
@@ -117,10 +118,16 @@ export function buildDurabilityMeasurementSampleSubmissions(
 
     const samplingMethod =
       samplingMethodByBatch.get(batch.creditBatchId) ?? "method_a";
-    // Throws for an unsampled Method-A batch (impossible state — fail closed).
-    selectSequestrationBlueprintKey({ sampled: batch.sampled, samplingMethod });
+    // The blueprint IS the Method A/B distinction (D6) and the single source of
+    // routing truth — dispatch on it, not a second `batch.sampled` re-check. It
+    // throws for an unsampled Method-A batch (impossible state — fail closed)
+    // rather than masking an upstream gate regression.
+    const blueprintKey = selectSequestrationBlueprintKey({
+      sampled: batch.sampled,
+      samplingMethod,
+    });
 
-    if (batch.sampled) {
+    if (blueprintKey === SEQUESTRATION_BLUEPRINT_SAMPLED) {
       const body = buildBiocharProductionBatchSample({
         batch,
         projectId: args.externalProjectId,

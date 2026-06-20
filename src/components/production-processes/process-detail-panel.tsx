@@ -21,6 +21,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   METHOD_B_SAMPLING_CADENCE_BATCHES,
 } from "@/config/certification";
+import { MOISTURE_PATHWAY_LABELS } from "@/schemas/production-process";
 import { formatLocalDate } from "@/lib/date-utils";
 import type { ProductionProcessSummary } from "@/data-access/production-processes";
 import { MethodPill } from "./method-pill";
@@ -122,6 +123,33 @@ export function ProcessDetailPanel({
                   </DetailRow>
                 )}
               </DetailSection>
+
+              {/* The three protocol prerequisites captured at unlock, surfaced
+                  read-only so the declaration is auditable (not write-only). */}
+              {isMethodB && process.agreedBaselineSize != null && (
+                <DetailSection title="Unlock declaration">
+                  <DetailRow>
+                    <DetailField
+                      label="Agreed baseline (G-F74T-0)"
+                      value={`${process.agreedBaselineSize} samples`}
+                    />
+                    <DetailField
+                      label="Moisture pathway (R-ADXG-0)"
+                      value={
+                        process.moisturePathway
+                          ? MOISTURE_PATHWAY_LABELS[process.moisturePathway]
+                          : "—"
+                      }
+                    />
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailField
+                      label="Random-sampling plan (R-S8K1-1)"
+                      value={process.randomSamplingPlanRef ?? "—"}
+                    />
+                  </DetailRow>
+                </DetailSection>
+              )}
 
               {isIsometric && <MethodBExplainer compact />}
 
