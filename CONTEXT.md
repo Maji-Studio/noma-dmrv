@@ -141,6 +141,18 @@ _Avoid_: declaring the method per reactor; the production run as the
 sampling unit; treating Method A/B as durability methods;
 "representative method".
 
+**Eligible sample**:
+A **Sample** counted toward a **production process**'s Method-B
+conservative estimate: one taken within the **6 months before** the
+production batch being estimated, from that same process while it is
+demonstrably stable. The registry's unsampled-batch estimate
+(mean − standard error) and its 3σ winsorisation run over the **eligible**
+population only; samples older than 6 months drop out. _Avoid_: conflating
+the rolling 6-month eligible window with the lifetime ≥30-sample baseline
+that unlocks Method B (a process can be unlocked yet hold few *eligible*
+samples); scoping eligibility to a reactor or facility rather than the
+production process.
+
 **Durability tier**:
 The crediting time horizon a biochar batch is certified against.
 Isometric's soil module offers exactly two: *200-year* (modelled from
