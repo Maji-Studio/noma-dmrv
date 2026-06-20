@@ -25,8 +25,30 @@ import {
   deleteSampleFn,
 } from "@/fn/samples";
 import { productionRunKeys } from "@/hooks/use-production-runs";
+import { certificationKeys } from "@/hooks/use-certification";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+
+// A sample's chemistry feeds the credit-batch durability roll-up (ADR 0015), so
+// every create/update/delete must refresh the two readiness surfaces that read
+// it: the credit-batch detail panel (keyed on the batch) and the lab-sample
+// form's derived-batch preview (keyed on the run). Both links can be null.
+function invalidateDurabilitySummaries(
+  queryClient: QueryClient,
+  links: { creditBatchId?: string | null; productionRunId?: string | null },
+) {
+  if (links.creditBatchId) {
+    queryClient.invalidateQueries({
+      queryKey: certificationKeys.batchDurabilitySummary(links.creditBatchId),
+    });
+  }
+  if (links.productionRunId) {
+    queryClient.invalidateQueries({
+      queryKey: certificationKeys.runDurabilitySummary(links.productionRunId),
+    });
+  }
+}
 
 // ============================================
 // Query Keys
@@ -192,6 +214,12 @@ export function useCreateSample(
         });
       }
 
+      // Refresh the durability readiness surfaces this sample rolls up to.
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: data.creditBatchId,
+        productionRunId: data.productionRunId,
+      });
+
       // Pre-populate the detail cache with the new sample
       queryClient.setQueryData(sampleKeys.detail(data.id), data);
 
@@ -299,6 +327,12 @@ export function useUpdateSample(
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "samples" && q.queryKey[1] === "stats",
+      });
+
+      // Refresh the durability readiness surfaces this sample rolls up to.
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: data.creditBatchId,
+        productionRunId: data.productionRunId,
       });
 
       await callbacks?.onSuccess?.(data, variables);
@@ -416,6 +450,11 @@ export function useDeleteSample(
           queryKey: productionRunKeys.detail(productionRunId),
         });
       }
+      // Refresh the durability readiness surfaces this sample fed.
+      invalidateDurabilitySummaries(queryClient, {
+        creditBatchId: sample?.creditBatchId,
+        productionRunId,
+      });
 
       await callbacks?.onSuccess?.(undefined, sampleId);
     },

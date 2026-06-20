@@ -10,6 +10,8 @@ import {
   createRemovalWithBatchesAction,
   deleteFacilityCertifierMapping,
   loadBatchHealth,
+  loadCreditBatchDurabilitySummary,
+  loadRunDurabilitySummary,
   loadCertificationHealth,
   loadCertificationOverview,
   loadCreditBatchHealthSummaries,
@@ -68,6 +70,18 @@ export const certificationKeys = {
     ] as const,
   batchHealth: (creditBatchId: string) =>
     [...certificationKeys.all, "batch-health", creditBatchId] as const,
+  batchDurabilitySummary: (creditBatchId: string) =>
+    [
+      ...certificationKeys.all,
+      "batch-durability-summary",
+      creditBatchId,
+    ] as const,
+  runDurabilitySummary: (productionRunId: string) =>
+    [
+      ...certificationKeys.all,
+      "run-durability-summary",
+      productionRunId,
+    ] as const,
   batchHealthSummaries: (facilityId: string, batchIds: string[]) =>
     [
       ...certificationKeys.all,
@@ -289,6 +303,45 @@ export function useBatchHealth(creditBatchId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!creditBatchId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Durability sampling roll-up + readiness for one credit batch — the detail
+// page's durability section (sample list, submitted mean ± std-dev, eligibility /
+// ≥3 / distribution). Sample mutations invalidate this key directly (see
+// use-samples.ts), so the panel reflects new chemistry without a manual refresh.
+export function useBatchDurabilitySummary(
+  creditBatchId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.batchDurabilitySummary(creditBatchId),
+    queryFn: async () => {
+      const result = await loadCreditBatchDurabilitySummary(creditBatchId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!creditBatchId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+// Durability sampling progress for the credit batch a production run belongs to —
+// the lab-sample form's derived-batch preview. Disabled until a run is chosen;
+// `creditBatch` is null when the run is uncommitted (the form says so honestly).
+export function useRunDurabilitySummary(
+  productionRunId: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.runDurabilitySummary(productionRunId ?? ""),
+    queryFn: async () => {
+      const result = await loadRunDurabilitySummary(productionRunId ?? "");
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!productionRunId,
     staleTime: DEFAULT_STALE_MS,
   });
 }

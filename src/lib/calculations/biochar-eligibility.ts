@@ -34,7 +34,15 @@ export const MINIMUM_REPLICATES_PER_RUN = 3;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function isUsableNumber(value: number | null | undefined): value is number {
+/**
+ * A chemistry value is usable only when present and finite. Exported so the
+ * durability gates can scope the §8.3.1 distribution check to the SAME complete-
+ * chemistry replicate set this module counts for `usableReplicateCount` — the
+ * two must agree or an incomplete off-day sample can mask a clustered set.
+ */
+export function isUsableNumber(
+  value: number | null | undefined,
+): value is number {
   return value != null && Number.isFinite(value);
 }
 
