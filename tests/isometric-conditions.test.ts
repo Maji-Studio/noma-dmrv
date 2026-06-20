@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  reactorSamplingMethodSchema,
+  processSamplingMethodSchema,
   creditBatchConditionSchema,
   applicationSoilTemperatureSchema,
   sampleConditionSchema,
@@ -81,8 +81,8 @@ describe("Isometric conditional required validation", () => {
     expect(result.error.issues.length).toBeGreaterThan(0);
   });
 
-  it("requires reactor_id when selecting sampling method on reactor", () => {
-    const result = reactorSamplingMethodSchema.safeParse({
+  it("requires process_id when selecting sampling method on a process", () => {
+    const result = processSamplingMethodSchema.safeParse({
       sampling_method: "method_b",
     });
 
@@ -90,13 +90,13 @@ describe("Isometric conditional required validation", () => {
     if (result.success) return;
 
     expect(result.error.issues.map((issue) => issue.path.join("."))).toContain(
-      "reactor_id"
+      "process_id"
     );
   });
 
-  it("accepts Method A for a reactor", () => {
-    const result = reactorSamplingMethodSchema.safeParse({
-      reactor_id: "00000000-0000-0000-0000-000000000101",
+  it("accepts Method A for a process", () => {
+    const result = processSamplingMethodSchema.safeParse({
+      process_id: "00000000-0000-0000-0000-000000000101",
       sampling_method: "method_a",
     });
 
@@ -104,9 +104,9 @@ describe("Isometric conditional required validation", () => {
   });
 
   it("accepts Method B when prior Method A samples meet threshold", () => {
-    const result = reactorSamplingMethodSchema.safeParse({
+    const result = processSamplingMethodSchema.safeParse({
       sampling_method: "method_b",
-      reactor_id: "00000000-0000-0000-0000-000000000101",
+      process_id: "00000000-0000-0000-0000-000000000101",
       prior_method_a_sample_count: 30,
     });
 
@@ -114,9 +114,9 @@ describe("Isometric conditional required validation", () => {
   });
 
   it("rejects Method B when prior Method A samples are below threshold", () => {
-    const result = reactorSamplingMethodSchema.safeParse({
+    const result = processSamplingMethodSchema.safeParse({
       sampling_method: "method_b",
-      reactor_id: "00000000-0000-0000-0000-000000000101",
+      process_id: "00000000-0000-0000-0000-000000000101",
       prior_method_a_sample_count: 29,
     });
 

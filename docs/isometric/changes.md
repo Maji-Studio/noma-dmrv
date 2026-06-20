@@ -13,6 +13,32 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-06-20 (ADR 0017 Track 1 — re-grain Method-B sampling/eligibility to the production process)
+
+Track 1 of the Method-B unlock (ADR 0017; implementation record
+[`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md)).
+**Method-A-safe** — changes the
+sampling/eligibility *grain*, not behaviour. Moves the Method-A/B baseline counter
+off the reactor onto the **production process** (`(facility, feedstock)` campaign),
+closing a latent **cross-feedstock over-credit bug** (a reactor's hardwood samples
+counted toward a softwood batch's eligibility).
+
+- `getMethodBEligibilityByReactor` → `getMethodBEligibilityByProcess`
+  (`src/data-access/isometric.ts`): counts eligible replicate samples via
+  `credit_batches.production_process_id`, not the reactor.
+- `deriveSamplingRequirement` re-grained run → credit batch (`BatchSampling`);
+  per-run replicate check → per-batch pooled. Constants renamed
+  `METHOD_B_SAMPLING_CADENCE_RUNS`/`MINIMUM_REPLICATES_PER_RUN` →
+  `…_CADENCE_BATCHES`/`…_PER_BATCH`.
+- `validateProcessSamplingMethodFn` + `processSamplingMethodSchema` (`process_id`)
+  replace the old reactor/credit-batch-grained names.
+- New read-only **`/production-processes`** operator surface (Verification nav):
+  per-process sampling method, baseline progress (N / 30), cadence status — where
+  Track 2's unlock CTA attaches. Verified live in Chrome + PR-CI E2E
+  (`tests/e2e/production-processes.spec.ts`).
+- Method B itself stays **inert** (the unlock is Track 2); the unsampled `_unsampled`
+  route remains deferred under `ADR 0017` Track 2.
+
 ## 2026-06-20 (Tier-1 — 200-year durability live-wiring, Phases 1–5; live POST staged behind a flag)
 
 Wires the 200-year durability submission onto the **measurement-sample** path

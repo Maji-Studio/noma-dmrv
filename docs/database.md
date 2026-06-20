@@ -202,13 +202,16 @@ provenance). The credit batch carries `feedstock_type_id` (NOT NULL, derived
 from its member runs) + `production_process_id`, and an Isometric ≤ 1-month
 window (`certifier IS DISTINCT FROM 'isometric' OR (end_date - start_date) <= 31`).
 
-Method B guardrails (process grain; **deferred to ADR 0017** — DEC is Method A):
+Method B guardrails (process grain; ADR 0017 Track 1 shipped the read-only
+counter/cadence layer, while DEC still operates Method A):
 
-1. A process needs at least 30 prior Method-A samples before unlocking `method_b`.
-2. Credit batches in a Method-B process need sampled-batch cadence ≥ 1 per 10.
+1. A process needs at least 30 prior Method-A samples before unlocking `method_b`
+   (`getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess`).
+2. Credit batches in a Method-B process need sampled-batch cadence ≥ 1 per 10
+   (`deriveSamplingRequirement`, credit-batch grain).
 
-Enforcement is layered through UI checks, server/data-access validation, and DB
-trigger guardrails (the process-grain trigger ships with the ADR 0017 unlock).
+The explicit unlock, prerequisite capture, `_unsampled` submission route, and
+process-grain DB backstop remain ADR 0017 Track 2 work.
 
 ## Verification Checklist
 

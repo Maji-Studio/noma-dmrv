@@ -7,17 +7,20 @@
  */
 
 /**
- * Minimum number of prior Method A samples a reactor must have before it can
- * switch its sampling method to Method B.
+ * Minimum number of prior Method A replicate samples a PRODUCTION PROCESS (the
+ * (facility, feedstock) campaign) must accumulate before it can switch its
+ * sampling method to Method B (`G-F74T-0`). Counted per process since its
+ * `established_at`, NOT per reactor — see `getMethodBEligibilityByProcess`.
  */
 export const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
 
 /**
  * Method B ongoing-sampling cadence: at least 1 sampled production batch per
- * this many production batches (runs). Biochar Protocol §8.3.1.2 (`G-2W0F-0`) —
- * `>= 1/10`. Required-sampled-runs is `ceil(totalRuns / cadence)`.
+ * this many production batches. A production batch IS a credit batch (ADR 0016),
+ * NOT a production run. Biochar Protocol §8.3.1.2 (`G-2W0F-0`) — `>= 1/10`.
+ * Required-sampled-batches is `ceil(totalBatches / cadence)`.
  */
-export const METHOD_B_SAMPLING_CADENCE_RUNS = 10;
+export const METHOD_B_SAMPLING_CADENCE_BATCHES = 10;
 
 /**
  * Protocol assigned when a facility ↔ registry project mapping is created

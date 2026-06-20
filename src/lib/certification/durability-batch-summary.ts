@@ -30,7 +30,7 @@ import {
   evaluateReplicateCount,
   evaluateRunEligibility,
   isUsableNumber,
-  MINIMUM_REPLICATES_PER_RUN,
+  MINIMUM_REPLICATES_PER_BATCH,
 } from "@/lib/calculations/biochar-eligibility";
 import {
   buildPerBatchDurabilityData,
@@ -182,7 +182,7 @@ export function buildDurabilityBatchSummaries(
       samplingMethod: batch.samplingMethod,
       sampleCount: batch.samples.length,
       usableReplicateCount: eligibility.usableReplicateCount,
-      minimumReplicates: MINIMUM_REPLICATES_PER_RUN,
+      minimumReplicates: MINIMUM_REPLICATES_PER_BATCH,
       meetsMinimum: replicateCheck.meetsMinimum,
       distinctRunDayCount,
       // A clustered set (≤1 distinct run/day) only matters once ≥3 are met —
