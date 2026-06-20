@@ -2,7 +2,7 @@
  * SampleBatchProgress — the lab-sample form's derived-batch preview (Phase 5a).
  *
  * A Sample is entered against ONE production run for provenance, but it
- * characterises the CREDIT BATCH that run belongs to (ADR 0015). So from the
+ * characterises the CREDIT BATCH that run belongs to (ADR 0016). So from the
  * chosen run this panel derives that credit batch and shows live progress toward
  * the protocol's ≥3 distributed-sample minimum (§8.3.1): the existing replicate
  * count, the runs/days they span (the distribution evidence), and the eligibility
@@ -40,7 +40,10 @@ function distinctProvenanceLabels(summary: DurabilityBatchSummary): string[] {
 
 function Panel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
+    <div
+      data-testid="sample-batch-progress"
+      className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16"
+    >
       {children}
     </div>
   );

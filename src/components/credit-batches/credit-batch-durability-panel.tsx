@@ -1,7 +1,7 @@
 /**
  * CreditBatchDurabilityPanel — the credit-batch detail's durability section
  * (Phase 5b). The credit batch IS the protocol production batch and the sampling
- * unit (ADR 0015), so this rolls up every lab Sample that characterises the batch
+ * unit (ADR 0016), so this rolls up every lab Sample that characterises the batch
  * (across its member runs/days), shows the batch-level mean ± std-dev that the
  * measurement-sample submission actually sends, and states the readiness inline:
  * the §3 Table 2 eligibility verdict, the §8.3.1 ≥3 count, and the distribution
@@ -31,7 +31,10 @@ import {
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-20 bg-[var(--panel-bg)] [border:var(--panel-border)] p-32">
+    <section
+      data-testid="credit-batch-durability-panel"
+      className="flex flex-col gap-20 bg-[var(--panel-bg)] [border:var(--panel-border)] p-32"
+    >
       <div className="flex flex-col gap-4">
         <h2 className="title-heading-3 flex items-center gap-6 text-[var(--color-text-primary)]">
           Durability samples
