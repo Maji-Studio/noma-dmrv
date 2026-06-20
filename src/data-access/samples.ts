@@ -510,9 +510,13 @@ export async function createSample(
     // (the lab-sample form never sets it) — ADR 0016: a Sample characterises the
     // credit batch its run belongs to, with both links populated. Null when the
     // run isn't yet in a batch (the form surfaces that; back-filled when it joins).
+    // Honor an explicit creditBatchId (including null) — only derive from the
+    // run's membership when the field is omitted, matching updateSample's
+    // explicit/undefined contract (the lab-sample form omits it; ADR 0016).
     const creditBatchId =
-      data.creditBatchId ??
-      (await resolveRunCreditBatchId(tx, data.productionRunId));
+      data.creditBatchId !== undefined
+        ? data.creditBatchId
+        : await resolveRunCreditBatchId(tx, data.productionRunId);
 
     const [created] = await tx
       .insert(samples)

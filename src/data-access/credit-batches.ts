@@ -1,4 +1,15 @@
-import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
@@ -798,10 +809,19 @@ export async function updateCreditBatch(
       // (ADR 0016): unlink samples whose run left the batch, then link the
       // current member runs' samples. The per-run unique constraint guarantees a
       // member run's samples can't already belong to another batch.
+      // Scope the unlink to RUN-BACKED samples — a commingled/batch-level sample
+      // linked directly with a null productionRunId has no run to leave, so it
+      // must survive a membership edit (it'd otherwise vanish from durability
+      // readiness, aggregation, and the source candidate walk).
       await tx
         .update(samples)
         .set({ creditBatchId: null, updatedAt: new Date() })
-        .where(eq(samples.creditBatchId, id));
+        .where(
+          and(
+            eq(samples.creditBatchId, id),
+            isNotNull(samples.productionRunId),
+          ),
+        );
       if (productionRunIds.length > 0) {
         await tx
           .update(samples)
