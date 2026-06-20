@@ -8,8 +8,10 @@
  *
  * Requires a running database (uses DATABASE_URL from .env.test or test defaults).
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
@@ -34,6 +36,25 @@ let facilityId: string;
 let feedstockTypeId: string;
 
 const METHOD_B_UNLOCKED_AT = new Date("2026-02-01T00:00:00.000Z");
+const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0062_process_method_b_sample_write_guards.sql",
+);
+
+async function applyMethodBSampleWriteGuards(): Promise<void> {
+  const migrationSql = readFileSync(
+    METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION,
+    "utf8",
+  );
+  const statements = migrationSql
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+}
 
 async function createMethodBProcessWithBaseline(tag: string): Promise<{
   processId: string;
@@ -94,6 +115,8 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
 }
 
 beforeAll(async () => {
+  await applyMethodBSampleWriteGuards();
+
   const runId = Date.now().toString(36);
 
   const [facility] = await db
