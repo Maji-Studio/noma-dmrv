@@ -13,7 +13,7 @@ submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 > protocol production batch (the lab-sampling unit). A facility running several feedstocks in
 > a month therefore has several **concurrent** credit batches, one per feedstock. Everything
 > below — run-membership, derived applications, the 12-month clock, produced-vs-applied
-> coverage — **stands unchanged**; 0015 adds only the feedstock constraint and a
+> coverage — **stands unchanged**; 0016 adds only the feedstock constraint and a
 > `production_processes` entity that scopes the Method A/B sampling regime.
 
 ## Context

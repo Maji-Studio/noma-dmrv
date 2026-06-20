@@ -22,6 +22,45 @@ ALTER TABLE "credit_batches" ADD CONSTRAINT "credit_batches_feedstock_type_id_fe
 ALTER TABLE "credit_batches" ADD CONSTRAINT "credit_batches_production_process_id_production_processes_id_fk" FOREIGN KEY ("production_process_id") REFERENCES "public"."production_processes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 DO $$
 DECLARE
+	duplicate_run_count integer;
+BEGIN
+	WITH legacy_membership AS (
+		SELECT DISTINCT
+			cba.credit_batch_id,
+			bp.linked_production_run_id AS production_run_id
+		FROM credit_batch_applications cba
+		INNER JOIN applications a ON a.id = cba.application_id
+		INNER JOIN deliveries d ON d.id = a.delivery_id
+		LEFT JOIN orders o ON o.id = d.order_id
+		INNER JOIN biochar_products bp ON bp.id = coalesce(d.biochar_product_id, o.biochar_product_id)
+		WHERE bp.linked_production_run_id IS NOT NULL
+	),
+	duplicate_runs AS (
+		SELECT production_run_id
+		FROM legacy_membership
+		GROUP BY production_run_id
+		HAVING count(DISTINCT credit_batch_id) > 1
+	)
+	SELECT count(*)
+	INTO duplicate_run_count
+	FROM duplicate_runs;
+
+	IF duplicate_run_count > 0 THEN
+		RAISE EXCEPTION 'Cannot backfill credit_batch_production_runs: % production run(s) are linked to more than one legacy credit batch', duplicate_run_count;
+	END IF;
+END $$;--> statement-breakpoint
+INSERT INTO credit_batch_production_runs ("credit_batch_id", "production_run_id")
+SELECT DISTINCT
+	cba.credit_batch_id,
+	bp.linked_production_run_id
+FROM credit_batch_applications cba
+INNER JOIN applications a ON a.id = cba.application_id
+INNER JOIN deliveries d ON d.id = a.delivery_id
+LEFT JOIN orders o ON o.id = d.order_id
+INNER JOIN biochar_products bp ON bp.id = coalesce(d.biochar_product_id, o.biochar_product_id)
+WHERE bp.linked_production_run_id IS NOT NULL;--> statement-breakpoint
+DO $$
+DECLARE
 	invalid_batch_count integer;
 BEGIN
 	WITH batch_feedstocks AS (

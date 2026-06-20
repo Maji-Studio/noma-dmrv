@@ -123,18 +123,40 @@ export async function resolveSingleFeedstockType(
     );
   }
 
+  const uniqueRunIds = [...new Set(productionRunIds)];
   const rows = await tx
-    .selectDistinct({ feedstockTypeId: feedstocks.feedstockTypeId })
+    .selectDistinct({
+      productionRunId: productionRunFeedstocks.productionRunId,
+      feedstockTypeId: feedstocks.feedstockTypeId,
+    })
     .from(productionRunFeedstocks)
     .innerJoin(
       feedstocks,
       eq(productionRunFeedstocks.feedstockId, feedstocks.id),
     )
-    .where(inArray(productionRunFeedstocks.productionRunId, productionRunIds));
+    .where(inArray(productionRunFeedstocks.productionRunId, uniqueRunIds));
 
-  const typeIds = rows
-    .map((r) => r.feedstockTypeId)
-    .filter((feedstockTypeId): feedstockTypeId is string => feedstockTypeId != null);
+  const mappedRunIds = new Set(
+    rows
+      .filter((r) => r.feedstockTypeId != null)
+      .map((r) => r.productionRunId),
+  );
+  const missingFeedstockRunIds = uniqueRunIds.filter(
+    (id) => !mappedRunIds.has(id),
+  );
+  if (missingFeedstockRunIds.length > 0) {
+    throw new SafeError(
+      `Cannot derive the credit batch feedstock: production run(s) have no linked feedstock: ${missingFeedstockRunIds.join(", ")}.`,
+    );
+  }
+
+  const typeIds = [
+    ...new Set(
+      rows
+        .map((r) => r.feedstockTypeId)
+        .filter((feedstockTypeId): feedstockTypeId is string => feedstockTypeId != null),
+    ),
+  ];
 
   if (typeIds.length === 0) {
     throw new SafeError(
