@@ -24,6 +24,21 @@ export type MoisturePathway = (typeof MOISTURE_PATHWAYS)[number];
 /** noma's default pathway: it already records per-run biochar moisture (D7). */
 export const DEFAULT_MOISTURE_PATHWAY: MoisturePathway = "measured_every_batch";
 
+/** Short human labels for the `R-ADXG-0` moisture pathways (unlock dialog). */
+export const MOISTURE_PATHWAY_LABELS: Record<MoisturePathway, string> = {
+  dry_weight_every_batch: "Dry-weight every batch",
+  consistent_target_moisture: "Consistent target moisture (SEM < 5%)",
+  measured_every_batch: "Moisture measured every batch",
+};
+
+/** One-line descriptions shown beneath each pathway option (kept ≤ 64 chars so
+ * they render inline under the select rather than collapsing into a tooltip). */
+export const MOISTURE_PATHWAY_DESCRIPTIONS: Record<MoisturePathway, string> = {
+  dry_weight_every_batch: "Mass recorded dry-weight every batch (volume-traceable).",
+  consistent_target_moisture: "Held at a consistent target moisture (SEM < 5%).",
+  measured_every_batch: "Moisture measured every batch — noma's default.",
+};
+
 /**
  * Method-B unlock input. Validated client-side (the unlock dialog) and again in
  * the server action. The agreed baseline must clear the protocol hard floor; the
