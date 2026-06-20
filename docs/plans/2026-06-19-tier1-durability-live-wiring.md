@@ -6,10 +6,10 @@
 · ADR 0015 (credit batch = protocol production batch; production process scopes Method A/B; the
 sampling unit is the credit batch). Sharpened in a `grill-with-docs` session, 2026-06-19.
 **Branch:** `feat/credit-batch-production-process` (builds **on** the ADR 0015 re-grain landing here).
-**Status:** Design locked. **Phases 1–3 DONE (staged)** on `feat/tier1-durability-live-wiring`;
+**Status:** Design locked. **Phases 1–4 DONE (staged)** on `feat/tier1-durability-live-wiring`;
 the **live POST** stays gated (`DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`) on two
-sandbox-empirical confirms the operator runs. **Phases 4–6 pending** (next: Phase 4 evidence-ledger
-PDF, in a fresh session).
+sandbox-empirical confirms the operator runs. **Phases 5–6 pending** (next: Phase 5 UX surfaces —
+lab-sample create form + credit-batch sample list/aggregation).
 
 > ⚠️ All Isometric rules below are non-authoritative summaries. The two that drive credit math
 > were re-verified verbatim via the isometric MCP on 2026-06-19: biochar protocol **1.2 §8.3.1**
@@ -158,15 +158,30 @@ sandbox template `rvt_1KS4S43VPSBXA26X`. Build + stage everything; keep the live
      `datapointIdsByRtcInput` → stop skipping in `buildCreateGhgEntryRequest` (bind as LIST inputs).
      The feasibility is confirmed (`MeasurementSample.values[].datapoint_id` is returned on POST).
 
-### Phase 4 — Durability evidence-ledger PDF
-- New ledger mirroring `src/fn/certification/evidence-ledger.ts` (the transport one) +
-  `src/lib/certification/evidence-ledger/`: @react-pdf renderer → `StorageProvider.putObject` →
-  mirrored as a Source in `submitRemoval` (best-effort, content-hash idempotent + retire-prior).
-- Content per credit batch: the raw ≥3 Sample values → the submitted **mean + std-dev**, the
-  facility soil-temp reference value + dataset/justification, and the eligibility checks
-  (H/C < 0.5, O/C < 0.2). It reconciles raw inputs → submitted figures (the COA stays the lab's
-  own certificate; this is **noma's working**).
-- **Use the `frontend-design` skill** to drive the PDF layout when building this phase.
+### Phase 4 — Durability evidence-ledger PDF ✅ DONE — 2026-06-20, branch `feat/tier1-durability-live-wiring`
+- ✅ New ledger mirroring `src/fn/certification/evidence-ledger.ts` (the transport one) +
+  `src/lib/certification/evidence-ledger/`: @react-pdf renderer (`durability-pdf.ts`) →
+  `StorageProvider.putObject` → mirrored as a Source in `submitRemoval` (best-effort, content-hash
+  idempotent + retire-prior).
+- ✅ Content per credit batch: the raw ≥3 Sample values → the submitted **mean + std-dev**, the
+  facility soil-temp reference value + dataset/justification + floor note, and the eligibility
+  verdict (H/C_org < 0.5, O/C_org < 0.2). Figures come from `buildPerBatchDurabilityData` (the same
+  aggregation the measurement-sample POST submits), so the ledger reconciles exactly. Shown in
+  noma's native units (the wire-unit transforms are a separate, gated concern). COA stays the lab's
+  own certificate; this is **noma's working**.
+- ✅ Used the `frontend-design` skill — hero is the eligibility gate written literally (tinted
+  mean vs `< 0.50` ceiling + verdict swatch); per-batch tables reduce raw replicates into a
+  SUBMITTED mean ± s.d. subtotal; soil-reference block closes the sheet. Glyph-safe (Latin subset
+  only — pass/fail carried by colour + word, never a tick glyph). Eyeballed eligible + ineligible +
+  floored + single/multi-batch states.
+- ✅ **DRY refactor (no behaviour change):** the reuse/render/store/mirror/retire choreography is now
+  a shared `src/fn/certification/evidence-ledger-core.ts` (`ensureLedgerSource`); both transport and
+  durability ledgers are thin wrappers over it. A `src/fn/certification/ensure-evidence-ledgers.ts`
+  helper runs both best-effort at submit (kept `submit-removal.ts` under the 1000-line cap).
+- ✅ Generation is NOT gated on `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (benign evidence, unit-stable);
+  it self-skips when there are no sampled batches / no soil reference / no mapping / no batches.
+  Tests: `durability-build-model.test.ts` (raw→submitted reconciliation, eligibility verdicts,
+  inorganic Eq.2 derivation, distribution count, unsampled skip, soil floor). Full suite green (840).
 
 ### Phase 5 — UX surfaces (Isometric-verifier-gated)
 - **Lab-sample create form:** reference exactly **one** production run (single-select); surface the

@@ -43,7 +43,7 @@ import {
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
   submitDurabilityMeasurementSamples,
 } from "./durability-measurement-samples";
-import { ensureTransportEvidenceLedgerSourceFromContext } from "./evidence-ledger";
+import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import {
   collectCandidateDocumentIdsForRemoval,
@@ -471,28 +471,15 @@ export async function submitRemoval(
     );
   }
 
-  // Regenerate the transport evidence ledger from the live legs and mirror it
-  // as a Source BEFORE candidate documents are collected, so the current ledger
-  // rides into source_ids on this submit (and supersedes any prior one). Done
-  // here — before the locked claim transaction below — because it makes HTTP
-  // calls to Isometric and inserts a document. The ledger flow owns a
-  // per-removal artifact lock for its list/create/retire sequence. Best-effort:
-  // a render/mirror hiccup must never block an otherwise-valid submission; the
-  // next submit regenerates it. Idempotent on ledger content, so an unchanged-
-  // legs resubmit is a no-op.
-  try {
-    const ledger = await ensureTransportEvidenceLedgerSourceFromContext(
-      userId,
-      removalId,
-      ctx,
-    );
-    log.info({ ledgerStatus: ledger.status }, "transport evidence ledger ensured");
-  } catch (err) {
-    log.warn(
-      { errorName: err instanceof Error ? err.name : typeof err },
-      "transport evidence ledger generation failed; submitting without it",
-    );
-  }
+  // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
+  // 200-year durability) from the live context and mirror them BEFORE candidate
+  // documents are collected, so the current ledgers ride into source_ids on this
+  // submit (and supersede any prior ones). Done here — before the locked claim
+  // transaction below — because it makes HTTP calls to Isometric and inserts
+  // documents under a per-removal artifact lock. Best-effort and idempotent on
+  // content (an unchanged resubmit is a no-op); each ledger self-skips when it
+  // has nothing to evidence.
+  await ensureEvidenceLedgersFromContext(userId, removalId, ctx, log);
 
   // Phase 3.5: mirrored Isometric Source IDs ride into every monitored
   // Datapoint (removal-wide attribution). They are part of the semantic

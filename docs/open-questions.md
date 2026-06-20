@@ -204,15 +204,18 @@ guard. Pure starter-template residue; the app is facility-scoped.
   #291 (template-driven remodel) — coordinate so the submission layer isn't
   double-built.
 
-### Transport evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
+### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
-- The transport evidence-ledger PDF (auto-generated + mirrored as a Source on
-  every Removal submit) renders with bundled DM Sans/Mono TTFs read at runtime
+- The evidence-ledger PDFs (the transport mass·distance ledger and, since Phase 4,
+  the 200-year durability ledger — both auto-generated + mirrored as Sources on
+  every Removal submit) render with bundled DM Sans/Mono TTFs read at runtime
   via a dynamic `process.cwd()` path (`src/lib/certification/evidence-ledger/
-  fonts.ts`). Next's static tracer can't follow a dynamic fs path, so the TTFs
-  are pulled into the serverless bundle by `outputFileTracingIncludes` in
-  `next.config.ts` (broad `"/**"` key, since the submit action bundles under
-  several routes).
+  fonts.ts`, shared by both renderers via `registerEvidenceLedgerFonts`). Next's
+  static tracer can't follow a dynamic fs path, so the TTFs are pulled into the
+  serverless bundle by `outputFileTracingIncludes` in `next.config.ts` (broad
+  `"/**"` key, since the submit action bundles under several routes). The glob is
+  directory-wide (`evidence-ledger/fonts/*.ttf`), so it already covers the
+  durability renderer — no config change for Phase 4.
 - **Why it matters:** serverless file-tracing can't be exercised locally. If the
   glob misses, the renderer throws `ENOENT` at submit time — and because ledger
   generation is best-effort (try/catch in `submitRemoval`), the failure is
@@ -226,10 +229,12 @@ guard. Pure starter-template residue; the app is facility-scoped.
   `outputFileTracingIncludes` glob is still unexercised. Entry stays open.
 - **Resolve via:** on the first staging deploy, run a real submit and confirm a
   `transport_evidence_ledger` document + Source is created (check the removal's
-  sources / the structured log line `generated transport evidence ledger`). If
-  absent, inspect the function bundle for the `.ttf` files and tighten the trace
-  key to the actual submit route(s). Record the outcome in
-  `docs/isometric/changes.md` and remove this entry (S).
+  sources / the structured log line `generated evidence ledger`). The durability
+  ledger (`durability_evidence_ledger`) shares the same fonts + render path, so a
+  passing transport render confirms both; for a durability removal also confirm
+  its document exists. If absent, inspect the function bundle for the `.ttf`
+  files and tighten the trace key to the actual submit route(s). Record the
+  outcome in `docs/isometric/changes.md` and remove this entry (S).
 
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
