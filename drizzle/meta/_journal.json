@@ -414,6 +414,20 @@
       "when": 1781904630186,
       "tag": "0058_clammy_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1781950016608,
+      "tag": "0059_skinny_vengeance",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1781950116608,
+      "tag": "0060_process_method_b_minimum_samples_guard",
+      "breakpoints": true
     }
   ]
 }
