@@ -164,52 +164,76 @@ export async function ensureLedgerSource(
       }
     }
 
-    // Render + store + insert a fresh ledger document.
-    const pdf = await spec.render();
-    const provider = getStorageProvider();
-    const storageKey = `${spec.storageKeyPrefix}/${spec.facilityId}/${spec.removalId}/${spec.contentHash}.pdf`;
-    await provider.putObject(storageKey, pdf, PDF_MIME);
+    // Render + store + insert a fresh ledger document. Past the reuse check the
+    // priors are known-stale (their content hash differs from the current
+    // model), so if any step here throws, retire them before propagating —
+    // otherwise a stale ledger Source would still ride into `source_ids` while
+    // the caller logs "submitting without it". On failure the submit then
+    // carries NO ledger of this kind (honest with the log), and the next submit
+    // regenerates it.
+    try {
+      const pdf = await spec.render();
+      const provider = getStorageProvider();
+      const storageKey = `${spec.storageKeyPrefix}/${spec.facilityId}/${spec.removalId}/${spec.contentHash}.pdf`;
+      await provider.putObject(storageKey, pdf, PDF_MIME);
 
-    const doc = await insertDocument(userId, {
-      entityType: "credit_batch",
-      entityId: spec.attachBatchId,
-      documentType: "pdf",
-      storageProvider: provider.name,
-      storageBucket: provider.bucket,
-      storageKey,
-      fileName: spec.fileName,
-      fileSizeBytes: pdf.byteLength,
-      mimeType: PDF_MIME,
-      checksumSha256: createHash("sha256").update(pdf).digest("hex"),
-      visibility: "private",
-      uploadStatus: "uploaded",
-      capturedAt: new Date(),
-      metadata: spec.buildMetadata(),
-      createdBy: userId,
-    });
+      const doc = await insertDocument(userId, {
+        entityType: "credit_batch",
+        entityId: spec.attachBatchId,
+        documentType: "pdf",
+        storageProvider: provider.name,
+        storageBucket: provider.bucket,
+        storageKey,
+        fileName: spec.fileName,
+        fileSizeBytes: pdf.byteLength,
+        mimeType: PDF_MIME,
+        checksumSha256: createHash("sha256").update(pdf).digest("hex"),
+        visibility: "private",
+        uploadStatus: "uploaded",
+        capturedAt: new Date(),
+        metadata: spec.buildMetadata(),
+        createdBy: userId,
+      });
 
-    // Mirror to a Source (idempotent on documentId). The document sits on a
-    // member credit batch, so the candidate-document lineage walk already finds
-    // it → its Source rides into source_ids on submit with no extra plumbing.
-    const mirror = await mirrorDocumentToSourceForUser(userId, {
-      removalId: spec.removalId,
-      documentId: doc.id,
-      isPublic: false,
-    });
+      // Mirror to a Source (idempotent on documentId). The document sits on a
+      // member credit batch, so the candidate-document lineage walk already
+      // finds it → its Source rides into source_ids on submit with no extra
+      // plumbing.
+      const mirror = await mirrorDocumentToSourceForUser(userId, {
+        removalId: spec.removalId,
+        documentId: doc.id,
+        isPublic: false,
+      });
 
-    // Supersede: retire every prior ledger now that the current one is mirrored.
-    await retireSupersededLedgers(userId, priors, doc, spec.log);
-    spec.log.info(
-      { documentId: doc.id, retired: priors.length },
-      "generated evidence ledger",
-    );
+      // Supersede: retire every prior ledger now that the current one is mirrored.
+      await retireSupersededLedgers(userId, priors, doc, spec.log);
+      spec.log.info(
+        { documentId: doc.id, retired: priors.length },
+        "generated evidence ledger",
+      );
 
-    return {
-      status: "created",
-      documentId: doc.id,
-      externalSourceId: mirror.externalDocumentId,
-      contentHash: spec.contentHash,
-    };
+      return {
+        status: "created",
+        documentId: doc.id,
+        externalSourceId: mirror.externalDocumentId,
+        contentHash: spec.contentHash,
+      };
+    } catch (err) {
+      // Drop the stale priors so they can't masquerade as current evidence;
+      // best-effort so a retirement hiccup doesn't mask the original failure.
+      await retireSupersededLedgers(userId, priors, null, spec.log).catch(
+        (retireErr) => {
+          spec.log.warn(
+            {
+              errorName:
+                retireErr instanceof Error ? retireErr.name : typeof retireErr,
+            },
+            "failed to retire stale ledgers after generation error",
+          );
+        },
+      );
+      throw err;
+    }
   });
 }
 

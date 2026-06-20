@@ -131,6 +131,19 @@ export function buildDurabilityLedgerModel(
     if (!dp.sampled || dp.hToCorgRatio == null) continue;
 
     const samples = samplesByBatchId.get(dp.creditBatchId) ?? [];
+    // Render only the replicates that back the submitted figures so the ledger
+    // can't show more rows than its own `replicateCount`/distinctDayCount claim:
+    //   • rows + replicateCount → the H/C_org-usable set (dp.replicateCount is
+    //     hValues.length in buildPerBatchDurabilityData);
+    //   • distinctDayCount → the complete-chemistry (H + O) set, mirroring the
+    //     §8.3.1 cluster gate's `usableProvenance` so an incomplete off-day
+    //     sample can't inflate the distribution evidence.
+    const usableHReplicates = samples.filter((s) =>
+      isUsableNumber(s.hToCOrgRatio),
+    );
+    const usablePairedReplicates = samples.filter(
+      (s) => isUsableNumber(s.hToCOrgRatio) && isUsableNumber(s.oToCOrgRatio),
+    );
     const eligibility = evaluateRunEligibility(
       samples.map((s) => ({
         hToCOrgRatio: s.hToCOrgRatio,
@@ -144,9 +157,9 @@ export function buildDurabilityLedgerModel(
     batches.push({
       creditBatchId: dp.creditBatchId,
       creditBatchCode: dp.creditBatchCode,
-      replicates: samples.map(buildReplicate),
+      replicates: usableHReplicates.map(buildReplicate),
       replicateCount: dp.replicateCount,
-      distinctDayCount: distinctDayCount(samples),
+      distinctDayCount: distinctDayCount(usablePairedReplicates),
       hToCorg: { mean: dp.hToCorgRatio.mean, stdDev: dp.hToCorgRatio.stdDev },
       totalCarbonPercent: statOf(dp.totalCarbonPercent),
       inorganicCarbonPercent: statOf(dp.inorganicCarbonPercent),
