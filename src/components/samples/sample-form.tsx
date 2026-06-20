@@ -37,6 +37,7 @@ import {
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
+import { SampleEvidenceSection } from "./sample-evidence-section";
 import type { SampleWithRelations } from "@/data-access/samples";
 
 // ============================================
@@ -954,6 +955,8 @@ export function SampleForm({
                 </div>
               )}
         </FormSection>
+
+        <SampleEvidenceSection sample={sample} isEditMode={isEditMode} />
       </FormSpine>
       </form>
 
