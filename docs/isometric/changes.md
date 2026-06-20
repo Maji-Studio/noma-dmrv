@@ -13,6 +13,104 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-06-20 (Tier-1 — 200-year durability live-wiring, Phases 1–5; live POST staged behind a flag)
+
+Wires the 200-year durability submission onto the **measurement-sample** path
+(ADR 0013: the registry computes `F_durable`; durability inputs feed the dedicated
+`biochar_sequestration_200_year_*` blueprints via measurement samples, **not**
+`INPUT_MAPPING`) and re-grains the whole durability data plane onto the **credit
+batch** (ADR 0016: the credit batch IS the protocol production batch; the sampling
+unit is the batch, never the run). Plan:
+`docs/plans/2026-06-19-tier1-durability-live-wiring.md`. **The live POST is staged,
+not on** — gated behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`
+(`src/fn/certification/durability-measurement-samples.ts`) pending two operator
+sandbox confirms (see `docs/open-questions.md` →
+`isometric/durability-measurement-samples`).
+
+Phase 1 — **run → credit-batch re-grain** (the spine). Post-ADR-0016, lab samples
+attach on `samples.creditBatchId` (run link now nullable provenance) and the old
+`getProductionRunsWithSamples` read skips null-run samples — so lab chemistry was
+invisible to the durability surfaces. Re-grained:
+
+- `src/lib/isometric/utils/durability-aggregation.ts` — `buildPerBatchDurabilityData`
+  iterates **credit batches**, pooling each batch's replicates (across member
+  runs/days) into one mean + sample std-dev; `PerBatchDurabilityDatapoint` keys on
+  `creditBatchId` / `creditBatchCode`, not the run.
+- `src/data-access/credit-batch-samples.ts` — `getCreditBatchesWithSamples` /
+  `getSamplesByCreditBatchIds` source by `samples.creditBatchId` (no null-run skip).
+- `src/lib/certification/durability-submission-gates.ts` — `evaluateDurabilitySubmissionGates`
+  evaluates **per credit batch**: eligibility on the batch's pooled replicate mean
+  (H/C_org < 0.5 AND O/C_org < 0.2, indeterminate fails closed), ≥ 3 usable
+  replicates per sampled batch, plus a non-blocking distribution warning when the
+  usable replicates cluster on one run/day (`countDistinctProvenance`).
+- `src/fn/certification/sources.ts` — the COA / `lab_report` candidate-document walk
+  gathers Samples **by credit batch**.
+
+Phase 2 — **facility reference soil temperature**. New nullable columns on the
+facility certification row: `certifier_projects.default_soil_temperature_c` (real,
+with a `..._range` check + 7 °C floor / one-decimal via `SOIL_TEMPERATURE_FLOOR_C`,
+`roundSoilTemperatureC`) and `default_soil_temperature_source` (dataset/region note
+for the PDD). Resolved by `resolveFacilityReferenceSoilTemperature`
+(`FacilityReferenceSoilTemperature`); operator-entered on the admin
+"Emission estimates" form. This is the sanctioned no-on-site-baseline path (global
+soil-temp DB, e.g. Lembrechts 2022; air temperature prohibited); justification lives
+in the PDD, so the API needs no description field. The old site-max
+`resolveConservativeSoilTemperature` is repurposed as a future per-removal override /
+conservative-direction reconciliation check.
+
+Phase 3 — **measurement-samples submission step** (staged). New
+`src/fn/certification/durability-measurement-samples.ts`:
+`buildDurabilityMeasurementSampleSubmissions` (per sampled credit batch → one
+`biochar_production_batch` sample carrying H/C + total/inorganic carbon + product
+mass; then one `biochar_soil` facility-reference sample) +
+`submitDurabilityMeasurementSamples` (POST via `performRegistryCreate` +
+`findMeasurementSampleBySupplierRef` reconcile, idempotent on the versioned supplier
+ref). Wired into `runRemovalSubmission` after the datapoint loop, before the
+removal-body POST. `resolveTemplateInputs` **and** `buildCreateGhgEntryRequest` skip
+the two `biochar_sequestration_200_year_*` components (`isSequestrationBlueprintKey`)
+— they're carried by this step, which also makes an input-less `_unsampled` (Method
+B) component inert. While the flag is off, `submitRemoval` hard-blocks any template
+declaring a sequestration component with a "staged, not yet live" `SafeError`.
+**Two sandbox-empirical confirms still gate the flip:** (1) datapoint↔component-input
+binding (explicit `datapoint_id` reference vs. auto-link by type/property); (2) the
+H/C unit scale (`%` vs. dimensionless ~0.5). Doc evidence leans dimensionless +
+explicit reference; both are pre-decided as one-constant edits. `source_ids` cannot
+ride on the measurement-sample body (`CreateMeasurementSampleRequest` has no such
+field) — evidence stays on the removal's datapoints + removal-body `source_ids`.
+
+> **Deferred to the live-flip cutover:** deleting the stale
+> `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry + its two
+> `certify-field-registry.ts` tuples. It is load-bearing on the still-live
+> old-template carbon path (5 tests); deleting it while the new path is gated breaks
+> working tests for zero gain. Tracked in the open-questions entry above.
+
+Phase 4 — **durability evidence-ledger PDF**. `src/fn/certification/durability-evidence-ledger.ts`
++ `src/lib/certification/evidence-ledger/durability-{build-model,pdf,types}.ts`:
+@react-pdf renderer → `StorageProvider.putObject` → mirrored as a `durability_evidence_ledger`
+Source on submit (best-effort, content-hash idempotent + retire-prior). Reconciles
+the raw ≥ 3 replicates → the submitted mean + std-dev, the facility soil-temp
+reference + dataset/floor note, and the eligibility verdict — figures from the same
+`buildPerBatchDurabilityData` the measurement-sample POST submits, so the ledger ties
+out exactly. Generation is **not** gated on the live flag (benign evidence,
+unit-stable) and self-skips when there's nothing to evidence. The reuse / render /
+store / mirror / retire choreography is shared with the transport ledger via
+`evidence-ledger-core.ts` (`ensureLedgerSource`); both run best-effort at submit
+through `ensure-evidence-ledgers.ts`.
+
+Phase 5 — **two UX surfaces + the sample→credit-batch linking write-path**.
+`sample-batch-progress.tsx` (in the lab-sample form) derives the credit batch from
+the chosen run and shows live N/3 progress + distinct run/day provenance + eligibility
+chips; `credit-batch-durability-panel.tsx` (on credit-batch detail) shows the sample
+roll-up + the submitted mean ± s.d. + readiness chips (`durability-readiness.tsx`).
+Both read `durability-batch-summary.ts` (lib + fn) via `useBatchDurabilitySummary` /
+`useRunDurabilitySummary`. Building these surfaced a **load-bearing gap**: the
+lab-sample form never set `samples.creditBatchId`, so form-created samples never
+rolled up. Fixed per ADR 0016's "both links stay populated": `createSample` /
+`updateSample` derive `creditBatchId` from the run (`resolveRunCreditBatchId`);
+`createCreditBatch` / `updateCreditBatch` back-fill member runs' samples on membership
+change. Covered by `tests/credit-batch-sample-linking.test.ts`. **Preserve this
+linking** — the durability surfaces and the measurement-sample submission depend on it.
+
 ## 2026-06-19 (ADR 0016 Phase 1 — credit batch = production batch, process scopes sampling)
 
 Credit batch becomes the Isometric **production batch**: one feedstock,

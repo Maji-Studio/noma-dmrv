@@ -203,6 +203,13 @@ guard. Pure starter-template residue; the app is facility-scoped.
 - **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
   #291 (template-driven remodel) — coordinate so the submission layer isn't
   double-built.
+- **ADR-number hygiene (2026-06-20):** the credit-batch=production-batch / sampling
+  re-grain is **ADR 0016** (ADR 0015 is the energy single-measurement-point). The
+  Tier-1 plan and ~20 Phase 1–5 comments shipped stale `ADR 0015` refs for the
+  durability/sampling paths; a 2026-06-20 sweep corrected them to ADR 0016 (energy
+  refs left untouched). When ADR 0017 (Method-B unlock) is authored it **refines ADR
+  0016** — verify ADR refs while re-graining `getMethodBEligibilityByReactor` and
+  friends rather than copying the stale number forward.
 
 ### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
@@ -237,6 +244,17 @@ guard. Pure starter-template residue; the app is facility-scoped.
   outcome in `docs/isometric/changes.md` and remove this entry (S).
 
 ### 200-year durability measurement-samples — two sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
+
+- **Status (2026-06-20): Tier-1 Phases 1–5 built + committed** on
+  `feat/tier1-durability-live-wiring` — the run → credit-batch re-grain, the facility
+  reference soil-temp field, the staged measurement-samples submission step, the
+  durability evidence-ledger PDF, and the two UX surfaces (lab-sample batch progress +
+  credit-batch durability panel). See `docs/isometric/changes.md` → 2026-06-20. **The
+  only thing still gating the live POST is the two sandbox-empirical confirms below**
+  (datapoint↔input binding + the H/C unit scale); every decision is built and staged.
+  **Do not remove this entry until `DURABILITY_MEASUREMENT_SAMPLES_LIVE` is flipped on
+  after the operator runs the confirms** — at the same cutover, delete the stale
+  `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry (see the Phase 3 note).
 
 - **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
   against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module
