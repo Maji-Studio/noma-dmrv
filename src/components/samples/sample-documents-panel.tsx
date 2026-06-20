@@ -74,9 +74,8 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
   );
 
   return (
-    <section className="flex flex-col gap-12 border border-[var(--color-border-secondary)] p-16">
-      <header className="flex items-center justify-between">
-        <h3 className="title-heading-3">Evidence & documents</h3>
+    <section className="flex flex-col gap-12">
+      <header className="flex items-center justify-end">
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {uploadedDocs.length} {uploadedDocs.length === 1 ? "file" : "files"}
         </span>
