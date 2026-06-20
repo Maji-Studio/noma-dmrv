@@ -125,6 +125,12 @@ export async function getProductionProcessSummariesByFacility(
   userId: string,
   facilityId: string,
 ): Promise<ProductionProcessSummary[]> {
+  // Auth posture matches every facility-scoped read in this repo
+  // (getReactorsByFacility, getCreditBatchesByFacilityId): requireAuth today,
+  // single-tenant + admin-invite. Per-facility membership authz
+  // (`requireFacilityAccess`) lands app-wide with the multi-tenancy work
+  // (ADR 0010, organizationId on every domain table); swap both queries here to
+  // it then, alongside the sibling chokepoints.
   requireAuth(userId);
 
   const processRows = await db

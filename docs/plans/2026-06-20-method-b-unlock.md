@@ -3,7 +3,8 @@
 **Date:** 2026-06-20
 **Decision record:** ADR 0017 (refines ADR 0016; submission boundary per ADR 0013).
 **Branch (when built):** `feat/method-b-unlock` — own branch, NOT the Tier-1 durability branch.
-**Status:** Plan. Supersedes the deferred half of
+**Status:** **Track 1 SHIPPED 2026-06-20** (branch `feat/method-b-unlock`); Track 2 PLANNED.
+Supersedes the deferred half of
 `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md` (its Phase 2 items 7–11
 and the "Deferred to ADR 0017" scope).
 
@@ -83,31 +84,39 @@ The archived plan listed Phases 1–4; much has landed. Confirmed live 2026-06-2
 
 ---
 
-## 4. Track 1 — Re-grain the sampling/eligibility layer (Method-A-safe, ships first)
+## 4. Track 1 — Re-grain the sampling/eligibility layer (Method-A-safe, ships first) — ✅ SHIPPED 2026-06-20
 
 Closes a **latent cross-feedstock over-credit bug** (today a reactor's hardwood samples wrongly
 count toward a softwood batch's Method-B eligibility) and finishes the mid-migration enforcement
 model. Entirely dormant-safe under Method A (it changes *grain*, not *behaviour*, while every
 batch is sampled). **No dependency on the unlock** — buildable and shippable on its own.
 
-1. **`getMethodBEligibilityByReactor` → `getMethodBEligibilityByProcess`**
-   (`src/data-access/isometric.ts`). Count **eligible samples (replicates)** in the production
-   process **since `established_at`**, ≥ 30 → eligible. Replace the reactor join with the
-   process→credit-batch→samples path. Re-point callers `validateReactorSamplingMethodFn` →
-   `validateProcessSamplingMethodFn` (`src/fn/isometric.ts`); keep a back-compat alias one release.
-2. **`sampling-requirements.ts` — unit run → credit batch.** `deriveSamplingRequirement` operates
-   on **credit batches**, not runs. Method A = every credit batch sampled; **≥ 3 replicates per
-   *credit batch*** (distributed across runs/days), fixing the stale per-*run* `MINIMUM_REPLICATES_PER_RUN`
-   check (today it over-requires sampling). Method-B branch `ceil(N_batches / 10)` per process —
-   scaffolded but inert until the unlock flips the method.
-3. **Cadence constants** (`src/config/certification.ts`): `METHOD_B_SAMPLING_CADENCE_RUNS` →
-   `…_CADENCE_BATCHES`; any `…_PER_RUN` → `…_PER_BATCH`. Update the doc-comments still citing
-   `getMethodBEligibilityByReactor`.
-4. **`durability-submission-gates.ts`** — confirm the gate reads at credit-batch grain (PR #296 may
-   already have moved it; verify and finish).
-5. **Process operator surface (read-only under Method A)** — a production-process view showing each
-   process, its `samplingMethod`, baseline progress (**N / 30 eligible samples**), and the cadence
-   status. This is the surface Track 2's unlock CTA and Method-B signals attach to.
+Shipped commits on `feat/method-b-unlock`: `refactor: re-grain Method-B sampling/eligibility to
+the production process`, `feat: read-only production-process operator surface`. Verified live in
+Chrome (two seeded feedstock processes show independent baseline counts) + a PR-CI E2E spec.
+
+1. ✅ **`getMethodBEligibilityByReactor` → `getMethodBEligibilityByProcess`**
+   (`src/data-access/isometric.ts`). Counts **eligible replicate samples** in the production
+   process via `credit_batches.production_process_id` (the process id is the "since `established_at`"
+   boundary), ≥ 30 → eligible. Reactor join replaced with the process→credit-batch→samples path.
+   Callers re-pointed to `validateProcessSamplingMethodFn` + `processSamplingMethodSchema`
+   (`src/fn/isometric.ts`, `src/schemas/isometric.ts`); reactor/credit-batch names kept one release
+   as deprecated aliases (zero runtime callers today).
+2. ✅ **`sampling-requirements.ts` — unit run → credit batch.** `deriveSamplingRequirement` now
+   operates on **credit batches** (`BatchSampling`), not runs. Method A = every credit batch
+   sampled; **≥ 3 replicates per *credit batch*** (pooled across runs/days) via the renamed
+   `MINIMUM_REPLICATES_PER_BATCH`, fixing the stale per-*run* over-requirement. Method-B branch
+   `ceil(N_batches / 10)` per process — scaffolded, inert until the unlock flips the method.
+3. ✅ **Cadence constants** (`src/config/certification.ts`): `METHOD_B_SAMPLING_CADENCE_RUNS` →
+   `…_CADENCE_BATCHES`; `MINIMUM_REPLICATES_PER_RUN` → `…_PER_BATCH`. Doc-comments re-grained.
+4. ✅ **`durability-submission-gates.ts`** — already reads at credit-batch grain; updated to the
+   re-grained `deriveSamplingRequirement` (`batchId`/`batchCode`/`sampledBatches`) + renamed
+   constants. Tests green.
+5. ✅ **Process operator surface (read-only under Method A)** — `/production-processes`: a
+   production-process view (Verification nav) showing each process, its `samplingMethod`, baseline
+   progress (**N / 30 eligible samples**), and cadence status. Standard layered pattern
+   (data-access → fn → hook → component → route). This is the surface Track 2's unlock CTA and
+   Method-B signals attach to.
 
 ---
 
