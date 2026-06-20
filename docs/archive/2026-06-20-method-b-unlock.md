@@ -8,6 +8,19 @@ Supersedes the deferred half of
 `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md` (its Phase 2 items 7–11
 and the "Deferred to ADR 0017" scope).
 
+## Archived shipped context from open questions
+
+- **ADR 0016 Phase 1 shipped** (branch `feat/credit-batch-production-process`,
+  commit `dde0c8e`, PR #294): `production_processes`, derived
+  `credit_batches.feedstock_type_id` + `production_process_id`, single-feedstock
+  invariant, `samples.credit_batch_id`, the Isometric <= 1-month cap, and removal
+  of `reactors.sampling_method` + its migration-`0052` Method-B trigger
+  (migration `0057`). Data model + server-side derivation only.
+- **ADR 0017 Track 1 shipped** (PR #299): process-grained baseline counting via
+  `getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess`,
+  credit-batch-grained cadence via `deriveSamplingRequirement`, and the read-only
+  `/production-processes` operator surface.
+
 > ⚠️ **Premise correction (2026-06-20).** ADR 0016, the archived plan, and the
 > open-questions tracker all assume "DEC runs **Method A everywhere**; Method B is a
 > *deferred* future unlock." DEC has since confirmed the opposite: **a process switches to

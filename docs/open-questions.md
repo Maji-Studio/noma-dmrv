@@ -174,18 +174,8 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
-### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`, opened 2026-06-19; refreshed 2026-06-20)
+### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
-- **Phase 1 shipped** (ADR 0016, branch `feat/credit-batch-production-process`,
-  commit `dde0c8e`, PR #294): `production_processes` table, derived
-  `credit_batches.feedstock_type_id` + `production_process_id`, single-feedstock
-  invariant, `samples.credit_batch_id`, the Isometric ≤ 1-month cap, and removal
-  of `reactors.sampling_method` + its migration-`0052` Method-B trigger
-  (migration `0057`). Data model + server-side derivation only.
-- **ADR 0017 Track 1 shipped** (PR #299): process-grained baseline counting via
-  `getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess`,
-  credit-batch-grained cadence via `deriveSamplingRequirement`, and the read-only
-  `/production-processes` operator surface.
 - **Remaining Track 2 work:** explicit Method-B unlock with prerequisite capture,
   the μ−σ/√n unsampled estimate preview, the 6-month eligible-sample pool,
   3σ winsorising, `_unsampled` submission routing, and the **process-grain DB
