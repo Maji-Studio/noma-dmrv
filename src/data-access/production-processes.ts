@@ -225,26 +225,6 @@ export async function getProductionProcessSummariesByFacility(
 }
 
 /**
- * Count a process's LIFETIME eligible replicate samples (the ≥30 baseline
- * counter), inside the caller's transaction. Mirrors
- * `getMethodBEligibilityByProcess` exactly — credit-batch-linked Samples whose
- * batch belongs to the process; in-process (null `creditBatchId`) samples are
- * internal-only and dropped by the inner join. No `asOf` bound: the unlock reads
- * the whole-life count since `established_at`.
- */
-async function countProcessEligibleSamples(
-  executor: Executor,
-  productionProcessId: string,
-): Promise<number> {
-  const [row] = await executor
-    .select({ sampleCount: count().mapWith(Number) })
-    .from(samples)
-    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .where(eq(creditBatches.productionProcessId, productionProcessId));
-  return row?.sampleCount ?? 0;
-}
-
-/**
  * Unlock Method B for a production process (ADR 0017): the deliberate, captured
  * transition off the Method-A baseline. Flips `samplingMethod → method_b`, stamps
  * `methodBUnlockedAt`, and persists the three protocol prerequisites the unlock
@@ -286,10 +266,14 @@ export async function unlockMethodBForProcess(
       throw new Error("This production process is already on Method B");
     }
 
-    const eligibleSampleCount = await countProcessEligibleSamples(
-      tx,
-      input.processId,
-    );
+    // Re-count the process's lifetime eligible samples inside the row-locked
+    // transaction via the shared process-grain counter (the same one the
+    // operator surface and submission gates read), so the gate can't disagree
+    // with what the operator saw.
+    const eligibleByProcess = await countEligibleSamplesByProcess(tx, {
+      facilityId: process.facilityId,
+    });
+    const eligibleSampleCount = eligibleByProcess.get(input.processId) ?? 0;
     // Refuse an under-baseline flip with a friendly message before the DB
     // trigger would raise its raw check_violation. The agreed baseline is
     // already ≥ the protocol floor (schema), so this also satisfies the trigger.
