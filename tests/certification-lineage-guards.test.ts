@@ -28,7 +28,7 @@ import {
   certificationSubmissions,
   certifierGhgStatements,
   certifierRemovals,
-  creditBatchApplications,
+  creditBatchProductionRuns,
   creditBatches,
   customers,
   deliveries,
@@ -38,6 +38,7 @@ import {
   orders,
   productionRunFeedstocks,
   productionRuns,
+  productionProcesses,
   reactors,
   samples,
   storageLocations,
@@ -54,6 +55,7 @@ interface LineageFixture {
   facilityId: string;
   feedstockId: string;
   feedstockTypeId: string;
+  productionProcessId: string;
   ghgStatementId: string | null;
   orderId: string;
   productId: string;
@@ -105,6 +107,14 @@ async function createLineageFixture(
         moistureContentPercent: 10,
       })
       .returning({ id: feedstocks.id });
+
+    const [productionProcess] = await tx
+      .insert(productionProcesses)
+      .values({
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+      })
+      .returning({ id: productionProcesses.id });
 
     const [productionRun] = await tx
       .insert(productionRuns)
@@ -217,6 +227,8 @@ async function createLineageFixture(
       .values({
         code: `CB-CLG-${tag}`,
         facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+        productionProcessId: productionProcess.id,
         status: "pending",
         startDate: "2026-06-01",
         endDate: "2026-06-30",
@@ -225,9 +237,9 @@ async function createLineageFixture(
       })
       .returning({ id: creditBatches.id });
 
-    await tx.insert(creditBatchApplications).values({
+    await tx.insert(creditBatchProductionRuns).values({
       creditBatchId: batch.id,
-      applicationId: application.id,
+      productionRunId: productionRun.id,
     });
 
     if (blockingVia !== "none") {
@@ -255,6 +267,7 @@ async function createLineageFixture(
       facilityId: facility.id,
       feedstockId: feedstock.id,
       feedstockTypeId: feedstockType.id,
+      productionProcessId: productionProcess.id,
       ghgStatementId,
       orderId: order.id,
       productId: product.id,
@@ -275,8 +288,8 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, submissionEntityIds));
     await tx
-      .delete(creditBatchApplications)
-      .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
+      .delete(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.creditBatchId, fixture.batchId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await tx
       .delete(applications)
@@ -293,6 +306,9 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
     await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
+    await tx
+      .delete(productionProcesses)
+      .where(eq(productionProcesses.id, fixture.productionProcessId));
     await tx
       .delete(feedstockTypes)
       .where(eq(feedstockTypes.id, fixture.feedstockTypeId));

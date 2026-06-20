@@ -8,20 +8,17 @@ import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import {
-  getCreditBatchApplicationOptions,
-  type CreditBatchApplicationOption,
-} from "@/data-access/applications";
-import {
   getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
+  getCreditBatchProductionRunOptions,
   createCreditBatch as createCreditBatchData,
   updateCreditBatch as updateCreditBatchData,
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
-  checkCreditBatchDateOverlap,
   type CreditBatchWithRelations,
   type CreditBatchCo2eStoredPreview,
+  type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
 import {
   createCreditBatchSchema,
@@ -122,28 +119,40 @@ export async function getCo2eStoredPreviewsFn(
   }
 }
 
-export async function getCreditBatchApplicationOptionsFn(
-  facilityId: string,
-): Promise<ActionResult<CreditBatchApplicationOption[]>> {
+const creditBatchProductionRunOptionsSchema = z.object({
+  facilityId: z.string().uuid(),
+  startDate: z.coerce.date().optional().nullable(),
+  endDate: z.coerce.date().optional().nullable(),
+  includeCreditBatchId: z.string().uuid().optional().nullable(),
+});
+
+export async function getCreditBatchProductionRunOptionsFn(
+  input: {
+    facilityId: string;
+    startDate?: string | Date | null;
+    endDate?: string | Date | null;
+    includeCreditBatchId?: string | null;
+  },
+): Promise<ActionResult<CreditBatchProductionRunOption[]>> {
   try {
     const user = await getUser();
     if (!user || !user.id) {
       return { success: false, error: "Unauthorized" };
     }
 
-    const validatedFacilityId = z.string().uuid().parse(facilityId);
-    const options = await getCreditBatchApplicationOptions(
+    const validated = creditBatchProductionRunOptionsSchema.parse(input);
+    const options = await getCreditBatchProductionRunOptions(
       user.id,
-      validatedFacilityId,
+      validated,
     );
     return { success: true, data: options };
   } catch (error) {
-    logCreditBatchError("Failed to get credit batch application options", error);
+    logCreditBatchError("Failed to get credit batch production run options", error);
     return {
       success: false,
       error: toActionError(
         error,
-        "Failed to get credit batch application options",
+        "Failed to get credit batch production run options",
       ),
     };
   }
@@ -162,20 +171,6 @@ export async function createCreditBatchFn(
     }
 
     const validated = createCreditBatchSchema.parse(data);
-
-    // Check for overlapping date ranges within the same facility
-    const overlap = await checkCreditBatchDateOverlap(
-      user.id,
-      validated.facilityId,
-      validated.startDate,
-      validated.endDate,
-    );
-    if (overlap) {
-      return {
-        success: false,
-        error: `Date range overlaps with existing batch ${overlap.code} (${overlap.startDate} – ${overlap.endDate})`,
-      };
-    }
 
     const creditBatch = await withAutoCode(
       "CB",
@@ -218,27 +213,6 @@ export async function updateCreditBatchFn(
     const existing = await getCreditBatchById(user.id, creditBatchId);
     if (!existing) {
       return { success: false, error: "Credit batch not found" };
-    }
-
-    // Check for overlapping date ranges if dates are being updated
-    const checkStartDate = updateData.startDate ?? existing.startDate;
-    const checkEndDate = updateData.endDate ?? existing.endDate;
-    const startDateObj = checkStartDate instanceof Date ? checkStartDate : new Date(checkStartDate);
-    const endDateObj = checkEndDate instanceof Date ? checkEndDate : new Date(checkEndDate);
-    const facilityForOverlap = updateData.facilityId ?? existing.facilityId;
-
-    const overlap = await checkCreditBatchDateOverlap(
-      user.id,
-      facilityForOverlap,
-      startDateObj,
-      endDateObj,
-      creditBatchId,
-    );
-    if (overlap) {
-      return {
-        success: false,
-        error: `Date range overlaps with existing batch ${overlap.code} (${overlap.startDate} – ${overlap.endDate})`,
-      };
     }
 
     // Check for duplicate code if code is being updated

@@ -8,6 +8,81 @@ Feedstock type certification guardrail implementation notes from 2026-06-13 are
 archived in
 [`docs/archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md`](../archive/isometric-changes-archive-2026-06-13-feedstock-type-certification-guardrails.md).
 
+Transport-leg evidence now reaches Isometric as mirrored Sources, and submit can
+auto-generate a transport evidence ledger Source from live legs. Dated
+implementation and sandbox-verification notes from 2026-06-19 are archived in
+[`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
+
+## 2026-06-19 (ADR 0016 Phase 1 — credit batch = production batch, process scopes sampling)
+
+Credit batch becomes the Isometric **production batch**: one feedstock,
+facility-scoped, ≤ 1 month under Isometric. A new `production_processes` entity
+keyed `(facility, feedstock)` — spanning reactors per Biochar Protocol §8.3.1 —
+owns the sampling regime (`sampling_method`), moved **off** `reactors`.
+
+Phase 1 (data model + server-side derivation only; commit `dde0c8e`, PR #294):
+
+- `production_processes` table; find-or-created per `(facility, feedstock)` on
+  credit-batch create. Inert `method_b_unlocked_at` seam for ADR 0017.
+- `credit_batches`: derived `feedstock_type_id` (NOT NULL) + `production_process_id`
+  from member runs; a batch whose runs span > 1 feedstock type is rejected.
+- `samples` attach per credit batch (`credit_batch_id`); `production_run_id`
+  retained as optional in-process provenance.
+- Isometric ≤ 1-month cap: Zod `superRefine` + DB `check`.
+- Dropped `reactors.sampling_method` and the migration-`0052` Method-B baseline
+  trigger (migration `0057`) — DEC is Method A, nothing left to guard at reactor
+  grain. The process-grain trigger ships with the ADR 0017 unlock.
+
+Deferred: Phases 2–4 (live sampling logic, submission mapping, credit-batch UI
+for the derived feedstock, process-grain sampling UI) and all Method-B compute
+(ADR 0017). Tracked in `docs/open-questions.md` →
+`certification/credit-batch-sampling-phases`. Decision of record: ADR 0016
+(refines ADR 0014). Archived plan:
+`docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`.
+
+## 2026-06-19 (transport → mass_distance, multi-leg mass-weighting)
+
+Re-binds feedstock and biochar transport to the registry's
+`mass_distance_based_ci_emissions` blueprint, matching the operator's
+re-authored "Dark Earth Carbon Template" (`rvt_1KS4S43VPSBXA26X`). Verified
+live against the sandbox: **every `mass_distance` input in the Certify
+blueprint catalog is `data_shape: SCALAR`** — there is no LIST-shaped transport
+blueprint anywhere (LIST exists only on chemistry/sensor blueprints, e.g. the
+durability `h_c_molar_ratios`). So per-leg datapoints (one datapoint per leg
+into a single input) are **not possible** for transport.
+
+Multiple transport legs per run (a run's feedstock can arrive across several
+deliveries / storage bins) are handled by **mass-weighting**: each category
+submits one `mass_distance` scalar = **Σⱼ(distⱼ_km × massⱼ_tonnes)**, which the
+blueprint multiplies by its fixed `carbon_intensity` emission factor. This is
+exact when every leg in the category shares that factor (same transport mode —
+Isometric Transportation v1.1 §5); a mixed-method/factor or missing-load-mass
+category still surfaces a blocking warning (`aggregateTransportMassDistance`).
+
+- **Aggregation** (`utils/aggregation.ts`) — `aggregateTransportLegs` (returned
+  a mass-weighted avg distance) became `aggregateTransportMassDistance`
+  (returns `massDistanceTonneKm`). `AggregatedProductionData` now carries
+  `feedstockTransportMassDistanceTonneKm` / `biocharTransportMassDistanceTonneKm`
+  (null when no legs — feedstock/biochar transport is required, so it fails
+  closed at submit) in place of the old `*TransportAvgDistanceKm` fields. The
+  sample path was already tonne·km (`sampleTransportMassDistanceTonneKm`, 0 when
+  empty — sample shipping is optional).
+- **INPUT_MAPPING** (`transformers/datapoint.ts`) — `biomass-feedstock-transport`
+  and `biochar-transport` now bind `mass_distance_based_ci_emissions/mass_distance`
+  (tonne·km) instead of the deleted `transport/{distance,mass}` blueprint; the
+  dead `sampling-required-for-mrv/distance_based_ci_emissions/distance` entry was
+  dropped (the template uses `mass_distance` for every transport category).
+- **Consumers** — `certify-field-registry.ts` and `certify-context-core.ts`
+  (`TRANSPORT_SOURCE_TO_CATEGORY`, coverage) follow the renamed fields. No
+  pipeline change: the submission path stays one scalar datapoint per
+  (component, input) — no 1:many remodel was needed once SCALAR was confirmed.
+- **Decision** — true per-leg *visibility* at the certifier would require one
+  `mass_distance_based_ci_emissions` component instance per leg (dynamic
+  `AddComponentToRemoval`, beyond the template-driven model) and adds **zero**
+  numerical accuracy for same-mode legs, so it was rejected. Mixed-mode
+  transport (rail/ship legs needing per-mode components with distinct EFs) is
+  deferred — see `docs/open-questions.md`.
+
 ## 2026-06-18 (durability DB-layer guardrails & coverage-check papercut — R2–R4)
 
 Closes the DB-layer defense-in-depth items from
@@ -87,14 +162,13 @@ sandbox-gated** — see `docs/open-questions.md`
   transform. The stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
   entry is left fail-closed until the live wiring replaces it.
 - **UI surfaces — durability made visible (Phase F)** — the Phase A–D
-  engines surfaced on four read-only surfaces, no new domain logic:
-  the reactor list gains a **Sampling Cadence** column + side-sheet section
-  (`src/data-access/reactors.ts` `getRunSamplingByReactorIds` →
-  `deriveSamplingRequirement` evaluated over each reactor's full non-archived
-  run population under its current method; `reactor-list.tsx`); the sample form
-  shows an amber **eligibility advisory** when a replicate's H/C_org ≥ 0.5 or
-  O/C_org ≥ 0.2 (non-blocking — eligibility is judged on the run mean, D8;
-  `sample-form.tsx`); the removal readiness/preflight gains a **durability**
+  engines surfaced on read-only surfaces, no new domain logic. The reactor-list
+  cadence surface that originally displayed `deriveSamplingRequirement` was
+  removed by ADR 0016 Phase 1 when sampling moved off reactors; process-grain UI
+  returns with ADR 0017. The sample form shows an amber **eligibility advisory**
+  when a replicate's H/C_org ≥ 0.5 or O/C_org ≥ 0.2 (non-blocking —
+  eligibility is judged on the run mean, D8; `sample-form.tsx`); the removal
+  readiness/preflight gains a **durability**
   check row + blocked-reasons (`readiness{,-facts}.ts`), computed ONCE in
   `buildDurabilityGateBlockers` (`src/fn/certification/durability-readiness.ts`,
   extracted to keep `certify-context-core.ts` ≤1000 lines) and carried on

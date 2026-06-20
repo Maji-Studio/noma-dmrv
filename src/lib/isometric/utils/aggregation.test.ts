@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TransportLeg } from "@/db/schema";
-import { aggregateTransportLegs } from "./aggregation";
+import { aggregateTransportMassDistance } from "./aggregation";
 
 function leg(
   id: string,
@@ -33,16 +33,16 @@ function leg(
   };
 }
 
-describe("aggregateTransportLegs", () => {
-  it("returns null distance and no warning for an empty leg list", () => {
-    const result = aggregateTransportLegs([], "Feedstock");
+describe("aggregateTransportMassDistance", () => {
+  it("returns null mass-distance and no warning for an empty leg list", () => {
+    const result = aggregateTransportMassDistance([], "Feedstock");
 
-    expect(result.distanceKm).toBeNull();
+    expect(result.massDistanceTonneKm).toBeNull();
     expect(result.warning).toBeNull();
   });
 
-  it("mass-weights distance across legs with valid mass", () => {
-    const result = aggregateTransportLegs(
+  it("sums Σ(distance × load-mass in tonnes) across legs with valid mass", () => {
+    const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", {
           distanceKm: 100,
@@ -56,23 +56,23 @@ describe("aggregateTransportLegs", () => {
       "Feedstock",
     );
 
-    // (100*50 + 200*100) / (50 + 100) = 166.67
-    expect(result.distanceKm).toBeCloseTo(166.67, 1);
+    // 100 km × 0.05 t + 200 km × 0.1 t = 5 + 20 = 25 t·km
+    expect(result.massDistanceTonneKm).toBeCloseTo(25, 6);
     expect(result.warning).toBeNull();
   });
 
   it("returns null and names a single leg missing load mass", () => {
-    const result = aggregateTransportLegs(
+    const result = aggregateTransportMassDistance(
       [leg("00000000-0000-0000-0000-000000000003", { loadMassKg: null })],
       "Feedstock",
     );
 
-    expect(result.distanceKm).toBeNull();
+    expect(result.massDistanceTonneKm).toBeNull();
     expect(result.warning).toContain("00000000-0000-0000-0000-000000000003");
   });
 
   it("returns null and warns when legs mix factor fields", () => {
-    const result = aggregateTransportLegs(
+    const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000004", { modelYear: null }),
         leg("00000000-0000-0000-0000-000000000005", { modelYear: 2020 }),
@@ -80,12 +80,12 @@ describe("aggregateTransportLegs", () => {
       "Feedstock",
     );
 
-    expect(result.distanceKm).toBeNull();
+    expect(result.massDistanceTonneKm).toBeNull();
     expect(result.warning).toContain("mix factor");
   });
 
   it("reports all legs missing load mass in one warning", () => {
-    const result = aggregateTransportLegs(
+    const result = aggregateTransportMassDistance(
       [
         leg("00000000-0000-0000-0000-000000000001", { loadMassKg: null }),
         leg("00000000-0000-0000-0000-000000000002", { loadMassKg: 0 }),
@@ -93,7 +93,7 @@ describe("aggregateTransportLegs", () => {
       "Feedstock",
     );
 
-    expect(result.distanceKm).toBeNull();
+    expect(result.massDistanceTonneKm).toBeNull();
     expect(result.warning).toContain(
       "00000000-0000-0000-0000-000000000001",
     );

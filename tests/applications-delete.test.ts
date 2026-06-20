@@ -3,11 +3,18 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { deleteApplication } from "@/data-access/applications";
 import { applications, soilTemperatureMeasurements } from "@/db/schema/application";
-import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
-import { facilities } from "@/db/schema/facilities";
+import {
+  creditBatches,
+  creditBatchApplications,
+  creditBatchProductionRuns,
+} from "@/db/schema/credits";
+import { facilities, reactors } from "@/db/schema/facilities";
+import { feedstockTypes } from "@/db/schema/feedstock";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
+import { productionProcesses } from "@/db/schema/production-processes";
+import { productionRuns } from "@/db/schema/production";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -15,6 +22,10 @@ interface DeleteFixture {
   facilityId: string;
   customerId: string;
   formulationId: string;
+  feedstockTypeId: string;
+  productionProcessId: string;
+  reactorId: string;
+  productionRunId: string;
   productId: string;
   orderId: string;
   deliveryId: string;
@@ -34,10 +45,53 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
     .values({ name: `Delete Test Formulation ${runId}`, code: `FM-DEL-${runId}` })
     .returning({ id: formulations.id });
 
+  // ADR 0016: a credit batch is single-feedstock (NOT NULL feedstockTypeId), so
+  // the fixture needs a feedstock type even though this delete test ignores
+  // feedstock semantics.
+  const [feedstockType] = await db
+    .insert(feedstockTypes)
+    .values({
+      name: `Delete Test Feedstock ${runId}`,
+      code: `FT-DEL-${runId}`,
+      category: "forestry",
+    })
+    .returning({ id: feedstockTypes.id });
+
   const [facility] = await db
     .insert(facilities)
     .values({ name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
     .returning({ id: facilities.id });
+
+  const [productionProcess] = await db
+    .insert(productionProcesses)
+    .values({
+      facilityId: facility.id,
+      feedstockTypeId: feedstockType.id,
+    })
+    .returning({ id: productionProcesses.id });
+
+  const [reactor] = await db
+    .insert(reactors)
+    .values({
+      code: `RE-DEL-${runId}`,
+      facilityId: facility.id,
+      identifier: `Delete Test Reactor ${runId}`,
+      reactorType: "fixed-bed",
+    })
+    .returning({ id: reactors.id });
+
+  const [productionRun] = await db
+    .insert(productionRuns)
+    .values({
+      code: `PR-DEL-${runId}`,
+      facilityId: facility.id,
+      reactorId: reactor.id,
+      date: "2025-06-15",
+      startTime: new Date("2025-06-15T08:00:00Z"),
+      endTime: new Date("2025-06-15T12:00:00Z"),
+      biocharDryMassKg: 10_000,
+    })
+    .returning({ id: productionRuns.id });
 
   const [product] = await db
     .insert(biocharProducts)
@@ -45,6 +99,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
       code: `BP-DEL-${runId}`,
       facilityId: facility.id,
       formulationId: formulation.id,
+      linkedProductionRunId: productionRun.id,
     })
     .returning({ id: biocharProducts.id });
 
@@ -76,6 +131,10 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
     facilityId: facility.id,
     customerId: customer.id,
     formulationId: formulation.id,
+    feedstockTypeId: feedstockType.id,
+    productionProcessId: productionProcess.id,
+    reactorId: reactor.id,
+    productionRunId: productionRun.id,
     productId: product.id,
     orderId: order.id,
     deliveryId: delivery.id,
@@ -95,6 +154,9 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
 
     if (fixture.batchIds.length > 0) {
       await tx
+        .delete(creditBatchProductionRuns)
+        .where(inArray(creditBatchProductionRuns.creditBatchId, fixture.batchIds));
+      await tx
         .delete(creditBatchApplications)
         .where(inArray(creditBatchApplications.creditBatchId, fixture.batchIds));
       await tx
@@ -111,9 +173,19 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
     await tx.delete(deliveries).where(eq(deliveries.id, fixture.deliveryId));
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
     await tx.delete(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
+    await tx
+      .delete(productionRuns)
+      .where(eq(productionRuns.id, fixture.productionRunId));
+    await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
+    await tx
+      .delete(productionProcesses)
+      .where(eq(productionProcesses.id, fixture.productionProcessId));
     await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await tx
+      .delete(feedstockTypes)
+      .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
   });
 }
 
@@ -163,7 +235,6 @@ async function createCreditBatchRecord(
   fixture: DeleteFixture,
   runId: string,
   status: "draft" | "pending" | "verified" | "issued" | "rejected",
-  applicationIds: string[],
   fields?: {
     weightTons?: number | null;
     totalCo2eStoredTons?: number | null;
@@ -177,6 +248,8 @@ async function createCreditBatchRecord(
     .values({
       code: `CB-DEL-${runId}-${status.toUpperCase()}`,
       facilityId: fixture.facilityId,
+      feedstockTypeId: fixture.feedstockTypeId,
+      productionProcessId: fixture.productionProcessId,
       status,
       startDate: "2025-06-01",
       endDate: "2025-06-30",
@@ -193,14 +266,10 @@ async function createCreditBatchRecord(
 
   fixture.batchIds.push(creditBatch.id);
 
-  if (applicationIds.length > 0) {
-    await db.insert(creditBatchApplications).values(
-      applicationIds.map((applicationId) => ({
-        creditBatchId: creditBatch.id,
-        applicationId,
-      })),
-    );
-  }
+  await db.insert(creditBatchProductionRuns).values({
+    creditBatchId: creditBatch.id,
+    productionRunId: fixture.productionRunId,
+  });
 
   return creditBatch.id;
 }
@@ -216,7 +285,7 @@ describe("deleteApplication", () => {
         biocharAppliedDryTons: 4.5,
         co2eStoredTonnes: 3.6,
       });
-      const remainingApplicationId = await createApplicationRecord(fixture, `${runId}-B`, {
+      await createApplicationRecord(fixture, `${runId}-B`, {
         biocharAppliedTons: 2,
         biocharAppliedDryTons: 1.8,
         co2eStoredTonnes: 1.4,
@@ -228,7 +297,6 @@ describe("deleteApplication", () => {
         fixture,
         runId,
         "pending",
-        [deletedApplicationId, remainingApplicationId],
         {
           weightTons: 7,
           totalCo2eStoredTons: 5,
@@ -247,10 +315,10 @@ describe("deleteApplication", () => {
         .from(applications)
         .where(eq(applications.id, deletedApplicationId));
 
-      const remainingLinks = await db
-        .select({ applicationId: creditBatchApplications.applicationId })
-        .from(creditBatchApplications)
-        .where(eq(creditBatchApplications.creditBatchId, creditBatchId));
+      const productionRunLinks = await db
+        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+        .from(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.creditBatchId, creditBatchId));
 
       const remainingMeasurements = await db
         .select({ id: soilTemperatureMeasurements.id })
@@ -269,7 +337,7 @@ describe("deleteApplication", () => {
         .where(eq(creditBatches.id, creditBatchId));
 
       expect(remainingApplication).toBeUndefined();
-      expect(remainingLinks).toEqual([{ applicationId: remainingApplicationId }]);
+      expect(productionRunLinks).toEqual([{ productionRunId: fixture.productionRunId }]);
       expect(remainingMeasurements).toHaveLength(0);
       expect(updatedBatch).toEqual({
         weightTons: 2,
@@ -293,7 +361,7 @@ describe("deleteApplication", () => {
         biocharAppliedDryTons: 4.5,
         co2eStoredTonnes: 3.6,
       });
-      await createCreditBatchRecord(fixture, runId, "issued", [applicationId], {
+      await createCreditBatchRecord(fixture, runId, "issued", {
         weightTons: 5,
         totalCo2eStoredTons: 3.6,
         totalCo2eEmissionsTons: 0.5,
@@ -311,9 +379,9 @@ describe("deleteApplication", () => {
         .where(eq(applications.id, applicationId));
 
       const remainingLinks = await db
-        .select({ applicationId: creditBatchApplications.applicationId })
-        .from(creditBatchApplications)
-        .where(eq(creditBatchApplications.applicationId, applicationId));
+        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+        .from(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.productionRunId, fixture.productionRunId));
 
       expect(applicationStillPresent).toEqual({ id: applicationId });
       expect(remainingLinks).toHaveLength(1);

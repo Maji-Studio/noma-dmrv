@@ -37,6 +37,12 @@ export interface ChainApplicationLineage {
   evidenceMethod: "visual" | "boundary";
   gisBoundaryReference: string | null;
   biocharAppliedDryTons: number | null;
+  /**
+   * The application site's own declared annual-average soil temperature (°C),
+   * or null. Used only to reconcile against the facility reference value
+   * (conservative-direction check) — NOT the submitted durability input.
+   */
+  soilTemperatureC: number | null;
   href: string;
 }
 
@@ -128,6 +134,7 @@ export async function getChainOfCustodyData(
       evidenceMethod: applications.evidenceMethod,
       gisBoundaryReference: applications.gisBoundaryReference,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,
+      applicationSoilTemperatureC: applications.soilTemperatureC,
       deliveryId: deliveries.id,
       deliveryCode: deliveries.code,
       deliveryStatus: deliveries.status,
@@ -206,6 +213,7 @@ export async function getChainOfCustodyData(
       evidenceMethod: applicationRow.evidenceMethod,
       gisBoundaryReference: applicationRow.gisBoundaryReference,
       biocharAppliedDryTons: applicationRow.biocharAppliedDryTons,
+      soilTemperatureC: applicationRow.applicationSoilTemperatureC,
       href: "/applications",
     },
     delivery: {

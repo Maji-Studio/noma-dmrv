@@ -25,15 +25,11 @@ import { useToast } from "@/components/ui/toast";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
-import {
-  CreditBatchForm,
-  type ApplicationOption,
-} from "./credit-batch-form";
+import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import { CertifyPanel } from "@/components/certification";
 import {
   useCreditBatches,
-  useCreditBatchApplicationOptions,
   useCreditBatchCo2eStoredPreviews,
   useCreateCreditBatch,
   useUpdateCreditBatch,
@@ -63,13 +59,7 @@ const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 // Component
 // ============================================
 
-interface CreditBatchListProps {
-  applications?: ApplicationOption[];
-}
-
-export function CreditBatchList({
-  applications = [],
-}: CreditBatchListProps) {
+export function CreditBatchList() {
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -89,15 +79,11 @@ export function CreditBatchList({
 
   const router = useRouter();
   const { facilityId: contextFacilityId } = useFacilityContext();
-  const applicationFacilityId =
-    sideSheet?.entity?.facilityId ?? contextFacilityId ?? undefined;
 
   // Data fetching — facility-scoped so batches never leak across facilities
   const { data: creditBatches, isLoading, error } = useCreditBatches(
     contextFacilityId ?? undefined
   );
-  const { data: scopedApplications = [] } =
-    useCreditBatchApplicationOptions(applicationFacilityId);
   const createCreditBatch = useCreateCreditBatch();
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
@@ -105,11 +91,6 @@ export function CreditBatchList({
 
   // Client-side filtering
   const allItems = creditBatches ?? EMPTY_CREDIT_BATCHES;
-  const formApplications =
-    applicationFacilityId && applications.length > 0
-      ? applications.filter((app) => app.facilityId === applicationFacilityId)
-      : scopedApplications;
-
   const filteredItems = useMemo(() => {
     let items = allItems;
 
@@ -585,14 +566,6 @@ export function CreditBatchList({
         <CreditBatchForm
           key={sideSheetEntity?.id ?? "create"}
           creditBatch={sideSheetEntity ?? undefined}
-          applications={formApplications}
-          existingBatches={allItems.map((b) => ({
-            id: b.id,
-            code: b.code,
-            facilityId: b.facilityId,
-            startDate: typeof b.startDate === "string" ? b.startDate : b.startDate,
-            endDate: typeof b.endDate === "string" ? b.endDate : b.endDate,
-          }))}
           onSubmit={
             sideSheetEntity && sideSheetMode === "edit"
               ? handleUpdate

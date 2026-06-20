@@ -153,9 +153,15 @@ export const productionRunReadings = pgTable(
 
 export const samples = pgTable('samples', {
   id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
-    .notNull()
-    .references(() => productionRuns.id),
+  // ADR 0016: a lab Sample characterises the CREDIT BATCH (the protocol
+  // production batch) — its >=3 replicates' mean/std-dev. Drizzle keeps this
+  // free of .references() to avoid a circular schema import with credits.ts;
+  // migration 0057 adds the DB foreign key.
+  creditBatchId: uuid('credit_batch_id'),
+  // Provenance: which production run the sample was physically drawn from.
+  // Nullable — batch biochar can be commingled across runs. (Was the primary
+  // link pre-0015; now secondary to creditBatchId.)
+  productionRunId: uuid('production_run_id').references(() => productionRuns.id),
   sampleCode: text('sample_code').notNull(),
   samplingTime: timestamp('sampling_time').notNull(),
   weightGrams: real('weight_grams'),

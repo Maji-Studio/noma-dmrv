@@ -21,16 +21,14 @@ import {
   getCreditBatchById,
   type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
-import { getDeliveriesByIds } from "@/data-access/deliveries";
-import { getFeedstocksByIds } from "@/data-access/feedstocks";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
+import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   deriveBatchHealth,
   type BatchHealth,
 } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
-import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -40,11 +38,9 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
-import type { DerivedStatus } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
-import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
-  aggregateTransportLegs,
+  aggregateTransportMassDistance,
   collectTransportEntityIds,
   listComponentBlueprints,
   listProjects,
@@ -55,11 +51,14 @@ import {
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import {
+  buildSoilTemperatureReconciliationWarnings,
+  resolveFacilityReferenceSoilTemperature,
+  type FacilityReferenceSoilTemperature,
+} from "@/lib/isometric/utils/durability-aggregation";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
-  GHG_STATEMENT_ENTITY_TYPE,
-  GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
@@ -68,7 +67,18 @@ import {
   type TransportLegsByCategory,
 } from "./shared";
 import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
-import { buildDurabilityGateBlockers } from "./durability-readiness";
+import {
+  buildEntityReadinessGaps,
+  buildTransportSourceReadinessGaps,
+} from "./certify-readiness-gaps";
+import { loadDurabilityBatchData } from "./durability-readiness";
+import { buildSubmissionWarnings } from "./submission-warnings";
+import {
+  loadLinkedGhgStatementStatus,
+  type LinkedGhgStatementStatus,
+} from "./linked-ghg-statement-status";
+
+export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 
 // Each removal/batch in a facility-level fan-out rebuilds its own context (a
 // chain of DB queries + registry lookups). Bound how many run at once so a
@@ -82,7 +92,7 @@ export interface TransportCoverageBucket {
   legIds: string[];
   firstLegEntityId: string | null;
   // Non-null when at least one leg fails the per-leg uniformity /
-  // completeness checks `aggregateTransportLegs` enforces. Pooling legs from
+  // completeness checks `aggregateTransportMassDistance` enforces. Pooling legs from
   // several credit batches into one removal raises the chance of a mixed
   // method/factor — the panel surfaces it before the user clicks submit.
   aggregationWarning: string | null;
@@ -99,9 +109,9 @@ export type TransportCategory = keyof TransportCoverage;
 // Maps an INPUT_MAPPING.source field name to a transport category. Keep in
 // sync with the three transport rows in transformers/datapoint.ts.
 const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
-  feedstockTransportAvgDistanceKm: "feedstock",
-  biocharTransportAvgDistanceKm: "biochar",
-  sampleTransportAvgDistanceKm: "sample",
+  feedstockTransportMassDistanceTonneKm: "feedstock",
+  biocharTransportMassDistanceTonneKm: "biochar",
+  sampleTransportMassDistanceTonneKm: "sample",
 };
 
 export interface MemberCreditBatch {
@@ -111,17 +121,6 @@ export interface MemberCreditBatch {
 }
 
 type DurabilityOption = "200_year" | "1000_year";
-
-// The GHG Statement this removal has been rolled into (if any), with its
-// derived verifier status. Carried separately from the removal's own
-// `latestSubmission` so the bridge can show the statement's status without
-// ever attributing a verifier lifecycle to the removal itself (P1-b). The
-// status is derived server-side (`deriveSubmissionStatus(..., "ghgStatement")`)
-// so the cached UI payload stays a lean value/label, not a submission row.
-export interface LinkedGhgStatementStatus {
-  id: string;
-  status: DerivedStatus;
-}
 
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
@@ -156,6 +155,11 @@ export interface RemovalCertifyContext {
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
+  // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
+  // active template has no component to carry (ADR 0015). Unlike
+  // durabilityGateBlockers / entityReadinessGaps these do NOT gate submission;
+  // they tell the operator a recorded value will not be submitted.
+  submissionWarnings: string[];
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -172,6 +176,12 @@ export interface RemovalCertifyContext {
 export interface RemovalSubmissionContext extends RemovalCertifyContext {
   lineages: ChainOfCustodyData[];
   runs: ProductionRunWithSamples[];
+  // The removal's member credit batches with their pooled lab Samples (by
+  // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
+  // (ADR 0015). Drives the durability gates here and the per-batch
+  // measurement-sample submission step (Phase 3). Each batch's `runs` are scoped
+  // to the removal's applied run set so product mass is attribution-correct.
+  batchesWithSamples: CreditBatchWithSamples[];
   // Per-run applied-biochar fraction (linear mass allocation). Passed to
   // `aggregateProductionRuns` so a partially-applied run contributes only
   // its applied share.
@@ -179,6 +189,12 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
   // Transport legs pooled across every member batch's lineage, deduped by
   // entity id. Fed to `enrichWithTransportLegs` by the submit pipeline.
   transportLegs: TransportLegsByCategory;
+  // The facility's resolved reference soil temperature (declared value, 7 °C
+  // floored, one decimal) submitted as the `biochar_soil` measurement for a
+  // 200-year removal (Phase 2). Null when the facility has not configured one —
+  // when there are credit batches to submit, that null is fail-closed via a
+  // durability gate blocker, so the Phase-3 step can assume non-null here.
+  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
 }
 
 function deriveRequiredTransportCategories(
@@ -209,143 +225,30 @@ function buildCoverage(
   legs: TransportLegsByCategory,
   entityIds: ReturnType<typeof collectTransportEntityIds>,
 ): TransportCoverage {
+  const mdWarn = aggregateTransportMassDistance;
   return {
     feedstock: {
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
       legIds: legs.feedstock.map((leg) => leg.id),
       firstLegEntityId: legs.feedstock[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportLegs(legs.feedstock, "Feedstock")
-        .warning,
+      aggregationWarning: mdWarn(legs.feedstock, "Feedstock").warning,
     },
     biochar: {
       count: legs.biochar.length,
       entityIds: entityIds.biocharProductIds,
       legIds: legs.biochar.map((leg) => leg.id),
       firstLegEntityId: legs.biochar[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportLegs(legs.biochar, "Biochar")
-        .warning,
+      aggregationWarning: mdWarn(legs.biochar, "Biochar").warning,
     },
     sample: {
       count: legs.sample.length,
       entityIds: entityIds.sampleIds,
       legIds: legs.sample.map((leg) => leg.id),
       firstLegEntityId: legs.sample[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportLegs(legs.sample, "Sample").warning,
+      aggregationWarning: mdWarn(legs.sample, "Sample").warning,
     },
   };
-}
-
-function buildEntityReadinessGaps(
-  runs: ProductionRunWithSamples[],
-  transportLegs: TransportLegsByCategory,
-  requiredTransportCategories: readonly TransportCategory[],
-  runIdsRequiring1000YearDurability: ReadonlySet<string>,
-): string[] {
-  const gaps: string[] = [];
-  const addEntityGaps = (
-    entityLabel: string,
-    readinessGaps: ReturnType<typeof deriveEntityCertifyReadiness>["gaps"],
-  ) => {
-    if (readinessGaps.length === 0) return;
-    gaps.push(
-      `${entityLabel}: ${readinessGaps.map((gap) => gap.label).join(" · ")}`,
-    );
-  };
-
-  for (const run of runs) {
-    addEntityGaps(
-      `Production run ${run.code}`,
-      deriveEntityCertifyReadiness("productionRun", run).gaps,
-    );
-    for (const sample of run.samples) {
-      const durabilityOption: DurabilityOption =
-        runIdsRequiring1000YearDurability.has(run.id)
-          ? "1000_year"
-          : "200_year";
-      addEntityGaps(
-        `Sample ${sample.sampleCode}`,
-        deriveEntityCertifyReadiness("sample", {
-          ...sample,
-          durabilityOption,
-        }).gaps,
-      );
-    }
-  }
-
-  for (const category of requiredTransportCategories) {
-    const legs = transportLegs[category];
-    for (const leg of legs) {
-      addEntityGaps(
-        `${category} transport leg ${leg.id}`,
-        deriveEntityCertifyReadiness("transportLeg", leg).gaps,
-      );
-    }
-  }
-
-  return Array.from(new Set(gaps));
-}
-
-function uniqueIds(ids: (string | null | undefined)[]): string[] {
-  return Array.from(new Set(ids.filter((id): id is string => !!id)));
-}
-
-function formatReadinessGapLabels(
-  entityLabel: string,
-  readinessGaps: ReturnType<typeof deriveEntityCertifyReadiness>["gaps"],
-): string[] {
-  if (readinessGaps.length === 0) return [];
-  return [
-    `${entityLabel}: ${readinessGaps.map((gap) => gap.label).join(" · ")}`,
-  ];
-}
-
-async function buildTransportSourceReadinessGaps(
-  userId: string,
-  lineages: ChainOfCustodyData[],
-  entityIds: ReturnType<typeof collectTransportEntityIds>,
-  requiredTransportCategories: readonly TransportCategory[],
-): Promise<string[]> {
-  const requireFeedstockWeighing =
-    requiredTransportCategories.includes("feedstock");
-  const requireDeliveryWeighing =
-    requiredTransportCategories.includes("biochar");
-  const feedstockIds = requireFeedstockWeighing ? entityIds.feedstockIds : [];
-  const deliveryIds = requireDeliveryWeighing
-    ? uniqueIds(lineages.map((lineage) => lineage.delivery?.id))
-    : [];
-
-  const [feedstockRows, deliveryRows] = await Promise.all([
-    feedstockIds.length > 0
-      ? getFeedstocksByIds(userId, feedstockIds)
-      : Promise.resolve([]),
-    deliveryIds.length > 0
-      ? getDeliveriesByIds(userId, deliveryIds)
-      : Promise.resolve([]),
-  ]);
-
-  const gaps = [
-    ...(feedstockRows ?? []).flatMap((feedstock) =>
-      formatReadinessGapLabels(
-        `Feedstock ${feedstock.code}`,
-        deriveEntityCertifyReadiness("feedstock", {
-          ...feedstock,
-          requiresTruckWeighing: true,
-        }).gaps.filter((gap) => gap.key === "truckWeighing"),
-      ),
-    ),
-    ...(deliveryRows ?? []).flatMap((delivery) =>
-      formatReadinessGapLabels(
-        `Delivery ${delivery.code}`,
-        deriveEntityCertifyReadiness("delivery", {
-          ...delivery,
-          requiresTruckWeighing: true,
-        }).gaps.filter((gap) => gap.key === "truckWeighing"),
-      ),
-    ),
-  ];
-
-  return Array.from(new Set(gaps));
 }
 
 const EMPTY_COVERAGE: TransportCoverage = {
@@ -380,10 +283,22 @@ interface RemovalScope {
   memberBatches: {
     id: string;
     code: string;
+    productionRunIds: string[];
     applicationIds: string[];
     durabilityOption: DurabilityOption;
     co2eStoredPreview?: CreditBatchCo2eStoredPreview;
   }[];
+}
+
+async function getApplicationIdsForProductionRuns(
+  userId: string,
+  productionRunIds: string[],
+): Promise<string[]> {
+  const applicationsForRuns = await getApplicationsForRuns(
+    userId,
+    productionRunIds,
+  );
+  return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
 }
 
 // Resolves the removal scope for a credit batch. When the batch is already
@@ -397,6 +312,10 @@ async function resolveScopeForCreditBatch(
   if (!batch) throw new SafeError("Credit batch not found");
 
   if (!batch.removalId) {
+    const applicationIds = await getApplicationIdsForProductionRuns(
+      userId,
+      batch.productionRunIds,
+    );
     return {
       facilityId: batch.facilityId,
       removalId: null,
@@ -405,7 +324,8 @@ async function resolveScopeForCreditBatch(
         {
           id: batch.id,
           code: batch.code,
-          applicationIds: batch.applicationIds,
+          productionRunIds: batch.productionRunIds,
+          applicationIds,
           durabilityOption: batch.durabilityOption,
           co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
         },
@@ -430,18 +350,23 @@ export async function resolveScopeForRemoval(
       const full = options?.skipPreview
         ? await getCreditBatchById(userId, b.id, { skipPreview: true })
         : await getCreditBatchById(userId, b.id);
-      // Fail fast rather than emitting a member batch with empty
-      // applicationIds / missing preview — partial data here silently
-      // understates a removal's scope downstream.
+      // Fail fast rather than emitting a member batch with missing run-derived
+      // applications / preview — partial data here silently understates a
+      // removal's scope downstream.
       if (!full) {
         throw new SafeError(
           `Credit batch ${b.id} in removal ${removalId} could not be loaded`,
         );
       }
+      const applicationIds = await getApplicationIdsForProductionRuns(
+        userId,
+        full.productionRunIds,
+      );
       return {
         id: full.id,
         code: full.code,
-        applicationIds: full.applicationIds,
+        productionRunIds: full.productionRunIds,
+        applicationIds,
         durabilityOption: full.durabilityOption,
         co2eStoredPreview: full.co2eStoredPreview ?? undefined,
       };
@@ -452,35 +377,6 @@ export async function resolveScopeForRemoval(
     removalId,
     removal,
     memberBatches,
-  };
-}
-
-// Resolves the GHG Statement a removal rolls into (via the persisted
-// `ghgStatementId` FK) and derives its verifier status from the statement's
-// own latest submission — the same `metadata.remoteStatus` overlay the GHG
-// Statements list reads. Returns null when the removal isn't grouped or isn't
-// linked to a statement. Kept lean (id + derived status) so it can ride on the
-// cached UI context.
-async function loadLinkedGhgStatementStatus(
-  userId: string,
-  removal: CertifierRemovalRow | null,
-): Promise<LinkedGhgStatementStatus | null> {
-  const ghgStatementId = removal?.ghgStatementId ?? null;
-  if (!ghgStatementId) return null;
-
-  const latest = await getLatestSubmission(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-    localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-    localEntityId: ghgStatementId,
-  });
-  return {
-    id: ghgStatementId,
-    status: deriveSubmissionStatus(
-      latest,
-      latest ? isLockedInFlight(latest) : false,
-      "ghgStatement",
-    ),
   };
 }
 
@@ -676,7 +572,7 @@ export async function buildRemovalContext(
     loadLinkedGhgStatementStatus(userId, scope.removal),
   ]);
 
-  // Walk every member batch's applications into one deduped run union.
+  // Walk every member batch's production-run applications into one deduped run union.
   const applicationIds = Array.from(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
@@ -702,14 +598,20 @@ export async function buildRemovalContext(
       productionReadinessGap,
       entityReadinessGaps: [],
       durabilityGateBlockers: [],
+      submissionWarnings: [],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
       isProduction,
       lineages: [],
       runs: [],
+      batchesWithSamples: [],
       attributionByRunId: new Map<string, number>(),
       transportLegs: { feedstock: [], biochar: [], sample: [] },
+      facilityReferenceSoilTemperature: resolveFacilityReferenceSoilTemperature({
+        declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+        source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+      }),
     };
   }
 
@@ -759,9 +661,65 @@ export async function buildRemovalContext(
     runs,
   );
 
-  // Durability sampling/eligibility gate (D3) — the same fail-closed result the
-  // submit pipeline blocks on, surfaced for readiness (see the field doc above).
-  const durabilityGateBlockers = await buildDurabilityGateBlockers(userId, runs);
+  // Credit-batch-grained durability data plane (ADR 0015): pool each member
+  // batch's lab Samples, scope runs to the removal's applied set, and run the D3
+  // gates. `durabilityGateBlockers` is the same fail-closed list the submit
+  // pipeline blocks on; the §8.3.1 distribution warning is advisory, so it joins
+  // the non-blocking submission warnings.
+  const {
+    batchesWithSamples,
+    blockers: durabilityBatchBlockers,
+    warnings: durabilityWarnings,
+  } = await loadDurabilityBatchData(
+    userId,
+    scope.memberBatches.map((b) => b.id),
+    new Set(runIds),
+  );
+
+  // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative
+  // value submitted as the `biochar_soil` measurement, 7 °C-floored. When there
+  // are credit batches to submit, an unset reference is fail-closed — it joins
+  // the durability gate blockers so readiness predicts the submit-pipeline block.
+  // (1000-year/R0 batches do not use soil temperature; out of Tier-1 scope, so
+  // every submittable batch here is treated as 200-year.)
+  const facilityReferenceSoilTemperature =
+    resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+    });
+  const soilTemperatureBlockers =
+    batchesWithSamples.length > 0 && facilityReferenceSoilTemperature == null
+      ? [
+          "Set this facility's reference soil temperature (admin → Emission " +
+            "estimates) before submitting a 200-year removal.",
+        ]
+      : [];
+  const durabilityGateBlockers = [
+    ...durabilityBatchBlockers,
+    ...soilTemperatureBlockers,
+  ];
+
+  // Conservative-direction reconciliation: warn (non-blocking) when a member
+  // application site is warmer than the declared reference (the reference would
+  // over-credit that site). Only meaningful once a reference is set.
+  const soilTemperatureReconciliationWarnings =
+    facilityReferenceSoilTemperature && batchesWithSamples.length > 0
+      ? buildSoilTemperatureReconciliationWarnings({
+          facilityReference: facilityReferenceSoilTemperature,
+          applicationSoilTemperaturesC: lineages.map(
+            (l) => l.application.soilTemperatureC,
+          ),
+        })
+      : [];
+
+  const submissionWarnings = [
+    ...buildSubmissionWarnings({
+      defaultTemplate: facilityFacts.defaultTemplate,
+      runs,
+    }),
+    ...durabilityWarnings,
+    ...soilTemperatureReconciliationWarnings,
+  ];
 
   return {
     facilityId: scope.facilityId,
@@ -773,14 +731,17 @@ export async function buildRemovalContext(
     productionReadinessGap,
     entityReadinessGaps,
     durabilityGateBlockers,
+    submissionWarnings,
     runSummary,
     latestSubmission,
     linkedGhgStatement,
     isProduction,
     lineages,
     runs,
+    batchesWithSamples,
     attributionByRunId,
     transportLegs,
+    facilityReferenceSoilTemperature,
   };
 }
 
@@ -819,6 +780,7 @@ function projectUiContext(
     productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
     durabilityGateBlockers: ctx.durabilityGateBlockers,
+    submissionWarnings: ctx.submissionWarnings,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,

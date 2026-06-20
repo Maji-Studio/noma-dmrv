@@ -234,9 +234,8 @@ function makeMapping(fixture: Fixture): CertifierProjectRow {
     webhookSecret: null,
     metadata: null,
     gensetEnergyYieldKwhPerLitre: 3.375,
-    stageSplitBiomassPct: 32.2,
-    stageSplitPyrolysisPct: 58.5,
-    stageSplitBiocharPct: 9.3,
+    defaultSoilTemperatureC: 24.2,
+    defaultSoilTemperatureSource: "Test dataset (annual mean)",
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;
@@ -325,6 +324,7 @@ function makeContext(
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
     durabilityGateBlockers: [],
+    submissionWarnings: [],
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,
@@ -352,8 +352,28 @@ function makeContext(
       } as never,
     ],
     runs: [makeRun(biocharMassKg)],
+    batchesWithSamples: [
+      {
+        creditBatchId: "cb-bd-1",
+        creditBatchCode: "CB-BD-001",
+        productionProcessId: null,
+        samplingMethod: "method_a",
+        declaredHToCorgRatio: null,
+        runs: [{ id: PRODUCTION_RUN_ID, code: "PR-BD-1", biocharDryMassKg: biocharMassKg }],
+        samples: makeRun(biocharMassKg).samples,
+      },
+    ],
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
     transportLegs: { feedstock: [], biochar: [], sample: [] },
+    facilityReferenceSoilTemperature: {
+      declaredSoilTemperatureC: 24.2,
+      effectiveSoilTemperatureC: 24.2,
+      source: "Test dataset (annual mean)",
+      temperatureFloored: false,
+      method:
+        "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
+      warnings: [],
+    },
   };
 }
 

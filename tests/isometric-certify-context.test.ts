@@ -5,10 +5,12 @@ import {
 } from "@/data-access/certification";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import { getDeliveriesByIds } from "@/data-access/deliveries";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getFeedstocksByIds } from "@/data-access/feedstocks";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import {
   listComponentBlueprints,
@@ -24,6 +26,10 @@ vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
 }));
 
+vi.mock("@/data-access/credit-batch-production-runs", () => ({
+  getApplicationsForRuns: vi.fn(),
+}));
+
 vi.mock("@/data-access/certification", () => ({
   getCertifierProjectByFacility: vi.fn(),
 }));
@@ -34,6 +40,10 @@ vi.mock("@/data-access/chain-of-custody", () => ({
 
 vi.mock("@/data-access/production-runs", () => ({
   getProductionRunsWithSamples: vi.fn(),
+}));
+
+vi.mock("@/data-access/credit-batch-samples", () => ({
+  getCreditBatchesWithSamples: vi.fn(),
 }));
 
 vi.mock("@/data-access/feedstocks", () => ({
@@ -64,9 +74,11 @@ vi.mock("@/lib/isometric", async () => {
 });
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
+const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
+const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedGetFeedstocksByIds = vi.mocked(getFeedstocksByIds);
 const mockedGetDeliveriesByIds = vi.mocked(getDeliveriesByIds);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -79,6 +91,10 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
+const APPLICATION_FOR_PR_1 = {
+  applicationId: "app-1",
+  productionRunId: "pr-1",
+};
 
 function mapping(
   overrides: Partial<CertifierProjectRow> = {},
@@ -141,15 +157,19 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: [],
+      productionRunIds: [],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
+      runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
+    );
     // Default the transport-coverage walkers to empty so each test only
     // overrides what it cares about.
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
     mockedGetRuns.mockResolvedValue([]);
+    mockedGetBatchesWithSamples.mockResolvedValue([]);
     mockedGetFeedstocksByIds.mockResolvedValue([]);
     mockedGetDeliveriesByIds.mockResolvedValue([]);
     mockedListDocuments.mockResolvedValue([]);
@@ -204,7 +224,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -259,7 +279,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -396,7 +416,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
@@ -465,9 +485,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 // ============================================================
 
 // Builds a template whose first group bundles three components, each with a
-// single monitored `distance` input — matching the three transport rows in
-// INPUT_MAPPING. The optional `omit` list lets a test simulate a template
-// that doesn't request a particular category.
+// single monitored `mass_distance` input on the `mass_distance_based_ci_emissions`
+// blueprint — matching the three transport rows in INPUT_MAPPING. The optional
+// `omit` list lets a test simulate a template that doesn't request a category.
 function transportTemplate(
   id: string,
   omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
@@ -475,20 +495,20 @@ function transportTemplate(
   const categories = [
     {
       key: "biomass-feedstock-transport",
-      blueprint_key: "transport",
-      input_key: "distance",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
       category: "feedstock" as const,
     },
     {
       key: "biochar-transport",
-      blueprint_key: "transport",
-      input_key: "distance",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
       category: "biochar" as const,
     },
     {
       key: "sampling-required-for-mrv",
-      blueprint_key: "distance_based_ci_emissions",
-      input_key: "distance",
+      blueprint_key: "mass_distance_based_ci_emissions",
+      input_key: "mass_distance",
       category: "sample" as const,
     },
   ].filter((c) => !omit.includes(c.category));
@@ -525,14 +545,18 @@ describe("requiredTransportCategories", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: [],
+      productionRunIds: [],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
+      runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
+    );
     mockedGetLegs.mockResolvedValue([]);
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
     mockedGetRuns.mockResolvedValue([]);
+    mockedGetBatchesWithSamples.mockResolvedValue([]);
     mockedListDocuments.mockResolvedValue([]);
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListBlueprints.mockResolvedValue([]);
@@ -578,7 +602,7 @@ describe("requiredTransportCategories", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -587,7 +611,9 @@ describe("requiredTransportCategories", () => {
     mockedListTemplates.mockResolvedValue([
       transportTemplate("tpl_no_sample", ["sample"]),
     ]);
-    mockedListBlueprints.mockResolvedValue([blueprint("transport")]);
+    mockedListBlueprints.mockResolvedValue([
+      blueprint("mass_distance_based_ci_emissions"),
+    ]);
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
       application: { biocharAppliedDryTons: 0.1 } as never,
@@ -647,7 +673,7 @@ describe("requiredTransportCategories", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
       durabilityOption: "1000_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -710,7 +736,7 @@ describe("requiredTransportCategories", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(
@@ -787,7 +813,7 @@ describe("requiredTransportCategories", () => {
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      applicationIds: ["app-1"],
+      productionRunIds: ["pr-1"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(

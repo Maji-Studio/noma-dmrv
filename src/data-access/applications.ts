@@ -6,7 +6,11 @@ import {
   type Application,
 } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
-import { creditBatches, creditBatchApplications } from "@/db/schema/credits";
+import {
+  creditBatches,
+  creditBatchApplications,
+  creditBatchProductionRuns,
+} from "@/db/schema/credits";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customers, customerLocations } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
@@ -121,13 +125,26 @@ async function getLinkedCreditBatches(
       code: creditBatches.code,
       status: creditBatches.status,
     })
-    .from(creditBatchApplications)
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .innerJoin(
+      biocharProducts,
+      sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+    )
+    .innerJoin(
+      creditBatchProductionRuns,
+      eq(
+        creditBatchProductionRuns.productionRunId,
+        biocharProducts.linkedProductionRunId,
+      ),
+    )
     .innerJoin(
       creditBatches,
-      eq(creditBatchApplications.creditBatchId, creditBatches.id),
+      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
     )
-    .where(eq(creditBatchApplications.applicationId, applicationId))
-    .for("update");
+    .where(eq(applications.id, applicationId))
+    .for("update", { of: creditBatches });
 
   return rows;
 }
@@ -141,12 +158,21 @@ async function refreshCreditBatchSummaries(
       biocharAppliedTons: applications.biocharAppliedTons,
       co2eStoredTonnes: applications.co2eStoredTonnes,
     })
-    .from(creditBatchApplications)
+    .from(applications)
+    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .leftJoin(orders, eq(deliveries.orderId, orders.id))
     .innerJoin(
-      applications,
-      eq(creditBatchApplications.applicationId, applications.id),
+      biocharProducts,
+      sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
     )
-    .where(eq(creditBatchApplications.creditBatchId, creditBatchId));
+    .innerJoin(
+      creditBatchProductionRuns,
+      eq(
+        creditBatchProductionRuns.productionRunId,
+        biocharProducts.linkedProductionRunId,
+      ),
+    )
+    .where(eq(creditBatchProductionRuns.creditBatchId, creditBatchId));
 
   const weightTons = linkedApplications.reduce(
     (total, application) => total + Number(application.biocharAppliedTons),
@@ -630,17 +656,17 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
       .delete(creditBatchApplications)
       .where(eq(creditBatchApplications.applicationId, id));
 
-    for (const creditBatchId of new Set(
-      linkedCreditBatches.map((batch) => batch.creditBatchId),
-    )) {
-      await refreshCreditBatchSummaries(tx, creditBatchId);
-    }
-
     await tx
       .delete(soilTemperatureMeasurements)
       .where(eq(soilTemperatureMeasurements.applicationId, id));
 
     await tx.delete(applications).where(eq(applications.id, id));
+
+    for (const creditBatchId of new Set(
+      linkedCreditBatches.map((batch) => batch.creditBatchId),
+    )) {
+      await refreshCreditBatchSummaries(tx, creditBatchId);
+    }
   });
 }
 

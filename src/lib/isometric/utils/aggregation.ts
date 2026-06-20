@@ -20,52 +20,52 @@ export interface AggregatedProductionData {
   totalStartupDieselLitres: number;
   totalGensetDieselLitres: number;
   totalElectricityKwh: number;
-  // Mass-weighted distance per transport-leg category, such that Certify's
-  // server-side `distance × Σmass × factor` equals Σⱼ(distⱼ × massⱼ × factor)
-  // — compliant with Isometric Transportation v1.1 §5 when every leg in the
-  // category shares the same method + emission factor. Mixed categories
-  // surface a warning instead of a value (see `aggregateTransportLegs`).
-  // Null when no legs are recorded OR when uniformity could not be
-  // established. Caller populates via `enrichWithTransportLegs`.
-  feedstockTransportAvgDistanceKm: number | null;
-  biocharTransportAvgDistanceKm: number | null;
-  sampleTransportAvgDistanceKm: number | null;
-  // Total sample-shipment mass-distance (tonne·km) — Σ(distance × load
-  // mass) over the sample legs. 0 when no sample legs (a valid value:
-  // no sample transport). Populated by `enrichWithTransportLegs`.
+  // Per-category transport mass-distance (tonne·km) = Σⱼ(distⱼ × massⱼ) over
+  // the category's legs — the exact quantity Certify's
+  // `mass_distance_based_ci_emissions` blueprint multiplies by its fixed
+  // emission factor. Summing per-leg contributions IS the mass-weighting (a
+  // run's feedstock can arrive across several deliveries / storage bins); it
+  // is exact when every leg in the category shares one emission factor
+  // (Isometric Transportation v1.1 §5), so a mixed-method/factor or
+  // missing-load-mass category surfaces a warning instead of a value
+  // (see `aggregateTransportMassDistance`). Caller populates via
+  // `enrichWithTransportLegs`.
+  //
+  // feedstock/biochar are null when no legs are recorded — transport is
+  // required for those categories, so a missing value fails closed at submit.
+  feedstockTransportMassDistanceTonneKm: number | null;
+  biocharTransportMassDistanceTonneKm: number | null;
+  // Sample shipment is optional: 0 (a true value — "no sample transport")
+  // rather than null when no sample legs exist.
   sampleTransportMassDistanceTonneKm: number;
-  // Per-process-stage energy, populated by `enrichWithFacilityConfig`
-  // from the combined per-run totals + the facility's stage-split
-  // estimate. Null until enriched.
-  biomassElectricityKwh: number | null;
-  pyrolysisElectricityKwh: number | null;
-  biocharElectricityKwh: number | null;
-  biomassGensetKwh: number | null;
-  pyrolysisGensetKwh: number | null;
-  biocharGensetKwh: number | null;
+  // Combined genset energy in kWh — genset litres × the facility's genset
+  // yield, applied by `enrichWithFacilityConfig`. Null until enriched (the raw
+  // litres live in `totalGensetDieselLitres`). ADR 0015 removed the per-stage
+  // energy split: all energy now submits as a single combined measurement
+  // point, so there is one genset-kWh figure instead of three stage shares.
+  totalGensetKwh: number | null;
   earliestStartTime: Date;
   latestEndTime: Date;
   sourceProductionRunIds: string[];
   warnings: string[];
 }
 
-// Aggregates a category's transport legs into a single mass-weighted distance
-// such that Certify's `distance × Σmass × factor` server-side calculation
-// equals the per-leg sum Σⱼ(distⱼ × massⱼ × factor) — compliant with Isometric
-// Transportation v1.1 §5. The emission factor is NOT stored on our legs: it
-// lives in the Isometric component blueprint, so collapsing is valid only when
-// every leg shares the local fields that select that factor.
+// Aggregates a category's transport legs into a single mass-distance
+// (tonne·km) = Σⱼ(distⱼ × massⱼ) — the value Certify's
+// `mass_distance_based_ci_emissions` blueprint multiplies by its fixed
+// emission factor. Summing per-leg contributions IS the mass-weighting, and is
+// exact only when every leg shares that factor (Isometric Transportation v1.1
+// §5). The factor is NOT stored on our legs — it lives on the blueprint — so a
+// category whose legs differ on the fields that select the factor cannot be
+// collapsed into one scalar and surfaces a warning instead.
 //
 // Returns:
-//   { distanceKm }                  — mass-weighted distance
-//   { warning }                     — missing load mass, mixed method, or empty
+//   { massDistanceTonneKm }  — Σⱼ(distⱼ × massⱼ); null when empty / blocked
+//   { warning }              — missing load mass, mixed method/factor, or null
 export interface TransportAggregationResult {
-  distanceKm: number | null;
+  massDistanceTonneKm: number | null;
   warning: string | null;
 }
-
-// Percent-to-fraction denominator.
-const PERCENT_DENOMINATOR = 100;
 
 const TRANSPORT_FACTOR_FIELDS = [
   "calculationMethodType",
@@ -101,22 +101,22 @@ function getMixedTransportFactorWarning(
   return null;
 }
 
-export function aggregateTransportLegs(
+export function aggregateTransportMassDistance(
   legs: TransportLeg[],
   categoryLabel: string,
 ): TransportAggregationResult {
   if (legs.length === 0) {
-    return { distanceKm: null, warning: null };
+    return { massDistanceTonneKm: null, warning: null };
   }
 
-  // Every leg needs a load mass to mass-weight the distance. Unweighted means
-  // are non-compliant (they would silently underweight large loads).
+  // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
+  // would silently drop its tonne·km, under-counting transport emissions.
   const missingMassLegIds = legs
     .filter((leg) => leg.loadMassKg == null || leg.loadMassKg <= 0)
     .map((leg) => leg.id);
   if (missingMassLegIds.length > 0) {
     return {
-      distanceKm: null,
+      massDistanceTonneKm: null,
       warning: `${categoryLabel} transport legs missing load_mass_kg (${missingMassLegIds.join(", ")}) - required for per-leg accounting`,
     };
   }
@@ -124,19 +124,19 @@ export function aggregateTransportLegs(
   const factorWarning = getMixedTransportFactorWarning(legs, categoryLabel);
   if (factorWarning) {
     return {
-      distanceKm: null,
+      massDistanceTonneKm: null,
       warning: factorWarning,
     };
   }
 
-  let weighted = 0;
-  let weightSum = 0;
+  // Σⱼ(distⱼ_km × massⱼ_tonnes). One mass-distance scalar per category — the
+  // single SCALAR the blueprint expects (there is no LIST-shaped transport
+  // input in the Certify catalog).
+  let massDistanceTonneKm = 0;
   for (const leg of legs) {
-    const mass = leg.loadMassKg as number;
-    weighted += leg.distanceKm * mass;
-    weightSum += mass;
+    massDistanceTonneKm += leg.distanceKm * kgToTonnes(leg.loadMassKg as number);
   }
-  return { distanceKm: weighted / weightSum, warning: null };
+  return { massDistanceTonneKm, warning: null };
 }
 
 // Clamps a per-run attribution factor into [0, 1]. A removal can only count
@@ -226,18 +226,12 @@ export function aggregateProductionRuns(
     totalStartupDieselLitres,
     totalGensetDieselLitres,
     totalElectricityKwh,
-    // Transport + per-stage fields default to null. Caller enriches via
+    // Transport + genset-kWh fields default to null/0. Caller enriches via
     // `enrichWithTransportLegs` and `enrichWithFacilityConfig`.
-    feedstockTransportAvgDistanceKm: null,
-    biocharTransportAvgDistanceKm: null,
-    sampleTransportAvgDistanceKm: null,
+    feedstockTransportMassDistanceTonneKm: null,
+    biocharTransportMassDistanceTonneKm: null,
     sampleTransportMassDistanceTonneKm: 0,
-    biomassElectricityKwh: null,
-    pyrolysisElectricityKwh: null,
-    biocharElectricityKwh: null,
-    biomassGensetKwh: null,
-    pyrolysisGensetKwh: null,
-    biocharGensetKwh: null,
+    totalGensetKwh: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
@@ -259,9 +253,9 @@ export function enrichWithTransportLegs(
   agg: AggregatedProductionData,
   legs: TransportLegsByCategory,
 ): AggregatedProductionData {
-  const feedstock = aggregateTransportLegs(legs.feedstock, "Feedstock");
-  const biochar = aggregateTransportLegs(legs.biochar, "Biochar");
-  const sample = aggregateTransportLegs(legs.sample, "Sample");
+  const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
+  const biochar = aggregateTransportMassDistance(legs.biochar, "Biochar");
+  const sample = aggregateTransportMassDistance(legs.sample, "Sample");
   const newWarnings = [
     feedstock.warning,
     biochar.warning,
@@ -270,63 +264,40 @@ export function enrichWithTransportLegs(
 
   return {
     ...agg,
-    feedstockTransportAvgDistanceKm: feedstock.distanceKm,
-    biocharTransportAvgDistanceKm: biochar.distanceKm,
-    sampleTransportAvgDistanceKm: sample.distanceKm,
-    sampleTransportMassDistanceTonneKm: sumMassDistanceTonneKm(legs.sample),
+    feedstockTransportMassDistanceTonneKm: feedstock.massDistanceTonneKm,
+    biocharTransportMassDistanceTonneKm: biochar.massDistanceTonneKm,
+    // Sample shipment is optional, so an empty category collapses to 0 (a
+    // true "no sample transport" value); feedstock/biochar stay null when
+    // empty so a forgotten required leg fails closed at submit. A blocked
+    // sample category (mixed factor / missing mass) yields its warning above
+    // AND falls back to 0 here — the pipeline blocks on the warning either way.
+    sampleTransportMassDistanceTonneKm: sample.massDistanceTonneKm ?? 0,
     warnings: [...agg.warnings, ...newWarnings],
   };
 }
 
-// Σ(distance_km × load_mass_tonnes) over the legs — the `mass_distance`
-// quantity (tonne·km) the Certify `mass_distance_based_ci_emissions`
-// blueprint expects. 0 for an empty category (no sample transport).
-function sumMassDistanceTonneKm(legs: TransportLeg[]): number {
-  if (getMixedTransportFactorWarning(legs, "Sample")) return 0;
-
-  let total = 0;
-  for (const leg of legs) {
-    total += leg.distanceKm * kgToTonnes(nz(leg.loadMassKg));
-  }
-  return total;
-}
-
-// Per-facility emission-estimate config — the four columns added to
-// `certifier_projects` in Phase 3.7. All required (the submission path
-// validates non-null before calling `enrichWithFacilityConfig`).
+// Per-facility emission-estimate config on `certifier_projects`. ADR 0015
+// dropped the three `stageSplit*Pct` columns (the per-stage split is gone);
+// the genset yield remains because it is emissions-affecting (litres → kWh).
+// The submission path validates non-null before calling
+// `enrichWithFacilityConfig`.
 export interface FacilityEmissionConfig {
   gensetEnergyYieldKwhPerLitre: number;
-  stageSplitBiomassPct: number;
-  stageSplitPyrolysisPct: number;
-  stageSplitBiocharPct: number;
 }
 
-// Layers per-process-stage energy onto an aggregation result. Pure;
-// returns a new object. Splits the combined per-run electricity and
-// genset energy across biomass / pyrolysis / biochar by the facility's
-// estimated stage ratios. The split is emissions-neutral (all three
-// stages share one carbon intensity in the template) — it only shapes
-// the per-stage breakdown shown in the registry. Genset litres are
-// converted to kWh via the facility's genset yield.
+// Layers combined genset energy (kWh) onto an aggregation result (ADR 0015).
+// Pure; returns a new object. Converts the run-combined genset litres to kWh
+// via the facility's genset yield — the only facility-config-derived energy
+// figure left after the per-stage split was removed. `totalElectricityKwh` is
+// already the combined grid figure, so it needs no enrichment.
 export function enrichWithFacilityConfig(
   agg: AggregatedProductionData,
   config: FacilityEmissionConfig,
 ): AggregatedProductionData {
-  const electricity = agg.totalElectricityKwh;
-  const gensetKwh =
-    agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre;
-  const biomass = config.stageSplitBiomassPct / PERCENT_DENOMINATOR;
-  const pyrolysis = config.stageSplitPyrolysisPct / PERCENT_DENOMINATOR;
-  const biochar = config.stageSplitBiocharPct / PERCENT_DENOMINATOR;
-
   return {
     ...agg,
-    biomassElectricityKwh: electricity * biomass,
-    pyrolysisElectricityKwh: electricity * pyrolysis,
-    biocharElectricityKwh: electricity * biochar,
-    biomassGensetKwh: gensetKwh * biomass,
-    pyrolysisGensetKwh: gensetKwh * pyrolysis,
-    biocharGensetKwh: gensetKwh * biochar,
+    totalGensetKwh:
+      agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre,
   };
 }
 

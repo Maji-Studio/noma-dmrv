@@ -19,8 +19,8 @@ function batch(
   overrides: Partial<PerBatchDurabilityDatapoint>,
 ): PerBatchDurabilityDatapoint {
   return {
-    productionRunId: "run-1",
-    productionRunCode: "PR-1",
+    creditBatchId: "batch-1",
+    creditBatchCode: "CB-1",
     sampled: true,
     replicateCount: 3,
     hToCorgRatio: { mean: 0.3, stdDev: 0.02 },

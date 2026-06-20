@@ -6,7 +6,6 @@
 import { CreditBatchDetail } from "@/components/credit-batches";
 import { requireAuth } from "@/lib/auth/server";
 import { getCreditBatchById } from "@/data-access/credit-batches";
-import { getCreditBatchApplicationOptions } from "@/data-access/applications";
 import { notFound, redirect } from "next/navigation";
 
 interface CreditBatchDetailPageProps {
@@ -45,11 +44,6 @@ export default async function CreditBatchDetailPage({
   const sp = await searchParams;
   const user = await requireAuth();
 
-  // Scope the auto-match application options to this batch's facility — the
-  // inline edit form only ever matches within one facility, so loading every
-  // application in the system (the previous raw, unfiltered page query) was
-  // both a layer bypass and a scaling hazard. Now routed through the guarded
-  // data-access layer.
   const batch = await getCreditBatchById(user.id, id, { skipPreview: true });
 
   if (!batch) {
@@ -60,12 +54,5 @@ export default async function CreditBatchDetailPage({
     redirect(canonicalBatchUrl(id, sp, batch.facilityId));
   }
 
-  const applicationOptions = await getCreditBatchApplicationOptions(
-    user.id,
-    batch.facilityId
-  );
-
-  return (
-    <CreditBatchDetail creditBatchId={id} applications={applicationOptions} />
-  );
+  return <CreditBatchDetail creditBatchId={id} />;
 }

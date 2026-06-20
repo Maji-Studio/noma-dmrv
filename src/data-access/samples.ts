@@ -4,9 +4,11 @@
  * Linked to production runs per Isometric Protocol Section 8.3
  */
 
-import { and, asc, desc, eq, gte, ilike, lte, sql, SQL, count, avg } from "drizzle-orm";
+import { and, asc, avg, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
+  creditBatches,
   samples,
   productionRuns,
   facilities,
@@ -21,7 +23,10 @@ import { deleteTransportLegsForEntity } from "./transport-legs";
 export interface SampleWithRelations {
   id: string;
   sampleCode: string;
-  productionRunId: string;
+  // Provenance — which run the replicate was drawn from (nullable since ADR 0016).
+  productionRunId: string | null;
+  // The credit batch (protocol production batch) this replicate characterises.
+  creditBatchId: string | null;
   samplingTime: Date;
   weightGrams: number | null;
   volumeMl: number | null;
@@ -109,6 +114,9 @@ import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
+const runFacilities = alias(facilities, "sample_run_facilities");
+const batchFacilities = alias(facilities, "sample_batch_facilities");
+
 // ============================================
 // Sample Read Operations
 // ============================================
@@ -149,7 +157,12 @@ export async function getSamples(
   }
 
   if (facilityId) {
-    conditions.push(eq(productionRuns.facilityId, facilityId));
+    conditions.push(
+      or(
+        eq(productionRuns.facilityId, facilityId),
+        eq(creditBatches.facilityId, facilityId),
+      )!,
+    );
   }
 
   // Note: durabilityOption is not in the DB schema, we'd need to add it or infer
@@ -181,6 +194,7 @@ export async function getSamples(
     .select({ totalCount: count() })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -193,6 +207,7 @@ export async function getSamples(
       id: samples.id,
       sampleCode: samples.sampleCode,
       productionRunId: samples.productionRunId,
+      creditBatchId: samples.creditBatchId,
       samplingTime: samples.samplingTime,
       weightGrams: samples.weightGrams,
       volumeMl: samples.volumeMl,
@@ -229,12 +244,14 @@ export async function getSamples(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       productionRunCode: productionRuns.code,
-      facilityCode: facilities.code,
-      facilityName: facilities.name,
+      facilityCode: sql<string | null>`coalesce(${runFacilities.code}, ${batchFacilities.code})`,
+      facilityName: sql<string | null>`coalesce(${runFacilities.name}, ${batchFacilities.name})`,
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(runFacilities, eq(productionRuns.facilityId, runFacilities.id))
+    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -279,6 +296,7 @@ export async function getSampleById(
       id: samples.id,
       sampleCode: samples.sampleCode,
       productionRunId: samples.productionRunId,
+      creditBatchId: samples.creditBatchId,
       samplingTime: samples.samplingTime,
       weightGrams: samples.weightGrams,
       volumeMl: samples.volumeMl,
@@ -315,12 +333,14 @@ export async function getSampleById(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       productionRunCode: productionRuns.code,
-      facilityCode: facilities.code,
-      facilityName: facilities.name,
+      facilityCode: sql<string | null>`coalesce(${runFacilities.code}, ${batchFacilities.code})`,
+      facilityName: sql<string | null>`coalesce(${runFacilities.name}, ${batchFacilities.name})`,
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(runFacilities, eq(productionRuns.facilityId, runFacilities.id))
+    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
     .where(eq(samples.id, sampleId));
 
   if (!sample) {
@@ -358,7 +378,12 @@ export async function getSampleStats(
     conditions.push(eq(samples.productionRunId, productionRunId));
   }
   if (facilityId) {
-    conditions.push(eq(productionRuns.facilityId, facilityId));
+    conditions.push(
+      or(
+        eq(productionRuns.facilityId, facilityId),
+        eq(creditBatches.facilityId, facilityId),
+      )!,
+    );
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -371,6 +396,7 @@ export async function getSampleStats(
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(whereClause);
 
   // Count 1000-year samples (those with R₀ reflectance data)
@@ -378,6 +404,7 @@ export async function getSampleStats(
     .select({ count: count() })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(
       whereClause
         ? and(whereClause, sql`${samples.randomReflectanceR0Percent} IS NOT NULL`)
@@ -410,6 +437,9 @@ export async function createSample(
   data: {
     sampleCode: string;
     productionRunId: string;
+    // The credit batch (protocol production batch) this replicate characterises
+    // (ADR 0016). Optional — may be associated after the batch is formed.
+    creditBatchId?: string | null;
     samplingTime: Date;
     labName?: string | null;
     labAccreditation?: string | null;
@@ -480,6 +510,7 @@ export async function createSample(
       .values({
         sampleCode: data.sampleCode,
         productionRunId: data.productionRunId,
+        creditBatchId: data.creditBatchId ?? null,
         samplingTime: data.samplingTime,
         labName: data.labName ?? null,
         labAccreditation: data.labAccreditation ?? null,
@@ -540,6 +571,7 @@ export async function updateSample(
   data: {
     sampleCode?: string;
     productionRunId?: string;
+    creditBatchId?: string | null;
     samplingTime?: Date;
     labName?: string | null;
     labAccreditation?: string | null;
@@ -606,6 +638,7 @@ export async function updateSample(
 
   if (data.sampleCode !== undefined) updateData.sampleCode = data.sampleCode;
   if (data.productionRunId !== undefined) updateData.productionRunId = data.productionRunId;
+  if (data.creditBatchId !== undefined) updateData.creditBatchId = data.creditBatchId;
   if (data.samplingTime !== undefined) updateData.samplingTime = data.samplingTime;
   if (data.labName !== undefined) updateData.labName = data.labName;
   if (data.labAccreditation !== undefined) updateData.labAccreditation = data.labAccreditation;

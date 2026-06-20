@@ -1,0 +1,1 @@
+ALTER TABLE "certifier_projects" ADD COLUMN "default_soil_temperature_source" text;

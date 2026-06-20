@@ -22,11 +22,14 @@ import {
 } from "@/data-access/certifier-removals";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
-import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
+import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getDocumentById,
   listDocumentsForEntity,
 } from "@/data-access/documents";
+import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import type { TransportLeg } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import {
   buildSourceSupplierRef,
@@ -44,6 +47,7 @@ import {
 import {
   loadCandidateDocumentsForRemovalSchema,
   mirrorDocumentToSourceSchema,
+  type MirrorDocumentToSourceInput,
   setDocumentSourceVisibilitySchema,
   SOURCES_MAX_BYTES,
   unlinkDocumentSourceSchema,
@@ -61,6 +65,13 @@ import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 // purpose — facility-scope evidence (LCAs, calibration certificates) is
 // handled by the PROJECT-Component flow per ADR 0005, not the Removal
 // source set.
+//
+// `transport_leg` is here because individual legs are aggregated into one
+// `mass_distance` scalar per category (no LIST transport blueprint), so they
+// can't reach the verifier as data — their bills of lading / weigh-scale
+// tickets must arrive as evidence (Sources) on the datapoint. Legs hang off
+// chain entities polymorphically; `collectTransportLegEntities` resolves them
+// from the feedstock / biochar-product / sample entities already in the set.
 type LineageEntityType =
   | "application"
   | "delivery"
@@ -73,7 +84,8 @@ type LineageEntityType =
   | "feedstock"
   | "feedstock_delivery"
   | "credit_batch"
-  | "reactor";
+  | "reactor"
+  | "transport_leg";
 
 export interface CandidateLineageEntity {
   entityType: LineageEntityType;
@@ -103,6 +115,54 @@ export interface CandidateDocumentsForRemoval {
   hasMapping: boolean;
 }
 
+function transportLegLabel(leg: TransportLeg): string {
+  if (leg.originName && leg.destinationName) {
+    return `Transport leg ${leg.originName} → ${leg.destinationName}`;
+  }
+  const endpoint = leg.destinationName ?? leg.originName;
+  return endpoint
+    ? `Transport leg to ${endpoint}`
+    : `Transport leg (${leg.transportMethodType})`;
+}
+
+// Resolves the transport legs hanging off the chain entities already in the
+// removal's set, as `transport_leg` lineage entities so their uploaded bills
+// of lading / weigh-scale tickets become Source candidates.
+//
+// `transport_legs.entityType` is its own polymorphic enum (feedstock | biochar
+// | sample) and does NOT match the document entity-type strings — note
+// "biochar" here vs. "biochar_product" in the lineage. The returned candidates
+// carry `entityType: "transport_leg"` keyed on the *leg's* id; the downstream
+// `listDocumentsForEntity(userId, "transport_leg", legId)` then picks up the
+// docs. Deduped by leg id so a leg reachable via two entities is listed once.
+async function collectTransportLegEntities(
+  userId: string,
+  ids: {
+    feedstockIds: string[];
+    biocharProductIds: string[];
+    sampleIds: string[];
+  },
+): Promise<CandidateLineageEntity[]> {
+  const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
+    getTransportLegsForEntities(userId, "feedstock", ids.feedstockIds),
+    getTransportLegsForEntities(userId, "biochar", ids.biocharProductIds),
+    getTransportLegsForEntities(userId, "sample", ids.sampleIds),
+  ]);
+
+  const seen = new Set<string>();
+  const out: CandidateLineageEntity[] = [];
+  for (const leg of [...feedstockLegs, ...biocharLegs, ...sampleLegs]) {
+    if (seen.has(leg.id)) continue;
+    seen.add(leg.id);
+    out.push({
+      entityType: "transport_leg",
+      entityId: leg.id,
+      entityLabel: transportLegLabel(leg),
+    });
+  }
+  return out;
+}
+
 // Walks every member credit batch's chain-of-custody, collecting (entityType,
 // entityId, label) tuples for each entity that can carry documents. Dedup by
 // (type, id). The labels feed into the panel UI so each candidate row says
@@ -130,20 +190,16 @@ async function collectLineageEntities(
       entityLabel: `Credit batch ${batch.code}`,
     });
 
+    const applicationsForRuns = await getApplicationsForRuns(
+      userId,
+      batch.productionRunIds,
+    );
+    const applicationIds = Array.from(
+      new Set(applicationsForRuns.map((row) => row.applicationId)),
+    );
     const lineages = await Promise.all(
-      batch.applicationIds.map((aid) => getChainOfCustodyData(userId, aid)),
+      applicationIds.map((aid) => getChainOfCustodyData(userId, aid)),
     );
-    const runIds = Array.from(
-      new Set(
-        lineages
-          .map((l) => l.productionRun?.id)
-          .filter((id): id is string => !!id),
-      ),
-    );
-    const runsWithSamples =
-      runIds.length > 0
-        ? await getProductionRunsWithSamples(userId, runIds)
-        : [];
 
     for (const lineage of lineages) {
       add({
@@ -193,16 +249,30 @@ async function collectLineageEntities(
       }
     }
 
-    for (const run of runsWithSamples) {
-      for (const sample of run.samples) {
-        add({
-          entityType: "sample",
-          entityId: sample.id,
-          entityLabel: `Lab sample for run ${run.code}`,
-        });
-      }
+    // Lab Samples by credit batch (ADR 0015) — the COA evidence walk. Keyed on
+    // `samples.creditBatchId` so a commingled-batch sample with a null run link
+    // still surfaces its COA as a Source candidate.
+    const batchSamples = await getSamplesByCreditBatchIds(userId, [batch.id]);
+    for (const sample of batchSamples) {
+      add({
+        entityType: "sample",
+        entityId: sample.id,
+        entityLabel: `Lab sample for credit batch ${batch.code}`,
+      });
     }
   }
+
+  // Resolve transport legs off the chain entities just gathered, so their
+  // bill-of-lading / weigh-ticket uploads surface as candidates too.
+  const collected = Array.from(seen.values());
+  const idsOfType = (t: LineageEntityType) =>
+    collected.filter((e) => e.entityType === t).map((e) => e.entityId);
+  const legEntities = await collectTransportLegEntities(userId, {
+    feedstockIds: idsOfType("feedstock"),
+    biocharProductIds: idsOfType("biochar_product"),
+    sampleIds: idsOfType("sample"),
+  });
+  for (const leg of legEntities) add(leg);
 
   return Array.from(seen.values());
 }
@@ -372,11 +442,22 @@ async function withSyncEventOnFailure<T>(
   }
 }
 
+// Thin server-action wrapper: validates input and resolves the caller from the
+// session. The body lives in `mirrorDocumentToSourceForUser` so server-side
+// callers that already hold a userId (the submit pipeline, the transport
+// evidence-ledger generator) can mirror without re-deriving the session.
 export async function mirrorDocumentToSource(
   input: unknown,
 ): Promise<ActionResult<MirrorResult>> {
-  return withAction(async (userId) => {
-    const parsed = mirrorDocumentToSourceSchema.parse(input);
+  return withAction((userId) =>
+    mirrorDocumentToSourceForUser(userId, mirrorDocumentToSourceSchema.parse(input)),
+  );
+}
+
+export async function mirrorDocumentToSourceForUser(
+  userId: string,
+  parsed: MirrorDocumentToSourceInput,
+): Promise<MirrorResult> {
     const { removalId, documentId, isPublic } = parsed;
 
     // Ownership + lineage scoping ───────────────────────────────────────
@@ -622,7 +703,6 @@ export async function mirrorDocumentToSource(
         recovered: recoveredFlag,
       };
     });
-  });
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -831,7 +911,6 @@ export async function collectCandidateDocumentIdsForRemoval(
       reactor: { id: string } | null;
       feedstocks: Array<{ id: string }>;
     }>;
-    runs: Array<{ id: string; samples: Array<{ id: string }> }>;
     memberBatchIds: string[];
   },
 ): Promise<string[]> {
@@ -850,9 +929,30 @@ export async function collectCandidateDocumentIdsForRemoval(
     if (lineage.reactor) add("reactor", lineage.reactor.id);
     for (const fs of lineage.feedstocks) add("feedstock", fs.id);
   }
-  for (const run of args.runs) {
-    for (const sample of run.samples) add("sample", sample.id);
-  }
+  // Lab Samples by credit batch (ADR 0015) — keyed on `samples.creditBatchId`,
+  // NOT via `run.samples`, so a commingled-batch sample's COA still lands in the
+  // candidate set. These ids also seed the sample-transport-leg walk below.
+  const batchSamples = await getSamplesByCreditBatchIds(
+    userId,
+    args.memberBatchIds,
+  );
+  const sampleIds = batchSamples.map((s) => s.id);
+  for (const id of sampleIds) add("sample", id);
+
+  // Transport legs hanging off those chain entities carry their own uploaded
+  // evidence (bills of lading / weigh tickets). Resolve them here so the
+  // submit path mirror-locks and references those docs too. Reads via `db`
+  // like the document walk below; the final sorted/deduped id list keeps the
+  // candidate set deterministic and re-walkable inside the snapshot txn.
+  const legEntities = await collectTransportLegEntities(userId, {
+    feedstockIds: args.lineages.flatMap((l) => l.feedstocks.map((f) => f.id)),
+    biocharProductIds: args.lineages
+      .map((l) => l.biocharProduct?.id)
+      .filter((id): id is string => !!id),
+    sampleIds,
+  });
+  for (const leg of legEntities) add("transport_leg", leg.entityId);
+
   const entityList = Array.from(entitySet.values());
   if (entityList.length === 0) return [];
 

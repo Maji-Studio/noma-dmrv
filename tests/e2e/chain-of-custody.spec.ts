@@ -159,6 +159,7 @@ async function seedBatchChain(seededData: SeededChainData) {
     applicationA: crypto.randomUUID(),
     applicationB: crypto.randomUUID(),
     creditBatch: crypto.randomUUID(),
+    productionProcess: crypto.randomUUID(),
     document: crypto.randomUUID(),
     productionSample: crypto.randomUUID(),
   };
@@ -259,10 +260,18 @@ async function seedBatchChain(seededData: SeededChainData) {
         });
       }
 
+      await tx.insert(schema.productionProcesses).values({
+        id: ids.productionProcess,
+        facilityId: seededData.facility.id,
+        feedstockTypeId: seededData.feedstockType.id,
+      });
+
       await tx.insert(schema.creditBatches).values({
         id: ids.creditBatch,
         code: codes.creditBatch,
         facilityId: seededData.facility.id,
+        feedstockTypeId: seededData.feedstockType.id,
+        productionProcessId: ids.productionProcess,
         startDate: "2026-03-01",
         endDate: "2026-03-31",
         totalFeedstockMassKg: 1000,
@@ -271,12 +280,10 @@ async function seedBatchChain(seededData: SeededChainData) {
         // requires this field; the spec doesn't read the durability math.
         hToCorgRatio: 0.4,
       });
-      await tx.insert(schema.creditBatchApplications).values(
-        [ids.applicationA, ids.applicationB].map((applicationId) => ({
-          creditBatchId: ids.creditBatch,
-          applicationId,
-        }))
-      );
+      await tx.insert(schema.creditBatchProductionRuns).values({
+        creditBatchId: ids.creditBatch,
+        productionRunId: ids.productionRun,
+      });
 
       // Trail evidence: a document on delivery A and a production-run sample.
       await tx.insert(schema.documents).values({
