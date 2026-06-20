@@ -36,9 +36,8 @@ export interface PaginatedReactors {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 
-// ADR 0016 removed the reactor-level sampling method. This transitional helper
-// exists only for legacy submission gates until ADR 0017 re-keys Method B to
-// production processes.
+// ADR 0016 removed the reactor-level sampling method. Reactor surfaces still
+// need a stable Method-A value while Method B is process-scoped.
 const LEGACY_REACTOR_SAMPLING_METHOD = "method_a" as const;
 
 // ============================================

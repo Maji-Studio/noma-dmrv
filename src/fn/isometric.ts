@@ -3,11 +3,11 @@
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import {
-  getMethodBEligibilityByReactor,
+  getMethodBEligibilityByProcess,
   type MethodBEligibilitySummary,
 } from "@/data-access/isometric";
 import {
-  reactorSamplingMethodSchema,
+  processSamplingMethodSchema,
   creditBatchConditionSchema,
   deliveryDryMassSchema,
   sampleConditionSchema,
@@ -27,29 +27,34 @@ export async function validateCreditBatchFn(
   return withAction(async () => creditBatchConditionSchema.parse(data));
 }
 
-export type ReactorSamplingEligibilityResult = {
-  reactor_id: string;
+export type ProcessSamplingEligibilityResult = {
+  process_id: string;
   sampling_method: "method_a" | "method_b";
   method_b_eligibility: MethodBEligibilitySummary;
 };
 
-export async function validateReactorSamplingMethodFn(
-  data: z.infer<typeof reactorSamplingMethodSchema>
-): Promise<ActionResult<ReactorSamplingEligibilityResult>> {
+/**
+ * Validate a Method A/B selection for a PRODUCTION PROCESS and attach its live
+ * baseline eligibility (≥30 process-scoped Method-A samples, `G-F74T-0`). The
+ * process — not the reactor — carries the sampling method (ADR 0017).
+ */
+export async function validateProcessSamplingMethodFn(
+  data: z.infer<typeof processSamplingMethodSchema>
+): Promise<ActionResult<ProcessSamplingEligibilityResult>> {
   return withAction(async (userId) => {
-    const validated = reactorSamplingMethodSchema.parse(data);
+    const validated = processSamplingMethodSchema.parse(data);
 
-    const eligibility = await getMethodBEligibilityByReactor(userId, {
-      reactorId: validated.reactor_id,
+    const eligibility = await getMethodBEligibilityByProcess(userId, {
+      productionProcessId: validated.process_id,
     });
 
-    const parsedWithEligibility = reactorSamplingMethodSchema.parse({
+    const parsedWithEligibility = processSamplingMethodSchema.parse({
       ...validated,
       prior_method_a_sample_count: eligibility.priorMethodASampleCount,
     });
 
     return {
-      reactor_id: parsedWithEligibility.reactor_id,
+      process_id: parsedWithEligibility.process_id,
       sampling_method: parsedWithEligibility.sampling_method,
       method_b_eligibility: {
         ...eligibility,
@@ -60,13 +65,6 @@ export async function validateReactorSamplingMethodFn(
       },
     };
   });
-}
-
-// Backward-compatible alias while callers migrate to reactor-level naming.
-export async function validateCreditBatchSamplingMethodFn(
-  data: z.infer<typeof reactorSamplingMethodSchema>
-): Promise<ActionResult<ReactorSamplingEligibilityResult>> {
-  return validateReactorSamplingMethodFn(data);
 }
 
 export async function validateSampleConditionsFn(

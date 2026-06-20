@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from '@/config/certification';
 
 const optionalNumber = z.number().finite().optional().nullable();
 const optionalString = z.string().trim().min(1).optional().nullable();
@@ -92,29 +93,41 @@ export const applicationSoilTemperatureSchema = z
     }
   });
 
-export const reactorSamplingMethodSchema = z
+// Shared Method-A→B baseline guard: selecting Method B requires the prior
+// Method-A sample count (when known) to clear the ≥30 baseline (`G-F74T-0`).
+function refineMethodBBaseline(
+  value: {
+    sampling_method: 'method_a' | 'method_b';
+    prior_method_a_sample_count?: number | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (value.sampling_method !== 'method_b') return;
+
+  if (
+    value.prior_method_a_sample_count != null &&
+    value.prior_method_a_sample_count < METHOD_B_MINIMUM_METHOD_A_SAMPLES
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['sampling_method'],
+      message: `sampling_method=method_b requires at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} prior samples under Method A`,
+    });
+  }
+}
+
+/**
+ * Process-grained sampling-method selection (ADR 0017): Method A/B is a property
+ * of the PRODUCTION PROCESS, which unlocks Method B once it clears its ≥30
+ * Method-A baseline.
+ */
+export const processSamplingMethodSchema = z
   .object({
-    reactor_id: uuidLikeString,
+    process_id: uuidLikeString,
     sampling_method: z.enum(['method_a', 'method_b']),
     prior_method_a_sample_count: optionalNumber,
   })
-  .superRefine((value, ctx) => {
-    if (value.sampling_method !== 'method_b') {
-      return;
-    }
-
-    if (
-      value.prior_method_a_sample_count != null &&
-      value.prior_method_a_sample_count < 30
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['sampling_method'],
-        message:
-          'sampling_method=method_b requires at least 30 prior samples under Method A',
-      });
-    }
-  });
+  .superRefine(refineMethodBBaseline);
 
 export const sampleConditionSchema = z
   .object({

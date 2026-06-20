@@ -32,6 +32,7 @@ import {
   Stack,
   FileText,
   TestTube,
+  FlowArrow,
   ListChecks,
   Lightning,
   GearSix,
@@ -128,6 +129,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/credit-batches", label: "Credit Batches", icon: Certificate },
       { href: "/samples", label: "Lab Samples", icon: TestTube },
+      { href: "/production-processes", label: "Production Processes", icon: FlowArrow },
     ],
   },
   {

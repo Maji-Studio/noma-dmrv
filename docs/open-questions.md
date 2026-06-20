@@ -174,42 +174,25 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
-### Credit-batch lab-sampling — Phases 2–4 + Method-B unlock deferred (`certification/credit-batch-sampling-phases`, opened 2026-06-19)
+### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
-- **Phase 1 shipped** (ADR 0016, branch `feat/credit-batch-production-process`,
-  commit `dde0c8e`, PR #294): `production_processes` table, derived
-  `credit_batches.feedstock_type_id` + `production_process_id`, single-feedstock
-  invariant, `samples.credit_batch_id`, the Isometric ≤ 1-month cap, and removal
-  of `reactors.sampling_method` + its migration-`0052` Method-B trigger
-  (migration `0057`). Data model + server-side derivation only.
-- **Deferred (Phases 2–4, plan items 7–15 in
-  `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`):**
-  re-grain `getMethodBEligibilityByReactor` → `…ByProcess` (counting samples in
-  the process since `established_at` — closes the cross-feedstock bug, dormant
-  under Method A); move the sampling unit from run to credit batch in
-  `sampling-requirements.ts` / `durability-submission-gates.ts`; re-point the
-  measurement-sample submission to one `biochar_production_batch` per credit
-  batch; surface the derived feedstock/process in the credit-batch UI; add the
-  process-grain Method-B/cadence operator surface.
-- **Deferred (ADR 0017 — Method-B unlock):** the live baseline counter, the
-  μ−σ/√n unsampled estimate, the 6-month borrow pool, 3σ winsorising, the
-  super-admin unlock, the Method-B operator UI, and the **process-grain DB
-  trigger** that replaces the dropped `0052` reactor trigger. Inert seam
-  (`production_processes.method_b_unlocked_at`) is laid.
-- **Why it matters:** DEC runs Method A everywhere today, so none of the above
-  blocks current operation — but the legacy reactor-grain submission gates still
-  describe an enforcement model mid-migration. Resolve by removing this entry as
-  each phase lands and recording it in `docs/isometric/changes.md`.
+- **Remaining Track 2 work:** explicit Method-B unlock with prerequisite capture,
+  the μ−σ/√n unsampled estimate preview, the 6-month eligible-sample pool,
+  3σ winsorising, `_unsampled` submission routing, and the **process-grain DB
+  backstop** that replaces the dropped `0052` reactor trigger.
+- **Gate shape to settle before activation:** Method-B cadence is a
+  production-process history rule, not just the removal member-batch subset. The
+  live submission gate should either load the full process batch window or accept
+  an explicit process-level cadence fact.
+- **Why it matters:** DEC runs Method A everywhere today, so Track 2 does not
+  block current operation; do not enable Method B until the activation path and
+  submission gate are process-grain end to end.
 - **Watch:** entangled with ADR 0013 (submission measurement-samples) and issue
   #291 (template-driven remodel) — coordinate so the submission layer isn't
   double-built.
-- **ADR-number hygiene (2026-06-20):** the credit-batch=production-batch / sampling
-  re-grain is **ADR 0016** (ADR 0015 is the energy single-measurement-point). The
-  Tier-1 plan and ~20 Phase 1–5 comments shipped stale `ADR 0015` refs for the
-  durability/sampling paths; a 2026-06-20 sweep corrected them to ADR 0016 (energy
-  refs left untouched). When ADR 0017 (Method-B unlock) is authored it **refines ADR
-  0016** — verify ADR refs while re-graining `getMethodBEligibilityByReactor` and
-  friends rather than copying the stale number forward.
+- **ADR-number hygiene (2026-06-20):** ADR 0017 (Method-B unlock) refines ADR
+  0016; keep sampling/credit-batch references on ADR 0016 unless they specifically
+  describe the Method-B unlock decision.
 
 ### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
 
