@@ -226,7 +226,7 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
         facilityId={creditBatch.facilityId}
       />
 
-      {/* Durability sample roll-up + readiness (ADR 0015) */}
+      {/* Durability sample roll-up + readiness (ADR 0016) */}
       <CreditBatchDurabilityPanel creditBatchId={creditBatchId} />
 
       {/* Batch details — read panels; the edit form mounts behind the toggle.

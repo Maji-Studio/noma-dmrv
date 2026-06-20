@@ -299,7 +299,7 @@ function makeRun(
   } as unknown as ProductionRun & { samples: Sample[]; readingsCount: number };
 }
 
-// One credit batch pooling the removal's runs' samples (ADR 0015: the credit
+// One credit batch pooling the removal's runs' samples (ADR 0016: the credit
 // batch is the protocol production batch and the sampling unit).
 function makeBatchesWithSamples(
   runs: Array<ProductionRun & { samples: Sample[] }>,

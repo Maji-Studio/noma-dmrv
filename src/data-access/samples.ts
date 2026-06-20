@@ -507,7 +507,7 @@ export async function createSample(
     );
 
     // Derive the credit batch from the run's membership when not set explicitly
-    // (the lab-sample form never sets it) — ADR 0015: a Sample characterises the
+    // (the lab-sample form never sets it) — ADR 0016: a Sample characterises the
     // credit batch its run belongs to, with both links populated. Null when the
     // run isn't yet in a batch (the form surfaces that; back-filled when it joins).
     const creditBatchId =
@@ -714,7 +714,7 @@ export async function updateSample(
 
     // When the run changes and the batch wasn't set explicitly, re-derive the
     // credit batch from the new run so the link tracks its run's membership
-    // (ADR 0015). An explicit creditBatchId in the payload is honoured as-is.
+    // (ADR 0016). An explicit creditBatchId in the payload is honoured as-is.
     if (data.productionRunId !== undefined && data.creditBatchId === undefined) {
       updateData.creditBatchId = await resolveRunCreditBatchId(
         tx,

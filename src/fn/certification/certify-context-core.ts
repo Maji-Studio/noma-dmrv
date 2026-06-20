@@ -178,7 +178,7 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
   runs: ProductionRunWithSamples[];
   // The removal's member credit batches with their pooled lab Samples (by
   // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
-  // (ADR 0015). Drives the durability gates here and the per-batch
+  // (ADR 0016). Drives the durability gates here and the per-batch
   // measurement-sample submission step (Phase 3). Each batch's `runs` are scoped
   // to the removal's applied run set so product mass is attribution-correct.
   batchesWithSamples: CreditBatchWithSamples[];
@@ -661,7 +661,7 @@ export async function buildRemovalContext(
     runs,
   );
 
-  // Credit-batch-grained durability data plane (ADR 0015): pool each member
+  // Credit-batch-grained durability data plane (ADR 0016): pool each member
   // batch's lab Samples, scope runs to the removal's applied set, and run the D3
   // gates. `durabilityGateBlockers` is the same fail-closed list the submit
   // pipeline blocks on; the §8.3.1 distribution warning is advisory, so it joins

@@ -1,7 +1,7 @@
 /**
  * Durability submission gates — the protocol's hard, fail-closed sampling and
  * eligibility blocks evaluated at removal-submission time (decision D3),
- * evaluated at the CREDIT-BATCH grain (ADR 0015: the credit batch IS the
+ * evaluated at the CREDIT-BATCH grain (ADR 0016: the credit batch IS the
  * protocol production batch; the sampling unit is the batch, never the run):
  *
  *   (a) Eligibility — the batch's POOLED replicate MEAN must satisfy

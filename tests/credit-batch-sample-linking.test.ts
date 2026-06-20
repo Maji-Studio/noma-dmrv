@@ -1,6 +1,6 @@
 /**
  * DB-backed tests for the credit-batch ↔ lab-sample linking write paths
- * (ADR 0015: a Sample characterises the credit batch its run belongs to, and
+ * (ADR 0016: a Sample characterises the credit batch its run belongs to, and
  * BOTH links stay populated). Two derivation/back-fill paths must keep
  * `samples.creditBatchId` consistent with run membership:
  *
