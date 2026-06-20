@@ -1509,6 +1509,8 @@ async function seedDemoData() {
           defaultRemovalTemplateId: 'rvt_1KS4S43VPSBXA26X',
           gensetEnergyYieldKwhPerLitre: 3.375,
           defaultSoilTemperatureC: 24.2,
+          defaultSoilTemperatureSource:
+            'Lembrechts et al. 2022 SoilTemp, 0–5 cm, Kilimanjaro region (annual mean)',
         },
       ]);
 

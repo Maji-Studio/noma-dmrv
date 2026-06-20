@@ -10,6 +10,7 @@ import { getDeliveriesByIds } from "@/data-access/deliveries";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getFeedstocksByIds } from "@/data-access/feedstocks";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import {
   listComponentBlueprints,
@@ -39,6 +40,10 @@ vi.mock("@/data-access/chain-of-custody", () => ({
 
 vi.mock("@/data-access/production-runs", () => ({
   getProductionRunsWithSamples: vi.fn(),
+}));
+
+vi.mock("@/data-access/credit-batch-samples", () => ({
+  getCreditBatchesWithSamples: vi.fn(),
 }));
 
 vi.mock("@/data-access/feedstocks", () => ({
@@ -73,6 +78,7 @@ const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
+const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedGetFeedstocksByIds = vi.mocked(getFeedstocksByIds);
 const mockedGetDeliveriesByIds = vi.mocked(getDeliveriesByIds);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -163,6 +169,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
     mockedGetRuns.mockResolvedValue([]);
+    mockedGetBatchesWithSamples.mockResolvedValue([]);
     mockedGetFeedstocksByIds.mockResolvedValue([]);
     mockedGetDeliveriesByIds.mockResolvedValue([]);
     mockedListDocuments.mockResolvedValue([]);
@@ -549,6 +556,7 @@ describe("requiredTransportCategories", () => {
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
     mockedGetRuns.mockResolvedValue([]);
+    mockedGetBatchesWithSamples.mockResolvedValue([]);
     mockedListDocuments.mockResolvedValue([]);
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
     mockedListBlueprints.mockResolvedValue([]);

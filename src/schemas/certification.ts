@@ -70,12 +70,30 @@ export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 // the three process-stage split percentages (and their sum constraint). Only
 // the genset yield — emissions-affecting (litres → kWh) — and the soil-temp
 // fallback remain.
+// Cap on the free-text soil-temperature dataset citation — enough for a
+// dataset + region note for the PDD without letting an oversized blob land.
+const SOIL_TEMPERATURE_SOURCE_MAX_LENGTH = 500;
+
 export const facilityEmissionConfigSchema = z.object({
   facilityId: z.string().uuid("Select a facility"),
   gensetEnergyYieldKwhPerLitre: requiredNumber(
     "Genset energy yield is required",
   ).pipe(z.number().positive("Genset energy yield must be greater than 0")),
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+  // Dataset / region citation for the reference soil temperature (PDD audit
+  // trail). Empty string normalizes to null so it stores identically whether
+  // the operator clears it or never filled it.
+  defaultSoilTemperatureSource: emptyToNull
+    .or(
+      z
+        .string()
+        .max(
+          SOIL_TEMPERATURE_SOURCE_MAX_LENGTH,
+          `Keep the source citation under ${SOIL_TEMPERATURE_SOURCE_MAX_LENGTH} characters`,
+        ),
+    )
+    .nullable()
+    .optional(),
 });
 
 export type FacilityEmissionConfigFormData = z.infer<
