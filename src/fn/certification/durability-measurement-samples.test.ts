@@ -97,13 +97,44 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(soil.body.values[0].value.unit).toBe("degC");
   });
 
-  it("skips an unsampled batch's production-batch sample but still emits the soil one", () => {
+  it("routes an unsampled Method-B batch to the _unsampled blueprint (mass-only), then soil", () => {
     const submissions = buildDurabilityMeasurementSampleSubmissions({
       ...common,
-      batches: [batch({ creditBatchId: "u", creditBatchCode: "CB-U" })],
+      batches: [
+        batch({
+          creditBatchId: "u",
+          creditBatchCode: "CB-U",
+          samplingMethod: "method_b",
+          runs: [{ id: "run-u", code: "R-U", biocharDryMassKg: 1000 }],
+        }),
+      ],
     });
 
-    expect(submissions.map((s) => s.operationKey)).toEqual(["soil"]);
+    expect(submissions.map((s) => s.operationKey)).toEqual([
+      "pb-unsampled:u",
+      "soil",
+    ]);
+    const pb = submissions[0];
+    expect(pb.body.measurement_type).toBe("biochar_production_batch");
+    // Mass-only — the registry derives carbon + durable fraction from history.
+    expect(pb.body.values).toHaveLength(1);
+    expect(pb.body.values[0].measurement_property.quantity_kind).toBe("mass");
+    expect(pb.body.values[0].value.magnitude).toBe(1000);
+  });
+
+  it("throws on an unsampled Method-A batch (impossible state — fail closed)", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        batches: [
+          batch({
+            creditBatchId: "x",
+            creditBatchCode: "CB-X",
+            samplingMethod: "method_a",
+          }),
+        ],
+      }),
+    ).toThrow(/only valid under Method B/);
   });
 
   it("scales product mass by the per-run applied attribution", () => {
