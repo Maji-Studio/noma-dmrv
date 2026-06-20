@@ -151,25 +151,26 @@ Method-B baseline DB trigger (migration `0052`) were **dropped** (migration
 - Sampling regime stored on `production_processes.sampling_method` (default
   `method_a`); a process is find-or-created per `(facility, feedstock)` when a
   credit batch is created.
-- DEC runs Method A everywhere. **All Method-B compute is deferred to ADR 0017**
-  (live per-process eligibility, the ≥30-sample baseline, the super-admin unlock);
-  only the inert `production_processes.method_b_unlocked_at` seam is laid.
+- DEC runs Method A everywhere. **ADR 0017 Track 1 shipped the Method-B
+  read-only compute**: per-process ≥30-sample baseline, credit-batch-grained
+  cadence, and the `/production-processes` operator surface. The explicit unlock
+  and submission routing remain Track 2.
 
-Method B requires (enforced once ADR 0017 lands):
+Method B requires:
 
 1. At least 30 prior Method-A samples in the process before unlocking `method_b`.
 2. Credit batches in the process must satisfy sampled-batch cadence ≥ 1 per 10.
 
-> **Transitional (Phase 1):** the reactor-list Method-B/cadence surface is
-> removed. The legacy reactor-grain helper remains only behind submission gates
-> until ADR 0017 re-keys Method B to the process/credit-batch grain.
+> **Current Track 1 state:** Method B is inert but no longer reactor-grained.
+> `getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess` provide the
+> baseline count, and `deriveSamplingRequirement` evaluates credit-batch cadence.
 
 Enforcement is intentionally layered:
 
 1. UI gating (disable/hide Method B when ineligible).
 2. Server validation in action/data-access layer.
-3. DB trigger guardrails for any direct/bypass writes (process-grain trigger
-   ships with the ADR 0017 unlock; the reactor-grain `0052` trigger was dropped).
+3. DB trigger guardrails for any direct/bypass writes (process-grain backstop
+   ships with ADR 0017 Track 2; the reactor-grain `0052` trigger was dropped).
 
 ## Certify Integration (Isometric)
 

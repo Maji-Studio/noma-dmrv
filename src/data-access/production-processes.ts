@@ -2,9 +2,9 @@
  * Production Processes Data Access Layer
  *
  * A production process is the (facility, feedstock) sampling-regime campaign
- * that scopes Method A/B (ADR 0016). It has no dedicated UI in Phase 1 — it is
- * auto-found-or-created when a credit batch is formed, defaulting to Method A.
- * The Method-B unlock + management surface ship with ADR 0017.
+ * that scopes Method A/B (ADR 0016). It is auto-found-or-created when a credit
+ * batch is formed, defaulting to Method A. ADR 0017 Track 1 adds the read-only
+ * operator surface; Track 2 adds the Method-B unlock action.
  */
 
 import { and, count, desc, eq, sql } from "drizzle-orm";
@@ -21,6 +21,7 @@ import {
   deriveSamplingRequirement,
   type SamplingMethod,
 } from "@/lib/certification/sampling-requirements";
+import { countEligibleSamplesByProcess } from "./isometric";
 import { requireAuth } from "./utils";
 
 type Executor = DbTransaction | typeof db;
@@ -40,8 +41,8 @@ async function lockCurrentProductionProcess(
  * create one (Method A). "Current" = the most recently established — a new
  * process (feedstock/condition change, 3σ deviation) is opened by establishing
  * a later one, so the lookup is ordered by `establishedAt` desc. That re-keying
- * and the Method-B compute it feeds are deferred to ADR 0017; today every
- * process is Method A.
+ * feeds ADR 0017's process-grained Method-B compute; new processes still default
+ * to Method A.
  *
  * Accepts an optional executor so it can participate in the credit-batch
  * creation transaction (find-or-create is read-then-write; running it inside the
@@ -90,13 +91,14 @@ export async function findOrCreateProductionProcess(
 /**
  * Read-only operator view of a facility's production processes (ADR 0017
  * Track 1.5): each process's feedstock, its CURRENT sampling method, its
- * lifetime Method-B baseline progress (N / 30 eligible replicate samples since
+ * lifetime Method-B baseline progress (eligible replicate samples since
  * `established_at`), and its cadence status under that method.
  *
- * The baseline counter and the cadence derivation share the same per-batch
- * sample counts as `getMethodBEligibilityByProcess` and the durability gates,
- * so the surface and the submission gate agree. This is where Track 2's unlock
- * CTA and Method-B signals attach.
+ * The baseline counter uses the same process-grained count as
+ * `getMethodBEligibilityByProcess`. Cadence here is a lifetime operator view over
+ * the facility's process history; removal-specific submission gates can evaluate
+ * a narrower in-scope batch set. This is where Track 2's unlock CTA and Method-B
+ * signals attach.
  */
 export interface ProductionProcessSummary {
   id: string;
@@ -125,12 +127,6 @@ export async function getProductionProcessSummariesByFacility(
   userId: string,
   facilityId: string,
 ): Promise<ProductionProcessSummary[]> {
-  // Auth posture matches every facility-scoped read in this repo
-  // (getReactorsByFacility, getCreditBatchesByFacilityId): requireAuth today,
-  // single-tenant + admin-invite. Per-facility membership authz
-  // (`requireFacilityAccess`) lands app-wide with the multi-tenancy work
-  // (ADR 0010, organizationId on every domain table); swap both queries here to
-  // it then, alongside the sibling chokepoints.
   requireAuth(userId);
 
   const processRows = await db
@@ -153,6 +149,10 @@ export async function getProductionProcessSummariesByFacility(
     .orderBy(desc(productionProcesses.establishedAt));
 
   if (processRows.length === 0) return [];
+
+  const eligibleSamplesByProcess = await countEligibleSamplesByProcess(db, {
+    facilityId,
+  });
 
   // Per credit batch: its pooled replicate-sample count, grouped by process.
   // GROUP BY the credit-batch PK functionally determines code/process_id.
@@ -184,10 +184,7 @@ export async function getProductionProcessSummariesByFacility(
 
   return processRows.map((process) => {
     const batches = batchesByProcess.get(process.id) ?? [];
-    const eligibleSampleCount = batches.reduce(
-      (sum, batch) => sum + batch.sampleCount,
-      0,
-    );
+    const eligibleSampleCount = eligibleSamplesByProcess.get(process.id) ?? 0;
     const requirement = deriveSamplingRequirement(
       process.samplingMethod,
       batches,

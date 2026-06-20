@@ -129,19 +129,6 @@ export const processSamplingMethodSchema = z
   })
   .superRefine(refineMethodBBaseline);
 
-/**
- * @deprecated Reactor-grained naming — Method A/B is a property of the
- * production process, not the reactor (ADR 0017). Kept one release for
- * import/test compatibility; use `processSamplingMethodSchema`.
- */
-export const reactorSamplingMethodSchema = z
-  .object({
-    reactor_id: uuidLikeString,
-    sampling_method: z.enum(['method_a', 'method_b']),
-    prior_method_a_sample_count: optionalNumber,
-  })
-  .superRefine(refineMethodBBaseline);
-
 export const sampleConditionSchema = z
   .object({
     nutrient_claim_enabled: z.boolean().default(false),

@@ -14,13 +14,20 @@ import { db } from "@/db";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
-import { findOrCreateProductionProcess } from "@/data-access/production-processes";
+import { creditBatches, samples } from "@/db/schema";
+import {
+  findOrCreateProductionProcess,
+  getProductionProcessSummariesByFacility,
+} from "@/data-access/production-processes";
+import { countEligibleSamplesByProcess } from "@/data-access/isometric";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
 const createdIds = {
   facilities: [] as string[],
   feedstockTypes: [] as string[],
+  creditBatches: [] as string[],
+  samples: [] as string[],
 };
 
 let facilityId: string;
@@ -50,6 +57,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.transaction(async (tx) => {
+    if (createdIds.samples.length > 0) {
+      await tx.delete(samples).where(inArray(samples.id, createdIds.samples));
+    }
+    if (createdIds.creditBatches.length > 0) {
+      await tx
+        .delete(creditBatches)
+        .where(inArray(creditBatches.id, createdIds.creditBatches));
+    }
     await tx
       .delete(productionProcesses)
       .where(inArray(productionProcesses.facilityId, createdIds.facilities));
@@ -123,5 +138,67 @@ describe("findOrCreateProductionProcess", () => {
     await expect(
       findOrCreateProductionProcess("", { facilityId, feedstockTypeId }),
     ).rejects.toThrow(/unauthorized/i);
+  });
+
+  it("uses the canonical process sample count in the summary surface", async () => {
+    const runId = Date.now().toString(36);
+    const process = await findOrCreateProductionProcess(TEST_USER_ID, {
+      facilityId,
+      feedstockTypeId,
+    });
+    const [sampledBatch, unsampledBatch] = await db
+      .insert(creditBatches)
+      .values([
+        {
+          code: `CB-PROC-SAMPLED-${runId}`,
+          facilityId,
+          feedstockTypeId,
+          productionProcessId: process.id,
+          startDate: "2026-01-01",
+          endDate: "2026-01-31",
+          certifier: "isometric",
+        },
+        {
+          code: `CB-PROC-UNSAMPLED-${runId}`,
+          facilityId,
+          feedstockTypeId,
+          productionProcessId: process.id,
+          startDate: "2026-02-01",
+          endDate: "2026-02-28",
+          certifier: "isometric",
+        },
+      ])
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(sampledBatch.id, unsampledBatch.id);
+
+    const insertedSamples = await db
+      .insert(samples)
+      .values(
+        [0, 1, 2].map((index) => ({
+          creditBatchId: sampledBatch.id,
+          sampleCode: `S-PROC-${runId}-${index}`,
+          samplingTime: new Date(`2026-01-0${index + 1}T12:00:00.000Z`),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
+
+    const countsByProcess = await countEligibleSamplesByProcess(db, {
+      facilityId,
+    });
+    const summaries = await getProductionProcessSummariesByFacility(
+      TEST_USER_ID,
+      facilityId,
+    );
+    const summary = summaries.find((item) => item.id === process.id);
+
+    expect(countsByProcess.get(process.id)).toBe(3);
+    expect(summary?.eligibleSampleCount).toBe(3);
+    expect(summary?.totalBatches).toBe(2);
+    expect(summary?.sampledBatches).toBe(1);
+    expect(summary?.requiredSampledBatches).toBe(2);
+    expect(summary?.cadenceMet).toBe(false);
   });
 });
