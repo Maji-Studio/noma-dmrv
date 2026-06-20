@@ -13,6 +13,170 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
+
+Track 2 activates the Method-B unlock end-to-end (ADR 0017; implementation record
+[`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md)).
+The registry stays the authority for the credited compute (ADR 0013 / D1) —
+everything here **gates, routes, and previews**; it never submits a credited
+number. The live `_unsampled` POST stays gated behind
+`DURABILITY_MEASUREMENT_SAMPLES_LIVE = false` (wire format unconfirmed).
+
+- **Schema/backstop:** new `production_processes` unlock columns
+  (`method_b_unlocked_at`, `agreed_baseline_size`, `random_sampling_plan_ref`,
+  `moisture_pathway`; migration `0059`) and the process-grain **DB trigger
+  backstop** re-asserting the ≥30-sample floor (migration `0060`). The backstop
+  counts only the **pre-unlock baseline** (`sampling_time < method_b_unlocked_at`)
+  so post-unlock Method-B samples can't mask a later regression/deletion of the
+  original baseline; the app guard (`unlockMethodBForProcess`) mirrors the same
+  `as_of = unlock` boundary via `countEligibleSamplesByProcess`.
+- **Pure engines (non-authoritative):** `previewUnsampledCarbon` (Eq 4/5,
+  μ − σ/√n over the trailing-6-month eligible pool) and
+  `evaluateProcessComplianceDrift` (the two 6-month review-trigger counters). The
+  eligible-window boundary lives in one place (`eligibleWindowCutoff` /
+  `isWithinEligibleWindow` / `filterEligibleSamples`), shared by the preview and
+  the compliance carbon window.
+- **Server actions / reads:** `unlockMethodBForProcess` (app guard + trigger,
+  captures the three prerequisites), `getProcessComplianceDrift`,
+  `getUnsampledCarbonPreviewForProcess` (shared `loadProcessSamples` loader), and
+  `startNewProductionProcess` (baseline reset), wired through `fn/` + hooks.
+- **Submission routing:** unsampled Method-B batches route to the `_unsampled`
+  blueprint, dispatched off `selectSequestrationBlueprintKey` (the blueprint IS
+  the Method A/B distinction; fail-closed on the impossible unsampled-Method-A
+  state). Gated — the whole measurement-sample step stays behind the flag.
+- **Operator UI** at **`/certification/production-processes`** — moved under the
+  `certification` segment so `CertificationRegistryGuard` gates direct URL access
+  on a registry link, exactly like Removals/GHG Statements (no Method A/B to
+  manage off the registry). Eligible Method-A rows get a one-click **Unlock**;
+  the detail panel hosts the protocol-cited explainer (Isometric only), the
+  non-authoritative unsampled-carbon preview, the warn-only compliance-drift
+  counters, the **Start new process** reset, and the three captured prerequisites
+  surfaced read-only. All thresholds pull from `@/config/certification`.
+
+## 2026-06-20 (ADR 0017 Track 1 — re-grain Method-B sampling/eligibility to the production process)
+
+Track 1 of the Method-B unlock (ADR 0017; implementation record
+[`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md)).
+**Method-A-safe** — changes the
+sampling/eligibility *grain*, not behaviour. Moves the Method-A/B baseline counter
+off the reactor onto the **production process** (`(facility, feedstock)` campaign),
+closing a latent **cross-feedstock over-credit bug** (a reactor's hardwood samples
+counted toward a softwood batch's eligibility).
+
+- `getMethodBEligibilityByReactor` → `getMethodBEligibilityByProcess`
+  (`src/data-access/isometric.ts`): counts eligible replicate samples via
+  `credit_batches.production_process_id`, not the reactor.
+- `deriveSamplingRequirement` re-grained run → credit batch (`BatchSampling`);
+  per-run replicate check → per-batch pooled. Constants renamed
+  `METHOD_B_SAMPLING_CADENCE_RUNS`/`MINIMUM_REPLICATES_PER_RUN` →
+  `…_CADENCE_BATCHES`/`…_PER_BATCH`.
+- `validateProcessSamplingMethodFn` + `processSamplingMethodSchema` (`process_id`)
+  replace the old reactor/credit-batch-grained names.
+- New read-only **`/production-processes`** operator surface (Verification nav):
+  per-process sampling method, baseline progress (N / 30), cadence status — where
+  Track 2's unlock CTA attaches. Verified live in Chrome + PR-CI E2E
+  (`tests/e2e/production-processes.spec.ts`).
+- Method B itself stays **inert** (the unlock is Track 2); the unsampled `_unsampled`
+  route remains deferred under `ADR 0017` Track 2.
+
+## 2026-06-20 (Tier-1 — 200-year durability live-wiring, Phases 1–5; live POST staged behind a flag)
+
+Wires the 200-year durability submission onto the **measurement-sample** path
+(ADR 0013: the registry computes `F_durable`; durability inputs feed the dedicated
+`biochar_sequestration_200_year_*` blueprints via measurement samples, **not**
+`INPUT_MAPPING`) and re-grains the whole durability data plane onto the **credit
+batch** (ADR 0016: the credit batch IS the protocol production batch; the sampling
+unit is the batch, never the run). Plan:
+`docs/plans/2026-06-19-tier1-durability-live-wiring.md`. **The live POST is staged,
+not on** — gated behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`
+(`src/fn/certification/durability-measurement-samples.ts`) pending two operator
+sandbox confirms (see `docs/open-questions.md` →
+`isometric/durability-measurement-samples`).
+
+Phase 1 — **run → credit-batch re-grain** (the spine). Post-ADR-0016, lab samples
+attach on `samples.creditBatchId` (run link now nullable provenance) and the old
+`getProductionRunsWithSamples` read skips null-run samples — so lab chemistry was
+invisible to the durability surfaces. Re-grained:
+
+- `src/lib/isometric/utils/durability-aggregation.ts` — `buildPerBatchDurabilityData`
+  iterates **credit batches**, pooling each batch's replicates (across member
+  runs/days) into one mean + sample std-dev; `PerBatchDurabilityDatapoint` keys on
+  `creditBatchId` / `creditBatchCode`, not the run.
+- `src/data-access/credit-batch-samples.ts` — `getCreditBatchesWithSamples` /
+  `getSamplesByCreditBatchIds` source by `samples.creditBatchId` (no null-run skip).
+- `src/lib/certification/durability-submission-gates.ts` — `evaluateDurabilitySubmissionGates`
+  evaluates **per credit batch**: eligibility on the batch's pooled replicate mean
+  (H/C_org < 0.5 AND O/C_org < 0.2, indeterminate fails closed), ≥ 3 usable
+  replicates per sampled batch, plus a non-blocking distribution warning when the
+  usable replicates cluster on one run/day (`countDistinctProvenance`).
+- `src/fn/certification/sources.ts` — the COA / `lab_report` candidate-document walk
+  gathers Samples **by credit batch**.
+
+Phase 2 — **facility reference soil temperature**. New nullable columns on the
+facility certification row: `certifier_projects.default_soil_temperature_c` (real,
+with a `..._range` check + 7 °C floor / one-decimal via `SOIL_TEMPERATURE_FLOOR_C`,
+`roundSoilTemperatureC`) and `default_soil_temperature_source` (dataset/region note
+for the PDD). Resolved by `resolveFacilityReferenceSoilTemperature`
+(`FacilityReferenceSoilTemperature`); operator-entered on the admin
+"Emission estimates" form. This is the sanctioned no-on-site-baseline path (global
+soil-temp DB, e.g. Lembrechts 2022; air temperature prohibited); justification lives
+in the PDD, so the API needs no description field. The old site-max
+`resolveConservativeSoilTemperature` is repurposed as a future per-removal override /
+conservative-direction reconciliation check.
+
+Phase 3 — **measurement-samples submission step** (staged). New
+`src/fn/certification/durability-measurement-samples.ts`:
+`buildDurabilityMeasurementSampleSubmissions` (per sampled credit batch → one
+`biochar_production_batch` sample carrying H/C + total/inorganic carbon + product
+mass; then one `biochar_soil` facility-reference sample) +
+`submitDurabilityMeasurementSamples` (POST via `performRegistryCreate` +
+`findMeasurementSampleBySupplierRef` reconcile, idempotent on the versioned supplier
+ref). Wired into `runRemovalSubmission` after the datapoint loop, before the
+removal-body POST. `resolveTemplateInputs` **and** `buildCreateGhgEntryRequest` skip
+the two `biochar_sequestration_200_year_*` components (`isSequestrationBlueprintKey`)
+— they're carried by this step, which also makes an input-less `_unsampled` (Method
+B) component inert. While the flag is off, `submitRemoval` hard-blocks any template
+declaring a sequestration component with a "staged, not yet live" `SafeError`.
+**Two sandbox-empirical confirms still gate the flip:** (1) datapoint↔component-input
+binding (explicit `datapoint_id` reference vs. auto-link by type/property); (2) the
+H/C unit scale (`%` vs. dimensionless ~0.5). Doc evidence leans dimensionless +
+explicit reference; both are pre-decided as one-constant edits. `source_ids` cannot
+ride on the measurement-sample body (`CreateMeasurementSampleRequest` has no such
+field) — evidence stays on the removal's datapoints + removal-body `source_ids`.
+
+> **Deferred to the live-flip cutover:** deleting the stale
+> `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry + its two
+> `certify-field-registry.ts` tuples. It is load-bearing on the still-live
+> old-template carbon path (5 tests); deleting it while the new path is gated breaks
+> working tests for zero gain. Tracked in the open-questions entry above.
+
+Phase 4 — **durability evidence-ledger PDF**. `src/fn/certification/durability-evidence-ledger.ts`
++ `src/lib/certification/evidence-ledger/durability-{build-model,pdf,types}.ts`:
+@react-pdf renderer → `StorageProvider.putObject` → mirrored as a `durability_evidence_ledger`
+Source on submit (best-effort, content-hash idempotent + retire-prior). Reconciles
+the raw ≥ 3 replicates → the submitted mean + std-dev, the facility soil-temp
+reference + dataset/floor note, and the eligibility verdict — figures from the same
+`buildPerBatchDurabilityData` the measurement-sample POST submits, so the ledger ties
+out exactly. Generation is **not** gated on the live flag (benign evidence,
+unit-stable) and self-skips when there's nothing to evidence. The reuse / render /
+store / mirror / retire choreography is shared with the transport ledger via
+`evidence-ledger-core.ts` (`ensureLedgerSource`); both run best-effort at submit
+through `ensure-evidence-ledgers.ts`.
+
+Phase 5 — **two UX surfaces + the sample→credit-batch linking write-path**.
+`sample-batch-progress.tsx` (in the lab-sample form) derives the credit batch from
+the chosen run and shows live N/3 progress + distinct run/day provenance + eligibility
+chips; `credit-batch-durability-panel.tsx` (on credit-batch detail) shows the sample
+roll-up + the submitted mean ± s.d. + readiness chips (`durability-readiness.tsx`).
+Both read `durability-batch-summary.ts` (lib + fn) via `useBatchDurabilitySummary` /
+`useRunDurabilitySummary`. Building these surfaced a **load-bearing gap**: the
+lab-sample form never set `samples.creditBatchId`, so form-created samples never
+rolled up. Fixed per ADR 0016's "both links stay populated": `createSample` /
+`updateSample` derive `creditBatchId` from the run (`resolveRunCreditBatchId`);
+`createCreditBatch` / `updateCreditBatch` back-fill member runs' samples on membership
+change. Covered by `tests/credit-batch-sample-linking.test.ts`. **Preserve this
+linking** — the durability surfaces and the measurement-sample submission depend on it.
+
 ## 2026-06-19 (ADR 0016 Phase 1 — credit batch = production batch, process scopes sampling)
 
 Credit batch becomes the Isometric **production batch**: one feedstock,

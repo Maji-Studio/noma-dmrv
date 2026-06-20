@@ -32,6 +32,7 @@ import {
   Stack,
   FileText,
   TestTube,
+  FlowArrow,
   ListChecks,
   Lightning,
   GearSix,
@@ -134,11 +135,18 @@ const navSections: NavSection[] = [
     // First-class section (ADR 0007, amended 2026-06-13): surface only the
     // concrete artifact/setup routes. The root `/certification` route redirects
     // to Removals for old bookmarks and broad entry points.
+    //
+    // Production Processes lives here, not under Verification: the whole surface
+    // is the Isometric Method A/B sampling regime (ADR 0017). It routes under the
+    // `certification` segment, so `CertificationRegistryGuard` gates direct URL
+    // access on a registry link like the other certification routes — a facility
+    // with no registry has no Method A/B to manage.
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
       { href: "/certification/removals", label: "Removals", icon: Stack },
       { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileText },
+      { href: "/certification/production-processes", label: "Production Processes", icon: FlowArrow },
       { href: "/certification/settings", label: "Settings", icon: GearSix },
     ],
   },

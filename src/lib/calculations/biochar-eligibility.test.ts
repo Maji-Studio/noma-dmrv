@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
-  MINIMUM_REPLICATES_PER_RUN,
+  MINIMUM_REPLICATES_PER_BATCH,
   O_TO_C_ORG_ELIGIBILITY_MAX,
   evaluateReplicateCount,
   evaluateRunEligibility,
@@ -11,7 +11,7 @@ describe("protocol thresholds (module §3 Table 2, §4)", () => {
   it("pins the eligibility ceilings and replicate minimum", () => {
     expect(H_TO_C_ORG_ELIGIBILITY_MAX).toBe(0.5);
     expect(O_TO_C_ORG_ELIGIBILITY_MAX).toBe(0.2);
-    expect(MINIMUM_REPLICATES_PER_RUN).toBe(3);
+    expect(MINIMUM_REPLICATES_PER_BATCH).toBe(3);
   });
 });
 
@@ -130,7 +130,7 @@ describe("evaluateReplicateCount (module §4 — ≥3 per run)", () => {
   it("meets the minimum at exactly 3 replicates", () => {
     const r = evaluateReplicateCount(3);
     expect(r.count).toBe(3);
-    expect(r.minimum).toBe(MINIMUM_REPLICATES_PER_RUN);
+    expect(r.minimum).toBe(MINIMUM_REPLICATES_PER_BATCH);
     expect(r.meetsMinimum).toBe(true);
   });
 

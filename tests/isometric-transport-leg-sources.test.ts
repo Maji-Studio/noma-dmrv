@@ -70,7 +70,7 @@ const lineageArgs = {
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Lab samples now roll up to the credit batch (ADR 0015): the collector
+  // Lab samples now roll up to the credit batch (ADR 0016): the collector
   // resolves sample ids via `getSamplesByCreditBatchIds`, not `run.samples`.
   vi.mocked(creditBatchSamplesDA.getSamplesByCreditBatchIds).mockResolvedValue([
     { id: SAMPLE_ID, creditBatchId: BATCH_ID },

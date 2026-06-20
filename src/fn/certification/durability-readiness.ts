@@ -21,7 +21,7 @@ export interface DurabilityBatchData extends DurabilityGateResult {
 }
 
 /**
- * Load the credit-batch-grained durability data plane (ADR 0015) for a removal:
+ * Load the credit-batch-grained durability data plane (ADR 0016) for a removal:
  * pool each member batch's lab Samples (by `samples.creditBatchId`), scope each
  * batch's member runs to the removal's applied run set so product mass stays
  * attribution-correct, then run the D3 gates. One call returns the batches (for
@@ -51,7 +51,7 @@ function isoSamplingDay(samplingTime: Date | null | undefined): string | null {
 /**
  * Evaluate the D3 durability gates (eligibility + Method-A-sampled + ≥3
  * replicates + the distribution warning) over a removal's CREDIT BATCHES
- * (ADR 0015: the credit batch is the protocol production batch and the sampling
+ * (ADR 0016: the credit batch is the protocol production batch and the sampling
  * unit). The sampling method comes off each batch's production process (D6) —
  * no per-reactor lookup. The single computation behind BOTH the readiness
  * surfaces and the submit pipeline's hard block — `submitRemoval` throws on this

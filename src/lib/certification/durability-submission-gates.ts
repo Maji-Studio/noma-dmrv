@@ -1,7 +1,7 @@
 /**
  * Durability submission gates — the protocol's hard, fail-closed sampling and
  * eligibility blocks evaluated at removal-submission time (decision D3),
- * evaluated at the CREDIT-BATCH grain (ADR 0015: the credit batch IS the
+ * evaluated at the CREDIT-BATCH grain (ADR 0016: the credit batch IS the
  * protocol production batch; the sampling unit is the batch, never the run):
  *
  *   (a) Eligibility — the batch's POOLED replicate MEAN must satisfy
@@ -24,13 +24,14 @@
  * chemistry datapoints (Phase E), not here.
  */
 
-import { METHOD_B_SAMPLING_CADENCE_RUNS } from "@/config/certification";
+import { METHOD_B_SAMPLING_CADENCE_BATCHES } from "@/config/certification";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
-  MINIMUM_REPLICATES_PER_RUN,
+  MINIMUM_REPLICATES_PER_BATCH,
   O_TO_C_ORG_ELIGIBILITY_MAX,
   evaluateReplicateCount,
   evaluateRunEligibility,
+  isUsableNumber,
   type ReplicateRatios,
 } from "@/lib/calculations/biochar-eligibility";
 import {
@@ -71,6 +72,28 @@ export interface DurabilitySubmissionGateResult {
   warnings: string[];
 }
 
+/**
+ * Distinct (run, day) provenance keys among a batch's pooled replicates — the
+ * §8.3.1 "distributed across distinct runs/days" evidence. Replicates with
+ * fully-null provenance can't be judged, so they add no key (a set of only
+ * null-provenance replicates counts as 0 distinct). Shared with the readiness
+ * surfaces (`durability-batch-summary.ts`) so the gate and the UI agree.
+ */
+export function countDistinctProvenance(
+  provenance: ReplicateProvenance[],
+): number {
+  const keys = new Set(
+    provenance
+      .map((p) =>
+        p.productionRunId == null && p.samplingDay == null
+          ? null
+          : `${p.productionRunId ?? "?"}::${p.samplingDay ?? "?"}`,
+      )
+      .filter((k): k is string => k != null),
+  );
+  return keys.size;
+}
+
 type ReplicateClusterReason = "single-run-day" | "unknown-provenance";
 
 // A batch's pooled replicates "cluster" when they span only ONE distinct
@@ -81,17 +104,24 @@ type ReplicateClusterReason = "single-run-day" | "unknown-provenance";
 function getReplicateClusterReason(
   provenance: ReplicateProvenance[],
 ): ReplicateClusterReason | null {
-  const keys = new Set(
-    provenance
-      .map((p) =>
-        p.productionRunId == null && p.samplingDay == null
-          ? null
-          : `${p.productionRunId ?? "?"}::${p.samplingDay ?? "?"}`,
-      )
-      .filter((k): k is string => k != null),
-  );
-  if (keys.size > 1) return null;
-  return keys.size === 0 ? "unknown-provenance" : "single-run-day";
+  const distinct = countDistinctProvenance(provenance);
+  if (distinct > 1) return null;
+  return distinct === 0 ? "unknown-provenance" : "single-run-day";
+}
+
+// The distribution check must judge only the USABLE (complete-chemistry)
+// replicates — the same set gate (c) counts via `usableReplicateCount`.
+// `replicates` and `replicateProvenance` are parallel arrays (same index = same
+// sample), so keep the provenance of indices whose chemistry is complete.
+// Otherwise an incomplete sample on a different run/day adds a phantom distinct
+// key and masks that the usable replicates all cluster on one run/day.
+function usableProvenance(batch: BatchGateFacts): ReplicateProvenance[] {
+  return batch.replicateProvenance.filter((_, i) => {
+    const r = batch.replicates[i];
+    return (
+      r != null && isUsableNumber(r.hToCOrgRatio) && isUsableNumber(r.oToCOrgRatio)
+    );
+  });
 }
 
 /**
@@ -131,10 +161,12 @@ export function evaluateDurabilitySubmissionGates(
     );
     if (!replicateCheck.meetsMinimum) {
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_RUN} required per sampled batch (§8.3.1).`,
+        `Credit batch ${batch.creditBatchCode} has ${eligibility.usableReplicateCount} replicate(s) with complete H/C_org + O/C_org chemistry; ≥ ${MINIMUM_REPLICATES_PER_BATCH} required per sampled batch (§8.3.1).`,
       );
     } else {
-      const clusterReason = getReplicateClusterReason(batch.replicateProvenance);
+      // Judge distribution on the USABLE (complete-chemistry) subset so an
+      // incomplete off-day sample can't mask a clustered usable set (§8.3.1).
+      const clusterReason = getReplicateClusterReason(usableProvenance(batch));
       // ≥3 met but distribution is unproven or clustered — warn, don't block.
       if (clusterReason === "single-run-day") {
         warnings.push(
@@ -190,14 +222,14 @@ export function evaluateDurabilitySubmissionGates(
     const requirement = deriveSamplingRequirement(
       "method_b",
       processBatches.map((batch) => ({
-        runId: batch.creditBatchId,
-        runCode: batch.creditBatchCode,
+        batchId: batch.creditBatchId,
+        batchCode: batch.creditBatchCode,
         sampleCount: batch.replicates.length,
       })),
     );
     if (requirement.cadenceShortfall > 0) {
       blockers.push(
-        `Method B process batch set samples ${requirement.sampledRuns}/${requirement.requiredSampledRuns} required batch(es) (≥ 1 per ${METHOD_B_SAMPLING_CADENCE_RUNS}); sample ${requirement.cadenceShortfall} more before submission (§8.3.1.2).`,
+        `Method B process batch set samples ${requirement.sampledBatches}/${requirement.requiredSampledBatches} required batch(es) (≥ 1 per ${METHOD_B_SAMPLING_CADENCE_BATCHES}); sample ${requirement.cadenceShortfall} more before submission (§8.3.1.2).`,
       );
     }
   }

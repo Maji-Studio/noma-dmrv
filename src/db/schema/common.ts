@@ -130,6 +130,19 @@ export const samplingMethod = pgEnum('sampling_method', [
   'method_b', // Sample at least 1 in 10 production batches
 ]);
 
+// Moisture-determination pathway a production process declares when it
+// transitions to Method B (Biochar Protocol `R-ADXG-0`). One of three must be
+// chosen at unlock; noma defaults to `measured_every_batch` (it already records
+// per-run biochar moisture). The SEM-monitored `consistent_target_moisture`
+// pathway is recordable but its < 5 % drift monitoring is out of scope (ADR 0017
+// D7). Non-authoritative summary — verify against the protocol before relying on
+// it for credit claims.
+export const moisturePathway = pgEnum('moisture_pathway', [
+  'dry_weight_every_batch', // (1) dry-weight every batch, volume-traceable
+  'consistent_target_moisture', // (2) consistent target moisture, SEM < 5 %
+  'measured_every_batch', // (3) moisture measured every batch (noma default)
+]);
+
 export const transportEntityType = pgEnum('transport_entity_type', [
   'feedstock',
   'biochar',

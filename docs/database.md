@@ -202,13 +202,24 @@ provenance). The credit batch carries `feedstock_type_id` (NOT NULL, derived
 from its member runs) + `production_process_id`, and an Isometric ≤ 1-month
 window (`certifier IS DISTINCT FROM 'isometric' OR (end_date - start_date) <= 31`).
 
-Method B guardrails (process grain; **deferred to ADR 0017** — DEC is Method A):
+Method B guardrails (process grain; ADR 0017 Track 1 shipped the read-only
+counter/cadence layer, Track 2 shipped the unlock, while DEC still operates
+Method A):
 
-1. A process needs at least 30 prior Method-A samples before unlocking `method_b`.
-2. Credit batches in a Method-B process need sampled-batch cadence ≥ 1 per 10.
+1. A process needs at least 30 prior Method-A samples before unlocking `method_b`
+   (`getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess`).
+2. Credit batches in a Method-B process need sampled-batch cadence ≥ 1 per 10
+   (`deriveSamplingRequirement`, credit-batch grain).
 
-Enforcement is layered through UI checks, server/data-access validation, and DB
-trigger guardrails (the process-grain trigger ships with the ADR 0017 unlock).
+Track 2 added the explicit unlock and prerequisite capture
+(`unlockMethodBForProcess` → `method_b_unlocked_at`, `agreed_baseline_size`,
+`random_sampling_plan_ref`, `moisture_pathway`) and the process-grain **DB trigger
+backstop** (migration `0060`, `enforce_process_method_b_minimum_samples`). The
+backstop counts only the **pre-unlock baseline** (`sampling_time <
+method_b_unlocked_at`) so post-unlock Method-B samples can't mask a later baseline
+regression; the app guard mirrors the same boundary. The `_unsampled` submission
+route is wired but its live POST stays gated behind
+`DURABILITY_MEASUREMENT_SAMPLES_LIVE` (wire format unconfirmed).
 
 ## Verification Checklist
 

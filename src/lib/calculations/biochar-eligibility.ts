@@ -1,7 +1,7 @@
 /**
  * Biochar sample-eligibility gates — the protocol's hard characterization
- * thresholds, evaluated on the PER-RUN MEAN of a production run's replicate
- * samples (decision D8), plus the per-run replicate-count minimum.
+ * thresholds, evaluated on the POOLED MEAN of a credit batch's replicate
+ * samples (decision D8), plus the per-batch replicate-count minimum.
  *
  * ─── AUTHORITATIVE SOURCE (pinned, see docs/isometric/versions.json) ─────────
  *   Module "Biochar Storage in Soil Environments" v1.2 (CERTIFIED, tag 1.2.0)
@@ -9,7 +9,8 @@
  *
  *   §3, Table 2  Eligibility: molar H/C_org < 0.5 AND molar O/C_org < 0.2.
  *   §4           Each sampling's composite is divided into ≥ 3 representative
- *                replicates per batch (production run).
+ *                replicates per batch (the credit batch — the protocol
+ *                production batch, ADR 0016 — pooled across its member runs).
  *
  * Eligibility is judged on the run's REPLICATE MEAN (D8): the run's
  * characterization is the mean of its replicates, with any individually
@@ -29,12 +30,25 @@ export const H_TO_C_ORG_ELIGIBILITY_MAX = 0.5;
 /** Maximum molar O/C_org for an eligible biochar (§3, Table 2). Strict (<). */
 export const O_TO_C_ORG_ELIGIBILITY_MAX = 0.2;
 
-/** Minimum representative replicates per sampled production run (§4). */
-export const MINIMUM_REPLICATES_PER_RUN = 3;
+/**
+ * Minimum representative replicates per sampled CREDIT BATCH — the protocol
+ * production batch (ADR 0016), pooled across its member runs/days, NOT per run
+ * (§4). Per-run counting over-requires sampling: 3 replicates spread across 3
+ * runs of one batch is compliant.
+ */
+export const MINIMUM_REPLICATES_PER_BATCH = 3;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function isUsableNumber(value: number | null | undefined): value is number {
+/**
+ * A chemistry value is usable only when present and finite. Exported so the
+ * durability gates can scope the §8.3.1 distribution check to the SAME complete-
+ * chemistry replicate set this module counts for `usableReplicateCount` — the
+ * two must agree or an incomplete off-day sample can mask a clustered set.
+ */
+export function isUsableNumber(
+  value: number | null | undefined,
+): value is number {
   return value != null && Number.isFinite(value);
 }
 
@@ -187,13 +201,14 @@ export interface ReplicateCountResult {
 }
 
 /**
- * Whether a sampled run carries the protocol minimum of ≥3 replicates (§4).
- * Takes a count so callers can pass `run.samples.length` directly.
+ * Whether a sampled credit batch pools the protocol minimum of ≥3 replicates
+ * (§4). Takes a count so callers can pass the batch's pooled replicate count
+ * (across its member runs/days) directly.
  */
 export function evaluateReplicateCount(count: number): ReplicateCountResult {
   return {
     count,
-    minimum: MINIMUM_REPLICATES_PER_RUN,
-    meetsMinimum: count >= MINIMUM_REPLICATES_PER_RUN,
+    minimum: MINIMUM_REPLICATES_PER_BATCH,
+    meetsMinimum: count >= MINIMUM_REPLICATES_PER_BATCH,
   };
 }

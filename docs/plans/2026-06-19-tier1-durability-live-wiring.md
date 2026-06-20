@@ -6,8 +6,10 @@
 · ADR 0016 (credit batch = protocol production batch; production process scopes Method A/B; the
 sampling unit is the credit batch). Sharpened in a `grill-with-docs` session, 2026-06-19.
 **Branch:** `feat/credit-batch-production-process` (builds **on** the ADR 0016 re-grain landing here).
-**Status:** Design locked. Buildable/stageable now; the **live POST** stays gated on two
-sandbox-empirical confirms the operator runs.
+**Status:** Design locked. **Phases 1–4 DONE (staged)** on `feat/tier1-durability-live-wiring`;
+the **live POST** stays gated (`DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`) on two
+sandbox-empirical confirms the operator runs. **Phases 5–6 pending** (next: Phase 5 UX surfaces —
+lab-sample create form + credit-batch sample list/aggregation).
 
 > ⚠️ All Isometric rules below are non-authoritative summaries. The two that drive credit math
 > were re-verified verbatim via the isometric MCP on 2026-06-19: biochar protocol **1.2 §8.3.1**
@@ -120,29 +122,66 @@ sandbox template `rvt_1KS4S43VPSBXA26X`. Build + stage everything; keep the live
   override / reconciliation — emit a warning if a member application's `soil_temperature_c` exceeds
   the declared facility value (conservative-direction check).
 
-### Phase 3 — Measurement-samples submission step in `submit-removal.ts`
-- **Delete** the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry.
-- In `resolveTemplateInputs`, **skip** the two `biochar_sequestration_200_year_*` components
-  (constant set of blueprint keys) — they are not fed by the aggregation→datapoint loop.
-- New step in `runRemovalSubmission` (after the datapoint loop, before the removal-body POST),
-  mirroring `sensors.ts`/the transport-evidence flow: for each credit batch build + POST a
-  `biochar_production_batch` measurement sample (H/C mean+std-dev) + carbon datapoints
-  (`total`/`inorganic`/`product_mass`); build + POST one `biochar_soil` sample (facility reference
-  temp); bind per the binding-confirm; thread the removal's COA + ledger `source_ids` on. Reuse
-  `findMeasurementSampleBySupplierRef` for idempotent reconcile.
-- `_unsampled`: no datapoints emitted under Method A; keep `selectSequestrationBlueprintKey`'s hard
-  assertion. **Wiring-time check:** confirm an input-less `_unsampled` component doesn't block the
-  submission; if it does, fall back to the operator dropping it from the template until Method B.
+### Phase 3 — Measurement-samples submission step in `submit-removal.ts` ✅ DONE (staged) — 2026-06-19, branch `feat/tier1-durability-live-wiring`
+- ✅ New step `src/fn/certification/durability-measurement-samples.ts`: pure
+  `buildDurabilityMeasurementSampleSubmissions` (per sampled credit batch → one
+  `biochar_production_batch` sample carrying H/C + total/inorganic carbon + product mass values,
+  then one `biochar_soil` facility-reference sample) + `submitDurabilityMeasurementSamples` (POSTs
+  each via `performRegistryCreate` + `findMeasurementSampleBySupplierRef` reconcile, idempotent on
+  the versioned supplier ref). Wired into `runRemovalSubmission` after the datapoint loop, before
+  the removal-body POST.
+- ✅ `buildBiocharSoilSample` now consumes `FacilityReferenceSoilTemperature` (Phase 2's value), not
+  the site-max `ConservativeSoilTemperature`; `buildBiocharProductionBatchSample` extended with the
+  carbon + product-mass values (sandbox-gated property/unit/scale constants).
+- ✅ `resolveTemplateInputs` **and** `buildCreateGhgEntryRequest` skip the two
+  `biochar_sequestration_200_year_*` components (constant key set via `isSequestrationBlueprintKey`)
+  — they're carried by the measurement-samples step, not the datapoint loop. This also makes an
+  input-less `_unsampled` component inert (skipped, never blocks the submission) — the wiring-time
+  concern is resolved structurally; `selectSequestrationBlueprintKey`'s hard assertion stays.
+- ✅ **Live POST gated** behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE = false`. While off,
+  `submitRemoval` hard-blocks any template that declares a sequestration component with a "staged,
+  not yet live" `SafeError` (so the new template can't be submitted until the two confirms land).
+- ⏸️ **DEFERRED (user-approved 2026-06-19):** deleting the stale `carbon_rich_substance_sequestration`
+  `INPUT_MAPPING` entry. It is load-bearing for the still-live old-template carbon path (5 tests +
+  `certify-field-registry.ts`); deleting it while the new path is gated breaks working tests for
+  zero gain. Delete at the **live-flip cutover** (the final cleanup) — tracked in
+  `docs/open-questions.md` `isometric/durability-measurement-samples`.
+- ⚠️ **Two deltas the next session must know:**
+  1. **`source_ids` can't ride on the measurement-sample body** — `CreateMeasurementSampleRequest`
+     has no `source_ids` field (verified against `certify.d.ts`). The COA/ledger evidence still
+     attaches to the removal's monitored datapoints + removal-body `source_ids`; binding evidence to
+     the measurement-sample datapoints (D4) is part of the gated binding follow-up.
+  2. **Binding = auto-link structural default.** The removal body skips the sequestration
+     components, assuming the registry auto-links the measurement-sample datapoints by
+     type/property. If sandbox confirm #1 returns **explicit reference**, switch to: capture each
+     POSTed sample's `values[].datapoint_id` (the response carries them) → populate
+     `datapointIdsByRtcInput` → stop skipping in `buildCreateGhgEntryRequest` (bind as LIST inputs).
+     The feasibility is confirmed (`MeasurementSample.values[].datapoint_id` is returned on POST).
 
-### Phase 4 — Durability evidence-ledger PDF
-- New ledger mirroring `src/fn/certification/evidence-ledger.ts` (the transport one) +
-  `src/lib/certification/evidence-ledger/`: @react-pdf renderer → `StorageProvider.putObject` →
-  mirrored as a Source in `submitRemoval` (best-effort, content-hash idempotent + retire-prior).
-- Content per credit batch: the raw ≥3 Sample values → the submitted **mean + std-dev**, the
-  facility soil-temp reference value + dataset/justification, and the eligibility checks
-  (H/C < 0.5, O/C < 0.2). It reconciles raw inputs → submitted figures (the COA stays the lab's
-  own certificate; this is **noma's working**).
-- **Use the `frontend-design` skill** to drive the PDF layout when building this phase.
+### Phase 4 — Durability evidence-ledger PDF ✅ DONE — 2026-06-20, branch `feat/tier1-durability-live-wiring`
+- ✅ New ledger mirroring `src/fn/certification/evidence-ledger.ts` (the transport one) +
+  `src/lib/certification/evidence-ledger/`: @react-pdf renderer (`durability-pdf.ts`) →
+  `StorageProvider.putObject` → mirrored as a Source in `submitRemoval` (best-effort, content-hash
+  idempotent + retire-prior).
+- ✅ Content per credit batch: the raw ≥3 Sample values → the submitted **mean + std-dev**, the
+  facility soil-temp reference value + dataset/justification + floor note, and the eligibility
+  verdict (H/C_org < 0.5, O/C_org < 0.2). Figures come from `buildPerBatchDurabilityData` (the same
+  aggregation the measurement-sample POST submits), so the ledger reconciles exactly. Shown in
+  noma's native units (the wire-unit transforms are a separate, gated concern). COA stays the lab's
+  own certificate; this is **noma's working**.
+- ✅ Used the `frontend-design` skill — hero is the eligibility gate written literally (tinted
+  mean vs `< 0.50` ceiling + verdict swatch); per-batch tables reduce raw replicates into a
+  SUBMITTED mean ± s.d. subtotal; soil-reference block closes the sheet. Glyph-safe (Latin subset
+  only — pass/fail carried by colour + word, never a tick glyph). Eyeballed eligible + ineligible +
+  floored + single/multi-batch states.
+- ✅ **DRY refactor (no behaviour change):** the reuse/render/store/mirror/retire choreography is now
+  a shared `src/fn/certification/evidence-ledger-core.ts` (`ensureLedgerSource`); both transport and
+  durability ledgers are thin wrappers over it. A `src/fn/certification/ensure-evidence-ledgers.ts`
+  helper runs both best-effort at submit (kept `submit-removal.ts` under the 1000-line cap).
+- ✅ Generation is NOT gated on `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (benign evidence, unit-stable);
+  it self-skips when there are no sampled batches / no soil reference / no mapping / no batches.
+  Tests: `durability-build-model.test.ts` (raw→submitted reconciliation, eligibility verdicts,
+  inorganic Eq.2 derivation, distribution count, unsampled skip, soil floor). Full suite green (840).
 
 ### Phase 5 — UX surfaces (Isometric-verifier-gated)
 - **Lab-sample create form:** reference exactly **one** production run (single-select); surface the
@@ -168,5 +207,7 @@ sandbox template `rvt_1KS4S43VPSBXA26X`. Build + stage everything; keep the live
   first; Phase 1 layers on top of it.
 - **Issue #291** (template-driven remodel) shares the measurement-sample path — coordinate so the
   submission layer isn't double-built.
-- **`_unsampled` input-less component** — verify it doesn't block submission (Phase 3 wiring-time).
+- ~~**`_unsampled` input-less component** — verify it doesn't block submission (Phase 3 wiring-time).~~
+  **Resolved (Phase 3):** sequestration components (incl. `_unsampled`) are skipped in both
+  `resolveTemplateInputs` and `buildCreateGhgEntryRequest`, so an input-less one can't block.
 - **Sandbox confirms** — the only thing between staged and live; decision rules pre-agreed above.
