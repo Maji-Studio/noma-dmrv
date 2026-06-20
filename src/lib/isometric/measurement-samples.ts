@@ -35,7 +35,7 @@ export interface BuildMeasurementSampleReferenceArgs {
  * Stable, noma-controlled measurement-sample supplier reference, versioned per
  * removal so a superseded-then-resubmitted removal claims a fresh resource. The
  * production-batch role keys on the CREDIT BATCH (the protocol production batch,
- * ADR 0015) — one measurement sample per credit batch carrying its pooled
+ * ADR 0016) — one measurement sample per credit batch carrying its pooled
  * mean + std-dev. The `nm-mts-` prefix never collides with the removal
  * (`nm-rmv-`) or sensor (`nm-snr-`) refs. Mirrors `buildRemovalSupplierRef`.
  */

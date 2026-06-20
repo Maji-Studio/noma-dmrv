@@ -236,7 +236,7 @@ export function SampleForm({
                 />
               </FormField>
 
-              {/* Derived credit batch + live ≥3 sampling progress (ADR 0015) */}
+              {/* Derived credit batch + live ≥3 sampling progress (ADR 0016) */}
               <SampleBatchProgress productionRunId={watchedProductionRunId} />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">

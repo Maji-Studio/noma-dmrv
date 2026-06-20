@@ -12,7 +12,7 @@ import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 
 // The two Phase-5 readiness surfaces read the credit-batch-grained durability
-// data plane (ADR 0015) and shape it with the SAME `buildDurabilityBatchSummaries`
+// data plane (ADR 0016) and shape it with the SAME `buildDurabilityBatchSummaries`
 // pure builder the submit pipeline's aggregation feeds — so the form preview, the
 // detail panel, and what's actually submitted can never disagree.
 

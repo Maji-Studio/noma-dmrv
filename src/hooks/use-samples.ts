@@ -30,7 +30,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 
-// A sample's chemistry feeds the credit-batch durability roll-up (ADR 0015), so
+// A sample's chemistry feeds the credit-batch durability roll-up (ADR 0016), so
 // every create/update/delete must refresh the two readiness surfaces that read
 // it: the credit-batch detail panel (keyed on the batch) and the lab-sample
 // form's derived-batch preview (keyed on the run). Both links can be null.

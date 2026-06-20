@@ -27,7 +27,7 @@ export {
 // Per-batch data-completeness verdict for the credit-batch detail page +
 // New-Removal wizard selection gate (classifier shared via batch-health.ts).
 export { loadBatchHealth } from "./batch-health";
-// Per-credit-batch durability sampling roll-up + readiness (ADR 0015) for the
+// Per-credit-batch durability sampling roll-up + readiness (ADR 0016) for the
 // lab-sample form's derived-batch preview and the credit-batch detail's
 // durability section. Shares `buildDurabilityBatchSummaries` with the submit
 // aggregation, so the surfaces and what's submitted can't disagree.
