@@ -12,9 +12,11 @@
  */
 "use client";
 
-import { Flask, Info } from "@phosphor-icons/react";
+import { useState } from "react";
+import { CaretDown, Flask, Info } from "@phosphor-icons/react";
 import { useUnsampledCarbonPreview } from "@/hooks/use-production-processes";
 import { InfoHint } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 /** Display precision for organic-carbon percentages (dry basis). */
 const CARBON_PERCENT_DIGITS = 2;
@@ -39,31 +41,22 @@ export function UnsampledCarbonPreviewCard({
     undefined,
     enabled,
   );
+  // The μ/σ/σ√n breakdown is secondary — collapsed by default, opened on click.
+  const [showStats, setShowStats] = useState(false);
 
   const preview = data?.preview;
 
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
-      <div className="flex items-start gap-8">
-        <Flask
-          size={16}
-          weight="bold"
-          className="mt-2 shrink-0 text-[var(--st-run)]"
-        />
-        <div className="flex flex-col gap-2">
-          <p className="flex items-center gap-6 body-small-bold text-[var(--color-text-primary)]">
-            Unsampled-batch carbon preview
-            <InfoHint label="About the unsampled-batch preview">
-              The conservative estimate an unsampled Method-B batch would carry —
-              the eligible-pool mean minus one standard error (Eq 4: μ − σ/√n).
-              The registry recomputes and winsorises this; noma only previews it.
-            </InfoHint>
-          </p>
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            Estimated organic carbon (dry basis) for a batch credited without its
-            own sample.
-          </p>
-        </div>
+      <div className="flex items-center gap-6 body-small-bold text-[var(--color-text-primary)]">
+        <Flask size={16} weight="bold" className="shrink-0 text-[var(--st-run)]" />
+        Unsampled-batch carbon preview
+        <InfoHint label="About the unsampled-batch preview">
+          The conservative organic-carbon estimate (dry basis) a batch credited
+          without its own sample would carry — the eligible-pool mean minus one
+          standard error (Eq 4: μ − σ/√n). Non-authoritative: the registry
+          recomputes and winsorises this; noma only previews it.
+        </InfoHint>
       </div>
 
       {isLoading ? (
@@ -75,7 +68,7 @@ export function UnsampledCarbonPreviewCard({
           {error.message || "Could not compute the preview."}
         </p>
       ) : preview ? (
-        <div className="flex flex-col gap-12">
+        <div className="flex flex-col gap-8">
           <div className="flex items-end gap-8">
             <span className="title-heading-2 tabular-nums text-[var(--color-text-primary)]">
               {formatPercent(preview.estimateOrganicCarbonPercent)}
@@ -85,26 +78,42 @@ export function UnsampledCarbonPreviewCard({
             </span>
           </div>
 
-          <dl className="grid grid-cols-3 gap-8">
-            <PreviewStat
-              label="Mean (μ)"
-              value={formatPercent(preview.meanOrganicCarbonPercent)}
-            />
-            <PreviewStat
-              label="Std dev (σ)"
-              value={formatPercent(preview.stdDevOrganicCarbonPercent)}
-            />
-            <PreviewStat
-              label="Std error (σ/√n)"
-              value={formatPercent(preview.standardError)}
-            />
-          </dl>
-
           <p className="body-caption text-[var(--color-text-tertiary)] tabular-nums">
             Pooled from {preview.eligibleSampleCount} eligible sample
             {preview.eligibleSampleCount === 1 ? "" : "s"} over the trailing{" "}
             {preview.windowMonths} months.
           </p>
+
+          <button
+            type="button"
+            onClick={() => setShowStats((v) => !v)}
+            aria-expanded={showStats}
+            className="flex w-fit items-center gap-4 body-caption text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+          >
+            {showStats ? "Hide" : "Show"} statistics
+            <CaretDown
+              size={12}
+              weight="bold"
+              className={cn("transition-transform", showStats && "rotate-180")}
+            />
+          </button>
+
+          {showStats && (
+            <dl className="grid grid-cols-3 gap-8">
+              <PreviewStat
+                label="Mean (μ)"
+                value={formatPercent(preview.meanOrganicCarbonPercent)}
+              />
+              <PreviewStat
+                label="Std dev (σ)"
+                value={formatPercent(preview.stdDevOrganicCarbonPercent)}
+              />
+              <PreviewStat
+                label="Std error (σ/√n)"
+                value={formatPercent(preview.standardError)}
+              />
+            </dl>
+          )}
 
           {preview.notes.length > 0 && (
             <ul className="flex flex-col gap-4">
@@ -119,10 +128,6 @@ export function UnsampledCarbonPreviewCard({
               ))}
             </ul>
           )}
-
-          <p className="border-t border-[var(--color-border-tertiary)] pt-8 body-caption text-[var(--color-text-tertiary)]">
-            Non-authoritative preview — the registry computes the credited number.
-          </p>
         </div>
       ) : null}
     </div>

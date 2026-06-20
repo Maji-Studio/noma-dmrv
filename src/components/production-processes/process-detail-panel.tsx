@@ -123,7 +123,7 @@ export function ProcessDetailPanel({
                 )}
               </DetailSection>
 
-              {isIsometric && <MethodBExplainer />}
+              {isIsometric && <MethodBExplainer compact />}
 
               <UnsampledCarbonPreviewCard processId={process.id} enabled={open} />
 
