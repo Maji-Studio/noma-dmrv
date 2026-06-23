@@ -1159,6 +1159,16 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     1.2 removals may stay; new crediting periods may require 1.3). Authoritative:
     https://registry.isometric.com/protocol/biochar/1.3 . Full audit:
     `.tmp_pdf/isometric-ghg-integration-audit.html`.
+- **Update (gap-check re-confirmation, 2026-06-21):** the
+  `.claude/workflows/isometric-gap-check.js` run (2026-06-20) independently
+  re-detected exactly these four drifts from a cold start — biochar `1.2→1.3`
+  (certified 2026-05-22), storage-soil `1.2→1.3` (2026-05-22), energy-use
+  `1.2→1.3` (2026-03-13), ghg-accounting `1.0→1.1` (2026-03-24) — and flagged
+  **no** drift on biomass-feedstock `1.3` or transportation `1.1`, matching the
+  2026-06-18 audit above. Nothing has shifted; this stays the live re-pin
+  decision. That workflow is now the standing re-audit mechanism — re-run it on
+  any version bump to regenerate the three-corner (authority vs. docs vs. code)
+  gap list before re-pinning.
 
 ### Certify-removal redesign — submit-context builder N+1 on selection/submit hot paths (`certification/submit-context-n+1`, opened 2026-06-05)
 
