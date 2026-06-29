@@ -7,7 +7,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Truck, Calendar, Package, Drop, Plus } from "@phosphor-icons/react";
+import { TruckIcon, CalendarIcon, PackageIcon, DropIcon, PlusIcon } from "@phosphor-icons/react";
 import type { Delivery } from "@/db/schema";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -66,7 +66,7 @@ function createColumns(
       header: "Date",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-[var(--color-text-tertiary)]" />
+          <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
           <span>{formatSafeDate(row.original.deliveryDate)}</span>
         </div>
       ),
@@ -276,7 +276,7 @@ export function DeliveryList() {
         subtitle="Track outbound biochar product deliveries"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={18} weight="bold" />
+            <PlusIcon size={18} weight="bold" />
             New Delivery
           </Button>
         }
@@ -287,28 +287,28 @@ export function DeliveryList() {
         <StatCard
           title="Total Deliveries"
           value={statsData?.totalDeliveries ?? 0}
-          icon={<Truck size={24} weight="bold" />}
+          icon={<TruckIcon size={24} weight="bold" />}
           description="All deliveries"
           isLoading={statsLoading}
         />
         <StatCard
           title="Wet Mass Delivered"
           value={`${(statsData?.totalDeliveredWetMassKg ?? 0).toLocaleString()} kg`}
-          icon={<Package size={24} weight="bold" />}
+          icon={<PackageIcon size={24} weight="bold" />}
           description="Total wet mass"
           isLoading={statsLoading}
         />
         <StatCard
           title="Dry Mass"
           value={`${(statsData?.totalMassDryKg ?? 0).toLocaleString()} kg`}
-          icon={<Drop size={24} weight="bold" />}
+          icon={<DropIcon size={24} weight="bold" />}
           description="Total dry mass"
           isLoading={statsLoading}
         />
         <StatCard
           title="Delivered"
           value={statsData?.deliveredCount ?? 0}
-          icon={<Truck size={24} weight="bold" />}
+          icon={<TruckIcon size={24} weight="bold" />}
           description="Completed deliveries"
           isLoading={statsLoading}
         />
@@ -327,12 +327,12 @@ export function DeliveryList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Truck size={48} />}
+            icon={<TruckIcon size={48} />}
             title="No deliveries yet"
             description="Create your first delivery to get started"
             action={
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={18} weight="bold" />
+                <PlusIcon size={18} weight="bold" />
                 New Delivery
               </Button>
             }
@@ -416,22 +416,6 @@ export function DeliveryList() {
                   fields: [
                     { label: "Driver", value: sideSheetEntity.driverName },
                     { label: "Vehicle", value: sideSheetEntity.vehicleName },
-                    {
-                      label: "Truck Mass on Arrival",
-                      ...certificationDetailField("delivery", "truckMassOnArrivalKg"),
-                      value:
-                        sideSheetEntity.truckMassOnArrivalKg != null
-                          ? `${sideSheetEntity.truckMassOnArrivalKg.toLocaleString()} kg`
-                          : null,
-                    },
-                    {
-                      label: "Truck Mass on Departure",
-                      ...certificationDetailField("delivery", "truckMassOnDepartureKg"),
-                      value:
-                        sideSheetEntity.truckMassOnDepartureKg != null
-                          ? `${sideSheetEntity.truckMassOnDepartureKg.toLocaleString()} kg`
-                          : null,
-                    },
                   ],
                 },
               ]

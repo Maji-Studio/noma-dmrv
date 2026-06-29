@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Calendar, Package, Plus } from "@phosphor-icons/react";
+import { CalendarIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -57,7 +57,7 @@ function createColumns(
       header: "Delivery Date",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-[var(--color-text-tertiary)]" />
+          <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
           <span>{formatSafeDate(row.original.deliveryDate)}</span>
         </div>
       ),
@@ -253,8 +253,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
-        truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
-        truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
         massDryKg: deriveMassDryKg(
           data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
           data.moisturePercent
@@ -362,7 +360,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         subtitle="Track incoming biomass deliveries and bin allocations"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={18} weight="bold" />
+            <PlusIcon size={18} weight="bold" />
             New Feedstock
           </Button>
         }
@@ -384,12 +382,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Package size={48} />}
+            icon={<PackageIcon size={48} />}
             title="No feedstocks yet"
             description="Create your first feedstock to get started"
             action={
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={18} weight="bold" />
+                <PlusIcon size={18} weight="bold" />
                 New Feedstock
               </Button>
             }
@@ -471,25 +469,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             title: "Storage",
             fields: [
               { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
-            ],
-          },
-          {
-            title: "Truck Weighing",
-            fields: [
-              {
-                label: "Before unloading",
-                ...certificationDetailField("feedstock", "truckMassOnArrivalKg"),
-                value: sideSheetEntity.truckMassOnArrivalKg !== null
-                  ? formatMass(sideSheetEntity.truckMassOnArrivalKg)
-                  : null,
-              },
-              {
-                label: "After unloading",
-                ...certificationDetailField("feedstock", "truckMassOnDepartureKg"),
-                value: sideSheetEntity.truckMassOnDepartureKg !== null
-                  ? formatMass(sideSheetEntity.truckMassOnDepartureKg)
-                  : null,
-              },
             ],
           },
           ...(sideSheetEntity.overrideJustification ? [{

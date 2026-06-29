@@ -3,7 +3,7 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
 import { db } from "@/db";
 import {
   deliveries,
@@ -88,8 +88,6 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
 // ============================================
 
 type DeliveryColumnAvailability = {
-  truckMassOnArrivalKg: boolean;
-  truckMassOnDepartureKg: boolean;
   distanceKmOverride: boolean;
   distanceSource: boolean;
   distanceNote: boolean;
@@ -107,8 +105,6 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
         where table_schema = 'public'
           and table_name = 'deliveries'
           and column_name in (
-            'truck_mass_on_arrival_kg',
-            'truck_mass_on_departure_kg',
             'distance_km_override',
             'distance_source',
             'distance_note',
@@ -119,8 +115,6 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
         const columns = new Set(rows.map((row) => row.column_name));
 
         return {
-          truckMassOnArrivalKg: columns.has("truck_mass_on_arrival_kg"),
-          truckMassOnDepartureKg: columns.has("truck_mass_on_departure_kg"),
           distanceKmOverride: columns.has("distance_km_override"),
           distanceSource: columns.has("distance_source"),
           distanceNote: columns.has("distance_note"),
@@ -147,12 +141,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     deliveredWetMassKg: deliveries.deliveredWetMassKg,
     massDryKg: deliveries.massDryKg,
     moistureContentPercent: deliveries.moistureContentPercent,
-    truckMassOnArrivalKg: columns.truckMassOnArrivalKg
-      ? deliveries.truckMassOnArrivalKg
-      : sql<number | null>`null`.as("truck_mass_on_arrival_kg"),
-    truckMassOnDepartureKg: columns.truckMassOnDepartureKg
-      ? deliveries.truckMassOnDepartureKg
-      : sql<number | null>`null`.as("truck_mass_on_departure_kg"),
     distanceKmOverride: columns.distanceKmOverride
       ? deliveries.distanceKmOverride
       : sql<number | null>`null`.as("distance_km_override"),
@@ -309,34 +297,6 @@ export async function getDeliveryById(
   return delivery;
 }
 
-export async function getDeliveriesByIds(
-  userId: string,
-  deliveryIds: string[],
-): Promise<
-  {
-    id: string;
-    code: string;
-    truckMassOnArrivalKg: number | null;
-    truckMassOnDepartureKg: number | null;
-  }[]
-> {
-  requireAuth(userId);
-  if (deliveryIds.length === 0) return [];
-
-  const deliveryColumns = await getDeliveryColumnAvailability();
-  const baseSelection = getDeliveryBaseSelection(deliveryColumns);
-
-  return db
-    .select({
-      id: deliveries.id,
-      code: deliveries.code,
-      truckMassOnArrivalKg: baseSelection.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: baseSelection.truckMassOnDepartureKg,
-    })
-    .from(deliveries)
-    .where(inArray(deliveries.id, deliveryIds));
-}
-
 /**
  * Get a single delivery with all its relationships
  */
@@ -387,8 +347,6 @@ export async function getDeliveryWithRelations(
     deliveredWetMassKg: deliveryRow.deliveredWetMassKg,
     massDryKg: deliveryRow.massDryKg,
     moistureContentPercent: deliveryRow.moistureContentPercent,
-    truckMassOnArrivalKg: deliveryRow.truckMassOnArrivalKg,
-    truckMassOnDepartureKg: deliveryRow.truckMassOnDepartureKg,
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
     distanceNote: deliveryRow.distanceNote,
@@ -545,8 +503,6 @@ export async function createDelivery(
     deliveredWetMassKg?: number | null;
     massDryKg?: number | null;
     moistureContentPercent?: number | null;
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
@@ -618,12 +574,6 @@ export async function createDelivery(
       deliveredWetMassKg: data.deliveredWetMassKg ?? null,
       massDryKg: data.massDryKg ?? null,
       moistureContentPercent: data.moistureContentPercent ?? null,
-      ...(deliveryColumns.truckMassOnArrivalKg
-        ? { truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null }
-        : {}),
-      ...(deliveryColumns.truckMassOnDepartureKg
-        ? { truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null }
-        : {}),
       ...(deliveryColumns.distanceKmOverride
         ? { distanceKmOverride: data.distanceKmOverride ?? null }
         : {}),
@@ -661,8 +611,6 @@ export async function updateDelivery(
     deliveredWetMassKg?: number | null;
     massDryKg?: number | null;
     moistureContentPercent?: number | null;
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
@@ -757,12 +705,6 @@ export async function updateDelivery(
       .update(deliveries)
       .set({
         ...data,
-        ...(deliveryColumns.truckMassOnArrivalKg
-          ? {}
-          : { truckMassOnArrivalKg: undefined }),
-        ...(deliveryColumns.truckMassOnDepartureKg
-          ? {}
-          : { truckMassOnDepartureKg: undefined }),
         ...(deliveryColumns.distanceKmOverride
           ? {}
           : { distanceKmOverride: undefined }),
