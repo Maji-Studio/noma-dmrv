@@ -583,7 +583,7 @@ describe("requiredTransportCategories", () => {
     ]);
   });
 
-  it("only reports transport readiness gaps for categories required by the template", async () => {
+  it("derives required transport categories from the template and surfaces coverage warnings without producing readiness gaps", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",

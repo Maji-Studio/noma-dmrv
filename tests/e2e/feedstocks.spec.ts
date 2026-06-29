@@ -3,7 +3,7 @@
  *
  * Covers:
  * - UI CRUD: create a feedstock through the side sheet form, verify it appears in the list
- * - Truck weighing: arrival/departure masses prefill feedstock wet mass and allocation
+ * - Allocation mirroring: total wet mass auto-fills the single-bin allocation
  */
 import { test, expect } from "./fixtures";
 import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
