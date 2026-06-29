@@ -20,7 +20,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
-import { ClipboardText, Plus } from "@phosphor-icons/react/dist/ssr";
+import { ClipboardTextIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -53,7 +53,7 @@ export function GhgStatementsList() {
 
       {!facilityId ? (
         <EmptyState
-          icon={<ClipboardText size={48} />}
+          icon={<ClipboardTextIcon size={48} />}
           title="Select a facility"
           description="Choose a facility from the sidebar to view its GHG statements."
         />
@@ -202,7 +202,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
             onClick={() => setCreateOpen(true)}
             disabled={isLinked !== true}
           >
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New GHG Statement
           </Button>
         </div>
@@ -232,7 +232,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
           aria-label="GHG statements"
           emptyMessage={
             <div className="flex flex-col items-center justify-center gap-12 py-48">
-              <ClipboardText
+              <ClipboardTextIcon
                 size={40}
                 className="text-[var(--color-text-tertiary)]"
               />

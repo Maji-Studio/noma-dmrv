@@ -14,12 +14,12 @@
 
 import Link from "next/link";
 import {
-  ArrowRight,
-  ArrowSquareOut,
-  CheckCircle,
-  Circle,
-  ShieldCheck,
-  Warning,
+  ArrowRightIcon,
+  ArrowSquareOutIcon,
+  CheckCircleIcon,
+  CircleIcon,
+  ShieldCheckIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -58,7 +58,7 @@ function OpenCheckRow({
       style={{ animationDelay: `${index * ROW_STAGGER_MS}ms` }}
     >
       <div className="flex items-start gap-10">
-        <Warning
+        <WarningIcon
           size={16}
           weight="fill"
           className="mt-1 shrink-0 text-[var(--st-wait)]"
@@ -83,9 +83,9 @@ function OpenCheckRow({
       >
         {fix.label}
         {isCrossPage ? (
-          <ArrowSquareOut size={14} aria-hidden />
+          <ArrowSquareOutIcon size={14} aria-hidden />
         ) : (
-          <ArrowRight size={14} aria-hidden />
+          <ArrowRightIcon size={14} aria-hidden />
         )}
       </Link>
     </li>
@@ -118,7 +118,7 @@ function ClearedSummary({
           key={check.key}
           className="inline-flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
         >
-          <CheckCircle
+          <CheckCircleIcon
             size={14}
             weight="fill"
             className="shrink-0 text-[var(--st-ok)]"
@@ -131,7 +131,7 @@ function ClearedSummary({
           key={check.key}
           className="inline-flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
         >
-          <Circle
+          <CircleIcon
             size={14}
             className="shrink-0 text-[var(--color-text-quaternary)]"
           />
@@ -141,7 +141,7 @@ function ClearedSummary({
             className="inline-flex items-center gap-4 font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
           >
             {skippedFix.label}
-            <ArrowSquareOut size={12} aria-hidden />
+            <ArrowSquareOutIcon size={12} aria-hidden />
           </Link>
         </span>
       ))}
@@ -156,7 +156,7 @@ function GateStatus({ health }: { health: BatchHealth }) {
       <StatusBadge
         status="ready"
         label="Ready to certify"
-        icon={<CheckCircle size={14} weight="fill" />}
+        icon={<CheckCircleIcon size={14} weight="fill" />}
       />
     );
   }
@@ -169,7 +169,7 @@ function GateStatus({ health }: { health: BatchHealth }) {
       <StatusBadge
         status="pending"
         label={`${health.issueCount} ${health.issueCount === 1 ? "issue" : "issues"} open`}
-        icon={<Warning size={14} weight="fill" />}
+        icon={<WarningIcon size={14} weight="fill" />}
       />
     </div>
   );
@@ -190,7 +190,7 @@ function GateBody({
     return (
       <div className="flex flex-col gap-16">
         <div className="flex items-center gap-12 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-16 py-12">
-          <ShieldCheck
+          <ShieldCheckIcon
             size={20}
             weight="fill"
             className="shrink-0 text-[var(--st-ok)]"

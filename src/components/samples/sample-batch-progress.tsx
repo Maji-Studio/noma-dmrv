@@ -16,7 +16,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowSquareOut, Flask, Info } from "@phosphor-icons/react/dist/ssr";
+import { ArrowSquareOutIcon, FlaskIcon, InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { useRunDurabilitySummary } from "@/hooks/use-certification";
 import type { DurabilityBatchSummary } from "@/lib/certification/durability-batch-summary";
 import { DurabilityReadinessSignals } from "@/components/certification/durability-readiness";
@@ -85,7 +85,7 @@ export function SampleBatchProgress({
     return (
       <Panel>
         <div className="flex items-start gap-8">
-          <Info
+          <InfoIcon
             size={16}
             className="mt-1 shrink-0 text-[var(--color-text-tertiary)]"
             aria-hidden
@@ -111,7 +111,7 @@ export function SampleBatchProgress({
     <Panel>
       <div className="flex flex-wrap items-center justify-between gap-8">
         <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-          <Flask
+          <FlaskIcon
             size={15}
             weight="fill"
             className="shrink-0 text-[var(--color-text-tertiary)]"
@@ -124,7 +124,7 @@ export function SampleBatchProgress({
           className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
         >
           View batch
-          <ArrowSquareOut size={12} aria-hidden />
+          <ArrowSquareOutIcon size={12} aria-hidden />
         </Link>
       </div>
 

@@ -13,7 +13,7 @@
 "use client";
 
 import { useState } from "react";
-import { CaretDown, Flask, Info } from "@phosphor-icons/react";
+import { CaretDownIcon, FlaskIcon, InfoIcon } from "@phosphor-icons/react";
 import { useUnsampledCarbonPreview } from "@/hooks/use-production-processes";
 import { InfoHint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -49,7 +49,7 @@ export function UnsampledCarbonPreviewCard({
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
       <div className="flex items-center gap-6 body-small-bold text-[var(--color-text-primary)]">
-        <Flask size={16} weight="bold" className="shrink-0 text-[var(--st-run)]" />
+        <FlaskIcon size={16} weight="bold" className="shrink-0 text-[var(--st-run)]" />
         Unsampled-batch carbon preview
         <InfoHint label="About the unsampled-batch preview">
           The conservative organic-carbon estimate (dry basis) a batch credited
@@ -91,7 +91,7 @@ export function UnsampledCarbonPreviewCard({
             className="flex w-fit items-center gap-4 body-caption text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             {showStats ? "Hide" : "Show"} statistics
-            <CaretDown
+            <CaretDownIcon
               size={12}
               weight="bold"
               className={cn("transition-transform", showStats && "rotate-180")}
@@ -122,7 +122,7 @@ export function UnsampledCarbonPreviewCard({
                   key={i}
                   className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]"
                 >
-                  <Info size={12} weight="bold" className="mt-2 shrink-0" />
+                  <InfoIcon size={12} weight="bold" className="mt-2 shrink-0" />
                   <span>{note}</span>
                 </li>
               ))}

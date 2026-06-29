@@ -9,7 +9,7 @@
  */
 "use client";
 
-import { CheckCircle, XCircle } from "@phosphor-icons/react/dist/ssr";
+import { CheckCircleIcon, XCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import type { AllowlistStatus } from "@/fn/certification";
 import { useCertificationHealth } from "@/hooks/use-certification";
 import { Field } from "./panel-layout";
@@ -57,12 +57,12 @@ export function CertificationHealthPanel() {
       <Field label="Credentials">
         {data.credentialsConfigured ? (
           <span className="body-small inline-flex items-center gap-6 text-[var(--color-signal-green)]">
-            <CheckCircle size={16} weight="fill" aria-hidden />
+            <CheckCircleIcon size={16} weight="fill" aria-hidden />
             Configured
           </span>
         ) : (
           <span className="body-small inline-flex items-center gap-6 text-[var(--color-signal-red)]">
-            <XCircle size={16} weight="fill" aria-hidden />
+            <XCircleIcon size={16} weight="fill" aria-hidden />
             Not configured
           </span>
         )}

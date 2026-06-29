@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  ArrowLeft,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Key,
+  ArrowLeftIcon,
+  ArrowUpRightIcon,
+  ArrowDownLeftIcon,
+  KeyIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { getSchemaTableByName, type SchemaArea } from "@/lib/schema/catalog";
@@ -55,7 +55,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
       <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         <nav className="flex flex-wrap items-center gap-[8px]">
           <Link href="/schema" className={buttonVariants({ size: "small" })}>
-            <ArrowLeft size={16} weight="bold" />
+            <ArrowLeftIcon size={16} weight="bold" />
             Schema
           </Link>
           <Link
@@ -88,11 +88,11 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
             <StatBadge label={`${tableInfo.columns.length} columns`} />
             <StatBadge
               label={`${tableInfo.outboundRelationships.length} outbound`}
-              icon={<ArrowUpRight size={12} />}
+              icon={<ArrowUpRightIcon size={12} />}
             />
             <StatBadge
               label={`${tableInfo.inboundRelationships.length} inbound`}
-              icon={<ArrowDownLeft size={12} />}
+              icon={<ArrowDownLeftIcon size={12} />}
             />
             <StatBadge
               label={`${linkedToTables.length + linkedFromTables.length} linked tables`}
@@ -117,7 +117,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
           <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 flex flex-col gap-[8px]">
             <div className="flex items-center justify-between">
               <h2 className="title-heading-4 flex items-center gap-[6px]">
-                <ArrowUpRight
+                <ArrowUpRightIcon
                   size={18}
                   weight="bold"
                   className="text-[var(--clr-purple)]"
@@ -161,7 +161,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
           <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 flex flex-col gap-[8px]">
             <div className="flex items-center justify-between">
               <h2 className="title-heading-4 flex items-center gap-[6px]">
-                <ArrowDownLeft
+                <ArrowDownLeftIcon
                   size={18}
                   weight="bold"
                   className="text-[var(--clr-orange)]"
@@ -250,7 +250,7 @@ export default async function SchemaTablePage({ params }: SchemaTablePageProps) 
                     <td className="py-[8px] px-[12px] body-small">
                       <span className="inline-flex items-center gap-[6px]">
                         {col.isPrimary && (
-                          <Key
+                          <KeyIcon
                             size={14}
                             weight="fill"
                             className="text-[var(--clr-purple)] shrink-0"

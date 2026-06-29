@@ -8,7 +8,7 @@
  */
 
 import { useId, useRef, useState } from "react";
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { FormInput } from "@/components/forms/form-input";
 import { cn } from "@/lib/utils";
 import { GEOCODE_DEBOUNCE_MS } from "@/config/geo";
@@ -93,7 +93,7 @@ export function AddressSearch({
   return (
     <div className="relative">
       <div className="relative">
-        <MagnifyingGlass
+        <MagnifyingGlassIcon
           size={16}
           aria-hidden="true"
           className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"

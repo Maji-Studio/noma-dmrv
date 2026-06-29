@@ -9,15 +9,15 @@ import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  Fire,
-  Leaf,
-  Plus,
-  X,
-  Clock,
-  CheckCircle,
-  Warning,
-  Prohibit,
-  MagnifyingGlass,
+  FireIcon,
+  LeafIcon,
+  PlusIcon,
+  XIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  WarningIcon,
+  ProhibitIcon,
+  MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
 import {
   useCreateProductionRun,
@@ -67,10 +67,10 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 // ============================================
 
 const STATUS_ICONS: Record<ProductionRunStatus, React.ReactNode> = {
-  draft: <Warning size={14} weight="fill" />,
-  running: <Clock size={14} weight="fill" />,
-  complete: <CheckCircle size={14} weight="fill" />,
-  void: <Prohibit size={14} weight="fill" />,
+  draft: <WarningIcon size={14} weight="fill" />,
+  running: <ClockIcon size={14} weight="fill" />,
+  complete: <CheckCircleIcon size={14} weight="fill" />,
+  void: <ProhibitIcon size={14} weight="fill" />,
 };
 
 function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
@@ -374,7 +374,7 @@ export function ProductionRunList() {
         subtitle="Pyrolysis batches from feedstock to biochar output"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Production Run
           </Button>
         }
@@ -382,10 +382,10 @@ export function ProductionRunList() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<Fire size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
-        <StatCard title="Biochar Output" value={`${((statsData?.totalBiocharKg ?? 0) / 1000).toFixed(1)} t`} icon={<Leaf size={24} weight="bold" />} description="Total biochar produced" isLoading={statsLoading} />
-        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<Clock size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
-        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircle size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
+        <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Biochar Output" value={`${((statsData?.totalBiocharKg ?? 0) / 1000).toFixed(1)} t`} icon={<LeafIcon size={24} weight="bold" />} description="Total biochar produced" isLoading={statsLoading} />
+        <StatCard title="Running" value={statsData?.runningCount ?? 0} icon={<ClockIcon size={24} weight="bold" />} description="Currently active runs" isLoading={statsLoading} />
+        <StatCard title="Completed" value={statsData?.completedCount ?? 0} icon={<CheckCircleIcon size={24} weight="bold" />} description="Finished production runs" isLoading={statsLoading} />
       </div>
 
       {/* Data Table */}
@@ -408,13 +408,13 @@ export function ProductionRunList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Fire size={48} />}
+            icon={<FireIcon size={48} />}
             title={hasActiveFilters ? "No production runs found" : "No production runs yet"}
             description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first production run to start tracking pyrolysis batches."}
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
-                  <Plus size={20} weight="bold" />
+                  <PlusIcon size={20} weight="bold" />
                   Create Production Run
                 </Button>
               ) : undefined
@@ -424,7 +424,7 @@ export function ProductionRunList() {
       >
         <DataTable.Toolbar>
           <div className="relative max-w-[320px] flex-1">
-            <MagnifyingGlass size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
+            <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
             <input
               type="text"
               placeholder="Search production runs..."
@@ -448,7 +448,7 @@ export function ProductionRunList() {
             </select>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
-                <X size={16} weight="bold" />
+                <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}

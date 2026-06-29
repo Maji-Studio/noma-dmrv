@@ -16,7 +16,7 @@
  */
 "use client";
 
-import { Info } from "@phosphor-icons/react";
+import { InfoIcon } from "@phosphor-icons/react";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   METHOD_B_SAMPLING_CADENCE_BATCHES,
@@ -106,7 +106,7 @@ export function MethodBExplainer({
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
       <div className="flex items-start gap-8">
-        <Info
+        <InfoIcon
           size={16}
           weight="bold"
           className="mt-2 shrink-0 text-[var(--st-run)]"

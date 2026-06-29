@@ -11,7 +11,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { DotsThreeVertical } from "@phosphor-icons/react";
+import { DotsThreeVerticalIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 
@@ -52,7 +52,7 @@ function RowActionsMenu({ label, actions, className }: RowActionsMenuProps) {
             />
           }
         >
-          <DotsThreeVertical size={20} weight="bold" />
+          <DotsThreeVerticalIcon size={20} weight="bold" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Content>
           {actions.map((action) =>

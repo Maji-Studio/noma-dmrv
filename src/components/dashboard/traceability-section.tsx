@@ -11,7 +11,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { MapTrifold } from "@phosphor-icons/react/dist/ssr";
+import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import type {
   CreditBatchSankeyData,
@@ -80,7 +80,7 @@ export function TraceabilitySection({
         {siteCount === 0 ? (
           <EmptyState
             padding="md"
-            icon={<MapTrifold size={32} />}
+            icon={<MapTrifoldIcon size={32} />}
             title="No mapped sites yet"
             description="Add GPS to this facility, its feedstock, or its application fields to trace the chain geographically."
           />

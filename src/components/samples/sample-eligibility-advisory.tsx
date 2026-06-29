@@ -1,4 +1,4 @@
-import { Warning } from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -49,7 +49,7 @@ export function SampleEligibilityAdvisory({
       role="status"
       className="flex items-start gap-8 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] p-12"
     >
-      <Warning
+      <WarningIcon
         size={16}
         weight="fill"
         aria-hidden

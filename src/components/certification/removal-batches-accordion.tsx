@@ -14,7 +14,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatTonnes } from "@/lib/format-utils";
@@ -75,7 +75,7 @@ export function RemovalBatchesAccordion({
                 className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] hover:underline w-fit"
               >
                 Open removal
-                <ArrowSquareOut size={12} weight="bold" aria-hidden />
+                <ArrowSquareOutIcon size={12} weight="bold" aria-hidden />
               </Link>
 
               <div className="flex flex-col gap-6">

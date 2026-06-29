@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeftIcon, ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { getSchemaRelationships } from "@/lib/schema/catalog";
 
@@ -12,7 +12,7 @@ export default function SchemaLinksPage() {
         <header className="flex flex-col gap-16">
           <nav>
             <Link href="/schema" className={buttonVariants({ size: "small" })}>
-              <ArrowLeft size={16} weight="bold" />
+              <ArrowLeftIcon size={16} weight="bold" />
               Schema
             </Link>
           </nav>
@@ -69,7 +69,7 @@ export default function SchemaLinksPage() {
                       <code>{r.fromColumn}</code>
                     </td>
                     <td className="py-[8px] text-center text-[var(--color-text-tertiary)]">
-                      <ArrowRight size={14} className="inline" />
+                      <ArrowRightIcon size={14} className="inline" />
                     </td>
                     <td className="py-[8px] px-[12px]">
                       <Link

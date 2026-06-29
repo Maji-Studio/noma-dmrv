@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Archive,
-  ArrowCounterClockwise,
-  Factory,
-  MapPin,
-  PencilSimple,
+  ArchiveIcon,
+  ArrowCounterClockwiseIcon,
+  FactoryIcon,
+  MapPinIcon,
+  PencilSimpleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { FacilityWithRelations } from "@/data-access/facilities";
@@ -36,13 +36,13 @@ export function FacilityCard({
         {/* Header: badge + country */}
         <div className="flex items-center justify-between gap-12">
           <span className="inline-flex items-center gap-6 border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-purple)]">
-            <Factory size={12} weight="bold" />
+            <FactoryIcon size={12} weight="bold" />
             {facility.code}
           </span>
           <span className="flex items-center gap-8">
             {isArchived && (
               <span className="inline-flex items-center gap-6 border border-[var(--color-border-primary)] bg-[var(--color-background-secondary)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
-                <Archive size={12} weight="bold" />
+                <ArchiveIcon size={12} weight="bold" />
                 Archived
               </span>
             )}
@@ -59,7 +59,7 @@ export function FacilityCard({
           </h3>
           {facility.location && (
             <p className="mt-6 flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
-              <MapPin size={12} />
+              <MapPinIcon size={12} />
               {facility.location}
             </p>
           )}
@@ -98,13 +98,13 @@ export function FacilityCard({
               aria-label={`Restore facility ${facility.code}`}
               onClick={() => onRestore(facility.id)}
             >
-              <ArrowCounterClockwise size={16} />
+              <ArrowCounterClockwiseIcon size={16} />
               Restore
             </Button>
           ) : (
             <>
               <Button size="small" variant="default" onClick={() => onEdit(facility)}>
-                <PencilSimple size={16} />
+                <PencilSimpleIcon size={16} />
                 Edit
               </Button>
               <Button
@@ -114,7 +114,7 @@ export function FacilityCard({
                 className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
                 onClick={() => onArchive(facility.id)}
               >
-                <Archive size={16} />
+                <ArchiveIcon size={16} />
               </Button>
             </>
           )}
