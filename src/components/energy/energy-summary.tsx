@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { Fire, GasPump, Lightning } from "@phosphor-icons/react";
+import { FireIcon, GasPumpIcon, LightningIcon } from "@phosphor-icons/react";
 import { ServerError } from "@/components/forms";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { StatCard } from "@/components/ui/stat-card";
@@ -51,7 +51,7 @@ export function EnergySummary() {
         />
         <EmptyState
           padding="md"
-          icon={<Lightning size={48} />}
+          icon={<LightningIcon size={48} />}
           title="Select a facility"
           description="Choose a facility from the sidebar to view its energy summary"
         />
@@ -100,28 +100,28 @@ export function EnergySummary() {
         <StatCard
           title="Production Runs"
           value={runCount}
-          icon={<Fire size={24} weight="bold" />}
+          icon={<FireIcon size={24} weight="bold" />}
           description="Rolled up in this summary"
           isLoading={isLoading}
         />
         <StatCard
           title="Grid Electricity"
           value={`${fmt(electricityKwh)} kWh`}
-          icon={<Lightning size={24} weight="bold" />}
+          icon={<LightningIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
           title="Genset Diesel"
           value={`${fmt(gensetLitres)} L`}
-          icon={<GasPump size={24} weight="bold" />}
+          icon={<GasPumpIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
           title="Startup / Plant Diesel"
           value={`${fmt(startupLitres)} L`}
-          icon={<GasPump size={24} weight="bold" />}
+          icon={<GasPumpIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />

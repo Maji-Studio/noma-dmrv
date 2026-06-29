@@ -11,7 +11,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Factory, Package, FlowArrow } from "@phosphor-icons/react/dist/ssr";
+import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, DryMassInput } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
@@ -312,7 +312,7 @@ export function BiocharProductForm({
           step, so it sits above the numbered spine and only when it has data. */}
       {(linkedRunPreview || selectedStorageLocation || massKgNum != null) && (
         <div className="space-y-12">
-          <SectionLabel icon={<FlowArrow size={14} weight="bold" />}>
+          <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
             Transfer Preview
           </SectionLabel>
           <TransferFlowPreview
@@ -335,7 +335,7 @@ export function BiocharProductForm({
       {/* Source: Production Run */}
       <FormSection
         title="Source"
-        icon={<Factory size={14} weight="bold" />}
+        icon={<FactoryIcon size={14} weight="bold" />}
         fields={["linkedProductionRunId", "massKg", "moistureContentPercent", "waterAddedKg", "densityKgM3"]}
       >
         <FormField
@@ -471,7 +471,7 @@ export function BiocharProductForm({
       {/* Destination + Product Details */}
       <FormSection
         title="Destination & Product"
-        icon={<Package size={14} weight="bold" />}
+        icon={<PackageIcon size={14} weight="bold" />}
         fields={["formulationId", "storageLocationId"]}
       >
 

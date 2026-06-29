@@ -16,27 +16,27 @@ import { type ElementType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  House,
-  TreeStructure,
-  Leaf,
-  Factory,
-  Handshake,
-  Users,
-  Truck,
-  Cube,
-  Flask,
-  Package,
-  ShoppingCart,
-  MapPin,
-  Certificate,
-  Stack,
-  FileText,
-  TestTube,
-  FlowArrow,
-  ListChecks,
-  Lightning,
-  GearSix,
-  SignOut,
+  HouseIcon,
+  TreeStructureIcon,
+  LeafIcon,
+  FactoryIcon,
+  HandshakeIcon,
+  UsersIcon,
+  TruckIcon,
+  CubeIcon,
+  FlaskIcon,
+  PackageIcon,
+  ShoppingCartIcon,
+  MapPinIcon,
+  CertificateIcon,
+  StackIcon,
+  FileTextIcon,
+  TestTubeIcon,
+  FlowArrowIcon,
+  ListChecksIcon,
+  LightningIcon,
+  GearSixIcon,
+  SignOutIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { useAuth, authClient } from "@/lib/auth/client";
@@ -88,8 +88,8 @@ const SIDEBAR_BACKGROUND_GRADIENT =
 const navSections: NavSection[] = [
   {
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: House },
-      { href: "/chain-of-custody", label: "Chain of Custody", icon: TreeStructure },
+      { href: "/dashboard", label: "Dashboard", icon: HouseIcon },
+      { href: "/chain-of-custody", label: "Chain of Custody", icon: TreeStructureIcon },
     ],
     accent: SECTION_ACCENTS.default,
   },
@@ -97,38 +97,38 @@ const navSections: NavSection[] = [
     title: "Production",
     accent: SECTION_ACCENTS.production,
     items: [
-      { href: "/feedstocks", label: "Feedstocks", icon: Leaf },
-      { href: "/production-runs", label: "Production Runs", icon: Factory },
-      { href: "/formulations", label: "Formulations", icon: ListChecks },
-      { href: "/biochar-products", label: "Biochar Products", icon: Cube },
+      { href: "/feedstocks", label: "Feedstocks", icon: LeafIcon },
+      { href: "/production-runs", label: "Production Runs", icon: FactoryIcon },
+      { href: "/formulations", label: "Formulations", icon: ListChecksIcon },
+      { href: "/biochar-products", label: "Biochar Products", icon: CubeIcon },
     ],
   },
   {
     title: "Infrastructure",
     accent: SECTION_ACCENTS.infrastructure,
     items: [
-      { href: "/reactors", label: "Reactors", icon: Flask },
-      { href: "/storage-locations", label: "Storage Locations", icon: Package },
-      { href: "/energy", label: "Energy", icon: Lightning },
+      { href: "/reactors", label: "Reactors", icon: FlaskIcon },
+      { href: "/storage-locations", label: "Storage Locations", icon: PackageIcon },
+      { href: "/energy", label: "Energy", icon: LightningIcon },
     ],
   },
   {
     title: "Distribution",
     accent: SECTION_ACCENTS.distribution,
     items: [
-      { href: "/suppliers", label: "Suppliers", icon: Handshake },
-      { href: "/customers", label: "Customers", icon: Users },
-      { href: "/orders", label: "Orders", icon: ShoppingCart },
-      { href: "/deliveries", label: "Deliveries", icon: Truck },
-      { href: "/applications", label: "Applications", icon: MapPin },
+      { href: "/suppliers", label: "Suppliers", icon: HandshakeIcon },
+      { href: "/customers", label: "Customers", icon: UsersIcon },
+      { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
+      { href: "/deliveries", label: "Deliveries", icon: TruckIcon },
+      { href: "/applications", label: "Applications", icon: MapPinIcon },
     ],
   },
   {
     title: "Verification",
     accent: SECTION_ACCENTS.verification,
     items: [
-      { href: "/credit-batches", label: "Credit Batches", icon: Certificate },
-      { href: "/samples", label: "Lab Samples", icon: TestTube },
+      { href: "/credit-batches", label: "Credit Batches", icon: CertificateIcon },
+      { href: "/samples", label: "Lab Samples", icon: TestTubeIcon },
     ],
   },
   {
@@ -144,10 +144,10 @@ const navSections: NavSection[] = [
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
-      { href: "/certification/removals", label: "Removals", icon: Stack },
-      { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileText },
-      { href: "/certification/production-processes", label: "Production Processes", icon: FlowArrow },
-      { href: "/certification/settings", label: "Settings", icon: GearSix },
+      { href: "/certification/removals", label: "Removals", icon: StackIcon },
+      { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
+      { href: "/certification/production-processes", label: "Production Processes", icon: FlowArrowIcon },
+      { href: "/certification/settings", label: "Settings", icon: GearSixIcon },
     ],
   },
 ];
@@ -164,7 +164,7 @@ const adminSection: NavSection = {
     {
       href: "/admin",
       label: "Admin Panel",
-      icon: GearSix,
+      icon: GearSixIcon,
       skipFacilityParam: true,
     },
   ],
@@ -352,7 +352,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               background: `linear-gradient(135deg, var(--clr-purple) 0%, var(--clr-pink) 100%)`,
             }}
           >
-            <Users
+            <UsersIcon
               size={14}
               weight="bold"
               className="text-[var(--color-white-75)]"
@@ -375,7 +375,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150"
             aria-label="Sign out"
           >
-            <SignOut size={16} />
+            <SignOutIcon size={16} />
           </button>
         </div>
       </div>

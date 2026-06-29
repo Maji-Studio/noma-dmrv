@@ -6,13 +6,13 @@
 
 import { useMemo, useState } from "react";
 import {
-  Archive,
-  Factory,
-  Lightning,
-  MagnifyingGlass,
-  Package,
-  Plus,
-  X,
+  ArchiveIcon,
+  FactoryIcon,
+  LightningIcon,
+  MagnifyingGlassIcon,
+  PackageIcon,
+  PlusIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import type { Facility } from "@/db/schema";
 import {
@@ -271,7 +271,7 @@ export function FacilityList() {
         subtitle="Production sites, reactors, and registry links"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Facility
           </Button>
         }
@@ -281,21 +281,21 @@ export function FacilityList() {
         <StatCard
           title={showArchived ? "Archived Facilities" : "Active Facilities"}
           value={totalFacilities}
-          icon={<Factory size={24} weight="bold" />}
+          icon={<FactoryIcon size={24} weight="bold" />}
           description="Facilities matching the current filters"
           isLoading={isLoading}
         />
         <StatCard
           title="Total Reactors"
           value={totalReactors}
-          icon={<Lightning size={24} weight="bold" />}
+          icon={<LightningIcon size={24} weight="bold" />}
           description="Installed across the visible facilities"
           isLoading={isLoading}
         />
         <StatCard
           title="Feedstock On Hand"
           value={formatMass(feedstockOnHandKg)}
-          icon={<Package size={24} weight="bold" />}
+          icon={<PackageIcon size={24} weight="bold" />}
           description={`${totalStorageBins} storage bins on this page`}
           isLoading={isLoading}
         />
@@ -305,7 +305,7 @@ export function FacilityList() {
         <div className="flex flex-col gap-16 xl:flex-row xl:items-end xl:justify-between">
           <div className="grid flex-1 gap-12 md:grid-cols-[minmax(0,1fr)_200px]">
             <div className="relative">
-              <MagnifyingGlass
+              <MagnifyingGlassIcon
                 size={18}
                 className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
               />
@@ -346,7 +346,7 @@ export function FacilityList() {
               onClick={toggleShowArchived}
               aria-pressed={showArchived}
             >
-              <Archive size={16} weight="bold" />
+              <ArchiveIcon size={16} weight="bold" />
               Archived
             </Button>
 
@@ -366,7 +366,7 @@ export function FacilityList() {
 
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
-                <X size={16} weight="bold" />
+                <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}
@@ -377,7 +377,7 @@ export function FacilityList() {
       {facilities.length === 0 ? (
         <EmptyState
           padding="lg"
-          icon={<Factory size={48} />}
+          icon={<FactoryIcon size={48} />}
           title={
             showArchived
               ? "No archived facilities"
@@ -395,7 +395,7 @@ export function FacilityList() {
           action={
             !hasActiveFilters && !showArchived ? (
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 Create Facility
               </Button>
             ) : undefined

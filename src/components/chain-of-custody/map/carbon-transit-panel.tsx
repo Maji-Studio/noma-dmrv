@@ -14,7 +14,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { MapTrifold } from "@phosphor-icons/react/dist/ssr";
+import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import type {
   ChainGeoLeg,
   ChainOfCustodyGeoData,
@@ -174,7 +174,7 @@ export function CarbonTransitPanel({
     return (
       <div className="flex h-full items-center justify-center bg-[var(--color-background-white)]">
         <div className="flex flex-col items-center gap-12">
-          <MapTrifold size={32} className="animate-pulse text-[var(--color-text-tertiary)]" />
+          <MapTrifoldIcon size={32} className="animate-pulse text-[var(--color-text-tertiary)]" />
           <p className="body-medium text-[var(--color-text-secondary)]">Loading geography...</p>
         </div>
       </div>

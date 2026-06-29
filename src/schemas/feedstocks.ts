@@ -10,10 +10,6 @@ import {
   optionalPositiveNumber,
   requiredNumber,
 } from "./helpers";
-import {
-  optionalTruckMass,
-  validateTruckMasses,
-} from "./truck-weighing";
 
 // ============================================
 // Shared numeric field helpers
@@ -89,8 +85,6 @@ export const feedstockFormSchema = z.object({
     .uuid("Please select a valid feedstock type"),
   totalWetMassKg: requiredNonNegativeNumber,
   moisturePercent: requiredMoisturePercent,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
 
   // --- Bin Allocations ---
   allocations: z
@@ -110,8 +104,6 @@ export const feedstockFormSchema = z.object({
     .max(2000, "Notes must be less than 2000 characters")
     .optional()
     .or(z.literal("")),
-}).superRefine((value, ctx) => {
-  validateTruckMasses(value, ctx);
 });
 
 // ============================================
@@ -142,13 +134,9 @@ export const updateFeedstockSchema = z.object({
   massWetKg: z.number().min(0).optional(),
   moistureContentPercent: z.number().min(0).max(100).optional(),
   massDryKg: z.number().min(0).optional(),
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   overrideJustification: z.string().max(2000).optional().nullable().or(z.literal("")),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),
-}).superRefine((value, ctx) => {
-  validateTruckMasses(value, ctx);
 });
 
 export const deleteFeedstockSchema = z.object({

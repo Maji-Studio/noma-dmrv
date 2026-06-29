@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { CaretDown, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDownIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatSafeDate } from "@/lib/format-utils";
@@ -99,7 +99,7 @@ export function RunFilterSelect({
           >
             {selected ? selected.code : "All production runs"}
           </span>
-          <CaretDown
+          <CaretDownIcon
             size={16}
             className={cn(
               "absolute right-12 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
@@ -116,7 +116,7 @@ export function RunFilterSelect({
             data-testid="chain-run-select-clear"
             className="absolute right-[36px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
           >
-            <X size={16} />
+            <XIcon size={16} />
           </Button>
         ) : null}
       </div>

@@ -3,7 +3,7 @@
  *
  * Covers:
  * - UI CRUD: create a feedstock through the side sheet form, verify it appears in the list
- * - Truck weighing: arrival/departure masses prefill feedstock wet mass and allocation
+ * - Allocation mirroring: total wet mass auto-fills the single-bin allocation
  */
 import { test, expect } from "./fixtures";
 import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
@@ -40,10 +40,8 @@ test.describe("Feedstock UI CRUD", () => {
       seededData.feedstockType.name
     );
 
-    // Fill weighbridge masses; wet mass and single-bin allocation are inferred.
-    await page.fill('input[name="truckMassOnArrivalKg"]', "250");
-    await page.fill('input[name="truckMassOnDepartureKg"]', "150");
-    await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue("100");
+    // Fill total wet mass; the single-bin allocation mirrors it automatically.
+    await page.fill('input[name="totalWetMassKg"]', "100");
     await expect(
       page.locator('input[name="allocations.0.allocatedWetMassKg"]')
     ).toHaveValue("100");

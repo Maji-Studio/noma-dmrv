@@ -10,7 +10,7 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormEntitySelect, FormField, FormInput, FormTextarea, FormSection, FormActions } from "@/components/forms";
 import { Button } from "@/components/ui";
-import { Plus, Trash } from "@phosphor-icons/react";
+import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   formulationFormSchema,
   FORMULATION_LINE_FEEDSTOCK_USAGE,
@@ -140,7 +140,7 @@ export function FormulationForm({
             onClick={() => append(EMPTY_INGREDIENT)}
             disabled={isSubmitting}
           >
-            <Plus size={16} weight="bold" />
+            <PlusIcon size={16} weight="bold" />
             Add Ingredient
           </Button>
         }
@@ -167,7 +167,7 @@ export function FormulationForm({
                 disabled={isSubmitting}
                 aria-label={`Remove ingredient ${index + 1}`}
               >
-                <Trash size={16} weight="bold" />
+                <TrashIcon size={16} weight="bold" />
               </Button>
             </div>
 

@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Cube, Plus, Scales } from "@phosphor-icons/react";
+import { CubeIcon, PlusIcon, ScalesIcon } from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   useBiocharProduct,
@@ -286,7 +286,7 @@ export function BiocharProductList() {
         subtitle="Finished biochar inventory and certifications"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Product
           </Button>
         }
@@ -297,14 +297,14 @@ export function BiocharProductList() {
         <StatCard
           title="Total Products"
           value={totalProducts}
-          icon={<Cube size={24} weight="bold" />}
+          icon={<CubeIcon size={24} weight="bold" />}
           description="Finished product batches"
           isLoading={isLoading}
         />
         <StatCard
           title="Total Mass"
           value={`${totalMassKg.toLocaleString()} kg`}
-          icon={<Scales size={24} weight="bold" />}
+          icon={<ScalesIcon size={24} weight="bold" />}
           description="Combined product mass"
           isLoading={isLoading}
         />
@@ -323,12 +323,12 @@ export function BiocharProductList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Cube size={48} />}
+            icon={<CubeIcon size={48} />}
             title="No biochar products yet"
             description="Create your first biochar product to start tracking finished product batches."
             action={
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 Create Product
               </Button>
             }

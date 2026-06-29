@@ -13,7 +13,7 @@
  */
 "use client";
 
-import { LockOpen, ArrowsClockwise } from "@phosphor-icons/react";
+import { LockOpenIcon, ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { DetailSection, DetailRow, DetailField } from "@/components/ui/detail-panel";
@@ -170,7 +170,7 @@ export function ProcessDetailPanel({
               disabled={!isEligible}
               onClick={() => onUnlock(process)}
             >
-              <LockOpen size={18} weight="bold" />
+              <LockOpenIcon size={18} weight="bold" />
               {isEligible
                 ? "Unlock Method B"
                 : `${process.baselineTarget - process.eligibleSampleCount} more to qualify`}
@@ -182,7 +182,7 @@ export function ProcessDetailPanel({
               className="flex-1"
               onClick={() => onStartNewProcess(process)}
             >
-              <ArrowsClockwise size={18} weight="bold" />
+              <ArrowsClockwiseIcon size={18} weight="bold" />
               Start new process
             </Button>
           )}

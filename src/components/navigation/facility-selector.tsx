@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { Warehouse, CaretDown, Plus, Check, GearSix } from "@phosphor-icons/react";
+import { WarehouseIcon, CaretDownIcon, PlusIcon, CheckIcon, GearSixIcon } from "@phosphor-icons/react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
 export function FacilitySelector() {
@@ -59,7 +59,7 @@ export function FacilitySelector() {
           href="/facilities"
           className="flex items-center gap-8 h-36 px-10 border border-dashed border-[var(--color-white-25)] text-[var(--color-white-50)] hover:text-white hover:border-[var(--clr-purple)] transition-colors duration-150"
         >
-          <Plus size={14} weight="bold" />
+          <PlusIcon size={14} weight="bold" />
           <span className="body-caption">Add First Facility</span>
         </Link>
       </div>
@@ -69,7 +69,7 @@ export function FacilitySelector() {
   return (
     <div className="mx-8 px-10 py-10" ref={containerRef}>
       <div className="relative">
-        <Warehouse
+        <WarehouseIcon
           size={16}
           weight="fill"
           className="absolute left-10 top-1/2 -translate-y-1/2 text-white pointer-events-none z-10"
@@ -84,7 +84,7 @@ export function FacilitySelector() {
         >
           <span className="block truncate">{selectedFacilityName}</span>
         </button>
-        <CaretDown
+        <CaretDownIcon
           size={14}
           weight="bold"
           className={`absolute right-10 top-1/2 -translate-y-1/2 text-[var(--color-white-50)] pointer-events-none transition-transform duration-150 ${
@@ -115,7 +115,7 @@ export function FacilitySelector() {
                     >
                       <span className="truncate">{facility.name}</span>
                       {isSelected && (
-                        <Check
+                        <CheckIcon
                           size={12}
                           weight="bold"
                           className="text-[var(--clr-purple)] shrink-0"
@@ -136,7 +136,7 @@ export function FacilitySelector() {
                 }}
                 className="w-full h-40 px-10 flex items-center gap-8 body-caption text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06] transition-colors duration-150"
               >
-                <GearSix size={14} weight="bold" className="shrink-0" />
+                <GearSixIcon size={14} weight="bold" className="shrink-0" />
                 <span>Manage Facilities</span>
               </button>
             </div>

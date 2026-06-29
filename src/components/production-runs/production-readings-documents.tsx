@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { File, Trash, ArrowSquareOut, Warning } from "@phosphor-icons/react/dist/ssr";
+import { FileIcon, TrashIcon, ArrowSquareOutIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormSelect, ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -38,7 +38,7 @@ function WarningBanner({ messages }: { messages: string[] }) {
 
   return (
     <div className="flex items-start gap-8 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange)]/10 p-12 text-[var(--color-signal-orange-strong)]">
-      <Warning size={16} weight="fill" className="mt-2 shrink-0" />
+      <WarningIcon size={16} weight="fill" className="mt-2 shrink-0" />
       <div className="space-y-4 body-small" role="alert" aria-live="polite">
         {messages.map((message) => (
           <p key={message}>{message}</p>
@@ -198,7 +198,7 @@ export function ProductionReadingsDocuments({
               key={doc.id}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
             >
-              <File
+              <FileIcon
                 size={16}
                 weight="bold"
                 className="shrink-0 text-[var(--color-text-tertiary)]"
@@ -218,7 +218,7 @@ export function ProductionReadingsDocuments({
                 className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-interaction)] transition-colors duration-300"
                 aria-label={`Open ${doc.fileName}`}
               >
-                <ArrowSquareOut size={16} weight="bold" />
+                <ArrowSquareOutIcon size={16} weight="bold" />
               </a>
               {!readOnly && (
                 <Button
@@ -229,7 +229,7 @@ export function ProductionReadingsDocuments({
                   className="shrink-0"
                   aria-label={`Delete ${doc.fileName}`}
                 >
-                  <Trash size={16} weight="bold" />
+                  <TrashIcon size={16} weight="bold" />
                 </Button>
               )}
             </li>

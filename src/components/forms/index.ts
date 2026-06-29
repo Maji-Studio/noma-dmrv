@@ -17,7 +17,6 @@ export { FormSection } from "./form-section";
 export { FormSpine } from "./form-spine";
 export { makeCertFieldStatus, type CertFieldStatus } from "./cert-field-status";
 export { DistanceCalcField } from "./distance-calc-field";
-export { TruckWeighingSection } from "./truck-weighing-section";
 
 // Position Picker (map preview + address search + manual lat/lng)
 export { PositionPicker, type PositionValue, type PickerAccent } from "./position-picker";

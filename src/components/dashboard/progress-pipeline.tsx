@@ -9,7 +9,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardProgressStage } from "@/data-access/dashboard-overview";
 import { DashboardPanel } from "./dashboard-panel";
 
@@ -65,7 +65,7 @@ export function ProgressPipeline({ stages }: ProgressPipelineProps) {
                     {stage.label}
                   </span>
                 </span>
-                <ArrowRight
+                <ArrowRightIcon
                   size={13}
                   weight="bold"
                   className="shrink-0 text-[var(--color-text-tertiary)] transition-transform duration-150 group-hover:translate-x-[3px]"

@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   useProductionSamples,
   useCreateProductionSample,
@@ -124,7 +124,7 @@ export function ProductionSampleTable({
         </h3>
         {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
-            <Plus size={16} weight="bold" />
+            <PlusIcon size={16} weight="bold" />
             Add Sample
           </Button>
         )}
@@ -184,7 +184,7 @@ export function ProductionSampleTable({
                           aria-label="Edit sample"
                           disabled={inlineForm.open}
                         >
-                          <Pencil size={16} />
+                          <PencilIcon size={16} />
                         </Button>
                         <Button
                           variant="destructive"
@@ -193,7 +193,7 @@ export function ProductionSampleTable({
                           aria-label="Delete sample"
                           disabled={inlineForm.open}
                         >
-                          <Trash size={16} />
+                          <TrashIcon size={16} />
                         </Button>
                       </div>
                     </td>

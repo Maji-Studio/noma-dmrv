@@ -14,7 +14,7 @@
  */
 "use client";
 
-import { Flask, Warning } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatTonnes } from "@/lib/format-utils";
@@ -92,7 +92,7 @@ function ReplicateRow({ r }: { r: DurabilitySummaryReplicate }) {
       <td className="px-10 py-8">
         <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-text-primary)]">
           {r.outlier && (
-            <Warning
+            <WarningIcon
               size={13}
               weight="fill"
               className="shrink-0 text-[var(--st-wait)]"
@@ -194,7 +194,7 @@ export function CreditBatchDurabilityPanel({
       <Section>
         <EmptyState
           padding="md"
-          icon={<Flask size={40} weight="duotone" />}
+          icon={<FlaskIcon size={40} weight="duotone" />}
           title="No durability samples yet"
           description="Lab samples entered against this batch's production runs roll up here. The protocol needs ≥3 independent samples across distinct runs/days (§8.3.1) before this batch can submit a 200-year removal."
         />

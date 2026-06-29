@@ -13,10 +13,10 @@
  */
 
 import {
-  File as FileIcon,
-  Flask,
-  Path,
-  SealCheck,
+  FileIcon,
+  FlaskIcon,
+  PathIcon,
+  SealCheckIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
@@ -145,7 +145,7 @@ function TransportLegEvidence({ leg }: { leg: TrailTransportLeg }) {
     .join(" → ");
   return (
     <li className="flex items-start gap-8" data-testid="trail-evidence-leg">
-      <Path size={14} className="mt-2 shrink-0 text-[var(--color-text-tertiary)]" />
+      <PathIcon size={14} className="mt-2 shrink-0 text-[var(--color-text-tertiary)]" />
       <div className="min-w-0">
         <p className="body-small text-[var(--color-text-primary)]">
           Transport leg · {leg.distanceKm.toLocaleString()} km
@@ -210,7 +210,7 @@ function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined })
           className="flex items-start gap-8"
           data-testid="trail-evidence-sample"
         >
-          <Flask
+          <FlaskIcon
             size={14}
             className="mt-2 shrink-0 text-[var(--color-text-tertiary)]"
           />
@@ -273,7 +273,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
             Custody trail · {steps.length} steps
           </p>
           <p className="flex items-center gap-6 body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
-            <SealCheck size={14} />
+            <SealCheckIcon size={14} />
             {evidence?.totalCount ?? 0} attesting records
           </p>
         </div>

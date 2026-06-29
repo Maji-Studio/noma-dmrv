@@ -5,7 +5,7 @@
  * admin layout's requireAdmin() guard.
  */
 import type { CSSProperties, ElementType } from "react";
-import { ArrowRight, Gauge, Users } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, GaugeIcon, UsersIcon } from "@phosphor-icons/react/dist/ssr";
 import { Card } from "@/components/ui/card";
 
 interface AdminTile {
@@ -22,7 +22,7 @@ const ADMIN_TILES: AdminTile[] = [
     // Emission-estimate config now lives in the certification workspace; link
     // straight there rather than through the deprecated /admin redirect hop.
     href: "/certification/settings",
-    icon: Gauge,
+    icon: GaugeIcon,
     title: "Emission estimates",
     description:
       "Per-facility genset yield and period LCA values used in Isometric submissions — configured under Certification → Settings → Emissions.",
@@ -30,7 +30,7 @@ const ADMIN_TILES: AdminTile[] = [
   },
   {
     href: "/admin/users",
-    icon: Users,
+    icon: UsersIcon,
     title: "Users",
     description:
       "Invite and manage the people with access to the MRV system.",
@@ -88,7 +88,7 @@ export default function AdminHomePage() {
                     <span className="title-chapter-title text-[var(--color-text-tertiary)] transition-colors duration-200 group-hover:text-[var(--color-text-primary)]">
                       Configure
                     </span>
-                    <ArrowRight
+                    <ArrowRightIcon
                       aria-hidden
                       size={14}
                       weight="bold"

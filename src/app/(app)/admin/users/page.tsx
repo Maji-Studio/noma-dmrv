@@ -6,10 +6,10 @@
  */
 import type { Icon } from "@phosphor-icons/react";
 import {
-  EnvelopeSimple,
-  ShieldCheck,
-  UserPlus,
-  Users,
+  EnvelopeSimpleIcon,
+  ShieldCheckIcon,
+  UserPlusIcon,
+  UsersIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
 interface PlannedCapability {
@@ -20,19 +20,19 @@ interface PlannedCapability {
 
 const PLANNED_CAPABILITIES: PlannedCapability[] = [
   {
-    icon: UserPlus,
+    icon: UserPlusIcon,
     title: "Invite users",
     description:
       "Send email invitations with a role pre-assigned. Invitees set their own password on first sign-in.",
   },
   {
-    icon: EnvelopeSimple,
+    icon: EnvelopeSimpleIcon,
     title: "Pending invitations",
     description:
       "Resend or revoke invitations that haven't been accepted yet.",
   },
   {
-    icon: ShieldCheck,
+    icon: ShieldCheckIcon,
     title: "Roles & access",
     description:
       "Promote users to admin or downgrade them, and remove access entirely.",
@@ -54,7 +54,7 @@ export default function AdminUsersPage() {
       </header>
 
       <section className="flex flex-col gap-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-24 py-32 items-center text-center">
-        <Users size={48} className="text-[var(--color-text-tertiary)]" />
+        <UsersIcon size={48} className="text-[var(--color-text-tertiary)]" />
         <div className="flex flex-col gap-8 max-w-[520px]">
           <h2 className="title-heading-3">User invitation UI coming soon</h2>
           <p className="body-small text-[var(--color-text-secondary)]">

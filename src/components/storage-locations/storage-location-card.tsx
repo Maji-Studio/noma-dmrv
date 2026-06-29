@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  ArrowDown,
-  ArrowUp,
-  CheckCircle,
-  PencilSimple,
-  Trash,
-  Warning,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CheckCircleIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { formatMass } from "@/lib/format-utils";
@@ -87,9 +87,9 @@ export function StorageLocationCard({
               }${formatMass(lastActivity.massKg)}`}
             >
               {lastActivity.type === "in" ? (
-                <ArrowUp size={12} weight="bold" />
+                <ArrowUpIcon size={12} weight="bold" />
               ) : (
-                <ArrowDown size={12} weight="bold" />
+                <ArrowDownIcon size={12} weight="bold" />
               )}
               {formatTimeAgo(lastActivity.date)}
             </span>
@@ -149,7 +149,7 @@ export function StorageLocationCard({
         {storageLocation.type === "feedstock_bin" &&
           storageLocation.feedstockInventory.pendingDryMassKg > 0 && (
             <p className="flex items-center gap-4 body-caption text-[var(--clr-orange)]">
-              <Warning size={12} weight="fill" />
+              <WarningIcon size={12} weight="fill" />
               {formatMass(storageLocation.feedstockInventory.pendingDryMassKg)}{" "}
               pending completion
             </p>
@@ -158,7 +158,7 @@ export function StorageLocationCard({
         {storageLocation.type === "product_bin" &&
           storageLocation.productInventory.appliedApplicationCount > 0 && (
             <p className="flex items-center gap-4 body-caption text-[var(--color-signal-green)]">
-              <CheckCircle size={12} weight="fill" />
+              <CheckCircleIcon size={12} weight="fill" />
               Applied{" "}
               {formatMass(storageLocation.productInventory.appliedDryMassKg)}
               <span className="mx-2">·</span>
@@ -181,7 +181,7 @@ export function StorageLocationCard({
           className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--bin-accent)] hover:text-[var(--bin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
           aria-label={`Edit ${storageLocation.name}`}
         >
-          <PencilSimple size={15} />
+          <PencilSimpleIcon size={15} />
         </button>
         <button
           type="button"
@@ -189,7 +189,7 @@ export function StorageLocationCard({
           className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--color-signal-red)] hover:text-[var(--color-signal-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
           aria-label={`Delete ${storageLocation.name}`}
         >
-          <Trash size={15} />
+          <TrashIcon size={15} />
         </button>
       </div>
     </article>
