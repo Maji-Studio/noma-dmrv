@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { CircleNotch } from "@phosphor-icons/react/dist/ssr"
+import { CircleNotchIcon } from "@phosphor-icons/react/dist/ssr"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -62,7 +62,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {busy && (
-          <CircleNotch
+          <CircleNotchIcon
             aria-hidden
             className="animate-spin shrink-0"
             size={16}

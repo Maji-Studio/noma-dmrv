@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { Package, Scales, Drop, CheckCircle, Warning } from "@phosphor-icons/react";
+import { PackageIcon, ScalesIcon, DropIcon, CheckCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMass } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -30,7 +30,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
       <StatCard
         title="Total Feedstocks"
         value={stats?.totalFeedstocks ?? 0}
-        icon={<Package size={20} />}
+        icon={<PackageIcon size={20} />}
         isLoading={isLoading}
         description="All time feedstocks"
       />
@@ -38,7 +38,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
       <StatCard
         title="Total Dry Mass"
         value={formatMass(stats?.totalDryMassKg ?? 0)}
-        icon={<Scales size={20} />}
+        icon={<ScalesIcon size={20} />}
         isLoading={isLoading}
         description="Total dry mass received"
       />
@@ -46,7 +46,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
       <StatCard
         title="Avg. Moisture"
         value={stats?.avgMoisturePercent != null ? `${stats.avgMoisturePercent.toFixed(1)}%` : "—"}
-        icon={<Drop size={20} />}
+        icon={<DropIcon size={20} />}
         isLoading={isLoading}
         description="Average moisture content"
       />
@@ -56,9 +56,9 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         value={`${stats?.completeFeedstocks ?? 0} / ${stats?.totalFeedstocks ?? 0}`}
         icon={
           stats?.missingDataFeedstocks === 0 ? (
-            <CheckCircle size={20} className="text-[var(--color-status-success)]" />
+            <CheckCircleIcon size={20} className="text-[var(--color-status-success)]" />
           ) : (
-            <Warning size={20} className="text-[var(--clr-orange)]" />
+            <WarningIcon size={20} className="text-[var(--clr-orange)]" />
           )
         }
         isLoading={isLoading}

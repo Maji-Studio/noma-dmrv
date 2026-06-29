@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui";
-import { ArrowRight, BookOpen } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, BookOpenIcon } from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
@@ -27,7 +27,7 @@ export default function Home() {
             onClick={() => router.push("/login")}
           >
              Get Started
-             <ArrowRight size={20} weight="bold" />
+             <ArrowRightIcon size={20} weight="bold" />
           </Button>
           <Button
             variant="weak"
@@ -35,7 +35,7 @@ export default function Home() {
             onClick={() => window.open("https://github.com/anthropics/claude-code", "_blank")}
           >
              Documentation
-             <BookOpen size={20} weight="bold" />
+             <BookOpenIcon size={20} weight="bold" />
           </Button>
         </div>
       </main>

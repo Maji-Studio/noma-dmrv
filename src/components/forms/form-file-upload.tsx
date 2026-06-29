@@ -13,7 +13,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { UploadSimple, File, X, CheckCircle, WarningCircle, Spinner } from "@phosphor-icons/react/dist/ssr";
+import { UploadSimpleIcon, FileIcon, XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { formatFileSize } from "@/lib/format-utils";
 import { useFileUpload } from "@/hooks/use-file-upload";
@@ -212,7 +212,7 @@ export function FormFileUpload({
           getDropzoneClass({ disabled, dragOver: isDragOver, error }),
         ].join(" ")}
       >
-        <UploadSimple
+        <UploadSimpleIcon
           size={24}
           weight="bold"
           className={
@@ -248,21 +248,21 @@ export function FormFileUpload({
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
             >
               {u.status === "uploading" && (
-                <Spinner
+                <SpinnerIcon
                   size={16}
                   weight="bold"
                   className="shrink-0 animate-spin text-[var(--color-text-tertiary)]"
                 />
               )}
               {u.status === "uploaded" && (
-                <CheckCircle
+                <CheckCircleIcon
                   size={16}
                   weight="fill"
                   className="shrink-0 text-[var(--color-signal-green)]"
                 />
               )}
               {u.status === "failed" && (
-                <WarningCircle
+                <WarningCircleIcon
                   size={16}
                   weight="fill"
                   className="shrink-0 text-[var(--color-signal-red)]"
@@ -295,7 +295,7 @@ export function FormFileUpload({
                 className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
                 aria-label={`Remove ${u.name}`}
               >
-                <X size={14} weight="bold" />
+                <XIcon size={14} weight="bold" />
               </Button>
             </li>
           ))}
@@ -309,7 +309,7 @@ export function FormFileUpload({
               key={`${file.name}-${i}`}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
             >
-              <File
+              <FileIcon
                 size={16}
                 weight="bold"
                 className="shrink-0 text-[var(--color-text-tertiary)]"
@@ -328,7 +328,7 @@ export function FormFileUpload({
                 className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
                 aria-label={`Remove ${file.name}`}
               >
-                <X size={14} weight="bold" />
+                <XIcon size={14} weight="bold" />
               </Button>
             </li>
           ))}

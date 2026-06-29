@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash, MapPin } from "@phosphor-icons/react";
+import { PlusIcon, TrashIcon, MapPinIcon } from "@phosphor-icons/react";
 import {
   DistanceCalcField,
   FormActions,
@@ -349,7 +349,7 @@ function CreateModeLocationsSection({
           onClick={() => setShowForm(true)}
           className="text-[var(--color-interaction)]"
         >
-          <Plus size={14} weight="bold" />
+          <PlusIcon size={14} weight="bold" />
           Add Location
         </Button>
       </div>
@@ -376,7 +376,7 @@ function CreateModeLocationsSection({
                 className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
               >
                 <div className="flex items-center gap-10 min-w-0">
-                  <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
+                  <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                   <div className="min-w-0">
                     <p className="body-small font-medium truncate">{title}</p>
                     {locationSummary ? (
@@ -397,7 +397,7 @@ function CreateModeLocationsSection({
                   className="shrink-0"
                   aria-label={`Remove ${title}`}
                 >
-                  <Trash size={16} />
+                  <TrashIcon size={16} />
                 </Button>
               </div>
             );
@@ -672,7 +672,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
           onClick={() => setShowAddDialog(true)}
           className="text-[var(--color-interaction)]"
         >
-          <Plus size={14} weight="bold" />
+          <PlusIcon size={14} weight="bold" />
           Add Location
         </Button>
       </div>
@@ -700,7 +700,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
               className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
             >
               <div className="flex items-center gap-10 min-w-0">
-                <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
+                <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                 <div className="min-w-0">
                   <p className="body-small font-medium truncate">{loc.name || loc.country}</p>
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
@@ -718,7 +718,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                 className="shrink-0"
                 aria-label={`Delete ${loc.name || loc.country}`}
               >
-                <Trash size={16} />
+                <TrashIcon size={16} />
               </Button>
             </div>
           ))}

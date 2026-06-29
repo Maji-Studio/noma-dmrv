@@ -28,7 +28,7 @@ import {
   type UseFormRegister,
   type UseFormRegisterReturn,
 } from "react-hook-form";
-import { CheckCircle, Warning } from "@phosphor-icons/react/dist/ssr";
+import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -521,7 +521,7 @@ function ResultPanel({
   return (
     <div className="flex flex-col gap-16">
       <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-        <CheckCircle
+        <CheckCircleIcon
           size={18}
           weight="fill"
           aria-hidden
@@ -536,7 +536,7 @@ function ResultPanel({
       {warnings.length > 0 && (
         <div className="flex flex-col gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
           <span className="inline-flex items-center gap-6 title-chapter-title text-[var(--color-signal-orange)]">
-            <Warning size={14} weight="fill" aria-hidden />
+            <WarningIcon size={14} weight="fill" aria-hidden />
             {warnings.length} warning(s)
           </span>
           <ul className="flex flex-col gap-4">

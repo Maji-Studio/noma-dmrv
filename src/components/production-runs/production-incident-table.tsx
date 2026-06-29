@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   useProductionIncidents,
   useCreateProductionIncident,
@@ -112,7 +112,7 @@ export function ProductionIncidentTable({
         </h3>
         {!readOnly && !inlineForm.open && (
           <Button variant="default" size="small" onClick={openCreate}>
-            <Plus size={16} weight="bold" />
+            <PlusIcon size={16} weight="bold" />
             Add Incident
           </Button>
         )}
@@ -170,7 +170,7 @@ export function ProductionIncidentTable({
                           aria-label="Edit incident"
                           disabled={inlineForm.open}
                         >
-                          <Pencil size={16} />
+                          <PencilIcon size={16} />
                         </Button>
                         <Button
                           variant="destructive"
@@ -179,7 +179,7 @@ export function ProductionIncidentTable({
                           aria-label="Delete incident"
                           disabled={inlineForm.open}
                         >
-                          <Trash size={16} />
+                          <TrashIcon size={16} />
                         </Button>
                       </div>
                     </td>

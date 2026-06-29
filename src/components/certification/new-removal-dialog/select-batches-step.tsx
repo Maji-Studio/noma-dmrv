@@ -13,9 +13,9 @@
 
 import Link from "next/link";
 import {
-  ArrowSquareOut,
-  CheckCircle,
-  Warning,
+  ArrowSquareOutIcon,
+  CheckCircleIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -91,7 +91,7 @@ function ReadyCard({
         />
       </div>
       <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-green)]">
-        <CheckCircle size={14} weight="fill" aria-hidden />
+        <CheckCircleIcon size={14} weight="fill" aria-hidden />
         Ready to certify
       </span>
     </label>
@@ -116,7 +116,7 @@ function IncompleteCard({
           {batch.code}
         </span>
         <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-orange-strong)]">
-          <Warning size={14} weight="fill" aria-hidden />
+          <WarningIcon size={14} weight="fill" aria-hidden />
           {batch.health.issueCount}{" "}
           {batch.health.issueCount === 1 ? "issue" : "issues"}
         </span>
@@ -145,7 +145,7 @@ function IncompleteCard({
         className="inline-flex items-center gap-4 self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
       >
         Fix on batch page
-        <ArrowSquareOut size={12} aria-hidden />
+        <ArrowSquareOutIcon size={12} aria-hidden />
       </Link>
     </div>
   );
@@ -171,7 +171,7 @@ export function SelectBatchesStep({
 
       {!facilitySetupComplete && (
         <div className="flex items-start gap-12 border-l-4 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
-          <Warning
+          <WarningIcon
             size={16}
             weight="fill"
             aria-hidden
@@ -187,7 +187,7 @@ export function SelectBatchesStep({
               className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
             >
               Open certification settings
-              <ArrowSquareOut size={12} aria-hidden />
+              <ArrowSquareOutIcon size={12} aria-hidden />
             </Link>
           </div>
         </div>

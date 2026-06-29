@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ListChecks, Plus } from "@phosphor-icons/react";
+import { ListChecksIcon, PlusIcon } from "@phosphor-icons/react";
 import {
   useCreateFormulation,
   useDeleteFormulation,
@@ -252,7 +252,7 @@ export function FormulationList() {
         subtitle="Biochar product recipes and blend ratios"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Formulation
           </Button>
         }
@@ -263,7 +263,7 @@ export function FormulationList() {
         <StatCard
           title="Total Formulations"
           value={formulations.length}
-          icon={<ListChecks size={24} weight="bold" />}
+          icon={<ListChecksIcon size={24} weight="bold" />}
           description="Biochar product recipes"
           isLoading={isLoading}
         />
@@ -282,12 +282,12 @@ export function FormulationList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<ListChecks size={48} />}
+            icon={<ListChecksIcon size={48} />}
             title="No formulations yet"
             description="Create your first formulation to define biochar product recipes."
             action={
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 Create Formulation
               </Button>
             }

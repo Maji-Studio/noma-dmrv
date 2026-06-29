@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import {
-  ArrowSquareOut,
-  Camera,
-  File,
-  Trash,
-  WarningCircle,
+  ArrowSquareOutIcon,
+  CameraIcon,
+  FileIcon,
+  TrashIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormFileUpload, FormSelect, ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -153,7 +153,7 @@ function EvidenceDocumentList({
             key={doc.id}
             className="flex flex-wrap items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
           >
-            <File
+            <FileIcon
               size={16}
               weight="bold"
               className="shrink-0 text-[var(--color-text-tertiary)]"
@@ -173,7 +173,7 @@ function EvidenceDocumentList({
               </span>
               {missingExif && (
                 <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange-strong)]">
-                  <WarningCircle size={14} weight="bold" />
+                  <WarningCircleIcon size={14} weight="bold" />
                   No geotag: {missingExif}
                 </span>
               )}
@@ -219,7 +219,7 @@ function EvidenceDocumentList({
               className="shrink-0 p-4 text-[var(--color-text-tertiary)] transition-colors duration-300 hover:text-[var(--color-interaction)]"
               aria-label={`Open ${doc.fileName}`}
             >
-              <ArrowSquareOut size={16} weight="bold" />
+              <ArrowSquareOutIcon size={16} weight="bold" />
             </a>
             <Button
               variant="destructive"
@@ -229,7 +229,7 @@ function EvidenceDocumentList({
               className="shrink-0"
               aria-label={`Delete ${doc.fileName}`}
             >
-              <Trash size={16} weight="bold" />
+              <TrashIcon size={16} weight="bold" />
             </Button>
           </li>
         );
@@ -341,9 +341,9 @@ export function ApplicationEvidencePanel({
       <header className="flex items-center justify-between gap-12">
         <h3 className="title-heading-3 flex items-center gap-8">
           {mode === "visual" ? (
-            <Camera size={18} weight="bold" />
+            <CameraIcon size={18} weight="bold" />
           ) : (
-            <File size={18} weight="bold" />
+            <FileIcon size={18} weight="bold" />
           )}
           Evidence
           <InfoHint side="top" label="What evidence is required">

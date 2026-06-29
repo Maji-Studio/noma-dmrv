@@ -10,13 +10,13 @@
 
 import { useMemo, useState } from "react";
 import {
-  Cube,
-  Leaf,
-  MagnifyingGlass,
-  Package,
-  Plus,
-  Warehouse,
-  X,
+  CubeIcon,
+  LeafIcon,
+  MagnifyingGlassIcon,
+  PackageIcon,
+  PlusIcon,
+  WarehouseIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import type { StorageLocation } from "@/db/schema";
 import {
@@ -57,19 +57,19 @@ const LANE_META: Record<
 > = {
   feedstock_bin: {
     label: "Feedstock",
-    icon: <Leaf size={18} weight="bold" />,
+    icon: <LeafIcon size={18} weight="bold" />,
     accent: "var(--acc-prod)",
     ink: "var(--acc-prod-ink)",
   },
   biochar_bin: {
     label: "Biochar",
-    icon: <Cube size={18} weight="bold" />,
+    icon: <CubeIcon size={18} weight="bold" />,
     accent: "var(--acc-infra)",
     ink: "var(--acc-infra-ink)",
   },
   product_bin: {
     label: "Product",
-    icon: <Package size={18} weight="bold" />,
+    icon: <PackageIcon size={18} weight="bold" />,
     accent: "var(--acc-dist)",
     ink: "var(--acc-dist-ink)",
   },
@@ -321,7 +321,7 @@ export function StorageLocationList() {
         subtitle="Bins and stores for feedstock, biochar, and finished product"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Storage Bin
           </Button>
         }
@@ -331,7 +331,7 @@ export function StorageLocationList() {
         <StatCard
           title="Feedstock On Hand"
           value={formatMass(onHandByType.feedstock_bin ?? 0)}
-          icon={<Leaf size={24} weight="bold" color="var(--acc-prod)" />}
+          icon={<LeafIcon size={24} weight="bold" color="var(--acc-prod)" />}
           description={
             isTruncated
               ? "Loaded dry mass across feedstock bins"
@@ -342,7 +342,7 @@ export function StorageLocationList() {
         <StatCard
           title="Biochar On Hand"
           value={formatMass(onHandByType.biochar_bin ?? 0)}
-          icon={<Cube size={24} weight="bold" color="var(--acc-infra)" />}
+          icon={<CubeIcon size={24} weight="bold" color="var(--acc-infra)" />}
           description={
             isTruncated
               ? "Loaded unallocated biochar in store"
@@ -353,7 +353,7 @@ export function StorageLocationList() {
         <StatCard
           title="Product On Hand"
           value={formatMass(onHandByType.product_bin ?? 0)}
-          icon={<Package size={24} weight="bold" color="var(--acc-dist)" />}
+          icon={<PackageIcon size={24} weight="bold" color="var(--acc-dist)" />}
           description={
             isTruncated
               ? "Loaded packed product ready to ship"
@@ -371,7 +371,7 @@ export function StorageLocationList() {
       <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <div className="flex flex-col gap-12 md:flex-row md:items-center md:justify-between">
           <div className="relative md:max-w-[360px] md:flex-1">
-            <MagnifyingGlass
+            <MagnifyingGlassIcon
               size={18}
               className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
             />
@@ -393,7 +393,7 @@ export function StorageLocationList() {
             </span>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
-                <X size={16} weight="bold" />
+                <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}
@@ -404,7 +404,7 @@ export function StorageLocationList() {
       {storageLocations.length === 0 ? (
         <EmptyState
           padding="lg"
-          icon={<Warehouse size={48} />}
+          icon={<WarehouseIcon size={48} />}
           title={hasActiveFilters ? "No storage bins found" : "No storage bins yet"}
           description={
             hasActiveFilters
@@ -414,7 +414,7 @@ export function StorageLocationList() {
           action={
             !hasActiveFilters ? (
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 Create Storage Bin
               </Button>
             ) : undefined

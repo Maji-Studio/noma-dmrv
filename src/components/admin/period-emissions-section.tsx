@@ -18,7 +18,7 @@
 import { useId, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, Trash } from "@phosphor-icons/react/dist/ssr";
+import { PencilIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Modal } from "@/components/ui/modal";
@@ -98,7 +98,7 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
           size="small"
           onClick={() => setOpenForm({ mode: "create" })}
         >
-          <Plus size={14} weight="bold" />
+          <PlusIcon size={14} weight="bold" />
           Add row
         </Button>
       </header>
@@ -168,7 +168,7 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
                       aria-label={`Edit ${CATEGORY_LABELS[row.category]} (${row.lcaWindowStartOn} → ${row.lcaWindowEndOn})`}
                       onClick={() => setOpenForm({ mode: "edit", row })}
                     >
-                      <Pencil size={14} weight="bold" />
+                      <PencilIcon size={14} weight="bold" />
                     </Button>
                     <Button
                       variant="noOutline"
@@ -176,7 +176,7 @@ export function PeriodEmissionsSection({ facilityId }: { facilityId: string }) {
                       aria-label={`Delete ${CATEGORY_LABELS[row.category]} (${row.lcaWindowStartOn} → ${row.lcaWindowEndOn})`}
                       onClick={() => setConfirmDelete(row)}
                     >
-                      <Trash size={14} weight="bold" />
+                      <TrashIcon size={14} weight="bold" />
                     </Button>
                   </div>
                 </td>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash } from "@phosphor-icons/react";
+import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { useToast } from "@/components/ui/toast";
@@ -131,7 +131,7 @@ export function TransportLegsEditor({
         </h3>
         {showAddButton && (
           <Button variant="default" size="small" onClick={openCreate}>
-            <Plus size={16} weight="bold" />
+            <PlusIcon size={16} weight="bold" />
             Add leg
           </Button>
         )}
@@ -210,7 +210,7 @@ export function TransportLegsEditor({
                           aria-label="Edit transport leg"
                           disabled={inlineForm.open}
                         >
-                          <Pencil size={16} />
+                          <PencilIcon size={16} />
                         </Button>
                         <Button
                           variant="destructive"
@@ -219,7 +219,7 @@ export function TransportLegsEditor({
                           aria-label="Delete transport leg"
                           disabled={inlineForm.open}
                         >
-                          <Trash size={16} />
+                          <TrashIcon size={16} />
                         </Button>
                       </div>
                     </td>

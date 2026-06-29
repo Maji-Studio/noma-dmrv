@@ -8,18 +8,18 @@
 
 import Link from "next/link";
 import {
-  ArrowSquareOut,
-  Factory,
-  TreeStructure,
-  Warehouse,
-  Users,
-  Truck,
-  Package,
-  Flask,
-  ShoppingCart,
-  MapPin,
-  Certificate,
-  Recycle,
+  ArrowSquareOutIcon,
+  FactoryIcon,
+  TreeStructureIcon,
+  WarehouseIcon,
+  UsersIcon,
+  TruckIcon,
+  PackageIcon,
+  FlaskIcon,
+  ShoppingCartIcon,
+  MapPinIcon,
+  CertificateIcon,
+  RecycleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
@@ -58,35 +58,35 @@ interface ViewRelatedLinkProps {
 
 const entityConfig: Record<
   EntityType,
-  { icon: typeof Factory; path: string; label: string }
+  { icon: typeof FactoryIcon; path: string; label: string }
 > = {
-  facility: { icon: Factory, path: "/facilities", label: "Facility" },
-  reactor: { icon: TreeStructure, path: "/reactors", label: "Reactor" },
+  facility: { icon: FactoryIcon, path: "/facilities", label: "Facility" },
+  reactor: { icon: TreeStructureIcon, path: "/reactors", label: "Reactor" },
   "storage-location": {
-    icon: Warehouse,
+    icon: WarehouseIcon,
     path: "/storage-locations",
     label: "Storage Location",
   },
-  supplier: { icon: Users, path: "/suppliers", label: "Supplier" },
-  customer: { icon: Users, path: "/customers", label: "Customer" },
-  feedstock: { icon: Recycle, path: "/feedstocks", label: "Feedstock" },
+  supplier: { icon: UsersIcon, path: "/suppliers", label: "Supplier" },
+  customer: { icon: UsersIcon, path: "/customers", label: "Customer" },
+  feedstock: { icon: RecycleIcon, path: "/feedstocks", label: "Feedstock" },
   "production-run": {
-    icon: Factory,
+    icon: FactoryIcon,
     path: "/production-runs",
     label: "Production Run",
   },
-  sample: { icon: Flask, path: "/samples", label: "Sample" },
-  formulation: { icon: Flask, path: "/formulations", label: "Formulation" },
+  sample: { icon: FlaskIcon, path: "/samples", label: "Sample" },
+  formulation: { icon: FlaskIcon, path: "/formulations", label: "Formulation" },
   "biochar-product": {
-    icon: Package,
+    icon: PackageIcon,
     path: "/biochar-products",
     label: "Biochar Product",
   },
-  order: { icon: ShoppingCart, path: "/orders", label: "Order" },
-  delivery: { icon: Truck, path: "/deliveries", label: "Delivery" },
-  application: { icon: MapPin, path: "/applications", label: "Application" },
+  order: { icon: ShoppingCartIcon, path: "/orders", label: "Order" },
+  delivery: { icon: TruckIcon, path: "/deliveries", label: "Delivery" },
+  application: { icon: MapPinIcon, path: "/applications", label: "Application" },
   "credit-batch": {
-    icon: Certificate,
+    icon: CertificateIcon,
     path: "/credit-batches",
     label: "Credit Batch",
   },
@@ -133,7 +133,7 @@ export function ViewRelatedLink({
           {count}
         </span>
       )}
-      <ArrowSquareOut size={size === "sm" ? 12 : 14} weight="regular" className="opacity-60" />
+      <ArrowSquareOutIcon size={size === "sm" ? 12 : 14} weight="regular" className="opacity-60" />
     </Link>
   );
 }

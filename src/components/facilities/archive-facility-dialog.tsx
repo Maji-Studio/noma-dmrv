@@ -9,7 +9,7 @@
 "use client";
 
 import { useId } from "react";
-import { Warning } from "@phosphor-icons/react";
+import { WarningIcon } from "@phosphor-icons/react";
 import { Button, Modal } from "@/components/ui";
 import { useFacilityArchiveImpact } from "@/hooks/use-facilities";
 
@@ -96,7 +96,7 @@ export function ArchiveFacilityDialog({
 
           {impact?.hasRegistrySubmissions && (
             <div className="flex items-start gap-8 border border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] p-12">
-              <Warning
+              <WarningIcon
                 size={18}
                 weight="bold"
                 className="mt-2 shrink-0 text-[var(--clr-orange)]"

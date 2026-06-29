@@ -14,7 +14,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { CheckCircle, Warning } from "@phosphor-icons/react/dist/ssr";
+import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -52,7 +52,7 @@ function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "ready") {
     return (
       <div className="flex items-center gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-        <CheckCircle
+        <CheckCircleIcon
           size={16}
           weight="fill"
           aria-hidden
@@ -73,7 +73,7 @@ function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
         <ul className="flex flex-col gap-4">
           {reasons.map((reason) => (
             <li key={reason} className="flex items-start gap-6">
-              <Warning
+              <WarningIcon
                 size={14}
                 weight="fill"
                 aria-hidden
@@ -212,7 +212,7 @@ export function RemovalDetailSheet({
               <ul className="flex flex-col gap-4">
                 {summary.submissionWarnings.map((warning) => (
                   <li key={warning} className="flex items-start gap-6">
-                    <Warning
+                    <WarningIcon
                       size={14}
                       weight="fill"
                       aria-hidden

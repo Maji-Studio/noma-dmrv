@@ -18,12 +18,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  ArrowsClockwise,
-  CheckCircle,
-  Cloud,
-  File as FileIcon,
-  Lock,
-  Globe,
+  ArrowsClockwiseIcon,
+  CheckCircleIcon,
+  CloudIcon,
+  FileIcon,
+  LockIcon,
+  GlobeIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -277,12 +277,12 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
         >
           {isPublic ? (
             <>
-              <Globe size={ICON_SIZE} weight="bold" />
+              <GlobeIcon size={ICON_SIZE} weight="bold" />
               <span className="body-caption">Public</span>
             </>
           ) : (
             <>
-              <Lock size={ICON_SIZE} weight="bold" />
+              <LockIcon size={ICON_SIZE} weight="bold" />
               <span className="body-caption">Private</span>
             </>
           )}
@@ -294,7 +294,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               className="flex items-center gap-4 text-[var(--color-signal-green)]"
               title="Mirrored to Isometric"
             >
-              <CheckCircle size={STATE_ICON_SIZE} weight="fill" />
+              <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
             </span>
             <Button
               variant="default"
@@ -313,12 +313,12 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
             disabled={pending}
           >
             {mirrorMutation.isPending ? (
-              <ArrowsClockwise
+              <ArrowsClockwiseIcon
                 size={ICON_SIZE}
                 className="animate-spin"
               />
             ) : (
-              <Cloud size={ICON_SIZE} weight="bold" />
+              <CloudIcon size={ICON_SIZE} weight="bold" />
             )}
             Mirror
           </Button>
