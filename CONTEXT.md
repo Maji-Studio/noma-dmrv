@@ -310,14 +310,6 @@ The pyrolysis mass not retained in biochar (syngas, vapour, ash) —
 expected process physics, not an error or a leak.
 _Avoid_: shrinkage, waste.
 
-**Truck weighing**:
-The gross-mass measurement of a transport vehicle before and after
-unloading at a custody transfer point — feedstock arriving at the
-facility, or biochar arriving at the application site. The difference
-attests the transported wet mass; calibrated scale tickets are retained
-verification evidence. Not specific to deliveries.
-_Avoid_: truck weighing at delivery site (over-narrow).
-
 **Evidence method**:
 The per-application declaration of which of the certifier's two
 acceptable proofs of biochar spreading the record satisfies — *visual*

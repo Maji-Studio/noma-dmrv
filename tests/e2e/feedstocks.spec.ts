@@ -40,10 +40,8 @@ test.describe("Feedstock UI CRUD", () => {
       seededData.feedstockType.name
     );
 
-    // Fill weighbridge masses; wet mass and single-bin allocation are inferred.
-    await page.fill('input[name="truckMassOnArrivalKg"]', "250");
-    await page.fill('input[name="truckMassOnDepartureKg"]', "150");
-    await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue("100");
+    // Fill total wet mass; the single-bin allocation mirrors it automatically.
+    await page.fill('input[name="totalWetMassKg"]', "100");
     await expect(
       page.locator('input[name="allocations.0.allocatedWetMassKg"]')
     ).toHaveValue("100");
