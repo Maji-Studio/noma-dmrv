@@ -20,10 +20,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
 import {
-  CheckCircle,
-  Plus,
-  SealCheck,
-  Warning,
+  CheckCircleIcon,
+  PlusIcon,
+  SealCheckIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState } from "@/components/ui";
@@ -70,7 +70,7 @@ export function RemovalsList() {
         </div>
         {facilityId && (
           <Button variant="primary" onClick={() => setDialogOpen(true)}>
-            <Plus size={16} weight="bold" />
+            <PlusIcon size={16} weight="bold" />
             New removal
           </Button>
         )}
@@ -78,7 +78,7 @@ export function RemovalsList() {
 
       {!facilityId ? (
         <EmptyState
-          icon={<SealCheck size={48} />}
+          icon={<SealCheckIcon size={48} />}
           title="Select a facility"
           description="Choose a facility from the sidebar to view its removals."
         />
@@ -152,7 +152,7 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "ready") {
     return (
       <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
-        <CheckCircle size={16} weight="fill" aria-hidden />
+        <CheckCircleIcon size={16} weight="fill" aria-hidden />
         Ready to submit
       </span>
     );
@@ -160,7 +160,7 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "blocked") {
     return (
       <span className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]">
-        <Warning size={16} weight="fill" aria-hidden className="mt-px shrink-0" />
+        <WarningIcon size={16} weight="fill" aria-hidden className="mt-px shrink-0" />
         <span className="line-clamp-2">{reasons.join(" · ")}</span>
       </span>
     );
@@ -239,7 +239,7 @@ function ListBody({
           aria-label="Removals"
           emptyMessage={
             <div className="flex flex-col items-center justify-center gap-12 py-48">
-              <SealCheck size={40} className="text-[var(--color-text-tertiary)]" />
+              <SealCheckIcon size={40} className="text-[var(--color-text-tertiary)]" />
               <div className="text-center">
                 <h3 className="title-heading-3 mb-1">No removals yet</h3>
                 <p className="body-small text-[var(--color-text-secondary)]">
@@ -247,7 +247,7 @@ function ListBody({
                 </p>
               </div>
               <Button variant="default" onClick={onNewRemoval}>
-                <Plus size={16} weight="bold" />
+                <PlusIcon size={16} weight="bold" />
                 New removal
               </Button>
             </div>

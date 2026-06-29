@@ -13,7 +13,7 @@ import * as React from "react";
 import Link from "next/link";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import { TrendUp, TrendDown, Minus } from "@phosphor-icons/react";
+import { TrendUpIcon, TrendDownIcon, MinusIcon } from "@phosphor-icons/react";
 
 /* -------------------------------------------------------------------------------------------------
  * StatCard Variants
@@ -94,7 +94,7 @@ interface TrendBadgeProps {
 }
 
 const TrendBadge = ({ trend, value, label }: TrendBadgeProps) => {
-  const TrendIcon = trend === "up" ? TrendUp : trend === "down" ? TrendDown : Minus;
+  const TrendIcon = trend === "up" ? TrendUpIcon : trend === "down" ? TrendDownIcon : MinusIcon;
 
   return (
     <div className="flex items-center gap-8">

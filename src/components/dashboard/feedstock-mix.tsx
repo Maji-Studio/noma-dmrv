@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Leaf } from "@phosphor-icons/react/dist/ssr";
+import { LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { DashboardFeedstockMixSlice } from "@/data-access/dashboard-overview";
 import { DashboardPanel } from "./dashboard-panel";
@@ -47,7 +47,7 @@ export function FeedstockMix({ slices }: FeedstockMixProps) {
       {totalKg <= 0 ? (
         <EmptyState
           padding="md"
-          icon={<Leaf size={32} />}
+          icon={<LeafIcon size={32} />}
           title="No feedstock in period"
           description="Feedstock intake recorded in this range will break down here by type."
         />

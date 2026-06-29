@@ -6,7 +6,7 @@
 
 import * as React from "react";
 import { Accordion as BaseAccordion } from "@base-ui/react/accordion";
-import { CaretDown } from "@phosphor-icons/react";
+import { CaretDownIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 // ============================================
@@ -111,7 +111,7 @@ function Trigger({ children, className }: AccordionTriggerProps) {
       <span className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
         {children}
       </span>
-      <CaretDown
+      <CaretDownIcon
         size={20}
         weight="bold"
         className="text-[var(--color-text-tertiary)] transition-transform duration-200 group-data-[panel-open]:rotate-180"

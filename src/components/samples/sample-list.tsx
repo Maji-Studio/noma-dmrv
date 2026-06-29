@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Flask, Leaf, MagnifyingGlass, Plus, X, Fire, Certificate } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, LeafIcon, MagnifyingGlassIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   useCreateSample,
@@ -58,7 +58,7 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
           : "border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] text-[var(--color-text-secondary)]"
       }`}
     >
-      {is1000Year && <Certificate size={12} weight="fill" />}
+      {is1000Year && <CertificateIcon size={12} weight="fill" />}
       {label}
     </span>
   );
@@ -338,17 +338,17 @@ export function SampleList() {
         subtitle="Lab analysis of biochar samples and carbon permanence"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Sample
           </Button>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<Flask size={24} weight="bold" />} description="All lab samples" isLoading={statsLoading} />
-        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "-"} icon={<Leaf size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
-        <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<Fire size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
-        <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<Certificate size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
+        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab samples" isLoading={statsLoading} />
+        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? "-"} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
+        <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
 
       <DataTable
@@ -370,7 +370,7 @@ export function SampleList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Flask size={48} />}
+            icon={<FlaskIcon size={48} />}
             title={hasActiveFilters ? "No samples found" : "No samples yet"}
             description={
               hasActiveFilters
@@ -380,7 +380,7 @@ export function SampleList() {
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
-                  <Plus size={20} weight="bold" />
+                  <PlusIcon size={20} weight="bold" />
                   Create Sample
                 </Button>
               ) : undefined
@@ -390,7 +390,7 @@ export function SampleList() {
       >
         <DataTable.Toolbar>
           <div className="relative max-w-[320px] flex-1">
-            <MagnifyingGlass size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
+            <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
             <input
               type="text"
               placeholder="Search samples..."
@@ -416,7 +416,7 @@ export function SampleList() {
             </select>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
-                <X size={16} weight="bold" />
+                <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}

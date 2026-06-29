@@ -10,7 +10,7 @@
 "use client";
 
 import { useState } from "react";
-import { Buildings, WarningOctagon } from "@phosphor-icons/react/dist/ssr";
+import { BuildingsIcon, WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
@@ -59,14 +59,14 @@ export function DashboardView() {
 
       {!facilityId ? (
         <EmptyState
-          icon={<Buildings size={48} />}
+          icon={<BuildingsIcon size={48} />}
           title="Select a facility"
           description="Choose a facility from the sidebar to monitor its carbon removal."
         />
       ) : error ? (
         <EmptyState
           padding="md"
-          icon={<WarningOctagon size={40} />}
+          icon={<WarningOctagonIcon size={40} />}
           title="Couldn't load the dashboard"
           description={error.message}
         />

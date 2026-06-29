@@ -29,7 +29,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
-import { ArrowLeft, TreeStructure } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeftIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -265,7 +265,7 @@ function LoadingState({ label }: { label: string }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center">
       <div className="flex flex-col items-center gap-12">
-        <TreeStructure
+        <TreeStructureIcon
           size={32}
           className="text-[var(--color-text-tertiary)] animate-pulse"
         />
@@ -749,7 +749,7 @@ export function ChainOfCustodyPage() {
                   data-testid="chain-back-to-batch"
                   className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
                 >
-                  <ArrowLeft size={14} weight="bold" />
+                  <ArrowLeftIcon size={14} weight="bold" />
                   Batch roll-up
                 </Button>
               ) : null}

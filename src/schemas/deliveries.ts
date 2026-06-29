@@ -8,10 +8,6 @@ import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
 import { optionalDistanceSource } from "./distance-source";
 import { emptyToNull } from "./helpers";
-import {
-  optionalTruckMass,
-  validateTruckMasses,
-} from "./truck-weighing";
 
 // ============================================
 // Constants and Enums
@@ -64,8 +60,6 @@ const deliveryFormBaseSchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -115,7 +109,6 @@ export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx
     }
   }
 
-  validateTruckMasses(value, ctx);
   validateDistanceOverride(value, ctx);
 });
 
@@ -143,8 +136,6 @@ export const createDeliverySchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -169,7 +160,6 @@ export const createDeliverySchema = z.object({
     });
   }
 
-  validateTruckMasses(value, ctx);
   validateDistanceOverride(value, ctx);
 });
 
@@ -195,8 +185,6 @@ export const updateDeliverySchema = z.object({
   deliveredWetMassKg: optionalNumber,
   massDryKg: optionalNumber,
   moistureContentPercent: optionalNumber,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -221,7 +209,6 @@ export const updateDeliverySchema = z.object({
     });
   }
 
-  validateTruckMasses(value, ctx);
   validateDistanceOverride(value, ctx);
 });
 

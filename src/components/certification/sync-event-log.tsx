@@ -8,7 +8,7 @@
  *
  * Terminal events only (no `pending` rows are written).
  */
-import { CaretDown } from "@phosphor-icons/react/dist/ssr";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CertifierSyncEventRow } from "@/data-access/certification";
 
 const COMPACT_DEFAULT_LIMIT = 5;
@@ -50,7 +50,7 @@ export function SyncEventLog({
     return (
       <details className="group">
         <summary className="flex cursor-pointer items-center gap-6 list-none [&::-webkit-details-marker]:hidden body-caption text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]">
-          <CaretDown
+          <CaretDownIcon
             size={10}
             weight="bold"
             className="transition-transform duration-150 group-open:rotate-180"
@@ -98,7 +98,7 @@ export function SyncEventLog({
     <details className="group">
       <summary className="flex cursor-pointer items-center gap-8 list-none [&::-webkit-details-marker]:hidden body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
         {triggerLabel}
-        <CaretDown
+        <CaretDownIcon
           size={12}
           weight="bold"
           className="transition-transform duration-150 group-open:rotate-180"

@@ -13,7 +13,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect, useId, useRef } from "react";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Factory, Plant, Lightning, Package, FlowArrow, FileCsv } from "@phosphor-icons/react/dist/ssr";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
@@ -363,7 +363,7 @@ export function ProductionRunForm({
       {/* ── Run Setup ── */}
       <FormSection
         title="Run Setup"
-        icon={<Factory size={14} weight="bold" />}
+        icon={<FactoryIcon size={14} weight="bold" />}
         fields={["reactorId", "status", "date", "operatorId", "startTime", "endTime"]}
       >
 
@@ -454,7 +454,7 @@ export function ProductionRunForm({
       {/* ── Feedstock & Processing ── */}
       <FormSection
         title="Feedstock & Processing"
-        icon={<Plant size={14} weight="bold" />}
+        icon={<PlantIcon size={14} weight="bold" />}
         fields={[
           "feedstockStorageLocationId",
           "feedstockWetMassKg",
@@ -569,7 +569,7 @@ export function ProductionRunForm({
       {/* ── Output ── */}
       <FormSection
         title="Output"
-        icon={<Package size={14} weight="bold" />}
+        icon={<PackageIcon size={14} weight="bold" />}
         fields={[
           "biocharStorageLocationId",
           "biocharOutputKg",
@@ -646,7 +646,7 @@ export function ProductionRunForm({
       {/* ── Energy ── */}
       <FormSection
         title="Energy"
-        icon={<Lightning size={14} weight="bold" />}
+        icon={<LightningIcon size={14} weight="bold" />}
         fields={[
           "dieselOperationLiters",
           "dieselGensetLiters",
@@ -749,7 +749,7 @@ export function ProductionRunForm({
       </FormSection>
 
       {/* ── Readings CSV Import ── */}
-      <FormSection title="Readings CSV Import" icon={<FileCsv size={14} weight="bold" />}>
+      <FormSection title="Readings CSV Import" icon={<FileCsvIcon size={14} weight="bold" />}>
 
         <FormField
           id="readingsCsv"
@@ -774,7 +774,7 @@ export function ProductionRunForm({
           something to show. */}
       {(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
         <div className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-20">
-          <SectionLabel icon={<FlowArrow size={14} weight="bold" />}>
+          <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
             Process Flow
           </SectionLabel>
           <ProcessFlowPreview

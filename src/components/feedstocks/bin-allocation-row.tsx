@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Trash } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react";
 import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ export function BinAllocationRow({
           className="mt-28"
           aria-label="Remove allocation"
         >
-          <Trash size={18} />
+          <TrashIcon size={18} />
         </Button>
       )}
     </div>

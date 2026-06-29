@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  Plant,
-  PencilSimple,
-  Trash,
+  PlantIcon,
+  PencilSimpleIcon,
+  TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { Application } from "@/db/schema/application";
@@ -43,7 +43,7 @@ export function ApplicationCard({
         {/* Header: code badge */}
         <div className="flex items-center gap-12">
           <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-pink)]">
-            <Plant size={12} weight="bold" />
+            <PlantIcon size={12} weight="bold" />
             {application.code}
           </span>
         </div>
@@ -102,7 +102,7 @@ export function ApplicationCard({
           <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
             {onEdit && (
               <Button size="small" variant="default" onClick={() => onEdit(application)}>
-                <PencilSimple size={16} />
+                <PencilSimpleIcon size={16} />
                 Edit
               </Button>
             )}
@@ -114,7 +114,7 @@ export function ApplicationCard({
                 onClick={() => onDelete(application.id)}
                 aria-label="Delete application"
               >
-                <Trash size={16} />
+                <TrashIcon size={16} />
               </Button>
             )}
           </div>

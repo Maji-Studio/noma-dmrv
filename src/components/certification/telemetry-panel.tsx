@@ -16,9 +16,9 @@
 "use client";
 
 import {
-  ArrowsClockwise,
-  CloudArrowUp,
-  WarningCircle,
+  ArrowsClockwiseIcon,
+  CloudArrowUpIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
@@ -76,7 +76,7 @@ export function TelemetryPanel({ removalId }: TelemetryPanelProps) {
             onClick={onSubmit}
             disabled={submit.isPending}
           >
-            <CloudArrowUp size={14} weight="bold" />
+            <CloudArrowUpIcon size={14} weight="bold" />
             {submit.isPending ? "Submitting..." : "Submit telemetry"}
           </Button>
           <Button
@@ -84,7 +84,7 @@ export function TelemetryPanel({ removalId }: TelemetryPanelProps) {
             onClick={() => state.refetch()}
             disabled={state.isFetching}
           >
-            <ArrowsClockwise size={14} />
+            <ArrowsClockwiseIcon size={14} />
             Refresh status
           </Button>
         </div>
@@ -146,7 +146,7 @@ function TelemetryError({ state }: { state: TelemetryState }) {
   if (!message) return null;
   return (
     <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-surface-secondary)] p-12">
-      <WarningCircle
+      <WarningCircleIcon
         size={16}
         weight="bold"
         className="text-[var(--color-signal-orange)] shrink-0"

@@ -12,14 +12,14 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import {
-  Database,
-  MagnifyingGlass,
-  ArrowRight,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Key,
-  CaretUp,
-  CaretDown,
+  DatabaseIcon,
+  MagnifyingGlassIcon,
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  ArrowDownLeftIcon,
+  KeyIcon,
+  CaretUpIcon,
+  CaretDownIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import type { SchemaArea, SchemaColumnInfo, SchemaRelationship, SchemaTableInfo } from "@/lib/schema/catalog";
@@ -79,7 +79,7 @@ const columnDefs = [
     header: "Column",
     cell: (info) => (
       <span className="inline-flex items-center gap-[6px]">
-        {info.row.original.isPrimary && <Key size={14} weight="fill" className="text-[var(--clr-purple)] shrink-0" />}
+        {info.row.original.isPrimary && <KeyIcon size={14} weight="fill" className="text-[var(--clr-purple)] shrink-0" />}
         <code>{info.getValue()}</code>
       </span>
     ),
@@ -219,7 +219,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
         {/* Header */}
         <header className="flex flex-col gap-16">
           <div className="flex items-center gap-[10px]">
-            <Database size={18} weight="bold" className="text-[var(--clr-purple)]" />
+            <DatabaseIcon size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
           </div>
           <h1 className="title-heading-2">Database Schema</h1>
@@ -235,7 +235,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
         {/* Controls: search + legacy toggle + links button */}
         <section className="flex flex-col gap-16">
           <div className="relative max-w-[480px]">
-            <MagnifyingGlass
+            <MagnifyingGlassIcon
               size={18}
               className="absolute left-[12px] top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none"
             />
@@ -258,7 +258,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
             </label>
             <Link href="/schema/links" className={buttonVariants({ size: "small" })}>
               All FK Links
-              <ArrowRight size={16} weight="bold" />
+              <ArrowRightIcon size={16} weight="bold" />
             </Link>
           </div>
         </section>
@@ -323,7 +323,7 @@ export function SchemaTableView({ tables, relationships }: SchemaTableViewProps)
           </>
         ) : (
           <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24 flex flex-col items-center gap-[12px] py-[64px]">
-            <Database size={32} className="text-[var(--color-text-tertiary)]" />
+            <DatabaseIcon size={32} className="text-[var(--color-text-tertiary)]" />
             <p className="body-medium text-[var(--color-text-secondary)]">No matching tables. Try a broader query.</p>
           </div>
         )}
@@ -363,8 +363,8 @@ function SelectedTablePanel({ table, accent }: { table: SchemaTableInfo; accent:
         <p className="body-medium text-[var(--color-text-secondary)]">{table.summary}</p>
         <div className="flex flex-wrap items-center gap-[8px]">
           <StatBadge label={`${table.columns.length} columns`} />
-          <StatBadge label={`${table.outboundRelationships.length} outbound`} icon={<ArrowUpRight size={12} />} />
-          <StatBadge label={`${table.inboundRelationships.length} inbound`} icon={<ArrowDownLeft size={12} />} />
+          <StatBadge label={`${table.outboundRelationships.length} outbound`} icon={<ArrowUpRightIcon size={12} />} />
+          <StatBadge label={`${table.inboundRelationships.length} inbound`} icon={<ArrowDownLeftIcon size={12} />} />
           <StatBadge label={`${linkedToTables.length + linkedFromTables.length} linked tables`} />
         </div>
         {table.useCases.length > 0 && (
@@ -389,7 +389,7 @@ function SelectedTablePanel({ table, accent }: { table: SchemaTableInfo; accent:
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <RelationshipPanel
             title="Outbound"
-            icon={<ArrowUpRight size={18} weight="bold" className="text-[var(--clr-purple)]" />}
+            icon={<ArrowUpRightIcon size={18} weight="bold" className="text-[var(--clr-purple)]" />}
             relationships={table.outboundRelationships}
             linkedCount={linkedToTables.length}
             renderRow={(r) => (
@@ -408,7 +408,7 @@ function SelectedTablePanel({ table, accent }: { table: SchemaTableInfo; accent:
           />
           <RelationshipPanel
             title="Inbound"
-            icon={<ArrowDownLeft size={18} weight="bold" className="text-[var(--clr-orange)]" />}
+            icon={<ArrowDownLeftIcon size={18} weight="bold" className="text-[var(--clr-orange)]" />}
             relationships={table.inboundRelationships}
             linkedCount={linkedFromTables.length}
             renderRow={(r) => (
@@ -494,8 +494,8 @@ function ColumnsTable({
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {isSortable && (
                           <span className="inline-flex flex-col leading-none text-[var(--color-text-tertiary)]">
-                            <CaretUp size={10} weight={sortDir === "asc" ? "fill" : "regular"} />
-                            <CaretDown size={10} weight={sortDir === "desc" ? "fill" : "regular"} />
+                            <CaretUpIcon size={10} weight={sortDir === "asc" ? "fill" : "regular"} />
+                            <CaretDownIcon size={10} weight={sortDir === "desc" ? "fill" : "regular"} />
                           </span>
                         )}
                       </span>

@@ -270,23 +270,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       formFields: ["transportDistanceKm"],
       mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
-    {
-      key: "truckWeighing",
-      label: "Truck weighing",
-      kind: "derived",
-      formFields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
-      condition: {
-        field: "requiresTruckWeighing",
-        equals: true,
-        label: "transport template",
-      },
-      satisfaction: {
-        mode: "allOf",
-        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
-        label: "Arrival and departure truck masses",
-      },
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
   ],
   transportLeg: [
     {
@@ -317,30 +300,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   // transport legs and the CO2e-stored preview instead).
   delivery: [
     {
-      // The truck weighbridge masses are the measurement method; this is the
-      // submitted value — it becomes the auto-derived biochar distribution
-      // leg's load mass (data-access/transport-legs.ts →
-      // syncBiocharProductTransportLeg).
+      // The delivered wet mass is the submitted value — it becomes the
+      // auto-derived biochar distribution leg's load mass
+      // (data-access/transport-legs.ts → syncBiocharProductTransportLeg).
       key: "deliveredWetMassKg",
       label: "Delivered wet mass",
       kind: "entered",
-      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
-    },
-    {
-      key: "truckWeighing",
-      label: "Truck weighing",
-      kind: "derived",
-      formFields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
-      condition: {
-        field: "requiresTruckWeighing",
-        equals: true,
-        label: "transport template",
-      },
-      satisfaction: {
-        mode: "allOf",
-        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
-        label: "Arrival and departure truck masses",
-      },
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],

@@ -13,7 +13,7 @@
 
 import * as React from "react";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { Info } from "@phosphor-icons/react";
+import { InfoIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 // Open/close delays (ms) — snappy enough to feel responsive, slow enough to
@@ -109,7 +109,7 @@ function InfoHint({
           className
         )}
       >
-        <Info size={size} weight="bold" />
+        <InfoIcon size={size} weight="bold" />
       </button>
     </Tooltip>
   );

@@ -14,9 +14,9 @@
 "use client";
 
 import {
-  CheckCircle,
-  WarningCircle,
-  WarningOctagon,
+  CheckCircleIcon,
+  WarningCircleIcon,
+  WarningOctagonIcon,
 } from "@phosphor-icons/react";
 import { useProcessComplianceDrift } from "@/hooks/use-production-processes";
 import type {
@@ -48,10 +48,10 @@ function toneFor(triggered: boolean, approaching: boolean): Tone {
 
 function ToneIcon({ tone, className }: { tone: Tone; className?: string }) {
   if (tone === "bad")
-    return <WarningOctagon weight="fill" className={className} />;
+    return <WarningOctagonIcon weight="fill" className={className} />;
   if (tone === "wait")
-    return <WarningCircle weight="fill" className={className} />;
-  return <CheckCircle weight="fill" className={className} />;
+    return <WarningCircleIcon weight="fill" className={className} />;
+  return <CheckCircleIcon weight="fill" className={className} />;
 }
 
 interface ProcessDriftWarningsProps {

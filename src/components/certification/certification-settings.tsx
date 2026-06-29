@@ -23,10 +23,10 @@
 "use client";
 
 import {
-  Factory,
-  Gauge,
-  Plugs,
-  Pulse,
+  FactoryIcon,
+  GaugeIcon,
+  PlugsIcon,
+  PulseIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { parseAsStringEnum, useQueryState } from "nuqs";
 import type { ElementType, ReactNode } from "react";
@@ -49,9 +49,9 @@ const TABS: {
   icon: ElementType;
   adminOnly: boolean;
 }[] = [
-  { key: "connection", label: "Connection", icon: Plugs, adminOnly: false },
-  { key: "emissions", label: "Emissions", icon: Gauge, adminOnly: true },
-  { key: "environment", label: "Environment", icon: Pulse, adminOnly: true },
+  { key: "connection", label: "Connection", icon: PlugsIcon, adminOnly: false },
+  { key: "emissions", label: "Emissions", icon: GaugeIcon, adminOnly: true },
+  { key: "environment", label: "Environment", icon: PulseIcon, adminOnly: true },
 ];
 
 function getTabId(key: TabKey) {
@@ -191,7 +191,7 @@ export function CertificationSettings() {
 
       {!facilityId ? (
         <div className="flex flex-col items-center justify-center gap-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-56">
-          <Factory size={48} className="text-[var(--color-text-tertiary)]" />
+          <FactoryIcon size={48} className="text-[var(--color-text-tertiary)]" />
           <div className="text-center">
             <h3 className="title-heading-3 mb-8">Select a facility</h3>
             <p className="body-small text-[var(--color-text-secondary)]">
@@ -221,7 +221,7 @@ export function CertificationSettings() {
               aria-labelledby={getTabId("connection")}
             >
               <SettingsSection
-                icon={Plugs}
+                icon={PlugsIcon}
                 title="Registry connection — Isometric"
                 caption="The Isometric project that every removal and GHG statement from this facility targets."
               >
@@ -246,7 +246,7 @@ export function CertificationSettings() {
               aria-labelledby={getTabId("emissions")}
             >
               <SettingsSection
-                icon={Gauge}
+                icon={GaugeIcon}
                 title="Emission estimates"
                 caption="Genset yield and the per-period LCA journal. Feeds combined energy datapoints on submission."
               >
@@ -286,7 +286,7 @@ export function CertificationSettings() {
               aria-labelledby={getTabId("environment")}
             >
               <SettingsSection
-                icon={Pulse}
+                icon={PulseIcon}
                 title="Environment & health"
                 caption="Read-only integration status. Never exposes tokens or secrets."
               >

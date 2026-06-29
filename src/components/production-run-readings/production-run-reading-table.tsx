@@ -8,7 +8,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react";
 import {
   useProductionRunReadings,
   useDeleteAllProductionRunReadings,
@@ -93,7 +93,7 @@ export function ProductionRunReadingTable({
             size="small"
             onClick={() => setConfirmingDeleteAll(true)}
           >
-            <Trash size={16} />
+            <TrashIcon size={16} />
             Delete All
           </Button>
         )}

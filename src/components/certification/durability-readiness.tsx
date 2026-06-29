@@ -9,10 +9,10 @@
 "use client";
 
 import {
-  CheckCircle,
-  Circle,
-  Warning,
-  XCircle,
+  CheckCircleIcon,
+  CircleIcon,
+  WarningIcon,
+  XCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
@@ -76,14 +76,14 @@ function eligibilityChip(
   if (eligibility.eligible === true) {
     return {
       tone: "ok",
-      icon: <CheckCircle size={14} weight="fill" />,
+      icon: <CheckCircleIcon size={14} weight="fill" />,
       label: "Eligible",
     };
   }
   if (eligibility.eligible === false) {
     return {
       tone: "bad",
-      icon: <XCircle size={14} weight="fill" />,
+      icon: <XCircleIcon size={14} weight="fill" />,
       label: "Ineligible",
     };
   }
@@ -91,12 +91,12 @@ function eligibilityChip(
   return hasUsableReplicates
     ? {
         tone: "wait",
-        icon: <Warning size={14} weight="fill" />,
+        icon: <WarningIcon size={14} weight="fill" />,
         label: "Eligibility indeterminate",
       }
     : {
         tone: "off",
-        icon: <Circle size={14} />,
+        icon: <CircleIcon size={14} />,
         label: "Awaiting chemistry",
       };
 }
@@ -126,9 +126,9 @@ export function DurabilityReadinessSignals({
         tone={meetsMinimum ? "ok" : "wait"}
         icon={
           meetsMinimum ? (
-            <CheckCircle size={14} weight="fill" />
+            <CheckCircleIcon size={14} weight="fill" />
           ) : (
-            <Warning size={14} weight="fill" />
+            <WarningIcon size={14} weight="fill" />
           )
         }
       >
@@ -140,9 +140,9 @@ export function DurabilityReadinessSignals({
           tone={summary.distributionWarning ? "wait" : "ok"}
           icon={
             summary.distributionWarning ? (
-              <Warning size={14} weight="fill" />
+              <WarningIcon size={14} weight="fill" />
             ) : (
-              <CheckCircle size={14} weight="fill" />
+              <CheckCircleIcon size={14} weight="fill" />
             )
           }
         >

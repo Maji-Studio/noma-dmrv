@@ -16,7 +16,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowSquareOut, CheckCircle } from "@phosphor-icons/react/dist/ssr";
+import { ArrowSquareOutIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -150,7 +150,7 @@ export function SubmitStep({
     return (
       <div className="flex flex-col gap-24">
         <div className="flex items-start gap-12 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-          <CheckCircle
+          <CheckCircleIcon
             size={20}
             weight="fill"
             aria-hidden
@@ -174,7 +174,7 @@ export function SubmitStep({
               className={buttonVariants({ variant: "default" })}
             >
               View on Isometric
-              <ArrowSquareOut size={16} aria-hidden />
+              <ArrowSquareOutIcon size={16} aria-hidden />
             </a>
           )}
           <Button variant="primary" onClick={onDone}>

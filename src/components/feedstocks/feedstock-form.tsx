@@ -9,14 +9,14 @@
 import { useEffect, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowCounterClockwise, Calendar, MapPin, Note, Plant, Plus, Stack, Truck } from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIcon, PlusIcon, StackIcon } from "@phosphor-icons/react";
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, TruckWeighingSection, DryMassInput, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, DryMassInput, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -81,8 +81,6 @@ export function FeedstockForm({
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
     moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
-    truckMassOnArrivalKg: feedstock?.truckMassOnArrivalKg ?? undefined,
-    truckMassOnDepartureKg: feedstock?.truckMassOnDepartureKg ?? undefined,
     allocations: feedstock
       ? [{ storageLocationId: feedstock.storageLocationId ?? "", allocatedWetMassKg: feedstock.massWetKg ?? 0 }]
       : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
@@ -120,8 +118,6 @@ export function FeedstockForm({
   // Watch values for dry mass calculation
   const watchWetMass = useWatch({ control, name: "totalWetMassKg" });
   const watchMoisture = useWatch({ control, name: "moisturePercent" });
-  const watchArrivalMass = useWatch({ control, name: "truckMassOnArrivalKg" });
-  const watchDepartureMass = useWatch({ control, name: "truckMassOnDepartureKg" });
   const watchAllocations = useWatch({ control, name: "allocations" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
@@ -238,22 +234,6 @@ export function FeedstockForm({
     }
   }, [fields.length, getValues, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
-  const suggestWetMassFromTruckWeighing = (wetMassKg: number) => {
-    const currentWetMass = getValues("totalWetMassKg");
-    const currentAllocation = getValues("allocations.0.allocatedWetMassKg");
-    setValue("totalWetMassKg", wetMassKg, { shouldValidate: true });
-    if (
-      !isEditMode &&
-      fields.length === 1 &&
-      (typeof currentAllocation !== "number" ||
-        currentAllocation === currentWetMass)
-    ) {
-      setValue("allocations.0.allocatedWetMassKg", wetMassKg, {
-        shouldValidate: true,
-      });
-    }
-  };
-
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FeedstockFormData);
   });
@@ -265,7 +245,7 @@ export function FeedstockForm({
         {/* Delivery Information */}
         <FormSection
           title="Delivery Information"
-          icon={<Calendar size={14} weight="bold" />}
+          icon={<CalendarIcon size={14} weight="bold" />}
           fields={["facilityId", "deliveryDate", "supplierId"]}
         >
           {!contextFacilityId && !feedstock && (
@@ -313,7 +293,7 @@ export function FeedstockForm({
         {/* Transport Details */}
         <FormSection
           title="Transport Details"
-          icon={<MapPin size={14} weight="bold" />}
+          icon={<MapPinIcon size={14} weight="bold" />}
           hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
           fields={["vehicleId", "transportDistanceKm"]}
         >
@@ -373,7 +353,7 @@ export function FeedstockForm({
                     className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
                   >
                     <span className="body-caption">override</span>
-                    <ArrowCounterClockwise size={14} weight="bold" />
+                    <ArrowCounterClockwiseIcon size={14} weight="bold" />
                   </button>
                 )}
               </div>
@@ -384,7 +364,7 @@ export function FeedstockForm({
         {/* Material Details */}
         <FormSection
           title="Material"
-          icon={<Plant size={14} weight="bold" />}
+          icon={<PlantIcon size={14} weight="bold" />}
           fields={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -450,40 +430,11 @@ export function FeedstockForm({
           </div>
         </FormSection>
 
-        <FormSection
-          title="Truck Weighing"
-          icon={<Truck size={14} weight="bold" />}
-          hint="Arrival minus departure gives the unloaded wet mass used as weighbridge evidence."
-          fields={["truckMassOnArrivalKg", "truckMassOnDepartureKg"]}
-        >
-          <TruckWeighingSection
-            bare
-            arrivalMassKg={watchArrivalMass}
-            departureMassKg={watchDepartureMass}
-            wetMassKg={watchWetMass}
-            wetMassLabel="Entered wet mass"
-            onSuggestWetMass={suggestWetMassFromTruckWeighing}
-            arrivalRegister={register("truckMassOnArrivalKg", {
-              setValueAs: numericValue,
-            })}
-            departureRegister={register("truckMassOnDepartureKg", {
-              setValueAs: numericValue,
-            })}
-            arrivalError={errors.truckMassOnArrivalKg?.message}
-            departureError={errors.truckMassOnDepartureKg?.message}
-            arrivalCertifyRequired={isFeedstockCertifyField("truckMassOnArrivalKg")}
-            departureCertifyRequired={isFeedstockCertifyField("truckMassOnDepartureKg")}
-            arrivalCertifyStatus={certStatus("truckMassOnArrivalKg")}
-            departureCertifyStatus={certStatus("truckMassOnDepartureKg")}
-            isSubmitting={isSubmitting}
-          />
-        </FormSection>
-
         {/* Bin Allocations — only shown after feedstock type is selected */}
         {watchedFeedstockTypeId ? (
           <FormSection
             title="Bin Allocations"
-            icon={<Stack size={14} weight="bold" />}
+            icon={<StackIcon size={14} weight="bold" />}
             actions={
               !isEditMode && (
                 <Button
@@ -493,7 +444,7 @@ export function FeedstockForm({
                   onClick={() => append({ storageLocationId: "", allocatedWetMassKg: 0 })}
                   disabled={isSubmitting}
                 >
-                  <Plus size={16} weight="bold" />
+                  <PlusIcon size={16} weight="bold" />
                   Add Bin
                 </Button>
               )
@@ -556,7 +507,7 @@ export function FeedstockForm({
         {/* Documentation */}
         <FormSection
           title="Documentation"
-          icon={<Note size={14} weight="bold" />}
+          icon={<NoteIcon size={14} weight="bold" />}
           fields={["notes"]}
         >
           <div className="grid grid-cols-1 gap-y-20">

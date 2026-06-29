@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { Lock, LockOpen } from "@phosphor-icons/react";
+import { LockIcon, LockOpenIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 
@@ -20,9 +20,9 @@ export function MethodPill({ method }: { method: SamplingMethod }) {
       )}
     >
       {isMethodB ? (
-        <LockOpen size={12} weight="bold" />
+        <LockOpenIcon size={12} weight="bold" />
       ) : (
-        <Lock size={12} weight="bold" />
+        <LockIcon size={12} weight="bold" />
       )}
       {isMethodB ? "Method B" : "Method A"}
     </span>

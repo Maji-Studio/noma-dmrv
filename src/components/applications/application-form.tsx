@@ -17,7 +17,7 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { Package, MapPin, Camera, Thermometer } from "@phosphor-icons/react/dist/ssr";
+import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
 import {
   applicationFormSchema,
@@ -360,7 +360,7 @@ export function ApplicationForm({
       {/* === Section 1: Application Details === */}
       <FormSection
         title="Application Details"
-        icon={<Package size={14} weight="bold" />}
+        icon={<PackageIcon size={14} weight="bold" />}
         fields={["applicationDate", "deliveryId", "biocharAppliedTons", "biocharAppliedDryTons"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -459,7 +459,7 @@ export function ApplicationForm({
       {/* === Section 2: Field Details === */}
       <FormSection
         title="Field Details"
-        icon={<MapPin size={14} weight="bold" />}
+        icon={<MapPinIcon size={14} weight="bold" />}
         fields={["fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethodType", "gpsLatitude", "gpsLongitude"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -542,7 +542,7 @@ export function ApplicationForm({
       {/* === Section 3: Evidence === */}
       <FormSection
         title="Evidence Method"
-        icon={<Camera size={14} weight="bold" />}
+        icon={<CameraIcon size={14} weight="bold" />}
         hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
         fields={["evidenceMethod", "gisBoundaryReference"]}
       >
@@ -610,7 +610,7 @@ export function ApplicationForm({
       {/* === Section 4: Soil Temperature === */}
       <FormSection
         title="Soil Temperature"
-        icon={<Thermometer size={14} weight="bold" />}
+        icon={<ThermometerIcon size={14} weight="bold" />}
         hint="Used in the Isometric 200-year durability calculation."
         fields={["soilTemperatureSource", "soilTemperatureC"]}
       >
