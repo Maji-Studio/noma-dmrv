@@ -128,21 +128,30 @@ Production-run telemetry uses the same document pipeline, but persistence is a
 two-step operation:
 
 1. Upload a `sensor_data` document against the `production_run`.
-2. Preview/import that uploaded document through
-   `src/fn/production-run-reading-imports.ts`.
+2. Import that uploaded document through
+   `src/fn/production-run-reading-imports.ts` (fires automatically on upload).
 
-The importer accepts **CSV reactor-day files only**. The filename must include a
-reactor code and ISO date, for example `TZ001B 2026-04-02.csv`. Preview reads
-the managed object from storage, checks that the file day overlaps the selected
-run window in the facility timezone, suggests column mappings from the header,
-and warns when the filename reactor does not match the run reactor.
+The importer accepts a **canonical CSV** with a full UTC timestamp per row, so a
+single file can span multiple days. Columns are matched by header
+(case-insensitive; extra columns are ignored) — there is no column-mapping step
+and no filename convention:
 
-Confirmed imports replace only readings inside the file-day/run-window overlap
-and store the accepted header mapping on `reactors.specifications` under
-`reactorDayCsvMapping` so the next file with the same header can import without
-re-mapping. XLSX files may still be stored as generic `sensor_data` evidence
-because the upload rule is tabular, but they are not parsed into
-`production_run_readings`.
+| Column                  | Required | Unit | Notes |
+|-------------------------|----------|------|-------|
+| `timestamp_utc`         | yes      | ISO-8601 UTC | e.g. `2026-04-02T22:15:00Z`; zone-less values are read as UTC |
+| `temperature_c`         | yes      | °C   | |
+| `pressure_bar`          | yes      | bar  | |
+| `dryer_frequency_hz`    | optional | Hz   | blank cell → null |
+| `reactor_frequency_hz`  | optional | Hz   | blank cell → null |
+
+Parsing lives in `src/lib/production-readings/readings-csv.ts`. Rows are clipped
+to the production run's `start_time`/`end_time` window (a run may span multiple
+days but is itself bounded by its credit batch); out-of-window and
+unparseable-timestamp rows are reported in the import summary. An import replaces
+existing readings only within the span it covers (min…max of the accepted rows),
+so importing separate files for different periods is additive. XLSX files may
+still be stored as generic `sensor_data` evidence because the upload rule is
+tabular, but they are not parsed into `production_run_readings`.
 
 ## CORS configuration (production buckets only)
 
