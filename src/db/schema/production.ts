@@ -131,7 +131,12 @@ export const productionRunReadings = pgTable(
     // Pressure monitoring (1-min intervals, required if reactor >0.5 bar)
     pressureBar: real('pressure_bar'),
 
-    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent
+    gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent — retained for legacy imports; not in the canonical CSV format
+
+    // Drive (VFD) frequencies — operator telemetry, internal-only (not
+    // published to Isometric). Optional columns in the canonical readings CSV.
+    dryerFrequencyHz: real('dryer_frequency_hz'),
+    reactorFrequencyHz: real('reactor_frequency_hz'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
@@ -392,5 +397,6 @@ export const productionSamplesRelations = relations(
 );
 
 export type ProductionRun = InferSelectModel<typeof productionRuns>;
+export type ProductionRunReading = InferSelectModel<typeof productionRunReadings>;
 export type Sample = InferSelectModel<typeof samples>;
 export type ProductionSample = InferSelectModel<typeof productionSamples>;
