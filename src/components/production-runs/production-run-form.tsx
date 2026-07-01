@@ -753,8 +753,8 @@ export function ProductionRunForm({
 
         <FormField
           id="readingsCsv"
-          label="Reactor-day CSV"
-          helperText="Upload reactor-day PLC CSV files. Imported rows populate the production readings table below."
+          label="Readings CSV"
+          helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
           certifyRequired
         >
           {isEditMode && productionRun ? (
